@@ -12,11 +12,19 @@ Going to keep this brief. This was developed during August 2026, a time where I 
 
 ## The Experience
 
+## How it Starts
+
+One person creates a space first. Afterwards, the other person can join this space, either via unique link or code. Once a person is in a space, they are locked in until the space is closed. Once both people are present, no others can join the space.
+
 ## How it Works
 
 1. **Share:** Person opens a box (default or custom) and adds a thought, idea, or desire
 2. **Wait:** The item is now in the shared box and hidden from the other person
-3. **Reveal:** When both parties agree that the time is right, they open the box to reveal all items and discuss them together. (Both must be present)
+3. **Reveal:** When both parties agree that the time is right, they have two options:
+  - Raffle: box is shuffled and one item is randomly selected to be revealed
+  - Full Reveal: all hidden items in the box is revealed
+
+For the reveal phase (either raffle or full reveal) to take place, both people must be present.
 
 ### How it Feels
 - **Comfort First:** Sharing thoughts, ideas, hopes, and desires feels natural and safe.

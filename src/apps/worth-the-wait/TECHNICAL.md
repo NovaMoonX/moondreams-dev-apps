@@ -4,28 +4,32 @@
 
 ## **Space Entry, Auth & Pairing Mechanics**
 
-While primary user authentication is handled globally by the host application, entering or creating a mini-app space requires a dedicated onboarding and approval flow. Each user belongs to **a single space** shared exclusively with their partner.
+Primary user authentication and display names are managed globally by the host application shell and passed down to the mini-app.
 
-\[ User A Creates Space \]  
-  ├─ Enters Display Name / Space Name  
-  └─ Generates Invite Code / Link  
-            │  
-            ▼  
-\[ User B Inputs Code \] ──▶ \[ State: Pending Approval \]  
-  └─ Enters Display Name        │  
+When a user opens Worth the Wait without an active space, they are presented with an onboarding choice to either **Create a Space** or **Join a Space**.
+
+                       [ First Time Entry ]  
+                                │  
+               ┌────────────────┴────────────────┐  
+               ▼                                 ▼  
+      [ Create Space ]                    [ Join Space ]  
+      ├─ Sets createdBy = uid             ├─ Submits inviteCode  
+      └─ Generates inviteCode             └─ Sets State: Pending Approval  
+               │                                 │  
+               └────────────────┬────────────────┘  
                                 ▼  
-                      \[ User A Approves User B \]  
+                    [ User A Approves User B ]  
                                 │  
                                 ▼  
-                   \[ Space Locked: 2 Members \]
+                   [ Space Locked: 2 Members ]
 
-* **Global Auth Assumption:** The user's authenticated uid is passed down from the global app shell.  
-* **Member Display Name:** Upon creating or joining a space, members must enter a display name (e.g., first name, nickname, or custom alias) that will identify them within the space.  
-* **Onboarding & Pairing Flow:**  
-  1. **Space Creation:** User A opens the mini-app for the first time, provides their display name/nickname, and generates a space. User A becomes member \#1 and an inviteCode is created.  
-  2. **Join Request:** User B enters the mini-app, submits an inviteCode, and enters their display name/nickname. User B is stored in the space under pendingMember.  
-  3. **Approval Step:** User A receives an in-app prompt to review and accept/decline User B's join request.  
-  4. **Space Lock:** Upon User A's approval, User B is moved into the active members array (members.length \== 2), pendingMember is cleared, the inviteCode is invalidated, and no further users can join.
+### **Onboarding & Pairing Steps**
+
+1. **Option Selection:**  
+   * **Create Space:** User A creates a space. User A becomes member #1 (createdBy = uidA), member array is initialized (members = [uidA]), and an inviteCode is generated.  
+   * **Join Space:** User B enters an inviteCode. User B is stored under pendingMember.  
+2. **Approval Step:** User A receives an in-app prompt to accept or decline User B's join request.  
+3. **Space Lock:** Upon approval, User B is added to members (members.length == 2), pendingMember is cleared, inviteCode is invalidated, and no further users may join.
 
 ## **Data Schema**
 
@@ -36,12 +40,12 @@ Represents the shared environment between the two partners.
 | Field | Type | Description |
 | :---- | :---- | :---- |
 | id | string | Unique space document ID |
+| createdBy | string | UID of the space creator (User A) |
 | createdAt | timestamp | Timestamp when space was created |
-| lastEditedAt | timestamp | Timestamp of last modification in space |
-| members | array\<string\> | Array of active member UIDs (\[uidA, uidB\]) |
-| memberNames | map\<string, string\> | Map of member UIDs to display names/nicknames (e.g. { "uidA": "Alex", "uidB": "Sam" }) |
-| inviteCode | string | Short string for partner pairing (cleared once space is locked) |
-| pendingMember | map | null | Pending user request object ({ uid: string, displayName: string, requestedAt: timestamp }) |
+| members | array<string> | Array of active member UIDs ([uidA, uidB]) |
+| inviteCode | string | null | Short string for partner pairing (cleared once locked) |
+| pendingMember | map | null | Pending request ({ uid: string, requestedAt: timestamp }) |
+| activeAction | map | null | Currently active synchronous action state (Full Reveal or Raffle) |
 
 ### **apps/worth-the-wait/spaces/{spaceId}/boxes/{boxId}**
 
@@ -54,12 +58,33 @@ Represents a collection box (default or custom).
 | emoji | string | Single emoji icon |
 | description | string | Short description (max 50 chars) |
 | isDefault | boolean | true for pre-seeded boxes, false for custom |
-| createdBy | string | UID of the creator |
-| isRevealed | boolean | Global visibility state (false by default) |
-| revealRequestedBy | array\<string\> | Array of member UIDs who have requested to reveal |
+| createdBy | string | UID of creator ("system" for default boxes) |
+| revealRequestedBy | array<map> | Active reveal requests ([{ userId, method, requestedAt }]) |
+| revealHistory | array<map> | Log of past reveals/raffles (see schema below) |
 | createdAt | timestamp | Box creation timestamp |
-| revealedAt | timestamp | null | Timestamp when isRevealed became true |
 | lastEditedAt | timestamp | Timestamp when box details were last modified |
+
+#### **revealRequestedBy Array Element Map**
+
+Tracks pending reveal or raffle requests. Each user may have at most one active request entry, which they can undo/cancel at any time prior to execution.
+
+| Field | Type | Description |
+| :---- | :---- | :---- |
+| userId | string | UID of the requesting member |
+| method | string (enum) | Requested action: "full_reveal" | "raffle" |
+| requestedAt | timestamp | Timestamp when the request was placed |
+
+#### **revealHistory Array Element Map**
+
+Tracks each completed reveal event (raffle or full box reveal) for auditing and UI indicators.
+
+| Field | Type | Description |
+| :---- | :---- | :---- |
+| id | string | Unique reveal event ID |
+| method | string (enum) | "full_reveal" | "raffle" |
+| triggeredBy | string | UID of user who clicked the explicit trigger button |
+| revealedAt | timestamp | Server timestamp when the reveal occurred |
+| itemIds | array<string> | Array of item IDs revealed during this event |
 
 ### **apps/worth-the-wait/spaces/{spaceId}/boxes/{boxId}/items/{itemId}**
 
@@ -68,80 +93,155 @@ Subcollection containing user-submitted notes within a box.
 | Field | Type | Description |
 | :---- | :---- | :---- |
 | id | string | Unique item document ID |
-| authorId | string | UID of the creator |
+| authorId | string | UID of the item creator |
 | content | string | Plain text note body |
+| isRevealed | boolean | Flag indicating if item is visible to both partners |
+| revealedAt | timestamp | null | Timestamp when the item was revealed |
+| revealedMethod | string (enum) | null | Method used: "full_reveal" | "raffle" | null |
 | createdAt | timestamp | Item creation timestamp |
 | lastEditedAt | timestamp | Timestamp when item content was last edited |
 
-## **Realtime Presence & Synchronous Reveal Workflow**
+### **activeAction Schema Map (on spaces/{spaceId})**
 
-To preserve the intimate ritual of opening a box together, **boxes can only be revealed when both users are online at the same time**.
+Tracks synchronized animations/modals across both partner devices during active raffles or full box reveals. Locks duplicate triggers.
 
-                       \[ State: Locked \]  
-                               │  
-                       User A requests reveal  
-                               │  
-                               ▼  
-                   \[ State: Pending Partner \]  
-                               │  
-               User B requests reveal  
-                               │  
-        ┌──────────────────────┴──────────────────────┐  
-        ▼                                             ▼  
-Both Users Online (RTDB)                     Either User Offline  
-        │                                             │  
-        ▼                                             ▼  
-  \[ State: Revealed \]                        Reveal Blocked / Waiting  
-  ├─ isRevealed \= true                       (UI prompts user that partner   
-  └─ revealedAt \= timestamp                   must be in app to open)
+| Field | Type | Description |
+| :---- | :---- | :---- |
+| actionId | string | Session identifier for current action run |
+| boxId | string | Target box ID where action is occurring |
+| method | string (enum) | "full_reveal" | "raffle" |
+| status | string (enum) | "initiating" | "executing" | "completed" |
+| selectedItemIds | array<string> | Item ID(s) revealed during this session |
+| initiatedBy | string | UID of user who pressed the trigger button |
+| startedAt | timestamp | Server timestamp when action began |
+| completedAt | timestamp | null | Timestamp when action completed |
 
-### **Presence Tracking (Firebase Realtime Database)**
+## **Realtime Presence & Synchronous Workflows**
 
-Presence is tracked continuously in the Realtime Database at /apps/worth-the-wait/presence/{userId}:
+Presence tracking is managed centrally by the host application via the Realtime Database path status/{uid}:
 
 {  
   "state": "online",  
-  "lastChanged": 1786838243000  
+  "currentLocation": "worth-the-wait",  
+  "lastChanges": 1786880000000  
 }
 
-### **Reveal Validation Rules**
+Both **Full Box Reveals** and **Raffles** require both partners to fulfill two presence criteria before an action can be triggered:
 
-1. **Consent Check:** Both user UIDs must exist in revealRequestedBy.  
-2. **Presence Check:** The reveal action verifies both uidA and uidB have an active "state": "online" status in the Realtime Database.  
-3. **Atomic Transition:** When both consent and presence conditions are met, isRevealed flips to true, and revealedAt is stamped with the server time.
+1. status/{uid}.state === 'online'  
+2. status/{uid}.currentLocation === 'worth-the-wait'
+
+### **Action Lifecycle & Dual-Trigger Prevention**
+
+To prevent race conditions (e.g., both partners clicking trigger simultaneously, or a user refreshing and clicking again), activeAction acts as an atomic execution lock.
+
+       [ Both Users Request Same Action ]  
+                       │  
+                       ▼  
+          [ Presence & Location Validated ]  
+                       │  
+                       ▼  
+          [ Primary Trigger Button Enabled ]  
+                       │  
+                       ▼  
+       [ Partner A Clicks "Start Action" ]  
+                       │  
+                       ▼  
+       [ Transaction Check: activeAction ]  
+       ├─ If activeAction exists & status != 'completed' ──▶ ABORT (Lock Active)  
+       └─ If null or status == 'completed' ──────────────▶ LOCK ACQUIRED  
+                                                                  │  
+                                                                  ▼  
+                                                      Set status: "initiating"  
+                                                                  │  
+                                                                  ▼  
+                                                      Set status: "executing"  
+                                                      ├─ DB writes & selection  
+                                                      └─ Server delay calculation  
+                                                                  │  
+                                                                  ▼  
+                                                      Set status: "completed"  
+                                                      (Reveal complete & UI unlock)
+
+1. **Button Disabled Conditions:**  
+   * Partner offline or in a different mini-app.  
+   * activeAction is non-null AND activeAction.status !== "completed" (action in progress).  
+2. **Derived UI Animation State:**  
+   * **Client Animation Visibility:** On the client, the UI animation/modal overlay is derived and displayed whenever activeAction exists and activeAction.status !== "completed" (i.e. status is "initiating" or "executing").  
+   * **Server Delay Calculation:** During the "executing" state, after writing database updates, the Cloud Function calculates the elapsed time since startedAt. It enforces a pause (sleep) for any remaining duration needed to satisfy the method's total animation time before setting status: "completed":  
+     * **Full Reveal Method Duration:** 2,500 ms total duration.  
+     * **Raffle Method Duration:** 5,000 ms total duration.
+
+## **Cloud Functions Requirements**
+
+Execution is strictly handled via the Cloud Function callable endpoint (triggerBoxAction) to guarantee concurrency locking, server-controlled randomness, and state integrity.
+
+### **triggerBoxAction**
+
+* **Trigger:** Callable function invoked when a user clicks the enabled primary trigger button in RevealAction.tsx.  
+* **Payload:** { spaceId: string, boxId: string, method: "full_reveal" | "raffle" }  
+* **Execution Steps:**  
+  1. **Atomic Lock & Dual-Trigger Guard:**  
+     * Runs within a database transaction reading spaces/{spaceId}.activeAction.  
+     * If activeAction != null AND activeAction.status !== "completed", aborts immediately with error code already-in-progress.  
+     * Immediately writes spaces/{spaceId}.activeAction = { actionId, boxId, method, status: "initiating", selectedItemIds: [], initiatedBy: context.auth.uid, startedAt: serverTimestamp(), completedAt: null }.  
+  2. **Matching Method Verification:**  
+     * Asserts that both space members have matching entries in boxes/{boxId}.revealRequestedBy matching payload.method.  
+  3. **Active Presence & Location Verification:**  
+     * Reads RTDB paths status/{uid} for both space members. Asserts that both users have state == "online" AND currentLocation == "worth-the-wait". If either condition fails, resets activeAction = null and aborts with informative error.  
+  4. **Execution Phase (status: "executing"):**  
+     * Updates activeAction.status = "executing".  
+     * **If method == "full_reveal":**  
+       1. Queries all unrevealed items (isRevealed == false) in the target box.  
+       2. Batch updates all unrevealed items: isRevealed = true, revealedAt = serverTimestamp(), revealedMethod = "full_reveal".  
+       3. Sets selectedItemIds with all newly revealed item IDs.  
+     * **If method == "raffle":**  
+       1. Queries all unrevealed items (isRevealed == false) in the target box.  
+       2. Uses cryptographically secure server randomness to select a single winning itemId.  
+       3. Updates the winning item: isRevealed = true, revealedAt = serverTimestamp(), revealedMethod = "raffle".  
+       4. Sets selectedItemIds containing the single winning item ID.  
+  5. **Server Delay Calculation & Synchronized Timing:**  
+     * Calculates elapsed time since startedAt.  
+     * Pauses (sleep) for the remaining duration required to reach the target animation time (2,500 ms for full_reveal, 5,000 ms for raffle).  
+  6. **Completion Phase (status: "completed"):**  
+     * Appends entry to boxes/{boxId}.revealHistory: { id, method, triggeredBy: context.auth.uid, revealedAt: serverTimestamp(), itemIds: selectedItemIds }.  
+     * Resets boxes/{boxId}.revealRequestedBy = [].  
+     * Updates spaces/{spaceId}.activeAction setting status: "completed" and completedAt = serverTimestamp().
 
 ## **Security & Privacy Requirements**
 
 * **App Namespacing:** All database transactions and security rules are restricted to paths prefixed with apps/worth-the-wait/.  
-* **Space Membership Guard:** Read/write permissions across all space resources are strictly restricted to authenticated users listed in members.  
-* **Join Approval Security:** A pending user can only read or write to pendingMember during initial pairing and cannot read boxes or items until accepted into members by member \#1.  
-* **Synchronous Reveal Guard:** Mutation rules for setting isRevealed \= true verify both partners are online.  
-* **Item Privacy (Unrevealed State):** Users can create, view, edit, and delete their own submitted items inside a box at any time. Unrevealed items created by the partner are completely unreadable and unqueryable until isRevealed \== true.  
-* **Item Readability (Revealed State):** Once isRevealed \== true, both members gain read permissions for all items in that box.  
+* **Space Membership Guard:** Read/write permissions across space subresources are restricted strictly to authenticated users listed in members.  
+* **Join Approval Security:** Pending users can write a join request to pendingMember during initial pairing, but cannot read boxes or items until accepted into members.  
+* **Item Privacy (Unrevealed State):** Unrevealed items (isRevealed == false) created by a partner remain strictly unqueryable and unreadable by the non-author until flipped to isRevealed == true via Cloud Functions.  
 * **Author Integrity:** Users may only write, edit, or delete items where authorId matches their authenticated UID.
 
 ## **Component & File Architecture**
 
+```
 src/  
 └── apps/  
     └── worth-the-wait/  
         ├── components/  
-        │   ├── BoxCard.tsx           \# Box display card with reveal & online badge  
-        │   ├── BoxDetailDrawer.tsx   \# Slide-out drawer/modal for box contents  
-        │   ├── BoxGrid.tsx           \# Grid layout for default and custom boxes  
-        │   ├── CreateBoxModal.tsx    \# Modal form for custom boxes (50 char limit)  
-        │   ├── ItemCard.tsx          \# Card displaying individual note content  
-        │   ├── ItemForm.tsx          \# Input form to stage/edit a note  
-        │   ├── PendingApprovalModal.tsx \# Prompt for Member \#1 to accept/decline Member \#2  
-        │   ├── PresenceBadge.tsx     \# Partner online/offline indicator  
-        │   ├── RevealAction.tsx      \# Mutual reveal toggle (requires partner online)  
-        │   └── SpaceOnboardingModal.tsx \# Name entry, space creation, and invite code entry  
+        │   ├── ActionAnimationModal.tsx # Synchronized raffle/reveal animation overlay  
+        │   ├── BoxCard.tsx              # Box display card with reveal history badge  
+        │   ├── BoxDetailDrawer.tsx      # Slide-out drawer/modal for box contents  
+        │   ├── BoxGrid.tsx              # Grid layout for default and custom boxes  
+        │   ├── CreateBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
+        │   ├── ItemCard.tsx             # Card displaying note content & revealMethod badge  
+        │   ├── ItemForm.tsx             # Input form to stage/edit a note  
+        │   ├── PendingApprovalModal.tsx # Prompt for Space Creator to accept/decline Member #2  
+        │   ├── PresenceBadge.tsx        # Partner online & in-app indicator (reads status/{uid})  
+        │   ├── RevealAction.tsx         # Mutual request selector & explicit action trigger button  
+        │   └── SpaceOnboardingModal.tsx # Create space vs. Join space selector & code entry  
         ├── hooks/  
-        │   ├── useBoxes.ts           \# Box queries, editing, and state transitions  
-        │   ├── useItems.ts           \# Item CRUD operations within a box  
-        │   ├── usePresence.ts        \# Realtime Database online status listener  
-        │   └── useSpace.ts           \# Active space context, display names & join approval  
+        │   ├── useActiveAction.ts       # Synchronous action state listener (initiating/executing/completed)  
+        │   ├── useBoxes.ts              # Box queries, editing, and reveal history listeners  
+        │   ├── useItems.ts              # Item CRUD operations within a box  
+        │   ├── usePresence.ts           # Hook consuming global RTDB status/{uid} & currentLocation  
+        │   └── useSpace.ts              # Active space context & join approval logic  
         ├── utils/  
-        │   └── boxHelpers.ts         \# Formatting and validation utilities  
-        ├── WorthTheWait.tsx          \# Mini-app main entry point  
-        └── index.ts                  \# Public exports for application router  
+        │   └── boxHelpers.ts            # Formatting and helper utilities  
+        ├── WorthTheWait.tsx             # Mini-app main entry point  
+        └── index.ts                     # Public exports for application router  
+```
