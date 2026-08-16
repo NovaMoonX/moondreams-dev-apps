@@ -1,19 +1,19 @@
+import { Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { useTheme } from '@moondreamsdev/dreamer-ui/hooks';
 import { Moon, Sun } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-function ThemeToggle() {
-	const { toggleTheme, theme } = useTheme();
-	const Icon = theme === 'dark' ? Sun : Moon;
+function ThemeToggle({ className }: { className?: string }) {
+  const { toggleTheme, resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
+  const Icon = isDarkMode ? Moon : Sun;
 
-	return (
-		<button
-			onClick={toggleTheme}
-			className='fixed top-4 left-4 z-50 p-3 rounded-lg backdrop-blur-sm focus:outline-none focus:ring focus:ring-foreground/80 hover:bg-foreground/10 transition-all duration-200 shadow-lg'
-			aria-label='Toggle theme'
-		>
-			<Icon className='size-5 text-foreground' />
-		</button>
-	);
+  return (
+    <div className={join('flex items-center gap-1', className)}>
+      <Toggle size='sm' checked={isDarkMode} onCheckedChange={toggleTheme} thumbClassName={isDarkMode ? 'bg-primary-foreground!' : undefined} />
+      <Icon className='text-foreground size-4' />
+    </div>
+  );
 }
 
 export default ThemeToggle;

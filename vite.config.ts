@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { qrcode } from 'vite-plugin-qrcode';
 import path from 'path';
@@ -8,17 +8,17 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), qrcode()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@contexts': path.resolve(__dirname, './src/contexts'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@lib': path.resolve(__dirname, './src/lib'),
-      '@routes': path.resolve(__dirname, './src/routes'),
-      '@screens': path.resolve(__dirname, './src/screens'),
-      '@store': path.resolve(__dirname, './src/store'),
-      '@styles': path.resolve(__dirname, './src/styles'),
-      '@ui': path.resolve(__dirname, './src/ui'),
-      '@utils': path.resolve(__dirname, './src/utils'),
+      '@': path.resolve(import.meta.dirname, './src'),
+      '@components': path.resolve(import.meta.dirname, './src/components'),
+      '@contexts': path.resolve(import.meta.dirname, './src/contexts'),
+      '@hooks': path.resolve(import.meta.dirname, './src/hooks'),
+      '@lib': path.resolve(import.meta.dirname, './src/lib'),
+      '@routes': path.resolve(import.meta.dirname, './src/routes'),
+      '@screens': path.resolve(import.meta.dirname, './src/screens'),
+      '@store': path.resolve(import.meta.dirname, './src/store'),
+      '@styles': path.resolve(import.meta.dirname, './src/styles'),
+      '@ui': path.resolve(import.meta.dirname, './src/ui'),
+      '@utils': path.resolve(import.meta.dirname, './src/utils'),
     },
   },
   build: {

@@ -4,7 +4,7 @@ import ThemeToggle from '@ui/ThemeToggle';
 function Layout() {
 	return (
 		<div className='page transition-colors duration-200'>
-			<ThemeToggle />
+			<ThemeToggle className='absolute bottom-4 left-4' />
 			<Outlet />
 		</div>
 	);
