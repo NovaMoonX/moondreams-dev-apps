@@ -6,6 +6,8 @@ export type AuthContextValue = {
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   logOut: () => Promise<void>;
+  updateDisplayName: (displayName: string) => Promise<void>;
+  setCurrentLocation: (location: string) => void;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

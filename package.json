@@ -10,11 +10,17 @@
     "preview": "vite preview",
     "predeploy": "npm run build && npm run preview",
     "fbdeploy": "npm run build && firebase deploy",
-    "devh": "vite --host"
+    "fbdeploy:rules:database": "firebase deploy --only database",
+    "fbdeploy:rules:firestore": "firebase deploy --only firestore:rules",
+    "fbdeploy:rules:storage": "firebase deploy --only storage",
+    "fbdeploy:rules": "firebase deploy --only database,firestore:rules,storage",
+    "fbdeploy:indexes": "firebase deploy --only firestore:indexes",
+    "fbdeploy:functions": "cd functions && npm run build && firebase deploy --only functions",
+    "fbdeploy:all": "cd functions && npm run build && cd .. && firebase deploy --only firestore:database,rules,firestore:indexes,storage,functions"
   },
   "dependencies": {
     "@moondreamsdev/dreamer-ui": "^1.7.26",
-    "firebase": "^12.17.1",
+    "firebase": "12.16.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2"
