@@ -7,7 +7,7 @@ function Home() {
 			<div className='text-center space-y-6 max-w-2xl px-4'>
 				<h1 className='text-5xl md:text-6xl font-bold'>{APP_TITLE}</h1>
 				<p className='text-lg md:text-xl text-foreground/80'>{APP_DESCRIPTION}</p>
-				<Button href='/about'>Learn More</Button>
+				<Button href='/worth-the-wait'>Worth the Wait</Button>
 			</div>
 		</div>
 	);

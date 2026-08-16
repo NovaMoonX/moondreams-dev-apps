@@ -98,7 +98,6 @@ import { useTheme } from '@moondreamsdev/dreamer-ui/hooks';
 
 // Project imports using aliases
 import { APP_TITLE } from '@lib/app';
-import Home from '@screens/Home';
 import Layout from '@ui/Layout';
 import { router } from '@routes/AppRoutes';
 import MyComponent from '@components/MyComponent';
@@ -110,12 +109,12 @@ import { helper } from '@utils/helper';
 
 ### 7. Available Import Aliases
 - `@/` → `src/`
+- `@apps/` → `src/apps/`
 - `@components/` → `src/components/`
 - `@contexts/` → `src/contexts/`
 - `@hooks/` → `src/hooks/`
 - `@lib/` → `src/lib/`
 - `@routes/` → `src/routes/`
-- `@screens/` → `src/screens/`
 - `@store/` → `src/store/`
 - `@styles/` → `src/styles/`
 - `@ui/` → `src/ui/`
@@ -125,7 +124,7 @@ import { helper } from '@utils/helper';
 - Component syntax: `export function ComponentName`
 - **Class names: ALWAYS use `join()` for conditionals - NEVER template literals**
 - Check Dreamer UI first
-- Use import aliases: `@components/`, `@hooks/`, `@lib/`, `@screens/`, `@ui/`, etc.
+- Use import aliases: `@components/`, `@hooks/`, `@lib/`, `@apps/`, `@ui/`, etc.
 - Follow structured folder organization with proper separation of concerns
 
 ## ⚠️ Critical Reminders

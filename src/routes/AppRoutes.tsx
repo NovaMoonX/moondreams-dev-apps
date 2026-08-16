@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 
-import Home from '@screens/Home';
+import Home from '@ui/Home';
 import Layout from '@ui/Layout';
 import Loading from '@ui/Loading';
 
@@ -13,13 +13,13 @@ export const router = createBrowserRouter([
         index: true,
         element: <Home />,
       },
-      // About page (lazy loaded)
       {
-        path: 'about',
+        path: 'worth-the-wait',
         HydrateFallback: Loading,
         lazy: async () => {
-          const { default: About } = await import('@screens/About');
-          return { Component: About };
+          const { default: WorthTheWait } =
+            await import('@apps/worth-the-wait');
+          return { Component: WorthTheWait };
         },
       },
     ],
