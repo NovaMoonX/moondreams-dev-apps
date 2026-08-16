@@ -23,6 +23,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     useAuth();
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const { pathname } = useLocation();
 
@@ -105,6 +106,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   ];
 
   const handleItemSelect = async (value: string) => {
+    if (value === 'profile') {
+      setIsProfileModalOpen(true);
+      return;
+    }
     if (value === 'change-name') {
       setNameInput(displayName);
       setIsNameModalOpen(true);
@@ -115,6 +120,16 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       await logOut();
     }
   };
+
+  const createdAt = user.metadata.creationTime;
+  const dateFromAuth = createdAt ? new Date(user.metadata.creationTime) : null;
+  const formattedDate = dateFromAuth
+    ? dateFromAuth.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Unknown';
 
   return (
     <>
@@ -141,6 +156,47 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       />
 
       <Modal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        title='Profile'
+        actions={[
+          {
+            label: 'Close',
+            variant: 'secondary',
+            onClick: () => setIsProfileModalOpen(false),
+          },
+        ]}
+      >
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-sm'>
+            This is your profile information.
+          </p>
+          <div className='flex items-center gap-3'>
+            <Avatar
+              src={user.photoURL ?? undefined}
+              alt={displayName}
+              initials={user.photoURL ? undefined : initials}
+              size='md'
+              shape='circle'
+            />
+            <div className='min-w-0'>
+              <div className='text-foreground truncate text-sm font-medium'>
+                {displayName}
+              </div>
+              <div className='text-muted-foreground truncate text-xs'>
+                {user.email}
+              </div>
+            </div>
+          </div>
+          {/* created at */}
+          <div className='text-muted-foreground text-sm'>
+            Account created at:{' '}
+            <span className='text-foreground font-medium'>{formattedDate}</span>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={isNameModalOpen}
         onClose={() => setIsNameModalOpen(false)}
         title='Change display name'
@@ -155,7 +211,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       >
         <div className='space-y-3'>
           <p className='text-muted-foreground text-sm'>
-            Choose the name you want to appear in MoonDreams.
+            Choose the name you want to appear across apps.
           </p>
           <Input
             value={nameInput}
