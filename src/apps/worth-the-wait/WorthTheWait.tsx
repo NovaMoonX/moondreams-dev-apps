@@ -2,15 +2,22 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 function WorthTheWait() {
   return (
-    <div className='page flex flex-col items-center justify-center'>
-      <div className='max-w-2xl space-y-6 px-4 text-center'>
-        <h1 className='text-5xl font-bold md:text-6xl'>Worth the Wait</h1>
-        <p className='text-foreground/80 text-lg md:text-xl'>
-          A space for myself and another to drop what's on our minds and in our hearts until it's time to share
-        </p>
-        <div className='pt-4'>
-          <Button href='/'>← Back to Home</Button>
+    <div className='page flex items-center justify-center px-4 py-12'>
+      <div className='w-full max-w-xl'>
+        <div className='mb-6'>
+          <Button href='/'>Back</Button>
         </div>
+
+        <main className='space-y-5'>
+          <p className='text-xs font-medium uppercase tracking-[0.24em] text-foreground/60'>Mini app</p>
+          <h1 className='text-4xl font-semibold tracking-tight text-foreground md:text-5xl'>
+            Worth the Wait
+          </h1>
+          <p className='max-w-lg text-base leading-7 text-foreground/70 md:text-lg'>
+            A quiet place to hold what is on your mind and in your heart until the right moment to
+            share it arrives.
+          </p>
+        </main>
       </div>
     </div>
   );
