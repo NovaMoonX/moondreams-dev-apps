@@ -29,7 +29,7 @@ function LocationSync() {
 
 function Layout() {
   return (
-    <div className='page transition-colors duration-200'>
+    <div className='transition-colors duration-200'>
       <LocationSync />
 
       {/* header */}

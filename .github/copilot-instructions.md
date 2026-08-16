@@ -77,16 +77,23 @@ className={join('base-class', isActive ? 'active' : 'inactive')}
 Follow the existing structure:
 ```
 src/
+├── apps/       # Mini-apps
 ├── components/ # Reusable UI components
 ├── contexts/   # React context providers (Should always import the context from its hook file)
+  ├── AuthContext.tsx  # Auth context provider
 ├── hooks/      # Custom React hooks (should always declare the context they use)
 ├── lib/        # Utilities and constants
 ├── routes/     # Router configuration
+  ├── AppRoutes.tsx  # Main app router
 ├── screens/    # Page/route components
+
 ├── store/      # State management (i.e. Redux store)
 ├── styles/     # Additional CSS/styling files
 ├── ui/         # Layout and core UI components
+  ├── Home.tsx   # Home page component
+  ├── Layout.tsx # Main layout component
 ├── utils/      # Utility functions
+├── App.tsx     # Main app entry point w/ providers
 ```
 
 ### 6. Import Patterns
@@ -115,6 +122,7 @@ import { helper } from '@utils/helper';
 - `@hooks/` → `src/hooks/`
 - `@lib/` → `src/lib/`
 - `@routes/` → `src/routes/`
+- `@screens/` → `src/screens/`
 - `@store/` → `src/store/`
 - `@styles/` → `src/styles/`
 - `@ui/` → `src/ui/`

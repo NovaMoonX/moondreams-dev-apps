@@ -4,7 +4,7 @@
 
 @utility page {
 	/* use dynamic viewport to handle browser UI (i.e. search bar, keyboard, etc) obscuring viewport */
-  @apply min-h-dvh w-dvw; 
+  @apply min-h-dvh w-dvw px-4 pb-12 pt-16; 
 }
 
 @theme app {
@@ -19,7 +19,7 @@
 }
 
 #root {
-  @apply page bg-background text-foreground;
+  @apply min-h-dvh w-dvw bg-background text-foreground;
 }
 
 body {

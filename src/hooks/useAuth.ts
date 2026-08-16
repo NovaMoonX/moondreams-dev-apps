@@ -4,6 +4,7 @@ import { createContext, useContext } from 'react';
 export type AuthContextValue = {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
   signInWithGoogle: () => Promise<void>;
   logOut: () => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;

@@ -10,22 +10,31 @@ import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
-import { APP_CATALOG_PATH_MAP } from '@/lib/app';
+import { getInitials } from '@/utils/accountUtils';
+import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 type AuthAvatarProps = {
   className?: string;
 };
 
 function AuthAvatar({ className }: AuthAvatarProps) {
-  const { user, loading, signInWithGoogle, logOut, updateDisplayName } =
-    useAuth();
+  const {
+    user,
+    loading,
+    signInWithGoogle,
+    logOut,
+    updateDisplayName,
+    isAdmin,
+  } = useAuth();
+  const { appPathMap } = useAppCatalog();
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   if (loading) {
     return (
@@ -48,18 +57,14 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     );
   }
 
-  const displayName = user.displayName ?? user.email ?? 'MoonDreams User';
-  const locationLabel =
-    pathname === '/'
+  const displayName = user.displayName ?? user.email ?? 'User';
+  const normalizedLocationName =
+    appPathMap[pathname]?.name?.trim() ||
+    (pathname === '/'
       ? 'Home'
-      : (APP_CATALOG_PATH_MAP[pathname]?.name ?? 'Unknown');
-  const initials =
-    displayName
-      .split(' ')
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? '')
-      .join('')
-      .slice(0, 2) || '??';
+      : pathname.replace(/^\//, '').replace(/-/g, ' '));
+  const locationLabel = pathname === '/' ? 'Home' : normalizedLocationName;
+  const initials = getInitials(displayName);
 
   const handleNameSave = async () => {
     const nextName = nameInput.trim();
@@ -99,6 +104,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         </div>
       </div>
     )),
+    ...(isAdmin ? [option({ label: 'Admin', value: 'admin' })] : []),
     option({ label: 'Profile', value: 'profile' }),
     option({ label: 'Change name', value: 'change-name' }),
     separator(),
@@ -106,6 +112,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   ];
 
   const handleItemSelect = async (value: string) => {
+    if (value === 'admin') {
+      navigate('/admin');
+      return;
+    }
     if (value === 'profile') {
       setIsProfileModalOpen(true);
       return;

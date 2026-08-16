@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom';
 
-import Home from '@ui/Home';
+import ProtectedRoute from '@routes/ProtectedRoute';
+import Home from '@screens/Home';
 import Layout from '@ui/Layout';
 import Loading from '@ui/Loading';
 
@@ -19,7 +20,43 @@ export const router = createBrowserRouter([
         lazy: async () => {
           const { default: WorthTheWait } =
             await import('@apps/worth-the-wait');
-          return { Component: WorthTheWait };
+          return {
+            Component: () => (
+              <ProtectedRoute appId='worth-the-wait'>
+                <WorthTheWait />
+              </ProtectedRoute>
+            ),
+          };
+        },
+      },
+      {
+        path: 'admin',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: AdminDashboard } = await import('@screens/AdminDashboard');
+          return {
+            Component: () => (
+              <ProtectedRoute requireAdmin>
+                <AdminDashboard />
+              </ProtectedRoute>
+            ),
+          };
+        },
+      },
+      {
+        path: 'unauthorized',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: Unauthorized } = await import('@screens/Unauthorized');
+          return { Component: Unauthorized };
+        },
+      },
+      {
+        path: '*',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: NotFound } = await import('@screens/NotFound');
+          return { Component: NotFound };
         },
       },
     ],

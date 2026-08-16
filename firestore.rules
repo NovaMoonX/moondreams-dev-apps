@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'nova@moondreams.dev'
+      );
+    }
+
+    match /apps/{appId} {
+      allow read: if !resource.data.isRestricted || (
+        request.auth != null && (
+          request.auth.uid in resource.data.allowedUsers ||
+          request.auth.token.email in resource.data.allowedUsers ||
+          isAdmin()
+        )
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
