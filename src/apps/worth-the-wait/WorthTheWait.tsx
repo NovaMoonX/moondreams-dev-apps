@@ -34,6 +34,7 @@ function WorthTheWait() {
   return (
     <>
       <PendingApprovalModal
+        key={pendingMember?.uid ?? 'no-pending-member'}
         isOpen={isCreatorPendingApproval}
         pendingMember={pendingMember}
         onApprove={approvePendingMember}

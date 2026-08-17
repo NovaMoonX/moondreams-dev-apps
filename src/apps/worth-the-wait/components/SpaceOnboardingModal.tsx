@@ -8,7 +8,7 @@ import {
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useMemo, useState } from 'react';
-import { generateInviteCode } from '../utils/generateCode';
+import { generateInviteCode, SPACE_CODE_LENGTH } from '../utils/generateCode';
 
 type SpaceOnboardingModalProps = {
   isOpen: boolean;
@@ -79,6 +79,9 @@ function SpaceOnboardingModal({
             onChange={(event) => setJoinInput(event.target.value)}
             placeholder='Enter invite code'
             aria-label='Invite code'
+            name='worth-the-wait-join-code'
+            autoComplete='off'
+            maxLength={SPACE_CODE_LENGTH}
           />
           <Button
             onClick={handleJoin}

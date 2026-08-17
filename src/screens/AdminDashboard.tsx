@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Button,
   Input,
   Modal,
@@ -10,7 +9,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import NavButton from '@/ui/NavButton';
-import { getInitials } from '@/utils/accountUtils';
+import UserAvatar from '@/ui/UserAvatar';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { ADMIN_EMAIL, getUnconfiguredRegistryApps } from '@lib/app';
@@ -240,17 +239,7 @@ function AppConfigEditor({
                 className='border-border bg-muted/40 text-foreground hover:bg-muted flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60'
                 disabled={!isRestricted}
               >
-                <Avatar
-                  src={profile.photoURL ?? undefined}
-                  alt={profile.displayName}
-                  initials={
-                    profile.photoURL
-                      ? undefined
-                      : getInitials(profile.displayName)
-                  }
-                  size='xs'
-                  shape='circle'
-                />
+                <UserAvatar user={profile} size='xs' />
                 <span>{profile.displayName}</span>
               </button>
             ))
@@ -281,17 +270,7 @@ function AppConfigEditor({
                   className='border-border flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5'
                 >
                   <div className='flex items-center gap-2'>
-                    <Avatar
-                      src={profile.photoURL ?? undefined}
-                      alt={profile.displayName ?? profile.email}
-                      initials={
-                        profile.photoURL
-                          ? undefined
-                          : getInitials(profile.displayName ?? profile.email)
-                      }
-                      size='sm'
-                      shape='circle'
-                    />
+                    <UserAvatar user={profile} size='sm' />
                     <div>
                       <div className='text-foreground text-sm'>
                         {profile.displayName ?? profile.email}

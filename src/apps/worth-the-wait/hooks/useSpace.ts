@@ -4,7 +4,6 @@ import {
   getDocs,
   onSnapshot,
   query,
-  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -22,17 +21,23 @@ function normalizeSpace(id: string, data: DocumentData): Space {
   const pendingMemberValue = data.pendingMember as
     Record<string, unknown> | null | undefined;
 
+  const now = Date.now();
+
   return {
     id,
     createdBy: String(data.createdBy ?? ''),
-    createdAt: (data.createdAt as Space['createdAt']) ?? null,
+    createdAt: typeof data.createdAt === 'number' ? data.createdAt : now,
+    updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : now,
     members: Array.isArray(data.members) ? data.members.map(String) : [],
     inviteCode: typeof data.inviteCode === 'string' ? data.inviteCode : null,
     pendingMember:
       pendingMemberValue && typeof pendingMemberValue.uid === 'string'
         ? {
             uid: pendingMemberValue.uid,
-            requestedAt: Number(pendingMemberValue.requestedA),
+            requestedAt:
+              typeof pendingMemberValue.requestedAt === 'number'
+                ? pendingMemberValue.requestedAt
+                : Date.now(),
           }
         : null,
     activeAction:
@@ -43,19 +48,13 @@ function normalizeSpace(id: string, data: DocumentData): Space {
 }
 
 export function useSpace(userUid: string) {
+  const hasUser = Boolean(userUid);
   const [space, setSpace] = useState<Space | null>(null);
   const [pendingMember, setPendingMember] = useState<PendingMember | null>(
     null,
   );
   const [loading, setLoading] = useState(Boolean(userUid));
   const [error, setError] = useState<string | null>(null);
-
-  if (!userUid) {
-    setSpace(null);
-    setPendingMember(null);
-    setLoading(false);
-    setError(null);
-  }
 
   useEffect(() => {
     if (!userUid) {
@@ -142,15 +141,16 @@ export function useSpace(userUid: string) {
       }
 
       const spaceRef = doc(SPACE_COLLECTION);
+      const now = Date.now();
       const payload = {
         id: spaceRef.id,
         createdBy: userUid,
-        createdAt: serverTimestamp(),
+        createdAt: now,
         members: [userUid],
         inviteCode,
         pendingMember: null,
         activeAction: null,
-        updatedAt: serverTimestamp(),
+        updatedAt: now,
       };
 
       await setDoc(spaceRef, payload);
@@ -203,14 +203,15 @@ export function useSpace(userUid: string) {
         throw new Error('This space already has a pending join request.');
       }
 
+      const requestedAt = Date.now();
       await updateDoc(match.ref, {
         pendingMember: {
           uid: userUid,
-          requestedAt: serverTimestamp(),
+          requestedAt,
         },
       });
 
-      setPendingMember({ uid: userUid, requestedAt: Date.now() });
+      setPendingMember({ uid: userUid, requestedAt });
       setError(null);
       return match.id;
     },
@@ -232,7 +233,7 @@ export function useSpace(userUid: string) {
       pendingMember: null,
       inviteCode: null,
       activeAction: null,
-      updatedAt: serverTimestamp(),
+      updatedAt: Date.now(),
     });
 
     setSpace({
@@ -257,7 +258,7 @@ export function useSpace(userUid: string) {
 
     await updateDoc(spaceRef, {
       pendingMember: null,
-      updatedAt: serverTimestamp(),
+      updatedAt: Date.now(),
     });
 
     setPendingMember(null);
@@ -270,11 +271,11 @@ export function useSpace(userUid: string) {
 
   const value = useMemo(
     () => ({
-      space,
-      pendingMember,
-      loading,
-      error,
-      isLocked: Boolean(space && space.members.length >= 2),
+      space: hasUser ? space : null,
+      pendingMember: hasUser ? pendingMember : null,
+      loading: hasUser ? loading : false,
+      error: hasUser ? error : null,
+      isLocked: hasUser ? Boolean(space && space.members.length >= 2) : false,
       createSpace,
       joinSpace,
       approvePendingMember,
@@ -285,6 +286,7 @@ export function useSpace(userUid: string) {
       createSpace,
       declinePendingMember,
       error,
+      hasUser,
       joinSpace,
       loading,
       pendingMember,

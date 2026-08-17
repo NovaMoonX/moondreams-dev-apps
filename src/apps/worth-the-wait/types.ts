@@ -1,12 +1,13 @@
 export type PendingMember = {
   uid: string;
-  requestedAt: number; // timestamp
+  requestedAt: number;
 };
 
 export type Space = {
   id: string;
   createdBy: string;
-  createdAt: string | Date | Record<string, unknown> | null;
+  createdAt: number | null;
+  updatedAt: number | null;
   members: string[];
   inviteCode: string | null;
   pendingMember: PendingMember | null;

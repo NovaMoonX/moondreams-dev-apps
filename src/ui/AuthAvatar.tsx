@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Button,
   DropdownMenu,
   DropdownMenuFactories,
@@ -10,7 +9,7 @@ import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
-import { getInitials } from '@/utils/accountUtils';
+import UserAvatar from '@/ui/UserAvatar';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -64,7 +63,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       ? 'Home'
       : pathname.replace(/^\//, '').replace(/-/g, ' '));
   const locationLabel = pathname === '/' ? 'Home' : normalizedLocationName;
-  const initials = getInitials(displayName);
 
   const handleNameSave = async () => {
     const nextName = nameInput.trim();
@@ -81,13 +79,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     custom(() => (
       <div className='border-border border-b px-3 py-2'>
         <div className='flex items-center gap-3'>
-          <Avatar
-            src={user.photoURL ?? undefined}
-            alt={displayName}
-            initials={user.photoURL ? undefined : initials}
-            size='md'
-            shape='circle'
-          />
+          <UserAvatar user={user} size='md' />
           <div className='min-w-0'>
             <div className='text-foreground truncate text-sm font-medium'>
               {displayName}
@@ -151,13 +143,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         offset={12}
         trigger={
           <Button variant='base' size='sm' className={join('gap-2', className)}>
-            <Avatar
-              src={user.photoURL ?? undefined}
-              alt={displayName}
-              initials={user.photoURL ? undefined : initials}
-              size='sm'
-              shape='circle'
-            />
+            <UserAvatar user={user} size='sm' />
             <span className='hidden sm:inline'>{displayName}</span>
             <ChevronDown className='h-4 w-4' />
           </Button>
@@ -182,13 +168,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             This is your profile information.
           </p>
           <div className='flex items-center gap-3'>
-            <Avatar
-              src={user.photoURL ?? undefined}
-              alt={displayName}
-              initials={user.photoURL ? undefined : initials}
-              size='md'
-              shape='circle'
-            />
+            <UserAvatar user={user} size='md' />
             <div className='min-w-0'>
               <div className='text-foreground truncate text-sm font-medium'>
                 {displayName}
