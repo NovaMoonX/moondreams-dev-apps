@@ -20,9 +20,7 @@ const SPACE_COLLECTION = collection(db, 'apps', 'worth-the-wait', 'spaces');
 
 function normalizeSpace(id: string, data: DocumentData): Space {
   const pendingMemberValue = data.pendingMember as
-    | Record<string, unknown>
-    | null
-    | undefined;
+    Record<string, unknown> | null | undefined;
 
   return {
     id,
@@ -34,9 +32,7 @@ function normalizeSpace(id: string, data: DocumentData): Space {
       pendingMemberValue && typeof pendingMemberValue.uid === 'string'
         ? {
             uid: pendingMemberValue.uid,
-            requestedAt:
-              (pendingMemberValue.requestedAt as PendingMember['requestedAt']) ??
-              null,
+            requestedAt: Number(pendingMemberValue.requestedA),
           }
         : null,
     activeAction:
@@ -46,29 +42,23 @@ function normalizeSpace(id: string, data: DocumentData): Space {
   };
 }
 
-function generateInviteCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-
-  for (let index = 0; index < 6; index += 1) {
-    code += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-
-  return code;
-}
-
 export function useSpace(userUid: string) {
   const [space, setSpace] = useState<Space | null>(null);
-  const [pendingMember, setPendingMember] = useState<PendingMember | null>(null);
+  const [pendingMember, setPendingMember] = useState<PendingMember | null>(
+    null,
+  );
   const [loading, setLoading] = useState(Boolean(userUid));
   const [error, setError] = useState<string | null>(null);
 
+  if (!userUid) {
+    setSpace(null);
+    setPendingMember(null);
+    setLoading(false);
+    setError(null);
+  }
+
   useEffect(() => {
     if (!userUid) {
-      setSpace(null);
-      setPendingMember(null);
-      setLoading(false);
-      setError(null);
       return;
     }
 
@@ -76,8 +66,14 @@ export function useSpace(userUid: string) {
     let nextActiveSpace: Space | null = null;
     let nextPendingMember: PendingMember | null = null;
 
-    const activeQuery = query(SPACE_COLLECTION, where('members', 'array-contains', userUid));
-    const creatorQuery = query(SPACE_COLLECTION, where('createdBy', '==', userUid));
+    const activeQuery = query(
+      SPACE_COLLECTION,
+      where('members', 'array-contains', userUid),
+    );
+    const creatorQuery = query(
+      SPACE_COLLECTION,
+      where('createdBy', '==', userUid),
+    );
 
     const activeUnsubscribe = onSnapshot(
       activeQuery,
@@ -139,31 +135,33 @@ export function useSpace(userUid: string) {
     };
   }, [userUid]);
 
-  const createSpace = useCallback(async () => {
-    if (!userUid) {
-      throw new Error('A user is required to create a space.');
-    }
+  const createSpace = useCallback(
+    async (inviteCode: string) => {
+      if (!userUid) {
+        throw new Error('A user is required to create a space.');
+      }
 
-    const inviteCode = generateInviteCode();
-    const spaceRef = doc(SPACE_COLLECTION);
-    const payload = {
-      id: spaceRef.id,
-      createdBy: userUid,
-      createdAt: serverTimestamp(),
-      members: [userUid],
-      inviteCode,
-      pendingMember: null,
-      activeAction: null,
-      updatedAt: serverTimestamp(),
-    };
+      const spaceRef = doc(SPACE_COLLECTION);
+      const payload = {
+        id: spaceRef.id,
+        createdBy: userUid,
+        createdAt: serverTimestamp(),
+        members: [userUid],
+        inviteCode,
+        pendingMember: null,
+        activeAction: null,
+        updatedAt: serverTimestamp(),
+      };
 
-    await setDoc(spaceRef, payload);
-    setSpace(normalizeSpace(spaceRef.id, payload));
-    setPendingMember(null);
-    setError(null);
+      await setDoc(spaceRef, payload);
+      setSpace(normalizeSpace(spaceRef.id, payload));
+      setPendingMember(null);
+      setError(null);
 
-    return inviteCode;
-  }, [userUid]);
+      return inviteCode;
+    },
+    [userUid],
+  );
 
   const joinSpace = useCallback(
     async (inviteCode: string) => {
@@ -177,7 +175,10 @@ export function useSpace(userUid: string) {
         throw new Error('A user is required to join a space.');
       }
 
-      const lookupQuery = query(SPACE_COLLECTION, where('inviteCode', '==', trimmedCode));
+      const lookupQuery = query(
+        SPACE_COLLECTION,
+        where('inviteCode', '==', trimmedCode),
+      );
       const snapshot = await getDocs(lookupQuery);
 
       if (snapshot.empty) {
@@ -195,7 +196,10 @@ export function useSpace(userUid: string) {
         throw new Error('This space is already full.');
       }
 
-      if (existingSpace.pendingMember && existingSpace.pendingMember.uid !== userUid) {
+      if (
+        existingSpace.pendingMember &&
+        existingSpace.pendingMember.uid !== userUid
+      ) {
         throw new Error('This space already has a pending join request.');
       }
 
@@ -206,7 +210,7 @@ export function useSpace(userUid: string) {
         },
       });
 
-      setPendingMember({ uid: userUid, requestedAt: new Date().toISOString() });
+      setPendingMember({ uid: userUid, requestedAt: Date.now() });
       setError(null);
       return match.id;
     },
@@ -218,7 +222,9 @@ export function useSpace(userUid: string) {
       throw new Error('There is no pending member to approve.');
     }
 
-    const nextMembers = Array.from(new Set([...space.members, space.pendingMember.uid]));
+    const nextMembers = Array.from(
+      new Set([...space.members, space.pendingMember.uid]),
+    );
     const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', space.id);
 
     await updateDoc(spaceRef, {
@@ -274,7 +280,16 @@ export function useSpace(userUid: string) {
       approvePendingMember,
       declinePendingMember,
     }),
-    [approvePendingMember, createSpace, declinePendingMember, error, joinSpace, loading, pendingMember, space],
+    [
+      approvePendingMember,
+      createSpace,
+      declinePendingMember,
+      error,
+      joinSpace,
+      loading,
+      pendingMember,
+      space,
+    ],
   );
 
   return value;

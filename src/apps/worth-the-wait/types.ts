@@ -1,6 +1,6 @@
 export type PendingMember = {
   uid: string;
-  requestedAt: string | Date | Record<string, unknown> | null;
+  requestedAt: number; // timestamp
 };
 
 export type Space = {

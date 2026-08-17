@@ -1,6 +1,7 @@
 import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
 
+import Loading from '@/ui/Loading';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import { useSpace } from './hooks/useSpace';
@@ -21,23 +22,12 @@ function WorthTheWait() {
   const isCreatorPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
-  const isOnboardingOpen = Boolean(user) && !hasLockedSpace && !isCreatorPendingApproval;
+  const isOnboardingOpen =
+    Boolean(user) && !hasLockedSpace && !isCreatorPendingApproval;
 
   if (loading) {
     return (
-      <div className='page flex items-center justify-center px-4 py-12'>
-        <div className='w-full max-w-xl'>
-          <div className='mb-6'>
-            <NavButton href='/'>Back</NavButton>
-          </div>
-
-          <main className='space-y-5'>
-            <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-              Loading your space
-            </p>
-          </main>
-        </div>
-      </div>
+      <Loading />
     );
   }
 
@@ -53,38 +43,39 @@ function WorthTheWait() {
 
       <SpaceOnboardingModal
         isOpen={isOnboardingOpen}
-        inviteCode={space?.inviteCode ?? ''}
-        onClose={() => undefined}
         onCreateSpace={createSpace}
         onJoinSpace={joinSpace}
       />
 
-      <div className='page flex items-center justify-center px-4 py-12'>
-        <div className='w-full max-w-xl'>
-          <div className='mb-6'>
-            <NavButton href='/'>Back</NavButton>
+      {!isOnboardingOpen && (
+        <div className='page flex items-center justify-center px-4 py-12'>
+          <div className='w-full max-w-xl'>
+            <div className='mb-6'>
+              <NavButton href='/'>Back</NavButton>
+            </div>
+
+            <main className='space-y-5'>
+              <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
+                Mini app
+              </p>
+              <h1 className='text-foreground text-4xl font-semibold tracking-tight md:text-5xl'>
+                Worth the Wait
+              </h1>
+              <p className='text-foreground/70 max-w-lg text-base leading-7 md:text-lg'>
+                A quiet place to hold what is on your mind and in your heart
+                until the right moment to share it arrives.
+              </p>
+
+              {!hasLockedSpace && user ? (
+                <div className='bg-muted/40 border-border text-muted-foreground rounded-lg border p-4 text-sm'>
+                  Your shared space is waiting for both partners to join and
+                  lock in.
+                </div>
+              ) : null}
+            </main>
           </div>
-
-          <main className='space-y-5'>
-            <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-              Mini app
-            </p>
-            <h1 className='text-foreground text-4xl font-semibold tracking-tight md:text-5xl'>
-              Worth the Wait
-            </h1>
-            <p className='text-foreground/70 max-w-lg text-base leading-7 md:text-lg'>
-              A quiet place to hold what is on your mind and in your heart until
-              the right moment to share it arrives.
-            </p>
-
-            {!hasLockedSpace && user ? (
-              <div className='bg-muted/40 border-border rounded-lg border p-4 text-sm text-muted-foreground'>
-                Your shared space is waiting for both partners to join and lock in.
-              </div>
-            ) : null}
-          </main>
         </div>
-      </div>
+      )}
     </>
   );
 }
