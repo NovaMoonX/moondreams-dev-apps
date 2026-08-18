@@ -1,5 +1,5 @@
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 import UserAvatar from '@/ui/UserAvatar';
@@ -36,27 +36,16 @@ function PendingApprovalModal({
       return;
     }
 
-    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const nextUser = snapshot.docs
-        .map((documentSnapshot) => {
-          const data = documentSnapshot.data() as Partial<UserProfile>;
-          return {
-            uid: String(data.uid ?? documentSnapshot.id),
-            displayName: data.displayName ?? null,
-            email: data.email ?? null,
-            photoURL: data.photoURL ?? null,
-          } satisfies UserProfile;
-        })
-        .find((user) => user.uid === pendingMember.uid);
+    const userDocRef = doc(db, 'users', pendingMember.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
+      const data = docSnapshot.data() as Partial<UserProfile> | undefined;
 
-      setPendingUser(
-        nextUser ?? {
-          uid: pendingMember.uid,
-          displayName: null,
-          email: null,
-          photoURL: null,
-        },
-      );
+      setPendingUser({
+        uid: pendingMember.uid,
+        displayName: data?.displayName ?? null,
+        email: data?.email ?? null,
+        photoURL: data?.photoURL ?? null,
+      });
     });
 
     return () => unsubscribe();

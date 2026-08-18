@@ -87,7 +87,8 @@ service cloud.firestore {
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
         request.auth.uid in resource.data.members ||
-        (resource.data.pendingMember != null && request.auth.uid == resource.data.pendingMember.uid)
+        (resource.data.pendingMember != null && request.auth.uid == resource.data.pendingMember.uid) ||
+        resource.data.members.size() < 2
       );
 
       allow create: if isCreateValid();
