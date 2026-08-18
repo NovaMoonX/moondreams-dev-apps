@@ -2,21 +2,28 @@ import { Badge } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { usePresence } from '@/hooks/usePresence';
-import UserAvatar, { type UserAvatarData } from '@/ui/UserAvatar';
+import UserAvatar from '@/ui/UserAvatar';
+import { useAuth } from '@hooks/useAuth';
+
+import { useWorthTheWait } from '../context/worthTheWaitContext';
 
 type PresenceBadgeProps = {
-  user?: UserAvatarData | null;
-  partnerUid?: string | null;
-  showPendingState?: boolean;
   className?: string;
 };
 
-function PresenceBadge({
-  user,
-  partnerUid,
-  showPendingState = false,
-  className,
-}: PresenceBadgeProps) {
+function PresenceBadge({ className }: PresenceBadgeProps) {
+  const { user } = useAuth();
+  const { space } = useWorthTheWait();
+
+  const activePartnerUid =
+    user && space
+      ? (space.members.find((memberUid) => memberUid !== user.uid) ?? null)
+      : null;
+  const partnerUid = activePartnerUid ?? space?.pendingMember?.uid ?? null;
+  const showPendingState = Boolean(
+    space && space.pendingMember && !activePartnerUid,
+  );
+
   const partnerPresence = usePresence(partnerUid);
   const presence =
     partnerPresence && !Array.isArray(partnerPresence)
