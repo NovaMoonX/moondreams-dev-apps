@@ -64,7 +64,7 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
         className={join(
           'mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
           revealCount > 0
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
             : 'border-border bg-muted/40 text-muted-foreground',
         )}
       >
@@ -74,7 +74,7 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
             : 'No reveals yet'}
         </span>
         {box.revealRequestedBy.length > 0 ? (
-          <span className='rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-amber-700 uppercase'>
+          <span className='rounded-full bg-amber-100 dark:bg-amber-900 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-amber-700 dark:text-amber-200 uppercase'>
             Pending
           </span>
         ) : null}

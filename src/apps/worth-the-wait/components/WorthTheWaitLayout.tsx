@@ -28,12 +28,12 @@ function WorthTheWaitLayout() {
   return (
     <div className='page pt-28'>
       <div className={join('mx-auto max-w-6xl space-y-6')}>
-        <header className='flex items-start justify-between gap-4'>
+        <header className='flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4'>
           <NavButton href='/' variant='link'>
             <ChevronLeft /> Back home
           </NavButton>
 
-          {space ? <PresenceBadge className='shrink-0' /> : null}
+          {space ? <PresenceBadge className='shrink-0 w-fit self-center' /> : null}
         </header>
 
         <main className='bg-card/80 border-border rounded-2xl border p-5 shadow-sm md:p-8'>
@@ -55,7 +55,7 @@ function WorthTheWaitLayout() {
 
           {hasLockedSpace && (
             <div className='mt-8 space-y-5'>
-              <div className='flex items-center justify-between gap-4'>
+              <div className='flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap'>
                 <div>
                   <h2 className='text-foreground text-xl font-semibold'>
                     Shared boxes
@@ -65,7 +65,7 @@ function WorthTheWaitLayout() {
                     right time.
                   </p>
                 </div>
-                <Button type='button' onClick={() => setIsCreateBoxOpen(true)}>
+                <Button type='button' onClick={() => setIsCreateBoxOpen(true)} className='shrink-0 w-full sm:w-auto'>
                   New box
                 </Button>
               </div>

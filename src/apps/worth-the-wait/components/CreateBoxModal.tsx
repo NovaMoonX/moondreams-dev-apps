@@ -52,13 +52,14 @@ function CreateBoxModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Create a new box'>
       <div className='space-y-4'>
-        <div className='grid grid-cols-[72px_1fr] items-center gap-3'>
+        <div className='grid grid-cols-[50px_1fr] items-center gap-3'>
           <Input
             value={emoji}
             onChange={(event) => setEmoji(event.target.value.slice(0, 2))}
             aria-label='Box emoji'
             name='box-emoji'
             maxLength={2}
+            className='text-center'
           />
           <Input
             value={name}
