@@ -106,7 +106,13 @@ service cloud.firestore {
             request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
         }
 
-        allow read, create, update, delete: if isSpaceMember();
+        function isCreator() {
+          return request.auth != null &&
+            resource.data.createdBy == request.auth
+        }
+
+        allow read, create, update: if isSpaceMember();
+        allow delete: if isSpaceMember() && isCreator()
 
         match /items/{itemId} {
           allow read, create, update, delete: if isSpaceMember();

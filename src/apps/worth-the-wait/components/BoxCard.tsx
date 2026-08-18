@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import type { Box } from '../types';
+import { useAuth } from '@/hooks/useAuth';
 
 interface BoxCardProps {
   box: Box;
@@ -10,10 +11,19 @@ interface BoxCardProps {
 }
 
 function BoxCard({ box, onDelete }: BoxCardProps) {
-  const { confirm } = useActionModal();
+  const { user } = useAuth();
+  const { alert, confirm } = useActionModal();
   const revealCount = box.revealHistory.length;
 
   const handleConfirmDelete = async () => {
+    if (user?.uid !== box.createdBy) {
+      alert({
+        title: 'Cannot delete box',
+        message: 'Only the person who created this box can delete it.',
+      });
+      return;
+    }
+
     const confirmed = await confirm({
       title: 'Delete box',
       message:
