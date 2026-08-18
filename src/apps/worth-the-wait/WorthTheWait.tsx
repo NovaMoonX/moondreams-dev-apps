@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import Loading from '@/ui/Loading';
 import PendingApprovalModal from './components/PendingApprovalModal';
+import PresenceBadge from './components/PresenceBadge';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import { useSpace } from './hooks/useSpace';
 
@@ -33,6 +34,13 @@ function WorthTheWait() {
   );
   const isOnboardingOpen =
     Boolean(user) && !hasLockedSpace && !creatorHasPendingApproval;
+  const activePartnerUid =
+    user && space
+      ? space.members.find((memberUid) => memberUid !== user.uid) ?? null
+      : null;
+  const presencePartnerUid =
+    activePartnerUid ?? (pendingMember ? pendingMember.uid : null);
+  const showPendingBadge = Boolean(space && pendingMember && !activePartnerUid);
 
   if (loading) {
     return <Loading />;
@@ -60,30 +68,40 @@ function WorthTheWait() {
       />
 
       {!isOnboardingOpen && (
-        <div className='page flex items-center justify-center px-4 py-12'>
-          <div className='w-full max-w-xl'>
-            <div className='mb-6'>
+        <div className='page min-h-screen px-4 py-6 md:px-6'>
+          <div className='mx-auto max-w-6xl space-y-6'>
+            <header className='flex items-start justify-between gap-4'>
               <NavButton href='/'>Back</NavButton>
-            </div>
 
-            <main className='space-y-5'>
-              <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-                Mini app
-              </p>
-              <h1 className='text-foreground text-4xl font-semibold tracking-tight md:text-5xl'>
-                Worth the Wait
-              </h1>
-              <p className='text-foreground/70 max-w-lg text-base leading-7 md:text-lg'>
-                A quiet place to hold what is on your mind and in your heart
-                until the right moment to share it arrives.
-              </p>
-
-              {!hasLockedSpace && user ? (
-                <div className='bg-muted/40 border-border text-muted-foreground rounded-lg border p-4 text-sm'>
-                  Your shared space is waiting for both partners to join and
-                  lock in.
-                </div>
+              {space ? (
+                <PresenceBadge
+                  partnerUid={presencePartnerUid}
+                  showPendingState={showPendingBadge}
+                  className='shrink-0'
+                />
               ) : null}
+            </header>
+
+            <main className='bg-card/80 border-border rounded-2xl border p-5 shadow-sm md:p-8'>
+              <div className='max-w-xl space-y-5'>
+                <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
+                  Mini app
+                </p>
+                <h1 className='text-foreground text-4xl font-semibold tracking-tight md:text-5xl'>
+                  Worth the Wait
+                </h1>
+                <p className='text-foreground/70 max-w-lg text-base leading-7 md:text-lg'>
+                  A quiet place to hold what is on your mind and in your heart
+                  until the right moment to share it arrives.
+                </p>
+
+                {!hasLockedSpace && user ? (
+                  <div className='bg-muted/40 border-border text-muted-foreground rounded-lg border p-4 text-sm'>
+                    Your shared space is waiting for both partners to join and
+                    lock in.
+                  </div>
+                ) : null}
+              </div>
             </main>
           </div>
         </div>

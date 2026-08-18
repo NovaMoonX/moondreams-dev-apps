@@ -3,6 +3,12 @@ export type PendingMember = {
   requestedAt: number;
 };
 
+export type UserPresence = {
+  state: 'online' | 'offline';
+  currentLocation: string | null;
+  lastChanges: number | null;
+};
+
 export type Space = {
   id: string;
   createdBy: string;
