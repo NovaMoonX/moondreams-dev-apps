@@ -20,7 +20,7 @@ function PresenceBadge({
 }: PresenceBadgeProps) {
   const presence = usePresence(partnerUid ?? null);
 
-  const isPending = showPendingState || (!partnerUid && !presence?.isOnline);
+  const isPending = showPendingState;
   const statusText = isPending
     ? 'Pending approval'
     : presence?.isHere
