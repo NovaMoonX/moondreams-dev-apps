@@ -15,6 +15,7 @@ import { useAuth } from '@hooks/useAuth';
 import { ADMIN_EMAIL, getUnconfiguredRegistryApps } from '@lib/app';
 import { db } from '@lib/firebase/config';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
+import { X } from '@moondreamsdev/dreamer-ui/symbols';
 
 type AppConfigEditorProps = {
   app: AppMetadata;
@@ -36,6 +37,7 @@ function AppConfigEditor({
     app.allowedUsers ?? [],
   );
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchError, setSearchError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
@@ -90,6 +92,10 @@ function AppConfigEditor({
     [allowedUsers, searchTerm, users],
   );
 
+  const trimmedSearchTerm = searchTerm.trim();
+  const hasNoSearchResults =
+    trimmedSearchTerm.length > 0 && availableUsers.length === 0;
+
   const hasUnsavedChanges = useMemo(() => {
     const savedAllowedUsers = [...app.allowedUsers].sort((a, b) =>
       a.localeCompare(b),
@@ -127,6 +133,40 @@ function AppConfigEditor({
       const uniqueValues = new Set([...current, trimmedValue]);
       return Array.from(uniqueValues);
     });
+  };
+
+  const addSearchTermToAccessList = () => {
+    if (!isRestricted) {
+      return;
+    }
+
+    const trimmedValue = searchTerm.trim();
+
+    if (!trimmedValue) {
+      setSearchError('Enter an email address to add.');
+      return;
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(trimmedValue)) {
+      setSearchError('Enter a valid email address.');
+      return;
+    }
+
+    const normalizedValue = trimmedValue.toLowerCase();
+    const alreadyExists = allowedUsers.some(
+      (value) => value.trim().toLowerCase() === normalizedValue,
+    );
+
+    if (alreadyExists) {
+      setSearchTerm('');
+      setSearchError('');
+      return;
+    }
+
+    setAllowedUsers((current) => [...current, trimmedValue]);
+    setSearchTerm('');
+    setSearchError('');
   };
 
   const removeUserFromAccessList = (value: string) => {
@@ -232,16 +272,21 @@ function AppConfigEditor({
             </span>
           ) : (
             approvedUsers.map((profile) => (
-              <button
+              <div
                 key={profile.key}
-                type='button'
-                onClick={() => removeUserFromAccessList(profile.key)}
-                className='border-border bg-muted/40 text-foreground hover:bg-muted flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60'
-                disabled={!isRestricted}
+                className='border-border bg-muted/40 text-foreground flex items-center gap-2 rounded-full border px-2.5 py-1.5'
               >
                 <UserAvatar user={profile} size='xs' />
                 <span>{profile.displayName}</span>
-              </button>
+                <Button
+                  size='icon'
+                  className='rounded-full!'
+                  onClick={() => removeUserFromAccessList(profile.key)}
+                  disabled={!isRestricted}
+                >
+                  <X className='h-3 w-3' />
+                </Button>
+              </div>
             ))
           )}
         </div>
@@ -253,13 +298,49 @@ function AppConfigEditor({
           <div className='mb-3'>
             <Input
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder='Search users by name or email'
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                if (searchError) {
+                  setSearchError('');
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && hasNoSearchResults) {
+                  event.preventDefault();
+                  addSearchTermToAccessList();
+                }
+              }}
+              placeholder={
+                hasNoSearchResults
+                  ? 'No match — add this email'
+                  : 'Search users by name or email'
+              }
               disabled={!isRestricted}
             />
           </div>
+
+          {hasNoSearchResults ? (
+            <div className='mb-3 flex items-center justify-between gap-2 rounded-lg border border-dashed border-amber-500/60 bg-amber-500/5 p-2'>
+              <span className='text-xs text-amber-700'>
+                No matching users found. Add this email instead.
+              </span>
+              <Button
+                variant='secondary'
+                size='sm'
+                onClick={addSearchTermToAccessList}
+                disabled={!isRestricted}
+              >
+                Add email
+              </Button>
+            </div>
+          ) : null}
+
+          {searchError ? (
+            <p className='text-destructive mb-3 text-xs'>{searchError}</p>
+          ) : null}
+
           <div className='space-y-2'>
-            {availableUsers.length === 0 ? (
+            {availableUsers.length === 0 && !hasNoSearchResults ? (
               <span className='text-muted-foreground text-sm'>
                 No matching users found.
               </span>

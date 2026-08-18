@@ -2,10 +2,8 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 
-import {
-  auth,
-  isUsingFirebaseEmulators,
-} from '@lib/firebase/config';
+import { useAuth } from '@/hooks/useAuth';
+import { auth, isUsingFirebaseEmulators } from '@lib/firebase/config';
 
 const FIXTURE_PASSWORD = 'local-fixture-password';
 
@@ -16,6 +14,7 @@ const fixtureAccounts = [
 ] as const;
 
 export function DevAccountSwitcher() {
+  const { user } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -55,6 +54,18 @@ export function DevAccountSwitcher() {
           {account.label}
         </Button>
       ))}
+      {user && (
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          disabled={isSigningIn}
+          onClick={() => void auth.signOut()}
+          title='Sign out'
+        >
+          Sign Out
+        </Button>
+      )}
       {error ? <span className='sr-only'>{error}</span> : null}
     </div>
   );
