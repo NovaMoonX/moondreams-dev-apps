@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import type { Box } from '../types';
 
 interface BoxCardProps {
@@ -9,7 +10,21 @@ interface BoxCardProps {
 }
 
 function BoxCard({ box, onDelete }: BoxCardProps) {
+  const { confirm } = useActionModal();
   const revealCount = box.revealHistory.length;
+
+  const handleConfirmDelete = async () => {
+    const confirmed = await confirm({
+      title: 'Delete box',
+      message:
+        'Are you sure you want to delete this box? This action cannot be undone.',
+      destructive: true,
+    });
+
+    if (confirmed && onDelete) {
+      await onDelete(box.id);
+    }
+  };
 
   return (
     <article className='border-border bg-card/80 flex h-full flex-col rounded-2xl border p-4 shadow-sm'>
@@ -19,8 +34,10 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
             {box.emoji}
           </div>
           <div>
-            <h3 className='text-foreground text-lg font-semibold'>{box.name}</h3>
-            <p className='text-muted-foreground text-xs uppercase tracking-[0.16em]'>
+            <h3 className='text-foreground text-lg font-semibold'>
+              {box.name}
+            </h3>
+            <p className='text-muted-foreground text-xs tracking-[0.16em] uppercase'>
               {box.isDefault ? 'Starter box' : 'Custom'}
             </p>
           </div>
@@ -31,7 +48,7 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => void onDelete(box.id)}
+            onClick={handleConfirmDelete}
             className='shrink-0'
           >
             Delete
@@ -43,19 +60,21 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
         {box.description}
       </p>
 
-      <div className={join(
-        'mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
-        revealCount > 0
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-          : 'border-border bg-muted/40 text-muted-foreground',
-      )}>
+      <div
+        className={join(
+          'mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
+          revealCount > 0
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-border bg-muted/40 text-muted-foreground',
+        )}
+      >
         <span>
           {revealCount > 0
             ? `${revealCount} reveal${revealCount === 1 ? '' : 's'}`
             : 'No reveals yet'}
         </span>
         {box.revealRequestedBy.length > 0 ? (
-          <span className='rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-amber-700'>
+          <span className='rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-amber-700 uppercase'>
             Pending
           </span>
         ) : null}
