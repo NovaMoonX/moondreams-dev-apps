@@ -1,5 +1,6 @@
 import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
+import { useState } from 'react';
 
 import Loading from '@/ui/Loading';
 import PendingApprovalModal from './components/PendingApprovalModal';
@@ -21,6 +22,11 @@ function WorthTheWait() {
     declinePendingMember,
   } = useSpace(user?.uid ?? '');
 
+  const [
+    hasPendingApprovalModalBeenDismissed,
+    setHasPendingApprovalModalBeenDismissed,
+  ] = useState(false);
+
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
   const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
@@ -36,11 +42,13 @@ function WorthTheWait() {
     <>
       <PendingApprovalModal
         key={pendingMember?.uid ?? 'no-pending-member'}
-        isOpen={creatorHasPendingApproval}
+        isOpen={
+          creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed
+        }
         pendingMember={pendingMember}
         onApprove={approvePendingMember}
         onDecline={declinePendingMember}
-        onClose={declinePendingMember}
+        onClose={() => setHasPendingApprovalModalBeenDismissed(true)}
       />
 
       <SpaceOnboardingModal
