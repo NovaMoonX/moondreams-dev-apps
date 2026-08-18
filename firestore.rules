@@ -108,15 +108,15 @@ service cloud.firestore {
 
         function isCreator() {
           return request.auth != null &&
-            resource.data.createdBy == request.auth
+            resource.data.createdBy == request.auth.uid
         }
 
         function isDefaultBox() {
           return resource.data.isDefault
         }
 
-        allow read, create, update: if isSpaceMember();
-        allow delete: if isSpaceMember() && isCreator() && !isDefaultBox()
+        allow read, create: if isSpaceMember();
+        allow update, delete: if isSpaceMember() && isCreator() && !isDefaultBox();
 
         match /items/{itemId} {
           allow read, create, update, delete: if isSpaceMember();

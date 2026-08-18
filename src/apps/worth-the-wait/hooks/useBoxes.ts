@@ -5,6 +5,7 @@ import {
   doc,
   onSnapshot,
   setDoc,
+  updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -40,7 +41,13 @@ export function useBoxes(spaceId: string) {
           .map((documentSnapshot) =>
             normalizeBox(documentSnapshot.id, documentSnapshot.data() as DocumentData),
           )
-          .sort((left, right) => left.createdAt - right.createdAt);
+          .sort((left, right) => {
+            if (left.createdAt === right.createdAt) {
+              return left.name.localeCompare(right.name);
+            }
+
+            return left.createdAt - right.createdAt
+          });
 
         setBoxes(nextBoxes);
         setLoading(false);
@@ -121,6 +128,48 @@ export function useBoxes(spaceId: string) {
     [spaceId],
   );
 
+  
+
+  const editCustomBox = useCallback(
+    async (boxId: string, draft: BoxDraft) => {
+      if (!spaceId || !boxId) {
+        throw new Error('A space and box are required to update a box.');
+      }
+
+      const trimmedName = draft.name.trim();
+      const trimmedDescription = limitDescription(draft.description);
+
+      if (!trimmedName) {
+        throw new Error('Add a box name before saving changes.');
+      }
+
+      if (trimmedDescription.length > 50) {
+        throw new Error('Descriptions must be 50 characters or fewer.');
+      }
+
+      const boxRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        boxId,
+      );
+
+      await updateDoc(
+        boxRef,
+        {
+          name: trimmedName,
+          emoji: draft.emoji.trim() || '✨',
+          description: trimmedDescription,
+          lastEditedAt: Date.now(),
+        },
+      );
+    },
+    [spaceId],
+  );
+
   const deleteBox = useCallback(
     async (boxId: string) => {
       if (!spaceId || !boxId) {
@@ -133,5 +182,5 @@ export function useBoxes(spaceId: string) {
     [spaceId],
   );
 
-  return { boxes, loading, error, createCustomBox, deleteBox };
+  return { boxes, loading, error, createCustomBox, editCustomBox, deleteBox };
 }

@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useBoxes } from '../hooks/useBoxes';
 import BoxGrid from './BoxGrid';
-import CreateBoxModal from './CreateBoxModal';
+import ManageBoxModal from './ManageBoxModal';
 import PresenceBadge from './PresenceBadge';
 
 function WorthTheWaitLayout() {
@@ -22,6 +22,7 @@ function WorthTheWaitLayout() {
     boxes,
     loading: boxesLoading,
     createCustomBox,
+    editCustomBox,
     deleteBox,
   } = useBoxes(space?.id ?? '');
 
@@ -33,7 +34,9 @@ function WorthTheWaitLayout() {
             <ChevronLeft /> Back home
           </NavButton>
 
-          {space ? <PresenceBadge className='shrink-0 w-fit self-center' /> : null}
+          {space ? (
+            <PresenceBadge className='w-fit shrink-0 self-center' />
+          ) : null}
         </header>
 
         <main className='bg-card/80 border-border rounded-2xl border p-5 shadow-sm md:p-8'>
@@ -55,7 +58,7 @@ function WorthTheWaitLayout() {
 
           {hasLockedSpace && (
             <div className='mt-8 space-y-5'>
-              <div className='flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap'>
+              <div className='flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap'>
                 <div>
                   <h2 className='text-foreground text-xl font-semibold'>
                     Shared boxes
@@ -65,7 +68,11 @@ function WorthTheWaitLayout() {
                     right time.
                   </p>
                 </div>
-                <Button type='button' onClick={() => setIsCreateBoxOpen(true)} className='shrink-0 w-full sm:w-auto'>
+                <Button
+                  type='button'
+                  onClick={() => setIsCreateBoxOpen(true)}
+                  className='w-full shrink-0 sm:w-auto'
+                >
                   New box
                 </Button>
               </div>
@@ -75,14 +82,21 @@ function WorthTheWaitLayout() {
                   Loading boxes...
                 </div>
               ) : (
-                <BoxGrid boxes={boxes} onDeleteBox={deleteBox} />
+                <BoxGrid
+                  boxes={boxes}
+                  onDeleteBox={deleteBox}
+                  onEditBox={async (boxId, draft) => {
+                    await editCustomBox(boxId, draft);
+                  }}
+                />
               )}
             </div>
           )}
         </main>
       </div>
 
-      <CreateBoxModal
+      <ManageBoxModal
+        key={`create-box-modal-${isCreateBoxOpen}`}
         isOpen={isCreateBoxOpen}
         onClose={() => setIsCreateBoxOpen(false)}
         onCreate={async (draft) => {
