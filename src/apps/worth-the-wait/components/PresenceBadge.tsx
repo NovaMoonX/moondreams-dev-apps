@@ -17,7 +17,7 @@ function PresenceBadge({
   showPendingState = false,
   className,
 }: PresenceBadgeProps) {
-  const partnerPresence = usePresence(partnerUid ?? null);
+  const partnerPresence = usePresence(partnerUid);
   const presence =
     partnerPresence && !Array.isArray(partnerPresence)
       ? partnerPresence
@@ -45,7 +45,7 @@ function PresenceBadge({
   return (
     <div
       className={join(
-        'flex min-w-[112px] flex-col items-center gap-2 rounded-xl border border-transparent bg-transparent p-2',
+        'flex min-w-28 flex-col items-center gap-2 rounded-xl border border-transparent bg-transparent p-2',
         className,
       )}
     >

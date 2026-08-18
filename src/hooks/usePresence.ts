@@ -16,7 +16,10 @@ export type PresenceEntry = PresenceStatus & {
 };
 
 function normalizePresence(value: unknown): PresenceStatus {
-  const data = value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+  const data =
+    value && typeof value === 'object'
+      ? (value as Record<string, unknown>)
+      : null;
 
   return {
     state: data?.state === 'online' ? 'online' : 'offline',
@@ -39,7 +42,18 @@ function buildPresenceEntry(uid: string, value: unknown): PresenceEntry {
   };
 }
 
-export function usePresence(userIds: string | string[] | null) {
+export type PresenceMapResult = {
+  map: Record<string, PresenceEntry>;
+  presence: PresenceEntry[];
+};
+
+export function usePresence(userId?: string | null): PresenceEntry | null;
+export function usePresence(
+  userIds?: string[] | null,
+): PresenceMapResult | null;
+export function usePresence(
+  userIds?: string | string[] | null,
+): PresenceEntry | PresenceMapResult | null {
   const ids = useMemo(() => {
     if (!userIds) {
       return [];
@@ -49,7 +63,7 @@ export function usePresence(userIds: string | string[] | null) {
     return nextIds.filter((uid) => Boolean(uid));
   }, [userIds]);
 
-  const [presenceMap, setPresenceMap] = useState<Record<string, PresenceEntry>>({});
+  const [presence, setPresence] = useState<PresenceEntry[]>([]);
 
   useEffect(() => {
     if (ids.length === 0) {
@@ -62,10 +76,10 @@ export function usePresence(userIds: string | string[] | null) {
       return onValue(statusRef, (snapshot) => {
         const nextEntry = buildPresenceEntry(uid, snapshot.val());
 
-        setPresenceMap((current) => ({
-          ...current,
-          [uid]: nextEntry,
-        }));
+        setPresence((current) => {
+          const filtered = current.filter((entry) => entry.userId !== uid);
+          return [...filtered, nextEntry];
+        });
       });
     });
 
@@ -74,15 +88,43 @@ export function usePresence(userIds: string | string[] | null) {
     };
   }, [ids]);
 
-  return useMemo(() => {
+  const presenceMap = useMemo(
+    () =>
+      presence.reduce<Record<string, PresenceEntry>>((acc, entry) => {
+        acc[entry.userId] = entry;
+        return acc;
+      }, {}),
+    [presence],
+  );
+
+  const result = useMemo(() => {
     if (ids.length === 0) {
       return null;
     }
 
-    if (ids.length === 1) {
-      return presenceMap[ids[0]] ?? buildPresenceEntry(ids[0], null);
+    if (Array.isArray(userIds)) {
+      const orderedPresence = ids.map(
+        (uid) => presenceMap[uid] ?? buildPresenceEntry(uid, null),
+      );
+
+      const result: PresenceMapResult = {
+        map: orderedPresence.reduce<Record<string, PresenceEntry>>(
+          (acc, entry) => {
+            acc[entry.userId] = entry;
+            return acc;
+          },
+          {},
+        ),
+        presence: orderedPresence,
+      };
+
+      return result;
     }
 
-    return ids.map((uid) => presenceMap[uid] ?? buildPresenceEntry(uid, null));
-  }, [ids, presenceMap]);
+    const singlePresence =
+      presenceMap[ids[0]] ?? buildPresenceEntry(ids[0], null);
+    return singlePresence;
+  }, [ids, presenceMap, userIds]);
+
+  return result;
 }
