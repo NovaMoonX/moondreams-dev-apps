@@ -5,9 +5,10 @@ interface BoxGridProps {
   boxes: Box[];
   onDeleteBox?: (boxId: string) => void | Promise<void>;
   onEditBox?: (boxId: string, draft: BoxDraft) => void | Promise<void>;
+  onOpenBox?: (boxId: string) => void;
 }
 
-function BoxGrid({ boxes, onDeleteBox, onEditBox }: BoxGridProps) {
+function BoxGrid({ boxes, onDeleteBox, onEditBox, onOpenBox }: BoxGridProps) {
   if (boxes.length === 0) {
     return (
       <div className='border-border bg-muted/30 rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground'>
@@ -24,6 +25,7 @@ function BoxGrid({ boxes, onDeleteBox, onEditBox }: BoxGridProps) {
           box={box}
           onDelete={onDeleteBox}
           onEdit={onEditBox}
+          onOpenBox={onOpenBox}
         />
       ))}
     </div>

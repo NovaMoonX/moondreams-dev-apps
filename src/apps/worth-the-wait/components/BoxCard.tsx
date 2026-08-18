@@ -18,9 +18,10 @@ interface BoxCardProps {
   box: Box;
   onDelete?: (boxId: string) => void | Promise<void>;
   onEdit?: (boxId: string, draft: BoxDraft) => void | Promise<void>;
+  onOpenBox?: (boxId: string) => void;
 }
 
-function BoxCard({ box, onDelete, onEdit }: BoxCardProps) {
+function BoxCard({ box, onDelete, onEdit, onOpenBox }: BoxCardProps) {
   const { user } = useAuth();
   const { alert, confirm } = useActionModal();
   const { option, separator } = DropdownMenuFactories;
@@ -95,7 +96,18 @@ function BoxCard({ box, onDelete, onEdit }: BoxCardProps) {
 
   return (
     <>
-      <article className='border-border bg-card/80 flex h-full flex-col rounded-2xl border p-4 shadow-sm'>
+      <article
+        className='border-border bg-card/80 flex h-full cursor-pointer flex-col rounded-2xl border p-4 shadow-sm transition hover:border-ring/60'
+        onClick={() => onOpenBox?.(box.id)}
+        role='button'
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpenBox?.(box.id);
+          }
+        }}
+      >
         <div className='mb-4 flex items-start justify-between gap-3'>
           <div className='flex items-center gap-3'>
             <div className='bg-muted flex h-12 w-12 items-center justify-center rounded-xl text-2xl'>
@@ -125,6 +137,7 @@ function BoxCard({ box, onDelete, onEdit }: BoxCardProps) {
                   size='sm'
                   className='h-9 w-9 shrink-0 p-0'
                   aria-label={`Open actions for ${box.name}`}
+                  onClick={(event) => event.stopPropagation()}
                 >
                   <DotsVertical className='h-4 w-4' />
                 </Button>
@@ -143,6 +156,7 @@ function BoxCard({ box, onDelete, onEdit }: BoxCardProps) {
                   className='h-9 w-9 shrink-0 p-0'
                   aria-label={`Open actions for ${box.name}`}
                   disabled={true}
+                  onClick={(event) => event.stopPropagation()}
                 >
                   <DotsVertical className='h-4 w-4' />
                 </Button>
