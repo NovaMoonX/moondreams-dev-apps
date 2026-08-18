@@ -188,9 +188,18 @@ useEffect(() => {
 
 - Rule of thumb: if the value can be computed from the current props or a boolean guard, compute it in render; if it depends on async data, keep the effect focused on fetching or subscribing, not synchronizing local state from a prop.
 
+### 12. Documentation Must Stay Current and Minimal
+- The root `README.md` and every mini-app `README.md`/`TECHNICAL.md` are critical project artifacts and must be kept up to date whenever code, behavior, setup, or architecture changes.
+- Keep documentation concise and factual; update, remove, or compress stale sections instead of adding long commentary.
+- Preserve the existing structure, tone, and writing style of the document you are editing; do not rewrite it into a different format or voice.
+- Use the same format the file already has: short sections, bullets, numbered steps, and checklists when appropriate.
+- Only add or change documentation when it reflects an actual code or product change; avoid speculative or verbose notes.
+- Examples of required docs to maintain: the repo root `README.md`, each mini-app `README.md`, and each mini-app technical document such as `src/apps/worth-the-wait/README.md` and `src/apps/worth-the-wait/TECHNICAL.md`.
+
 ## ⚠️ Critical Reminders
 - **Template literals with `${` in className are FORBIDDEN**
 - **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`**
 - **Before writing any conditional className, ask: "Am I using join()?"**
 - **Treat time fields as timestamps, not strings**
 - **Keep Firestore rules and app data lifecycle logic aligned**
+- **Keep the root README and all mini-app docs current, concise, and aligned with the existing format and tone**
