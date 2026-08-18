@@ -1,9 +1,8 @@
 import { Badge } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { usePresence } from '@/hooks/usePresence';
 import UserAvatar, { type UserAvatarData } from '@/ui/UserAvatar';
-
-import { usePresence } from '../hooks/usePresence';
 
 type PresenceBadgeProps = {
   user?: UserAvatarData | null;
@@ -18,7 +17,13 @@ function PresenceBadge({
   showPendingState = false,
   className,
 }: PresenceBadgeProps) {
-  const presence = usePresence(partnerUid ?? null);
+  const partnerPresence = usePresence(partnerUid ?? null);
+  const presence =
+    partnerPresence && !Array.isArray(partnerPresence)
+      ? partnerPresence
+      : partnerPresence && partnerPresence[0]
+        ? partnerPresence[0]
+        : null;
 
   const isPending = showPendingState;
   const statusText = isPending
@@ -44,11 +49,14 @@ function PresenceBadge({
         className,
       )}
     >
-      <div className='relative'>
-        <UserAvatar user={user} size='md' />
-      </div>
+      <UserAvatar user={user} size='md' />
 
-      <Badge use='status' variant={statusVariant} size='sm' className='w-full justify-center'>
+      <Badge
+        use='status'
+        variant={statusVariant}
+        size='sm'
+        className='w-full justify-center'
+      >
         {statusText}
       </Badge>
     </div>
