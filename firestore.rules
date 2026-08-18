@@ -106,12 +106,10 @@ service cloud.firestore {
             request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
         }
 
-        allow read: if isSpaceMember();
-        allow create, update, delete: if isSpaceMember();
+        allow read, create, update, delete: if isSpaceMember();
 
         match /items/{itemId} {
-          allow read: if isSpaceMember();
-          allow create, update, delete: if isSpaceMember();
+          allow read, create, update, delete: if isSpaceMember();
         }
       }
     }
