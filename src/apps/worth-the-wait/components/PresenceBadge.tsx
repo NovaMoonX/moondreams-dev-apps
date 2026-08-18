@@ -7,9 +7,37 @@ import { useAuth } from '@hooks/useAuth';
 
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 
-type PresenceBadgeProps = {
+interface PresenceBadgeProps {
   className?: string;
-};
+}
+
+function getPresenceStatus({
+  isPending,
+  partnerUid,
+  presence,
+}: {
+  isPending: boolean;
+  partnerUid: string | null;
+  presence: { isHere?: boolean; isOnline?: boolean } | null;
+}) {
+  if (isPending) {
+    return { text: 'Pending approval', variant: 'warning' as const };
+  }
+
+  if (!partnerUid) {
+    return { text: 'Waiting for partner', variant: 'secondary' as const };
+  }
+
+  if (presence?.isHere) {
+    return { text: 'Online in WTW', variant: 'success' as const };
+  }
+
+  if (presence?.isOnline) {
+    return { text: 'Online elsewhere', variant: 'warning' as const };
+  }
+
+  return { text: 'Offline', variant: 'muted' as const };
+}
 
 function PresenceBadge({ className }: PresenceBadgeProps) {
   const { user } = useAuth();
@@ -23,31 +51,16 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
   const showPendingState = Boolean(
     space && space.pendingMember && !activePartnerUid,
   );
+  const presence = usePresence(partnerUid, 'worth-the-wait');
+  const avatarUser = partnerUid
+    ? { uid: partnerUid, displayName: 'Partner' }
+    : user;
 
-  const partnerPresence = usePresence(partnerUid);
-  const presence =
-    partnerPresence && !Array.isArray(partnerPresence)
-      ? partnerPresence
-      : partnerPresence && partnerPresence[0]
-        ? partnerPresence[0]
-        : null;
-
-  const isPending = showPendingState;
-  const statusText = isPending
-    ? 'Pending approval'
-    : presence?.isHere
-      ? 'Online in WTW'
-      : presence?.isOnline
-        ? 'Online elsewhere'
-        : 'Offline';
-
-  const statusVariant = isPending
-    ? 'warning'
-    : presence?.isHere
-      ? 'success'
-      : presence?.isOnline
-        ? 'warning'
-        : 'secondary';
+  const { text: statusText, variant: statusVariant } = getPresenceStatus({
+    isPending: showPendingState,
+    partnerUid,
+    presence,
+  });
 
   return (
     <div
@@ -56,7 +69,7 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
         className,
       )}
     >
-      <UserAvatar user={user} size='md' />
+      <UserAvatar user={avatarUser} size='md' />
 
       <Badge
         use='status'

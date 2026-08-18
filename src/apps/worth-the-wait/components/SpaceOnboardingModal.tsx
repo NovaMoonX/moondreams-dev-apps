@@ -10,14 +10,14 @@ import {
 import { useMemo, useState } from 'react';
 import { generateInviteCode, SPACE_CODE_LENGTH } from '../utils/generateCode';
 
-type SpaceOnboardingModalProps = {
+interface SpaceOnboardingModalProps {
   isOpen: boolean;
   isSubmitting?: boolean;
   hasJoinBeenSubmitted?: boolean;
   onCreateSpace: (inviteCode: string) => Promise<unknown> | unknown;
   onJoinSpace: (inviteCode: string) => Promise<unknown> | unknown;
   onClose: () => void;
-};
+}
 
 function SpaceOnboardingModal({
   isOpen,

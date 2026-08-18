@@ -114,10 +114,23 @@ useEffect(() => {
 
 ### Core principles
 - Use `export function ComponentName` (or `function ComponentName` + `export default ComponentName`) syntax instead of `React.FC` or arrow-function components.
+- Prefer `interface` for component props and object contracts; use `type` only when an interface would not work, such as unions or computed/non-object shapes.
 - Always store computed or returned values in variables before returning them for easier debugging and traceability.
 - Prefer TypeScript optional properties with `?:` when a value may simply be absent, instead of `null` or `undefined` in object types whenever that absence is the normal state.
 - Use `null` only when a runtime value genuinely needs to represent a nullable state, not just an absent field.
 - Keep code readable and consistent with the existing project structure and existing app patterns.
+
+```ts
+// ✅ Prefer interface for props and shape contracts
+interface ButtonProps {
+  label: string;
+  variant?: 'primary' | 'secondary';
+  disabled?: boolean;
+}
+
+// ✅ Use type only when an interface cannot express the shape
+type Status = 'idle' | 'loading' | 'success';
+```
 
 ### Return-value debugging
 - This applies to callbacks, computed values, complex expressions, and hook return values.

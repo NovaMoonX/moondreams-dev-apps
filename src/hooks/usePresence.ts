@@ -1,6 +1,7 @@
 import { onValue, ref } from 'firebase/database';
 import { useEffect, useMemo, useState } from 'react';
 
+import { AppId } from '@/lib/types/appCatalog';
 import { realtimeDb } from '@lib/firebase/config';
 
 export type PresenceStatus = {
@@ -30,15 +31,23 @@ function normalizePresence(value: unknown): PresenceStatus {
   };
 }
 
-function buildPresenceEntry(uid: string, value: unknown): PresenceEntry {
+function buildPresenceEntry(
+  uid: string,
+  value: unknown,
+  hereLocation?: string | null,
+): PresenceEntry {
   const status = normalizePresence(value);
   const isOnline = status.state === 'online';
+  const isHere =
+    Boolean(hereLocation) &&
+    isOnline &&
+    status.currentLocation === hereLocation;
 
   return {
     userId: uid,
     ...status,
     isOnline,
-    isHere: isOnline && status.currentLocation === 'worth-the-wait',
+    isHere,
   };
 }
 
@@ -47,12 +56,19 @@ export type PresenceMapResult = {
   presence: PresenceEntry[];
 };
 
-export function usePresence(userId?: string | null): PresenceEntry | null;
+export function usePresence(
+  userId?: string | null,
+  hereLocation?: AppId | null,
+): PresenceEntry | null;
+
 export function usePresence(
   userIds?: string[] | null,
+  hereLocation?: AppId | null,
 ): PresenceMapResult | null;
+
 export function usePresence(
   userIds?: string | string[] | null,
+  hereLocation?: AppId | null,
 ): PresenceEntry | PresenceMapResult | null {
   const ids = useMemo(() => {
     if (!userIds) {
@@ -60,7 +76,17 @@ export function usePresence(
     }
 
     const nextIds = Array.isArray(userIds) ? userIds : [userIds];
-    return nextIds.filter((uid) => Boolean(uid));
+    const filteredIds: string[] = [];
+
+    for (const uid of nextIds) {
+      if (!uid || filteredIds.includes(uid)) {
+        continue;
+      }
+
+      filteredIds.push(uid);
+    }
+
+    return filteredIds;
   }, [userIds]);
 
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
@@ -74,7 +100,7 @@ export function usePresence(
       const statusRef = ref(realtimeDb, `status/${uid}`);
 
       return onValue(statusRef, (snapshot) => {
-        const nextEntry = buildPresenceEntry(uid, snapshot.val());
+        const nextEntry = buildPresenceEntry(uid, snapshot.val(), hereLocation);
 
         setPresence((current) => {
           const filtered = current.filter((entry) => entry.userId !== uid);
@@ -86,7 +112,7 @@ export function usePresence(
     return () => {
       listeners.forEach((unsubscribe) => unsubscribe());
     };
-  }, [ids]);
+  }, [hereLocation, ids]);
 
   const presenceMap = useMemo(
     () =>
@@ -104,7 +130,8 @@ export function usePresence(
 
     if (Array.isArray(userIds)) {
       const orderedPresence = ids.map(
-        (uid) => presenceMap[uid] ?? buildPresenceEntry(uid, null),
+        (uid) =>
+          presenceMap[uid] ?? buildPresenceEntry(uid, null, hereLocation),
       );
 
       const result: PresenceMapResult = {
@@ -122,9 +149,9 @@ export function usePresence(
     }
 
     const singlePresence =
-      presenceMap[ids[0]] ?? buildPresenceEntry(ids[0], null);
+      presenceMap[ids[0]] ?? buildPresenceEntry(ids[0], null, hereLocation);
     return singlePresence;
-  }, [ids, presenceMap, userIds]);
+  }, [hereLocation, ids, presenceMap, userIds]);
 
   return result;
 }

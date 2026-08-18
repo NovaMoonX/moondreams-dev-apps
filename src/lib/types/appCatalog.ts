@@ -1,4 +1,4 @@
-export type AppId = 'worth-the-wait' | string;
+export type AppId = 'worth-the-wait' | (string & {});
 
 export interface AppMetadata {
   id: AppId;

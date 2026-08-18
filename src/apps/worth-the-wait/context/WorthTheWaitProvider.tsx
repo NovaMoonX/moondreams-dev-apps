@@ -6,9 +6,9 @@ import {
   type WorthTheWaitContextValue,
 } from './worthTheWaitContext';
 
-type WorthTheWaitProviderProps = PropsWithChildren<{
+interface WorthTheWaitProviderProps extends PropsWithChildren {
   space: Space | null;
-}>;
+}
 
 export function WorthTheWaitProvider({
   children,
