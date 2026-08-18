@@ -9,6 +9,98 @@ service cloud.firestore {
       );
     }
 
+    match /apps/worth-the-wait {
+      allow read: if !resource.data.isRestricted || (
+        request.auth != null && (
+          request.auth.uid in resource.data.allowedUsers ||
+          request.auth.token.email in resource.data.allowedUsers ||
+          isAdmin()
+        )
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /apps/worth-the-wait/spaces/{spaceId} {
+      function isCreator(data) {
+        return request.auth != null && request.auth.uid == data.createdBy;
+      }
+
+      function isMember(data) {
+        return request.auth != null && request.auth.uid in data.members;
+      }
+
+      function isPendingMember(data) {
+        return request.auth != null &&
+          data.pendingMember != null &&
+          request.auth.uid == data.pendingMember.uid;
+      }
+
+      function isCreateValid() {
+        return request.auth != null
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is number
+          && request.resource.data.members is list
+          && request.resource.data.members == [request.auth.uid]
+          && request.resource.data.pendingMember == null
+          && request.resource.data.inviteCode is string
+          && request.resource.data.inviteCode.size() == 6;
+      }
+
+      function isPendingJoinRequestValid() {
+        return request.auth != null
+          && request.auth.uid != resource.data.createdBy
+          && !(request.auth.uid in resource.data.members)
+          && resource.data.members.size() < 2
+          && (resource.data.pendingMember == null || resource.data.pendingMember.uid == request.auth.uid)
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.pendingMember != null
+          && request.resource.data.pendingMember.uid == request.auth.uid
+          && request.resource.data.pendingMember.requestedAt is number;
+      }
+
+      function isApprovalValid() {
+        return request.auth != null
+          && request.auth.uid == resource.data.createdBy
+          && resource.data.pendingMember != null
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.pendingMember == null
+          && request.resource.data.inviteCode == null
+          && request.resource.data.activeAction == null
+          && request.resource.data.members.size() == resource.data.members.size() + 1
+          && request.resource.data.members.hasAny([resource.data.pendingMember.uid]);
+      }
+
+      function isDeclineValid() {
+        return request.auth != null
+          && request.auth.uid == resource.data.createdBy
+          && resource.data.pendingMember != null
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.pendingMember == null
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.activeAction == resource.data.activeAction;
+      }
+
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.createdBy ||
+        request.auth.uid in resource.data.members ||
+        (resource.data.pendingMember != null && request.auth.uid == resource.data.pendingMember.uid) ||
+        resource.data.members.size() < 2
+      );
+
+      allow create: if isCreateValid();
+
+      allow update: if (
+        isPendingJoinRequestValid() ||
+        (isCreator(resource.data) && (isApprovalValid() || isDeclineValid()))
+      );
+
+      allow delete: if isCreator(resource.data);
+    }
+
     match /apps/{appId} {
       allow read: if !resource.data.isRestricted || (
         request.auth != null && (

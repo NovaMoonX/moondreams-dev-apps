@@ -3,7 +3,7 @@
 ## Core Development Rules
 
 ### 1. Component Creation
-- Use `export function ComponentName` syntax (NOT `React.FC` or arrow functions)
+- Use `export function ComponentName` (or `function ComponentName` + `export default ComponentName`) syntax (NOT `React.FC` or arrow functions)
 
 ### 2. Return Value Debugging
 - Always store return values in variables before returning them for easier debugging
@@ -129,13 +129,77 @@ import { helper } from '@utils/helper';
 - `@utils/` → `src/utils/`
 
 ## Quick Reference
-- Component syntax: `export function ComponentName`
+- Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`)
 - **Class names: ALWAYS use `join()` for conditionals - NEVER template literals**
 - Check Dreamer UI first
 - Use import aliases: `@components/`, `@hooks/`, `@lib/`, `@apps/`, `@ui/`, etc.
 - Follow structured folder organization with proper separation of concerns
 
+### 8. App Data Must Be Namespaced Per Mini-App
+- Keep each mini-app’s data isolated under its own namespace, such as `apps/worth-the-wait/...`, instead of relying on a generic or shared app path when the app is known.
+- For app-specific state, prefer the official collection path for that mini-app and keep other mini-app data separate to avoid cross-app collisions and rule drift.
+- Shared user profiles belong in the global `users` collection and should be resolved by `uid` when a mini-app needs display data or avatar metadata.
+
+### 9. Timestamp Handling Across Mini-Apps
+- Treat time fields as real timestamps in milliseconds as numbers, not plain strings or JS date strings in app state.
+- Use `Date.now()` for new timestamp values unless a real server-generated timestamp is required by the platform.
+- Keep app-side type shapes and Firestore data contracts aligned so `createdAt`, `updatedAt`, and request timestamps use consistent millisecond-number semantics in the client.
+- Do not add string-based or Firestore `Timestamp`-style values unless the feature truly requires them.
+
+### 10. Firestore Rules and App State Must Stay in Sync
+- When a mini-app uses lifecycle state such as created-by, members, pending requests, or invite codes, the Firestore rules should reflect that same behavior.
+- If the app writes a doc with a lifecycle field, the rules should allow only the matching valid transitions.
+- Do not let app code and Firestore rules drift apart; if a write pattern changes in code, update the rules to reflect the same contract.
+- Keep equality checks, membership checks, and pending-state transitions consistent with the app’s actual flow.
+
+### 11. Avoid `setState` Synchronously Inside Effects or Render
+- Do not call `setState` inside `useEffect` or during render just to mirror props or derive values from current data. This is a common React anti-pattern and often triggers the "state update during render/effect cycle" warning or cascading re-renders.
+- Prefer deriving the value directly during render, or move the state update to event handlers or computed values.
+- A hook or component should not do things like `if (!userUid) { setSpace(null); setPendingMember(null); }` during render. That is forbidden.
+- Reference: React docs on avoiding unnecessary effects: https://react.dev/learn/you-might-not-need-an-effect
+
+```tsx
+// ❌ Bad: setting state in render or effect to follow prop-driven data
+if (!userUid) {
+  setSpace(null);
+  setPendingMember(null);
+}
+
+useEffect(() => {
+  if (!pendingMember?.uid) {
+    setPendingUser(null);
+    return;
+  }
+
+  // ...load user data
+}, [pendingMember?.uid]);
+
+// ✅ Better: derive or guard in render; keep effects for async subscriptions only
+const hasPendingUser = Boolean(pendingMember?.uid);
+
+useEffect(() => {
+  if (!hasPendingUser) {
+    return;
+  }
+
+  // ...load user data
+}, [hasPendingUser, pendingMember?.uid]);
+```
+
+- Rule of thumb: if the value can be computed from the current props or a boolean guard, compute it in render; if it depends on async data, keep the effect focused on fetching or subscribing, not synchronizing local state from a prop.
+
+### 12. Documentation Must Stay Current and Minimal
+- The root `README.md` and every mini-app `README.md`/`TECHNICAL.md` are critical project artifacts and must be kept up to date whenever code, behavior, setup, or architecture changes.
+- Keep documentation concise and factual; update, remove, or compress stale sections instead of adding long commentary.
+- Preserve the existing structure, tone, and writing style of the document you are editing; do not rewrite it into a different format or voice.
+- Use the same format the file already has: short sections, bullets, numbered steps, and checklists when appropriate.
+- Only add or change documentation when it reflects an actual code or product change; avoid speculative or verbose notes.
+- Examples of required docs to maintain: the repo root `README.md`, each mini-app `README.md`, and each mini-app technical document such as `src/apps/worth-the-wait/README.md` and `src/apps/worth-the-wait/TECHNICAL.md`.
+
 ## ⚠️ Critical Reminders
 - **Template literals with `${` in className are FORBIDDEN**
 - **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`**
 - **Before writing any conditional className, ask: "Am I using join()?"**
+- **Treat time fields as timestamps, not strings**
+- **Keep Firestore rules and app data lifecycle logic aligned**
+- **Keep the root README and all mini-app docs current, concise, and aligned with the existing format and tone**
