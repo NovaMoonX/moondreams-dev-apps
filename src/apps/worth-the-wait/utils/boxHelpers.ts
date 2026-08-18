@@ -1,4 +1,4 @@
-import type { Box, RevealHistory, RevealRequestedBy } from '../types';
+import type { Box, RevealHistory, RevealMethod, RevealRequestedBy } from '../types';
 
 const DEFAULT_BOX_SEEDS = [
   {
@@ -116,4 +116,27 @@ export function getDefaultBoxes(now = Date.now()): Box[] {
     createdAt: now + index,
     lastEditedAt: now + index,
   }));
+}
+
+export function getFriendlyRevealMethod(method: RevealMethod, casing?: 'upper' | 'lower' | 'title'): string {
+  switch (method) {
+    case 'full_reveal':
+      return casing === 'upper'
+        ? 'FULL REVEAL'
+        : casing === 'lower'
+        ? 'full reveal'
+        : 'Full Reveal';
+    case 'raffle':
+      return casing === 'upper'
+        ? 'RAFFLE'
+        : casing === 'lower'
+        ? 'raffle'
+        : 'Raffle';
+    default:
+      return casing === 'upper'
+        ? 'UNKNOWN'
+        : casing === 'lower'
+        ? 'unknown'
+        : 'Unknown';
+  }
 }

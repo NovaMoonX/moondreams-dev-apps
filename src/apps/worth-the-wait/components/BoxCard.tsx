@@ -4,6 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import type { Box } from '../types';
 import { useAuth } from '@/hooks/useAuth';
+import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 
 interface BoxCardProps {
   box: Box;
@@ -36,6 +37,25 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
     }
   };
 
+  const numActiveRevealRequest = box.revealRequestedBy.length;
+  const isActiveRevealRequest = numActiveRevealRequest > 0;
+  const getRevealRequestText = () => {
+    if (numActiveRevealRequest === 0) {
+      return
+    }
+
+    if (numActiveRevealRequest > 1) {
+      return `${numActiveRevealRequest} pending reveal requests`;
+    }
+
+    const revealRequest = box.revealRequestedBy[0];
+
+    if (revealRequest?.userId === user?.uid) {
+      return `You requested a ${getFriendlyRevealMethod(revealRequest.method)}`;
+    }
+
+    return `A ${getFriendlyRevealMethod(revealRequest.method)} was requested`;
+  }
   return (
     <article className='border-border bg-card/80 flex h-full flex-col rounded-2xl border p-4 shadow-sm'>
       <div className='mb-4 flex items-start justify-between gap-3'>
@@ -73,8 +93,8 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
       <div
         className={join(
           'mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
-          revealCount > 0
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
+          isActiveRevealRequest
+            ? 'border-emerald-400 dark:border-emerald-700'
             : 'border-border bg-muted/40 text-muted-foreground',
         )}
       >
@@ -83,9 +103,9 @@ function BoxCard({ box, onDelete }: BoxCardProps) {
             ? `${revealCount} reveal${revealCount === 1 ? '' : 's'}`
             : 'No reveals yet'}
         </span>
-        {box.revealRequestedBy.length > 0 ? (
-          <span className='rounded-full bg-amber-100 dark:bg-amber-900 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-amber-700 dark:text-amber-200 uppercase'>
-            Pending
+        {isActiveRevealRequest ? (
+          <span className='rounded-full bg-emerald-400 text-emerald-950 dark:bg-emerald-900 dark:text-emerald-200 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] uppercase'>
+            {getRevealRequestText()}
           </span>
         ) : null}
       </div>
