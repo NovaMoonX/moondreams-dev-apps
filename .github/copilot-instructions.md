@@ -1,109 +1,25 @@
 # GitHub AI Instructions for project
 
-## Core Development Rules
+## Core project rules
 
-### 1. Component Creation
-- Use `export function ComponentName` (or `function ComponentName` + `export default ComponentName`) syntax (NOT `React.FC` or arrow functions)
+### Quick reference
+- Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`).
+- **Class names: always use `join()` for conditionals; never use template literals in `className`.**
+- Check Dreamer UI first before building custom UI.
+- Always use the project import aliases instead of relative paths when available.
+- Follow the existing folder organization and keep responsibilities separated by feature, UI, hooks, context, routes, lib, and utils.
 
-### 2. Return Value Debugging
-- Always store return values in variables before returning them for easier debugging
-- This applies to all callbacks, computed values, and complex expressions
-
-```tsx
-// ❌ Hard to debug - direct return
-const answeredCount = useMemo(() => {
-  if (!selectedApartment) return 0;
-  return allQuestions.filter(
-    (q) => getAnswer(q.id, selectedApartment) !== '',
-  ).length;
-}, [allQuestions, selectedApartment, getAnswer]);
-
-// ✅ Easy to debug - store in variable first
-const answeredCount = useMemo(() => {
-  if (!selectedApartment) return 0;
-  
-  const result = allQuestions.filter(
-    (q) => getAnswer(q.id, selectedApartment) !== '',
-  ).length;
-  
-  return result;
-}, [allQuestions, selectedApartment, getAnswer]);
-```
-
-### 3. Styling & Class Names
-- Use TailwindCSS exclusively
-- **ALWAYS** use `join` from `@moondreamsdev/dreamer-ui/utils` for conditional class names
-- **NEVER** use template literals with `${` for className - always use `join()` instead
-- Use existing styles and colors from `src/dreamer-ui.css` and `src/index.css` when applicable (do not modify them)
+### File structure and imports
+- Follow the existing project structure and keep code organized by feature, UI, hooks, context, routes, lib, and utils.
+- Use the established import aliases: `@/`, `@apps/`, `@components/`, `@contexts/`, `@hooks/`, `@lib/`, `@routes/`, `@screens/`, `@store/`, `@styles/`, `@ui/`, and `@utils/`.
+- Always prefer the alias path over relative imports like `../` when the target is inside the app structure.
+- Prefer clean, consistent imports over broad or redundant patterns.
 
 ```tsx
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-
-export function Test({ variant, className }: TestProps) {
-  return (
-    <div 
-      className={join(
-        'px-4 py-2 rounded',
-        variant === 'primary' ? 'bg-primary text-primary-foreground' : 'bg-secondary',
-        className
-      )}
-    >
-      Click me
-    </div>
-  );
-}
-```
-
-**❌ NEVER DO THIS:**
-```tsx
-// Bad - template literals for conditional classes
-className={`base-class ${condition ? 'conditional-class' : ''}`}
-className={`base-class ${isActive ? 'active' : 'inactive'}`}
-```
-
-**✅ ALWAYS DO THIS:**
-```tsx
-// Good - use join() for all conditional classes
-className={join('base-class', condition && 'conditional-class')}
-className={join('base-class', isActive ? 'active' : 'inactive')}
-```
-
-### 4. Component Library Priority
-- Always check Dreamer UI first before creating custom components
-- Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, `/utils`
-- Always check existing props of Dream UI components before setting custom styles
-
-### 5. File Structure
-Follow the existing structure:
-```
-src/
-├── apps/       # Mini-apps
-├── components/ # Reusable UI components
-├── contexts/   # React context providers (Should always import the context from its hook file)
-  ├── AuthContext.tsx  # Auth context provider
-├── hooks/      # Custom React hooks (should always declare the context they use)
-├── lib/        # Utilities and constants
-├── routes/     # Router configuration
-  ├── AppRoutes.tsx  # Main app router
-├── screens/    # Page/route components
-
-├── store/      # State management (i.e. Redux store)
-├── styles/     # Additional CSS/styling files
-├── ui/         # Layout and core UI components
-  ├── Home.tsx   # Home page component
-  ├── Layout.tsx # Main layout component
-├── utils/      # Utility functions
-├── App.tsx     # Main app entry point w/ providers
-```
-
-### 6. Import Patterns
-```tsx
-// Dreamer UI imports
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useTheme } from '@moondreamsdev/dreamer-ui/hooks';
 
-// Project imports using aliases
 import { APP_TITLE } from '@lib/app';
 import Layout from '@ui/Layout';
 import { router } from '@routes/AppRoutes';
@@ -114,49 +30,43 @@ import { store } from '@store';
 import { helper } from '@utils/helper';
 ```
 
-### 7. Available Import Aliases
-- `@/` → `src/`
-- `@apps/` → `src/apps/`
-- `@components/` → `src/components/`
-- `@contexts/` → `src/contexts/`
-- `@hooks/` → `src/hooks/`
-- `@lib/` → `src/lib/`
-- `@routes/` → `src/routes/`
-- `@screens/` → `src/screens/`
-- `@store/` → `src/store/`
-- `@styles/` → `src/styles/`
-- `@ui/` → `src/ui/`
-- `@utils/` → `src/utils/`
+### File structure
+Follow the existing structure:
+```text
+src/
+├── apps/       # Mini-apps
+├── components/ # Reusable UI components
+├── contexts/   # React context providers
+│   └── AuthContext.tsx
+├── hooks/      # Custom React hooks
+├── lib/        # Utilities and constants
+├── routes/     # Router configuration
+│   └── AppRoutes.tsx
+├── screens/    # Page/route components
+├── store/      # State management
+├── styles/     # Additional CSS styling files
+├── ui/         # Layout and core UI components
+│   ├── Home.tsx
+│   └── Layout.tsx
+├── utils/      # Utility functions
+├── App.tsx     # Main app entry point w/ providers
+└── main.tsx
+```
 
-## Quick Reference
-- Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`)
-- **Class names: ALWAYS use `join()` for conditionals - NEVER template literals**
-- Check Dreamer UI first
-- Use import aliases: `@components/`, `@hooks/`, `@lib/`, `@apps/`, `@ui/`, etc.
-- Follow structured folder organization with proper separation of concerns
-
-### 8. App Data Must Be Namespaced Per Mini-App
-- Keep each mini-app’s data isolated under its own namespace, such as `apps/worth-the-wait/...`, instead of relying on a generic or shared app path when the app is known.
-- For app-specific state, prefer the official collection path for that mini-app and keep other mini-app data separate to avoid cross-app collisions and rule drift.
-- Shared user profiles belong in the global `users` collection and should be resolved by `uid` when a mini-app needs display data or avatar metadata.
-
-### 9. Timestamp Handling Across Mini-Apps
+### Data and app patterns
+- Namespace app data per mini-app, such as `apps/worth-the-wait/...`, instead of mixing app-specific state into a generic shared path.
+- Keep app-specific state isolated to that app's official collection path and keep other mini-app data separate.
+- Shared user profiles belong in the global `users` collection and should be resolved by `uid` when display data or avatar metadata is needed.
 - Treat time fields as real timestamps in milliseconds as numbers, not plain strings or JS date strings in app state.
-- Use `Date.now()` for new timestamp values unless a real server-generated timestamp is required by the platform.
+- Use `Date.now()` for new timestamp values unless a real server-generated timestamp is required.
 - Keep app-side type shapes and Firestore data contracts aligned so `createdAt`, `updatedAt`, and request timestamps use consistent millisecond-number semantics in the client.
 - Do not add string-based or Firestore `Timestamp`-style values unless the feature truly requires them.
+- Keep Firestore rules and app state lifecycle logic aligned when creating or updating lifecycle-related fields such as `createdBy`, `members`, `pendingRequests`, or invite codes.
 
-### 10. Firestore Rules and App State Must Stay in Sync
-- When a mini-app uses lifecycle state such as created-by, members, pending requests, or invite codes, the Firestore rules should reflect that same behavior.
-- If the app writes a doc with a lifecycle field, the rules should allow only the matching valid transitions.
-- Do not let app code and Firestore rules drift apart; if a write pattern changes in code, update the rules to reflect the same contract.
-- Keep equality checks, membership checks, and pending-state transitions consistent with the app’s actual flow.
-
-### 11. Avoid `setState` Synchronously Inside Effects or Render
-- Do not call `setState` inside `useEffect` or during render just to mirror props or derive values from current data. This is a common React anti-pattern and often triggers the "state update during render/effect cycle" warning or cascading re-renders.
-- Prefer deriving the value directly during render, or move the state update to event handlers or computed values.
-- A hook or component should not do things like `if (!userUid) { setSpace(null); setPendingMember(null); }` during render. That is forbidden.
-- Reference: React docs on avoiding unnecessary effects: https://react.dev/learn/you-might-not-need-an-effect
+### React and state patterns
+- Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
+- Prefer deriving values directly during render, or move the update into an event handler or computed value.
+- Keep effects focused on async subscriptions or fetching rather than mirroring prop-driven state.
 
 ```tsx
 // ❌ Bad: setting state in render or effect to follow prop-driven data
@@ -186,20 +96,137 @@ useEffect(() => {
 }, [hasPendingUser, pendingMember?.uid]);
 ```
 
-- Rule of thumb: if the value can be computed from the current props or a boolean guard, compute it in render; if it depends on async data, keep the effect focused on fetching or subscribing, not synchronizing local state from a prop.
+### Documentation quality
+- Keep the root `README.md` and relevant mini-app docs current and minimal whenever code or behavior changes.
+- Preserve the existing structure and tone of existing docs; do not rewrite them into a different format or voice.
+- Update, remove, or compress stale content instead of adding long commentary.
 
-### 12. Documentation Must Stay Current and Minimal
-- The root `README.md` and every mini-app `README.md`/`TECHNICAL.md` are critical project artifacts and must be kept up to date whenever code, behavior, setup, or architecture changes.
-- Keep documentation concise and factual; update, remove, or compress stale sections instead of adding long commentary.
-- Preserve the existing structure, tone, and writing style of the document you are editing; do not rewrite it into a different format or voice.
-- Use the same format the file already has: short sections, bullets, numbered steps, and checklists when appropriate.
-- Only add or change documentation when it reflects an actual code or product change; avoid speculative or verbose notes.
-- Examples of required docs to maintain: the repo root `README.md`, each mini-app `README.md`, and each mini-app technical document such as `src/apps/worth-the-wait/README.md` and `src/apps/worth-the-wait/TECHNICAL.md`.
+### Critical reminders
+- **Template literals with `${` in `className` are FORBIDDEN.**
+- **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`.**
+- **Before writing any conditional className, ask: “Am I using `join()`?”**
+- **Always prefer configured project aliases over relative paths.**
+- **Treat time fields as timestamps, not strings.**
+- **Keep Firestore rules and app data lifecycle logic aligned.**
+- **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
 
-## ⚠️ Critical Reminders
-- **Template literals with `${` in className are FORBIDDEN**
-- **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`**
-- **Before writing any conditional className, ask: "Am I using join()?"**
-- **Treat time fields as timestamps, not strings**
-- **Keep Firestore rules and app data lifecycle logic aligned**
-- **Keep the root README and all mini-app docs current, concise, and aligned with the existing format and tone**
+## Coding Styles
+
+### Core principles
+- Use `export function ComponentName` (or `function ComponentName` + `export default ComponentName`) syntax instead of `React.FC` or arrow-function components.
+- Prefer `interface` for component props and object contracts; use `type` only when an interface would not work, such as unions or computed/non-object shapes.
+- Always store computed or returned values in variables before returning them for easier debugging and traceability.
+- Prefer TypeScript optional properties with `?:` when a value may simply be absent, instead of `null` or `undefined` in object types whenever that absence is the normal state.
+- Use `null` only when a runtime value genuinely needs to represent a nullable state, not just an absent field.
+- Keep code readable and consistent with the existing project structure and existing app patterns.
+
+```ts
+// ✅ Prefer interface for props and shape contracts
+interface ButtonProps {
+  label: string;
+  variant?: 'primary' | 'secondary';
+  disabled?: boolean;
+}
+
+// ✅ Use type only when an interface cannot express the shape
+type Status = 'idle' | 'loading' | 'success';
+```
+
+### Return-value debugging
+- This applies to callbacks, computed values, complex expressions, and hook return values.
+- Keep early returns readable, but when a value is derived, assign it to a local variable before returning it.
+
+```tsx
+// ❌ Hard to debug - direct return
+const answeredCount = useMemo(() => {
+  if (!selectedApartment) return 0;
+  return allQuestions.filter(
+    (q) => getAnswer(q.id, selectedApartment) !== '',
+  ).length;
+}, [allQuestions, selectedApartment, getAnswer]);
+
+// ✅ Easy to debug - store in variable first
+const answeredCount = useMemo(() => {
+  if (!selectedApartment) return 0;
+
+  const result = allQuestions.filter(
+    (q) => getAnswer(q.id, selectedApartment) !== '',
+  ).length;
+
+  return result;
+}, [allQuestions, selectedApartment, getAnswer]);
+
+// ✅ Also for hook return values
+export function usePresence(userIds: string[] | null) {
+  const presence = useMemo(() => {
+    if (!userIds || userIds.length === 0) {
+      return null;
+    }
+
+    const result = userIds.map((id) => ({ id }));
+    return result;
+  }, [userIds]);
+
+  return presence;
+}
+```
+
+### Optional properties and nullish handling
+- Prefer `email?: string` over `email: string | undefined` when the field is optional by definition.
+- Prefer `displayName?: string` over `displayName: string | null` when the absence is just an omitted value.
+- Use explicit `null` only when the runtime semantics truly require it.
+
+```ts
+// ❌ Avoid when the field is optional by definition
+type User = {
+  email: string | null;
+  displayName: string | undefined;
+};
+
+// ✅ Prefer optional properties when absence is the natural state
+type User = {
+  email?: string;
+  displayName?: string;
+};
+```
+
+### Styling and class names
+- Use TailwindCSS exclusively.
+- **Always** use `join` from `@moondreamsdev/dreamer-ui/utils` for conditional class names.
+- **Never** use template literals with `${` in `className`; always use `join()` instead.
+- Reuse existing styles and colors from `src/dreamer-ui.css` and `src/index.css` whenever applicable; do not modify them unless required.
+
+```tsx
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
+export function Test({ variant, className }: TestProps) {
+  return (
+    <div
+      className={join(
+        'px-4 py-2 rounded',
+        variant === 'primary' ? 'bg-primary text-primary-foreground' : 'bg-secondary',
+        className,
+      )}
+    >
+      Click me
+    </div>
+  );
+}
+```
+
+**❌ Never do this:**
+```tsx
+className={`base-class ${condition ? 'conditional-class' : ''}`}
+className={`base-class ${isActive ? 'active' : 'inactive'}`}
+```
+
+**✅ Always do this:**
+```tsx
+className={join('base-class', condition && 'conditional-class')}
+className={join('base-class', isActive ? 'active' : 'inactive')}
+```
+
+### Component library priority
+- Check Dreamer UI first before creating custom components.
+- Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, and `/utils` when possible.
+- Review existing Dreamer UI props before applying custom styling or behavior.

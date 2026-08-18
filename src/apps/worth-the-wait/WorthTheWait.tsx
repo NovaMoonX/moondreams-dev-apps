@@ -1,10 +1,13 @@
-import NavButton from '@/ui/NavButton';
-import { useAuth } from '@hooks/useAuth';
 import { useState } from 'react';
 
+import { useAuth } from '@hooks/useAuth';
+
 import Loading from '@/ui/Loading';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
+import WorthTheWaitLayout from './components/WorthTheWaitLayout';
+import { WorthTheWaitProvider } from './context/WorthTheWaitProvider';
 import { useSpace } from './hooks/useSpace';
 
 function WorthTheWait() {
@@ -26,14 +29,15 @@ function WorthTheWait() {
     hasPendingApprovalModalBeenDismissed,
     setHasPendingApprovalModalBeenDismissed,
   ] = useState(false);
+  const [hasOnboardingModalBeenDismissed, setHasOnboardingModalBeenDismissed] =
+    useState(false);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
   const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
-  const isOnboardingOpen =
+  const shouldOnboardingBeOpen =
     Boolean(user) && !hasLockedSpace && !creatorHasPendingApproval;
-
   if (loading) {
     return <Loading />;
   }
@@ -52,41 +56,26 @@ function WorthTheWait() {
       />
 
       <SpaceOnboardingModal
-        isOpen={isOnboardingOpen}
+        isOpen={shouldOnboardingBeOpen && !hasOnboardingModalBeenDismissed}
         isSubmitting={isJoiningSpace || isCreatingSpace}
         hasJoinBeenSubmitted={joinRequestSent}
         onCreateSpace={createSpace}
         onJoinSpace={joinSpace}
+        onClose={() => setHasOnboardingModalBeenDismissed(true)}
       />
 
-      {!isOnboardingOpen && (
-        <div className='page flex items-center justify-center px-4 py-12'>
-          <div className='w-full max-w-xl'>
-            <div className='mb-6'>
-              <NavButton href='/'>Back</NavButton>
-            </div>
-
-            <main className='space-y-5'>
-              <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-                Mini app
-              </p>
-              <h1 className='text-foreground text-4xl font-semibold tracking-tight md:text-5xl'>
-                Worth the Wait
-              </h1>
-              <p className='text-foreground/70 max-w-lg text-base leading-7 md:text-lg'>
-                A quiet place to hold what is on your mind and in your heart
-                until the right moment to share it arrives.
-              </p>
-
-              {!hasLockedSpace && user ? (
-                <div className='bg-muted/40 border-border text-muted-foreground rounded-lg border p-4 text-sm'>
-                  Your shared space is waiting for both partners to join and
-                  lock in.
-                </div>
-              ) : null}
-            </main>
-          </div>
+      {shouldOnboardingBeOpen && hasOnboardingModalBeenDismissed && (
+        <div className='page flex flex-col items-center justify-center'>
+          <Button onClick={() => setHasOnboardingModalBeenDismissed(false)}>
+            Enter app
+          </Button>
         </div>
+      )}
+
+      {!shouldOnboardingBeOpen && (
+        <WorthTheWaitProvider space={space}>
+          <WorthTheWaitLayout />
+        </WorthTheWaitProvider>
       )}
     </>
   );

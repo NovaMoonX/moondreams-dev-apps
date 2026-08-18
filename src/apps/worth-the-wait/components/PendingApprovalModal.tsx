@@ -14,7 +14,7 @@ type UserProfile = {
   photoURL?: string | null;
 };
 
-type PendingApprovalModalProps = {
+interface PendingApprovalModalProps {
   isOpen: boolean;
   pendingMember: PendingMember | null;
   onApprove: () => Promise<unknown> | unknown;

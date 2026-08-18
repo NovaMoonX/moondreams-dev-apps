@@ -9,7 +9,7 @@ function ThemeToggle({ className }: { className?: string }) {
   const Icon = isDarkMode ? Moon : Sun;
 
   return (
-    <div className={join('flex items-center gap-1', className)}>
+    <div className={join('flex items-center gap-2', className)}>
       <Toggle size='sm' checked={isDarkMode} onCheckedChange={toggleTheme} thumbClassName={isDarkMode ? 'bg-primary-foreground!' : undefined} />
       <Icon className='text-foreground size-4' />
     </div>
