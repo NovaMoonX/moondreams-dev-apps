@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@hooks/useAuth';
 import AuthAvatar from '@ui/AuthAvatar';
+import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import ThemeToggle from '@ui/ThemeToggle';
 
 function LocationSync() {
@@ -40,6 +41,10 @@ function Layout() {
 
         <div className='pointer-events-auto'>
           <AuthAvatar />
+        </div>
+
+        <div className='pointer-events-auto absolute left-1/2 -translate-x-1/2'>
+          <DevAccountSwitcher />
         </div>
       </div>
 

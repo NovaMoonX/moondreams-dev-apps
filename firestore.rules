@@ -99,6 +99,29 @@ service cloud.firestore {
       );
 
       allow delete: if isCreator(resource.data);
+
+      match /boxes/{boxId} {
+        function isSpaceMember() {
+          return request.auth != null &&
+            request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
+        }
+
+        function isCreator() {
+          return request.auth != null &&
+            resource.data.createdBy == request.auth.uid
+        }
+
+        function isDefaultBox() {
+          return resource.data.isDefault
+        }
+
+        allow read, create: if isSpaceMember();
+        allow update, delete: if isSpaceMember() && isCreator() && !isDefaultBox();
+
+        match /items/{itemId} {
+          allow read, create, update, delete: if isSpaceMember();
+        }
+      }
     }
 
     match /apps/{appId} {

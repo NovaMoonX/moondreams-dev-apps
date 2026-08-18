@@ -19,3 +19,38 @@ export type Space = {
   pendingMember: PendingMember | null;
   activeAction: Record<string, unknown> | null;
 };
+
+export type RevealMethod = 'full_reveal' | 'raffle';
+
+export type RevealRequestedBy = {
+  userId: string;
+  method: RevealMethod;
+  requestedAt: number;
+};
+
+export type RevealHistory = {
+  id: string;
+  method: RevealMethod;
+  triggeredBy: string;
+  revealedAt: number;
+  itemIds: string[];
+};
+
+export type Box = {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  isDefault: boolean;
+  createdBy: string;
+  revealRequestedBy: RevealRequestedBy[];
+  revealHistory: RevealHistory[];
+  createdAt: number;
+  lastEditedAt: number;
+};
+
+export type BoxDraft = {
+  name: string;
+  emoji: string;
+  description: string;
+};

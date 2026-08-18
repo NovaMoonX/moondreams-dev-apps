@@ -18,6 +18,8 @@ npm run dev
 
 Then open the local Vite app in your browser to explore the collection.
 
+For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md).
+
 For a production build:
 
 ```bash

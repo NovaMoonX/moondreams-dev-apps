@@ -227,7 +227,7 @@ src/
         │   ├── BoxCard.tsx              # Box display card with reveal history badge  
         │   ├── BoxDetailDrawer.tsx      # Slide-out drawer/modal for box contents  
         │   ├── BoxGrid.tsx              # Grid layout for default and custom boxes  
-        │   ├── CreateBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
+        │   ├── ManageBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
         │   ├── ItemCard.tsx             # Card displaying note content & revealMethod badge  
         │   ├── ItemForm.tsx             # Input form to stage/edit a note  
         │   ├── PendingApprovalModal.tsx # Prompt for Space Creator to accept/decline Member #2  

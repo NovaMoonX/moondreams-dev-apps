@@ -1,8 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getDatabase } from 'firebase/database';
 import {
+  connectAuthEmulator,
+  getAuth,
+  GoogleAuthProvider,
+} from 'firebase/auth';
+import { connectDatabaseEmulator, getDatabase } from 'firebase/database';
+import {
+  connectFirestoreEmulator,
   initializeFirestore,
+  memoryLocalCache,
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
@@ -19,16 +25,29 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
+export const isUsingFirebaseEmulators =
+  import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 
 export const auth = getAuth(app);
 auth.useDeviceLanguage();
 
 export const googleProvider = new GoogleAuthProvider();
 
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+export const db = initializeFirestore(
+  app,
+  isUsingFirebaseEmulators
+    ? { localCache: memoryLocalCache() }
+    : {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      },
+);
 export const realtimeDb = getDatabase(app);
 export const storage = getStorage(app);
+
+if (isUsingFirebaseEmulators) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectDatabaseEmulator(realtimeDb, '127.0.0.1', 9000);
+}

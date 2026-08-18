@@ -5,6 +5,7 @@ import { usePresence } from '@/hooks/usePresence';
 import UserAvatar from '@/ui/UserAvatar';
 import { useAuth } from '@hooks/useAuth';
 
+import { useUserInfo } from '@/hooks/useUserInfo';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 
 interface PresenceBadgeProps {
@@ -52,9 +53,7 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
     space && space.pendingMember && !activePartnerUid,
   );
   const presence = usePresence(partnerUid, 'worth-the-wait');
-  const avatarUser = partnerUid
-    ? { uid: partnerUid, displayName: 'Partner' }
-    : user;
+  const avatarUser = useUserInfo(partnerUid);
 
   const { text: statusText, variant: statusVariant } = getPresenceStatus({
     isPending: showPendingState,
