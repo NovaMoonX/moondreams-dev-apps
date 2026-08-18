@@ -15,27 +15,28 @@ function WorthTheWait() {
     createSpace,
     joinSpace,
     approvePendingMember,
+    isJoiningSpace,
+    isCreatingSpace,
+    joinRequestSent,
     declinePendingMember,
   } = useSpace(user?.uid ?? '');
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
-  const isCreatorPendingApproval = Boolean(
+  const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
   const isOnboardingOpen =
-    Boolean(user) && !hasLockedSpace && !isCreatorPendingApproval;
+    Boolean(user) && !hasLockedSpace && !creatorHasPendingApproval;
 
   if (loading) {
-    return (
-      <Loading />
-    );
+    return <Loading />;
   }
 
   return (
     <>
       <PendingApprovalModal
         key={pendingMember?.uid ?? 'no-pending-member'}
-        isOpen={isCreatorPendingApproval}
+        isOpen={creatorHasPendingApproval}
         pendingMember={pendingMember}
         onApprove={approvePendingMember}
         onDecline={declinePendingMember}
@@ -44,6 +45,8 @@ function WorthTheWait() {
 
       <SpaceOnboardingModal
         isOpen={isOnboardingOpen}
+        isSubmitting={isJoiningSpace || isCreatingSpace}
+        hasJoinBeenSubmitted={joinRequestSent}
         onCreateSpace={createSpace}
         onJoinSpace={joinSpace}
       />

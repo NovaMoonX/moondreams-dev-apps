@@ -49,12 +49,27 @@ function normalizeSpace(id: string, data: DocumentData): Space {
 
 export function useSpace(userUid: string) {
   const hasUser = Boolean(userUid);
+  const [userUid_, setUserUid_] = useState(userUid);
   const [space, setSpace] = useState<Space | null>(null);
   const [pendingMember, setPendingMember] = useState<PendingMember | null>(
     null,
   );
+  const [isJoiningSpace, setIsJoiningSpace] = useState(false);
+  const [isCreatingSpace, setIsCreatingSpace] = useState(false);
+  const [joinRequestSent, setJoinRequestSent] = useState(false);
   const [loading, setLoading] = useState(Boolean(userUid));
   const [error, setError] = useState<string | null>(null);
+
+  if (userUid !== userUid_) {
+    setUserUid_(userUid);
+    setSpace(null);
+    setPendingMember(null);
+    setIsJoiningSpace(false);
+    setIsCreatingSpace(false);
+    setJoinRequestSent(false);
+    setLoading(Boolean(userUid));
+    setError(null);
+  }
 
   useEffect(() => {
     if (!userUid) {
@@ -136,7 +151,9 @@ export function useSpace(userUid: string) {
 
   const createSpace = useCallback(
     async (inviteCode: string) => {
+      setIsCreatingSpace(true);
       if (!userUid) {
+        setIsCreatingSpace(false);
         throw new Error('A user is required to create a space.');
       }
 
@@ -157,6 +174,7 @@ export function useSpace(userUid: string) {
       setSpace(normalizeSpace(spaceRef.id, payload));
       setPendingMember(null);
       setError(null);
+      setIsCreatingSpace(false);
 
       return inviteCode;
     },
@@ -165,14 +183,20 @@ export function useSpace(userUid: string) {
 
   const joinSpace = useCallback(
     async (inviteCode: string) => {
+      setIsJoiningSpace(true);
       const trimmedCode = inviteCode.trim().toUpperCase();
 
+      const handleThrowError = (message: string) => {
+        setIsJoiningSpace(false);
+        throw new Error(message);
+      };
+
       if (!trimmedCode) {
-        throw new Error('Enter a valid invite code.');
+        handleThrowError('Enter a valid invite code.');
       }
 
       if (!userUid) {
-        throw new Error('A user is required to join a space.');
+        handleThrowError('A user is required to join a space.');
       }
 
       const lookupQuery = query(
@@ -182,25 +206,25 @@ export function useSpace(userUid: string) {
       const snapshot = await getDocs(lookupQuery);
 
       if (snapshot.empty) {
-        throw new Error('That invite code does not match an active space.');
+        handleThrowError('That invite code does not match an active space.');
       }
 
       const match = snapshot.docs[0];
       const existingSpace = normalizeSpace(match.id, match.data());
 
       if (existingSpace.members.includes(userUid)) {
-        throw new Error('You are already part of this space.');
+        handleThrowError('You are already part of this space.');
       }
 
       if (existingSpace.members.length >= 2) {
-        throw new Error('This space is already full.');
+        handleThrowError('This space is already full.');
       }
 
       if (
         existingSpace.pendingMember &&
         existingSpace.pendingMember.uid !== userUid
       ) {
-        throw new Error('This space already has a pending join request.');
+        handleThrowError('This space already has a pending join request.');
       }
 
       const requestedAt = Date.now();
@@ -213,6 +237,9 @@ export function useSpace(userUid: string) {
 
       setPendingMember({ uid: userUid, requestedAt });
       setError(null);
+      setIsJoiningSpace(false);
+      setJoinRequestSent(true);
+
       return match.id;
     },
     [userUid],
@@ -276,6 +303,9 @@ export function useSpace(userUid: string) {
       loading: hasUser ? loading : false,
       error: hasUser ? error : null,
       isLocked: hasUser ? Boolean(space && space.members.length >= 2) : false,
+      isJoiningSpace: hasUser ? isJoiningSpace : false,
+      isCreatingSpace: hasUser ? isCreatingSpace : false,
+      joinRequestSent: hasUser ? joinRequestSent : false,
       createSpace,
       joinSpace,
       approvePendingMember,
@@ -288,6 +318,9 @@ export function useSpace(userUid: string) {
       error,
       hasUser,
       joinSpace,
+      isJoiningSpace,
+      isCreatingSpace,
+      joinRequestSent,
       loading,
       pendingMember,
       space,

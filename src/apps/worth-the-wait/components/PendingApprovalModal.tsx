@@ -71,6 +71,7 @@ function PendingApprovalModal({
     [pendingMember?.uid, pendingUser],
   );
 
+  const pendingUserEmail = pendingUser?.email?.trim();
   return (
     <Modal
       isOpen={isOpen}
@@ -95,9 +96,11 @@ function PendingApprovalModal({
             <div className='text-foreground truncate text-sm font-medium'>
               {memberLabel}
             </div>
-            <div className='text-muted-foreground truncate text-xs'>
-              {pendingUser?.email ?? pendingMember?.uid ?? 'Partner request'}
-            </div>
+            {pendingUserEmail && pendingUserEmail !== memberLabel && (
+              <div className='text-muted-foreground truncate text-xs'>
+                ({pendingUserEmail})
+              </div>
+            )}
           </div>
         </div>
 
