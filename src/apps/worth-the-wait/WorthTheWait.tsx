@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '@hooks/useAuth';
 
 import Loading from '@/ui/Loading';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import WorthTheWaitLayout from './components/WorthTheWaitLayout';
@@ -28,12 +29,14 @@ function WorthTheWait() {
     hasPendingApprovalModalBeenDismissed,
     setHasPendingApprovalModalBeenDismissed,
   ] = useState(false);
+  const [hasOnboardingModalBeenDismissed, setHasOnboardingModalBeenDismissed] =
+    useState(false);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
   const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
-  const isOnboardingOpen =
+  const shouldOnboardingBeOpen =
     Boolean(user) && !hasLockedSpace && !creatorHasPendingApproval;
   if (loading) {
     return <Loading />;
@@ -53,14 +56,23 @@ function WorthTheWait() {
       />
 
       <SpaceOnboardingModal
-        isOpen={isOnboardingOpen}
+        isOpen={shouldOnboardingBeOpen && !hasOnboardingModalBeenDismissed}
         isSubmitting={isJoiningSpace || isCreatingSpace}
         hasJoinBeenSubmitted={joinRequestSent}
         onCreateSpace={createSpace}
         onJoinSpace={joinSpace}
+        onClose={() => setHasOnboardingModalBeenDismissed(true)}
       />
 
-      {!isOnboardingOpen && (
+      {shouldOnboardingBeOpen && hasOnboardingModalBeenDismissed && (
+        <div className='page flex flex-col items-center justify-center'>
+          <Button onClick={() => setHasOnboardingModalBeenDismissed(false)}>
+            Enter app
+          </Button>
+        </div>
+      )}
+
+      {!shouldOnboardingBeOpen && (
         <WorthTheWaitProvider space={space}>
           <WorthTheWaitLayout />
         </WorthTheWaitProvider>

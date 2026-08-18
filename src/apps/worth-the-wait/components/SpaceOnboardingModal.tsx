@@ -16,6 +16,7 @@ type SpaceOnboardingModalProps = {
   hasJoinBeenSubmitted?: boolean;
   onCreateSpace: (inviteCode: string) => Promise<unknown> | unknown;
   onJoinSpace: (inviteCode: string) => Promise<unknown> | unknown;
+  onClose: () => void;
 };
 
 function SpaceOnboardingModal({
@@ -24,6 +25,7 @@ function SpaceOnboardingModal({
   hasJoinBeenSubmitted = false,
   onCreateSpace,
   onJoinSpace,
+  onClose,
 }: SpaceOnboardingModalProps) {
   const createInviteCode = useMemo(() => generateInviteCode(), []);
   const [joinInput, setJoinInput] = useState('');
@@ -39,9 +41,9 @@ function SpaceOnboardingModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => undefined}
+      onClose={onClose}
       title={hasJoinBeenSubmitted ? 'Request Sent' : 'Create or join a space'}
-      hideCloseButton={true}
+      hideCloseButton={false}
     >
       {hasJoinBeenSubmitted && (
         <div className='space-y-4 pt-4'>
