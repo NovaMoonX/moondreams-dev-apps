@@ -77,17 +77,6 @@ function PendingApprovalModal({
       isOpen={isOpen}
       onClose={onClose ?? (() => undefined)}
       title='Pending approval'
-      actions={[
-        {
-          label: 'Decline',
-          variant: 'secondary',
-          onClick: onDecline,
-        },
-        {
-          label: 'Approve',
-          onClick: onApprove,
-        },
-      ]}
     >
       <div className='space-y-4'>
         <div className='border-border bg-muted/30 flex items-center gap-3 rounded-md border p-3'>

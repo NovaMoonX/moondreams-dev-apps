@@ -3,7 +3,7 @@
 ## Core Development Rules
 
 ### 1. Component Creation
-- Use `export function ComponentName` syntax (NOT `React.FC` or arrow functions)
+- Use `export function ComponentName` (or `function ComponentName` + `export default ComponentName`) syntax (NOT `React.FC` or arrow functions)
 
 ### 2. Return Value Debugging
 - Always store return values in variables before returning them for easier debugging
@@ -129,7 +129,7 @@ import { helper } from '@utils/helper';
 - `@utils/` → `src/utils/`
 
 ## Quick Reference
-- Component syntax: `export function ComponentName`
+- Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`)
 - **Class names: ALWAYS use `join()` for conditionals - NEVER template literals**
 - Check Dreamer UI first
 - Use import aliases: `@components/`, `@hooks/`, `@lib/`, `@apps/`, `@ui/`, etc.

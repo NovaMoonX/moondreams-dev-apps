@@ -6,8 +6,8 @@ export type PendingMember = {
 export type Space = {
   id: string;
   createdBy: string;
-  createdAt: number | null;
-  updatedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
   members: string[];
   inviteCode: string | null;
   pendingMember: PendingMember | null;
