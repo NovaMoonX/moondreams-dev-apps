@@ -99,6 +99,21 @@ service cloud.firestore {
       );
 
       allow delete: if isCreator(resource.data);
+
+      match /boxes/{boxId} {
+        function isSpaceMember() {
+          return request.auth != null &&
+            request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
+        }
+
+        allow read: if isSpaceMember();
+        allow create, update, delete: if isSpaceMember();
+
+        match /items/{itemId} {
+          allow read: if isSpaceMember();
+          allow create, update, delete: if isSpaceMember();
+        }
+      }
     }
 
     match /apps/{appId} {

@@ -1,16 +1,25 @@
 import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
+import { useBoxes } from '../hooks/useBoxes';
+import BoxGrid from './BoxGrid';
+import CreateBoxModal from './CreateBoxModal';
 import PresenceBadge from './PresenceBadge';
+import { useState } from 'react';
 
 function WorthTheWaitLayout() {
   const { user } = useAuth();
   const { space } = useWorthTheWait();
+  const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
+  const { boxes, loading: boxesLoading, createCustomBox, deleteBox } = useBoxes(
+    space?.id ?? '',
+  );
 
   return (
     <div className='page pt-28'>
@@ -40,8 +49,40 @@ function WorthTheWaitLayout() {
               </div>
             ) : null}
           </div>
+
+          {hasLockedSpace && (
+            <div className='mt-8 space-y-5'>
+              <div className='flex items-center justify-between gap-4'>
+                <div>
+                  <h2 className='text-foreground text-xl font-semibold'>Shared boxes</h2>
+                  <p className='text-muted-foreground text-sm'>
+                    Keep your hopes, memories, and wishes tucked away until the
+                    right time.
+                  </p>
+                </div>
+                <Button type='button' onClick={() => setIsCreateBoxOpen(true)}>
+                  New box
+                </Button>
+              </div>
+
+              {boxesLoading ? (
+                <div className='text-muted-foreground text-sm'>Loading boxes...</div>
+              ) : (
+                <BoxGrid boxes={boxes} onDeleteBox={deleteBox} />
+              )}
+            </div>
+          )}
         </main>
       </div>
+
+      <CreateBoxModal
+        isOpen={isCreateBoxOpen}
+        onClose={() => setIsCreateBoxOpen(false)}
+        onCreate={async (draft) => {
+          await createCustomBox(draft);
+          setIsCreateBoxOpen(false);
+        }}
+      />
     </div>
   );
 }

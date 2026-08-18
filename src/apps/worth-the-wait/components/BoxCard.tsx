@@ -1,0 +1,67 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
+import type { Box } from '../types';
+
+interface BoxCardProps {
+  box: Box;
+  onDelete?: (boxId: string) => void | Promise<void>;
+}
+
+function BoxCard({ box, onDelete }: BoxCardProps) {
+  const revealCount = box.revealHistory.length;
+
+  return (
+    <article className='border-border bg-card/80 flex h-full flex-col rounded-2xl border p-4 shadow-sm'>
+      <div className='mb-4 flex items-start justify-between gap-3'>
+        <div className='flex items-center gap-3'>
+          <div className='bg-muted flex h-12 w-12 items-center justify-center rounded-xl text-2xl'>
+            {box.emoji}
+          </div>
+          <div>
+            <h3 className='text-foreground text-lg font-semibold'>{box.name}</h3>
+            <p className='text-muted-foreground text-xs uppercase tracking-[0.16em]'>
+              {box.isDefault ? 'Starter box' : 'Custom'}
+            </p>
+          </div>
+        </div>
+
+        {onDelete && !box.isDefault ? (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => void onDelete(box.id)}
+            className='shrink-0'
+          >
+            Delete
+          </Button>
+        ) : null}
+      </div>
+
+      <p className='text-muted-foreground flex-1 text-sm leading-6'>
+        {box.description}
+      </p>
+
+      <div className={join(
+        'mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
+        revealCount > 0
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : 'border-border bg-muted/40 text-muted-foreground',
+      )}>
+        <span>
+          {revealCount > 0
+            ? `${revealCount} reveal${revealCount === 1 ? '' : 's'}`
+            : 'No reveals yet'}
+        </span>
+        {box.revealRequestedBy.length > 0 ? (
+          <span className='rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-amber-700'>
+            Pending
+          </span>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+export default BoxCard;
