@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { EyeClosed, EyeOpened, Trash } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import type { Item } from '../types';
 
 interface ItemCardProps {
@@ -19,14 +20,25 @@ function ItemCard({
   onDelete,
   onToggleVisibility,
 }: ItemCardProps) {
+  const { confirm } = useActionModal();
   const isOwnItem = item.authorId === currentUserId;
   const shouldMaskContent = !item.isRevealed && !isOwnItem;
   const shouldHideOwnContent = !item.isRevealed && isOwnItem && isAuthorHidden;
-  const shouldDisplayContent = item.isRevealed || (isOwnItem && !shouldHideOwnContent);
+  const shouldDisplayContent =
+    item.isRevealed || (isOwnItem && !shouldHideOwnContent);
 
   const handleDelete = async () => {
     if (onDelete) {
-      await onDelete(item.id);
+      const confirmed = await confirm({
+        title: 'Delete item',
+        message:
+          'Are you sure you want to delete this item? This action cannot be undone.',
+        destructive: true,
+      });
+
+      if (confirmed) {
+        await onDelete(item.id);
+      }
     }
   };
 
@@ -58,7 +70,9 @@ function ItemCard({
               size='sm'
               className='h-8 w-8 p-0'
               aria-label={
-                shouldHideOwnContent ? 'Show hidden item' : 'Hide item from view'
+                shouldHideOwnContent
+                  ? 'Show hidden item'
+                  : 'Hide item from view'
               }
               onClick={handleToggleVisibility}
             >
@@ -86,13 +100,11 @@ function ItemCard({
       </div>
 
       <p className='text-sm leading-6'>
-        {shouldDisplayContent ? (
-          item.content
-        ) : shouldMaskContent ? (
-          'Hidden item from partner'
-        ) : (
-          'Hidden item from you'
-        )}
+        {shouldDisplayContent
+          ? item.content
+          : shouldMaskContent
+            ? 'Hidden item from partner'
+            : 'Hidden item from you'}
       </p>
     </div>
   );
