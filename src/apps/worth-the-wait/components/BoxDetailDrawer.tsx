@@ -16,21 +16,33 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
-  const [hideOwnHiddenItems, setHideOwnHiddenItems] = useState(true);
-  const [hiddenItemIds, setHiddenItemIds] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
 
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => left.createdAt - right.createdAt),
     [items],
   );
 
-  const handleToggleVisibility = async (itemId: string) => {
-    setHiddenItemIds((current) => ({
-      ...current,
-      [itemId]: !current[itemId],
-    }));
+  const handleToggleAllItemsVisibility = () => {
+    setVisibleItemIds((current) => {
+      if (current.size === 0) {
+        return new Set(items.map((item) => item.id));
+      } else {
+        return new Set();
+      }
+    });
+  };
+
+  const handleToggleItemVisibility = async (itemId: string) => {
+    setVisibleItemIds((current) => {
+      const newSet = new Set(current);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -75,9 +87,9 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   type='button'
                   variant='secondary'
                   size='sm'
-                  onClick={() => setHideOwnHiddenItems((current) => !current)}
+                  onClick={handleToggleAllItemsVisibility}
                 >
-                  {hideOwnHiddenItems ? 'Show my items' : 'Hide my items'}
+                  {visibleItemIds.size === 0 ? 'Show my items' : 'Hide my items'}
                 </Button>
               )}
             </div>
@@ -97,11 +109,10 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   item={item}
                   currentUserId={user?.uid}
                   isAuthorHidden={
-                    (item.authorId === user?.uid && hideOwnHiddenItems) ||
-                    Boolean(hiddenItemIds[item.id])
+                    item.authorId === user?.uid && !visibleItemIds.has(item.id)
                   }
                   onDelete={deleteItem}
-                  onToggleVisibility={handleToggleVisibility}
+                  onToggleVisibility={handleToggleItemVisibility}
                 />
               ))
             )}
