@@ -1,8 +1,9 @@
 import { doc, updateDoc } from 'firebase/firestore';
 import { useCallback } from 'react';
 
-import { db } from '@lib/firebase/config';
+import { db, functions } from '@lib/firebase/config';
 
+import { httpsCallable } from 'firebase/functions';
 import type { Box, RevealMethod } from '../types';
 
 interface UseRevealRequestArgs {
@@ -57,26 +58,29 @@ export function useRevealRequest({
     [box.id, box.revealRequestedBy, spaceId, userUid],
   );
 
-  // TODO: will be moved to a cloud function in the future
   const startAction = useCallback(
     async (method: RevealMethod) => {
       if (!spaceId || !userUid) {
         return;
       }
 
-      const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
-      await updateDoc(spaceRef, {
-        activeAction: {
-          actionId: `${userUid}-${box.id}-${method}-${Date.now()}`,
+      const triggerBoxAction = httpsCallable(functions, 'triggerBoxAction');
+
+      try {
+        await triggerBoxAction({
+          spaceId,
           boxId: box.id,
+          userId: userUid,
           method,
-          status: 'initiating',
-          selectedItemIds: [],
-          initiatedBy: userUid,
-          startedAt: Date.now(),
-          completedAt: null,
-        },
-      });
+        });
+      } catch (error) {
+        console.error('Error triggering box action:', error);
+        throw new Error('Failed to trigger box action. Please try again later.', {
+          cause: error,
+        });
+      }
+
+      
     },
     [box.id, spaceId, userUid],
   );

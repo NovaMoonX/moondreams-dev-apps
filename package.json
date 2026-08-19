@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "emulators": "firebase emulators:start --only auth,firestore,database",
+    "emulators": "firebase emulators:start --only auth,firestore,database,functions",
     "seed": "FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 GCLOUD_PROJECT=moondreams-dev-apps tsx scripts/seed.ts",
     "seed:core": "npm run seed -- --scope core",
     "seed:worth-the-wait": "npm run seed -- --scope worth-the-wait",

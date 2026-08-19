@@ -31,3 +31,7 @@ This repository includes the server-side execution path for Worth the Wait. The 
 ## Emulator checks
 
 Use the emulator UI at `http://127.0.0.1:4001` to inspect the Firestore and Realtime Database state while the function runs. The local seed data includes a shared Worth the Wait space and fixture user IDs so you can validate both trigger paths without touching production data.
+
+## Troubleshooting
+
+If you run into issues about the function not being found or `lib/index.js` not existing, it means you've forgotten to run `npm run build`.

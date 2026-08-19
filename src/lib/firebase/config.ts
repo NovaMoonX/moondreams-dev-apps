@@ -4,6 +4,7 @@ import {
   getAuth,
   GoogleAuthProvider,
 } from 'firebase/auth';
+import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
 import { connectDatabaseEmulator, getDatabase } from 'firebase/database';
 import {
   connectFirestoreEmulator,
@@ -45,9 +46,11 @@ export const db = initializeFirestore(
 );
 export const realtimeDb = getDatabase(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app);
 
 if (isUsingFirebaseEmulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099');
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
   connectDatabaseEmulator(realtimeDb, '127.0.0.1', 9000);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
