@@ -1,0 +1,74 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useState } from 'react';
+
+interface ItemFormProps {
+  disabled?: boolean;
+  placeholder?: string;
+  onSubmit?: (content: string) => void | Promise<void>;
+}
+
+function ItemForm({
+  disabled = false,
+  placeholder = 'Write an item...',
+  onSubmit,
+}: ItemFormProps) {
+  const [value, setValue] = useState('');
+
+  const handleSubmit = async (
+    event:
+      | React.SyntheticEvent<HTMLFormElement>
+      | React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
+    event.preventDefault();
+
+    if (!onSubmit) {
+      return;
+    }
+
+    const trimmedValue = value.trim();
+    if (!trimmedValue || disabled) {
+      return;
+    }
+
+    await onSubmit(trimmedValue);
+    setValue('');
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className='space-y-3'>
+      <label className='block'>
+        <span className='sr-only'>Write an item</span>
+        <textarea
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          disabled={disabled}
+          placeholder={placeholder}
+          rows={4}
+          maxLength={500}
+          className='border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-ring w-full resize-none rounded-xl border px-3 py-2 text-sm ring-0 transition outline-none'
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void handleSubmit(event);
+            }
+          }}
+        />
+      </label>
+
+      <div className='flex items-center justify-between gap-3'>
+        <span className='text-muted-foreground text-xs'>
+          {value.trim().length}/500
+        </span>
+        <Button
+          type='submit'
+          size='sm'
+          disabled={disabled || value.trim().length === 0}
+        >
+          Add item
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export default ItemForm;

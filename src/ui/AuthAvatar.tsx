@@ -49,9 +49,9 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
   if (!user) {
     return (
-      <Button onClick={signInWithGoogle} className={join('gap-2', className)}>
+      <Button onClick={signInWithGoogle} className={join('gap-2', className)} aria-label='Sign in with Google'>
         <Google className='size-4' />
-        Sign in
+        <span className='hidden sm:inline'>Sign in</span>
       </Button>
     );
   }

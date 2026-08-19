@@ -88,13 +88,13 @@ Tracks each completed reveal event (raffle or full box reveal) for auditing and 
 
 ### **apps/worth-the-wait/spaces/{spaceId}/boxes/{boxId}/items/{itemId}**
 
-Subcollection containing user-submitted notes within a box.
+Subcollection containing user-submitted items within a box.
 
 | Field | Type | Description |
 | :---- | :---- | :---- |
 | id | string | Unique item document ID |
 | authorId | string | UID of the item creator |
-| content | string | Plain text note body |
+| content | string | Plain text item body |
 | isRevealed | boolean | Flag indicating if item is visible to both partners |
 | revealedAt | timestamp | null | Timestamp when the item was revealed |
 | revealedMethod | string (enum) | null | Method used: "full_reveal" | "raffle" | null |
@@ -228,8 +228,8 @@ src/
         │   ├── BoxDetailDrawer.tsx      # Slide-out drawer/modal for box contents  
         │   ├── BoxGrid.tsx              # Grid layout for default and custom boxes  
         │   ├── ManageBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
-        │   ├── ItemCard.tsx             # Card displaying note content & revealMethod badge  
-        │   ├── ItemForm.tsx             # Input form to stage/edit a note  
+        │   ├── ItemCard.tsx             # Card displaying item content & revealMethod badge  
+        │   ├── ItemForm.tsx             # Input form to stage/edit an item  
         │   ├── PendingApprovalModal.tsx # Prompt for Space Creator to accept/decline Member #2  
         │   ├── PresenceBadge.tsx        # Partner online & in-app indicator (reads status/{uid})  
         │   ├── RevealAction.tsx         # Mutual request selector & explicit action trigger button  

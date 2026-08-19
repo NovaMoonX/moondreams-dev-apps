@@ -64,8 +64,7 @@ function WorthTheWaitLayout() {
                     Shared boxes
                   </h2>
                   <p className='text-muted-foreground text-sm'>
-                    Keep your hopes, memories, and wishes tucked away until the
-                    right time.
+                    Click on a box to view your items and add new ones.
                   </p>
                 </div>
                 <Button
@@ -88,6 +87,7 @@ function WorthTheWaitLayout() {
                   onEditBox={async (boxId, draft) => {
                     await editCustomBox(boxId, draft);
                   }}
+                  onOpenBox={() => undefined}
                 />
               )}
             </div>
@@ -104,6 +104,7 @@ function WorthTheWaitLayout() {
           setIsCreateBoxOpen(false);
         }}
       />
+
     </div>
   );
 }

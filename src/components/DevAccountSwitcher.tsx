@@ -45,7 +45,7 @@ export function DevAccountSwitcher() {
         <Button
           key={account.email}
           type='button'
-          variant='secondary'
+          variant={user?.email === account.email ? 'secondary' : 'tertiary'}
           size='sm'
           disabled={isSigningIn}
           onClick={() => void signInAsFixture(account.email)}
@@ -57,7 +57,7 @@ export function DevAccountSwitcher() {
       {user && (
         <Button
           type='button'
-          variant='secondary'
+          variant='tertiary'
           size='sm'
           disabled={isSigningIn}
           onClick={() => void auth.signOut()}

@@ -119,7 +119,25 @@ service cloud.firestore {
         allow update, delete: if isSpaceMember() && isCreator() && !isDefaultBox();
 
         match /items/{itemId} {
-          allow read, create, update, delete: if isSpaceMember();
+          function isAuthor() {
+            return request.auth != null && resource.data.authorId == request.auth.uid;
+          }
+
+          allow read: if isSpaceMember();
+
+          allow create: if isSpaceMember()
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.content is string
+            && request.resource.data.content.size() > 0
+            && request.resource.data.createdAt is number
+            && request.resource.data.lastEditedAt is number;
+
+          allow update: if isAuthor()
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.content is string
+            && request.resource.data.content.size() > 0;
+
+          allow delete: if isAuthor();
         }
       }
     }

@@ -54,3 +54,18 @@ export type BoxDraft = {
   emoji: string;
   description: string;
 };
+
+export type Item = {
+  id: string;
+  authorId: string;
+  content: string;
+  isRevealed: boolean;
+  revealedAt: number | null;
+  revealedMethod: RevealMethod | null;
+  createdAt: number;
+  lastEditedAt: number;
+};
+
+export type ItemDraft = {
+  content: string;
+};
