@@ -101,6 +101,7 @@ function BoxCard() {
     <>
       <div
         tabIndex={0}
+        role='button'
         onClick={() => {
           if (isManagedActionInProgress.current) {
             return;
@@ -108,6 +109,20 @@ function BoxCard() {
 
           onOpen?.(box.id);
           setIsDrawerOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) {
+            return;
+          }
+          
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if (isManagedActionInProgress.current) {
+              return;
+            }
+            onOpen?.(box.id);
+            setIsDrawerOpen(true);
+          }
         }}
         className='w-full'
         aria-label={`Open box ${box.name}`}
@@ -139,7 +154,7 @@ function BoxCard() {
                   items={menuItems}
                   onItemSelect={(value) => {
                     isManagedActionInProgress.current = true;
-                    handleMenuSelect(value);
+                    void handleMenuSelect(value);
                   }}
                   placement='top'
                   alignment='end'

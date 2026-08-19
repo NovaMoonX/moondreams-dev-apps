@@ -229,7 +229,7 @@ src/
         │   ├── BoxGrid.tsx              # Grid layout for default and custom boxes  
         │   ├── ManageBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
         │   ├── ItemCard.tsx             # Card displaying item content & revealMethod badge  
-        │   ├── ItemForm.tsx             # Input form to stage/edit a item  
+        │   ├── ItemForm.tsx             # Input form to stage/edit an item  
         │   ├── PendingApprovalModal.tsx # Prompt for Space Creator to accept/decline Member #2  
         │   ├── PresenceBadge.tsx        # Partner online & in-app indicator (reads status/{uid})  
         │   ├── RevealAction.tsx         # Mutual request selector & explicit action trigger button  

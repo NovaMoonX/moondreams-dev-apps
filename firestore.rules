@@ -123,7 +123,7 @@ service cloud.firestore {
             return request.auth != null && resource.data.authorId == request.auth.uid;
           }
 
-          allow read: if isSpaceMember()
+          allow read: if isSpaceMember();
 
           allow create: if isSpaceMember()
             && request.resource.data.authorId == request.auth.uid

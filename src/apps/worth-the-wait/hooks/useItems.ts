@@ -32,10 +32,22 @@ function normalizeItem(id: string, data: DocumentData): Item {
   };
 }
 
+function createSpaceBoxIdKey(spaceId: string, boxId: string) {
+  return `${spaceId}-${boxId}`;
+}
+
 export function useItems(spaceId: string, boxId: string) {
+  const [spaceBoxId_, setSpaceBoxId_] = useState(createSpaceBoxIdKey(spaceId, boxId));
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(Boolean(spaceId) && Boolean(boxId));
   const [error, setError] = useState<string | null>(null);
+
+  if (spaceBoxId_ !== createSpaceBoxIdKey(spaceId, boxId)) {
+    setSpaceBoxId_(createSpaceBoxIdKey(spaceId, boxId));
+    setItems([]);
+    setLoading(Boolean(spaceId) && Boolean(boxId));
+    setError(null);
+  }
 
   useEffect(() => {
     if (!spaceId || !boxId) {
@@ -89,7 +101,7 @@ export function useItems(spaceId: string, boxId: string) {
   const addItem = useCallback(
     async (content: string | ItemDraft) => {
       if (!spaceId || !boxId) {
-        throw new Error('A space and box are required to add a item.');
+        throw new Error('A space and box are required to add an item.');
       }
 
       const nextContent = typeof content === 'string' ? content : content.content;
@@ -110,10 +122,16 @@ export function useItems(spaceId: string, boxId: string) {
         'items',
       );
       const itemRef = doc(itemsCollection);
+      const userId = auth.currentUser?.uid
+
+      if (!userId) {
+        throw new Error('You must be signed in to add an item.');
+      }
+
       const now = Date.now();
       const nextItem: Item = {
         id: itemRef.id,
-        authorId: auth.currentUser?.uid ?? 'anonymous',
+        authorId: userId,
         content: trimmedContent,
         isRevealed: false,
         revealedAt: null,
