@@ -3,7 +3,7 @@
 @theme dreamer-ui {
   --color-primary: var(--color-zinc-900);
   --color-primary-foreground: var(--color-zinc-50);
-  --color-secondary: var(--color-zinc-100);
+  --color-secondary: var(--color-zinc-200);
   --color-secondary-foreground: var(--color-zinc-900);
   --color-muted: var(--color-zinc-100);
   --color-muted-foreground: var(--color-zinc-500);
