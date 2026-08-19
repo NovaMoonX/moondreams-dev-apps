@@ -55,16 +55,7 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
       members: [firstMember.uid, secondMember.uid],
       inviteCode: null,
       pendingMember: null,
-      activeAction: {
-        actionId: 'seed-completed-raffle',
-        boxId: 'seed-custom-box',
-        method: 'raffle',
-        status: 'completed',
-        selectedItemIds: ['seed-item-revealed-raffle'],
-        initiatedBy: firstMember.uid,
-        startedAt: context.now - 86_400_000,
-        completedAt: context.now - 86_395_000,
-      },
+      activeAction: null,
     },
     { merge: true },
   );
@@ -83,9 +74,14 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
     createdBy: firstMember.uid,
     revealRequestedBy: [
       {
-        userId: secondMember.uid,
+        userId: firstMember.uid,
         method: 'full_reveal',
         requestedAt: context.now - 7_200_000,
+      },
+      {
+        userId: secondMember.uid,
+        method: 'full_reveal',
+        requestedAt: context.now - 7_000_000,
       },
     ],
     revealHistory: [

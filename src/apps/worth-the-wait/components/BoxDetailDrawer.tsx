@@ -6,6 +6,7 @@ import { useBoxContext } from '../context/boxContext';
 import { useItems } from '../hooks/useItems';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
+import RevealAction from './RevealAction';
 
 interface BoxDetailDrawerProps {
   isOpen: boolean;
@@ -76,6 +77,8 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
             <p className='text-muted-foreground text-sm leading-6'>
               {box.description}
             </p>
+
+            <RevealAction />
 
             <div className='flex items-center justify-between gap-3'>
               <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>

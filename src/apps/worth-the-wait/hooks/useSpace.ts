@@ -13,9 +13,62 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { db } from '@lib/firebase/config';
 
-import type { PendingMember, Space } from '../types';
+import type { ActiveAction, PendingMember, Space } from '../types';
 
 const SPACE_COLLECTION = collection(db, 'apps', 'worth-the-wait', 'spaces');
+
+function normalizeActiveAction(value: unknown): ActiveAction | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const action = value as Record<string, unknown>;
+  const method =
+    action.method === 'full_reveal' || action.method === 'raffle'
+      ? action.method
+      : null;
+
+  if (!method) {
+    return null;
+  }
+
+  const status =
+    action.status === 'initiating' ||
+    action.status === 'executing' ||
+    action.status === 'completed'
+      ? action.status
+      : 'completed';
+
+  const startedAtValue = action.startedAt;
+  const startedAt =
+    typeof startedAtValue === 'number'
+      ? startedAtValue
+      : typeof startedAtValue === 'object' && startedAtValue && 'seconds' in startedAtValue
+        ? Number((startedAtValue as { seconds: number }).seconds) * 1000
+        : Date.now();
+
+  const completedAtValue = action.completedAt;
+  const completedAt =
+    typeof completedAtValue === 'number'
+      ? completedAtValue
+      : typeof completedAtValue === 'object' && completedAtValue && 'seconds' in completedAtValue
+        ? Number((completedAtValue as { seconds: number }).seconds) * 1000
+        : null;
+
+  return {
+    actionId: typeof action.actionId === 'string' ? action.actionId : '',
+    boxId: typeof action.boxId === 'string' ? action.boxId : '',
+    method,
+    status,
+    selectedItemIds: Array.isArray(action.selectedItemIds)
+      ? action.selectedItemIds.map(String)
+      : [],
+    initiatedBy:
+      typeof action.initiatedBy === 'string' ? action.initiatedBy : '',
+    startedAt,
+    completedAt,
+  };
+}
 
 function normalizeSpace(id: string, data: DocumentData): Space {
   const pendingMemberValue = data.pendingMember as
@@ -40,10 +93,7 @@ function normalizeSpace(id: string, data: DocumentData): Space {
                 : Date.now(),
           }
         : null,
-    activeAction:
-      data.activeAction && typeof data.activeAction === 'object'
-        ? (data.activeAction as Record<string, unknown>)
-        : null,
+    activeAction: normalizeActiveAction(data.activeAction),
   };
 }
 

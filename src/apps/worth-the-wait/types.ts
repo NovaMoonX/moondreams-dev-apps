@@ -9,6 +9,19 @@ export type UserPresence = {
   lastChanges: number | null;
 };
 
+export type ActiveActionStatus = 'initiating' | 'executing' | 'completed';
+
+export type ActiveAction = {
+  actionId: string;
+  boxId: string;
+  method: RevealMethod;
+  status: ActiveActionStatus;
+  selectedItemIds: string[];
+  initiatedBy: string;
+  startedAt: number;
+  completedAt: number | null;
+};
+
 export type Space = {
   id: string;
   createdBy: string;
@@ -17,7 +30,7 @@ export type Space = {
   members: string[];
   inviteCode: string | null;
   pendingMember: PendingMember | null;
-  activeAction: Record<string, unknown> | null;
+  activeAction: ActiveAction | null;
 };
 
 export type RevealMethod = 'full_reveal' | 'raffle';
