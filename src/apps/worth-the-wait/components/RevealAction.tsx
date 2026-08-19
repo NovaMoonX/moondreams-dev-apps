@@ -54,9 +54,7 @@ function RevealAction() {
       ? selectedMethod
       : null;
 
-  const isPartnerAvailable =
-    partnerPresence?.isOnline === true &&
-    partnerPresence.currentLocation === 'worth-the-wait';
+  const isPartnerAvailable = partnerPresence?.isHere;
   const actionLocked = Boolean(
     activeAction && activeAction.status !== 'completed',
   );
@@ -89,6 +87,7 @@ function RevealAction() {
             variant='secondary'
             size='sm'
             onClick={() => void toggleRevealRequest(selectedMethod)}
+            disabled={actionLocked}
           >
             Remove request
           </Button>
@@ -111,6 +110,7 @@ function RevealAction() {
               key={method}
               value={method}
               hideInput
+              disabled={actionLocked}
               className={join(
                 'min-h-14 rounded-xl border px-3 py-2 text-left transition',
                 isSelected
@@ -137,11 +137,13 @@ function RevealAction() {
 
       <div className='mt-4 flex items-center justify-between gap-3'>
         <div className='text-muted-foreground text-xs'>
-          {mutualMethod
-            ? `Both of you requested ${getFriendlyRevealMethod(mutualMethod)}.`
-            : partnerUid
-              ? 'Waiting for a matching request from your partner.'
-              : 'Add your partner to start sharing a reveal request.'}
+          {actionLocked
+            ? null
+            : mutualMethod
+              ? `Both of you requested ${getFriendlyRevealMethod(mutualMethod)}.`
+              : partnerUid
+                ? 'Waiting for a matching request from your partner.'
+                : 'Add your partner to start sharing a reveal request.'}
         </div>
 
         <Button
@@ -150,7 +152,9 @@ function RevealAction() {
           disabled={!isTriggerEnabled}
           onClick={() => void handleStartAction()}
         >
-          {actionLocked ? 'Reveal in progress' : 'Start Action'}
+          <span className='animate-pulse'>
+            {actionLocked ? 'Reveal in progress' : 'Start Action'}
+          </span>
         </Button>
       </div>
     </div>
