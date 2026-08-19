@@ -17,7 +17,7 @@ import type { RevealMethod } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 
 interface RevealActionProps {
-  // TODO: once we synchronize the reveal state with the backend, this prop can be removed 
+  // TODO: once we synchronize the reveal state with the backend, this prop can be removed
   // as we should have a synchronized UI as well that is displayed to both users.
   onRevealStateChange?: (state: {
     isLocked: boolean;
@@ -100,6 +100,30 @@ function RevealAction({ onRevealStateChange }: RevealActionProps) {
     selectedMethod,
   ]);
 
+  const getRevealStatusMessage = () => {
+    if (actionLocked) {
+      return null;
+    }
+
+    if (mutualMethod) {
+      return 'Both you and your partner have matched and can now start the reveal!';
+    }
+
+    if (selectedMethod && partnerRequest) {
+      return 'You and your partner have made different requests. Match to continue.';
+    }
+
+    if (!selectedMethod && partnerRequest) {
+      return 'Your partner has made a request. Choose the same method to match.';
+    }
+
+    if (partnerUid) {
+      return 'Choose a reveal method to start matching with your partner.';
+    }
+
+    return 'Add your partner to start sharing a reveal request.';
+  };
+
   return (
     <div className='border-border bg-muted/30 rounded-2xl border p-4'>
       <div className='mb-3 flex items-center justify-between gap-3'>
@@ -173,13 +197,7 @@ function RevealAction({ onRevealStateChange }: RevealActionProps) {
 
       <div className='mt-4 flex items-center justify-between gap-3'>
         <div className='text-muted-foreground text-xs'>
-          {actionLocked
-            ? null
-            : mutualMethod
-              ? `Both of you requested ${getFriendlyRevealMethod(mutualMethod)}.`
-              : partnerUid
-                ? 'Waiting for a matching request from your partner.'
-                : 'Add your partner to start sharing a reveal request.'}
+          {getRevealStatusMessage()}
         </div>
 
         <Button
