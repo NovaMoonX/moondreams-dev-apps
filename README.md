@@ -18,7 +18,7 @@ npm run dev
 
 Then open the local Vite app in your browser to explore the collection.
 
-For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md).
+For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For the callable Cloud Functions used by Worth the Wait, see [functions/README.md](functions/README.md).
 
 For a production build:
 
