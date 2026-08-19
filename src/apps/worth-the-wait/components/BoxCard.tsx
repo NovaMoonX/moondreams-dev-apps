@@ -11,24 +11,23 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMemo, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
-import type { Box, BoxDraft } from '../types';
+import { useBoxContext } from '../context/boxContext';
+import { useItems } from '../hooks/useItems';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
+import BoxDetailDrawer from './BoxDetailDrawer';
 import ManageBoxModal from './ManageBoxModal';
 
-interface BoxCardProps {
-  box: Box;
-  onDelete?: (boxId: string) => void | Promise<void>;
-  onEdit?: (boxId: string, draft: BoxDraft) => void | Promise<void>;
-  onOpenBox?: (boxId: string) => void;
-}
-
-function BoxCard({ box, onDelete, onEdit, onOpenBox }: BoxCardProps) {
+function BoxCard() {
   const { user } = useAuth();
+  const { box, spaceId, onDelete, onEdit, onOpen } = useBoxContext();
   const { alert, confirm } = useActionModal();
   const { option, separator } = DropdownMenuFactories;
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const revealCount = box.revealHistory.length;
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
+  const { items, loading: itemsLoading } = useItems(spaceId, box.id);
+  const itemCount = items.length;
 
   const handleConfirmDelete = async () => {
     if (user?.uid !== box.createdBy) {
@@ -100,7 +99,8 @@ function BoxCard({ box, onDelete, onEdit, onOpenBox }: BoxCardProps) {
       <Clickable
         tabIndex={0}
         onButtonClick={() => {
-          onOpenBox?.(box.id);
+          onOpen?.(box.id);
+          setIsDrawerOpen(true);
         }}
         className='w-full'
         aria-label={`Open box ${box.name}`}
@@ -167,9 +167,29 @@ function BoxCard({ box, onDelete, onEdit, onOpenBox }: BoxCardProps) {
             {box.description}
           </p>
 
+          <div className='mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground'>
+            <span>
+              {itemsLoading
+                ? 'Checking notes…'
+                : itemCount > 0
+                  ? `${itemCount} note${itemCount === 1 ? '' : 's'}`
+                  : 'No notes yet'}
+            </span>
+            <span
+              className={join(
+                'rounded-full px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] uppercase',
+                itemCount > 0
+                  ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-200'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {itemCount > 0 ? 'Has notes' : 'Empty'}
+            </span>
+          </div>
+
           <div
             className={join(
-              'mt-4 flex flex-col sm:flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
+              'mt-3 flex flex-col sm:flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
               isActiveRevealRequest
                 ? 'border-emerald-400 dark:border-emerald-700'
                 : 'border-border bg-muted/40 text-muted-foreground',
@@ -188,6 +208,11 @@ function BoxCard({ box, onDelete, onEdit, onOpenBox }: BoxCardProps) {
           </div>
         </div>
       </Clickable>
+
+      <BoxDetailDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+      />
 
       {canManageCustomBox ? (
         <ManageBoxModal

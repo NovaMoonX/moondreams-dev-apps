@@ -8,7 +8,6 @@ import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useState } from 'react';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useBoxes } from '../hooks/useBoxes';
-import BoxDetailDrawer from './BoxDetailDrawer';
 import BoxGrid from './BoxGrid';
 import ManageBoxModal from './ManageBoxModal';
 import PresenceBadge from './PresenceBadge';
@@ -17,7 +16,6 @@ function WorthTheWaitLayout() {
   const { user } = useAuth();
   const { space } = useWorthTheWait();
   const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
-  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
   const {
@@ -27,7 +25,6 @@ function WorthTheWaitLayout() {
     editCustomBox,
     deleteBox,
   } = useBoxes(space?.id ?? '');
-  const selectedBox = boxes.find((box) => box.id === selectedBoxId) ?? null;
 
   return (
     <div className='page pt-28'>
@@ -91,7 +88,7 @@ function WorthTheWaitLayout() {
                   onEditBox={async (boxId, draft) => {
                     await editCustomBox(boxId, draft);
                   }}
-                  onOpenBox={setSelectedBoxId}
+                  onOpenBox={() => undefined}
                 />
               )}
             </div>
@@ -109,11 +106,6 @@ function WorthTheWaitLayout() {
         }}
       />
 
-      <BoxDetailDrawer
-        box={selectedBox}
-        spaceId={space?.id ?? ''}
-        onClose={() => setSelectedBoxId(null)}
-      />
     </div>
   );
 }

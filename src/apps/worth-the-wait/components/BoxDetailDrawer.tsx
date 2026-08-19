@@ -1,23 +1,25 @@
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useAuth } from '@hooks/useAuth';
+import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useMemo, useState } from 'react';
 
+import { useBoxContext } from '../context/boxContext';
 import { useItems } from '../hooks/useItems';
-import type { Box } from '../types';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
 
 interface BoxDetailDrawerProps {
-  box: Box | null;
-  spaceId: string;
+  isOpen: boolean;
   onClose: () => void;
 }
 
-function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
+function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
-  const { items, loading, addItem, deleteItem } = useItems(spaceId, box?.id ?? '');
-  const [hideOwnHiddenNotes, setHideOwnHiddenNotes] = useState(false);
-  const [hiddenItemIds, setHiddenItemIds] = useState<Record<string, boolean>>({});
+  const { box, spaceId } = useBoxContext();
+  const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
+  const [hideOwnHiddenNotes, setHideOwnHiddenNotes] = useState(true);
+  const [hiddenItemIds, setHiddenItemIds] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => left.createdAt - right.createdAt),
@@ -33,7 +35,7 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
 
   return (
     <Drawer
-      isOpen={Boolean(box)}
+      isOpen={isOpen}
       onClose={onClose}
       title={
         box ? (
@@ -42,8 +44,10 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
               {box.emoji}
             </span>
             <div>
-              <p className='text-foreground text-lg font-semibold'>{box.name}</p>
-              <p className='text-muted-foreground text-xs uppercase tracking-[0.14em]'>
+              <p className='text-foreground text-lg font-semibold'>
+                {box.name}
+              </p>
+              <p className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
                 {box.isDefault ? 'Starter box' : 'Custom box'}
               </p>
             </div>
@@ -51,7 +55,7 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
         ) : null
       }
       showCloseButton
-      className='max-w-2xl mx-auto'
+      className='mx-auto max-w-2xl'
       enableDragGestures
     >
       {box ? (
@@ -62,18 +66,20 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
             </p>
 
             <div className='flex items-center justify-between gap-3'>
-              <span className='text-muted-foreground text-xs uppercase tracking-[0.14em]'>
+              <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
                 {sortedItems.length} note{sortedItems.length === 1 ? '' : 's'}
               </span>
 
-              {sortedItems.length > 0 && <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                onClick={() => setHideOwnHiddenNotes((current) => !current)}
-              >
-                {hideOwnHiddenNotes ? 'Show hidden notes' : 'Hide my notes'}
-              </Button>}
+              {sortedItems.length > 0 && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  onClick={() => setHideOwnHiddenNotes((current) => !current)}
+                >
+                  {hideOwnHiddenNotes ? 'Show my notes' : 'Hide my notes'}
+                </Button>
+              )}
             </div>
           </div>
 
@@ -81,7 +87,7 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
             {loading ? (
               <p className='text-muted-foreground text-sm'>Loading notes...</p>
             ) : sortedItems.length === 0 ? (
-              <div className='border-border bg-muted/30 rounded-2xl border border-dashed p-4 text-center text-sm text-muted-foreground'>
+              <div className='border-border bg-muted/30 text-muted-foreground rounded-2xl border border-dashed p-4 text-center text-sm'>
                 No notes yet. Share your first thought with your partner.
               </div>
             ) : (
@@ -110,7 +116,11 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
             />
           </div>
         </div>
-      ) : null}
+      ) : loading ? (
+        <p className='text-muted-foreground text-sm'>Loading box...</p>
+      ) : (
+        <p className='text-muted-foreground text-sm'>No box selected.</p>
+      )}
     </Drawer>
   );
 }
