@@ -1,6 +1,5 @@
 import {
   Button,
-  Clickable,
   DropdownMenu,
   DropdownMenuFactories,
   Tooltip,
@@ -8,7 +7,7 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useBoxContext } from '../context/boxContext';
@@ -24,9 +23,11 @@ function BoxCard() {
   const { option, separator } = DropdownMenuFactories;
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const isManagedActionInProgress = useRef(false);
+
   const revealCount = box.revealHistory.length;
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
-  const { items, loading: itemsLoading } = useItems(spaceId, box.id);
+  const { items } = useItems(spaceId, box.id);
   const itemCount = items.length;
 
   const handleConfirmDelete = async () => {
@@ -62,6 +63,7 @@ function BoxCard() {
   const handleMenuSelect = async (value: string) => {
     if (value === 'edit') {
       if (user?.uid !== box.createdBy) {
+        isManagedActionInProgress.current = false;
         return;
       }
 
@@ -71,6 +73,7 @@ function BoxCard() {
 
     if (value === 'delete') {
       await handleConfirmDelete();
+      isManagedActionInProgress.current = false;
     }
   };
 
@@ -96,9 +99,13 @@ function BoxCard() {
 
   return (
     <>
-      <Clickable
+      <div
         tabIndex={0}
-        onButtonClick={() => {
+        onClick={() => {
+          if (isManagedActionInProgress.current) {
+            return;
+          }
+
           onOpen?.(box.id);
           setIsDrawerOpen(true);
         }}
@@ -121,75 +128,67 @@ function BoxCard() {
               </div>
             </div>
 
-            {canManageCustomBox ? (
-              <DropdownMenu
-                items={menuItems}
-                onItemSelect={handleMenuSelect}
-                placement='top'
-                alignment='end'
-                offset={8}
-                trigger={
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    className='h-9 w-9 shrink-0 p-0'
-                    aria-label={`Open actions for ${box.name}`}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DotsVertical className='h-4 w-4' />
-                  </Button>
-                }
-              />
-            ) : !box.isDefault ? (
-              <Tooltip
-                message='Only the person who created this box can edit or delete it.'
-                placement='left'
-              >
-                <span>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    className='h-9 w-9 shrink-0 p-0'
-                    aria-label={`Open actions for ${box.name}`}
-                    disabled={true}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DotsVertical className='h-4 w-4' />
-                  </Button>
+            <div className='flex items-center gap-2'>
+              {itemCount > 0 && (
+                <span className='border-border bg-muted/40 text-muted-foreground rounded-full px-3 py-1 text-center font-bold'>
+                  {itemCount}
                 </span>
-              </Tooltip>
-            ) : null}
+              )}
+              {canManageCustomBox ? (
+                <DropdownMenu
+                  items={menuItems}
+                  onItemSelect={(value) => {
+                    isManagedActionInProgress.current = true;
+                    handleMenuSelect(value);
+                  }}
+                  placement='top'
+                  alignment='end'
+                  offset={8}
+                  trigger={
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className='h-9 w-9 shrink-0 p-0'
+                      aria-label={`Open actions for ${box.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      <DotsVertical className='h-4 w-4' />
+                    </Button>
+                  }
+                />
+              ) : !box.isDefault ? (
+                <Tooltip
+                  message='Only the person who created this box can edit or delete it.'
+                  placement='left'
+                >
+                  <span>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className='h-9 w-9 shrink-0 p-0'
+                      aria-label={`Open actions for ${box.name}`}
+                      disabled={true}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <DotsVertical className='h-4 w-4' />
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : null}
+            </div>
           </div>
 
           <p className='text-muted-foreground flex-1 text-sm leading-6'>
             {box.description}
           </p>
 
-          <div className='mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground'>
-            <span>
-              {itemsLoading
-                ? 'Checking notes…'
-                : itemCount > 0
-                  ? `${itemCount} note${itemCount === 1 ? '' : 's'}`
-                  : 'No notes yet'}
-            </span>
-            <span
-              className={join(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] uppercase',
-                itemCount > 0
-                  ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-200'
-                  : 'bg-muted text-muted-foreground',
-              )}
-            >
-              {itemCount > 0 ? 'Has notes' : 'Empty'}
-            </span>
-          </div>
-
           <div
             className={join(
-              'mt-3 flex flex-col sm:flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
+              'mt-3 flex flex-col items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs sm:flex-row',
               isActiveRevealRequest
                 ? 'border-emerald-400 dark:border-emerald-700'
                 : 'border-border bg-muted/40 text-muted-foreground',
@@ -207,7 +206,7 @@ function BoxCard() {
             ) : null}
           </div>
         </div>
-      </Clickable>
+      </div>
 
       <BoxDetailDrawer
         isOpen={isDrawerOpen}
@@ -225,7 +224,10 @@ function BoxCard() {
             emoji: box.emoji,
             description: box.description,
           }}
-          onClose={() => setIsEditModalOpen(false)}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            isManagedActionInProgress.current = false;
+          }}
           onCreate={async (draft) => {
             if (onEdit) {
               await onEdit(box.id, draft);
