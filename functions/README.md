@@ -4,22 +4,22 @@ This repository includes the server-side execution path for Worth the Wait. The 
 
 ## Local development
 
-1. Start the local Firebase emulators for Auth, Firestore, Realtime Database, and Cloud Functions:
+1. Build the Cloud Functions package first so the emulator loads the compiled `functions/lib/index.js`:
+
+   ```bash
+   cd functions && npm install && npm run build
+   ```
+
+2. Start the local Firebase emulators for Auth, Firestore, Realtime Database, and Cloud Functions:
 
    ```bash
    npm run emulators
    ```
 
-2. Seed the local emulator data for the app:
+3. Seed the local emulator data for the app:
 
    ```bash
    npm run seed:reset
-   ```
-
-3. Build the Cloud Functions package:
-
-   ```bash
-   cd functions && npm install && npm run build
    ```
 
 4. Invoke the callable function from a signed-in client or a custom-token helper. The emulator exposes it at:

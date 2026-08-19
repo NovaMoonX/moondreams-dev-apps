@@ -119,7 +119,7 @@ function assertMutualRequests(
 }
 
 export const triggerBoxAction = onCall(
-  { region: 'us-central1', cors: [/firebase\.com$/, 'https://flutter.com'] },
+  { region: 'us-central1' },
   async (request) => {
     const authUid = request.auth?.uid;
 
@@ -219,108 +219,123 @@ export const triggerBoxAction = onCall(
       });
     });
 
-    const unrevealedItemsSnapshot = await boxRef
-      .collection('items')
-      .where('isRevealed', '==', false)
-      .get();
-    const unrevealedItems = unrevealedItemsSnapshot.docs.map((itemDoc) => ({
-      id: itemDoc.id,
-      ref: itemDoc.ref,
-    }));
-
-    const selectedItemIds: string[] = [];
-
-    if (method === 'raffle') {
-      if (unrevealedItems.length === 0) {
-        throw new HttpsError(
-          'failed-precondition',
-          'No unrevealed items remain to raffle.',
-        );
-      }
-
-      const winningIndex = randomInt(0, unrevealedItems.length);
-      const winner = unrevealedItems[winningIndex];
-      selectedItemIds.push(winner.id);
-
-      await winner.ref.update({
-        isRevealed: true,
-        revealedAt: Date.now(),
-        revealedMethod: 'raffle',
+    try {
+      await spaceRef.update({
+        'activeAction.status': 'executing',
       });
-    }
 
-    if (method === 'full_reveal') {
-      for (const item of unrevealedItems) {
-        selectedItemIds.push(item.id);
-        await item.ref.update({
+      const unrevealedItemsSnapshot = await boxRef
+        .collection('items')
+        .where('isRevealed', '==', false)
+        .get();
+      const unrevealedItems = unrevealedItemsSnapshot.docs.map((itemDoc) => ({
+        id: itemDoc.id,
+        ref: itemDoc.ref,
+      }));
+
+      const selectedItemIds: string[] = [];
+
+      if (method === 'raffle') {
+        if (unrevealedItems.length === 0) {
+          
+          throw new HttpsError(
+            'failed-precondition',
+            'No unrevealed items remain to raffle.',
+          );
+        }
+
+        const winningIndex = randomInt(0, unrevealedItems.length);
+        const winner = unrevealedItems[winningIndex];
+        selectedItemIds.push(winner.id);
+
+        await winner.ref.update({
           isRevealed: true,
           revealedAt: Date.now(),
-          revealedMethod: 'full_reveal',
+          revealedMethod: 'raffle',
         });
       }
-    }
 
-    await spaceRef.update({
-      'activeAction.status': 'executing',
-      'activeAction.selectedItemIds': selectedItemIds,
-    });
+      if (method === 'full_reveal') {
+        for (const item of unrevealedItems) {
+          selectedItemIds.push(item.id);
+          await item.ref.update({
+            isRevealed: true,
+            revealedAt: Date.now(),
+            revealedMethod: 'full_reveal',
+          });
+        }
+      }
 
-    const elapsedMs = Date.now() - startedAt;
-    const targetDurationMs = ACTION_DURATION_MS[method];
-    const remainingDelayMs = Math.max(0, targetDurationMs - elapsedMs);
-
-    if (remainingDelayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, remainingDelayMs));
-    }
-
-    const completedAt = Date.now();
-    const historyEntry = {
-      id: actionId,
-      method,
-      triggeredBy: authUid,
-      revealedAt: completedAt,
-      itemIds: selectedItemIds,
-    };
-
-    await firestore.runTransaction(async (transaction) => {
-      const spaceTx = await transaction.get(spaceRef);
-      const boxTx = await transaction.get(boxRef);
-      const currentAction = (spaceTx.data()?.activeAction ??
-        null) as IndexedActionRecord | null;
-      const history = Array.isArray(boxTx.data()?.revealHistory)
-        ? boxTx.data()?.revealHistory
-        : [];
-
-      transaction.update(boxRef, {
-        revealRequestedBy: [],
-        revealHistory: [...history, historyEntry],
+      await spaceRef.update({
+        'activeAction.status': 'executing',
+        'activeAction.selectedItemIds': selectedItemIds,
       });
 
-      transaction.update(spaceRef, {
-        activeAction: {
-          ...(currentAction ?? {
-            actionId,
-            boxId,
-            method,
-            status: 'initiating',
-            selectedItemIds: [],
-            initiatedBy: authUid,
-            startedAt,
-            completedAt: null,
-          }),
-          status: 'completed',
-          selectedItemIds,
-          completedAt,
-        },
-      });
-    });
+      const elapsedMs = Date.now() - startedAt;
+      const targetDurationMs = ACTION_DURATION_MS[method];
+      const remainingDelayMs = Math.max(0, targetDurationMs - elapsedMs);
 
-    return {
-      success: true,
-      actionId,
-      method,
-      itemIds: selectedItemIds,
-    };
+      if (remainingDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingDelayMs));
+      }
+
+      const completedAt = Date.now();
+      const historyEntry = {
+        id: actionId,
+        method,
+        triggeredBy: authUid,
+        revealedAt: completedAt,
+        itemIds: selectedItemIds,
+      };
+
+      await firestore.runTransaction(async (transaction) => {
+        const spaceTx = await transaction.get(spaceRef);
+        const boxTx = await transaction.get(boxRef);
+        const currentAction = (spaceTx.data()?.activeAction ??
+          null) as IndexedActionRecord | null;
+        const history = Array.isArray(boxTx.data()?.revealHistory)
+          ? boxTx.data()?.revealHistory
+          : [];
+
+        transaction.update(boxRef, {
+          revealRequestedBy: [],
+          revealHistory: [...history, historyEntry],
+        });
+
+        transaction.update(spaceRef, {
+          activeAction: {
+            ...(currentAction ?? {
+              actionId,
+              boxId,
+              method,
+              status: 'initiating',
+              selectedItemIds: [],
+              initiatedBy: authUid,
+              startedAt,
+              completedAt: null,
+            }),
+            status: 'completed',
+            selectedItemIds,
+            completedAt,
+          },
+        });
+      });
+
+      return {
+        success: true,
+        actionId,
+        method,
+        itemIds: selectedItemIds,
+      };
+    } catch (error) {
+      await spaceRef.update({
+        'activeAction.status': 'completed',
+        'activeAction.completedAt': Date.now(),
+        'activeAction.selectedItemIds': [],
+      });
+
+      throw error;
+    }
   },
 );
 

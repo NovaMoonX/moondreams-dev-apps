@@ -70,17 +70,17 @@ export function useRevealRequest({
         await triggerBoxAction({
           spaceId,
           boxId: box.id,
-          userId: userUid,
           method,
         });
       } catch (error) {
         console.error('Error triggering box action:', error);
-        throw new Error('Failed to trigger box action. Please try again later.', {
-          cause: error,
-        });
+        throw new Error(
+          'Failed to trigger box action. Please try again later.',
+          {
+            cause: error,
+          },
+        );
       }
-
-      
     },
     [box.id, spaceId, userUid],
   );
