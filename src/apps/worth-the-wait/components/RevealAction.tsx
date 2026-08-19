@@ -1,4 +1,8 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  RadioGroup,
+  RadioGroupItem,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useMemo } from 'react';
@@ -29,11 +33,14 @@ function RevealAction() {
 
   const partnerPresence = usePresence(partnerUid, 'worth-the-wait');
   const currentUserRequest =
-    box.revealRequestedBy.find((request) => request.userId === user?.uid) ?? null;
+    box.revealRequestedBy.find((request) => request.userId === user?.uid) ??
+    null;
   const partnerRequest =
     partnerUid == null
       ? null
-      : box.revealRequestedBy.find((request) => request.userId === partnerUid) ?? null;
+      : (box.revealRequestedBy.find(
+          (request) => request.userId === partnerUid,
+        ) ?? null);
 
   const selectedMethod = currentUserRequest?.method ?? null;
   const mutualMethod =
@@ -44,7 +51,9 @@ function RevealAction() {
   const isPartnerAvailable =
     partnerPresence?.isOnline === true &&
     partnerPresence.currentLocation === 'worth-the-wait';
-  const actionLocked = Boolean(activeAction && activeAction.status !== 'completed');
+  const actionLocked = Boolean(
+    activeAction && activeAction.status !== 'completed',
+  );
   const isTriggerEnabled =
     Boolean(mutualMethod) && isPartnerAvailable && !actionLocked;
 
@@ -53,7 +62,15 @@ function RevealAction() {
       return;
     }
 
-    const boxRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId, 'boxes', box.id);
+    const boxRef = doc(
+      db,
+      'apps',
+      'worth-the-wait',
+      'spaces',
+      spaceId,
+      'boxes',
+      box.id,
+    );
     const nextRequests = box.revealRequestedBy.filter(
       (request) => request.userId !== user.uid,
     );
@@ -101,8 +118,12 @@ function RevealAction() {
     <div className='border-border bg-muted/30 rounded-2xl border p-4'>
       <div className='mb-3 flex items-center justify-between gap-3'>
         <div>
-          <p className='text-foreground text-sm font-semibold'>Reveal request</p>
-          <p className='text-muted-foreground text-xs'>Match your partner to unlock the reveal.</p>
+          <p className='text-foreground text-sm font-semibold'>
+            Is it time to share?
+          </p>
+          <p className='text-muted-foreground text-xs'>
+            Match your partner to unlock the reveal.
+          </p>
         </div>
 
         {selectedMethod ? (
@@ -117,37 +138,45 @@ function RevealAction() {
         ) : null}
       </div>
 
-      <div className='grid gap-2 sm:grid-cols-2'>
+      <RadioGroup
+        value={selectedMethod ?? ''}
+        onChange={(nextValue) => {
+          void toggleRevealRequest(nextValue as RevealMethod);
+        }}
+        className='grid gap-2 sm:grid-cols-2'
+      >
         {methodOptions.map((method) => {
           const isSelected = selectedMethod === method;
           const isPartnerSelected = partnerRequest?.method === method;
 
           return (
-            <button
+            <RadioGroupItem
               key={method}
-              type='button'
-              onClick={() => void toggleRevealRequest(method)}
+              value={method}
+              hideInput
               className={join(
-                'flex min-h-14 flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition',
+                'min-h-14 rounded-xl border px-3 py-2 text-left transition',
                 isSelected
                   ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
                   : 'border-border bg-card text-foreground hover:border-ring/60',
               )}
             >
-              <span className='text-sm font-medium'>
-                {getFriendlyRevealMethod(method)}
-              </span>
-              <span className='text-muted-foreground text-[11px]'>
-                {isSelected
-                  ? 'You requested this'
-                  : isPartnerSelected
-                    ? 'Partner requested this'
-                    : 'Tap to request'}
-              </span>
-            </button>
+              <div className='flex flex-col'>
+                <span className='text-sm font-medium'>
+                  {getFriendlyRevealMethod(method)}
+                </span>
+                <span className='text-muted-foreground text-[11px]'>
+                  {isSelected
+                    ? 'You requested this'
+                    : isPartnerSelected
+                      ? 'Partner requested this'
+                      : 'Tap to request'}
+                </span>
+              </div>
+            </RadioGroupItem>
           );
         })}
-      </div>
+      </RadioGroup>
 
       <div className='mt-4 flex items-center justify-between gap-3'>
         <div className='text-muted-foreground text-xs'>

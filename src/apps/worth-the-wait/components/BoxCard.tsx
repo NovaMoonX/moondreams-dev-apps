@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   DropdownMenu,
   DropdownMenuFactories,
@@ -114,7 +115,7 @@ function BoxCard() {
           if (event.target !== event.currentTarget) {
             return;
           }
-          
+
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             if (isManagedActionInProgress.current) {
@@ -145,9 +146,9 @@ function BoxCard() {
 
             <div className='flex items-center gap-2'>
               {itemCount > 0 && (
-                <span className='border-border bg-muted/40 text-muted-foreground rounded-full px-3 py-1 text-center font-bold'>
+                <Badge variant='muted' className='text-base! font-bold'>
                   {itemCount}
-                </span>
+                </Badge>
               )}
               {canManageCustomBox ? (
                 <DropdownMenu
