@@ -9,8 +9,8 @@ import { useMemo, useState } from 'react';
 
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
+import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useItems } from '../hooks/useItems';
-import { RevealMethod } from '../types';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
 import RevealAction from './RevealAction';
@@ -23,14 +23,45 @@ interface BoxDetailDrawerProps {
 function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
+  const { space } = useWorthTheWait();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
-  const [revealState, setRevealState] = useState({
-    isLocked: false,
-    userHasActiveRequest: false,
-    partnerHasActiveRequest: false,
-    mutualMethod: null as RevealMethod | null,
-  });
+
+  const partnerUid = useMemo(() => {
+    if (!user || !space) {
+      return null;
+    }
+
+    return space.members.find((memberUid) => memberUid !== user.uid) ?? null;
+  }, [space, user]);
+
+  const currentUserRequest = useMemo(
+    () =>
+      box.revealRequestedBy.find((request) => request.userId === user?.uid) ??
+      null,
+    [box.revealRequestedBy, user?.uid],
+  );
+
+  const partnerRequest = useMemo(
+    () =>
+      partnerUid == null
+        ? null
+        : (box.revealRequestedBy.find(
+            (request) => request.userId === partnerUid,
+          ) ?? null),
+    [box.revealRequestedBy, partnerUid],
+  );
+
+  const mutualMethod =
+    currentUserRequest &&
+    partnerRequest &&
+    currentUserRequest.method === partnerRequest.method
+      ? currentUserRequest.method
+      : null;
+
+  const hasUserRequest = Boolean(currentUserRequest);
+  const hasPartnerRequest = Boolean(partnerRequest);
+  const hasMutualRequest = Boolean(mutualMethod);
 
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => left.createdAt - right.createdAt),
@@ -95,13 +126,11 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
               label={
                 <div className='flex w-full items-center justify-between gap-3'>
                   <span>Request reveal</span>
-                  {revealState.isLocked ? (
-                    <span className='h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent' />
-                  ) : revealState.mutualMethod ? (
+                  {hasMutualRequest ? (
                     <CheckCircled className='h-5 w-5 text-emerald-500' />
-                  ) : revealState.partnerHasActiveRequest ? (
-                    <DeepRing className='h-5 w-5 animate-spin text-emerald-500' />
-                  ) : revealState.userHasActiveRequest ? (
+                  ) : hasPartnerRequest ? (
+                    <DeepRing className='h-5 w-5 text-emerald-500' />
+                  ) : hasUserRequest ? (
                     <Badge variant='success' aspect='square' size='md' />
                   ) : null}
                 </div>
@@ -110,7 +139,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
               buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
             >
               <div className='px-4 pt-2 pb-4'>
-                <RevealAction onRevealStateChange={setRevealState} />
+                <RevealAction />
               </div>
             </Disclosure>
 

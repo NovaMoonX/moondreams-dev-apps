@@ -4,7 +4,7 @@ import {
   RadioGroupItem,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
 import { useAuth } from '@hooks/useAuth';
@@ -16,20 +16,9 @@ import { useRevealRequest } from '../hooks/useRevealRequest';
 import type { RevealMethod } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 
-interface RevealActionProps {
-  // TODO: once we synchronize the reveal state with the backend, this prop can be removed
-  // as we should have a synchronized UI as well that is displayed to both users.
-  onRevealStateChange?: (state: {
-    isLocked: boolean;
-    userHasActiveRequest: boolean;
-    partnerHasActiveRequest: boolean;
-    mutualMethod: RevealMethod | null;
-  }) => void;
-}
-
 const methodOptions: RevealMethod[] = ['full_reveal', 'raffle'];
 
-function RevealAction({ onRevealStateChange }: RevealActionProps) {
+function RevealAction() {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { space } = useWorthTheWait();
@@ -83,22 +72,6 @@ function RevealAction({ onRevealStateChange }: RevealActionProps) {
 
     await startAction(mutualMethod);
   };
-
-  useEffect(() => {
-    onRevealStateChange?.({
-      isLocked: isActionForCurrentBox && actionLocked,
-      userHasActiveRequest: isActionForCurrentBox && Boolean(selectedMethod),
-      partnerHasActiveRequest: isActionForCurrentBox && Boolean(partnerRequest),
-      mutualMethod: isActionForCurrentBox ? mutualMethod : null,
-    });
-  }, [
-    isActionForCurrentBox,
-    actionLocked,
-    mutualMethod,
-    onRevealStateChange,
-    partnerRequest,
-    selectedMethod,
-  ]);
 
   const getRevealStatusMessage = () => {
     if (actionLocked) {
