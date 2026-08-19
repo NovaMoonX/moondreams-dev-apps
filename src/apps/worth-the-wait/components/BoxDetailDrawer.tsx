@@ -1,11 +1,19 @@
 import { useAuth } from '@hooks/useAuth';
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Badge,
+  Button,
+  Disclosure,
+  Drawer,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useMemo, useState } from 'react';
 
+import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useItems } from '../hooks/useItems';
+import { RevealMethod } from '../types';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
+import RevealAction from './RevealAction';
 
 interface BoxDetailDrawerProps {
   isOpen: boolean;
@@ -17,6 +25,12 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { box, spaceId } = useBoxContext();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
+  const [revealState, setRevealState] = useState({
+    isLocked: false,
+    userHasActiveRequest: false,
+    partnerHasActiveRequest: false,
+    mutualMethod: null as RevealMethod | null,
+  });
 
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => left.createdAt - right.createdAt),
@@ -72,50 +86,90 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     >
       {box ? (
         <div className='space-y-5'>
-          <div className='space-y-2'>
+          <div className='space-y-3'>
             <p className='text-muted-foreground text-sm leading-6'>
               {box.description}
             </p>
 
-            <div className='flex items-center justify-between gap-3'>
-              <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
-                {sortedItems.length} item{sortedItems.length === 1 ? '' : 's'}
-              </span>
-
-              {sortedItems.length > 0 && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  onClick={handleToggleAllItemsVisibility}
-                >
-                  {visibleItemIds.size === 0 ? 'Show my items' : 'Hide my items'}
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className='space-y-3'>
-            {loading ? (
-              <p className='text-muted-foreground text-sm'>Loading items...</p>
-            ) : sortedItems.length === 0 ? (
-              <div className='border-border bg-muted/30 text-muted-foreground rounded-2xl border border-dashed p-4 text-center text-sm'>
-                No items yet. Share your first thought with your partner.
+            <Disclosure
+              label={
+                <div className='flex w-full items-center justify-between gap-3'>
+                  <span>Request reveal</span>
+                  {revealState.isLocked ? (
+                    <span className='h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent' />
+                  ) : revealState.mutualMethod ? (
+                    <CheckCircled className='h-5 w-5 text-emerald-500' />
+                  ) : revealState.partnerHasActiveRequest ? (
+                    <DeepRing className='h-5 w-5 animate-spin text-emerald-500' />
+                  ) : revealState.userHasActiveRequest ? (
+                    <Badge variant='success' aspect='square' size='md' />
+                  ) : null}
+                </div>
+              }
+              className='border-border rounded-2xl border bg-slate-950/10'
+              buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
+            >
+              <div className='px-4 pt-2 pb-4'>
+                <RevealAction onRevealStateChange={setRevealState} />
               </div>
-            ) : (
-              sortedItems.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  currentUserId={user?.uid}
-                  isAuthorHidden={
-                    item.authorId === user?.uid && !visibleItemIds.has(item.id)
-                  }
-                  onDelete={deleteItem}
-                  onToggleVisibility={handleToggleItemVisibility}
-                />
-              ))
-            )}
+            </Disclosure>
+
+            <Disclosure
+              label={
+                <div className='flex w-full items-center justify-between gap-3'>
+                  <span>Items</span>
+                  <Badge variant='muted'>{sortedItems.length}</Badge>
+                </div>
+              }
+              className='border-border rounded-2xl border bg-slate-950/10'
+              buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
+            >
+              <div className='space-y-3 px-4 pt-3 pb-4'>
+                <div className='flex items-center justify-between gap-3'>
+                  <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
+                    {sortedItems.length} item
+                    {sortedItems.length === 1 ? '' : 's'}
+                  </span>
+
+                  {sortedItems.length > 0 && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={handleToggleAllItemsVisibility}
+                    >
+                      {visibleItemIds.size === 0
+                        ? 'Show my items'
+                        : 'Hide my items'}
+                    </Button>
+                  )}
+                </div>
+
+                {loading ? (
+                  <p className='text-muted-foreground text-sm'>
+                    Loading items...
+                  </p>
+                ) : sortedItems.length === 0 ? (
+                  <div className='border-border bg-muted/30 text-muted-foreground rounded-2xl border border-dashed p-4 text-center text-sm'>
+                    No items yet. Share your first thought with your partner.
+                  </div>
+                ) : (
+                  sortedItems.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      currentUserId={user?.uid}
+                      isAuthorHidden={
+                        item.authorId === user?.uid &&
+                        !visibleItemIds.has(item.id)
+                      }
+                      onDelete={deleteItem}
+                      onToggleVisibility={handleToggleItemVisibility}
+                    />
+                  ))
+                )}
+              </div>
+            </Disclosure>
           </div>
 
           <div className='border-border border-t pt-4'>

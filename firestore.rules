@@ -84,6 +84,18 @@ service cloud.firestore {
           && request.resource.data.activeAction == resource.data.activeAction;
       }
 
+      function isActiveActionStartValid() {
+        return request.auth != null
+          && request.auth.uid in resource.data.members
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMember == resource.data.pendingMember
+          && request.resource.data.activeAction != null
+          && request.resource.data.activeAction.initiatedBy == request.auth.uid
+          && request.resource.data.activeAction.status == 'initiating';
+      }
+
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.createdBy ||
         request.auth.uid in resource.data.members ||
@@ -95,7 +107,8 @@ service cloud.firestore {
 
       allow update: if (
         isPendingJoinRequestValid() ||
-        (isCreator(resource.data) && (isApprovalValid() || isDeclineValid()))
+        (isCreator(resource.data) && (isApprovalValid() || isDeclineValid())) ||
+        isActiveActionStartValid()
       );
 
       allow delete: if isCreator(resource.data);
@@ -115,8 +128,20 @@ service cloud.firestore {
           return resource.data.isDefault
         }
 
+        function isRevealRequestChange() {
+          return request.auth != null
+            && isSpaceMember()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealRequestedBy', 'revealHistory'])
+            && request.resource.data.revealRequestedBy is list
+            && request.resource.data.revealHistory is list;
+        }
+
         allow read, create: if isSpaceMember();
-        allow update, delete: if isSpaceMember() && isCreator() && !isDefaultBox();
+        allow update: if isSpaceMember() && (
+          (isCreator() && !isDefaultBox()) ||
+          isRevealRequestChange()
+        );
+        allow delete: if isSpaceMember() && isCreator() && !isDefaultBox();
 
         match /items/{itemId} {
           function isAuthor() {

@@ -128,10 +128,10 @@ export function getFriendlyRevealMethod(method: RevealMethod, casing?: 'upper' |
         : 'Full Reveal';
     case 'raffle':
       return casing === 'upper'
-        ? 'RAFFLE'
+        ? 'RAFFLE SINGLE ITEM'
         : casing === 'lower'
-        ? 'raffle'
-        : 'Raffle';
+        ? 'raffle single item'
+        : 'Raffle Single Item';
     default:
       return casing === 'upper'
         ? 'UNKNOWN'
