@@ -51,7 +51,7 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
         ) : null
       }
       showCloseButton
-      className='max-w-xl'
+      className='max-w-2xl mx-auto'
       enableDragGestures
     >
       {box ? (
@@ -66,14 +66,14 @@ function BoxDetailDrawer({ box, spaceId, onClose }: BoxDetailDrawerProps) {
                 {sortedItems.length} note{sortedItems.length === 1 ? '' : 's'}
               </span>
 
-              <Button
+              {sortedItems.length > 0 && <Button
                 type='button'
                 variant='secondary'
                 size='sm'
                 onClick={() => setHideOwnHiddenNotes((current) => !current)}
               >
                 {hideOwnHiddenNotes ? 'Show hidden notes' : 'Hide my notes'}
-              </Button>
+              </Button>}
             </div>
           </div>
 

@@ -14,7 +14,11 @@ function ItemForm({
 }: ItemFormProps) {
   const [value, setValue] = useState('');
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    event:
+      | React.SyntheticEvent<HTMLFormElement>
+      | React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
     event.preventDefault();
 
     if (!onSubmit) {
@@ -41,7 +45,13 @@ function ItemForm({
           placeholder={placeholder}
           rows={4}
           maxLength={500}
-          className='border-border bg-background text-foreground placeholder:text-muted-foreground w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none ring-0 transition focus:border-ring'
+          className='border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-ring w-full resize-none rounded-xl border px-3 py-2 text-sm ring-0 transition outline-none'
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void handleSubmit(event);
+            }
+          }}
         />
       </label>
 

@@ -1,5 +1,6 @@
 import {
   Button,
+  Clickable,
   DropdownMenu,
   DropdownMenuFactories,
   Tooltip,
@@ -96,99 +97,97 @@ function BoxCard({ box, onDelete, onEdit, onOpenBox }: BoxCardProps) {
 
   return (
     <>
-      <article
-        className='border-border bg-card/80 flex h-full cursor-pointer flex-col rounded-2xl border p-4 shadow-sm transition hover:border-ring/60'
-        onClick={() => onOpenBox?.(box.id)}
-        role='button'
+      <Clickable
         tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onOpenBox?.(box.id);
-          }
+        onButtonClick={() => {
+          onOpenBox?.(box.id);
         }}
+        className='w-full'
+        aria-label={`Open box ${box.name}`}
       >
-        <div className='mb-4 flex items-start justify-between gap-3'>
-          <div className='flex items-center gap-3'>
-            <div className='bg-muted flex h-12 w-12 items-center justify-center rounded-xl text-2xl'>
-              {box.emoji}
+        <div className='border-border bg-card/80 hover:border-ring/60 flex h-full cursor-pointer flex-col rounded-2xl border p-4 shadow-sm transition'>
+          <div className='mb-4 flex items-start justify-between gap-3'>
+            <div className='flex items-center gap-3'>
+              <div className='bg-muted flex h-12 w-12 items-center justify-center rounded-xl text-2xl'>
+                {box.emoji}
+              </div>
+              <div>
+                <h3 className='text-foreground text-lg font-semibold'>
+                  {box.name}
+                </h3>
+                <p className='text-muted-foreground text-xs tracking-[0.16em] uppercase'>
+                  {box.isDefault ? 'Starter box' : 'Custom'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className='text-foreground text-lg font-semibold'>
-                {box.name}
-              </h3>
-              <p className='text-muted-foreground text-xs tracking-[0.16em] uppercase'>
-                {box.isDefault ? 'Starter box' : 'Custom'}
-              </p>
-            </div>
+
+            {canManageCustomBox ? (
+              <DropdownMenu
+                items={menuItems}
+                onItemSelect={handleMenuSelect}
+                placement='top'
+                alignment='end'
+                offset={8}
+                trigger={
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className='h-9 w-9 shrink-0 p-0'
+                    aria-label={`Open actions for ${box.name}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <DotsVertical className='h-4 w-4' />
+                  </Button>
+                }
+              />
+            ) : !box.isDefault ? (
+              <Tooltip
+                message='Only the person who created this box can edit or delete it.'
+                placement='left'
+              >
+                <span>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className='h-9 w-9 shrink-0 p-0'
+                    aria-label={`Open actions for ${box.name}`}
+                    disabled={true}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <DotsVertical className='h-4 w-4' />
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
           </div>
 
-          {canManageCustomBox ? (
-            <DropdownMenu
-              items={menuItems}
-              onItemSelect={handleMenuSelect}
-              placement='top'
-              alignment='end'
-              offset={8}
-              trigger={
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  className='h-9 w-9 shrink-0 p-0'
-                  aria-label={`Open actions for ${box.name}`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <DotsVertical className='h-4 w-4' />
-                </Button>
-              }
-            />
-          ) : !box.isDefault ? (
-            <Tooltip
-              message='Only the person who created this box can edit or delete it.'
-              placement='left'
-            >
-              <span>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  className='h-9 w-9 shrink-0 p-0'
-                  aria-label={`Open actions for ${box.name}`}
-                  disabled={true}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <DotsVertical className='h-4 w-4' />
-                </Button>
-              </span>
-            </Tooltip>
-          ) : null}
-        </div>
+          <p className='text-muted-foreground flex-1 text-sm leading-6'>
+            {box.description}
+          </p>
 
-        <p className='text-muted-foreground flex-1 text-sm leading-6'>
-          {box.description}
-        </p>
-
-        <div
-          className={join(
-            'mt-4 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
-            isActiveRevealRequest
-              ? 'border-emerald-400 dark:border-emerald-700'
-              : 'border-border bg-muted/40 text-muted-foreground',
-          )}
-        >
-          <span>
-            {revealCount > 0
-              ? `${revealCount} reveal${revealCount === 1 ? '' : 's'}`
-              : 'No reveals yet'}
-          </span>
-          {isActiveRevealRequest ? (
-            <span className='rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-emerald-950 uppercase dark:bg-emerald-900 dark:text-emerald-200'>
-              {getRevealRequestText()}
+          <div
+            className={join(
+              'mt-4 flex flex-col sm:flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',
+              isActiveRevealRequest
+                ? 'border-emerald-400 dark:border-emerald-700'
+                : 'border-border bg-muted/40 text-muted-foreground',
+            )}
+          >
+            <span>
+              {revealCount > 0
+                ? `${revealCount} reveal${revealCount === 1 ? '' : 's'}`
+                : 'No reveals yet'}
             </span>
-          ) : null}
+            {isActiveRevealRequest ? (
+              <span className='rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-emerald-950 uppercase dark:bg-emerald-900 dark:text-emerald-200'>
+                {getRevealRequestText()}
+              </span>
+            ) : null}
+          </div>
         </div>
-      </article>
+      </Clickable>
 
       {canManageCustomBox ? (
         <ManageBoxModal

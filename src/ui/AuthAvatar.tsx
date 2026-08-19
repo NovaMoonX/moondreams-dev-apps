@@ -51,7 +51,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     return (
       <Button onClick={signInWithGoogle} className={join('gap-2', className)}>
         <Google className='size-4' />
-        Sign in
+        <span className='hidden sm:inline'>Sign in</span>
       </Button>
     );
   }
