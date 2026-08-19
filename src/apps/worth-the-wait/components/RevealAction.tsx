@@ -4,24 +4,30 @@ import {
   RadioGroupItem,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { doc, updateDoc } from 'firebase/firestore';
 import { useMemo } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
 import { useAuth } from '@hooks/useAuth';
-import { db } from '@lib/firebase/config';
 
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useActiveAction } from '../hooks/useActiveAction';
+import { useRevealRequest } from '../hooks/useRevealRequest';
 import type { RevealMethod } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
+
+const methodOptions: RevealMethod[] = ['full_reveal', 'raffle'];
 
 function RevealAction() {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { space } = useWorthTheWait();
   const { activeAction } = useActiveAction(spaceId);
+  const { toggleRevealRequest, startAction } = useRevealRequest({
+    spaceId,
+    box,
+    userUid: user?.uid,
+  });
 
   const partnerUid = useMemo(() => {
     if (!user || !space) {
@@ -57,62 +63,13 @@ function RevealAction() {
   const isTriggerEnabled =
     Boolean(mutualMethod) && isPartnerAvailable && !actionLocked;
 
-  const toggleRevealRequest = async (method: RevealMethod) => {
-    if (!user?.uid) {
-      return;
-    }
-
-    const boxRef = doc(
-      db,
-      'apps',
-      'worth-the-wait',
-      'spaces',
-      spaceId,
-      'boxes',
-      box.id,
-    );
-    const nextRequests = box.revealRequestedBy.filter(
-      (request) => request.userId !== user.uid,
-    );
-
-    if (currentUserRequest?.method === method) {
-      await updateDoc(boxRef, { revealRequestedBy: nextRequests });
-      return;
-    }
-
-    await updateDoc(boxRef, {
-      revealRequestedBy: [
-        ...nextRequests,
-        {
-          userId: user.uid,
-          method,
-          requestedAt: Date.now(),
-        },
-      ],
-    });
-  };
-
   const handleStartAction = async () => {
     if (!isTriggerEnabled || !mutualMethod || !user?.uid) {
       return;
     }
 
-    const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
-    await updateDoc(spaceRef, {
-      activeAction: {
-        actionId: `${user.uid}-${box.id}-${mutualMethod}-${Date.now()}`,
-        boxId: box.id,
-        method: mutualMethod,
-        status: 'initiating',
-        selectedItemIds: [],
-        initiatedBy: user.uid,
-        startedAt: Date.now(),
-        completedAt: null,
-      },
-    });
+    await startAction(mutualMethod);
   };
-
-  const methodOptions: RevealMethod[] = ['full_reveal', 'raffle'];
 
   return (
     <div className='border-border bg-muted/30 rounded-2xl border p-4'>

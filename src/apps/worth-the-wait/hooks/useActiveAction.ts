@@ -33,7 +33,9 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
   const startedAt =
     typeof action.startedAt === 'number'
       ? action.startedAt
-      : typeof action.startedAt === 'object' && action.startedAt && 'seconds' in action.startedAt
+      : typeof action.startedAt === 'object' &&
+          action.startedAt &&
+          'seconds' in action.startedAt
         ? Number((action.startedAt as { seconds: number }).seconds) * 1000
         : Date.now();
 
@@ -41,7 +43,9 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
   const completedAt =
     typeof completedAtValue === 'number'
       ? completedAtValue
-      : typeof completedAtValue === 'object' && completedAtValue && 'seconds' in completedAtValue
+      : typeof completedAtValue === 'object' &&
+          completedAtValue &&
+          'seconds' in completedAtValue
         ? Number((completedAtValue as { seconds: number }).seconds) * 1000
         : null;
 
@@ -51,22 +55,28 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
     method: method as RevealMethod,
     status,
     selectedItemIds,
-    initiatedBy: typeof action.initiatedBy === 'string' ? action.initiatedBy : '',
+    initiatedBy:
+      typeof action.initiatedBy === 'string' ? action.initiatedBy : '',
     startedAt,
     completedAt,
   };
 }
 
 export function useActiveAction(spaceId: string) {
+  const [spaceId_, setSpaceId_] = useState(spaceId);
   const [activeAction, setActiveAction] = useState<ActiveAction | null>(null);
   const [loading, setLoading] = useState(Boolean(spaceId));
   const [error, setError] = useState<string | null>(null);
 
+  if (spaceId !== spaceId_) {
+    setSpaceId_(spaceId);
+    setActiveAction(null);
+    setLoading(Boolean(spaceId));
+    setError(null);
+  }
+
   useEffect(() => {
     if (!spaceId) {
-      setActiveAction(null);
-      setLoading(false);
-      setError(null);
       return;
     }
 
