@@ -9,7 +9,7 @@ interface ItemFormProps {
 
 function ItemForm({
   disabled = false,
-  placeholder = 'Write a note...',
+  placeholder = 'Write a item...',
   onSubmit,
 }: ItemFormProps) {
   const [value, setValue] = useState('');
@@ -37,7 +37,7 @@ function ItemForm({
   return (
     <form onSubmit={handleSubmit} className='space-y-3'>
       <label className='block'>
-        <span className='sr-only'>Write a note</span>
+        <span className='sr-only'>Write a item</span>
         <textarea
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -64,7 +64,7 @@ function ItemForm({
           size='sm'
           disabled={disabled || value.trim().length === 0}
         >
-          Add note
+          Add item
         </Button>
       </div>
     </form>

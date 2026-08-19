@@ -58,7 +58,7 @@ function ItemCard({
               size='sm'
               className='h-8 w-8 p-0'
               aria-label={
-                shouldHideOwnContent ? 'Show hidden note' : 'Hide note from view'
+                shouldHideOwnContent ? 'Show hidden item' : 'Hide item from view'
               }
               onClick={handleToggleVisibility}
             >
@@ -76,7 +76,7 @@ function ItemCard({
               variant='secondary'
               size='sm'
               className='h-8 w-8 p-0'
-              aria-label={`Delete note ${item.id}`}
+              aria-label={`Delete item ${item.id}`}
               onClick={handleDelete}
             >
               <Trash className='h-4 w-4' />
@@ -89,9 +89,9 @@ function ItemCard({
         {shouldDisplayContent ? (
           item.content
         ) : shouldMaskContent ? (
-          'Hidden note from partner'
+          'Hidden item from partner'
         ) : (
-          'Hidden note from you'
+          'Hidden item from you'
         )}
       </p>
     </div>

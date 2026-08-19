@@ -89,7 +89,7 @@ export function useItems(spaceId: string, boxId: string) {
   const addItem = useCallback(
     async (content: string | ItemDraft) => {
       if (!spaceId || !boxId) {
-        throw new Error('A space and box are required to add a note.');
+        throw new Error('A space and box are required to add a item.');
       }
 
       const nextContent = typeof content === 'string' ? content : content.content;

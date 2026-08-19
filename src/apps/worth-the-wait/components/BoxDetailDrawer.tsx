@@ -16,7 +16,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
-  const [hideOwnHiddenNotes, setHideOwnHiddenNotes] = useState(true);
+  const [hideOwnHiddenItems, setHideOwnHiddenItems] = useState(true);
   const [hiddenItemIds, setHiddenItemIds] = useState<Record<string, boolean>>(
     {},
   );
@@ -67,7 +67,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
 
             <div className='flex items-center justify-between gap-3'>
               <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
-                {sortedItems.length} note{sortedItems.length === 1 ? '' : 's'}
+                {sortedItems.length} item{sortedItems.length === 1 ? '' : 's'}
               </span>
 
               {sortedItems.length > 0 && (
@@ -75,9 +75,9 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   type='button'
                   variant='secondary'
                   size='sm'
-                  onClick={() => setHideOwnHiddenNotes((current) => !current)}
+                  onClick={() => setHideOwnHiddenItems((current) => !current)}
                 >
-                  {hideOwnHiddenNotes ? 'Show my notes' : 'Hide my notes'}
+                  {hideOwnHiddenItems ? 'Show my items' : 'Hide my items'}
                 </Button>
               )}
             </div>
@@ -85,10 +85,10 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
 
           <div className='space-y-3'>
             {loading ? (
-              <p className='text-muted-foreground text-sm'>Loading notes...</p>
+              <p className='text-muted-foreground text-sm'>Loading items...</p>
             ) : sortedItems.length === 0 ? (
               <div className='border-border bg-muted/30 text-muted-foreground rounded-2xl border border-dashed p-4 text-center text-sm'>
-                No notes yet. Share your first thought with your partner.
+                No items yet. Share your first thought with your partner.
               </div>
             ) : (
               sortedItems.map((item) => (
@@ -97,7 +97,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   item={item}
                   currentUserId={user?.uid}
                   isAuthorHidden={
-                    (item.authorId === user?.uid && hideOwnHiddenNotes) ||
+                    (item.authorId === user?.uid && hideOwnHiddenItems) ||
                     Boolean(hiddenItemIds[item.id])
                   }
                   onDelete={deleteItem}
