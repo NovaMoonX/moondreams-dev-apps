@@ -7,9 +7,7 @@ This repository includes the server-side execution path for Worth the Wait. The 
 1. Start the local Firebase emulators for Auth, Firestore, Realtime Database, and Cloud Functions:
 
    ```bash
-   export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-   export PATH="$JAVA_HOME/bin:$PATH"
-   npx firebase emulators:start --project moondreams-dev-apps --only auth,firestore,database,functions
+   npm run emulators
    ```
 
 2. Seed the local emulator data for the app:
@@ -29,16 +27,6 @@ This repository includes the server-side execution path for Worth the Wait. The 
    ```text
    http://127.0.0.1:5001/moondreams-dev-apps/us-central1/triggerBoxAction
    ```
-
-## Function behavior
-
-The `triggerBoxAction` callable endpoint enforces the locked reveal workflow for Worth the Wait:
-
-- verifies both space members are online and still in the Worth the Wait flow,
-- rejects duplicate simultaneous triggers via a transaction on `apps/worth-the-wait/spaces/{spaceId}.activeAction`,
-- uses server-side randomness for raffles,
-- waits for the remaining animation duration before marking the action as completed,
-- clears reveal requests and appends a revealHistory entry when the action finishes.
 
 ## Emulator checks
 
