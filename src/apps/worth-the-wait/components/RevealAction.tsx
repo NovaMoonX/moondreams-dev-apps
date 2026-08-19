@@ -4,7 +4,7 @@ import {
   RadioGroupItem,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
 import { useAuth } from '@hooks/useAuth';
@@ -16,9 +16,20 @@ import { useRevealRequest } from '../hooks/useRevealRequest';
 import type { RevealMethod } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 
+interface RevealActionProps {
+  // TODO: once we synchronize the reveal state with the backend, this prop can be removed 
+  // as we should have a synchronized UI as well that is displayed to both users.
+  onRevealStateChange?: (state: {
+    isLocked: boolean;
+    userHasActiveRequest: boolean;
+    partnerHasActiveRequest: boolean;
+    mutualMethod: RevealMethod | null;
+  }) => void;
+}
+
 const methodOptions: RevealMethod[] = ['full_reveal', 'raffle'];
 
-function RevealAction() {
+function RevealAction({ onRevealStateChange }: RevealActionProps) {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { space } = useWorthTheWait();
@@ -55,9 +66,13 @@ function RevealAction() {
       : null;
 
   const isPartnerAvailable = partnerPresence?.isHere;
+  const isActionForCurrentBox = Boolean(
+    activeAction && activeAction.boxId === box.id,
+  );
   const actionLocked = Boolean(
     activeAction && activeAction.status !== 'completed',
   );
+
   const isTriggerEnabled =
     Boolean(mutualMethod) && isPartnerAvailable && !actionLocked;
 
@@ -68,6 +83,22 @@ function RevealAction() {
 
     await startAction(mutualMethod);
   };
+
+  useEffect(() => {
+    onRevealStateChange?.({
+      isLocked: isActionForCurrentBox && actionLocked,
+      userHasActiveRequest: isActionForCurrentBox && Boolean(selectedMethod),
+      partnerHasActiveRequest: isActionForCurrentBox && Boolean(partnerRequest),
+      mutualMethod: isActionForCurrentBox ? mutualMethod : null,
+    });
+  }, [
+    isActionForCurrentBox,
+    actionLocked,
+    mutualMethod,
+    onRevealStateChange,
+    partnerRequest,
+    selectedMethod,
+  ]);
 
   return (
     <div className='border-border bg-muted/30 rounded-2xl border p-4'>
@@ -122,7 +153,12 @@ function RevealAction() {
                 <span className='text-sm font-medium'>
                   {getFriendlyRevealMethod(method)}
                 </span>
-                <span className='text-muted-foreground text-[11px]'>
+                <span
+                  className={join(
+                    'text-muted-foreground text-[11px]',
+                    !isSelected && isPartnerSelected && 'text-emerald-500!',
+                  )}
+                >
                   {isSelected
                     ? 'You requested this'
                     : isPartnerSelected
@@ -152,8 +188,16 @@ function RevealAction() {
           disabled={!isTriggerEnabled}
           onClick={() => void handleStartAction()}
         >
-          <span className='animate-pulse'>
-            {actionLocked ? 'Reveal in progress' : 'Start Action'}
+          <span
+            className={
+              actionLocked && isActionForCurrentBox ? 'animate-pulse' : ''
+            }
+          >
+            {!actionLocked
+              ? 'Start Action'
+              : isActionForCurrentBox
+                ? 'Reveal in progress'
+                : 'Another box is being revealed'}
           </span>
         </Button>
       </div>

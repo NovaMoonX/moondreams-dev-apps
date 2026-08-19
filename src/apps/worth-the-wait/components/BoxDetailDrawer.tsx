@@ -7,8 +7,10 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useMemo, useState } from 'react';
 
+import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useItems } from '../hooks/useItems';
+import { RevealMethod } from '../types';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
 import RevealAction from './RevealAction';
@@ -23,6 +25,12 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { box, spaceId } = useBoxContext();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
+  const [revealState, setRevealState] = useState({
+    isLocked: false,
+    userHasActiveRequest: false,
+    partnerHasActiveRequest: false,
+    mutualMethod: null as RevealMethod | null,
+  });
 
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => left.createdAt - right.createdAt),
@@ -87,17 +95,22 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
               label={
                 <div className='flex w-full items-center justify-between gap-3'>
                   <span>Request reveal</span>
-                  {/* <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
-                    {sortedItems.length}
-                  </span> */}
-                  <Badge variant='success' aspect='square' size='md' />
+                  {revealState.isLocked ? (
+                    <span className='h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent' />
+                  ) : revealState.mutualMethod ? (
+                    <CheckCircled className='h-5 w-5 text-emerald-500' />
+                  ) : revealState.partnerHasActiveRequest ? (
+                    <DeepRing className='h-5 w-5 animate-spin text-emerald-500' />
+                  ) : revealState.userHasActiveRequest ? (
+                    <Badge variant='success' aspect='square' size='md' />
+                  ) : null}
                 </div>
               }
               className='border-border rounded-2xl border bg-slate-950/10'
               buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
             >
               <div className='px-4 pt-2 pb-4'>
-                <RevealAction />
+                <RevealAction onRevealStateChange={setRevealState} />
               </div>
             </Disclosure>
 
