@@ -51,7 +51,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
       onClose={onClose}
       title={
         box ? (
-          <div className='flex items-center gap-3'>
+          <div className='flex items-center gap-3 pb-2'>
             <span className='bg-muted flex h-10 w-10 items-center justify-center rounded-xl text-xl'>
               {box.emoji}
             </span>

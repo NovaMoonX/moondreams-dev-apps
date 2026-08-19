@@ -1,5 +1,10 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { EyeClosed, EyeOpened, Trash } from '@moondreamsdev/dreamer-ui/symbols';
+import { Button, Tooltip } from '@moondreamsdev/dreamer-ui/components';
+import {
+  EyeClosed,
+  EyeOpened,
+  InfoCircled,
+  Trash,
+} from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -48,6 +53,14 @@ function ItemCard({
     }
   };
 
+  const getInfoMessage = () => (
+    <div className='text-left text-xs'>
+      <span>Created: {new Date(item.createdAt).toLocaleString()}</span>
+      {/* <br />
+      <span>Last edited: {new Date(item.lastEditedAt).toLocaleString()}</span> */}
+    </div>
+  );
+
   return (
     <div
       className={join(
@@ -57,7 +70,7 @@ function ItemCard({
           : 'bg-card/90 text-foreground',
       )}
     >
-      <div className='mb-2 flex items-center justify-between gap-3'>
+      <div className='relative mb-2 flex items-center justify-between gap-3'>
         <span className='text-muted-foreground text-[10px] font-medium tracking-[0.14em] uppercase'>
           {isOwnItem ? 'You' : 'Partner'}
         </span>
@@ -92,6 +105,7 @@ function ItemCard({
               className='h-8 w-8 p-0'
               aria-label={`Delete item ${item.id}`}
               onClick={handleDelete}
+              disabled={shouldHideOwnContent}
             >
               <Trash className='h-4 w-4' />
             </Button>
@@ -99,13 +113,31 @@ function ItemCard({
         </div>
       </div>
 
-      <p className='text-sm leading-6'>
-        {shouldDisplayContent
-          ? item.content
-          : shouldMaskContent
-            ? 'Hidden item from partner'
-            : 'Hidden item from you'}
-      </p>
+      <div>
+        <p className='text-sm leading-6'>
+          {shouldDisplayContent
+            ? item.content
+            : shouldMaskContent
+              ? 'Hidden item from partner'
+              : 'Hidden item from you'}
+        </p>
+
+        <Tooltip
+          message={getInfoMessage()}
+          placement='right'
+          disabled={!shouldDisplayContent}
+        >
+          <Button
+            variant='base'
+            size='icon'
+            aria-label='Item details'
+            className='pl-0!'
+            disabled={!shouldDisplayContent}
+          >
+            <InfoCircled className='h-4 w-4' />
+          </Button>
+        </Tooltip>
+      </div>
     </div>
   );
 }
