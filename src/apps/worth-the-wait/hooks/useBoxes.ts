@@ -1,8 +1,14 @@
 import { auth, db } from '@lib/firebase/config';
 import {
+  encryptStringForSpace,
+  normalizeSpaceEncryption,
+  type SpaceEncryption,
+} from '@lib/security';
+import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   setDoc,
   updateDoc,
@@ -14,6 +20,14 @@ import type { Box, BoxDraft } from '../types';
 import { getDefaultBoxes, normalizeBox } from '../utils/boxHelpers';
 
 const limitDescription = (description: string) => description.trim();
+
+async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
+  const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
+  const spaceSnapshot = await getDoc(spaceRef);
+
+  return normalizeSpaceEncryption(spaceSnapshot.data()?.encryption ?? null);
+}
+
 
 export function useBoxes(spaceId: string) {
   const [boxes, setBoxes] = useState<Box[]>([]);
@@ -37,17 +51,24 @@ export function useBoxes(spaceId: string) {
           return;
         }
 
-        const nextBoxes = snapshot.docs
-          .map((documentSnapshot) =>
-            normalizeBox(documentSnapshot.id, documentSnapshot.data() as DocumentData),
+        const spaceEncryption = await getSpaceEncryption(spaceId);
+        const nextBoxes = (
+          await Promise.all(
+            snapshot.docs.map(async (documentSnapshot) =>
+              normalizeBox(
+                documentSnapshot.id,
+                documentSnapshot.data() as DocumentData,
+                spaceEncryption,
+              ),
+            ),
           )
-          .sort((left, right) => {
-            if (left.createdAt === right.createdAt) {
-              return left.name.localeCompare(right.name);
-            }
+        ).sort((left, right) => {
+          if (left.createdAt === right.createdAt) {
+            return left.name.localeCompare(right.name);
+          }
 
-            return left.createdAt - right.createdAt
-          });
+          return left.createdAt - right.createdAt;
+        });
 
         setBoxes(nextBoxes);
         setLoading(false);
@@ -55,9 +76,27 @@ export function useBoxes(spaceId: string) {
         if (snapshot.docs.length === 0 && !hasSeededDefaults.current) {
           hasSeededDefaults.current = true;
           const defaultBoxes = getDefaultBoxes();
+          const encryptedDefaults = await Promise.all(
+            defaultBoxes.map(async (box) => {
+              const encryptedName = await encryptStringForSpace(box.name, spaceEncryption);
+              const encryptedEmoji = await encryptStringForSpace(box.emoji, spaceEncryption);
+              const encryptedDescription = await encryptStringForSpace(
+                box.description,
+                spaceEncryption,
+              );
+
+              return {
+                ...box,
+                id: box.id,
+                name: encryptedName,
+                emoji: encryptedEmoji,
+                description: encryptedDescription,
+              };
+            }),
+          );
 
           await Promise.all(
-            defaultBoxes.map((box) =>
+            encryptedDefaults.map((box) =>
               setDoc(doc(boxCollection, box.id), {
                 ...box,
                 id: box.id,
@@ -109,6 +148,7 @@ export function useBoxes(spaceId: string) {
       );
       const boxRef = doc(boxCollection);
       const now = Date.now();
+      const spaceEncryption = await getSpaceEncryption(spaceId);
       const payload: Box = {
         id: boxRef.id,
         name: trimmedName,
@@ -122,7 +162,12 @@ export function useBoxes(spaceId: string) {
         lastEditedAt: now,
       };
 
-      await setDoc(boxRef, payload);
+      await setDoc(boxRef, {
+        ...payload,
+        name: await encryptStringForSpace(trimmedName, spaceEncryption),
+        emoji: await encryptStringForSpace(draft.emoji.trim() || '✨', spaceEncryption),
+        description: await encryptStringForSpace(trimmedDescription, spaceEncryption),
+      });
       return payload;
     },
     [spaceId],
@@ -156,13 +201,14 @@ export function useBoxes(spaceId: string) {
         'boxes',
         boxId,
       );
+      const spaceEncryption = await getSpaceEncryption(spaceId);
 
       await updateDoc(
         boxRef,
         {
-          name: trimmedName,
-          emoji: draft.emoji.trim() || '✨',
-          description: trimmedDescription,
+          name: await encryptStringForSpace(trimmedName, spaceEncryption),
+          emoji: await encryptStringForSpace(draft.emoji.trim() || '✨', spaceEncryption),
+          description: await encryptStringForSpace(trimmedDescription, spaceEncryption),
           lastEditedAt: Date.now(),
         },
       );

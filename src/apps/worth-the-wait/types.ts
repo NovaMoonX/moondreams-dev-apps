@@ -11,6 +11,12 @@ export type UserPresence = {
 
 export type ActiveActionStatus = 'initiating' | 'executing' | 'completed';
 
+export type SpaceEncryption = {
+  keyId: string;
+  keyVersion: number;
+  key: string;
+};
+
 export type ActiveAction = {
   actionId: string;
   boxId: string;
@@ -32,6 +38,7 @@ export type Space = {
   pendingMember: PendingMember | null;
   activeAction: ActiveAction | null;
   welcomeSeenBy: Record<string, number>;
+  encryption: SpaceEncryption | null;
 };
 
 export type RevealMethod = 'full_reveal' | 'raffle';

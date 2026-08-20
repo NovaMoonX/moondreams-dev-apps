@@ -1,6 +1,10 @@
 import { faker } from '@faker-js/faker';
 
 import { getDefaultBoxes } from '../../src/apps/worth-the-wait/utils/boxHelpers.ts';
+import {
+  createSeedSpaceEncryptionKey,
+  encryptStringForSpace,
+} from '../../src/lib/security/index.ts';
 
 import {
   EMPTY_SEED_RESULT,
@@ -10,6 +14,7 @@ import {
 } from './types.ts';
 
 const SPACE_ID = 'seed-shared-space';
+const SEED_SPACE_ENCRYPTION = createSeedSpaceEncryptionKey();
 
 function createItem(
   id: string,
@@ -56,12 +61,24 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
       inviteCode: null,
       pendingMember: null,
       activeAction: null,
+      encryption: SEED_SPACE_ENCRYPTION,
     },
     { merge: true },
   );
 
   const defaultBoxes = getDefaultBoxes(spaceCreatedAt + 1_000);
-  defaultBoxes.forEach((box) => {
+  const encryptedDefaultBoxes = await Promise.all(
+    defaultBoxes.map(async (box) => ({
+      ...box,
+      name: await encryptStringForSpace(box.name, SEED_SPACE_ENCRYPTION),
+      emoji: await encryptStringForSpace(box.emoji, SEED_SPACE_ENCRYPTION),
+      description: await encryptStringForSpace(
+        box.description,
+        SEED_SPACE_ENCRYPTION,
+      ),
+    })),
+  );
+  encryptedDefaultBoxes.forEach((box) => {
     batch.set(spaceRef.collection('boxes').doc(box.id), box, { merge: true });
   });
 
@@ -173,8 +190,17 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
     createdAt: context.now - 172_800_000,
     lastEditedAt: context.now - 172_800_000,
   };
+  const encryptedCustomBox = {
+    ...customBox,
+    name: await encryptStringForSpace(customBox.name, SEED_SPACE_ENCRYPTION),
+    emoji: await encryptStringForSpace(customBox.emoji, SEED_SPACE_ENCRYPTION),
+    description: await encryptStringForSpace(
+      customBox.description,
+      SEED_SPACE_ENCRYPTION,
+    ),
+  };
   const customBoxRef = spaceRef.collection('boxes').doc(customBox.id);
-  batch.set(customBoxRef, customBox, { merge: true });
+  batch.set(customBoxRef, encryptedCustomBox, { merge: true });
 
   const defaultBoxSeeds = [
     {
@@ -265,17 +291,25 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
     ),
   ];
 
-  defaultBoxSeeds.forEach(({ boxId, items: boxItems }) => {
+  for (const { boxId, items: boxItems } of defaultBoxSeeds) {
     const boxRef = spaceRef.collection('boxes').doc(boxId);
 
-    boxItems.forEach((item) => {
-      batch.set(boxRef.collection('items').doc(item.id), item, { merge: true });
-    });
-  });
+    for (const item of boxItems) {
+      const encryptedItem = {
+        ...item,
+        content: await encryptStringForSpace(item.content, SEED_SPACE_ENCRYPTION),
+      };
+      batch.set(boxRef.collection('items').doc(item.id), encryptedItem, { merge: true });
+    }
+  }
 
-  items.forEach((item) => {
-    batch.set(customBoxRef.collection('items').doc(item.id), item, { merge: true });
-  });
+  for (const item of items) {
+    const encryptedItem = {
+      ...item,
+      content: await encryptStringForSpace(item.content, SEED_SPACE_ENCRYPTION),
+    };
+    batch.set(customBoxRef.collection('items').doc(item.id), encryptedItem, { merge: true });
+  }
 
   await batch.commit();
 

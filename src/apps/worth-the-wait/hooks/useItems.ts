@@ -1,8 +1,15 @@
 import { auth, db } from '@lib/firebase/config';
 import {
+  decryptStringForSpace,
+  encryptStringForSpace,
+  normalizeSpaceEncryption,
+  type SpaceEncryption,
+} from '@lib/security';
+import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   setDoc,
   type DocumentData,
@@ -11,13 +18,24 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Item, ItemDraft } from '../types';
 
-function normalizeItem(id: string, data: DocumentData): Item {
+async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
+  const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
+  const snapshot = await getDoc(spaceRef);
+
+  return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
+}
+
+async function normalizeItem(
+  id: string,
+  data: DocumentData,
+  encryption: SpaceEncryption | null,
+): Promise<Item> {
   const methodValue = data.revealedMethod;
 
   return {
     id,
     authorId: typeof data.authorId === 'string' ? data.authorId : 'anonymous',
-    content: typeof data.content === 'string' ? data.content : '',
+    content: await decryptStringForSpace(data.content, encryption),
     isRevealed: Boolean(data.isRevealed),
     revealedAt:
       typeof data.revealedAt === 'number' ? data.revealedAt : null,
@@ -68,16 +86,17 @@ export function useItems(spaceId: string, boxId: string) {
 
     const unsubscribe = onSnapshot(
       itemsCollection,
-      (snapshot) => {
+      async (snapshot) => {
         if (!isActive) {
           return;
         }
 
-        const nextItems = snapshot.docs
-          .map((documentSnapshot) =>
-            normalizeItem(documentSnapshot.id, documentSnapshot.data()),
-          )
-          .sort((left, right) => left.createdAt - right.createdAt);
+        const spaceEncryption = await getSpaceEncryption(spaceId);
+        const nextItems = (await Promise.all(
+          snapshot.docs.map((documentSnapshot) =>
+            normalizeItem(documentSnapshot.id, documentSnapshot.data(), spaceEncryption),
+          ),
+        )).sort((left, right) => left.createdAt - right.createdAt);
 
         setItems(nextItems);
         setLoading(false);
@@ -129,6 +148,8 @@ export function useItems(spaceId: string, boxId: string) {
       }
 
       const now = Date.now();
+      const spaceEncryption = await getSpaceEncryption(spaceId);
+      const encryptedContent = await encryptStringForSpace(trimmedContent, spaceEncryption);
       const nextItem: Item = {
         id: itemRef.id,
         authorId: userId,
@@ -140,7 +161,10 @@ export function useItems(spaceId: string, boxId: string) {
         lastEditedAt: now,
       };
 
-      await setDoc(itemRef, nextItem);
+      await setDoc(itemRef, {
+        ...nextItem,
+        content: encryptedContent,
+      });
       return nextItem;
     },
     [boxId, spaceId],

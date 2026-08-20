@@ -1,3 +1,9 @@
+import {
+  decryptStringForSpace,
+  normalizeSpaceEncryption,
+  type SpaceEncryption,
+} from '@lib/security';
+
 import type { Box, RevealHistory, RevealMethod, RevealRequestedBy } from '../types';
 
 export const RECENT_REVEAL_WINDOW_MS = 3_600_000;
@@ -40,7 +46,11 @@ const DEFAULT_BOX_SEEDS = [
   },
 ] as const;
 
-export function normalizeBox(id: string, data: Record<string, unknown>): Box {
+export async function normalizeBox(
+  id: string,
+  data: Record<string, unknown>,
+  encryption: SpaceEncryption | null = null,
+): Promise<Box> {
   const requestedBy = Array.isArray(data.revealRequestedBy)
     ? data.revealRequestedBy.map((entry) => {
         const request = entry as Record<string, unknown>;
@@ -80,12 +90,21 @@ export function normalizeBox(id: string, data: Record<string, unknown>): Box {
       })
     : [];
 
+  const normalizedEncryption =
+    encryption ?? normalizeSpaceEncryption(data.encryption ?? null);
+
+  const decryptedName = await decryptStringForSpace(data.name, normalizedEncryption);
+  const decryptedEmoji = await decryptStringForSpace(data.emoji, normalizedEncryption);
+  const decryptedDescription = await decryptStringForSpace(
+    data.description,
+    normalizedEncryption,
+  );
+
   return {
     id,
-    name: typeof data.name === 'string' ? data.name : 'Untitled Box',
-    emoji: typeof data.emoji === 'string' && data.emoji.trim() ? data.emoji : '✨',
-    description:
-      typeof data.description === 'string' ? data.description : 'No description.',
+    name: decryptedName || 'Untitled Box',
+    emoji: decryptedEmoji.trim() || '✨',
+    description: decryptedDescription || 'No description.',
     isDefault: Boolean(data.isDefault),
     createdBy: typeof data.createdBy === 'string' ? data.createdBy : 'system',
     revealRequestedBy: requestedBy,
