@@ -70,6 +70,33 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
   };
 }
 
+function normalizeWelcomeSeenBy(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+
+  return entries.reduce<Record<string, number>>((result, [userId, timestamp]) => {
+    if (!userId) {
+      return result;
+    }
+
+    const seenAt =
+      typeof timestamp === 'number'
+        ? timestamp
+        : typeof timestamp === 'object' && timestamp && 'seconds' in timestamp
+          ? Number((timestamp as { seconds: number }).seconds) * 1000
+          : null;
+
+    if (typeof seenAt === 'number' && Number.isFinite(seenAt)) {
+      result[userId] = seenAt;
+    }
+
+    return result;
+  }, {});
+}
+
 function normalizeSpace(id: string, data: DocumentData): Space {
   const pendingMemberValue = data.pendingMember as
     Record<string, unknown> | null | undefined;
@@ -94,6 +121,7 @@ function normalizeSpace(id: string, data: DocumentData): Space {
           }
         : null,
     activeAction: normalizeActiveAction(data.activeAction),
+    welcomeSeenBy: normalizeWelcomeSeenBy(data.welcomeSeenBy),
   };
 }
 
@@ -217,6 +245,7 @@ export function useSpace(userUid: string) {
         inviteCode,
         pendingMember: null,
         activeAction: null,
+        welcomeSeenBy: {},
         updatedAt: now,
       };
 
@@ -310,6 +339,9 @@ export function useSpace(userUid: string) {
       pendingMember: null,
       inviteCode: null,
       activeAction: null,
+      welcomeSeenBy: {
+        ...(space.welcomeSeenBy ?? {}),
+      },
       updatedAt: Date.now(),
     });
 

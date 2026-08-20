@@ -39,11 +39,14 @@ service cloud.firestore {
         return request.auth != null
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.createdAt is number
+          && request.resource.data.updatedAt is number
           && request.resource.data.members is list
           && request.resource.data.members == [request.auth.uid]
           && request.resource.data.pendingMember == null
           && request.resource.data.inviteCode is string
-          && request.resource.data.inviteCode.size() == 6;
+          && request.resource.data.inviteCode.size() == 6
+          && request.resource.data.welcomeSeenBy is map
+          && request.resource.data.activeAction == null;
       }
 
       function isPendingJoinRequestValid() {
@@ -84,6 +87,19 @@ service cloud.firestore {
           && request.resource.data.activeAction == resource.data.activeAction;
       }
 
+      function isWelcomeSeenUpdateValid() {
+        return request.auth != null
+          && request.auth.uid in resource.data.members
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMember == resource.data.pendingMember
+          && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.updatedAt is number
+          && request.resource.data.welcomeSeenBy is map
+          && request.resource.data.welcomeSeenBy[request.auth.uid] is number;
+      }
+
       function isActiveActionStartValid() {
         return request.auth != null
           && request.auth.uid in resource.data.members
@@ -108,6 +124,7 @@ service cloud.firestore {
       allow update: if (
         isPendingJoinRequestValid() ||
         (isCreator(resource.data) && (isApprovalValid() || isDeclineValid())) ||
+        isWelcomeSeenUpdateValid() ||
         isActiveActionStartValid()
       );
 
