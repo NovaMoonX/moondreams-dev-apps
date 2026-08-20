@@ -1,6 +1,6 @@
 import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, HelpIcon } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
@@ -8,14 +8,21 @@ import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useState } from 'react';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useBoxes } from '../hooks/useBoxes';
+import { useWelcomeModal } from '../hooks/useWelcomeModal';
 import BoxGrid from './BoxGrid';
 import ManageBoxModal from './ManageBoxModal';
 import PresenceBadge from './PresenceBadge';
+import SpaceWelcomeModal from './SpaceWelcomeModal';
 
 function WorthTheWaitLayout() {
   const { user } = useAuth();
   const { space } = useWorthTheWait();
   const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
+  const {
+    isOpen: isWelcomeModalOpen,
+    openManual,
+    close,
+  } = useWelcomeModal(space, user);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
   const {
@@ -35,7 +42,9 @@ function WorthTheWaitLayout() {
           </NavButton>
 
           {space ? (
-            <PresenceBadge className='w-fit shrink-0 self-center' />
+            <div className='flex items-center gap-3'>
+              <PresenceBadge className='w-fit shrink-0 self-center' />
+            </div>
           ) : null}
         </header>
 
@@ -95,6 +104,25 @@ function WorthTheWaitLayout() {
         </main>
       </div>
 
+      {/* Worth the Wait guide button */}
+      {space ? (
+        <Button
+          variant='base'
+          size='icon'
+          aria-label='Open Worth the Wait guide'
+          title='Open Worth the Wait guide'
+          onClick={openManual}
+          className='group border-border bg-background hover:bg-muted/40 fixed right-6 bottom-6 z-50 h-12 w-12 rounded-full! border shadow-lg transition-colors'
+        >
+          <HelpIcon
+            message='Worth the Wait guide'
+            placement='left'
+            iconSize={18}
+            className='group-hover:text-foreground! text-muted-foreground! transition-colors'
+          />
+        </Button>
+      ) : null}
+
       <ManageBoxModal
         key={`create-box-modal-${isCreateBoxOpen}`}
         isOpen={isCreateBoxOpen}
@@ -105,6 +133,11 @@ function WorthTheWaitLayout() {
         }}
       />
 
+      <SpaceWelcomeModal
+        key={`space-welcome-modal-${isWelcomeModalOpen}`}
+        isOpen={isWelcomeModalOpen}
+        onClose={close}
+      />
     </div>
   );
 }
