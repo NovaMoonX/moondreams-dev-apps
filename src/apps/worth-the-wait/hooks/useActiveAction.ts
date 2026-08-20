@@ -1,5 +1,5 @@
 import { doc, onSnapshot, type DocumentData } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { db } from '@lib/firebase/config';
 
@@ -65,12 +65,16 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
 export function useActiveAction(spaceId: string) {
   const [spaceId_, setSpaceId_] = useState(spaceId);
   const [activeAction, setActiveAction] = useState<ActiveAction | null>(null);
+  const [presentedAction, setPresentedAction] = useState<ActiveAction | null>(
+    null,
+  );
   const [loading, setLoading] = useState(Boolean(spaceId));
   const [error, setError] = useState<string | null>(null);
 
   if (spaceId !== spaceId_) {
     setSpaceId_(spaceId);
     setActiveAction(null);
+    setPresentedAction(null);
     setLoading(Boolean(spaceId));
     setError(null);
   }
@@ -97,6 +101,21 @@ export function useActiveAction(spaceId: string) {
             : null;
 
         setActiveAction(nextAction);
+        setPresentedAction((current) => {
+          if (!nextAction) {
+            return null;
+          }
+
+          if (nextAction.status !== 'completed') {
+            return nextAction;
+          }
+
+          if (!current) {
+            return nextAction;
+          }
+
+          return current.actionId === nextAction.actionId ? nextAction : current;
+        });
         setError(null);
         setLoading(false);
       },
@@ -116,7 +135,17 @@ export function useActiveAction(spaceId: string) {
     };
   }, [spaceId]);
 
-  return { activeAction, loading, error };
+  const dismissPresentedAction = useCallback(() => {
+    setPresentedAction(null);
+  }, []);
+
+  return {
+    activeAction,
+    presentedAction,
+    loading,
+    error,
+    dismissPresentedAction,
+  };
 }
 
 export default useActiveAction;

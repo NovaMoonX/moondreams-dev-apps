@@ -7,10 +7,9 @@ interface BoxGridProps {
   boxes: Box[];
   onDeleteBox?: (boxId: string) => void | Promise<void>;
   onEditBox?: (boxId: string, draft: BoxDraft) => void | Promise<void>;
-  onOpenBox?: (boxId: string) => void;
 }
 
-function BoxGrid({ boxes, onDeleteBox, onEditBox, onOpenBox }: BoxGridProps) {
+function BoxGrid({ boxes, onDeleteBox, onEditBox }: BoxGridProps) {
   const { space } = useWorthTheWait();
 
   if (boxes.length === 0) {
@@ -31,7 +30,6 @@ function BoxGrid({ boxes, onDeleteBox, onEditBox, onOpenBox }: BoxGridProps) {
             spaceId: space?.id ?? '',
             onDelete: onDeleteBox,
             onEdit: onEditBox,
-            onOpen: onOpenBox,
           }}
         >
           <BoxCard />
