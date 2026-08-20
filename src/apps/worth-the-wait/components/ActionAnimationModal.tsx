@@ -1,4 +1,4 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -110,11 +110,15 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
   };
 
   return (
-    <div
-      className='bg-background/90 fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md'
-      role='dialog'
-      aria-modal='true'
-      aria-label={title}
+    <Modal
+      isOpen
+      onClose={() => undefined}
+      contentOnly
+      hideCloseButton
+      disableCloseOnOverlayClick
+      ariaLabelledBy='action-animation-title'
+      overlayClassName='bg-background/90 z-50 p-4 backdrop-blur-md'
+      containerClassName='w-full max-w-lg'
     >
       <div className='border-border bg-card relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 text-center shadow-2xl sm:p-8'>
         <div className='from-primary/20 via-primary/5 pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b to-transparent' />
@@ -124,7 +128,10 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
             <span className='text-muted-foreground text-xs font-semibold tracking-[0.18em] uppercase'>
               {getFriendlyRevealMethod(presentedAction.method, 'upper')}
             </span>
-            <h2 className='text-foreground text-3xl font-semibold tracking-tight'>
+            <h2
+              id='action-animation-title'
+              className='text-foreground text-3xl font-semibold tracking-tight'
+            >
               {title}
             </h2>
             <p className='text-muted-foreground text-sm'>
@@ -183,7 +190,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
