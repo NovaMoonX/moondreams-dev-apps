@@ -72,7 +72,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
       setNow(Date.now());
     }, RAFFLE_TICK_MS);
 
-    return () => window.clearInterval(intervalId);
+    return () => clearInterval(intervalId);
   }, [presentedAction?.method]);
 
   const targetBox = useMemo(

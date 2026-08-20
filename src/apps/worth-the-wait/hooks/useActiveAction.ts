@@ -110,7 +110,11 @@ export function useActiveAction(spaceId: string) {
             return nextAction;
           }
 
-          return current?.actionId === nextAction.actionId ? nextAction : null;
+          if (!current) {
+            return nextAction;
+          }
+
+          return current.actionId === nextAction.actionId ? nextAction : current;
         });
         setError(null);
         setLoading(false);

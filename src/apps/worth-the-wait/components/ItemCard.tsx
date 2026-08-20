@@ -72,7 +72,7 @@ function ItemCard({
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-    }, 1000);
+    }, 0);
 
     return () => clearInterval(interval);
   }, []);
@@ -139,21 +139,28 @@ function ItemCard({
         </p>
 
         <div className='mt-3 flex items-center justify-between gap-2'>
-          <Tooltip
-            message={getInfoMessage()}
-            placement='right'
-            disabled={!shouldDisplayContent}
-          >
-            <Button
-              variant='base'
-              size='icon'
-              aria-label='Item details'
-              className='pl-0!'
+          <div className='flex items-center gap-2'>
+            <Tooltip
+              message={getInfoMessage()}
+              placement='right'
               disabled={!shouldDisplayContent}
             >
-              <InfoCircled className='h-4 w-4' />
-            </Button>
-          </Tooltip>
+              <Button
+                variant='base'
+                size='icon'
+                aria-label='Item details'
+                className='pl-0!'
+                disabled={!shouldDisplayContent}
+              >
+                <InfoCircled className='h-4 w-4' />
+              </Button>
+            </Tooltip>
+            {!shouldHideOwnContent && (
+              <span className='text-xs block'>
+                Only visible to you. Your partner cannot see this item.
+              </span>
+            )}
+          </div>
 
           {hasRecentReveal ? (
             <Badge

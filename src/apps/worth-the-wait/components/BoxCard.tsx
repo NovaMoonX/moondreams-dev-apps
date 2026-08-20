@@ -109,9 +109,9 @@ function BoxCard() {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNow(Date.now());
-    }, 1000);
+    }, 0);
 
-    return () => window.clearInterval(intervalId);
+    return () => clearInterval(intervalId);
   }, []);
 
   return (
