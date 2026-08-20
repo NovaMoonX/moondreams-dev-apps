@@ -91,8 +91,10 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const statuses = fixtures.map((fixture) => [
     `status/${fixture.uid}`,
     {
-      state: 'online',
-      currentLocation: fixture.uid === FIXTURE_USERS.admin.uid ? 'home' : 'worth-the-wait',
+      state:
+        fixture.uid === FIXTURE_USERS.partnerTwo.uid ? 'offline' : 'online',
+      currentLocation:
+        fixture.uid === FIXTURE_USERS.partnerOne.uid ? 'worth-the-wait' : null,
       lastChanges: context.now,
     },
   ]);

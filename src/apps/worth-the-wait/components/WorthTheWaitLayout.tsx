@@ -5,16 +5,19 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useBoxes } from '../hooks/useBoxes';
+import ActionAnimationModal from './ActionAnimationModal';
+import BoxDetailDrawer from './BoxDetailDrawer';
 import BoxGrid from './BoxGrid';
+import { BoxProvider } from '../context/BoxProvider';
 import ManageBoxModal from './ManageBoxModal';
 import PresenceBadge from './PresenceBadge';
 
 function WorthTheWaitLayout() {
   const { user } = useAuth();
-  const { space } = useWorthTheWait();
+  const { activeAction, closeBox, selectedBoxId, space } = useWorthTheWait();
   const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
@@ -25,6 +28,20 @@ function WorthTheWaitLayout() {
     editCustomBox,
     deleteBox,
   } = useBoxes(space?.id ?? '');
+  const selectedBox = useMemo(
+    () => boxes.find((box) => box.id === selectedBoxId) ?? null,
+    [boxes, selectedBoxId],
+  );
+
+  useEffect(() => {
+    if (
+      activeAction &&
+      activeAction.status !== 'completed' &&
+      selectedBoxId === activeAction.boxId
+    ) {
+      closeBox();
+    }
+  }, [activeAction, closeBox, selectedBoxId]);
 
   return (
     <div className='page pt-28'>
@@ -87,7 +104,6 @@ function WorthTheWaitLayout() {
                   onEditBox={async (boxId, draft) => {
                     await editCustomBox(boxId, draft);
                   }}
-                  onOpenBox={() => undefined}
                 />
               )}
             </div>
@@ -105,6 +121,20 @@ function WorthTheWaitLayout() {
         }}
       />
 
+      {selectedBox ? (
+        <BoxProvider
+          value={{
+            box: selectedBox,
+            spaceId: space?.id ?? '',
+            onDelete: deleteBox,
+            onEdit: editCustomBox,
+          }}
+        >
+          <BoxDetailDrawer isOpen onClose={closeBox} />
+        </BoxProvider>
+      ) : null}
+
+      <ActionAnimationModal boxes={boxes} />
     </div>
   );
 }

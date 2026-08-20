@@ -11,7 +11,6 @@ import { useAuth } from '@hooks/useAuth';
 
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { useActiveAction } from '../hooks/useActiveAction';
 import { useRevealRequest } from '../hooks/useRevealRequest';
 import type { RevealMethod } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
@@ -21,8 +20,7 @@ const methodOptions: RevealMethod[] = ['full_reveal', 'raffle'];
 function RevealAction() {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
-  const { space } = useWorthTheWait();
-  const { activeAction } = useActiveAction(spaceId);
+  const { activeAction, space } = useWorthTheWait();
   const { toggleRevealRequest, startAction } = useRevealRequest({
     spaceId,
     box,

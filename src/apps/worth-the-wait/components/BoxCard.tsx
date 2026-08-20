@@ -13,20 +13,26 @@ import { useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useBoxContext } from '../context/boxContext';
 import { useItems } from '../hooks/useItems';
+import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
-import BoxDetailDrawer from './BoxDetailDrawer';
 import ManageBoxModal from './ManageBoxModal';
+
+const RECENT_REVEAL_WINDOW_MS = 3_600_000;
+const RECENT_REVEAL_CUTOFF = Date.now() - RECENT_REVEAL_WINDOW_MS;
 
 function BoxCard() {
   const { user } = useAuth();
-  const { box, spaceId, onDelete, onEdit, onOpen } = useBoxContext();
+  const { box, spaceId, onDelete, onEdit } = useBoxContext();
+  const { openBox } = useWorthTheWait();
   const { alert, confirm } = useActionModal();
   const { option, separator } = DropdownMenuFactories;
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const isManagedActionInProgress = useRef(false);
 
   const revealCount = box.revealHistory.length;
+  const hasRecentReveal = box.revealHistory.some(
+    (entry) => entry.revealedAt >= RECENT_REVEAL_CUTOFF,
+  );
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
   const { items } = useItems(spaceId, box.id);
   const itemCount = items.length;
@@ -108,8 +114,7 @@ function BoxCard() {
             return;
           }
 
-          onOpen?.(box.id);
-          setIsDrawerOpen(true);
+          openBox(box.id);
         }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) {
@@ -121,8 +126,7 @@ function BoxCard() {
             if (isManagedActionInProgress.current) {
               return;
             }
-            onOpen?.(box.id);
-            setIsDrawerOpen(true);
+            openBox(box.id);
           }
         }}
         className='w-full'
@@ -219,15 +223,14 @@ function BoxCard() {
               <span className='rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-emerald-950 uppercase dark:bg-emerald-900 dark:text-emerald-200'>
                 {getRevealRequestText()}
               </span>
+            ) : hasRecentReveal ? (
+              <span className='rounded-full bg-violet-400 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-violet-950 uppercase dark:bg-violet-900 dark:text-violet-100'>
+                Recently revealed
+              </span>
             ) : null}
           </div>
         </div>
       </div>
-
-      <BoxDetailDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-      />
 
       {canManageCustomBox ? (
         <ManageBoxModal
