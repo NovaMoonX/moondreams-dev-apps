@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useItems } from '../hooks/useItems';
+import { useRaffleReveal } from '../hooks/useRaffleReveal';
 import type { ActiveAction, Box, Item } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 
@@ -63,10 +64,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
   const { items } = useItems(space?.id ?? '', activeBoxId);
 
   useEffect(() => {
-    if (
-      presentedAction?.method !== 'raffle' ||
-      presentedAction.status === 'completed'
-    ) {
+    if (presentedAction?.method !== 'raffle') {
       return;
     }
 
@@ -75,7 +73,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
     }, RAFFLE_TICK_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [presentedAction?.method, presentedAction?.status]);
+  }, [presentedAction?.method]);
 
   const targetBox = useMemo(
     () => boxes.find((box) => box.id === presentedAction?.boxId) ?? null,
@@ -92,28 +90,20 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
     ? getRaffleItem(items, presentedAction, now)
     : null;
 
+  const raffleReveal = useRaffleReveal({
+    content: raffleItem?.content ?? null,
+    status: presentedAction?.status,
+    completedAt: presentedAction?.completedAt,
+    now,
+  });
+
   if (!presentedAction || !targetBox) {
     return null;
   }
 
-  const getRaffleDisplayText = () => {
-    if (presentedAction?.status === 'completed') {
-      return raffleItem?.content;
-      // (actionPhase === 'preparing'
-      //   ? 'Gathering the raffle tickets...'
-      //   : 'Shuffling your shared thoughts...')
-    }
-
-    if (raffleItem?.content) {
-      // replace all characters with asterisks
-      return raffleItem.content.replace(/\S/g, '*');
-    }
-
-    return 'Shuffling your shared thoughts...';
-  };
-
   const isCompleted = presentedAction.status === 'completed';
-  const raffleDisplayText = getRaffleDisplayText();
+
+  const raffleDisplayText = raffleReveal?.displayText;
   const isRaffle = presentedAction.method === 'raffle';
   const revealedItemCount = completedItems.length;
   const title = isCompleted
@@ -138,7 +128,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
       disableCloseOnOverlayClick
     >
       <div className='bg-background/90 border-border bg-card relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 text-center shadow-2xl sm:p-8'>
-        <div className='from-primary/20 via-primary/5 pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b to-transparent' />
+        <div className='from-primary/20 via-primary/5 pointer-events-none absolute inset-x-0 top-0 h-44 bg-linear-to-b to-transparent' />
 
         <div className='relative space-y-6'>
           <div className='space-y-2'>
