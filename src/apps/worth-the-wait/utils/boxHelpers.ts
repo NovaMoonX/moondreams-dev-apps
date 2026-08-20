@@ -1,5 +1,7 @@
 import type { Box, RevealHistory, RevealMethod, RevealRequestedBy } from '../types';
 
+export const RECENT_REVEAL_WINDOW_MS = 3_600_000;
+
 const DEFAULT_BOX_SEEDS = [
   {
     name: 'Future Dates',

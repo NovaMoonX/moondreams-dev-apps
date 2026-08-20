@@ -65,6 +65,83 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
     batch.set(spaceRef.collection('boxes').doc(box.id), box, { merge: true });
   });
 
+  const revealRequestSeeds = [
+    {
+      boxId: defaultBoxes[0].id,
+      requests: [
+        {
+          userId: firstMember.uid,
+          method: 'raffle',
+          requestedAt: context.now - 7_200_000,
+        },
+        {
+          userId: secondMember.uid,
+          method: 'raffle',
+          requestedAt: context.now - 7_000_000,
+        },
+      ],
+    },
+    {
+      boxId: defaultBoxes[1].id,
+      requests: [
+        {
+          userId: firstMember.uid,
+          method: 'full_reveal',
+          requestedAt: context.now - 3_600_000,
+        },
+        {
+          userId: secondMember.uid,
+          method: 'raffle',
+          requestedAt: context.now - 3_500_000,
+        },
+      ],
+    },
+    {
+      boxId: defaultBoxes[2].id,
+      requests: [
+        {
+          userId: firstMember.uid,
+          method: 'raffle',
+          requestedAt: context.now - 1_800_000,
+        },
+      ],
+    },
+    {
+      boxId: defaultBoxes[4].id,
+      requests: [
+        {
+          userId: secondMember.uid,
+          method: 'full_reveal',
+          requestedAt: context.now - 900_000,
+        },
+      ],
+    },
+  ];
+
+  revealRequestSeeds.forEach(({ boxId, requests }) => {
+    batch.set(
+      spaceRef.collection('boxes').doc(boxId),
+      { revealRequestedBy: requests },
+      { merge: true },
+    );
+  });
+
+  batch.set(
+    spaceRef.collection('boxes').doc(defaultBoxes[3].id),
+    {
+      revealHistory: [
+        {
+          id: 'seed-recent-full-reveal',
+          method: 'full_reveal',
+          triggeredBy: firstMember.uid,
+          revealedAt: context.now - 900_000,
+          itemIds: ['seed-default-box-four-item-one'],
+        },
+      ],
+    },
+    { merge: true },
+  );
+
   const customBox = {
     id: 'seed-custom-box',
     name: faker.word.words({ count: { min: 2, max: 3 } }),

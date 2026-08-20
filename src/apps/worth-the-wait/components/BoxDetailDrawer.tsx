@@ -23,7 +23,8 @@ interface BoxDetailDrawerProps {
 function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
-  const { space } = useWorthTheWait();
+  const { space, itemsDisclosureOpen, setItemsDisclosureOpen } =
+    useWorthTheWait();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
 
@@ -66,6 +67,14 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const sortedItems = useMemo(
     () => [...items].sort((left, right) => left.createdAt - right.createdAt),
     [items],
+  );
+
+  const areUnrevealedItems = useMemo(
+    () =>
+      sortedItems.some(
+        (item) => item.authorId === user?.uid && item.isRevealed === false,
+      ),
+    [sortedItems, user?.uid],
   );
 
   const handleToggleAllItemsVisibility = () => {
@@ -144,6 +153,8 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
             </Disclosure>
 
             <Disclosure
+              isOpen={itemsDisclosureOpen}
+              onToggle={(open) => setItemsDisclosureOpen(open)}
               label={
                 <div className='flex w-full items-center justify-between gap-3'>
                   <span>Items</span>
@@ -160,7 +171,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                     {sortedItems.length === 1 ? '' : 's'}
                   </span>
 
-                  {sortedItems.length > 0 && (
+                  {sortedItems.length > 0 && areUnrevealedItems && (
                     <Button
                       type='button'
                       variant='secondary'

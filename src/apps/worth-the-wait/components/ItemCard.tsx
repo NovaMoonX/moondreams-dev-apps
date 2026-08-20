@@ -1,4 +1,4 @@
-import { Button, Tooltip } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Tooltip } from '@moondreamsdev/dreamer-ui/components';
 import {
   EyeClosed,
   EyeOpened,
@@ -8,7 +8,9 @@ import {
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useEffect, useState } from 'react';
 import type { Item } from '../types';
+import { RECENT_REVEAL_WINDOW_MS } from '../utils/boxHelpers';
 
 interface ItemCardProps {
   item: Item;
@@ -26,11 +28,17 @@ function ItemCard({
   onToggleVisibility,
 }: ItemCardProps) {
   const { confirm } = useActionModal();
+  const [now, setNow] = useState<number | null>(null);
   const isOwnItem = item.authorId === currentUserId;
   const shouldMaskContent = !item.isRevealed && !isOwnItem;
   const shouldHideOwnContent = !item.isRevealed && isOwnItem && isAuthorHidden;
   const shouldDisplayContent =
     item.isRevealed || (isOwnItem && !shouldHideOwnContent);
+  const hasRecentReveal =
+    item.isRevealed &&
+    item.revealedAt !== null &&
+    now !== null &&
+    item.revealedAt >= now - RECENT_REVEAL_WINDOW_MS;
 
   const handleDelete = async () => {
     if (onDelete) {
@@ -60,6 +68,14 @@ function ItemCard({
       <span>Last edited: {new Date(item.lastEditedAt).toLocaleString()}</span> */}
     </div>
   );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 0);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div
@@ -122,21 +138,39 @@ function ItemCard({
               : 'Hidden item from you'}
         </p>
 
-        <Tooltip
-          message={getInfoMessage()}
-          placement='right'
-          disabled={!shouldDisplayContent}
-        >
-          <Button
-            variant='base'
-            size='icon'
-            aria-label='Item details'
-            className='pl-0!'
-            disabled={!shouldDisplayContent}
-          >
-            <InfoCircled className='h-4 w-4' />
-          </Button>
-        </Tooltip>
+        <div className='mt-3 flex items-center justify-between gap-2'>
+          <div className='flex items-center gap-2'>
+            <Tooltip
+              message={getInfoMessage()}
+              placement='right'
+              disabled={!shouldDisplayContent}
+            >
+              <Button
+                variant='base'
+                size='icon'
+                aria-label='Item details'
+                className='pl-0!'
+                disabled={!shouldDisplayContent}
+              >
+                <InfoCircled className='h-4 w-4' />
+              </Button>
+            </Tooltip>
+            {!shouldHideOwnContent && (
+              <span className='text-xs block'>
+                Only visible to you. Your partner cannot see this item.
+              </span>
+            )}
+          </div>
+
+          {hasRecentReveal ? (
+            <Badge
+              variant='muted'
+              className='border-violet-400/60 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium tracking-[0.12em] text-violet-700 uppercase dark:text-violet-200'
+            >
+              Recently revealed
+            </Badge>
+          ) : null}
+        </div>
       </div>
     </div>
   );
