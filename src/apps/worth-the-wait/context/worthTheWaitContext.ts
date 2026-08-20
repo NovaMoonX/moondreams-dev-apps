@@ -8,8 +8,10 @@ export interface WorthTheWaitContextValue {
   presentedAction: ActiveAction | null;
   dismissPresentedAction: () => void;
   selectedBoxId: string | null;
-  openBox: (boxId: string) => void;
+  itemsDisclosureOpen: boolean;
+  openBox: (boxId: string, options?: { openItems?: boolean }) => void;
   closeBox: () => void;
+  setItemsDisclosureOpen: (open: boolean) => void;
 }
 
 export const WorthTheWaitContext = createContext<WorthTheWaitContextValue | null>(

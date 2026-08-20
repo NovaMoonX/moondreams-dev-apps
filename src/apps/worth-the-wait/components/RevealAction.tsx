@@ -88,6 +88,10 @@ function RevealAction() {
       return 'Your partner has made a request. Choose the same method to match.';
     }
 
+    if (selectedMethod && !partnerRequest) {
+      return 'Waiting for your partner to make a request.';
+    }
+
     if (partnerUid) {
       return 'Choose a reveal method to start matching with your partner.';
     }

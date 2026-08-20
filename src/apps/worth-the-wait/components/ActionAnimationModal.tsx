@@ -11,29 +11,27 @@ interface ActionAnimationModalProps {
   boxes: Box[];
 }
 
-const RAFFLE_TICK_MS = 125;
+const RAFFLE_TICK_MS = 300;
 
-function getActionPhase(action: ActiveAction, now: number) {
-  if (action.status === 'completed') {
-    return 'complete';
-  }
+// function getActionPhase(action: ActiveAction, now: number) {
+//   if (action.status === 'completed') {
+//     return 'complete';
+//   }
 
-  const elapsedMs = Math.max(0, now - action.startedAt);
-  const result = action.status === 'initiating' || elapsedMs < 500
-    ? 'preparing'
-    : 'animating';
+//   const elapsedMs = Math.max(0, now - action.startedAt);
+//   const result =
+//     action.status === 'initiating' || elapsedMs < 500
+//       ? 'preparing'
+//       : 'animating';
 
-  return result;
-}
+//   return result;
+// }
 
-function getRaffleItem(
-  items: Item[],
-  action: ActiveAction,
-  now: number,
-) {
+function getRaffleItem(items: Item[], action: ActiveAction, now: number) {
   if (action.status === 'completed') {
     const selectedItemId = action.selectedItemIds[0];
-    const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+    const selectedItem =
+      items.find((item) => item.id === selectedItemId) ?? null;
 
     return selectedItem;
   }
@@ -59,12 +57,16 @@ function getCompletedItems(items: Item[], action: ActiveAction) {
 function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
   const { dismissPresentedAction, openBox, presentedAction, space } =
     useWorthTheWait();
+
   const [now, setNow] = useState(() => Date.now());
   const activeBoxId = presentedAction?.boxId ?? '';
   const { items } = useItems(space?.id ?? '', activeBoxId);
 
   useEffect(() => {
-    if (presentedAction?.method !== 'raffle' || presentedAction.status === 'completed') {
+    if (
+      presentedAction?.method !== 'raffle' ||
+      presentedAction.status === 'completed'
+    ) {
       return;
     }
 
@@ -79,9 +81,10 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
     () => boxes.find((box) => box.id === presentedAction?.boxId) ?? null,
     [boxes, presentedAction?.boxId],
   );
-  const actionPhase = presentedAction
-    ? getActionPhase(presentedAction, now)
-    : null;
+
+  // const actionPhase = presentedAction
+  //   ? getActionPhase(presentedAction, now)
+  //   : null;
   const completedItems = presentedAction
     ? getCompletedItems(items, presentedAction)
     : [];
@@ -93,7 +96,24 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
     return null;
   }
 
+  const getRaffleDisplayText = () => {
+    if (presentedAction?.status === 'completed') {
+      return raffleItem?.content;
+      // (actionPhase === 'preparing'
+      //   ? 'Gathering the raffle tickets...'
+      //   : 'Shuffling your shared thoughts...')
+    }
+
+    if (raffleItem?.content) {
+      // replace all characters with asterisks
+      return raffleItem.content.replace(/\S/g, '*');
+    }
+
+    return 'Shuffling your shared thoughts...';
+  };
+
   const isCompleted = presentedAction.status === 'completed';
+  const raffleDisplayText = getRaffleDisplayText();
   const isRaffle = presentedAction.method === 'raffle';
   const revealedItemCount = completedItems.length;
   const title = isCompleted
@@ -106,7 +126,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
 
   const handleViewItems = () => {
     dismissPresentedAction();
-    openBox(presentedAction.boxId);
+    openBox(presentedAction.boxId, { openItems: true });
   };
 
   return (
@@ -116,11 +136,8 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
       contentOnly
       hideCloseButton
       disableCloseOnOverlayClick
-      ariaLabelledBy='action-animation-title'
-      overlayClassName='bg-background/90 z-50 p-4 backdrop-blur-md'
-      containerClassName='w-full max-w-lg'
     >
-      <div className='border-border bg-card relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 text-center shadow-2xl sm:p-8'>
+      <div className='bg-background/90 border-border bg-card relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 text-center shadow-2xl sm:p-8'>
         <div className='from-primary/20 via-primary/5 pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b to-transparent' />
 
         <div className='relative space-y-6'>
@@ -143,14 +160,11 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
             <div className='border-border bg-muted/40 flex min-h-44 items-center justify-center rounded-3xl border p-6'>
               <p
                 className={join(
-                  'text-foreground max-w-sm text-xl font-medium leading-8 transition-opacity',
+                  'text-foreground max-w-sm text-2xl leading-8 font-medium wrap-break-word transition-opacity',
                   !isCompleted && 'animate-pulse',
                 )}
               >
-                {raffleItem?.content ??
-                  (actionPhase === 'preparing'
-                    ? 'Gathering the raffle tickets...'
-                    : 'Shuffling your shared thoughts...')}
+                {raffleDisplayText}
               </p>
             </div>
           ) : (
@@ -179,7 +193,11 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
                   ? 'One item is ready to explore together.'
                   : `${revealedItemCount} item${revealedItemCount === 1 ? '' : 's'} are ready to explore together.`}
               </p>
-              <Button type='button' className='w-full' onClick={handleViewItems}>
+              <Button
+                type='button'
+                className='w-full'
+                onClick={handleViewItems}
+              >
                 View items
               </Button>
             </div>

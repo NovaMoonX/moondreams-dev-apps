@@ -18,13 +18,19 @@ export function WorthTheWaitProvider({
   const { activeAction, dismissPresentedAction, presentedAction } =
     useActiveAction(space?.id ?? '');
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const [itemsDisclosureOpen, setItemsDisclosureOpen] = useState(false);
 
-  const openBox = useCallback((boxId: string) => {
-    setSelectedBoxId(boxId);
-  }, []);
+  const openBox = useCallback(
+    (boxId: string, options?: { openItems?: boolean }) => {
+      setSelectedBoxId(boxId);
+      setItemsDisclosureOpen(Boolean(options?.openItems));
+    },
+    [],
+  );
 
   const closeBox = useCallback(() => {
     setSelectedBoxId(null);
+    setItemsDisclosureOpen(false);
   }, []);
 
   const value: WorthTheWaitContextValue = {
@@ -33,8 +39,10 @@ export function WorthTheWaitProvider({
     presentedAction,
     dismissPresentedAction,
     selectedBoxId,
+    itemsDisclosureOpen,
     openBox,
     closeBox,
+    setItemsDisclosureOpen,
   };
 
   return (

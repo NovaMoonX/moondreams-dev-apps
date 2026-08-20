@@ -8,20 +8,21 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useBoxContext } from '../context/boxContext';
-import { useItems } from '../hooks/useItems';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { getFriendlyRevealMethod } from '../utils/boxHelpers';
+import { useItems } from '../hooks/useItems';
+import {
+  getFriendlyRevealMethod,
+  RECENT_REVEAL_WINDOW_MS,
+} from '../utils/boxHelpers';
 import ManageBoxModal from './ManageBoxModal';
-
-const RECENT_REVEAL_WINDOW_MS = 3_600_000;
-const RECENT_REVEAL_CUTOFF = Date.now() - RECENT_REVEAL_WINDOW_MS;
 
 function BoxCard() {
   const { user } = useAuth();
+  const [now, setNow] = useState<number | null>(null);
   const { box, spaceId, onDelete, onEdit } = useBoxContext();
   const { openBox } = useWorthTheWait();
   const { alert, confirm } = useActionModal();
@@ -31,7 +32,8 @@ function BoxCard() {
 
   const revealCount = box.revealHistory.length;
   const hasRecentReveal = box.revealHistory.some(
-    (entry) => entry.revealedAt >= RECENT_REVEAL_CUTOFF,
+    (entry) =>
+      now !== null && entry.revealedAt >= now - RECENT_REVEAL_WINDOW_MS,
   );
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
   const { items } = useItems(spaceId, box.id);
@@ -103,6 +105,14 @@ function BoxCard() {
 
     return `A ${getFriendlyRevealMethod(revealRequest.method)} was requested`;
   };
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   return (
     <>
@@ -220,11 +230,11 @@ function BoxCard() {
                 : 'No reveals yet'}
             </span>
             {isActiveRevealRequest ? (
-              <span className='rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-emerald-950 uppercase dark:bg-emerald-900 dark:text-emerald-200'>
+              <span className='rounded-full bg-emerald-300 px-2 py-0.5 text-center text-[10px] font-medium tracking-[0.14em] text-emerald-950 uppercase dark:bg-emerald-900 dark:text-emerald-200'>
                 {getRevealRequestText()}
               </span>
             ) : hasRecentReveal ? (
-              <span className='rounded-full bg-violet-400 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-violet-950 uppercase dark:bg-violet-900 dark:text-violet-100'>
+              <span className='rounded-full bg-violet-300 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-violet-950 uppercase dark:bg-violet-900 dark:text-violet-100'>
                 Recently revealed
               </span>
             ) : null}
