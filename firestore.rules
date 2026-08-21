@@ -35,6 +35,16 @@ service cloud.firestore {
           request.auth.uid == data.pendingMember.uid;
       }
 
+      function isEncryptionConfigValid() {
+        return request.resource.data.encryption is map
+          && request.resource.data.encryption.appId == 'worth-the-wait'
+          && request.resource.data.encryption.keyId is string
+          && request.resource.data.encryption.keyId.size() > 0
+          && request.resource.data.encryption.keyVersion is number
+          && request.resource.data.encryption.key is string
+          && request.resource.data.encryption.key.size() > 0;
+      }
+
       function isCreateValid() {
         return request.auth != null
           && request.resource.data.createdBy == request.auth.uid
@@ -46,7 +56,8 @@ service cloud.firestore {
           && request.resource.data.inviteCode is string
           && request.resource.data.inviteCode.size() == 6
           && request.resource.data.welcomeSeenBy is map
-          && request.resource.data.activeAction == null;
+          && request.resource.data.activeAction == null
+          && isEncryptionConfigValid();
       }
 
       function isPendingJoinRequestValid() {
@@ -125,7 +136,16 @@ service cloud.firestore {
         isPendingJoinRequestValid() ||
         (isCreator(resource.data) && (isApprovalValid() || isDeclineValid())) ||
         isWelcomeSeenUpdateValid() ||
-        isActiveActionStartValid()
+        isActiveActionStartValid() ||
+        (
+          isMember(resource.data)
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMember == resource.data.pendingMember
+          && request.resource.data.activeAction == resource.data.activeAction
+          && isEncryptionConfigValid()
+        )
       );
 
       allow delete: if isCreator(resource.data);

@@ -1,3 +1,5 @@
+import type { AppEncryption as BaseAppEncryption } from '@lib/security';
+
 export type PendingMember = {
   uid: string;
   requestedAt: number;
@@ -10,6 +12,8 @@ export type UserPresence = {
 };
 
 export type ActiveActionStatus = 'initiating' | 'executing' | 'completed';
+
+export type SpaceEncryption = BaseAppEncryption<'worth-the-wait'>;
 
 export type ActiveAction = {
   actionId: string;
@@ -32,6 +36,7 @@ export type Space = {
   pendingMember: PendingMember | null;
   activeAction: ActiveAction | null;
   welcomeSeenBy: Record<string, number>;
+  encryption: SpaceEncryption | null;
 };
 
 export type RevealMethod = 'full_reveal' | 'raffle';

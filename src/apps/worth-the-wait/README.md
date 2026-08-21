@@ -26,6 +26,10 @@ One person creates a space first. Afterwards, the other person can join this spa
 
 For the reveal phase (either raffle or full reveal) to take place, both people must be present.
 
+## Privacy & Content Encryption
+
+Worth the Wait encrypts the private, user-authored content fields for each space using a per-space AES-256-GCM key tied to the active members list. The sensitive fields are the box name/description/emoji plus each item body, while metadata such as created timestamps, reveal history, and creator IDs remains unencrypted so the app can still query, reveal, and audit flows without exposing private text.
+
 ### How it Feels
 - **Comfort First:** Sharing thoughts, ideas, hopes, and desires feels natural and safe.
 - **Zero Pressure:** Neither person ever feels rushed or obligated to share or open a box.
