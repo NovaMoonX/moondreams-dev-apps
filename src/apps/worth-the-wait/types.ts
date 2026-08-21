@@ -1,4 +1,4 @@
-import type { SpaceEncryption as BaseSpaceEncryption } from '@lib/security';
+import type { AppEncryption as BaseAppEncryption } from '@lib/security';
 
 export type PendingMember = {
   uid: string;
@@ -13,7 +13,7 @@ export type UserPresence = {
 
 export type ActiveActionStatus = 'initiating' | 'executing' | 'completed';
 
-export type SpaceEncryption = BaseSpaceEncryption<'worth-the-wait'>;
+export type SpaceEncryption = BaseAppEncryption<'worth-the-wait'>;
 
 export type ActiveAction = {
   actionId: string;

@@ -2,7 +2,7 @@ import type { AppId } from '../types/appCatalog';
 
 export type EncryptionAlgorithm = 'AES-256-GCM';
 
-export type SpaceEncryption<TAppId extends AppId> = {
+export type AppEncryption<TAppId extends AppId> = {
   appId: TAppId;
   keyId: string;
   keyVersion: number;
@@ -77,10 +77,10 @@ function getCrypto(): Crypto {
   return globalThis.crypto;
 }
 
-export function createSpaceEncryptionKey<TAppId extends AppId>(
+export function createAppEncryptionKey<TAppId extends AppId>(
   appId: TAppId,
-  prefix = `${appId}-space`,
-): SpaceEncryption<TAppId> {
+  prefix = `${appId}-app-key`,
+): AppEncryption<TAppId> {
   const crypto = getCrypto();
   const keyBytes = new Uint8Array(KEY_BYTES);
   crypto.getRandomValues(keyBytes);
@@ -93,10 +93,10 @@ export function createSpaceEncryptionKey<TAppId extends AppId>(
   };
 }
 
-export function createSeedSpaceEncryptionKey<TAppId extends AppId>(
+export function createSeedAppEncryptionKey<TAppId extends AppId>(
   appId: TAppId,
-  prefix = `seed-${appId}-space`,
-): SpaceEncryption<TAppId> {
+  prefix = `seed-${appId}-app-key`,
+): AppEncryption<TAppId> {
   return {
     appId,
     keyId: `${prefix}-v1`,
@@ -105,10 +105,10 @@ export function createSeedSpaceEncryptionKey<TAppId extends AppId>(
   };
 }
 
-export function normalizeSpaceEncryption<TAppId extends AppId>(
+export function normalizeAppEncryption<TAppId extends AppId>(
   value: unknown,
   appId: TAppId,
-): SpaceEncryption<TAppId> | null {
+): AppEncryption<TAppId> | null {
   if (!value || typeof value !== 'object') {
     return null;
   }
@@ -229,9 +229,9 @@ export async function decryptValue(
   return new TextDecoder().decode(decrypted);
 }
 
-export async function encryptStringForSpace<TAppId extends AppId>(
+export async function encryptStringForApp<TAppId extends AppId>(
   value: string,
-  encryption: SpaceEncryption<TAppId> | null | undefined,
+  encryption: AppEncryption<TAppId> | null | undefined,
 ): Promise<string | EncryptedFieldPayload> {
   if (!encryption) {
     return value;
@@ -240,9 +240,9 @@ export async function encryptStringForSpace<TAppId extends AppId>(
   return encryptValue(value, encryption.key, encryption.keyId, encryption.keyVersion);
 }
 
-export async function decryptStringForSpace<TAppId extends AppId>(
+export async function decryptStringForApp<TAppId extends AppId>(
   value: unknown,
-  encryption: SpaceEncryption<TAppId> | null | undefined,
+  encryption: AppEncryption<TAppId> | null | undefined,
 ): Promise<string> {
   if (typeof value === 'string') {
     return value;

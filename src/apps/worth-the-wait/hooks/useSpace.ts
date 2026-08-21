@@ -12,7 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { db } from '@lib/firebase/config';
-import { createSpaceEncryptionKey, normalizeSpaceEncryption } from '@lib/security';
+import { createSpaceEncryptionKey, normalizeSpaceEncryption } from '../security';
 
 import type { ActiveAction, PendingMember, Space } from '../types';
 
@@ -123,7 +123,7 @@ function normalizeSpace(id: string, data: DocumentData): Space {
         : null,
     activeAction: normalizeActiveAction(data.activeAction),
     welcomeSeenBy: normalizeWelcomeSeenBy(data.welcomeSeenBy),
-    encryption: normalizeSpaceEncryption(data.encryption ?? null, 'worth-the-wait'),
+    encryption: normalizeSpaceEncryption(data.encryption ?? null),
   };
 }
 
@@ -239,7 +239,7 @@ export function useSpace(userUid: string) {
 
       const spaceRef = doc(SPACE_COLLECTION);
       const now = Date.now();
-      const encryption = createSpaceEncryptionKey('worth-the-wait');
+      const encryption = createSpaceEncryptionKey();
       const payload = {
         id: spaceRef.id,
         createdBy: userUid,

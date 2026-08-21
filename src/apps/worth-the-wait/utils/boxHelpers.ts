@@ -2,7 +2,7 @@ import {
   decryptStringForSpace,
   normalizeSpaceEncryption,
   type SpaceEncryption,
-} from '@lib/security';
+} from '../security';
 
 import type { Box, RevealHistory, RevealMethod, RevealRequestedBy } from '../types';
 
@@ -49,7 +49,7 @@ const DEFAULT_BOX_SEEDS = [
 export async function normalizeBox(
   id: string,
   data: Record<string, unknown>,
-  encryption: SpaceEncryption<'worth-the-wait'> | null = null,
+  encryption: SpaceEncryption | null = null,
 ): Promise<Box> {
   const requestedBy = Array.isArray(data.revealRequestedBy)
     ? data.revealRequestedBy.map((entry) => {
@@ -91,7 +91,7 @@ export async function normalizeBox(
     : [];
 
   const normalizedEncryption =
-    encryption ?? normalizeSpaceEncryption(data.encryption ?? null, 'worth-the-wait');
+    encryption ?? normalizeSpaceEncryption(data.encryption ?? null);
 
   const decryptedName = await decryptStringForSpace(data.name, normalizedEncryption);
   const decryptedEmoji = await decryptStringForSpace(data.emoji, normalizedEncryption);

@@ -4,7 +4,7 @@ import {
   encryptStringForSpace,
   normalizeSpaceEncryption,
   type SpaceEncryption,
-} from '@lib/security';
+} from '../security';
 import {
   collection,
   deleteDoc,
@@ -18,17 +18,17 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Item, ItemDraft } from '../types';
 
-async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption<'worth-the-wait'> | null> {
+async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
   const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
   const snapshot = await getDoc(spaceRef);
 
-  return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null, 'worth-the-wait');
+  return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
 }
 
 async function normalizeItem(
   id: string,
   data: DocumentData,
-  encryption: SpaceEncryption<'worth-the-wait'> | null,
+  encryption: SpaceEncryption | null,
 ): Promise<Item> {
   const methodValue = data.revealedMethod;
 

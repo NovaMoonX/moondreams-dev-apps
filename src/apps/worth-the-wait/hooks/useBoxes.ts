@@ -3,7 +3,7 @@ import {
   encryptStringForSpace,
   normalizeSpaceEncryption,
   type SpaceEncryption,
-} from '@lib/security';
+} from '../security';
 import {
   collection,
   deleteDoc,
@@ -21,11 +21,11 @@ import { getDefaultBoxes, normalizeBox } from '../utils/boxHelpers';
 
 const limitDescription = (description: string) => description.trim();
 
-async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption<'worth-the-wait'> | null> {
+async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
   const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
   const spaceSnapshot = await getDoc(spaceRef);
 
-  return normalizeSpaceEncryption(spaceSnapshot.data()?.encryption ?? null, 'worth-the-wait');
+  return normalizeSpaceEncryption(spaceSnapshot.data()?.encryption ?? null);
 }
 
 
