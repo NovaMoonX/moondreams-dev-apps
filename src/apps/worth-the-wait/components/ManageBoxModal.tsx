@@ -32,7 +32,7 @@ function ManageBoxModal({
   onCreate,
 }: ManageBoxModalProps) {
   const [name, setName] = useState(initialValues?.name ?? '');
-  const [emoji, setEmoji] = useState(initialValues?.emoji ?? '✨');
+  const [emoji, setEmoji] = useState(initialValues?.emoji ?? '');
   const [description, setDescription] = useState(
     initialValues?.description ?? '',
   );
@@ -40,7 +40,7 @@ function ManageBoxModal({
   const handleSubmit = async () => {
     const sanitizedDraft: BoxDraft = {
       name: name.trim(),
-      emoji: emoji.trim() || '✨',
+      emoji: emoji.trim() || '',
       description: description.trim(),
     };
 
@@ -69,6 +69,7 @@ function ManageBoxModal({
             maxLength={2}
             className='text-center'
             autoComplete='off'
+            placeholder='✨'
           />
           <Input
             value={name}
