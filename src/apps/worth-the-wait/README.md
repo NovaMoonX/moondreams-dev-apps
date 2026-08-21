@@ -1,5 +1,7 @@
 # Worth the Wait
 
+<img width="1727" height="933" alt="image" src="https://github.com/user-attachments/assets/e39dd70a-4d4c-426c-a002-c3d90365d94a" />
+
 ## Overview
 
 ### The short
