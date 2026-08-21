@@ -1,12 +1,12 @@
 import {
   collection,
   doc,
-  getDocs,
+  getDoc,
   onSnapshot,
   query,
-  setDoc,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -17,6 +17,17 @@ import { createSpaceEncryptionKey, normalizeSpaceEncryption } from '../security'
 import type { ActiveAction, PendingMember, Space } from '../types';
 
 const SPACE_COLLECTION = collection(db, 'apps', 'worth-the-wait', 'spaces');
+const INVITE_CODE_COLLECTION = collection(
+  db,
+  'apps',
+  'worth-the-wait',
+  'inviteCodes',
+);
+
+function createInviteCodeRef(inviteCode: string) {
+  const result = doc(INVITE_CODE_COLLECTION, inviteCode);
+  return result;
+}
 
 function normalizeActiveAction(value: unknown): ActiveAction | null {
   if (!value || typeof value !== 'object') {
@@ -244,29 +255,49 @@ export function useSpace(userUid: string) {
         throw new Error('A user is required to create a space.');
       }
 
-      const spaceRef = doc(SPACE_COLLECTION);
-      const now = Date.now();
-      const encryption = createSpaceEncryptionKey();
-      const payload = {
-        id: spaceRef.id,
-        createdBy: userUid,
-        createdAt: now,
-        members: [userUid],
-        inviteCode,
-        pendingMember: null,
-        activeAction: null,
-        welcomeSeenBy: {},
-        encryption,
-        updatedAt: now,
-      };
+      try {
+        const spaceRef = doc(SPACE_COLLECTION);
+        const inviteCodeRef = createInviteCodeRef(inviteCode);
+        const now = Date.now();
+        const encryption = createSpaceEncryptionKey();
+        const payload = {
+          id: spaceRef.id,
+          createdBy: userUid,
+          createdAt: now,
+          members: [userUid],
+          inviteCode,
+          pendingMember: null,
+          activeAction: null,
+          welcomeSeenBy: {},
+          encryption,
+          updatedAt: now,
+        };
 
-      await setDoc(spaceRef, payload);
-      setSpace(normalizeSpace(spaceRef.id, payload));
-      setPendingMember(null);
-      setError(null);
-      setIsCreatingSpace(false);
+        const existingInviteCodeSnapshot = await getDoc(inviteCodeRef);
 
-      return inviteCode;
+        if (existingInviteCodeSnapshot.exists()) {
+          throw new Error(
+            'That invite code is already in use. Close this modal and try again.',
+          );
+        }
+
+        const batch = writeBatch(db);
+        batch.set(spaceRef, payload);
+        batch.set(inviteCodeRef, {
+          spaceId: spaceRef.id,
+        });
+        await batch.commit();
+
+        setSpace(normalizeSpace(spaceRef.id, payload));
+        setPendingMember(null);
+        setError(null);
+        setIsCreatingSpace(false);
+        return inviteCode;
+      } catch (createError) {
+        setIsCreatingSpace(false);
+        throw createError;
+      }
+
     },
     [userUid],
   );
@@ -289,13 +320,10 @@ export function useSpace(userUid: string) {
         handleThrowError('A user is required to join a space.');
       }
 
-      let snapshot;
+      const inviteCodeRef = createInviteCodeRef(trimmedCode);
+      let inviteCodeSnapshot;
       try {
-        const lookupQuery = query(
-          SPACE_COLLECTION,
-          where('inviteCode', '==', trimmedCode),
-        );
-        snapshot = await getDocs(lookupQuery);
+        inviteCodeSnapshot = await getDoc(inviteCodeRef);
       } catch (lookupError) {
         handleThrowError(
           'Failed to look up the space by invite code.',
@@ -303,49 +331,43 @@ export function useSpace(userUid: string) {
         );
       }
 
-      if (snapshot!.empty) {
+      if (!inviteCodeSnapshot!.exists()) {
         handleThrowError('That invite code does not match an active space.');
       }
 
-      const match = snapshot!.docs[0];
-      const existingSpace = normalizeSpace(match.id, match.data());
+      const inviteCodeLookup = inviteCodeSnapshot!.data();
+      const spaceId =
+        typeof inviteCodeLookup?.spaceId === 'string'
+          ? inviteCodeLookup.spaceId
+          : '';
 
-      if (existingSpace.members.includes(userUid)) {
-        handleThrowError('You are already part of this space.');
-      }
-
-      if (existingSpace.members.length >= 2) {
-        handleThrowError('This space is already full.');
-      }
-
-      if (
-        existingSpace.pendingMember &&
-        existingSpace.pendingMember.uid !== userUid
-      ) {
-        handleThrowError('This space already has a pending join request.');
+      if (!spaceId) {
+        handleThrowError('That invite code is no longer available.');
       }
 
       try {
         const requestedAt = Date.now();
-        await updateDoc(match.ref, {
+        const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
+
+        await updateDoc(spaceRef, {
           pendingMember: {
             uid: userUid,
             requestedAt,
           },
+          updatedAt: requestedAt,
         });
 
-        setPendingMember({ uid: userUid, requestedAt });
         setError(null);
         setIsJoiningSpace(false);
         setJoinRequestSent(true);
       } catch (updateError) {
         handleThrowError(
-          'Failed to submit the join request for this space.',
+          'Unable to request access to this space. It may already be full or unavailable.',
           updateError,
         );
       }
 
-      return match.id;
+      return spaceId;
     },
     [userUid],
   );
@@ -359,8 +381,8 @@ export function useSpace(userUid: string) {
       new Set([...space.members, space.pendingMember.uid]),
     );
     const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', space.id);
-
-    await updateDoc(spaceRef, {
+    const batch = writeBatch(db);
+    batch.update(spaceRef, {
       members: nextMembers,
       pendingMember: null,
       inviteCode: null,
@@ -370,6 +392,10 @@ export function useSpace(userUid: string) {
       },
       updatedAt: Date.now(),
     });
+    if (space.inviteCode) {
+      batch.delete(createInviteCodeRef(space.inviteCode));
+    }
+    await batch.commit();
 
     setSpace({
       ...space,

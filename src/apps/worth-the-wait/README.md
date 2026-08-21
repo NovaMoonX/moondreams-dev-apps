@@ -14,7 +14,7 @@ Going to keep this brief. This was developed during August 2026, a time where I 
 
 ## How it Starts
 
-One person creates a space first. Afterwards, the other person can join this space, either via unique link or code. Once a person is in a space, they are locked in until the space is closed. Once both people are present, no others can join the space.
+One person creates a space first. Afterwards, the other person can join this space with the invite code and wait for the creator to approve the request. Once a person is in a space, they are locked in until the space is closed. Once both people are present, no others can join the space.
 
 ## How it Works
 
