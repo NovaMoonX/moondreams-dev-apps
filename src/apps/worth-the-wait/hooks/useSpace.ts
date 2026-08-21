@@ -123,7 +123,7 @@ function normalizeSpace(id: string, data: DocumentData): Space {
         : null,
     activeAction: normalizeActiveAction(data.activeAction),
     welcomeSeenBy: normalizeWelcomeSeenBy(data.welcomeSeenBy),
-    encryption: normalizeSpaceEncryption(data.encryption ?? null),
+    encryption: normalizeSpaceEncryption(data.encryption ?? null, 'worth-the-wait'),
   };
 }
 
@@ -239,7 +239,7 @@ export function useSpace(userUid: string) {
 
       const spaceRef = doc(SPACE_COLLECTION);
       const now = Date.now();
-      const encryption = createSpaceEncryptionKey('worth-the-wait-space');
+      const encryption = createSpaceEncryptionKey('worth-the-wait');
       const payload = {
         id: spaceRef.id,
         createdBy: userUid,

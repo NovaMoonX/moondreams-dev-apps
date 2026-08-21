@@ -1,6 +1,9 @@
+import type { AppId } from '../types/appCatalog';
+
 export type EncryptionAlgorithm = 'AES-256-GCM';
 
-export type SpaceEncryption = {
+export type SpaceEncryption<TAppId extends AppId> = {
+  appId: TAppId;
   keyId: string;
   keyVersion: number;
   key: string;
@@ -74,34 +77,51 @@ function getCrypto(): Crypto {
   return globalThis.crypto;
 }
 
-export function createSpaceEncryptionKey(prefix = 'worth-the-wait-space'): SpaceEncryption {
+export function createSpaceEncryptionKey<TAppId extends AppId>(
+  appId: TAppId,
+  prefix = `${appId}-space`,
+): SpaceEncryption<TAppId> {
   const crypto = getCrypto();
   const keyBytes = new Uint8Array(KEY_BYTES);
   crypto.getRandomValues(keyBytes);
 
   return {
+    appId,
     keyId: `${prefix}-${crypto.randomUUID()}`,
     keyVersion: 1,
     key: toHex(keyBytes),
   };
 }
 
-export function createSeedSpaceEncryptionKey(): SpaceEncryption {
+export function createSeedSpaceEncryptionKey<TAppId extends AppId>(
+  appId: TAppId,
+  prefix = `seed-${appId}-space`,
+): SpaceEncryption<TAppId> {
   return {
-    keyId: 'seed-worth-the-wait-space-v1',
+    appId,
+    keyId: `${prefix}-v1`,
     keyVersion: 1,
     key: 'd953f53d9d6c3b3d2a748beca467f20b4b74d7cb7cc17a0e7a7f315f8b3e756f',
   };
 }
 
-export function normalizeSpaceEncryption(value: unknown): SpaceEncryption | null {
+export function normalizeSpaceEncryption<TAppId extends AppId>(
+  value: unknown,
+  appId: TAppId,
+): SpaceEncryption<TAppId> | null {
   if (!value || typeof value !== 'object') {
     return null;
   }
 
   const candidate = value as Record<string, unknown>;
+  const nextAppId =
+    typeof candidate.appId === 'string'
+      ? (candidate.appId as TAppId)
+      : appId;
 
   if (
+    typeof nextAppId !== 'string' ||
+    nextAppId !== appId ||
     typeof candidate.keyId !== 'string' ||
     typeof candidate.keyVersion !== 'number' ||
     typeof candidate.key !== 'string'
@@ -110,6 +130,7 @@ export function normalizeSpaceEncryption(value: unknown): SpaceEncryption | null
   }
 
   return {
+    appId: nextAppId,
     keyId: candidate.keyId,
     keyVersion: candidate.keyVersion,
     key: candidate.key,
@@ -208,9 +229,9 @@ export async function decryptValue(
   return new TextDecoder().decode(decrypted);
 }
 
-export async function encryptStringForSpace(
+export async function encryptStringForSpace<TAppId extends AppId>(
   value: string,
-  encryption: SpaceEncryption | null | undefined,
+  encryption: SpaceEncryption<TAppId> | null | undefined,
 ): Promise<string | EncryptedFieldPayload> {
   if (!encryption) {
     return value;
@@ -219,9 +240,9 @@ export async function encryptStringForSpace(
   return encryptValue(value, encryption.key, encryption.keyId, encryption.keyVersion);
 }
 
-export async function decryptStringForSpace(
+export async function decryptStringForSpace<TAppId extends AppId>(
   value: unknown,
-  encryption: SpaceEncryption | null | undefined,
+  encryption: SpaceEncryption<TAppId> | null | undefined,
 ): Promise<string> {
   if (typeof value === 'string') {
     return value;

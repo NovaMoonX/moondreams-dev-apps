@@ -37,6 +37,7 @@ service cloud.firestore {
 
       function isEncryptionConfigValid() {
         return request.resource.data.encryption is map
+          && request.resource.data.encryption.appId == 'worth-the-wait'
           && request.resource.data.encryption.keyId is string
           && request.resource.data.encryption.keyId.size() > 0
           && request.resource.data.encryption.keyVersion is number

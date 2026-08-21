@@ -18,17 +18,17 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Item, ItemDraft } from '../types';
 
-async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
+async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption<'worth-the-wait'> | null> {
   const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
   const snapshot = await getDoc(spaceRef);
 
-  return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
+  return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null, 'worth-the-wait');
 }
 
 async function normalizeItem(
   id: string,
   data: DocumentData,
-  encryption: SpaceEncryption | null,
+  encryption: SpaceEncryption<'worth-the-wait'> | null,
 ): Promise<Item> {
   const methodValue = data.revealedMethod;
 

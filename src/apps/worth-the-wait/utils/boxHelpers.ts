@@ -49,7 +49,7 @@ const DEFAULT_BOX_SEEDS = [
 export async function normalizeBox(
   id: string,
   data: Record<string, unknown>,
-  encryption: SpaceEncryption | null = null,
+  encryption: SpaceEncryption<'worth-the-wait'> | null = null,
 ): Promise<Box> {
   const requestedBy = Array.isArray(data.revealRequestedBy)
     ? data.revealRequestedBy.map((entry) => {
@@ -91,7 +91,7 @@ export async function normalizeBox(
     : [];
 
   const normalizedEncryption =
-    encryption ?? normalizeSpaceEncryption(data.encryption ?? null);
+    encryption ?? normalizeSpaceEncryption(data.encryption ?? null, 'worth-the-wait');
 
   const decryptedName = await decryptStringForSpace(data.name, normalizedEncryption);
   const decryptedEmoji = await decryptStringForSpace(data.emoji, normalizedEncryption);

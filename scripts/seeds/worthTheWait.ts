@@ -14,7 +14,7 @@ import {
 } from './types.ts';
 
 const SPACE_ID = 'seed-shared-space';
-const SEED_SPACE_ENCRYPTION = createSeedSpaceEncryptionKey();
+const SEED_SPACE_ENCRYPTION = createSeedSpaceEncryptionKey('worth-the-wait');
 
 function createItem(
   id: string,

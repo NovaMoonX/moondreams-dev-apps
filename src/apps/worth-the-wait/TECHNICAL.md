@@ -121,7 +121,7 @@ Tracks synchronized animations/modals across both partner devices during active 
 
 Worth the Wait encrypts only the sensitive user-authored text that should stay private between the two active members. The payload contract is shared by the app and seed fixtures:
 
-- `spaces/{spaceId}.encryption = { keyId, keyVersion, key }`
+- `spaces/{spaceId}.encryption = { appId, keyId, keyVersion, key }`
 - Each encrypted field stores a ciphertext plus `nonce`, `algorithm`, and the matching `keyId`/`keyVersion` metadata.
 - Sensitive fields include `boxes/{boxId}.name`, `boxes/{boxId}.description`, `boxes/{boxId}.emoji`, and `boxes/{boxId}/items/{itemId}.content`.
 - Metadata fields such as `createdBy`, `createdAt`, `isDefault`, `revealRequestedBy`, and `revealHistory` remain unencrypted so queries, reveal logic, and access control still work reliably.
