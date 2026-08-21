@@ -208,6 +208,16 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                     />
                   ))
                 )}
+
+                <div className='flex justify-center py-2'>
+                  <Button
+                    variant='link'
+                    onClick={() => setItemsDisclosureOpen(false)}
+                    className='text-sm'
+                  >
+                    Close
+                  </Button>
+                </div>
               </div>
             </Disclosure>
           </div>
