@@ -40,7 +40,7 @@ export function useRaffleReveal({
   completedAt,
   now,
 }: UseRaffleRevealOptions) {
-  return useMemo(() => {
+  const raffleRevealResult = useMemo(() => {
     if (!status || !completedAt || !content || status !== 'completed') {
       return {
         phase: 'shuffling' as const,
@@ -57,7 +57,7 @@ export function useRaffleReveal({
     if (elapsedSinceCompletion < HERE_WE_GO_MS) {
       return {
         phase: 'here-we-go' as const,
-        displayText: 'Here we go',
+        displayText: 'and done ✔️',
         revealedLetterCount: 0,
         revealOrder,
       };
@@ -92,6 +92,8 @@ export function useRaffleReveal({
       revealOrder,
     };
   }, [completedAt, content, now, status]);
+
+  return raffleRevealResult;
 }
 
 export default useRaffleReveal;

@@ -110,11 +110,11 @@ export function useActiveAction(spaceId: string) {
             return nextAction;
           }
 
-          if (!current) {
+          if (!current && nextAction.status !== 'completed') {
             return nextAction;
           }
 
-          return current.actionId === nextAction.actionId ? nextAction : current;
+          return current?.actionId === nextAction.actionId ? nextAction : current;
         });
         setError(null);
         setLoading(false);

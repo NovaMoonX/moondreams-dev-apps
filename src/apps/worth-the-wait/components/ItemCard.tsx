@@ -8,9 +8,8 @@ import {
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { useEffect, useState } from 'react';
 import type { Item } from '../types';
-import { RECENT_REVEAL_WINDOW_MS } from '../utils/boxHelpers';
+import { getWasRecentlyRevealed } from '../utils/itemHelpers';
 
 interface ItemCardProps {
   item: Item;
@@ -28,17 +27,12 @@ function ItemCard({
   onToggleVisibility,
 }: ItemCardProps) {
   const { confirm } = useActionModal();
-  const [now, setNow] = useState<number | null>(null);
   const isOwnItem = item.authorId === currentUserId;
   const shouldMaskContent = !item.isRevealed && !isOwnItem;
   const shouldHideOwnContent = !item.isRevealed && isOwnItem && isAuthorHidden;
   const shouldDisplayContent =
     item.isRevealed || (isOwnItem && !shouldHideOwnContent);
-  const hasRecentReveal =
-    item.isRevealed &&
-    item.revealedAt !== null &&
-    now !== null &&
-    item.revealedAt >= now - RECENT_REVEAL_WINDOW_MS;
+  const hasRecentReveal = getWasRecentlyRevealed(item);
 
   const handleDelete = async () => {
     if (onDelete) {
@@ -68,14 +62,6 @@ function ItemCard({
       <span>Last edited: {new Date(item.lastEditedAt).toLocaleString()}</span> */}
     </div>
   );
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 0);
-
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div
@@ -156,7 +142,7 @@ function ItemCard({
               </Button>
             </Tooltip>
             {!shouldHideOwnContent && isOwnItem && !item.isRevealed && (
-              <span className='text-xs block'>
+              <span className='block text-xs'>
                 Only visible to you. Your partner cannot see this item.
               </span>
             )}

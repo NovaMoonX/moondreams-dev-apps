@@ -3,11 +3,11 @@ import {
   Input,
   Modal,
   Textarea,
-  Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import AppToggle from '@/components/AppToggle';
 import NavButton from '@/ui/NavButton';
 import UserAvatar from '@/ui/UserAvatar';
 import { useAppCatalog } from '@hooks/useAppCatalog';
@@ -248,7 +248,7 @@ function AppConfigEditor({
             Limit the app to specific users or emails.
           </div>
         </div>
-        <Toggle checked={isRestricted} onCheckedChange={setIsRestricted} />
+        <AppToggle checked={isRestricted} onCheckedChange={setIsRestricted} />
       </div>
 
       <div className='space-y-3'>

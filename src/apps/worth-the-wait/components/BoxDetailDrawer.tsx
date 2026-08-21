@@ -7,10 +7,12 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useMemo, useState } from 'react';
 
+import AppToggle from '@/components/AppToggle';
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useItems } from '../hooks/useItems';
+import { getWasRecentlyRevealed } from '../utils/itemHelpers';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
 import RevealAction from './RevealAction';
@@ -27,6 +29,8 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     useWorthTheWait();
   const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
+  const [showRecentlyRevealedItems, setShowRecentlyRevealedItems] =
+    useState(itemsDisclosureOpen);
 
   const partnerUid = useMemo(() => {
     if (!user || !space) {
@@ -69,12 +73,25 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     [items],
   );
 
+  const filteredItems = useMemo(() => {
+    if (showRecentlyRevealedItems) {
+      return sortedItems.filter((item) => item.isRevealed);
+    }
+
+    return sortedItems;
+  }, [showRecentlyRevealedItems, sortedItems]);
+
+  const areRecentlyRevealedItems = useMemo(
+    () => sortedItems.some((item) => getWasRecentlyRevealed(item)),
+    [sortedItems],
+  );
+
   const areUnrevealedItems = useMemo(
     () =>
-      sortedItems.some(
+      filteredItems.some(
         (item) => item.authorId === user?.uid && item.isRevealed === false,
       ),
-    [sortedItems, user?.uid],
+    [filteredItems, user?.uid],
   );
 
   const handleToggleAllItemsVisibility = () => {
@@ -167,34 +184,52 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
               <div className='space-y-3 px-4 pt-3 pb-4'>
                 <div className='flex items-center justify-between gap-3'>
                   <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
-                    {sortedItems.length} item
-                    {sortedItems.length === 1 ? '' : 's'}
+                    {filteredItems.length} item
+                    {filteredItems.length === 1 ? '' : 's'}
                   </span>
 
-                  {sortedItems.length > 0 && areUnrevealedItems && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      onClick={handleToggleAllItemsVisibility}
-                    >
-                      {visibleItemIds.size === 0
-                        ? 'Show my items'
-                        : 'Hide my items'}
-                    </Button>
-                  )}
+                  <div className='flex items-center gap-3'>
+                    {areRecentlyRevealedItems && (
+                      <div className='ml-2 flex items-center gap-2'>
+                        <span className='text-xs'>
+                          {showRecentlyRevealedItems
+                            ? 'Viewing recently revealed'
+                            : 'Viewing all items'}
+                        </span>
+                        <AppToggle
+                          size='sm'
+                          checked={showRecentlyRevealedItems}
+                          onCheckedChange={() => {
+                            setShowRecentlyRevealedItems((current) => !current);
+                            setVisibleItemIds(new Set()); // Reset visible items when toggling
+                          }}
+                        />
+                      </div>
+                    )}
+                    {filteredItems.length > 0 && areUnrevealedItems && (
+                      <Button
+                        variant={'secondary'}
+                        size='sm'
+                        onClick={handleToggleAllItemsVisibility}
+                      >
+                        {visibleItemIds.size === 0
+                          ? 'Show my items'
+                          : 'Hide my items'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {loading ? (
                   <p className='text-muted-foreground text-sm'>
                     Loading items...
                   </p>
-                ) : sortedItems.length === 0 ? (
+                ) : filteredItems.length === 0 ? (
                   <div className='border-border bg-muted/30 text-muted-foreground rounded-2xl border border-dashed p-4 text-center text-sm'>
                     No items yet. Share your first thought with your partner.
                   </div>
                 ) : (
-                  sortedItems.map((item) => (
+                  filteredItems.map((item) => (
                     <ItemCard
                       key={item.id}
                       item={item}
