@@ -3,28 +3,34 @@ import { useState } from 'react';
 
 const welcomeSteps = [
   {
-    emoji: '🌟',
-    title: 'Welcome',
+    emoji: '👋🏾',
+    title: 'Welcome to Worth the Wait',
     description:
-      'Start with the built-in standard boxes to get a feel for the flow and create a shared starting point for both of you.',
+      "This is a private space for you and your partner to share things in a way that keeps the surprise intact until you're both ready to share.",
+  },
+  {
+    emoji: '📦',
+    title: 'Organize by "boxes"',
+    description:
+      'Each category has its own "box". For example, "Future Dates 📅" is a box where you can add ideas for future dates.',
   },
   {
     emoji: '📝',
-    title: 'Add items and keep them hidden',
+    title: 'Add items',
     description:
-      'Open a box, add your thoughts or prompts, and each item stays hidden until the reveal. That keeps the surprise intact for both partners.',
+      'Open a box, add your thoughts, prompts, questions, whatever! — and each item stays hidden until the reveal.',
   },
   {
     emoji: '✨',
-    title: 'Choose how the reveal works',
+    title: 'The reveal',
     description:
-      'You can use two reveal methods: a full reveal to uncover everything at once, or a raffle to randomly select one item to reveal together.',
+      "Once you're both ready to share, you can 'reveal' what's in the box. There are two reveal methods: a full reveal to share everything in the box, or a raffle to randomly select one item to be revealed."
   },
   {
     emoji: '🧩',
-    title: 'Create custom boxes after the basics',
+    title: 'Create custom boxes',
     description:
-      'Once you are comfortable with the standard boxes and reveal flow, you can create your own custom boxes to match the kinds of moments you want to explore together.',
+      "You start off with a set of 'starter' boxes. Once you are comfortable with those and the reveal flow, create your own custom boxes to match the kinds of moments you both want to explore together."
   },
 ] as const;
 

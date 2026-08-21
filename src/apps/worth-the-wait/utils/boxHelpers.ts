@@ -22,7 +22,7 @@ const DEFAULT_BOX_SEEDS = [
   {
     name: 'Appreciations of Each Other',
     emoji: '💛',
-    description: 'Small things noticed and loved about you.',
+    description: 'Small things noticed and appreciated about you.',
   },
   {
     name: 'Bedroom Desires',
