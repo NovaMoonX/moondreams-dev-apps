@@ -42,7 +42,7 @@ function getPresenceStatus({
 
 function PresenceBadge({ className }: PresenceBadgeProps) {
   const { user } = useAuth();
-  const { space, removePendingApprovalModalDismissal } = useWorthTheWait();
+  const { space, forceOpenPendingApprovalModal } = useWorthTheWait();
 
   const activePartnerUid =
     user && space
@@ -90,7 +90,7 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
     return (
       <Clickable
         aria-label='Click to open modal to address pending request'
-        onButtonClick={removePendingApprovalModalDismissal}
+        onButtonClick={forceOpenPendingApprovalModal}
       >
         {component}
       </Clickable>

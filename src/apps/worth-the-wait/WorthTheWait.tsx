@@ -29,6 +29,9 @@ function WorthTheWait() {
     hasPendingApprovalModalBeenDismissed,
     setHasPendingApprovalModalBeenDismissed,
   ] = useState(false);
+  // force the PendingApprovalModal open when user clicks PresenceBadge
+  const [forceOpenPendingApprovalModal, setForceOpenPendingApprovalModal] =
+    useState(false);
   const [hasOnboardingModalBeenDismissed, setHasOnboardingModalBeenDismissed] =
     useState(false);
 
@@ -38,7 +41,7 @@ function WorthTheWait() {
   );
   const shouldOnboardingBeOpen =
     Boolean(user) && !hasSpace && !creatorHasPendingApproval;
-  
+
   if (loading) {
     return <Loading />;
   }
@@ -48,12 +51,16 @@ function WorthTheWait() {
       <PendingApprovalModal
         key={pendingMember?.uid ?? 'no-pending-member'}
         isOpen={
-          creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed
+          forceOpenPendingApprovalModal ||
+          (creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed)
         }
         pendingMember={pendingMember}
         onApprove={approvePendingMember}
         onDecline={declinePendingMember}
-        onClose={() => setHasPendingApprovalModalBeenDismissed(true)}
+        onClose={() => {
+          setHasPendingApprovalModalBeenDismissed(true);
+          setForceOpenPendingApprovalModal(false);
+        }}
       />
 
       <SpaceOnboardingModal
@@ -74,7 +81,12 @@ function WorthTheWait() {
       )}
 
       {!shouldOnboardingBeOpen && (
-        <WorthTheWaitProvider space={space} removePendingApprovalModalDismissal={() => setHasPendingApprovalModalBeenDismissed(false)}>
+        <WorthTheWaitProvider
+          space={space}
+          forceOpenPendingApprovalModal={() =>
+            setForceOpenPendingApprovalModal(false)
+          }
+        >
           <WorthTheWaitLayout />
         </WorthTheWaitProvider>
       )}
