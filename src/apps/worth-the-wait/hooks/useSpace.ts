@@ -43,7 +43,9 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
   const startedAt =
     typeof startedAtValue === 'number'
       ? startedAtValue
-      : typeof startedAtValue === 'object' && startedAtValue && 'seconds' in startedAtValue
+      : typeof startedAtValue === 'object' &&
+          startedAtValue &&
+          'seconds' in startedAtValue
         ? Number((startedAtValue as { seconds: number }).seconds) * 1000
         : Date.now();
 
@@ -51,7 +53,9 @@ function normalizeActiveAction(value: unknown): ActiveAction | null {
   const completedAt =
     typeof completedAtValue === 'number'
       ? completedAtValue
-      : typeof completedAtValue === 'object' && completedAtValue && 'seconds' in completedAtValue
+      : typeof completedAtValue === 'object' &&
+          completedAtValue &&
+          'seconds' in completedAtValue
         ? Number((completedAtValue as { seconds: number }).seconds) * 1000
         : null;
 
@@ -77,24 +81,27 @@ function normalizeWelcomeSeenBy(value: unknown): Record<string, number> {
 
   const entries = Object.entries(value as Record<string, unknown>);
 
-  return entries.reduce<Record<string, number>>((result, [userId, timestamp]) => {
-    if (!userId) {
+  return entries.reduce<Record<string, number>>(
+    (result, [userId, timestamp]) => {
+      if (!userId) {
+        return result;
+      }
+
+      const seenAt =
+        typeof timestamp === 'number'
+          ? timestamp
+          : typeof timestamp === 'object' && timestamp && 'seconds' in timestamp
+            ? Number((timestamp as { seconds: number }).seconds) * 1000
+            : null;
+
+      if (typeof seenAt === 'number' && Number.isFinite(seenAt)) {
+        result[userId] = seenAt;
+      }
+
       return result;
-    }
-
-    const seenAt =
-      typeof timestamp === 'number'
-        ? timestamp
-        : typeof timestamp === 'object' && timestamp && 'seconds' in timestamp
-          ? Number((timestamp as { seconds: number }).seconds) * 1000
-          : null;
-
-    if (typeof seenAt === 'number' && Number.isFinite(seenAt)) {
-      result[userId] = seenAt;
-    }
-
-    return result;
-  }, {});
+    },
+    {},
+  );
 }
 
 function normalizeSpace(id: string, data: DocumentData): Space {
@@ -265,9 +272,9 @@ export function useSpace(userUid: string) {
       setIsJoiningSpace(true);
       const trimmedCode = inviteCode.trim().toUpperCase();
 
-      const handleThrowError = (message: string) => {
+      const handleThrowError = (message: string, cause?: unknown) => {
         setIsJoiningSpace(false);
-        throw new Error(message);
+        throw new Error(message, cause ? { cause } : undefined);
       };
 
       if (!trimmedCode) {
@@ -278,17 +285,25 @@ export function useSpace(userUid: string) {
         handleThrowError('A user is required to join a space.');
       }
 
-      const lookupQuery = query(
-        SPACE_COLLECTION,
-        where('inviteCode', '==', trimmedCode),
-      );
-      const snapshot = await getDocs(lookupQuery);
+      let snapshot;
+      try {
+        const lookupQuery = query(
+          SPACE_COLLECTION,
+          where('inviteCode', '==', trimmedCode),
+        );
+        snapshot = await getDocs(lookupQuery);
+      } catch (lookupError) {
+        handleThrowError(
+          'Failed to look up the space by invite code.',
+          lookupError,
+        );
+      }
 
-      if (snapshot.empty) {
+      if (snapshot!.empty) {
         handleThrowError('That invite code does not match an active space.');
       }
 
-      const match = snapshot.docs[0];
+      const match = snapshot!.docs[0];
       const existingSpace = normalizeSpace(match.id, match.data());
 
       if (existingSpace.members.includes(userUid)) {
@@ -306,18 +321,25 @@ export function useSpace(userUid: string) {
         handleThrowError('This space already has a pending join request.');
       }
 
-      const requestedAt = Date.now();
-      await updateDoc(match.ref, {
-        pendingMember: {
-          uid: userUid,
-          requestedAt,
-        },
-      });
+      try {
+        const requestedAt = Date.now();
+        await updateDoc(match.ref, {
+          pendingMember: {
+            uid: userUid,
+            requestedAt,
+          },
+        });
 
-      setPendingMember({ uid: userUid, requestedAt });
-      setError(null);
-      setIsJoiningSpace(false);
-      setJoinRequestSent(true);
+        setPendingMember({ uid: userUid, requestedAt });
+        setError(null);
+        setIsJoiningSpace(false);
+        setJoinRequestSent(true);
+      } catch (updateError) {
+        handleThrowError(
+          'Failed to submit the join request for this space.',
+          updateError,
+        );
+      }
 
       return match.id;
     },
