@@ -332,7 +332,7 @@ export function useSpace(userUid: string) {
       }
 
       if (!inviteCodeSnapshot!.exists()) {
-        handleThrowError('That invite code does not match an active space.');
+        handleThrowError('That invite code does not match an available space.');
       }
 
       const inviteCodeLookup = inviteCodeSnapshot!.data();
@@ -342,7 +342,7 @@ export function useSpace(userUid: string) {
           : '';
 
       if (!spaceId) {
-        handleThrowError('That invite code is no longer available.');
+        handleThrowError('No space found for that invite code.');
       }
 
       try {

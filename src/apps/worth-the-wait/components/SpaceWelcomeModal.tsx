@@ -70,6 +70,7 @@ function SpaceWelcomeModal({ isOpen, onClose }: SpaceWelcomeModalProps) {
               <Button
                 type='button'
                 variant='secondary'
+                size='sm'
                 onClick={() => setCurrentStep((value) => value - 1)}
               >
                 Back
@@ -77,12 +78,13 @@ function SpaceWelcomeModal({ isOpen, onClose }: SpaceWelcomeModalProps) {
             )}
 
             {isLastStep ? (
-              <Button type='button' onClick={onClose}>
+              <Button type='button' size='sm' onClick={onClose}>
                 Get started
               </Button>
             ) : (
               <Button
                 type='button'
+                size='sm'
                 onClick={() => setCurrentStep((value) => value + 1)}
               >
                 Next

@@ -291,6 +291,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
             <ItemForm
               onSubmit={async (content) => {
                 await addItem(content);
+                setShowRecentlyRevealedItems(false);
               }}
               placeholder='Write a thought, wish, or plan...'
             />
