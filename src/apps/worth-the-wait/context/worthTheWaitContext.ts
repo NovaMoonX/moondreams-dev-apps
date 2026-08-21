@@ -12,6 +12,7 @@ export interface WorthTheWaitContextValue {
   openBox: (boxId: string, options?: { openItems?: boolean }) => void;
   closeBox: () => void;
   setItemsDisclosureOpen: (open: boolean) => void;
+  removePendingApprovalModalDismissal: () => void;
 }
 
 export const WorthTheWaitContext = createContext<WorthTheWaitContextValue | null>(

@@ -32,6 +32,7 @@ function SpaceOnboardingModal({
   const { addToast } = useToast();
   const createInviteCode = useMemo(() => generateInviteCode(), []);
   const [joinInput, setJoinInput] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
   const handleCreate = async () => {
@@ -45,11 +46,7 @@ function SpaceOnboardingModal({
         });
       })
       .catch((error) => {
-        addToast({
-          title: 'Error creating space',
-          description: error.message || 'An unexpected error occurred.',
-          type: 'error',
-        });
+        setCreateError(error.message || 'An unexpected error occurred.');
         throw error;
       });
   };
@@ -96,6 +93,9 @@ function SpaceOnboardingModal({
                 {createInviteCode}
               </div>
             </div>
+            {createError && (
+              <p className='text-destructive text-sm'>{createError}</p>
+            )}
             <Button
               onClick={handleCreate}
               disabled={isSubmitting}

@@ -74,7 +74,7 @@ function WorthTheWait() {
       )}
 
       {!shouldOnboardingBeOpen && (
-        <WorthTheWaitProvider space={space}>
+        <WorthTheWaitProvider space={space} removePendingApprovalModalDismissal={() => setHasPendingApprovalModalBeenDismissed(false)}>
           <WorthTheWaitLayout />
         </WorthTheWaitProvider>
       )}

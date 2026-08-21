@@ -1,4 +1,4 @@
-import { Badge } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Clickable } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { usePresence } from '@/hooks/usePresence';
@@ -42,7 +42,7 @@ function getPresenceStatus({
 
 function PresenceBadge({ className }: PresenceBadgeProps) {
   const { user } = useAuth();
-  const { space } = useWorthTheWait();
+  const { space, removePendingApprovalModalDismissal } = useWorthTheWait();
 
   const activePartnerUid =
     user && space
@@ -61,7 +61,7 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
     presence,
   });
 
-  return (
+  const component = (
     <div
       className={join(
         'flex min-w-28 flex-col items-center gap-2 rounded-xl border border-transparent bg-transparent p-2',
@@ -78,8 +78,26 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
       >
         {statusText}
       </Badge>
+      {showPendingState && (
+        <span className='text-muted-foreground text-xs'>
+          Click to address request
+        </span>
+      )}
     </div>
   );
+
+  if (showPendingState) {
+    return (
+      <Clickable
+        aria-label='Click to open modal to address pending request'
+        onButtonClick={removePendingApprovalModalDismissal}
+      >
+        {component}
+      </Clickable>
+    );
+  }
+
+  return component;
 }
 
 export default PresenceBadge;
