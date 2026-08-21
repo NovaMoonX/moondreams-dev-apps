@@ -24,29 +24,13 @@ import {
 
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
+import { ensureDocExists } from '@/lib/firebase';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
-
-async function ensureAppDocExists(appId: string, defaultData: Record<string, unknown>) {
-  const docRef = doc(db, 'apps', appId);
-
-  try {
-    // If the document already exists, this is a no-op that preserves its current values.
-    // The empty object means we intentionally do not overwrite any existing fields.
-    await updateDoc(docRef, {});
-  } catch (error) {
-    // Firestore throws a 'not-found' error when the document does not exist yet.
-    // In that case, we create the default record safely without touching any user-edited values.
-    const firebaseError = error as { code?: string };
-
-    if (firebaseError.code === 'not-found') {
-      await setDoc(docRef, defaultData);
-    }
-  }
-}
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDisplayNameUpdating, setIsDisplayNameUpdating] = useState(false);
   const currentLocationRef = useRef('home');
 
   const isAdmin = useMemo(
@@ -59,7 +43,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        const isAdminUser = firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+        const isAdminUser =
+          firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
         const profileRef = doc(db, 'users', firebaseUser.uid);
         await setDoc(
           profileRef,
@@ -72,6 +57,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
           },
           { merge: true },
         );
+
+        // await ensureDocExists(profileRef, {
+        //   uid: firebaseUser.uid,
+        //   email: firebaseUser.email ?? '',
+        //   displayName: firebaseUser.displayName ?? firebaseUser.email ?? '',
+        //   photoURL: firebaseUser.photoURL ?? '',
+        //   isAdmin: isAdminUser,
+        // });
 
         if (isAdminUser) {
           await Promise.all(
@@ -89,7 +82,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
                 updatedAt: new Date().toISOString(),
               };
 
-              await ensureAppDocExists(app.id, defaultData);
+              const docRef = doc(db, 'apps', app.id);
+              await ensureDocExists(docRef, defaultData);
             }),
           );
         }
@@ -142,6 +136,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const setCurrentLocation = useCallback((location: string) => {
     const nextLocation = location || 'home';
     currentLocationRef.current = nextLocation;
+
+    const currentUserId = auth.currentUser?.uid;
+    if (!currentUserId) {
+      return;
+    }
+    const userStatusRef = ref(realtimeDb, `status/${currentUserId}`);
+    set(userStatusRef, {
+      state: 'online',
+      currentLocation: currentLocationRef.current,
+      lastChanges: serverTimestamp(),
+    });
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
@@ -168,6 +173,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const updateDisplayName = useCallback(async (displayName: string) => {
+    setIsDisplayNameUpdating(true);
     const trimmedName = displayName.trim();
     const currentUser = auth.currentUser;
 
@@ -179,9 +185,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
       throw new Error('Display name cannot be empty.');
     }
 
-    await updateProfile(currentUser, { displayName: trimmedName });
-    await currentUser.reload();
-    setUser(auth.currentUser ? { ...auth.currentUser } : null);
+    try {
+      await updateProfile(currentUser, { displayName: trimmedName });
+
+      // Update Firestore user profile doc for other users
+      // calling `reload` here won't pick up the changes in onAuthStateChanged
+      const profileRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(profileRef, { displayName: trimmedName });
+
+      setUser(auth.currentUser ? { ...auth.currentUser } : null);
+    } catch (error) {
+      console.error('Error updating display name:', error);
+    }
+
+    setIsDisplayNameUpdating(false);
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -193,6 +210,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       logOut,
       updateDisplayName,
       setCurrentLocation,
+      isDisplayNameUpdating,
     }),
     [
       user,
@@ -202,6 +220,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       logOut,
       updateDisplayName,
       setCurrentLocation,
+      isDisplayNameUpdating,
     ],
   );
 

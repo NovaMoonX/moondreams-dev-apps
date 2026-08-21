@@ -23,6 +23,7 @@ function UserAvatar({ user, size = 'sm', className }: UserAvatarProps) {
     <Avatar
       src={user?.photoURL ?? undefined}
       alt={displayName}
+      title={displayName}
       initials={initials}
       size={size}
       shape='circle'
