@@ -73,6 +73,12 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     [items],
   );
 
+  const revealedItems = useMemo(
+    () => items.filter((item) => item.isRevealed === true),
+    [items],
+  );
+  const areUnrevealedItems = revealedItems.length < items.length;
+
   const filteredItems = useMemo(() => {
     if (showRecentlyRevealedItems) {
       return sortedItems.filter((item) => item.isRevealed);
@@ -86,7 +92,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     [sortedItems],
   );
 
-  const areUnrevealedItems = useMemo(
+  const authorHasUnrevealedVisibleItems = useMemo(
     () =>
       filteredItems.some(
         (item) => item.authorId === user?.uid && item.isRevealed === false,
@@ -151,7 +157,17 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
             <Disclosure
               label={
                 <div className='flex w-full items-center justify-between gap-3'>
-                  <span>Request reveal</span>
+                  <div className='leading-tight'>
+                    Request reveal
+                    {!areUnrevealedItems && (
+                      <>
+                        <br />
+                        <span className='text-muted-foreground text-xs'>
+                          There are no unrevealed items
+                        </span>
+                      </>
+                    )}
+                  </div>
                   {hasMutualRequest ? (
                     <CheckCircled className='h-5 w-5 text-emerald-500' />
                   ) : hasPartnerRequest ? (
@@ -163,6 +179,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
               }
               className='border-border rounded-2xl border bg-slate-950/10'
               buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
+              disabled={!areUnrevealedItems}
             >
               <div className='px-4 pt-2 pb-4'>
                 <RevealAction />
@@ -175,7 +192,19 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
               label={
                 <div className='flex w-full items-center justify-between gap-3'>
                   <span>Items</span>
-                  <Badge variant='muted'>{sortedItems.length}</Badge>
+                  <div className='flex items-center gap-2'>
+                    {revealedItems.length > 0 && (
+                      <Badge
+                        variant='base'
+                        className='bg-violet-300 text-violet-950 dark:bg-violet-900 dark:text-violet-100'
+                      >
+                        {revealedItems.length}
+                      </Badge>
+                    )}
+                    <Badge variant='muted'>
+                      {sortedItems.length - revealedItems.length}
+                    </Badge>
+                  </div>
                 </div>
               }
               className='border-border rounded-2xl border bg-slate-950/10'
@@ -206,17 +235,18 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                         />
                       </div>
                     )}
-                    {filteredItems.length > 0 && areUnrevealedItems && (
-                      <Button
-                        variant={'secondary'}
-                        size='sm'
-                        onClick={handleToggleAllItemsVisibility}
-                      >
-                        {visibleItemIds.size === 0
-                          ? 'Show my items'
-                          : 'Hide my items'}
-                      </Button>
-                    )}
+                    {filteredItems.length > 0 &&
+                      authorHasUnrevealedVisibleItems && (
+                        <Button
+                          variant={'secondary'}
+                          size='sm'
+                          onClick={handleToggleAllItemsVisibility}
+                        >
+                          {visibleItemIds.size === 0
+                            ? 'Show my items'
+                            : 'Hide my items'}
+                        </Button>
+                      )}
                   </div>
                 </div>
 
