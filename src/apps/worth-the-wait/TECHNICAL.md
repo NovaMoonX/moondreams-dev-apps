@@ -46,6 +46,7 @@ Represents the shared environment between the two partners.
 | inviteCode | string | null | Short string for partner pairing (cleared once locked) |
 | pendingMember | map | null | Pending request ({ uid: string, requestedAt: timestamp }) |
 | activeAction | map | null | Currently active synchronous action state (Full Reveal or Raffle) |
+| encryption | map | null | Per-space AES-256-GCM key bundle with `keyId`, `keyVersion`, and the raw secret key for the active member set |
 
 ### **apps/worth-the-wait/spaces/{spaceId}/boxes/{boxId}**
 
@@ -115,6 +116,16 @@ Tracks synchronized animations/modals across both partner devices during active 
 | initiatedBy | string | UID of user who pressed the trigger button |
 | startedAt | timestamp | Server timestamp when action began |
 | completedAt | timestamp | null | Timestamp when action completed |
+
+## **Private Content Encryption Contract**
+
+Worth the Wait encrypts only the sensitive user-authored text that should stay private between the two active members. The payload contract is shared by the app and seed fixtures:
+
+- `spaces/{spaceId}.encryption = { appId, keyId, keyVersion, key }`
+- Each encrypted field stores a ciphertext plus `nonce`, `algorithm`, and the matching `keyId`/`keyVersion` metadata.
+- Sensitive fields include `boxes/{boxId}.name`, `boxes/{boxId}.description`, `boxes/{boxId}.emoji`, and `boxes/{boxId}/items/{itemId}.content`.
+- Metadata fields such as `createdBy`, `createdAt`, `isDefault`, `revealRequestedBy`, and `revealHistory` remain unencrypted so queries, reveal logic, and access control still work reliably.
+- Decryption is only performed when an authenticated user is a current member of the space; non-members cannot read the key or the encrypted payload contract.
 
 ## **Realtime Presence & Synchronous Workflows**
 
