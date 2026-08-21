@@ -32,12 +32,13 @@ function WorthTheWait() {
   const [hasOnboardingModalBeenDismissed, setHasOnboardingModalBeenDismissed] =
     useState(false);
 
-  const hasLockedSpace = Boolean(space && space.members.length >= 2);
+  const hasSpace = Boolean(space && space.members.length >= 1);
   const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
   const shouldOnboardingBeOpen =
-    Boolean(user) && !hasLockedSpace && !creatorHasPendingApproval;
+    Boolean(user) && !hasSpace && !creatorHasPendingApproval;
+  
   if (loading) {
     return <Loading />;
   }
