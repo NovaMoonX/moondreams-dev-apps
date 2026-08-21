@@ -155,7 +155,7 @@ function ItemCard({
                 <InfoCircled className='h-4 w-4' />
               </Button>
             </Tooltip>
-            {!shouldHideOwnContent && (
+            {!shouldHideOwnContent && isOwnItem && !item.isRevealed && (
               <span className='text-xs block'>
                 Only visible to you. Your partner cannot see this item.
               </span>

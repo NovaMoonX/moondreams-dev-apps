@@ -235,15 +235,17 @@ service cloud.firestore {
 
           allow create: if isSpaceMember()
             && request.resource.data.authorId == request.auth.uid
-            && request.resource.data.content is string
-            && request.resource.data.content.size() > 0
+            && request.resource.data.content is map
+            && 'value' in request.resource.data.content
+            && request.resource.data.content.value.size() > 0
             && request.resource.data.createdAt is number
             && request.resource.data.lastEditedAt is number;
 
           allow update: if isAuthor()
             && request.resource.data.authorId == request.auth.uid
-            && request.resource.data.content is string
-            && request.resource.data.content.size() > 0;
+            && request.resource.data.content is map
+            && 'value' in request.resource.data.content
+            && request.resource.data.content.value.size() > 0;
 
           allow delete: if isAuthor();
         }

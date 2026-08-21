@@ -1,11 +1,5 @@
 import { auth, db } from '@lib/firebase/config';
 import {
-  decryptStringForSpace,
-  encryptStringForSpace,
-  normalizeSpaceEncryption,
-  type SpaceEncryption,
-} from '../security';
-import {
   collection,
   deleteDoc,
   doc,
@@ -15,10 +9,18 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
+import {
+  decryptStringForSpace,
+  encryptStringForSpace,
+  normalizeSpaceEncryption,
+  type SpaceEncryption,
+} from '../security';
 
 import type { Item, ItemDraft } from '../types';
 
-async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
+async function getSpaceEncryption(
+  spaceId: string,
+): Promise<SpaceEncryption | null> {
   const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
   const snapshot = await getDoc(spaceRef);
 
@@ -37,14 +39,12 @@ async function normalizeItem(
     authorId: typeof data.authorId === 'string' ? data.authorId : 'anonymous',
     content: await decryptStringForSpace(data.content, encryption),
     isRevealed: Boolean(data.isRevealed),
-    revealedAt:
-      typeof data.revealedAt === 'number' ? data.revealedAt : null,
+    revealedAt: typeof data.revealedAt === 'number' ? data.revealedAt : null,
     revealedMethod:
       methodValue === 'full_reveal' || methodValue === 'raffle'
         ? methodValue
         : null,
-    createdAt:
-      typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+    createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
     lastEditedAt:
       typeof data.lastEditedAt === 'number' ? data.lastEditedAt : Date.now(),
   };
@@ -55,7 +55,9 @@ function createSpaceBoxIdKey(spaceId: string, boxId: string) {
 }
 
 export function useItems(spaceId: string, boxId: string) {
-  const [spaceBoxId_, setSpaceBoxId_] = useState(createSpaceBoxIdKey(spaceId, boxId));
+  const [spaceBoxId_, setSpaceBoxId_] = useState(
+    createSpaceBoxIdKey(spaceId, boxId),
+  );
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(Boolean(spaceId) && Boolean(boxId));
   const [error, setError] = useState<string | null>(null);
@@ -92,11 +94,17 @@ export function useItems(spaceId: string, boxId: string) {
         }
 
         const spaceEncryption = await getSpaceEncryption(spaceId);
-        const nextItems = (await Promise.all(
-          snapshot.docs.map((documentSnapshot) =>
-            normalizeItem(documentSnapshot.id, documentSnapshot.data(), spaceEncryption),
-          ),
-        )).sort((left, right) => left.createdAt - right.createdAt);
+        const nextItems = (
+          await Promise.all(
+            snapshot.docs.map((documentSnapshot) =>
+              normalizeItem(
+                documentSnapshot.id,
+                documentSnapshot.data(),
+                spaceEncryption,
+              ),
+            ),
+          )
+        ).sort((left, right) => left.createdAt - right.createdAt);
 
         setItems(nextItems);
         setLoading(false);
@@ -123,7 +131,8 @@ export function useItems(spaceId: string, boxId: string) {
         throw new Error('A space and box are required to add an item.');
       }
 
-      const nextContent = typeof content === 'string' ? content : content.content;
+      const nextContent =
+        typeof content === 'string' ? content : content.content;
       const trimmedContent = nextContent.trim();
 
       if (!trimmedContent) {
@@ -141,7 +150,7 @@ export function useItems(spaceId: string, boxId: string) {
         'items',
       );
       const itemRef = doc(itemsCollection);
-      const userId = auth.currentUser?.uid
+      const userId = auth.currentUser?.uid;
 
       if (!userId) {
         throw new Error('You must be signed in to add an item.');
@@ -149,7 +158,10 @@ export function useItems(spaceId: string, boxId: string) {
 
       const now = Date.now();
       const spaceEncryption = await getSpaceEncryption(spaceId);
-      const encryptedContent = await encryptStringForSpace(trimmedContent, spaceEncryption);
+      const encryptedContent = await encryptStringForSpace(
+        trimmedContent,
+        spaceEncryption,
+      );
       const nextItem: Item = {
         id: itemRef.id,
         authorId: userId,
@@ -161,11 +173,18 @@ export function useItems(spaceId: string, boxId: string) {
         lastEditedAt: now,
       };
 
-      await setDoc(itemRef, {
-        ...nextItem,
-        content: encryptedContent,
-      });
-      return nextItem;
+      try {
+        await setDoc(itemRef, {
+          ...nextItem,
+          content: encryptedContent,
+        });
+
+        return nextItem;
+      } catch (error) {
+        throw new Error('Failed to add item. Please try again.', {
+          cause: error,
+        });
+      }
     },
     [boxId, spaceId],
   );
