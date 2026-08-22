@@ -1,7 +1,7 @@
 {
   "name": "Moondreams Dev Apps",
   "short_name": "Moondreams Dev Apps",
-  "description": "A collection of small apps designed to help address, solve, or simplify whatever was going on at that time.",
+  "description": "A collection of mini-apps built to fit whatever felt useful, fun, or simply interesting during a particular moment in life.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
