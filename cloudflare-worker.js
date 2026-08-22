@@ -25,7 +25,7 @@ export default {
     const response = await fetch(request);
 
     // Match the route path
-    const appMeta = APP_REGISTRY_PATH_MAP[url.pathname] || null;
+    const appMeta = APP_REGISTRY.find((app) => url.pathname.startsWith(app.path));
 
     // If it's a social bot and we have custom meta for this route, rewrite the HTML tags
     if (appMeta && isBot) {
