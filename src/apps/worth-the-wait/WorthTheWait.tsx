@@ -78,14 +78,14 @@ function WorthTheWait() {
         <div className='page relative pb-0!'>
           <Button
             onClick={() => setHasOnboardingModalBeenDismissed(false)}
-            className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-4'
+            className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
           >
             Enter app
           </Button>
           <Button
             variant='link'
             onClick={() => navigate('/')}
-            className='absolute top-1/2 left-1/2 -translate-x-1/2 mt-16'
+            className='absolute top-1/2 left-1/2 -translate-x-1/2 mt-12'
           >
             Back home
           </Button>
