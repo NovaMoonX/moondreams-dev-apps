@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { APP_REGISTRY_PATH_MAP } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
 import AuthAvatar from '@ui/AuthAvatar';
@@ -11,6 +12,8 @@ function LocationSync() {
   const location = useLocation();
   const { setCurrentLocation } = useAuth();
 
+  // Sync the user's current location with
+  // their status in the Firebase Realtime Database
   useEffect(() => {
     if (!location.pathname) {
       navigate('/');
@@ -29,6 +32,35 @@ function LocationSync() {
 
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation]);
+
+  // Sync the manifest file based on the current location
+  useEffect(() => {
+    let manifestPath = '/manifest-main.json';
+    let appName = 'Moondreams Dev Apps';
+
+    const appRegistry = APP_REGISTRY_PATH_MAP[location.pathname] || null;
+    if (appRegistry) {
+      manifestPath = `/manifest-${appRegistry.id}.json`;
+      appName = `${appRegistry.name} - Moondreams Dev Apps`;
+    }
+
+    // Update the manifest link in the document head
+    let link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'manifest';
+      document.head.appendChild(link);
+    }
+
+    // Only update if changed to avoid unnecessary DOM mutations
+    if (link.getAttribute('href') !== manifestPath) {
+      link.setAttribute('href', manifestPath);
+    }
+
+
+    // Update the document title based on the current app
+    document.title = appName;
+  }, [location.pathname]);
 
   return null;
 }

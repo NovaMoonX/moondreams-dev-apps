@@ -1,11 +1,23 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { qrcode } from 'vite-plugin-qrcode';
+import react from '@vitejs/plugin-react';
 import path from 'path';
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+import { qrcode } from 'vite-plugin-qrcode';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), qrcode()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    qrcode(),
+    VitePWA({
+      injectRegister: null, // Handles registration manually
+      manifest: false, // Disables auto single-manifest injection
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
@@ -24,5 +36,5 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1000, // in KB. 1000 - 1500 is good for most apps.
-  }
+  },
 });

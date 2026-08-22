@@ -80,7 +80,7 @@ function WorthTheWaitLayout() {
 
             {!hasLockedSpace && user ? (
               <div className='bg-muted/40 border-border space-y-3 rounded-lg border p-4'>
-                <p className='text-sm text-muted-foreground'>
+                <p className='text-muted-foreground text-sm'>
                   Your shared space is waiting for both partners to join and
                   lock in.
                 </p>
@@ -89,7 +89,12 @@ function WorthTheWaitLayout() {
                     <p className='text-xl'>
                       <b>Invite Code:</b> {space?.inviteCode}
                     </p>{' '}
-                    <CopyButton textToCopy={space?.inviteCode} className='inline!' variant='base' size='icon' />
+                    <CopyButton
+                      textToCopy={space?.inviteCode}
+                      className='inline!'
+                      variant='base'
+                      size='icon'
+                    />
                   </div>
                 )}
               </div>

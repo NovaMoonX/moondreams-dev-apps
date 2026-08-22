@@ -8,6 +8,10 @@ export type AppRegistryEntry = {
   createdAt?: string; // YYYY-MM-DD
 };
 
+/* IMPORTANT: Keep the following in sync with this registry:
+   - manifests in /public folder
+   - repo root README.md
+*/
 export const APP_REGISTRY: AppRegistryEntry[] = [
   {
     id: 'worth-the-wait',
