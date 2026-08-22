@@ -4,7 +4,7 @@ import {
   RadioGroupItem,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
 import { useAuth } from '@hooks/useAuth';
@@ -21,11 +21,12 @@ function RevealAction() {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { activeAction, space } = useWorthTheWait();
-  const { toggleRevealRequest, startAction } = useRevealRequest({
+  const { toggleRevealRequest, startAction, loading } = useRevealRequest({
     spaceId,
     box,
     userUid: user?.uid,
   });
+  const [startActionError, setStartActionError] = useState<string | null>(null);
 
   const partnerUid = useMemo(() => {
     if (!user || !space) {
@@ -179,7 +180,15 @@ function RevealAction() {
           type='button'
           size='sm'
           disabled={!isTriggerEnabled}
-          onClick={() => void handleStartAction()}
+          onClick={() => {
+            handleStartAction().catch((error) => {
+              console.error('Error starting action:', error);
+              setStartActionError(
+                'An error occurred while starting the action. Please try again.',
+              );
+            });
+          }}
+          loading={loading}
         >
           <span
             className={
@@ -193,6 +202,9 @@ function RevealAction() {
                 : 'Another box is being revealed'}
           </span>
         </Button>
+      </div>
+      <div className='my-1 text-right'>
+        <span className='text-destructive text-xs'>{startActionError}</span>
       </div>
     </div>
   );

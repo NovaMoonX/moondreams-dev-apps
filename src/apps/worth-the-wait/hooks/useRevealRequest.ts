@@ -1,5 +1,5 @@
 import { doc, updateDoc } from 'firebase/firestore';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 import { db, functions } from '@lib/firebase/config';
 
@@ -17,6 +17,8 @@ export function useRevealRequest({
   box,
   userUid,
 }: UseRevealRequestArgs) {
+  const [loading, setLoading] = useState(false);
+
   const toggleRevealRequest = useCallback(
     async (method: RevealMethod) => {
       if (!userUid) {
@@ -63,6 +65,7 @@ export function useRevealRequest({
       if (!spaceId || !userUid) {
         return;
       }
+      setLoading(true);
 
       const triggerBoxAction = httpsCallable(functions, 'triggerBoxAction');
 
@@ -80,12 +83,14 @@ export function useRevealRequest({
             cause: error,
           },
         );
+      } finally {
+        setLoading(false);
       }
     },
     [box.id, spaceId, userUid],
   );
 
-  return { toggleRevealRequest, startAction };
+  return { toggleRevealRequest, startAction, loading };
 }
 
 export default useRevealRequest;

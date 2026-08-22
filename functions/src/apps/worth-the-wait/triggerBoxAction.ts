@@ -119,7 +119,13 @@ function assertMutualRequests(
 }
 
 export const triggerBoxAction = onCall(
-  { region: 'us-central1' },
+  {
+    region: 'us-central1',
+    cors: [
+      'https://apps.moondreams.dev',
+      /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
+    ],
+  },
   async (request) => {
     const authUid = request.auth?.uid;
 
@@ -237,7 +243,6 @@ export const triggerBoxAction = onCall(
 
       if (method === 'raffle') {
         if (unrevealedItems.length === 0) {
-          
           throw new HttpsError(
             'failed-precondition',
             'No unrevealed items remain to raffle.',
