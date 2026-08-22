@@ -9,6 +9,7 @@ export type AuthContextValue = {
   logOut: () => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
   setCurrentLocation: (location: string) => void;
+  isDisplayNameUpdating: boolean;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

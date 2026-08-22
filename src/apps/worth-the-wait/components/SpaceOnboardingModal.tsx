@@ -1,3 +1,4 @@
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import {
   Button,
   Input,
@@ -7,6 +8,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useMemo, useState } from 'react';
 import { generateInviteCode, SPACE_CODE_LENGTH } from '../utils/generateCode';
 
@@ -14,8 +16,8 @@ interface SpaceOnboardingModalProps {
   isOpen: boolean;
   isSubmitting?: boolean;
   hasJoinBeenSubmitted?: boolean;
-  onCreateSpace: (inviteCode: string) => Promise<unknown> | unknown;
-  onJoinSpace: (inviteCode: string) => Promise<unknown> | unknown;
+  onCreateSpace: (inviteCode: string) => Promise<string>;
+  onJoinSpace: (inviteCode: string) => Promise<string>;
   onClose: () => void;
 }
 
@@ -27,15 +29,33 @@ function SpaceOnboardingModal({
   onJoinSpace,
   onClose,
 }: SpaceOnboardingModalProps) {
+  const { addToast } = useToast();
   const createInviteCode = useMemo(() => generateInviteCode(), []);
   const [joinInput, setJoinInput] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    await onCreateSpace(createInviteCode);
+    onCreateSpace(createInviteCode)
+      .then((inviteCode) => {
+        copyToClipboard(inviteCode).then(() => {
+          addToast({
+            title: 'Space Created 🎊',
+            description: 'Your invite code has been copied to your keyboard',
+          });
+        });
+      })
+      .catch((error) => {
+        setCreateError(error.message || 'An unexpected error occurred.');
+        throw error;
+      });
   };
 
   const handleJoin = async () => {
-    await onJoinSpace(joinInput.trim());
+    onJoinSpace(joinInput.trim()).catch((error: Error) => {
+      setJoinError(error.message || 'An unexpected error occurred.');
+      throw error;
+    });
   };
 
   return (
@@ -73,6 +93,9 @@ function SpaceOnboardingModal({
                 {createInviteCode}
               </div>
             </div>
+            {createError && (
+              <p className='text-destructive text-sm'>{createError}</p>
+            )}
             <Button
               onClick={handleCreate}
               disabled={isSubmitting}
@@ -96,6 +119,9 @@ function SpaceOnboardingModal({
               autoComplete='off'
               maxLength={SPACE_CODE_LENGTH}
             />
+            {joinError && (
+              <p className='text-destructive text-sm'>{joinError}</p>
+            )}
             <Button
               onClick={handleJoin}
               disabled={isSubmitting || !joinInput.trim()}

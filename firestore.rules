@@ -20,6 +20,40 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /apps/worth-the-wait/inviteCodes/{inviteCode} {
+      function isInviteCodeShapeValid() {
+        return request.resource.data.keys().hasOnly(['spaceId'])
+          && request.resource.data.spaceId is string
+          && request.resource.data.spaceId.size() > 0;
+      }
+
+      function getInviteSpaceAfter() {
+        return getAfter(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId));
+      }
+
+      function isInviteCodeCreateValid() {
+        return request.auth != null
+          && inviteCode.size() == 6
+          && isInviteCodeShapeValid()
+          && !exists(/databases/$(database)/documents/apps/worth-the-wait/inviteCodes/$(inviteCode))
+          && existsAfter(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId))
+          && getInviteSpaceAfter().data.createdBy == request.auth.uid
+          && request.auth.uid in getInviteSpaceAfter().data.members
+          && getInviteSpaceAfter().data.inviteCode == inviteCode;
+      }
+
+      function isInviteCodeDeleteValid() {
+        return request.auth != null
+          && resource.data.spaceId is string
+          && exists(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(resource.data.spaceId))
+          && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(resource.data.spaceId)).data.createdBy == request.auth.uid;
+      }
+
+      allow read: if request.auth != null;
+      allow create: if isInviteCodeCreateValid();
+      allow delete: if isInviteCodeDeleteValid();
+    }
+
     match /apps/worth-the-wait/spaces/{spaceId} {
       function isCreator(data) {
         return request.auth != null && request.auth.uid == data.createdBy;
@@ -27,12 +61,6 @@ service cloud.firestore {
 
       function isMember(data) {
         return request.auth != null && request.auth.uid in data.members;
-      }
-
-      function isPendingMember(data) {
-        return request.auth != null &&
-          data.pendingMember != null &&
-          request.auth.uid == data.pendingMember.uid;
       }
 
       function isEncryptionConfigValid() {
@@ -66,46 +94,69 @@ service cloud.firestore {
           && !(request.auth.uid in resource.data.members)
           && resource.data.members.size() < 2
           && (resource.data.pendingMember == null || resource.data.pendingMember.uid == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingMember', 'updatedAt'])
+          && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
+          && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.pendingMember != null
           && request.resource.data.pendingMember.uid == request.auth.uid
-          && request.resource.data.pendingMember.requestedAt is number;
+          && request.resource.data.pendingMember.requestedAt is number
+          && request.resource.data.updatedAt is number;
       }
 
       function isApprovalValid() {
         return request.auth != null
           && request.auth.uid == resource.data.createdBy
           && resource.data.pendingMember != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'pendingMember', 'inviteCode', 'activeAction', 'updatedAt'])
+          && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.pendingMember == null
           && request.resource.data.inviteCode == null
           && request.resource.data.activeAction == null
+          && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
+          && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.members.size() == resource.data.members.size() + 1
-          && request.resource.data.members.hasAny([resource.data.pendingMember.uid]);
+          && request.resource.data.members.hasAll(resource.data.members)
+          && request.resource.data.members.hasAll([resource.data.pendingMember.uid])
+          && request.resource.data.updatedAt is number;
       }
 
       function isDeclineValid() {
         return request.auth != null
           && request.auth.uid == resource.data.createdBy
           && resource.data.pendingMember != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingMember', 'updatedAt'])
+          && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.pendingMember == null
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
-          && request.resource.data.activeAction == resource.data.activeAction;
+          && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
+          && request.resource.data.encryption == resource.data.encryption
+          && request.resource.data.updatedAt is number;
       }
 
       function isWelcomeSeenUpdateValid() {
         return request.auth != null
           && request.auth.uid in resource.data.members
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['welcomeSeenBy', 'updatedAt'])
+          && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.pendingMember == resource.data.pendingMember
           && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.updatedAt is number
           && request.resource.data.welcomeSeenBy is map
           && request.resource.data.welcomeSeenBy[request.auth.uid] is number;
@@ -123,12 +174,7 @@ service cloud.firestore {
           && request.resource.data.activeAction.status == 'initiating';
       }
 
-      allow read: if request.auth != null && (
-        request.auth.uid == resource.data.createdBy ||
-        request.auth.uid in resource.data.members ||
-        (resource.data.pendingMember != null && request.auth.uid == resource.data.pendingMember.uid) ||
-        resource.data.members.size() < 2
-      );
+      allow read: if isMember(resource.data);
 
       allow create: if isCreateValid();
 
@@ -189,15 +235,17 @@ service cloud.firestore {
 
           allow create: if isSpaceMember()
             && request.resource.data.authorId == request.auth.uid
-            && request.resource.data.content is string
-            && request.resource.data.content.size() > 0
+            && request.resource.data.content is map
+            && 'value' in request.resource.data.content
+            && request.resource.data.content.value.size() > 0
             && request.resource.data.createdAt is number
             && request.resource.data.lastEditedAt is number;
 
           allow update: if isAuthor()
             && request.resource.data.authorId == request.auth.uid
-            && request.resource.data.content is string
-            && request.resource.data.content.size() > 0;
+            && request.resource.data.content is map
+            && 'value' in request.resource.data.content
+            && request.resource.data.content.value.size() > 0;
 
           allow delete: if isAuthor();
         }

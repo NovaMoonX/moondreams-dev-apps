@@ -16,13 +16,14 @@ type UserAvatarProps = {
 };
 
 function UserAvatar({ user, size = 'sm', className }: UserAvatarProps) {
-  const displayName = user?.displayName?.trim() || user?.email || 'User';
+  const displayName = user?.displayName?.trim() || user?.email || '??';
   const initials = user?.photoURL ? undefined : getInitials(displayName);
 
   return (
     <Avatar
       src={user?.photoURL ?? undefined}
       alt={displayName}
+      title={displayName}
       initials={initials}
       size={size}
       shape='circle'

@@ -1,6 +1,10 @@
 import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
-import { Button, HelpIcon } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  CopyButton,
+  HelpIcon,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
@@ -75,9 +79,19 @@ function WorthTheWaitLayout() {
             </p>
 
             {!hasLockedSpace && user ? (
-              <div className='bg-muted/40 border-border text-muted-foreground rounded-lg border p-4 text-sm'>
-                Your shared space is waiting for both partners to join and lock
-                in.
+              <div className='bg-muted/40 border-border space-y-3 rounded-lg border p-4'>
+                <p className='text-sm text-muted-foreground'>
+                  Your shared space is waiting for both partners to join and
+                  lock in.
+                </p>
+                {space?.inviteCode && (
+                  <div className='flex items-center gap-2'>
+                    <p className='text-xl'>
+                      <b>Invite Code:</b> {space?.inviteCode}
+                    </p>{' '}
+                    <CopyButton textToCopy={space?.inviteCode} className='inline!' variant='base' size='icon' />
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
@@ -154,7 +168,7 @@ function WorthTheWaitLayout() {
         isOpen={isWelcomeModalOpen}
         onClose={close}
       />
-      
+
       {selectedBox ? (
         <BoxProvider
           value={{

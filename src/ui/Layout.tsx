@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
 import AuthAvatar from '@ui/AuthAvatar';
-import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import ThemeToggle from '@ui/ThemeToggle';
 
 function LocationSync() {
@@ -17,12 +17,17 @@ function LocationSync() {
       return;
     }
 
-    // remove any leading slashes and replace with 'home' if the path is just '/'
-    const nextLocation =
-      location.pathname === '/'
-        ? 'home'
-        : location.pathname.replace(/^\/+/, '');
-    setCurrentLocation(nextLocation);
+    function handleSetCurrentLocation(locationPathname: string) {
+      // remove any leading slashes and replace with 'home' if the path is just '/'
+      const nextLocation =
+        locationPathname === '/'
+          ? 'home'
+          : locationPathname.replace(/^\/+/, '');
+
+      setCurrentLocation(nextLocation);
+    }
+
+    handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation]);
 
   return null;

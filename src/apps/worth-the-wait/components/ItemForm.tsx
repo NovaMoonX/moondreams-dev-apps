@@ -4,7 +4,7 @@ import { useState } from 'react';
 interface ItemFormProps {
   disabled?: boolean;
   placeholder?: string;
-  onSubmit?: (content: string) => void | Promise<void>;
+  onSubmit?: (content: string) => Promise<void>;
 }
 
 function ItemForm({
@@ -13,6 +13,7 @@ function ItemForm({
   onSubmit,
 }: ItemFormProps) {
   const [value, setValue] = useState('');
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const handleSubmit = async (
     event:
@@ -30,35 +31,50 @@ function ItemForm({
       return;
     }
 
-    await onSubmit(trimmedValue);
-    setValue('');
+    onSubmit(trimmedValue)
+      .then(() => {
+        setSubmissionError(null);
+        setValue('');
+      })
+      .catch((error) => {
+        setSubmissionError(
+          error instanceof Error ? error.message : 'Failed to submit item.',
+        );
+      });
   };
 
   return (
     <form onSubmit={handleSubmit} className='space-y-3'>
-      <label className='block'>
-        <span className='sr-only'>Write an item</span>
-        <textarea
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          disabled={disabled}
-          placeholder={placeholder}
-          rows={4}
-          maxLength={500}
-          className='border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-ring w-full resize-none rounded-xl border px-3 py-2 text-sm ring-0 transition outline-none'
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              void handleSubmit(event);
-            }
-          }}
-        />
-      </label>
+      <div>
+        <label className='block'>
+          <span className='sr-only'>Write an item</span>
+          <textarea
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            disabled={disabled}
+            placeholder={placeholder}
+            rows={4}
+            maxLength={500}
+            className='border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-ring w-full resize-none rounded-xl border px-3 py-2 text-sm ring-0 transition outline-none'
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void handleSubmit(event);
+              }
+            }}
+          />
+        </label>
+        <div className='flex items-center justify-between gap-3 px-1'>
+          <span className='text-muted-foreground text-xs'>
+            {value.trim().length}/500
+          </span>
+          {submissionError && (
+            <span className='text-destructive text-xs'>{submissionError}</span>
+          )}
+        </div>
+      </div>
 
-      <div className='flex items-center justify-between gap-3'>
-        <span className='text-muted-foreground text-xs'>
-          {value.trim().length}/500
-        </span>
+      <div className='flex items-center justify-end'>
         <Button
           type='submit'
           size='sm'

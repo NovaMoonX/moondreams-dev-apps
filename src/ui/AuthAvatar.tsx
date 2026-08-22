@@ -26,6 +26,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     logOut,
     updateDisplayName,
     isAdmin,
+    isDisplayNameUpdating,
   } = useAuth();
   const { appPathMap } = useAppCatalog();
   const { option, separator, custom } = DropdownMenuFactories;
@@ -49,7 +50,11 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
   if (!user) {
     return (
-      <Button onClick={signInWithGoogle} className={join('gap-2', className)} aria-label='Sign in with Google'>
+      <Button
+        onClick={signInWithGoogle}
+        className={join('gap-2', className)}
+        aria-label='Sign in with Google'
+      >
         <Google className='size-4' />
         <span className='hidden sm:inline'>Sign in</span>
       </Button>
@@ -195,8 +200,13 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             label: 'Cancel',
             variant: 'secondary',
             onClick: () => setIsNameModalOpen(false),
+            disabled: isDisplayNameUpdating,
           },
-          { label: 'Save', onClick: handleNameSave },
+          {
+            label: 'Save',
+            onClick: handleNameSave,
+            loading: isDisplayNameUpdating,
+          },
         ]}
       >
         <div className='space-y-3'>

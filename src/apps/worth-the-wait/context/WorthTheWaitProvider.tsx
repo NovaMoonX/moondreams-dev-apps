@@ -9,11 +9,13 @@ import {
 
 interface WorthTheWaitProviderProps extends PropsWithChildren {
   space: Space | null;
+  forceOpenPendingApprovalModal: () => void;
 }
 
 export function WorthTheWaitProvider({
   children,
   space,
+  forceOpenPendingApprovalModal,
 }: WorthTheWaitProviderProps) {
   const { activeAction, dismissPresentedAction, presentedAction } =
     useActiveAction(space?.id ?? '');
@@ -43,6 +45,7 @@ export function WorthTheWaitProvider({
     openBox,
     closeBox,
     setItemsDisclosureOpen,
+    forceOpenPendingApprovalModal,
   };
 
   return (

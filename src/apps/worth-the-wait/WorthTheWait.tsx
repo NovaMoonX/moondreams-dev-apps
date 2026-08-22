@@ -29,15 +29,19 @@ function WorthTheWait() {
     hasPendingApprovalModalBeenDismissed,
     setHasPendingApprovalModalBeenDismissed,
   ] = useState(false);
+  // force the PendingApprovalModal open when user clicks PresenceBadge
+  const [forceOpenPendingApprovalModal, setForceOpenPendingApprovalModal] =
+    useState(false);
   const [hasOnboardingModalBeenDismissed, setHasOnboardingModalBeenDismissed] =
     useState(false);
 
-  const hasLockedSpace = Boolean(space && space.members.length >= 2);
+  const hasSpace = Boolean(space && space.members.length >= 1);
   const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
   const shouldOnboardingBeOpen =
-    Boolean(user) && !hasLockedSpace && !creatorHasPendingApproval;
+    Boolean(user) && !hasSpace && !creatorHasPendingApproval;
+
   if (loading) {
     return <Loading />;
   }
@@ -47,12 +51,16 @@ function WorthTheWait() {
       <PendingApprovalModal
         key={pendingMember?.uid ?? 'no-pending-member'}
         isOpen={
-          creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed
+          forceOpenPendingApprovalModal ||
+          (creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed)
         }
         pendingMember={pendingMember}
         onApprove={approvePendingMember}
         onDecline={declinePendingMember}
-        onClose={() => setHasPendingApprovalModalBeenDismissed(true)}
+        onClose={() => {
+          setHasPendingApprovalModalBeenDismissed(true);
+          setForceOpenPendingApprovalModal(false);
+        }}
       />
 
       <SpaceOnboardingModal
@@ -73,7 +81,12 @@ function WorthTheWait() {
       )}
 
       {!shouldOnboardingBeOpen && (
-        <WorthTheWaitProvider space={space}>
+        <WorthTheWaitProvider
+          space={space}
+          forceOpenPendingApprovalModal={() =>
+            setForceOpenPendingApprovalModal(false)
+          }
+        >
           <WorthTheWaitLayout />
         </WorthTheWaitProvider>
       )}

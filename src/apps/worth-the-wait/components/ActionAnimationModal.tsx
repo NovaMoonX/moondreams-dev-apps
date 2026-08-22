@@ -7,6 +7,7 @@ import { useItems } from '../hooks/useItems';
 import { useRaffleReveal } from '../hooks/useRaffleReveal';
 import type { ActiveAction, Box, Item } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
+import { useUserInfo } from '@/hooks/useUserInfo';
 
 interface ActionAnimationModalProps {
   boxes: Box[];
@@ -90,6 +91,9 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
     ? getRaffleItem(items, presentedAction, now)
     : null;
 
+
+  const raffleUser = useUserInfo(raffleItem?.authorId);
+
   const raffleReveal = useRaffleReveal({
     content: raffleItem?.content ?? null,
     status: presentedAction?.status,
@@ -147,7 +151,8 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
           </div>
 
           {isRaffle ? (
-            <div className='border-border bg-muted/40 flex min-h-44 items-center justify-center rounded-3xl border p-6'>
+            <div className='border-border bg-muted/40 flex flex-col min-h-44 items-center justify-center rounded-3xl border p-6'>
+              <span className='text-muted-foreground'>{raffleUser?.displayName ?? 'Unknown user'}</span>
               <p
                 className={join(
                   'text-foreground max-w-sm text-2xl leading-8 font-medium wrap-break-word transition-opacity',

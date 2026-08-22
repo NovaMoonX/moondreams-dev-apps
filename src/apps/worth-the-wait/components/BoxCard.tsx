@@ -14,10 +14,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useItems } from '../hooks/useItems';
-import {
-  getFriendlyRevealMethod,
-  RECENT_REVEAL_WINDOW_MS,
-} from '../utils/boxHelpers';
+import { getFriendlyRevealMethod } from '../utils/boxHelpers';
+import { RECENT_REVEAL_WINDOW_MS } from '../utils/itemHelpers';
 import ManageBoxModal from './ManageBoxModal';
 
 function BoxCard() {
@@ -94,6 +92,12 @@ function BoxCard() {
     }
 
     if (numActiveRevealRequest > 1) {
+      if (
+        box.revealRequestedBy[0]?.method === box.revealRequestedBy[1]?.method
+      ) {
+        return `Mutual pending request`;
+      }
+
       return `${numActiveRevealRequest} pending reveal requests`;
     }
 
@@ -103,7 +107,7 @@ function BoxCard() {
       return `You requested a ${getFriendlyRevealMethod(revealRequest.method)}`;
     }
 
-    return `A ${getFriendlyRevealMethod(revealRequest.method)} was requested`;
+    return `${getFriendlyRevealMethod(revealRequest.method)} was requested`;
   };
 
   useEffect(() => {
