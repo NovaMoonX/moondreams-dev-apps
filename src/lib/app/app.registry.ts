@@ -9,7 +9,8 @@ export type AppRegistryEntry = {
 };
 
 /* IMPORTANT: Keep the following in sync with this registry:
-   - manifests in /public folder
+   - in /public folder: manifests, logos, and banners
+   - cloudflare-worker.js
    - repo root README.md
 */
 export const APP_REGISTRY: AppRegistryEntry[] = [
