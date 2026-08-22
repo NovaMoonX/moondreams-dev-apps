@@ -4,6 +4,7 @@ import { useAuth } from '@hooks/useAuth';
 
 import Loading from '@/ui/Loading';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useNavigate } from 'react-router-dom';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import WorthTheWaitLayout from './components/WorthTheWaitLayout';
@@ -12,6 +13,7 @@ import { useSpace } from './hooks/useSpace';
 
 function WorthTheWait() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const {
     space,
     pendingMember,
@@ -73,9 +75,19 @@ function WorthTheWait() {
       />
 
       {shouldOnboardingBeOpen && hasOnboardingModalBeenDismissed && (
-        <div className='page flex flex-col items-center justify-center'>
-          <Button onClick={() => setHasOnboardingModalBeenDismissed(false)}>
+        <div className='page relative pb-0!'>
+          <Button
+            onClick={() => setHasOnboardingModalBeenDismissed(false)}
+            className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
+          >
             Enter app
+          </Button>
+          <Button
+            variant='link'
+            onClick={() => navigate('/')}
+            className='absolute top-1/2 left-1/2 -translate-x-1/2 mt-12'
+          >
+            Back home
           </Button>
         </div>
       )}
@@ -84,7 +96,7 @@ function WorthTheWait() {
         <WorthTheWaitProvider
           space={space}
           forceOpenPendingApprovalModal={() =>
-            setForceOpenPendingApprovalModal(false)
+            setForceOpenPendingApprovalModal(true)
           }
         >
           <WorthTheWaitLayout />
