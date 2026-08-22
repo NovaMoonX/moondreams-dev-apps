@@ -10,7 +10,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     qrcode(),
-    VitePWA({ registerType: 'autoUpdate' }),
+    VitePWA({
+      injectRegister: null, // Handles registration manually
+      manifest: false, // Disables auto single-manifest injection
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+      },
+    }),
   ],
   resolve: {
     alias: {
