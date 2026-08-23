@@ -1,3 +1,5 @@
+export const SPACE_CODE_QUERY_PARAM = 'inviteCode';
+
 export const SPACE_CODE_LENGTH = 6;
 
 export function generateInviteCode() {
