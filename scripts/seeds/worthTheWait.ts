@@ -1,11 +1,9 @@
 import { faker } from '@faker-js/faker';
-
-import { getDefaultBoxes } from '../../src/apps/worth-the-wait/utils/boxHelpers.ts';
 import {
   createSeedSpaceEncryptionKey,
   encryptStringForSpace,
-} from '../../src/lib/security/index.ts';
-
+} from '../../src/apps/worth-the-wait/security.ts';
+import { getDefaultBoxes } from '../../src/apps/worth-the-wait/utils/boxHelpers.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -14,7 +12,7 @@ import {
 } from './types.ts';
 
 const SPACE_ID = 'seed-shared-space';
-const SEED_SPACE_ENCRYPTION = createSeedSpaceEncryptionKey('worth-the-wait');
+const SEED_SPACE_ENCRYPTION = createSeedSpaceEncryptionKey();
 
 function createItem(
   id: string,
@@ -37,7 +35,9 @@ function createItem(
   return item;
 }
 
-export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult> {
+export async function seedWorthTheWait(
+  context: SeedContext,
+): Promise<SeedResult> {
   faker.seed(20260818);
 
   const firstMember = FIXTURE_USERS.partnerOne;
@@ -297,9 +297,14 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
     for (const item of boxItems) {
       const encryptedItem = {
         ...item,
-        content: await encryptStringForSpace(item.content, SEED_SPACE_ENCRYPTION),
+        content: await encryptStringForSpace(
+          item.content,
+          SEED_SPACE_ENCRYPTION,
+        ),
       };
-      batch.set(boxRef.collection('items').doc(item.id), encryptedItem, { merge: true });
+      batch.set(boxRef.collection('items').doc(item.id), encryptedItem, {
+        merge: true,
+      });
     }
   }
 
@@ -308,7 +313,9 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
       ...item,
       content: await encryptStringForSpace(item.content, SEED_SPACE_ENCRYPTION),
     };
-    batch.set(customBoxRef.collection('items').doc(item.id), encryptedItem, { merge: true });
+    batch.set(customBoxRef.collection('items').doc(item.id), encryptedItem, {
+      merge: true,
+    });
   }
 
   await batch.commit();
@@ -320,7 +327,8 @@ export async function seedWorthTheWait(context: SeedContext): Promise<SeedResult
 
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + defaultBoxes.length + 1 + seedItemCount + items.length,
+    firestoreDocuments:
+      1 + defaultBoxes.length + 1 + seedItemCount + items.length,
   };
 
   return result;

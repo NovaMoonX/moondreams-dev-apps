@@ -10,7 +10,11 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useMemo, useState } from 'react';
-import { generateInviteCode, SPACE_CODE_LENGTH } from '../utils/generateCode';
+import {
+  generateInviteCode,
+  generateInviteLink,
+  SPACE_CODE_LENGTH,
+} from '../utils/generateCode';
 
 interface SpaceOnboardingModalProps {
   isOpen: boolean;
@@ -40,10 +44,10 @@ function SpaceOnboardingModal({
   const handleCreate = async () => {
     onCreateSpace(createInviteCode)
       .then((inviteCode) => {
-        copyToClipboard(inviteCode).then(() => {
+        copyToClipboard(generateInviteLink(inviteCode)).then(() => {
           addToast({
             title: 'Space Created 🎊',
-            description: 'Your invite code has been copied to your keyboard',
+            description: 'Link to join your space has been copied to your clipboard!',
           });
         });
       })

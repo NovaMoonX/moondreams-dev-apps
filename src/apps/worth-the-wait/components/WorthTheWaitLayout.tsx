@@ -14,6 +14,7 @@ import { BoxProvider } from '../context/BoxProvider';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useBoxes } from '../hooks/useBoxes';
 import { useWelcomeModal } from '../hooks/useWelcomeModal';
+import { generateInviteLink } from '../utils/generateCode';
 import ActionAnimationModal from './ActionAnimationModal';
 import BoxDetailDrawer from './BoxDetailDrawer';
 import BoxGrid from './BoxGrid';
@@ -70,7 +71,7 @@ function WorthTheWaitLayout() {
         </header>
 
         <main className='bg-card/80 border-border rounded-2xl border p-5 shadow-sm md:p-8'>
-          <div className='max-w-xl space-y-5'>
+          <div className='max-w-3xl space-y-5'>
             <h1 className='text-foreground text-4xl font-semibold tracking-tight md:text-5xl'>
               Worth the Wait
             </h1>
@@ -85,16 +86,30 @@ function WorthTheWaitLayout() {
                   lock in.
                 </p>
                 {space?.inviteCode && (
-                  <div className='flex items-center gap-2'>
-                    <p className='text-xl'>
-                      <b>Invite Code:</b> {space?.inviteCode}
-                    </p>{' '}
-                    <CopyButton
-                      textToCopy={space?.inviteCode}
-                      className='inline!'
-                      variant='base'
-                      size='icon'
-                    />
+                  <div className='space-y-3'>
+                    <div className='flex items-center gap-2'>
+                      <p>
+                        <b>Invite Join Link:</b>{' '}
+                        {generateInviteLink(space.inviteCode)}
+                      </p>{' '}
+                      <CopyButton
+                        textToCopy={space.inviteCode}
+                        className='inline! hover:text-muted-foreground'
+                        variant='base'
+                        size='icon'
+                      />
+                    </div>
+                    <div className='flex items-center gap-2 text-muted-foreground'>
+                      <p className='text-sm'>
+                        <b>Invite Code:</b> {space.inviteCode}
+                      </p>{' '}
+                      <CopyButton
+                        textToCopy={space.inviteCode}
+                        className='inline! hover:text-foreground'
+                        variant='base'
+                        size='icon'
+                      />
+                    </div>
                   </div>
                 )}
               </div>

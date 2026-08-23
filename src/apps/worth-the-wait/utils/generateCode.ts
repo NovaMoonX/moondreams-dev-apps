@@ -12,3 +12,9 @@ export function generateInviteCode() {
 
   return code;
 }
+
+export function generateInviteLink(inviteCode: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set(SPACE_CODE_QUERY_PARAM, inviteCode);
+  return url.toString();
+}
