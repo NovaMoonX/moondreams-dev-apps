@@ -1,66 +1,44 @@
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import UserAvatar from '@/ui/UserAvatar';
-import { db } from '@lib/firebase/config';
 
-import type { PendingMember } from '../types';
-
-type UserProfile = {
-  uid: string;
-  displayName?: string | null;
-  email?: string | null;
-  photoURL?: string | null;
-};
+import { useAuth } from '@/hooks/useAuth';
+import { useUserInfo } from '@/hooks/useUserInfo';
+import type { PendingMember, Space } from '../types';
+import { getPartnerUid } from '../utils/spaceHelpers';
 
 interface PendingApprovalModalProps {
+  space: Space | null;
   isOpen: boolean;
   pendingMember: PendingMember | null;
   onApprove: () => Promise<unknown> | unknown;
   onDecline: () => Promise<unknown> | unknown;
   onClose?: () => void;
-};
+}
 
 function PendingApprovalModal({
+  space,
   isOpen,
   pendingMember,
   onApprove,
   onDecline,
   onClose,
 }: PendingApprovalModalProps) {
-  const [pendingUser, setPendingUser] = useState<UserProfile | null>(null);
-
-  useEffect(() => {
-    if (!pendingMember?.uid) {
-      return;
-    }
-
-    const userDocRef = doc(db, 'users', pendingMember.uid);
-    const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
-      const data = docSnapshot.data() as Partial<UserProfile> | undefined;
-
-      setPendingUser({
-        uid: pendingMember.uid,
-        displayName: data?.displayName ?? null,
-        email: data?.email ?? null,
-        photoURL: data?.photoURL ?? null,
-      });
-    });
-
-    return () => unsubscribe();
-  }, [pendingMember?.uid]);
+  const { user } = useAuth();
+  const partnerUid = getPartnerUid(space, user);
+  const avatarUser = useUserInfo(partnerUid);
 
   const memberLabel = useMemo(
     () =>
-      pendingUser?.displayName?.trim() ||
-      pendingUser?.email ||
+      avatarUser?.displayName?.trim() ||
+      avatarUser?.email ||
       pendingMember?.uid ||
       'This partner',
-    [pendingMember?.uid, pendingUser],
+    [pendingMember?.uid, avatarUser],
   );
 
-  const pendingUserEmail = pendingUser?.email?.trim();
+  const pendingUserEmail = avatarUser?.email?.trim();
   return (
     <Modal
       isOpen={isOpen}
@@ -69,7 +47,7 @@ function PendingApprovalModal({
     >
       <div className='space-y-4'>
         <div className='border-border bg-muted/30 flex items-center gap-3 rounded-md border p-3'>
-          <UserAvatar user={pendingUser} size='md' />
+          <UserAvatar user={avatarUser} size='md' />
           <div className='min-w-0'>
             <div className='text-foreground truncate text-sm font-medium'>
               {memberLabel}

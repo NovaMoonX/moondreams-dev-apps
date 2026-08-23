@@ -63,6 +63,7 @@ function WorthTheWait() {
     <>
       <PendingApprovalModal
         key={pendingMember?.uid ?? 'no-pending-member'}
+        space={space}
         isOpen={
           forceOpenPendingApprovalModal ||
           (creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed)

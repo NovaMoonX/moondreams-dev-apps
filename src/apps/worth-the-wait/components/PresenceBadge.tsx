@@ -3,10 +3,11 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { usePresence } from '@/hooks/usePresence';
 import UserAvatar from '@/ui/UserAvatar';
-import { useAuth } from '@hooks/useAuth';
 
+import { useAuth } from '@/hooks/useAuth';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
+import { getPartnerUid } from '../utils/spaceHelpers';
 
 interface PresenceBadgeProps {
   className?: string;
@@ -44,14 +45,8 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
   const { user } = useAuth();
   const { space, forceOpenPendingApprovalModal } = useWorthTheWait();
 
-  const activePartnerUid =
-    user && space
-      ? (space.members.find((memberUid) => memberUid !== user.uid) ?? null)
-      : null;
-  const partnerUid = activePartnerUid ?? space?.pendingMember?.uid ?? null;
-  const showPendingState = Boolean(
-    space && space.pendingMember && !activePartnerUid,
-  );
+  const partnerUid = getPartnerUid(space, user);
+  const showPendingState = Boolean(space && space.pendingMember && !partnerUid);
   const presence = usePresence(partnerUid, 'worth-the-wait');
   const avatarUser = useUserInfo(partnerUid);
 
