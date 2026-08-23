@@ -10,12 +10,17 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useMemo, useState } from 'react';
-import { generateInviteCode, SPACE_CODE_LENGTH } from '../utils/generateCode';
+import {
+  generateInviteCode,
+  generateInviteLink,
+  SPACE_CODE_LENGTH,
+} from '../utils/generateCode';
 
 interface SpaceOnboardingModalProps {
   isOpen: boolean;
   isSubmitting?: boolean;
   hasJoinBeenSubmitted?: boolean;
+  searchJoinCode?: string | null;
   onCreateSpace: (inviteCode: string) => Promise<string>;
   onJoinSpace: (inviteCode: string) => Promise<string>;
   onClose: () => void;
@@ -25,23 +30,24 @@ function SpaceOnboardingModal({
   isOpen,
   isSubmitting = false,
   hasJoinBeenSubmitted = false,
+  searchJoinCode,
   onCreateSpace,
   onJoinSpace,
   onClose,
 }: SpaceOnboardingModalProps) {
   const { addToast } = useToast();
   const createInviteCode = useMemo(() => generateInviteCode(), []);
-  const [joinInput, setJoinInput] = useState('');
+  const [joinInput, setJoinInput] = useState(searchJoinCode ?? '');
   const [createError, setCreateError] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
   const handleCreate = async () => {
     onCreateSpace(createInviteCode)
       .then((inviteCode) => {
-        copyToClipboard(inviteCode).then(() => {
+        copyToClipboard(generateInviteLink(inviteCode)).then(() => {
           addToast({
             title: 'Space Created 🎊',
-            description: 'Your invite code has been copied to your keyboard',
+            description: 'Link to join your space has been copied to your clipboard!',
           });
         });
       })
@@ -74,7 +80,11 @@ function SpaceOnboardingModal({
         </div>
       )}
       {!hasJoinBeenSubmitted && (
-        <Tabs defaultValue='create' tabsWidth='full' variant='pills'>
+        <Tabs
+          defaultValue={searchJoinCode ? 'join' : 'create'}
+          tabsWidth='full'
+          variant='pills'
+        >
           <TabsList>
             <TabsTrigger value='create'>Create Space</TabsTrigger>
             <TabsTrigger value='join'>Join Space</TabsTrigger>
