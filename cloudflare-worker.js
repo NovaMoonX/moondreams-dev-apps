@@ -10,9 +10,9 @@ export const APP_REGISTRY = [
     params: {
       inviteCode: {
         isValid: (value) => value && value.length === 6,
-        title: "You've been invited to join a private space",
+        title: "You've been invited to join a private space on Worth the Wait",
         description:
-          "You've been invited to join a private space on Worth the Wait. Click to join the space and share your thoughts, feelings, hopes, and desires with your companion.",
+          "You've been invited to join a private space on Worth the Wait. Accept this invitation to join the space and share your thoughts, feelings, hopes, and desires until we're ready to explore them together.",
       },
     },
   },
@@ -49,6 +49,7 @@ export default {
         if (config.isValid && config.isValid(value)) {
           appMeta.title = config.title;
           appMeta.description = config.description;
+          appMeta.siteName = 'Moondreams Dev Apps';
         }
       }
     }
@@ -56,6 +57,13 @@ export default {
     // If it's a social bot and we have custom meta for this route, rewrite the HTML tags
     if (appMeta && isBot) {
       return new HTMLRewriter()
+        .on('meta[property="og:site_name"]', {
+          element(e) {
+            if (appMeta.siteName) {
+              e.setAttribute('content', appMeta.siteName);
+            }
+          },
+        })
         .on('meta[property="og:title"]', {
           element(e) {
             e.setAttribute('content', appMeta.title);
