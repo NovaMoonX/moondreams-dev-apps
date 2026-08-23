@@ -4,7 +4,7 @@ export const APP_REGISTRY = [
     title: 'Worth the Wait - Moondreams Dev Apps',
     path: '/worth-the-wait',
     description:
-      'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
+      'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives. Another Moondreams Dev App, built with passion, care, and intent.',
     image:
       'https://moondreams-dev-apps.web.app/banners/by-app/banner-worth-the-wait.png',
     params: {
@@ -12,7 +12,7 @@ export const APP_REGISTRY = [
         isValid: (value) => value && value.length === 6,
         title: "You've been invited to join a private space",
         description:
-          'Click to join a space on Worth the Wait, a Moondreams Dev App)',
+          "You've been invited to join a private space on Worth the Wait. Click to join the space and share your thoughts, feelings, hopes, and desires with your companion.",
       },
     },
   },
