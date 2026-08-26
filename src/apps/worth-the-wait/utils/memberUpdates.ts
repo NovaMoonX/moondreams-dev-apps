@@ -56,9 +56,9 @@ export function calculateMemberUpdateSummary({
 
   const referencePoint = lastSurfacedAt;
 
-  const createdBoxes = boxes.filter((box) => box.createdAt > referencePoint).length;
+  const createdBoxes = boxes.filter((box) => box.createdBy !== memberId && box.createdAt > referencePoint).length;
   const updatedBoxes = boxes.filter(
-    (box) => box.lastEditedAt > referencePoint && box.createdAt !== box.lastEditedAt,
+    (box) => box.createdBy !== memberId && box.lastEditedAt > referencePoint && box.createdAt !== box.lastEditedAt,
   ).length;
   const newItems = items.filter(
     (item) => item.authorId !== memberId && item.createdAt > referencePoint,

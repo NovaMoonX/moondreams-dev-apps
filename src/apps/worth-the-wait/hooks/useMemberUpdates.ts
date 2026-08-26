@@ -19,7 +19,7 @@ import {
   normalizeMemberUpdateSummary,
 } from '../utils/memberUpdates';
 
-const AUTO_DISMISS_MS = 24 * 60 * 60 * 1000;
+const AUTO_DISMISS_MS = 72 * 60 * 60 * 1000; // 72 hours in milliseconds
 
 async function getSpaceEncryption(
   spaceId: string,
@@ -28,6 +28,18 @@ async function getSpaceEncryption(
   const snapshot = await getDoc(spaceRef);
 
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
+}
+
+function getMemberUpdateDocRef(spaceId: string, userId: string) {
+  return doc(
+    db,
+    'apps',
+    'worth-the-wait',
+    'spaces',
+    spaceId,
+    'memberUpdates',
+    userId,
+  );
 }
 
 function createZeroMemberUpdateSummary(
@@ -55,27 +67,18 @@ export function useMemberUpdates(spaceId: string, userId: string) {
   const [loading, setLoading] = useState(Boolean(spaceId && userId));
   const [error, setError] = useState<string | null>(null);
 
-  const memberUpdateRef = useMemo(
-    () =>
-      spaceId && userId
-        ? doc(
-            db,
-            'apps',
-            'worth-the-wait',
-            'spaces',
-            spaceId,
-            'memberUpdates',
-            userId,
-          )
-        : null,
-    [spaceId, userId],
-  );
+  useEffect(() => {
+    console.log('memberUpdate', memberUpdate); // REMOVE
+  }, [memberUpdate]);
+  
 
   const persistMemberUpdate = useCallback(
     async (nextSummary: MemberUpdateSummary) => {
-      if (!memberUpdateRef) {
+      if (!spaceId || !userId) {
         return;
       }
+
+      const memberUpdateRef = getMemberUpdateDocRef(spaceId, userId);
 
       await setDoc(
         memberUpdateRef,
@@ -87,7 +90,7 @@ export function useMemberUpdates(spaceId: string, userId: string) {
         { merge: true },
       );
     },
-    [memberUpdateRef, userId],
+    [spaceId, userId],
   );
 
   const markMemberUpdatesAsSeen = useCallback(async () => {
@@ -220,15 +223,7 @@ export function useMemberUpdates(spaceId: string, userId: string) {
     }
 
     let isActive = true;
-    const ref = doc(
-      db,
-      'apps',
-      'worth-the-wait',
-      'spaces',
-      spaceId,
-      'memberUpdates',
-      userId,
-    );
+    const ref = getMemberUpdateDocRef(spaceId, userId);
 
     const unsubscribe = onSnapshot(
       ref,
@@ -238,11 +233,16 @@ export function useMemberUpdates(spaceId: string, userId: string) {
         }
 
         if (!snapshot.exists()) {
-          const zeroedSummary = createZeroMemberUpdateSummary(userId, Date.now());
+          const zeroedSummary = createZeroMemberUpdateSummary(
+            userId,
+            Date.now(),
+          );
 
-          void setDoc(ref, zeroedSummary, { merge: true }).catch((writeError: Error) => {
-            setError(writeError.message);
-          });
+          void setDoc(ref, zeroedSummary, { merge: true }).catch(
+            (writeError: Error) => {
+              setError(writeError.message);
+            },
+          );
 
           setMemberUpdate(zeroedSummary);
           setLoading(false);
@@ -282,6 +282,10 @@ export function useMemberUpdates(spaceId: string, userId: string) {
       lastSurfacedAt: memberUpdate?.lastSurfacedAt ?? null,
     });
   }, [boxes, items, memberUpdate, userId]);
+
+  useEffect(() => {
+    console.log('summary', summary); // REMOVE
+  }, [summary]);
 
   useEffect(() => {
     if (!userId || !memberUpdate || !hasMemberUpdateSummary(summary)) {
