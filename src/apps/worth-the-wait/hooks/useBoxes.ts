@@ -38,9 +38,6 @@ export function useBoxes(spaceId: string, userUid?: string) {
   useEffect(() => {
     if (!spaceId || !userUid) {
       hasSeededDefaults.current = false;
-      setBoxes([]);
-      setError(null);
-      setLoading(false);
       return;
     }
 
@@ -231,5 +228,16 @@ export function useBoxes(spaceId: string, userUid?: string) {
     [spaceId],
   );
 
-  return { boxes, loading, error, createCustomBox, editCustomBox, deleteBox };
+  const visibleBoxes = spaceId && userUid ? boxes : [];
+  const visibleLoading = Boolean(spaceId && userUid) && loading;
+  const visibleError = spaceId && userUid ? error : null;
+
+  return {
+    boxes: visibleBoxes,
+    loading: visibleLoading,
+    error: visibleError,
+    createCustomBox,
+    editCustomBox,
+    deleteBox,
+  };
 }

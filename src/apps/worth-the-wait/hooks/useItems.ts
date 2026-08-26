@@ -33,9 +33,6 @@ export function useItems(spaceId: string, boxId?: string | null, userUid?: strin
 
   useEffect(() => {
     if (!spaceId || (!boxId && !userUid)) {
-      setItemsByBoxId({});
-      setLoading(false);
-      setError(null);
       return;
     }
 
@@ -199,7 +196,19 @@ export function useItems(spaceId: string, boxId?: string | null, userUid?: strin
     [spaceId],
   );
 
-  return { items, itemsByBoxId, loading, error, addItem, deleteItem };
+  const visibleItems = spaceId && (boxId || userUid) ? items : [];
+  const visibleItemsByBoxId = spaceId && (boxId || userUid) ? itemsByBoxId : {};
+  const visibleLoading = Boolean(spaceId && (boxId || userUid)) && loading;
+  const visibleError = spaceId && (boxId || userUid) ? error : null;
+
+  return {
+    items: visibleItems,
+    itemsByBoxId: visibleItemsByBoxId,
+    loading: visibleLoading,
+    error: visibleError,
+    addItem,
+    deleteItem,
+  };
 }
 
 export default useItems;

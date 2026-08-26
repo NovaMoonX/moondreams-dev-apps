@@ -85,8 +85,6 @@ export function useMemberUpdates(
 
   useEffect(() => {
     if (!spaceId || !userId) {
-      setMemberUpdate(null);
-      setLoading(false);
       return;
     }
 
@@ -164,10 +162,14 @@ export function useMemberUpdates(
     }
   }, [markMemberUpdatesAsSeen, memberUpdate, summary, userId]);
 
+  const visibleSummary = spaceId && userId ? summary : null;
+  const visibleLoading = Boolean(spaceId && userId) && loading;
+  const visibleError = spaceId && userId ? error : null;
+
   return {
-    summary,
-    loading,
-    error,
+    summary: visibleSummary,
+    loading: visibleLoading,
+    error: visibleError,
     markMemberUpdatesAsSeen,
   };
 }
