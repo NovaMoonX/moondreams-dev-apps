@@ -6,17 +6,16 @@ import {
   getDoc,
   onSnapshot,
   setDoc,
-  type DocumentData,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  decryptStringForSpace,
   encryptStringForSpace,
   normalizeSpaceEncryption,
   type SpaceEncryption,
 } from '../security';
 
 import type { Item, ItemDraft } from '../types';
+import { normalizeItem } from '../utils/itemHelpers';
 
 async function getSpaceEncryption(
   spaceId: string,
@@ -25,29 +24,6 @@ async function getSpaceEncryption(
   const snapshot = await getDoc(spaceRef);
 
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
-}
-
-async function normalizeItem(
-  id: string,
-  data: DocumentData,
-  encryption: SpaceEncryption | null,
-): Promise<Item> {
-  const methodValue = data.revealedMethod;
-
-  return {
-    id,
-    authorId: typeof data.authorId === 'string' ? data.authorId : 'anonymous',
-    content: await decryptStringForSpace(data.content, encryption),
-    isRevealed: Boolean(data.isRevealed),
-    revealedAt: typeof data.revealedAt === 'number' ? data.revealedAt : null,
-    revealedMethod:
-      methodValue === 'full_reveal' || methodValue === 'raffle'
-        ? methodValue
-        : null,
-    createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
-    lastEditedAt:
-      typeof data.lastEditedAt === 'number' ? data.lastEditedAt : Date.now(),
-  };
 }
 
 function createSpaceBoxIdKey(spaceId: string, boxId: string) {

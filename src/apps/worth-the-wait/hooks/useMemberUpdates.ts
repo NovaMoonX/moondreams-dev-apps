@@ -6,17 +6,13 @@ import {
   getDocs,
   onSnapshot,
   setDoc,
-  type DocumentData,
 } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  decryptStringForSpace,
-  normalizeSpaceEncryption,
-  type SpaceEncryption,
-} from '../security';
+import { normalizeSpaceEncryption, type SpaceEncryption } from '../security';
 import type { Box, Item, MemberUpdateSummary } from '../types';
 import { normalizeBox } from '../utils/boxHelpers';
+import { normalizeItem } from '../utils/itemHelpers';
 import {
   calculateMemberUpdateSummary,
   hasMemberUpdateSummary,
@@ -30,29 +26,6 @@ async function getSpaceEncryption(
   const snapshot = await getDoc(spaceRef);
 
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
-}
-
-async function normalizeItem(
-  id: string,
-  data: DocumentData,
-  encryption: SpaceEncryption | null,
-): Promise<Item> {
-  const revealedMethodValue = data.revealedMethod;
-
-  return {
-    id,
-    authorId: typeof data.authorId === 'string' ? data.authorId : 'anonymous',
-    content: await decryptStringForSpace(data.content, encryption),
-    isRevealed: Boolean(data.isRevealed),
-    revealedAt: typeof data.revealedAt === 'number' ? data.revealedAt : null,
-    revealedMethod:
-      revealedMethodValue === 'full_reveal' || revealedMethodValue === 'raffle'
-        ? revealedMethodValue
-        : null,
-    createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
-    lastEditedAt:
-      typeof data.lastEditedAt === 'number' ? data.lastEditedAt : Date.now(),
-  };
 }
 
 export function useMemberUpdates(spaceId: string, userId: string) {
@@ -204,7 +177,7 @@ export function useMemberUpdates(spaceId: string, userId: string) {
 
         setMemberUpdate(
           snapshot.exists()
-            ? normalizeMemberUpdateSummary(snapshot.data(), userId) ?? null
+            ? (normalizeMemberUpdateSummary(snapshot.data(), userId) ?? null)
             : null,
         );
         setLoading(false);
