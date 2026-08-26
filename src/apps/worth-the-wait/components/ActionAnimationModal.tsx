@@ -3,7 +3,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { useItems } from '../hooks/useItems';
 import { useRaffleReveal } from '../hooks/useRaffleReveal';
 import type { ActiveAction, Box, Item } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
@@ -57,12 +56,12 @@ function getCompletedItems(items: Item[], action: ActiveAction) {
 }
 
 function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
-  const { dismissPresentedAction, openBox, presentedAction, space } =
+  const { dismissPresentedAction, itemsByBoxId, openBox, presentedAction } =
     useWorthTheWait();
 
   const [now, setNow] = useState(() => Date.now());
   const activeBoxId = presentedAction?.boxId ?? '';
-  const { items } = useItems(space?.id ?? '', activeBoxId);
+  const items = itemsByBoxId[activeBoxId] ?? [];
 
   useEffect(() => {
     if (presentedAction?.method !== 'raffle') {

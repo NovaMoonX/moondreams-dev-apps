@@ -29,15 +29,18 @@ async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | nu
 }
 
 
-export function useBoxes(spaceId: string) {
+export function useBoxes(spaceId: string, userUid?: string) {
   const [boxes, setBoxes] = useState<Box[]>([]);
-  const [loading, setLoading] = useState(Boolean(spaceId));
+  const [loading, setLoading] = useState(Boolean(spaceId && userUid));
   const [error, setError] = useState<string | null>(null);
   const hasSeededDefaults = useRef(false);
 
   useEffect(() => {
-    if (!spaceId) {
+    if (!spaceId || !userUid) {
       hasSeededDefaults.current = false;
+      setBoxes([]);
+      setError(null);
+      setLoading(false);
       return;
     }
 
@@ -119,7 +122,7 @@ export function useBoxes(spaceId: string) {
       isActive = false;
       unsubscribe();
     };
-  }, [spaceId]);
+  }, [spaceId, userUid]);
 
   const createCustomBox = useCallback(
     async (draft: BoxDraft) => {

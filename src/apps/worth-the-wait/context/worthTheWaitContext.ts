@@ -1,9 +1,21 @@
 import { createContext, useContext } from 'react';
 
-import type { ActiveAction, Space } from '../types';
+import type { ActiveAction, Box, Item, MemberUpdateSummary, Space } from '../types';
 
 export interface WorthTheWaitContextValue {
   space: Space | null;
+  boxes: Box[];
+  boxesLoading: boolean;
+  createCustomBox: (draft: { name: string; emoji: string; description: string }) => Promise<unknown>;
+  editCustomBox: (boxId: string, draft: { name: string; emoji: string; description: string }) => Promise<void>;
+  deleteBox: (boxId: string) => Promise<void>;
+  itemsByBoxId: Record<string, Item[]>;
+  itemsLoading: boolean;
+  addItem: (boxId: string, content: string | { content: string }) => Promise<unknown>;
+  deleteItem: (boxId: string, itemId: string) => Promise<void>;
+  memberUpdateSummary: MemberUpdateSummary | null;
+  memberUpdateLoading: boolean;
+  markMemberUpdatesAsSeen: () => Promise<void>;
   activeAction: ActiveAction | null;
   presentedAction: ActiveAction | null;
   dismissPresentedAction: () => void;

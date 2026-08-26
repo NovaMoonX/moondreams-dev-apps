@@ -13,8 +13,6 @@ import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useEffect, useMemo, useState } from 'react';
 import { BoxProvider } from '../context/BoxProvider';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { useBoxes } from '../hooks/useBoxes';
-import { useMemberUpdates } from '../hooks/useMemberUpdates';
 import { useWelcomeModal } from '../hooks/useWelcomeModal';
 import { generateInviteLink } from '../utils/generateCode';
 import ActionAnimationModal from './ActionAnimationModal';
@@ -26,7 +24,20 @@ import SpaceWelcomeModal from './SpaceWelcomeModal';
 
 function WorthTheWaitLayout() {
   const { user } = useAuth();
-  const { activeAction, closeBox, selectedBoxId, space } = useWorthTheWait();
+  const {
+    activeAction,
+    boxes,
+    boxesLoading,
+    closeBox,
+    createCustomBox,
+    deleteBox,
+    editCustomBox,
+    markMemberUpdatesAsSeen,
+    memberUpdateLoading,
+    memberUpdateSummary,
+    selectedBoxId,
+    space,
+  } = useWorthTheWait();
   const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
   const {
     isOpen: isWelcomeModalOpen,
@@ -35,18 +46,6 @@ function WorthTheWaitLayout() {
   } = useWelcomeModal(space, user);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
-  const {
-    boxes,
-    loading: boxesLoading,
-    createCustomBox,
-    editCustomBox,
-    deleteBox,
-  } = useBoxes(space?.id ?? '');
-  const {
-    summary: memberUpdateSummary,
-    loading: memberUpdateLoading,
-    markMemberUpdatesAsSeen,
-  } = useMemberUpdates(space?.id ?? '', user?.uid ?? '');
   const selectedBox = useMemo(
     () => boxes.find((box) => box.id === selectedBoxId) ?? null,
     [boxes, selectedBoxId],

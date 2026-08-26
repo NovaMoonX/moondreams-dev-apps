@@ -13,7 +13,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { useItems } from '../hooks/useItems';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 import { RECENT_REVEAL_WINDOW_MS } from '../utils/itemHelpers';
 import ManageBoxModal from './ManageBoxModal';
@@ -21,8 +20,8 @@ import ManageBoxModal from './ManageBoxModal';
 function BoxCard() {
   const { user } = useAuth();
   const [now, setNow] = useState<number | null>(null);
-  const { box, spaceId, onDelete, onEdit } = useBoxContext();
-  const { openBox } = useWorthTheWait();
+  const { box, onDelete, onEdit } = useBoxContext();
+  const { itemsByBoxId, openBox } = useWorthTheWait();
   const { alert, confirm } = useActionModal();
   const { option, separator } = DropdownMenuFactories;
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -34,8 +33,7 @@ function BoxCard() {
       now !== null && entry.revealedAt >= now - RECENT_REVEAL_WINDOW_MS,
   );
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
-  const { items } = useItems(spaceId, box.id);
-  const itemCount = items.length;
+  const itemCount = itemsByBoxId[box.id]?.length ?? 0;
 
   const handleConfirmDelete = async () => {
     if (user?.uid !== box.createdBy) {

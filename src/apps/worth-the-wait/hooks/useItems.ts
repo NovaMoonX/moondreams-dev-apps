@@ -4,16 +4,16 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  onSnapshot,
+  getDocs,
   setDoc,
 } from 'firebase/firestore';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import {
   encryptStringForSpace,
   normalizeSpaceEncryption,
   type SpaceEncryption,
 } from '../security';
-
 import type { Item, ItemDraft } from '../types';
 import { normalizeItem } from '../utils/itemHelpers';
 
@@ -26,84 +26,95 @@ async function getSpaceEncryption(
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
 }
 
-function createSpaceBoxIdKey(spaceId: string, boxId: string) {
-  return `${spaceId}-${boxId}`;
-}
-
-export function useItems(spaceId: string, boxId: string) {
-  const [spaceBoxId_, setSpaceBoxId_] = useState(
-    createSpaceBoxIdKey(spaceId, boxId),
-  );
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(Boolean(spaceId) && Boolean(boxId));
+export function useItems(spaceId: string, boxId?: string | null, userUid?: string) {
+  const [itemsByBoxId, setItemsByBoxId] = useState<Record<string, Item[]>>({});
+  const [loading, setLoading] = useState(Boolean(spaceId && (userUid || boxId)));
   const [error, setError] = useState<string | null>(null);
 
-  if (spaceBoxId_ !== createSpaceBoxIdKey(spaceId, boxId)) {
-    setSpaceBoxId_(createSpaceBoxIdKey(spaceId, boxId));
-    setItems([]);
-    setLoading(Boolean(spaceId) && Boolean(boxId));
-    setError(null);
-  }
-
   useEffect(() => {
-    if (!spaceId || !boxId) {
+    if (!spaceId || (!boxId && !userUid)) {
+      setItemsByBoxId({});
+      setLoading(false);
+      setError(null);
       return;
     }
 
-    const itemsCollection = collection(
-      db,
-      'apps',
-      'worth-the-wait',
-      'spaces',
-      spaceId,
-      'boxes',
-      boxId,
-      'items',
-    );
     let isActive = true;
 
-    const unsubscribe = onSnapshot(
-      itemsCollection,
-      async (snapshot) => {
-        if (!isActive) {
-          return;
-        }
+    const loadItems = async () => {
+      const spaceEncryption = await getSpaceEncryption(spaceId);
+      const targetBoxIds = boxId
+        ? [boxId]
+        : (
+            await getDocs(
+              collection(db, 'apps', 'worth-the-wait', 'spaces', spaceId, 'boxes'),
+            )
+          ).docs.map((documentSnapshot) => documentSnapshot.id);
 
-        const spaceEncryption = await getSpaceEncryption(spaceId);
-        const nextItems = (
-          await Promise.all(
-            snapshot.docs.map((documentSnapshot) =>
-              normalizeItem(
-                documentSnapshot.id,
-                documentSnapshot.data(),
-                spaceEncryption,
-              ),
-            ),
-          )
-        ).sort((left, right) => left.createdAt - right.createdAt);
+      const nextItemsByBoxId = Object.fromEntries(
+        await Promise.all(
+          targetBoxIds.map(async (targetBoxId) => {
+            const itemCollection = collection(
+              db,
+              'apps',
+              'worth-the-wait',
+              'spaces',
+              spaceId,
+              'boxes',
+              targetBoxId,
+              'items',
+            );
+            const itemSnapshots = await getDocs(itemCollection);
+            const nextItems = (
+              await Promise.all(
+                itemSnapshots.docs.map((documentSnapshot) =>
+                  normalizeItem(
+                    documentSnapshot.id,
+                    documentSnapshot.data(),
+                    spaceEncryption,
+                  ),
+                ),
+              )
+            ).sort((left, right) => left.createdAt - right.createdAt);
 
-        setItems(nextItems);
+            return [targetBoxId, nextItems] as const;
+          }),
+        ),
+      );
+
+      if (isActive) {
+        setItemsByBoxId(nextItemsByBoxId);
         setLoading(false);
-      },
-      (queryError) => {
-        if (!isActive) {
-          return;
-        }
+      }
+    };
 
-        setError(queryError.message);
-        setLoading(false);
-      },
-    );
+    void loadItems().catch((queryError: Error) => {
+      if (!isActive) {
+        return;
+      }
+
+      setError(queryError.message);
+      setLoading(false);
+    });
 
     return () => {
       isActive = false;
-      unsubscribe();
     };
-  }, [boxId, spaceId]);
+  }, [boxId, spaceId, userUid]);
+
+  const items = useMemo(() => {
+    if (boxId) {
+      return itemsByBoxId[boxId] ?? [];
+    }
+
+    return Object.values(itemsByBoxId)
+      .flat()
+      .sort((left, right) => left.createdAt - right.createdAt);
+  }, [boxId, itemsByBoxId]);
 
   const addItem = useCallback(
-    async (content: string | ItemDraft) => {
-      if (!spaceId || !boxId) {
+    async (targetBoxId: string, content: string | ItemDraft) => {
+      if (!spaceId || !targetBoxId) {
         throw new Error('A space and box are required to add an item.');
       }
 
@@ -122,11 +133,11 @@ export function useItems(spaceId: string, boxId: string) {
         'spaces',
         spaceId,
         'boxes',
-        boxId,
+        targetBoxId,
         'items',
       );
       const itemRef = doc(itemsCollection);
-      const userId = auth.currentUser?.uid;
+      const userId = auth.currentUser?.uid ?? userUid;
 
       if (!userId) {
         throw new Error('You must be signed in to add an item.');
@@ -156,18 +167,18 @@ export function useItems(spaceId: string, boxId: string) {
         });
 
         return nextItem;
-      } catch (error) {
+      } catch (queryError) {
         throw new Error('Failed to add item. Please try again.', {
-          cause: error,
+          cause: queryError,
         });
       }
     },
-    [boxId, spaceId],
+    [spaceId, userUid],
   );
 
   const deleteItem = useCallback(
-    async (itemId: string) => {
-      if (!spaceId || !boxId || !itemId) {
+    async (targetBoxId: string, itemId: string) => {
+      if (!spaceId || !targetBoxId || !itemId) {
         return;
       }
 
@@ -178,17 +189,17 @@ export function useItems(spaceId: string, boxId: string) {
         'spaces',
         spaceId,
         'boxes',
-        boxId,
+        targetBoxId,
         'items',
         itemId,
       );
 
       await deleteDoc(itemRef);
     },
-    [boxId, spaceId],
+    [spaceId],
   );
 
-  return { items, loading, error, addItem, deleteItem };
+  return { items, itemsByBoxId, loading, error, addItem, deleteItem };
 }
 
 export default useItems;

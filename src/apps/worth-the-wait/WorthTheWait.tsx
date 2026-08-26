@@ -9,6 +9,9 @@ import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import WorthTheWaitLayout from './components/WorthTheWaitLayout';
 import { WorthTheWaitProvider } from './context/WorthTheWaitProvider';
+import { useBoxes } from './hooks/useBoxes';
+import { useItems } from './hooks/useItems';
+import { useMemberUpdates } from './hooks/useMemberUpdates';
 import { useSpace } from './hooks/useSpace';
 import {
   SPACE_CODE_LENGTH,
@@ -49,13 +52,36 @@ function WorthTheWait() {
   );
   const shouldOnboardingBeOpen =
     Boolean(user) && !hasSpace && !creatorHasPendingApproval;
+  const {
+    boxes,
+    loading: boxesLoading,
+    createCustomBox,
+    editCustomBox,
+    deleteBox,
+  } = useBoxes(space?.id ?? '', user?.uid ?? '');
+  const {
+    itemsByBoxId,
+    loading: itemsLoading,
+    addItem,
+    deleteItem,
+  } = useItems(space?.id ?? '', undefined, user?.uid ?? '');
+  const {
+    summary: memberUpdateSummary,
+    loading: memberUpdateLoading,
+    markMemberUpdatesAsSeen,
+  } = useMemberUpdates(
+    space?.id ?? '',
+    user?.uid ?? '',
+    boxes,
+    Object.values(itemsByBoxId).flat(),
+  );
 
   // only allow the search param to be used if it is a valid invite code
   const searchInviteCode = searchParams.get(SPACE_CODE_QUERY_PARAM)?.trim();
   const finalSearchInviteCode =
     searchInviteCode?.length === SPACE_CODE_LENGTH ? searchInviteCode : null;
 
-  if (loading) {
+  if (loading || boxesLoading || itemsLoading || memberUpdateLoading) {
     return <Loading />;
   }
 
@@ -108,6 +134,18 @@ function WorthTheWait() {
       {!shouldOnboardingBeOpen && (
         <WorthTheWaitProvider
           space={space}
+          boxes={boxes}
+          boxesLoading={boxesLoading}
+          createCustomBox={createCustomBox}
+          editCustomBox={editCustomBox}
+          deleteBox={deleteBox}
+          itemsByBoxId={itemsByBoxId}
+          itemsLoading={itemsLoading}
+          addItem={addItem}
+          deleteItem={deleteItem}
+          memberUpdateSummary={memberUpdateSummary}
+          memberUpdateLoading={memberUpdateLoading}
+          markMemberUpdatesAsSeen={markMemberUpdatesAsSeen}
           forceOpenPendingApprovalModal={() =>
             setForceOpenPendingApprovalModal(true)
           }

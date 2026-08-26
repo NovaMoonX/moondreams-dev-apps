@@ -1,6 +1,6 @@
 import { useCallback, useState, type PropsWithChildren } from 'react';
 
-import type { Space } from '../types';
+import type { Box, Item, MemberUpdateSummary, Space } from '../types';
 import { useActiveAction } from '../hooks/useActiveAction';
 import {
   WorthTheWaitContext,
@@ -9,12 +9,36 @@ import {
 
 interface WorthTheWaitProviderProps extends PropsWithChildren {
   space: Space | null;
+  boxes: Box[];
+  boxesLoading: boolean;
+  createCustomBox: (draft: { name: string; emoji: string; description: string }) => Promise<unknown>;
+  editCustomBox: (boxId: string, draft: { name: string; emoji: string; description: string }) => Promise<void>;
+  deleteBox: (boxId: string) => Promise<void>;
+  itemsByBoxId: Record<string, Item[]>;
+  itemsLoading: boolean;
+  addItem: (boxId: string, content: string | { content: string }) => Promise<unknown>;
+  deleteItem: (boxId: string, itemId: string) => Promise<void>;
+  memberUpdateSummary: MemberUpdateSummary | null;
+  memberUpdateLoading: boolean;
+  markMemberUpdatesAsSeen: () => Promise<void>;
   forceOpenPendingApprovalModal: () => void;
 }
 
 export function WorthTheWaitProvider({
   children,
   space,
+  boxes,
+  boxesLoading,
+  createCustomBox,
+  editCustomBox,
+  deleteBox,
+  itemsByBoxId,
+  itemsLoading,
+  addItem,
+  deleteItem,
+  memberUpdateSummary,
+  memberUpdateLoading,
+  markMemberUpdatesAsSeen,
   forceOpenPendingApprovalModal,
 }: WorthTheWaitProviderProps) {
   const { activeAction, dismissPresentedAction, presentedAction } =
@@ -37,6 +61,18 @@ export function WorthTheWaitProvider({
 
   const value: WorthTheWaitContextValue = {
     space,
+    boxes,
+    boxesLoading,
+    createCustomBox,
+    editCustomBox,
+    deleteBox,
+    itemsByBoxId,
+    itemsLoading,
+    addItem,
+    deleteItem,
+    memberUpdateSummary,
+    memberUpdateLoading,
+    markMemberUpdatesAsSeen,
     activeAction,
     presentedAction,
     dismissPresentedAction,
