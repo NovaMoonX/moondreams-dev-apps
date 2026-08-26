@@ -94,7 +94,6 @@ export type MemberUpdateSummary = {
   createdBoxes: number;
   updatedBoxes: number;
   newItems: number;
-  newReveals: number;
   lastSurfacedAt: number | null;
   updatedAt: number;
 };

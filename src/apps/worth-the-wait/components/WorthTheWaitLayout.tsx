@@ -42,65 +42,42 @@ function WorthTheWaitLayout() {
     editCustomBox,
     deleteBox,
   } = useBoxes(space?.id ?? '');
-  const { summary: memberUpdateSummary, loading: memberUpdateLoading } =
-    useMemberUpdates(space?.id ?? '', user?.uid ?? '');
-  const [dismissedCallouts, setDismissedCallouts] = useState<Record<string, boolean>>({});
+  const {
+    summary: memberUpdateSummary,
+    loading: memberUpdateLoading,
+    markMemberUpdatesAsSeen,
+  } = useMemberUpdates(space?.id ?? '', user?.uid ?? '');
   const selectedBox = useMemo(
     () => boxes.find((box) => box.id === selectedBoxId) ?? null,
     [boxes, selectedBoxId],
   );
-  const updateCallouts = useMemo(() => {
+  const updateList = useMemo(() => {
     if (!memberUpdateSummary || memberUpdateLoading) {
       return [];
     }
 
-    const entries = [
-      memberUpdateSummary.createdBoxes > 0
-        ? {
-            key: 'created-boxes',
-            title: `${memberUpdateSummary.createdBoxes} new box${memberUpdateSummary.createdBoxes === 1 ? '' : 'es'}`,
-            description: 'A new box was added to your shared space while you were away.',
-            variant: 'info' as const,
-            icon: '📦',
-          }
-        : null,
-      memberUpdateSummary.updatedBoxes > 0
-        ? {
-            key: 'updated-boxes',
-            title: `${memberUpdateSummary.updatedBoxes} updated box${memberUpdateSummary.updatedBoxes === 1 ? '' : 'es'}`,
-            description: 'One or more existing boxes were updated since your last visit.',
-            variant: 'warning' as const,
-            icon: '📝',
-          }
-        : null,
-      memberUpdateSummary.newItems > 0
-        ? {
-            key: 'new-items',
-            title: `${memberUpdateSummary.newItems} new item${memberUpdateSummary.newItems === 1 ? '' : 's'} from your partner`,
-            description: 'Your partner added fresh ideas and messages to the space.',
-            variant: 'success' as const,
-            icon: '💬',
-          }
-        : null,
-      memberUpdateSummary.newReveals > 0
-        ? {
-            key: 'new-reveals',
-            title: `${memberUpdateSummary.newReveals} new reveal${memberUpdateSummary.newReveals === 1 ? '' : 's'}`,
-            description: 'Something in the space was revealed while you were away.',
-            variant: 'base' as const,
-            icon: '✨',
-          }
-        : null,
-    ].filter(Boolean) as Array<{
-      key: string;
-      title: string;
-      description: string;
-      variant: 'base' | 'info' | 'warning' | 'success';
-      icon: string;
-    }>;
+    const items: string[] = [];
 
-    return entries.filter((entry) => !dismissedCallouts[entry.key]);
-  }, [dismissedCallouts, memberUpdateLoading, memberUpdateSummary]);
+    if (memberUpdateSummary.createdBoxes > 0) {
+      items.push(
+        `${memberUpdateSummary.createdBoxes} new box${memberUpdateSummary.createdBoxes === 1 ? '' : 'es'}`,
+      );
+    }
+
+    if (memberUpdateSummary.updatedBoxes > 0) {
+      items.push(
+        `${memberUpdateSummary.updatedBoxes} updated box${memberUpdateSummary.updatedBoxes === 1 ? '' : 'es'}`,
+      );
+    }
+
+    if (memberUpdateSummary.newItems > 0) {
+      items.push(
+        `${memberUpdateSummary.newItems} new item${memberUpdateSummary.newItems === 1 ? '' : 's'} from your partner`,
+      );
+    }
+
+    return items;
+  }, [memberUpdateLoading, memberUpdateSummary]);
 
   useEffect(() => {
     if (
@@ -175,25 +152,23 @@ function WorthTheWaitLayout() {
 
           {hasLockedSpace && (
             <div className='mt-8 space-y-5'>
-              {updateCallouts.length > 0 ? (
-                <div className='space-y-3'>
-                  {updateCallouts.map((callout) => (
-                    <Callout
-                      key={callout.key}
-                      variant={callout.variant}
-                      title={callout.title}
-                      description={callout.description}
-                      icon={callout.icon}
-                      dismissible
-                      onDismiss={() =>
-                        setDismissedCallouts((current) => ({
-                          ...current,
-                          [callout.key]: true,
-                        }))
-                      }
-                    />
-                  ))}
-                </div>
+              {updateList.length > 0 ? (
+                <Callout
+                  variant='info'
+                  title="What's changed since your last visit?"
+                  description={
+                    <ul className='list-disc space-y-1 pl-5'>
+                      {updateList.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  }
+                  icon='✨'
+                  dismissible
+                  onDismiss={() => {
+                    void markMemberUpdatesAsSeen();
+                  }}
+                />
               ) : null}
 
               <div className='flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap'>

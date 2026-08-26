@@ -208,7 +208,6 @@ service cloud.firestore {
             && request.resource.data.createdBoxes is number
             && request.resource.data.updatedBoxes is number
             && request.resource.data.newItems is number
-            && request.resource.data.newReveals is number
             && request.resource.data.lastSurfacedAt is number
             && request.resource.data.updatedAt is number;
         }

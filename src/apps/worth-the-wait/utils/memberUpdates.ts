@@ -19,8 +19,7 @@ export function normalizeMemberUpdateSummary(
   const createdBoxes = asFiniteNumber(value.createdBoxes) ?? 0;
   const updatedBoxes = asFiniteNumber(value.updatedBoxes) ?? 0;
   const newItems = asFiniteNumber(value.newItems) ?? 0;
-  const newReveals = asFiniteNumber(value.newReveals) ?? 0;
-  const lastSurfacedAt = asFiniteNumber(value.lastSurfacedAt);
+  const lastSurfacedAt = asFiniteNumber(value.lastSurfacedAt) ?? null;
   const updatedAt = asFiniteNumber(value.updatedAt) ?? Date.now();
 
   return {
@@ -28,7 +27,6 @@ export function normalizeMemberUpdateSummary(
     createdBoxes,
     updatedBoxes,
     newItems,
-    newReveals,
     lastSurfacedAt,
     updatedAt,
   };
@@ -45,19 +43,25 @@ export function calculateMemberUpdateSummary({
   memberId: string;
   lastSurfacedAt: number | null;
 }): MemberUpdateSummary {
-  const referencePoint = lastSurfacedAt ?? Date.now();
+  if (lastSurfacedAt === null) {
+    return {
+      userId: memberId,
+      createdBoxes: 0,
+      updatedBoxes: 0,
+      newItems: 0,
+      lastSurfacedAt: null,
+      updatedAt: 0,
+    };
+  }
+
+  const referencePoint = lastSurfacedAt;
 
   const createdBoxes = boxes.filter((box) => box.createdAt > referencePoint).length;
   const updatedBoxes = boxes.filter(
-    (box) =>
-      box.lastEditedAt > referencePoint &&
-      box.createdAt !== box.lastEditedAt,
+    (box) => box.lastEditedAt > referencePoint && box.createdAt !== box.lastEditedAt,
   ).length;
   const newItems = items.filter(
     (item) => item.authorId !== memberId && item.createdAt > referencePoint,
-  ).length;
-  const newReveals = items.filter(
-    (item) => item.isRevealed && item.revealedAt !== null && item.revealedAt > referencePoint,
   ).length;
 
   return {
@@ -65,9 +69,8 @@ export function calculateMemberUpdateSummary({
     createdBoxes,
     updatedBoxes,
     newItems,
-    newReveals,
     lastSurfacedAt,
-    updatedAt: Date.now(),
+    updatedAt: referencePoint,
   };
 }
 
@@ -79,7 +82,6 @@ export function hasMemberUpdateSummary(summary: MemberUpdateSummary | null): boo
   return (
     summary.createdBoxes > 0 ||
     summary.updatedBoxes > 0 ||
-    summary.newItems > 0 ||
-    summary.newReveals > 0
+    summary.newItems > 0
   );
 }

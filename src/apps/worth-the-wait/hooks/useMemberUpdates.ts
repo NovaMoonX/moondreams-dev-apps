@@ -7,7 +7,7 @@ import {
   onSnapshot,
   setDoc,
 } from 'firebase/firestore';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { normalizeSpaceEncryption, type SpaceEncryption } from '../security';
 import type { Box, Item, MemberUpdateSummary } from '../types';
@@ -19,6 +19,8 @@ import {
   normalizeMemberUpdateSummary,
 } from '../utils/memberUpdates';
 
+const AUTO_DISMISS_MS = 24 * 60 * 60 * 1000;
+
 async function getSpaceEncryption(
   spaceId: string,
 ): Promise<SpaceEncryption | null> {
@@ -26,6 +28,22 @@ async function getSpaceEncryption(
   const snapshot = await getDoc(spaceRef);
 
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
+}
+
+function createZeroMemberUpdateSummary(
+  userId: string,
+  lastSurfacedAt = Date.now(),
+): MemberUpdateSummary {
+  const timestamp = Date.now();
+
+  return {
+    userId,
+    createdBoxes: 0,
+    updatedBoxes: 0,
+    newItems: 0,
+    lastSurfacedAt,
+    updatedAt: timestamp,
+  };
 }
 
 export function useMemberUpdates(spaceId: string, userId: string) {
@@ -36,7 +54,51 @@ export function useMemberUpdates(spaceId: string, userId: string) {
   );
   const [loading, setLoading] = useState(Boolean(spaceId && userId));
   const [error, setError] = useState<string | null>(null);
-  const pendingWriteRef = useRef(false);
+
+  const memberUpdateRef = useMemo(
+    () =>
+      spaceId && userId
+        ? doc(
+            db,
+            'apps',
+            'worth-the-wait',
+            'spaces',
+            spaceId,
+            'memberUpdates',
+            userId,
+          )
+        : null,
+    [spaceId, userId],
+  );
+
+  const persistMemberUpdate = useCallback(
+    async (nextSummary: MemberUpdateSummary) => {
+      if (!memberUpdateRef) {
+        return;
+      }
+
+      await setDoc(
+        memberUpdateRef,
+        {
+          ...nextSummary,
+          userId,
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
+    },
+    [memberUpdateRef, userId],
+  );
+
+  const markMemberUpdatesAsSeen = useCallback(async () => {
+    if (!spaceId || !userId) {
+      return;
+    }
+
+    const timestamp = Date.now();
+    const zeroedSummary = createZeroMemberUpdateSummary(userId, timestamp);
+    await persistMemberUpdate(zeroedSummary);
+  }, [persistMemberUpdate, spaceId, userId]);
 
   useEffect(() => {
     if (!spaceId) {
@@ -158,7 +220,7 @@ export function useMemberUpdates(spaceId: string, userId: string) {
     }
 
     let isActive = true;
-    const memberUpdateRef = doc(
+    const ref = doc(
       db,
       'apps',
       'worth-the-wait',
@@ -169,16 +231,26 @@ export function useMemberUpdates(spaceId: string, userId: string) {
     );
 
     const unsubscribe = onSnapshot(
-      memberUpdateRef,
+      ref,
       (snapshot) => {
         if (!isActive) {
           return;
         }
 
+        if (!snapshot.exists()) {
+          const zeroedSummary = createZeroMemberUpdateSummary(userId, Date.now());
+
+          void setDoc(ref, zeroedSummary, { merge: true }).catch((writeError: Error) => {
+            setError(writeError.message);
+          });
+
+          setMemberUpdate(zeroedSummary);
+          setLoading(false);
+          return;
+        }
+
         setMemberUpdate(
-          snapshot.exists()
-            ? (normalizeMemberUpdateSummary(snapshot.data(), userId) ?? null)
-            : null,
+          normalizeMemberUpdateSummary(snapshot.data(), userId) ?? null,
         );
         setLoading(false);
       },
@@ -203,82 +275,36 @@ export function useMemberUpdates(spaceId: string, userId: string) {
       return null;
     }
 
-    const lastSurfacedAt = memberUpdate?.lastSurfacedAt ?? null;
-
     return calculateMemberUpdateSummary({
       boxes,
       items,
       memberId: userId,
-      lastSurfacedAt,
+      lastSurfacedAt: memberUpdate?.lastSurfacedAt ?? null,
     });
   }, [boxes, items, memberUpdate, userId]);
 
   useEffect(() => {
-    if (!spaceId || !userId || pendingWriteRef.current) {
-      return;
-    }
+    if (!userId || !memberUpdate || !hasMemberUpdateSummary(summary)) {
+      if (!userId || !memberUpdate) {
+        return;
+      }
 
-    const memberUpdateRef = doc(
-      db,
-      'apps',
-      'worth-the-wait',
-      'spaces',
-      spaceId,
-      'memberUpdates',
-      userId,
-    );
+      const lastSurfacedAt = memberUpdate.lastSurfacedAt ?? Date.now();
+      const autoDismissEligible =
+        lastSurfacedAt + AUTO_DISMISS_MS <= Date.now();
 
-    if (memberUpdate === null) {
-      pendingWriteRef.current = true;
-      const timestamp = Date.now();
-
-      void setDoc(
-        memberUpdateRef,
-        {
-          userId,
-          createdBoxes: 0,
-          updatedBoxes: 0,
-          newItems: 0,
-          newReveals: 0,
-          lastSurfacedAt: timestamp,
-          updatedAt: timestamp,
-        },
-        { merge: true },
-      )
-        .catch((writeError: Error) => {
-          setError(writeError.message);
-        })
-        .finally(() => {
-          pendingWriteRef.current = false;
-        });
+      if (autoDismissEligible) {
+        void markMemberUpdatesAsSeen();
+      }
 
       return;
     }
+  }, [markMemberUpdatesAsSeen, memberUpdate, summary, userId]);
 
-    if (!hasMemberUpdateSummary(summary)) {
-      return;
-    }
-
-    pendingWriteRef.current = true;
-    const timestamp = Date.now();
-
-    void setDoc(
-      memberUpdateRef,
-      {
-        ...summary,
-        userId,
-        lastSurfacedAt: timestamp,
-        updatedAt: timestamp,
-      },
-      { merge: true },
-    )
-      .catch((writeError: Error) => {
-        setError(writeError.message);
-      })
-      .finally(() => {
-        pendingWriteRef.current = false;
-      });
-  }, [memberUpdate, spaceId, summary, userId]);
-
-  return { summary, loading, error };
+  return {
+    summary,
+    loading,
+    error,
+    markMemberUpdatesAsSeen,
+  };
 }
