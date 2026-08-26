@@ -196,6 +196,28 @@ service cloud.firestore {
 
       allow delete: if isCreator(resource.data);
 
+      match /memberUpdates/{userId} {
+        function isCurrentSpaceMember() {
+          return request.auth != null
+            && request.auth.uid == userId
+            && request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
+        }
+
+        function isMemberUpdateShapeValid() {
+          return request.resource.data.userId == userId
+            && request.resource.data.createdBoxes is number
+            && request.resource.data.updatedBoxes is number
+            && request.resource.data.newItems is number
+            && request.resource.data.newReveals is number
+            && request.resource.data.lastSurfacedAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        allow read: if isCurrentSpaceMember();
+        allow create, update: if isCurrentSpaceMember() && isMemberUpdateShapeValid();
+        allow delete: if false;
+      }
+
       match /boxes/{boxId} {
         function isSpaceMember() {
           return request.auth != null &&

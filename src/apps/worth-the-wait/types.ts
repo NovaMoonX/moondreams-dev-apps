@@ -88,3 +88,13 @@ export type Item = {
 export type ItemDraft = {
   content: string;
 };
+
+export type MemberUpdateSummary = {
+  userId: string;
+  createdBoxes: number;
+  updatedBoxes: number;
+  newItems: number;
+  newReveals: number;
+  lastSurfacedAt: number | null;
+  updatedAt: number;
+};
