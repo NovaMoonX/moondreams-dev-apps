@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useAuth } from '@hooks/useAuth';
 
@@ -59,12 +59,13 @@ function WorthTheWait() {
     editCustomBox,
     deleteBox,
   } = useBoxes(space?.id ?? '', user?.uid ?? '');
+  const boxIds = useMemo(() => boxes.map((box) => box.id), [boxes]);
   const {
     itemsByBoxId,
     loading: itemsLoading,
     addItem,
     deleteItem,
-  } = useItems(space?.id ?? '', undefined, user?.uid ?? '');
+  } = useItems(space?.id ?? '', boxIds, user?.uid ?? '');
   const {
     summary: memberUpdateSummary,
     loading: memberUpdateLoading,

@@ -4,7 +4,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  getDocs,
+  onSnapshot,
   setDoc,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -26,88 +26,127 @@ async function getSpaceEncryption(
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
 }
 
-export function useItems(spaceId: string, boxId?: string | null, userUid?: string) {
+function createSpaceBoxIdsKey(spaceId: string, boxIds: string[]) {
+  return `${spaceId}-${boxIds.join(',')}`;
+}
+
+export function useItems(
+  spaceId: string,
+  boxIds?: string[] | null,
+  userUid?: string,
+) {
+  const [_spaceBoxIdsKey, _setSpaceBoxIdsKey] = useState(
+    createSpaceBoxIdsKey(spaceId, boxIds ?? []),
+  );
   const [itemsByBoxId, setItemsByBoxId] = useState<Record<string, Item[]>>({});
-  const [loading, setLoading] = useState(Boolean(spaceId && (userUid || boxId)));
+  const [loading, setLoading] = useState(
+    Boolean(spaceId && (userUid || (boxIds && boxIds.length > 0))),
+  );
   const [error, setError] = useState<string | null>(null);
 
+  const areBoxes = Boolean(boxIds && boxIds.length > 0);
+
+  const latestSpaceBoxIdKey = createSpaceBoxIdsKey(spaceId, boxIds ?? []);
+  if (_spaceBoxIdsKey !== latestSpaceBoxIdKey) {
+    _setSpaceBoxIdsKey(latestSpaceBoxIdKey);
+    setLoading(Boolean(spaceId && (userUid || areBoxes)));
+    setError(null);
+    setItemsByBoxId((currentItemsByBoxId) => {
+      const nextItemsByBoxId = { ...currentItemsByBoxId };
+
+      Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
+        if (!(boxIds ?? []).includes(currentBoxId)) {
+          delete nextItemsByBoxId[currentBoxId];
+        }
+      });
+
+      return nextItemsByBoxId;
+    });
+  }
+
   useEffect(() => {
-    if (!spaceId || (!boxId && !userUid)) {
+    if (!spaceId || (!userUid && (!boxIds || boxIds.length === 0))) {
       return;
     }
 
     let isActive = true;
 
-    const loadItems = async () => {
-      const spaceEncryption = await getSpaceEncryption(spaceId);
-      const targetBoxIds = boxId
-        ? [boxId]
-        : (
-            await getDocs(
-              collection(db, 'apps', 'worth-the-wait', 'spaces', spaceId, 'boxes'),
-            )
-          ).docs.map((documentSnapshot) => documentSnapshot.id);
+    const targetBoxIds = boxIds ?? [];
+    // setItemsByBoxId((currentItemsByBoxId) => {
+    //   const nextItemsByBoxId = { ...currentItemsByBoxId };
 
-      const nextItemsByBoxId = Object.fromEntries(
-        await Promise.all(
-          targetBoxIds.map(async (targetBoxId) => {
-            const itemCollection = collection(
-              db,
-              'apps',
-              'worth-the-wait',
-              'spaces',
-              spaceId,
-              'boxes',
-              targetBoxId,
-              'items',
-            );
-            const itemSnapshots = await getDocs(itemCollection);
-            const nextItems = (
-              await Promise.all(
-                itemSnapshots.docs.map((documentSnapshot) =>
-                  normalizeItem(
-                    documentSnapshot.id,
-                    documentSnapshot.data(),
-                    spaceEncryption,
-                  ),
-                ),
-              )
-            ).sort((left, right) => left.createdAt - right.createdAt);
+    //   Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
+    //     if (!targetBoxIds.includes(currentBoxId)) {
+    //       delete nextItemsByBoxId[currentBoxId];
+    //     }
+    //   });
 
-            return [targetBoxId, nextItems] as const;
-          }),
-        ),
+    //   return nextItemsByBoxId;
+    // });
+
+    const unsubscribeFns = targetBoxIds.map((targetBoxId) => {
+      const itemCollection = collection(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+        'items',
       );
 
-      if (isActive) {
-        setItemsByBoxId(nextItemsByBoxId);
-        setLoading(false);
-      }
-    };
+      return onSnapshot(
+        itemCollection,
+        async (snapshot) => {
+          if (!isActive) {
+            return;
+          }
 
-    void loadItems().catch((queryError: Error) => {
-      if (!isActive) {
-        return;
-      }
+          const spaceEncryption = await getSpaceEncryption(spaceId);
+          const nextItems = (
+            await Promise.all(
+              snapshot.docs.map((documentSnapshot) =>
+                normalizeItem(
+                  documentSnapshot.id,
+                  documentSnapshot.data(),
+                  spaceEncryption,
+                ),
+              ),
+            )
+          ).sort((left, right) => left.createdAt - right.createdAt);
 
-      setError(queryError.message);
-      setLoading(false);
+          setItemsByBoxId((currentItemsByBoxId) => {
+            const nextItemsByBoxId = { ...currentItemsByBoxId };
+
+            Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
+              if (!targetBoxIds.includes(currentBoxId)) {
+                delete nextItemsByBoxId[currentBoxId];
+              }
+            });
+
+            nextItemsByBoxId[targetBoxId] = nextItems;
+
+            return nextItemsByBoxId;
+          });
+          setLoading(false);
+        },
+        (queryError) => {
+          if (!isActive) {
+            return;
+          }
+
+          setError(queryError.message);
+          setLoading(false);
+        },
+      );
     });
 
     return () => {
       isActive = false;
+      unsubscribeFns.forEach((unsubscribe) => unsubscribe());
     };
-  }, [boxId, spaceId, userUid]);
-
-  const items = useMemo(() => {
-    if (boxId) {
-      return itemsByBoxId[boxId] ?? [];
-    }
-
-    return Object.values(itemsByBoxId)
-      .flat()
-      .sort((left, right) => left.createdAt - right.createdAt);
-  }, [boxId, itemsByBoxId]);
+  }, [_setSpaceBoxIdsKey, boxIds, spaceId, userUid, areBoxes]);
 
   const addItem = useCallback(
     async (targetBoxId: string, content: string | ItemDraft) => {
@@ -196,10 +235,17 @@ export function useItems(spaceId: string, boxId?: string | null, userUid?: strin
     [spaceId],
   );
 
-  const visibleItems = spaceId && (boxId || userUid) ? items : [];
-  const visibleItemsByBoxId = spaceId && (boxId || userUid) ? itemsByBoxId : {};
-  const visibleLoading = Boolean(spaceId && (boxId || userUid)) && loading;
-  const visibleError = spaceId && (boxId || userUid) ? error : null;
+  const visibleItems = useMemo(() => {
+    const allItems = Object.values(itemsByBoxId).flat();
+    return spaceId && (areBoxes || userUid) ? allItems : [];
+  }, [spaceId, areBoxes, userUid, itemsByBoxId]);
+
+  const visibleItemsByBoxId = useMemo(() => {
+    return spaceId && (areBoxes || userUid) ? itemsByBoxId : {};
+  }, [spaceId, areBoxes, userUid, itemsByBoxId]);
+
+  const visibleLoading = Boolean(spaceId && (areBoxes || userUid)) && loading;
+  const visibleError = spaceId && (areBoxes || userUid) ? error : null;
 
   return {
     items: visibleItems,
@@ -210,5 +256,3 @@ export function useItems(spaceId: string, boxId?: string | null, userUid?: strin
     deleteItem,
   };
 }
-
-export default useItems;
