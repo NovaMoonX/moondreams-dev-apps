@@ -1,10 +1,5 @@
 import { auth, db } from '@lib/firebase/config';
 import {
-  encryptStringForSpace,
-  normalizeSpaceEncryption,
-  type SpaceEncryption,
-} from '../security';
-import {
   collection,
   deleteDoc,
   doc,
@@ -14,34 +9,47 @@ import {
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  encryptStringForSpace,
+  normalizeSpaceEncryption,
+  type SpaceEncryption,
+} from '../security';
 
 import type { Box, BoxDraft } from '../types';
 import { getDefaultBoxes, normalizeBox } from '../utils/boxHelpers';
 
 const limitDescription = (description: string) => description.trim();
 
-async function getSpaceEncryption(spaceId: string): Promise<SpaceEncryption | null> {
+async function getSpaceEncryption(
+  spaceId: string,
+): Promise<SpaceEncryption | null> {
   const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
   const spaceSnapshot = await getDoc(spaceRef);
 
   return normalizeSpaceEncryption(spaceSnapshot.data()?.encryption ?? null);
 }
 
-
-export function useBoxes(spaceId: string) {
+export function useBoxes(spaceId: string, userUid?: string) {
   const [boxes, setBoxes] = useState<Box[]>([]);
-  const [loading, setLoading] = useState(Boolean(spaceId));
+  const [loading, setLoading] = useState(Boolean(spaceId && userUid));
   const [error, setError] = useState<string | null>(null);
   const hasSeededDefaults = useRef(false);
 
   useEffect(() => {
-    if (!spaceId) {
+    if (!spaceId || !userUid) {
       hasSeededDefaults.current = false;
       return;
     }
 
-    const boxCollection = collection(db, 'apps', 'worth-the-wait', 'spaces', spaceId, 'boxes');
+    const boxCollection = collection(
+      db,
+      'apps',
+      'worth-the-wait',
+      'spaces',
+      spaceId,
+      'boxes',
+    );
     let isActive = true;
 
     const unsubscribe = onSnapshot(
@@ -78,8 +86,14 @@ export function useBoxes(spaceId: string) {
           const defaultBoxes = getDefaultBoxes();
           const encryptedDefaults = await Promise.all(
             defaultBoxes.map(async (box) => {
-              const encryptedName = await encryptStringForSpace(box.name, spaceEncryption);
-              const encryptedEmoji = await encryptStringForSpace(box.emoji, spaceEncryption);
+              const encryptedName = await encryptStringForSpace(
+                box.name,
+                spaceEncryption,
+              );
+              const encryptedEmoji = await encryptStringForSpace(
+                box.emoji,
+                spaceEncryption,
+              );
               const encryptedDescription = await encryptStringForSpace(
                 box.description,
                 spaceEncryption,
@@ -119,7 +133,7 @@ export function useBoxes(spaceId: string) {
       isActive = false;
       unsubscribe();
     };
-  }, [spaceId]);
+  }, [spaceId, userUid]);
 
   const createCustomBox = useCallback(
     async (draft: BoxDraft) => {
@@ -165,15 +179,19 @@ export function useBoxes(spaceId: string) {
       await setDoc(boxRef, {
         ...payload,
         name: await encryptStringForSpace(trimmedName, spaceEncryption),
-        emoji: await encryptStringForSpace(draft.emoji.trim() || '✨', spaceEncryption),
-        description: await encryptStringForSpace(trimmedDescription, spaceEncryption),
+        emoji: await encryptStringForSpace(
+          draft.emoji.trim() || '✨',
+          spaceEncryption,
+        ),
+        description: await encryptStringForSpace(
+          trimmedDescription,
+          spaceEncryption,
+        ),
       });
       return payload;
     },
     [spaceId],
   );
-
-  
 
   const editCustomBox = useCallback(
     async (boxId: string, draft: BoxDraft) => {
@@ -203,15 +221,18 @@ export function useBoxes(spaceId: string) {
       );
       const spaceEncryption = await getSpaceEncryption(spaceId);
 
-      await updateDoc(
-        boxRef,
-        {
-          name: await encryptStringForSpace(trimmedName, spaceEncryption),
-          emoji: await encryptStringForSpace(draft.emoji.trim() || '✨', spaceEncryption),
-          description: await encryptStringForSpace(trimmedDescription, spaceEncryption),
-          lastEditedAt: Date.now(),
-        },
-      );
+      await updateDoc(boxRef, {
+        name: await encryptStringForSpace(trimmedName, spaceEncryption),
+        emoji: await encryptStringForSpace(
+          draft.emoji.trim() || '✨',
+          spaceEncryption,
+        ),
+        description: await encryptStringForSpace(
+          trimmedDescription,
+          spaceEncryption,
+        ),
+        lastEditedAt: Date.now(),
+      });
     },
     [spaceId],
   );
@@ -222,11 +243,33 @@ export function useBoxes(spaceId: string) {
         return;
       }
 
-      const boxRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId, 'boxes', boxId);
+      const boxRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        boxId,
+      );
       await deleteDoc(boxRef);
     },
     [spaceId],
   );
 
-  return { boxes, loading, error, createCustomBox, editCustomBox, deleteBox };
+  const visibleBoxes = useMemo(
+    () => (spaceId && userUid ? boxes : []),
+    [spaceId, userUid, boxes],
+  );
+  const visibleLoading = Boolean(spaceId && userUid) && loading;
+  const visibleError = spaceId && userUid ? error : null;
+
+  return {
+    boxes: visibleBoxes,
+    loading: visibleLoading,
+    error: visibleError,
+    createCustomBox,
+    editCustomBox,
+    deleteBox,
+  };
 }

@@ -11,7 +11,6 @@ import AppToggle from '@/components/AppToggle';
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { useItems } from '../hooks/useItems';
 import { getWasRecentlyRevealed } from '../utils/itemHelpers';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
@@ -24,10 +23,17 @@ interface BoxDetailDrawerProps {
 
 function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
-  const { box, spaceId } = useBoxContext();
-  const { space, itemsDisclosureOpen, setItemsDisclosureOpen } =
-    useWorthTheWait();
-  const { items, loading, addItem, deleteItem } = useItems(spaceId, box.id);
+  const { box } = useBoxContext();
+  const {
+    addItem,
+    deleteItem,
+    itemsByBoxId,
+    itemsDisclosureOpen,
+    itemsLoading,
+    setItemsDisclosureOpen,
+    space,
+  } = useWorthTheWait();
+  const items = itemsByBoxId[box.id] ?? [];
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
   const [showRecentlyRevealedItems, setShowRecentlyRevealedItems] =
     useState(itemsDisclosureOpen);
@@ -250,7 +256,7 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   </div>
                 </div>
 
-                {loading ? (
+                {itemsLoading ? (
                   <p className='text-muted-foreground text-sm'>
                     Loading items...
                   </p>
@@ -268,7 +274,9 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                         item.authorId === user?.uid &&
                         !visibleItemIds.has(item.id)
                       }
-                      onDelete={deleteItem}
+                      onDelete={async (itemId) => {
+                        await deleteItem(box.id, itemId);
+                      }}
                       onToggleVisibility={handleToggleItemVisibility}
                     />
                   ))
@@ -290,14 +298,14 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
           <div className='border-border border-t pt-4'>
             <ItemForm
               onSubmit={async (content) => {
-                await addItem(content);
+                await addItem(box.id, content);
                 setShowRecentlyRevealedItems(false);
               }}
               placeholder='Write a thought, wish, or plan...'
             />
           </div>
         </div>
-      ) : loading ? (
+      ) : itemsLoading ? (
         <p className='text-muted-foreground text-sm'>Loading box...</p>
       ) : (
         <p className='text-muted-foreground text-sm'>No box selected.</p>

@@ -2,17 +2,18 @@ import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
 import {
   Button,
+  Callout,
   CopyButton,
   HelpIcon,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
+import { formatList } from '@/utils';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useEffect, useMemo, useState } from 'react';
 import { BoxProvider } from '../context/BoxProvider';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { useBoxes } from '../hooks/useBoxes';
 import { useWelcomeModal } from '../hooks/useWelcomeModal';
 import { generateInviteLink } from '../utils/generateCode';
 import ActionAnimationModal from './ActionAnimationModal';
@@ -24,7 +25,20 @@ import SpaceWelcomeModal from './SpaceWelcomeModal';
 
 function WorthTheWaitLayout() {
   const { user } = useAuth();
-  const { activeAction, closeBox, selectedBoxId, space } = useWorthTheWait();
+  const {
+    activeAction,
+    boxes,
+    boxesLoading,
+    closeBox,
+    createCustomBox,
+    deleteBox,
+    editCustomBox,
+    markMemberUpdatesAsSeen,
+    memberUpdateLoading,
+    memberUpdateSummary,
+    selectedBoxId,
+    space,
+  } = useWorthTheWait();
   const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
   const {
     isOpen: isWelcomeModalOpen,
@@ -33,17 +47,40 @@ function WorthTheWaitLayout() {
   } = useWelcomeModal(space, user);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
-  const {
-    boxes,
-    loading: boxesLoading,
-    createCustomBox,
-    editCustomBox,
-    deleteBox,
-  } = useBoxes(space?.id ?? '');
   const selectedBox = useMemo(
     () => boxes.find((box) => box.id === selectedBoxId) ?? null,
     [boxes, selectedBoxId],
   );
+  const updateList = useMemo(() => {
+    if (!memberUpdateSummary || memberUpdateLoading) {
+      return [];
+    }
+
+    const items: string[] = [];
+
+    if (memberUpdateSummary.createdBoxNames.length > 0) {
+      const createdNames = formatList(memberUpdateSummary.createdBoxNames);
+      items.push(
+        `${memberUpdateSummary.createdBoxes === 1 ? 'New box' : 'New boxes'}: ${createdNames}`,
+      );
+    }
+
+    if (memberUpdateSummary.updatedBoxNames.length > 0) {
+      const updatedNames = formatList(memberUpdateSummary.updatedBoxNames);
+      items.push(
+        `${memberUpdateSummary.updatedBoxes === 1 ? 'Updated box' : 'Updated boxes'}: ${updatedNames}`,
+      );
+    }
+
+    if (memberUpdateSummary.newItemBoxNames.length > 0) {
+      const itemBoxNames = formatList(memberUpdateSummary.newItemBoxNames);
+      items.push(
+        `${memberUpdateSummary.newItems === 1 ? 'New item added to' : 'New items added to'} ${itemBoxNames}`,
+      );
+    }
+
+    return items;
+  }, [memberUpdateLoading, memberUpdateSummary]);
 
   useEffect(() => {
     if (
@@ -94,18 +131,18 @@ function WorthTheWaitLayout() {
                       </p>{' '}
                       <CopyButton
                         textToCopy={space.inviteCode}
-                        className='inline! hover:text-muted-foreground'
+                        className='hover:text-muted-foreground inline!'
                         variant='base'
                         size='icon'
                       />
                     </div>
-                    <div className='flex items-center gap-2 text-muted-foreground'>
+                    <div className='text-muted-foreground flex items-center gap-2'>
                       <p className='text-sm'>
                         <b>Invite Code:</b> {space.inviteCode}
                       </p>{' '}
                       <CopyButton
                         textToCopy={space.inviteCode}
-                        className='inline! hover:text-foreground'
+                        className='hover:text-foreground inline!'
                         variant='base'
                         size='icon'
                       />
@@ -118,6 +155,25 @@ function WorthTheWaitLayout() {
 
           {hasLockedSpace && (
             <div className='mt-8 space-y-5'>
+              {updateList.length > 0 ? (
+                <Callout
+                  variant='info'
+                  title="What's changed since your last visit?"
+                  description={
+                    <ul className='list-disc space-y-1 pl-5'>
+                      {updateList.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  }
+                  icon='✨'
+                  dismissible
+                  onDismiss={() => {
+                    void markMemberUpdatesAsSeen();
+                  }}
+                />
+              ) : null}
+
               <div className='flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap'>
                 <div>
                   <h2 className='text-foreground text-xl font-semibold'>

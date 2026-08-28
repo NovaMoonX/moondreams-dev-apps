@@ -6,17 +6,16 @@ import {
   getDoc,
   onSnapshot,
   setDoc,
-  type DocumentData,
 } from 'firebase/firestore';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import {
-  decryptStringForSpace,
   encryptStringForSpace,
   normalizeSpaceEncryption,
   type SpaceEncryption,
 } from '../security';
-
 import type { Item, ItemDraft } from '../types';
+import { normalizeItem } from '../utils/itemHelpers';
 
 async function getSpaceEncryption(
   spaceId: string,
@@ -27,107 +26,131 @@ async function getSpaceEncryption(
   return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
 }
 
-async function normalizeItem(
-  id: string,
-  data: DocumentData,
-  encryption: SpaceEncryption | null,
-): Promise<Item> {
-  const methodValue = data.revealedMethod;
-
-  return {
-    id,
-    authorId: typeof data.authorId === 'string' ? data.authorId : 'anonymous',
-    content: await decryptStringForSpace(data.content, encryption),
-    isRevealed: Boolean(data.isRevealed),
-    revealedAt: typeof data.revealedAt === 'number' ? data.revealedAt : null,
-    revealedMethod:
-      methodValue === 'full_reveal' || methodValue === 'raffle'
-        ? methodValue
-        : null,
-    createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
-    lastEditedAt:
-      typeof data.lastEditedAt === 'number' ? data.lastEditedAt : Date.now(),
-  };
+function createSpaceBoxIdsKey(spaceId: string, boxIds: string[]) {
+  return `${spaceId}-${boxIds.join(',')}`;
 }
 
-function createSpaceBoxIdKey(spaceId: string, boxId: string) {
-  return `${spaceId}-${boxId}`;
-}
-
-export function useItems(spaceId: string, boxId: string) {
-  const [spaceBoxId_, setSpaceBoxId_] = useState(
-    createSpaceBoxIdKey(spaceId, boxId),
+export function useItems(
+  spaceId: string,
+  boxIds?: string[] | null,
+  userUid?: string,
+) {
+  const [_spaceBoxIdsKey, _setSpaceBoxIdsKey] = useState(
+    createSpaceBoxIdsKey(spaceId, boxIds ?? []),
   );
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(Boolean(spaceId) && Boolean(boxId));
+  const [itemsByBoxId, setItemsByBoxId] = useState<Record<string, Item[]>>({});
+  const [loading, setLoading] = useState(
+    Boolean(spaceId && (userUid || (boxIds && boxIds.length > 0))),
+  );
   const [error, setError] = useState<string | null>(null);
 
-  if (spaceBoxId_ !== createSpaceBoxIdKey(spaceId, boxId)) {
-    setSpaceBoxId_(createSpaceBoxIdKey(spaceId, boxId));
-    setItems([]);
-    setLoading(Boolean(spaceId) && Boolean(boxId));
+  const areBoxes = Boolean(boxIds && boxIds.length > 0);
+
+  const latestSpaceBoxIdKey = createSpaceBoxIdsKey(spaceId, boxIds ?? []);
+  if (_spaceBoxIdsKey !== latestSpaceBoxIdKey) {
+    _setSpaceBoxIdsKey(latestSpaceBoxIdKey);
+    setLoading(Boolean(spaceId && (userUid || areBoxes)));
     setError(null);
+    setItemsByBoxId((currentItemsByBoxId) => {
+      const nextItemsByBoxId = { ...currentItemsByBoxId };
+
+      Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
+        if (!(boxIds ?? []).includes(currentBoxId)) {
+          delete nextItemsByBoxId[currentBoxId];
+        }
+      });
+
+      return nextItemsByBoxId;
+    });
   }
 
   useEffect(() => {
-    if (!spaceId || !boxId) {
+    if (!spaceId || (!userUid && (!boxIds || boxIds.length === 0))) {
       return;
     }
 
-    const itemsCollection = collection(
-      db,
-      'apps',
-      'worth-the-wait',
-      'spaces',
-      spaceId,
-      'boxes',
-      boxId,
-      'items',
-    );
     let isActive = true;
 
-    const unsubscribe = onSnapshot(
-      itemsCollection,
-      async (snapshot) => {
-        if (!isActive) {
-          return;
-        }
+    const targetBoxIds = boxIds ?? [];
+    // setItemsByBoxId((currentItemsByBoxId) => {
+    //   const nextItemsByBoxId = { ...currentItemsByBoxId };
 
-        const spaceEncryption = await getSpaceEncryption(spaceId);
-        const nextItems = (
-          await Promise.all(
-            snapshot.docs.map((documentSnapshot) =>
-              normalizeItem(
-                documentSnapshot.id,
-                documentSnapshot.data(),
-                spaceEncryption,
+    //   Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
+    //     if (!targetBoxIds.includes(currentBoxId)) {
+    //       delete nextItemsByBoxId[currentBoxId];
+    //     }
+    //   });
+
+    //   return nextItemsByBoxId;
+    // });
+
+    const unsubscribeFns = targetBoxIds.map((targetBoxId) => {
+      const itemCollection = collection(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+        'items',
+      );
+
+      return onSnapshot(
+        itemCollection,
+        async (snapshot) => {
+          if (!isActive) {
+            return;
+          }
+
+          const spaceEncryption = await getSpaceEncryption(spaceId);
+          const nextItems = (
+            await Promise.all(
+              snapshot.docs.map((documentSnapshot) =>
+                normalizeItem(
+                  documentSnapshot.id,
+                  documentSnapshot.data(),
+                  spaceEncryption,
+                ),
               ),
-            ),
-          )
-        ).sort((left, right) => left.createdAt - right.createdAt);
+            )
+          ).sort((left, right) => left.createdAt - right.createdAt);
 
-        setItems(nextItems);
-        setLoading(false);
-      },
-      (queryError) => {
-        if (!isActive) {
-          return;
-        }
+          setItemsByBoxId((currentItemsByBoxId) => {
+            const nextItemsByBoxId = { ...currentItemsByBoxId };
 
-        setError(queryError.message);
-        setLoading(false);
-      },
-    );
+            Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
+              if (!targetBoxIds.includes(currentBoxId)) {
+                delete nextItemsByBoxId[currentBoxId];
+              }
+            });
+
+            nextItemsByBoxId[targetBoxId] = nextItems;
+
+            return nextItemsByBoxId;
+          });
+          setLoading(false);
+        },
+        (queryError) => {
+          if (!isActive) {
+            return;
+          }
+
+          setError(queryError.message);
+          setLoading(false);
+        },
+      );
+    });
 
     return () => {
       isActive = false;
-      unsubscribe();
+      unsubscribeFns.forEach((unsubscribe) => unsubscribe());
     };
-  }, [boxId, spaceId]);
+  }, [_setSpaceBoxIdsKey, boxIds, spaceId, userUid, areBoxes]);
 
   const addItem = useCallback(
-    async (content: string | ItemDraft) => {
-      if (!spaceId || !boxId) {
+    async (targetBoxId: string, content: string | ItemDraft) => {
+      if (!spaceId || !targetBoxId) {
         throw new Error('A space and box are required to add an item.');
       }
 
@@ -146,11 +169,11 @@ export function useItems(spaceId: string, boxId: string) {
         'spaces',
         spaceId,
         'boxes',
-        boxId,
+        targetBoxId,
         'items',
       );
       const itemRef = doc(itemsCollection);
-      const userId = auth.currentUser?.uid;
+      const userId = auth.currentUser?.uid ?? userUid;
 
       if (!userId) {
         throw new Error('You must be signed in to add an item.');
@@ -180,18 +203,18 @@ export function useItems(spaceId: string, boxId: string) {
         });
 
         return nextItem;
-      } catch (error) {
+      } catch (queryError) {
         throw new Error('Failed to add item. Please try again.', {
-          cause: error,
+          cause: queryError,
         });
       }
     },
-    [boxId, spaceId],
+    [spaceId, userUid],
   );
 
   const deleteItem = useCallback(
-    async (itemId: string) => {
-      if (!spaceId || !boxId || !itemId) {
+    async (targetBoxId: string, itemId: string) => {
+      if (!spaceId || !targetBoxId || !itemId) {
         return;
       }
 
@@ -202,17 +225,34 @@ export function useItems(spaceId: string, boxId: string) {
         'spaces',
         spaceId,
         'boxes',
-        boxId,
+        targetBoxId,
         'items',
         itemId,
       );
 
       await deleteDoc(itemRef);
     },
-    [boxId, spaceId],
+    [spaceId],
   );
 
-  return { items, loading, error, addItem, deleteItem };
-}
+  const visibleItems = useMemo(() => {
+    const allItems = Object.values(itemsByBoxId).flat();
+    return spaceId && (areBoxes || userUid) ? allItems : [];
+  }, [spaceId, areBoxes, userUid, itemsByBoxId]);
 
-export default useItems;
+  const visibleItemsByBoxId = useMemo(() => {
+    return spaceId && (areBoxes || userUid) ? itemsByBoxId : {};
+  }, [spaceId, areBoxes, userUid, itemsByBoxId]);
+
+  const visibleLoading = Boolean(spaceId && (areBoxes || userUid)) && loading;
+  const visibleError = spaceId && (areBoxes || userUid) ? error : null;
+
+  return {
+    items: visibleItems,
+    itemsByBoxId: visibleItemsByBoxId,
+    loading: visibleLoading,
+    error: visibleError,
+    addItem,
+    deleteItem,
+  };
+}
