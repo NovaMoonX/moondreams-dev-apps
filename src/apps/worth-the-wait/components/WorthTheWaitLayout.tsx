@@ -22,6 +22,22 @@ import ManageBoxModal from './ManageBoxModal';
 import PresenceBadge from './PresenceBadge';
 import SpaceWelcomeModal from './SpaceWelcomeModal';
 
+function formatNameList(names: string[]) {
+  if (names.length === 0) {
+    return '';
+  }
+
+  if (names.length === 1) {
+    return names[0];
+  }
+
+  if (names.length === 2) {
+    return `${names[0]} and ${names[1]}`;
+  }
+
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
 function WorthTheWaitLayout() {
   const { user } = useAuth();
   const {
@@ -57,21 +73,24 @@ function WorthTheWaitLayout() {
 
     const items: string[] = [];
 
-    if (memberUpdateSummary.createdBoxes > 0) {
+    if (memberUpdateSummary.createdBoxNames.length > 0) {
+      const createdNames = formatNameList(memberUpdateSummary.createdBoxNames);
       items.push(
-        `${memberUpdateSummary.createdBoxes} new box${memberUpdateSummary.createdBoxes === 1 ? '' : 'es'}`,
+        `${memberUpdateSummary.createdBoxes === 1 ? 'New box' : 'New boxes'}: ${createdNames}`,
       );
     }
 
-    if (memberUpdateSummary.updatedBoxes > 0) {
+    if (memberUpdateSummary.updatedBoxNames.length > 0) {
+      const updatedNames = formatNameList(memberUpdateSummary.updatedBoxNames);
       items.push(
-        `${memberUpdateSummary.updatedBoxes} updated box${memberUpdateSummary.updatedBoxes === 1 ? '' : 'es'}`,
+        `${memberUpdateSummary.updatedBoxes === 1 ? 'Updated box' : 'Updated boxes'}: ${updatedNames}`,
       );
     }
 
-    if (memberUpdateSummary.newItems > 0) {
+    if (memberUpdateSummary.newItemBoxNames.length > 0) {
+      const itemBoxNames = formatNameList(memberUpdateSummary.newItemBoxNames);
       items.push(
-        `${memberUpdateSummary.newItems} new item${memberUpdateSummary.newItems === 1 ? '' : 's'} from your partner`,
+        `${memberUpdateSummary.newItems === 1 ? 'New item added to' : 'New items added to'} ${itemBoxNames}`,
       );
     }
 

@@ -30,8 +30,11 @@ function createZeroMemberUpdateSummary(
   return {
     userId,
     createdBoxes: 0,
+    createdBoxNames: [],
     updatedBoxes: 0,
+    updatedBoxNames: [],
     newItems: 0,
+    newItemBoxNames: [],
     lastSurfacedAt,
     updatedAt: Date.now(),
   };
@@ -41,7 +44,7 @@ export function useMemberUpdates(
   spaceId: string,
   userId: string,
   boxes: Box[] = [],
-  items: Item[] = [],
+  itemsByBoxId: Record<string, Item[]> = {},
 ) {
   const [memberUpdate, setMemberUpdate] = useState<MemberUpdateSummary | null>(
     null,
@@ -143,11 +146,11 @@ export function useMemberUpdates(
 
     return calculateMemberUpdateSummary({
       boxes,
-      items,
+      itemsByBoxId,
       memberId: userId,
       lastSurfacedAt: memberUpdate?.lastSurfacedAt ?? null,
     });
-  }, [boxes, items, memberUpdate, userId]);
+  }, [boxes, itemsByBoxId, memberUpdate, userId]);
 
   useEffect(() => {
     if (!userId || !memberUpdate) {

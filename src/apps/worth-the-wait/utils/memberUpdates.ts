@@ -8,6 +8,14 @@ function asFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
 export function normalizeMemberUpdateSummary(
   value: Record<string, unknown> | null | undefined,
   userId: string,
@@ -19,14 +27,20 @@ export function normalizeMemberUpdateSummary(
   const createdBoxes = asFiniteNumber(value.createdBoxes) ?? 0;
   const updatedBoxes = asFiniteNumber(value.updatedBoxes) ?? 0;
   const newItems = asFiniteNumber(value.newItems) ?? 0;
+  const createdBoxNames = asStringArray(value.createdBoxNames);
+  const updatedBoxNames = asStringArray(value.updatedBoxNames);
+  const newItemBoxNames = asStringArray(value.newItemBoxNames);
   const lastSurfacedAt = asFiniteNumber(value.lastSurfacedAt) ?? null;
   const updatedAt = asFiniteNumber(value.updatedAt) ?? Date.now();
 
   return {
     userId,
     createdBoxes,
+    createdBoxNames,
     updatedBoxes,
+    updatedBoxNames,
     newItems,
+    newItemBoxNames,
     lastSurfacedAt,
     updatedAt,
   };
@@ -34,12 +48,12 @@ export function normalizeMemberUpdateSummary(
 
 export function calculateMemberUpdateSummary({
   boxes,
-  items,
+  itemsByBoxId,
   memberId,
   lastSurfacedAt,
 }: {
   boxes: Box[];
-  items: Item[];
+  itemsByBoxId: Record<string, Item[]>;
   memberId: string;
   lastSurfacedAt: number | null;
 }): MemberUpdateSummary {
@@ -47,33 +61,59 @@ export function calculateMemberUpdateSummary({
     return {
       userId: memberId,
       createdBoxes: 0,
+      createdBoxNames: [],
       updatedBoxes: 0,
+      updatedBoxNames: [],
       newItems: 0,
+      newItemBoxNames: [],
       lastSurfacedAt: null,
       updatedAt: 0,
     };
   }
 
   const referencePoint = lastSurfacedAt;
-
-  const createdBoxes = boxes.filter(
+  const createdBoxMatches = boxes.filter(
     (box) => box.createdBy !== memberId && box.createdAt > referencePoint,
-  ).length;
-  const updatedBoxes = boxes.filter(
+  );
+  const updatedBoxMatches = boxes.filter(
     (box) =>
       box.createdBy !== memberId &&
       box.lastEditedAt > referencePoint &&
       box.createdAt !== box.lastEditedAt,
-  ).length;
-  const newItems = items.filter(
-    (item) => item.authorId !== memberId && item.createdAt > referencePoint,
-  ).length;
+  );
+  const newItemBoxNames = Array.from(
+    new Set(
+      Object.entries(itemsByBoxId)
+        .filter(([boxId, items]) => {
+          const box = boxes.find((candidate) => candidate.id === boxId);
+
+          if (!box) {
+            return false;
+          }
+
+          return items.some(
+            (item) =>
+              item.authorId !== memberId && item.createdAt > referencePoint,
+          );
+        })
+        .map(([boxId]) => boxes.find((box) => box.id === boxId)?.name)
+        .filter((name): name is string => Boolean(name)),
+    ),
+  );
+  const newItems = Object.values(itemsByBoxId)
+    .flat()
+    .filter(
+      (item) => item.authorId !== memberId && item.createdAt > referencePoint,
+    ).length;
 
   return {
     userId: memberId,
-    createdBoxes,
-    updatedBoxes,
+    createdBoxes: createdBoxMatches.length,
+    createdBoxNames: createdBoxMatches.map((box) => box.name),
+    updatedBoxes: updatedBoxMatches.length,
+    updatedBoxNames: updatedBoxMatches.map((box) => box.name),
     newItems,
+    newItemBoxNames,
     lastSurfacedAt,
     updatedAt: Date.now(),
   };

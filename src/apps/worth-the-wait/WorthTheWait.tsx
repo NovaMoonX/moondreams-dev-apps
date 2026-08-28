@@ -74,7 +74,7 @@ function WorthTheWait() {
     space?.id ?? '',
     user?.uid ?? '',
     boxes,
-    Object.values(itemsByBoxId).flat(),
+    itemsByBoxId,
   );
 
   // only allow the search param to be used if it is a valid invite code

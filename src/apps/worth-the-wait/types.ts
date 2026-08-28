@@ -92,8 +92,11 @@ export type ItemDraft = {
 export type MemberUpdateSummary = {
   userId: string;
   createdBoxes: number;
+  createdBoxNames: string[];
   updatedBoxes: number;
+  updatedBoxNames: string[];
   newItems: number;
+  newItemBoxNames: string[];
   lastSurfacedAt: number | null;
   updatedAt: number;
 };
