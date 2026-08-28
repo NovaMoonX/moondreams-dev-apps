@@ -9,7 +9,7 @@ import {
   normalizeMemberUpdateSummary,
 } from '../utils/memberUpdates';
 
-const AUTO_DISMISS_MS = 24 * 60 * 60 * 1000;
+const AUTO_DISMISS_MS = 72 * 60 * 60 * 1000; // 72 hours in milliseconds
 
 function getMemberUpdateDocRef(spaceId: string, userId: string) {
   return doc(
