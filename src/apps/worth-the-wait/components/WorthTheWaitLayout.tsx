@@ -9,6 +9,7 @@ import {
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
+import { formatList } from '@/utils';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useEffect, useMemo, useState } from 'react';
 import { BoxProvider } from '../context/BoxProvider';
@@ -21,22 +22,6 @@ import BoxGrid from './BoxGrid';
 import ManageBoxModal from './ManageBoxModal';
 import PresenceBadge from './PresenceBadge';
 import SpaceWelcomeModal from './SpaceWelcomeModal';
-
-function formatNameList(names: string[]) {
-  if (names.length === 0) {
-    return '';
-  }
-
-  if (names.length === 1) {
-    return names[0];
-  }
-
-  if (names.length === 2) {
-    return `${names[0]} and ${names[1]}`;
-  }
-
-  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
-}
 
 function WorthTheWaitLayout() {
   const { user } = useAuth();
@@ -74,21 +59,21 @@ function WorthTheWaitLayout() {
     const items: string[] = [];
 
     if (memberUpdateSummary.createdBoxNames.length > 0) {
-      const createdNames = formatNameList(memberUpdateSummary.createdBoxNames);
+      const createdNames = formatList(memberUpdateSummary.createdBoxNames);
       items.push(
         `${memberUpdateSummary.createdBoxes === 1 ? 'New box' : 'New boxes'}: ${createdNames}`,
       );
     }
 
     if (memberUpdateSummary.updatedBoxNames.length > 0) {
-      const updatedNames = formatNameList(memberUpdateSummary.updatedBoxNames);
+      const updatedNames = formatList(memberUpdateSummary.updatedBoxNames);
       items.push(
         `${memberUpdateSummary.updatedBoxes === 1 ? 'Updated box' : 'Updated boxes'}: ${updatedNames}`,
       );
     }
 
     if (memberUpdateSummary.newItemBoxNames.length > 0) {
-      const itemBoxNames = formatNameList(memberUpdateSummary.newItemBoxNames);
+      const itemBoxNames = formatList(memberUpdateSummary.newItemBoxNames);
       items.push(
         `${memberUpdateSummary.newItems === 1 ? 'New item added to' : 'New items added to'} ${itemBoxNames}`,
       );
@@ -146,18 +131,18 @@ function WorthTheWaitLayout() {
                       </p>{' '}
                       <CopyButton
                         textToCopy={space.inviteCode}
-                        className='inline! hover:text-muted-foreground'
+                        className='hover:text-muted-foreground inline!'
                         variant='base'
                         size='icon'
                       />
                     </div>
-                    <div className='flex items-center gap-2 text-muted-foreground'>
+                    <div className='text-muted-foreground flex items-center gap-2'>
                       <p className='text-sm'>
                         <b>Invite Code:</b> {space.inviteCode}
                       </p>{' '}
                       <CopyButton
                         textToCopy={space.inviteCode}
-                        className='inline! hover:text-foreground'
+                        className='hover:text-foreground inline!'
                         variant='base'
                         size='icon'
                       />
