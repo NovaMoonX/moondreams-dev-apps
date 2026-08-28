@@ -101,7 +101,7 @@ function WorthTheWaitLayout() {
           </NavButton>
 
           {space ? (
-            <div className='flex items-center gap-3'>
+            <div className='flex justify-center items-center gap-3'>
               <PresenceBadge className='w-fit shrink-0 self-center' />
             </div>
           ) : null}

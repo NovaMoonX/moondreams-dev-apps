@@ -66,33 +66,6 @@ export async function seedWorthTheWait(
     { merge: true },
   );
 
-  const memberUpdateSeeds = [
-    {
-      userId: firstMember.uid,
-      createdBoxes: 1,
-      updatedBoxes: 1,
-      newItems: 2,
-      lastSurfacedAt: context.now - 4_200_000,
-      updatedAt: context.now - 3_600_000,
-    },
-    {
-      userId: secondMember.uid,
-      createdBoxes: 2,
-      updatedBoxes: 2,
-      newItems: 1,
-      lastSurfacedAt: context.now - 8_640_000,
-      updatedAt: context.now - 7_200_000,
-    },
-  ];
-
-  memberUpdateSeeds.forEach((memberUpdate) => {
-    batch.set(
-      spaceRef.collection('memberUpdates').doc(memberUpdate.userId),
-      memberUpdate,
-      { merge: true },
-    );
-  });
-
   const defaultBoxes = getDefaultBoxes(spaceCreatedAt + 1_000);
   const encryptedDefaultBoxes = await Promise.all(
     defaultBoxes.map(async (box) => ({
