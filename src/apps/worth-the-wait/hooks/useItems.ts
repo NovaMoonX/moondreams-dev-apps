@@ -278,6 +278,12 @@ export function useItems(
         return;
       }
 
+      const userId = auth.currentUser?.uid ?? userUid;
+      if (!userId) {
+        throw new Error('You must be signed in to reveal an item.');
+      }
+
+      const now = Date.now();
       const itemRef = doc(
         db,
         'apps',
@@ -289,14 +295,40 @@ export function useItems(
         'items',
         itemId,
       );
+      const boxRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+      );
 
-      await updateDoc(itemRef, {
-        isRevealed: true,
-        revealedAt: Date.now(),
-        revealedMethod: 'full_reveal',
-      });
+      const boxSnapshot = await getDoc(boxRef);
+      const existingHistory = Array.isArray(boxSnapshot.data()?.revealHistory)
+        ? boxSnapshot.data()?.revealHistory
+        : [];
+      const historyEntry = {
+        id: `user-reveal-${itemId}-${now}`,
+        method: 'user_reveal',
+        triggeredBy: userId,
+        revealedAt: now,
+        itemIds: [itemId],
+      };
+
+      await Promise.all([
+        updateDoc(itemRef, {
+          isRevealed: true,
+          revealedAt: now,
+          revealedMethod: 'user_reveal',
+        }),
+        updateDoc(boxRef, {
+          revealHistory: [...existingHistory, historyEntry],
+        }),
+      ]);
     },
-    [spaceId],
+    [spaceId, userUid],
   );
 
   const getItemsByBoxId = useCallback(

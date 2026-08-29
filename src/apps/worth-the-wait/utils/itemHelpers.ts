@@ -31,7 +31,9 @@ export async function normalizeItem(
     isRevealed: Boolean(data.isRevealed),
     revealedAt: typeof data.revealedAt === 'number' ? data.revealedAt : null,
     revealedMethod:
-      revealedMethodValue === 'full_reveal' || revealedMethodValue === 'raffle'
+      revealedMethodValue === 'full_reveal' ||
+      revealedMethodValue === 'raffle' ||
+      revealedMethodValue === 'user_reveal'
         ? revealedMethodValue
         : null,
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),

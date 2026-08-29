@@ -268,10 +268,10 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   </div>
                 </div>
               }
-              className='border-border rounded-2xl border bg-slate-950/10'
+              className='border-border rounded-2xl border bg-slate-950/10 overflow-visible!'
               buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
             >
-              <div className='space-y-3 px-4 pt-3 pb-4'>
+              <div className='space-y-3 px-4 pt-3 pb-4 '>
                 <div className='flex items-center justify-between gap-3'>
                   <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
                     {filteredItems.length} item

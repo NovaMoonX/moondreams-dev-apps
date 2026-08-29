@@ -4,7 +4,13 @@ import {
   type SpaceEncryption,
 } from '../security';
 
-import type { Box, RevealHistory, RevealMethod, RevealRequestedBy } from '../types';
+import type {
+  Box,
+  RevealHistory,
+  RevealHistoryMethod,
+  RevealMethod,
+  RevealRequestedBy,
+} from '../types';
 
 const DEFAULT_BOX_SEEDS = [
   {
@@ -73,12 +79,16 @@ export async function normalizeBox(
     ? data.revealHistory.map((entry) => {
         const event = entry as Record<string, unknown>;
 
+        const normalizedMethod: RevealHistoryMethod =
+          event.method === 'full_reveal' ||
+          event.method === 'raffle' ||
+          event.method === 'user_reveal'
+            ? event.method
+            : 'full_reveal';
+
         return {
           id: typeof event.id === 'string' ? event.id : '',
-          method:
-            event.method === 'full_reveal' || event.method === 'raffle'
-              ? event.method
-              : 'full_reveal',
+          method: normalizedMethod,
           triggeredBy:
             typeof event.triggeredBy === 'string' ? event.triggeredBy : '',
           revealedAt:
@@ -139,7 +149,10 @@ export function getDefaultBoxes(now = Date.now()): Box[] {
   }));
 }
 
-export function getFriendlyRevealMethod(method: RevealMethod, casing?: 'upper' | 'lower' | 'title'): string {
+export function getFriendlyRevealMethod(
+  method: RevealMethod | 'user_reveal',
+  casing?: 'upper' | 'lower' | 'title',
+): string {
   switch (method) {
     case 'full_reveal':
       return casing === 'upper'
@@ -153,6 +166,12 @@ export function getFriendlyRevealMethod(method: RevealMethod, casing?: 'upper' |
         : casing === 'lower'
         ? 'raffle single item'
         : 'Raffle Single Item';
+    case 'user_reveal':
+      return casing === 'upper'
+        ? 'USER REVEAL'
+        : casing === 'lower'
+        ? 'user reveal'
+        : 'User Reveal';
     default:
       return casing === 'upper'
         ? 'UNKNOWN'
