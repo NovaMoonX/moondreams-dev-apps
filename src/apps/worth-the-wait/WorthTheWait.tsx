@@ -62,6 +62,7 @@ function WorthTheWait() {
   const boxIds = useMemo(() => boxes.map((box) => box.id), [boxes]);
   const {
     itemsByBoxId,
+    getItemsByBoxId,
     loading: itemsLoading,
     addItem,
     deleteItem,
@@ -141,6 +142,7 @@ function WorthTheWait() {
           editCustomBox={editCustomBox}
           deleteBox={deleteBox}
           itemsByBoxId={itemsByBoxId}
+          getItemsByBoxId={getItemsByBoxId}
           itemsLoading={itemsLoading}
           addItem={addItem}
           deleteItem={deleteItem}

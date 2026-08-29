@@ -27,13 +27,13 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const {
     addItem,
     deleteItem,
-    itemsByBoxId,
+    getItemsByBoxId,
     itemsDisclosureOpen,
     itemsLoading,
     setItemsDisclosureOpen,
     space,
   } = useWorthTheWait();
-  const items = itemsByBoxId[box.id] ?? [];
+  const items = getItemsByBoxId(box.id);
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
   const [showRecentlyRevealedItems, setShowRecentlyRevealedItems] =
     useState(itemsDisclosureOpen);

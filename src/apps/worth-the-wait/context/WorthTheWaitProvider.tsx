@@ -15,6 +15,7 @@ interface WorthTheWaitProviderProps extends PropsWithChildren {
   editCustomBox: (boxId: string, draft: { name: string; emoji: string; description: string }) => Promise<void>;
   deleteBox: (boxId: string) => Promise<void>;
   itemsByBoxId: Record<string, Item[]>;
+  getItemsByBoxId: (boxId: string) => Item[];
   itemsLoading: boolean;
   addItem: (boxId: string, content: string | { content: string }) => Promise<unknown>;
   deleteItem: (boxId: string, itemId: string) => Promise<void>;
@@ -33,6 +34,7 @@ export function WorthTheWaitProvider({
   editCustomBox,
   deleteBox,
   itemsByBoxId,
+  getItemsByBoxId,
   itemsLoading,
   addItem,
   deleteItem,
@@ -67,6 +69,7 @@ export function WorthTheWaitProvider({
     editCustomBox,
     deleteBox,
     itemsByBoxId,
+    getItemsByBoxId,
     itemsLoading,
     addItem,
     deleteItem,

@@ -235,6 +235,13 @@ export function useItems(
     [spaceId],
   );
 
+  const getItemsByBoxId = useCallback(
+    (targetBoxId: string) => {
+      return itemsByBoxId[targetBoxId] ?? [];
+    },
+    [itemsByBoxId],
+  );
+
   const visibleItems = useMemo(() => {
     const allItems = Object.values(itemsByBoxId).flat();
     return spaceId && (areBoxes || userUid) ? allItems : [];
@@ -250,6 +257,7 @@ export function useItems(
   return {
     items: visibleItems,
     itemsByBoxId: visibleItemsByBoxId,
+    getItemsByBoxId,
     loading: visibleLoading,
     error: visibleError,
     addItem,
