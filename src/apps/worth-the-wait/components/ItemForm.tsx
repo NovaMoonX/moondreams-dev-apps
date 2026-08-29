@@ -1,4 +1,4 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useState } from 'react';
 
 interface ItemFormProps {
@@ -14,6 +14,7 @@ function ItemForm({
 }: ItemFormProps) {
   const [value, setValue] = useState('');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (
     event:
@@ -31,6 +32,7 @@ function ItemForm({
       return;
     }
 
+    setIsSubmitting(true);
     onSubmit(trimmedValue)
       .then(() => {
         setSubmissionError(null);
@@ -40,6 +42,9 @@ function ItemForm({
         setSubmissionError(
           error instanceof Error ? error.message : 'Failed to submit item.',
         );
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
   };
 
@@ -48,10 +53,10 @@ function ItemForm({
       <div>
         <label className='block'>
           <span className='sr-only'>Write an item</span>
-          <textarea
+          <Textarea
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            disabled={disabled}
+            disabled={disabled || isSubmitting}
             placeholder={placeholder}
             rows={4}
             maxLength={500}
@@ -76,6 +81,7 @@ function ItemForm({
 
       <div className='flex items-center justify-end'>
         <Button
+          loading={isSubmitting}
           type='submit'
           size='sm'
           disabled={disabled || value.trim().length === 0}
