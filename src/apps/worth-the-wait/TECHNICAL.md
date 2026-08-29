@@ -65,7 +65,7 @@ Represents a collection box (default or custom).
 | id | string | Unique box document ID |
 | name | string | Display name of the box |
 | emoji | string | Single emoji icon |
-| description | string | Short description (max 50 chars) |
+| description | string | Short description |
 | isDefault | boolean | true for pre-seeded boxes, false for custom |
 | createdBy | string | UID of creator ("system" for default boxes) |
 | revealRequestedBy | array<map> | Active reveal requests ([{ userId, method, requestedAt }]) |
@@ -247,7 +247,7 @@ src/
         │   ├── BoxCard.tsx              # Box display card with reveal history badge  
         │   ├── BoxDetailDrawer.tsx      # Slide-out drawer/modal for box contents  
         │   ├── BoxGrid.tsx              # Grid layout for default and custom boxes  
-        │   ├── ManageBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
+        │   ├── ManageBoxModal.tsx       # Modal form for custom boxes 
         │   ├── ItemCard.tsx             # Card displaying item content & revealMethod badge  
         │   ├── ItemForm.tsx             # Input form to stage/edit an item  
         │   ├── PendingApprovalModal.tsx # Prompt for Space Creator to accept/decline Member #2  

@@ -44,6 +44,8 @@ const DEFAULT_BOX_SEEDS = [
   },
 ] as const;
 
+export const BOX_DESCRIPTION_MAX_LENGTH = 80;
+
 export async function normalizeBox(
   id: string,
   data: Record<string, unknown>,
