@@ -101,7 +101,7 @@ function WorthTheWaitLayout() {
           </NavButton>
 
           {space ? (
-            <div className='flex justify-center items-center gap-3'>
+            <div className='flex items-center justify-center gap-3'>
               <PresenceBadge className='w-fit shrink-0 self-center' />
             </div>
           ) : null}
@@ -158,9 +158,9 @@ function WorthTheWaitLayout() {
               {updateList.length > 0 ? (
                 <Callout
                   variant='info'
-                  title="What's changed since your last visit?"
+                  title={<span className='text-blue-700 dark:text-blue-400'>What's changed since your last visit?</span>}
                   description={
-                    <ul className='list-disc space-y-1 pl-5'>
+                    <ul className='list-disc space-y-1 pl-5 text-blue-600 dark:text-blue-200'>
                       {updateList.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
