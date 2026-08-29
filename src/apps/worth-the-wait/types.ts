@@ -97,6 +97,10 @@ export type MemberUpdateSummary = {
   updatedBoxNames: string[];
   newItems: number;
   newItemBoxNames: string[];
+  newRevealRequests: number;
+  newRevealRequestBoxNames: string[];
+  newReveals: number;
+  newRevealBoxNames: string[];
   lastSurfacedAt: number | null;
   updatedAt: number;
 };

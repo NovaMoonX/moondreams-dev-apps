@@ -35,6 +35,10 @@ function createZeroMemberUpdateSummary(
     updatedBoxNames: [],
     newItems: 0,
     newItemBoxNames: [],
+    newRevealRequests: 0,
+    newRevealRequestBoxNames: [],
+    newReveals: 0,
+    newRevealBoxNames: [],
     lastSurfacedAt,
     updatedAt: Date.now(),
   };

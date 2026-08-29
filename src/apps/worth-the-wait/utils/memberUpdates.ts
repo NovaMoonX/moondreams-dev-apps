@@ -27,9 +27,13 @@ export function normalizeMemberUpdateSummary(
   const createdBoxes = asFiniteNumber(value.createdBoxes) ?? 0;
   const updatedBoxes = asFiniteNumber(value.updatedBoxes) ?? 0;
   const newItems = asFiniteNumber(value.newItems) ?? 0;
+  const newRevealRequests = asFiniteNumber(value.newRevealRequests) ?? 0;
+  const newReveals = asFiniteNumber(value.newReveals) ?? 0;
   const createdBoxNames = asStringArray(value.createdBoxNames);
   const updatedBoxNames = asStringArray(value.updatedBoxNames);
   const newItemBoxNames = asStringArray(value.newItemBoxNames);
+  const newRevealRequestBoxNames = asStringArray(value.newRevealRequestBoxNames);
+  const newRevealBoxNames = asStringArray(value.newRevealBoxNames);
   const lastSurfacedAt = asFiniteNumber(value.lastSurfacedAt) ?? null;
   const updatedAt = asFiniteNumber(value.updatedAt) ?? Date.now();
 
@@ -41,6 +45,10 @@ export function normalizeMemberUpdateSummary(
     updatedBoxNames,
     newItems,
     newItemBoxNames,
+    newRevealRequests,
+    newRevealRequestBoxNames,
+    newReveals,
+    newRevealBoxNames,
     lastSurfacedAt,
     updatedAt,
   };
@@ -66,6 +74,10 @@ export function calculateMemberUpdateSummary({
       updatedBoxNames: [],
       newItems: 0,
       newItemBoxNames: [],
+      newRevealRequests: 0,
+      newRevealRequestBoxNames: [],
+      newReveals: 0,
+      newRevealBoxNames: [],
       lastSurfacedAt: null,
       updatedAt: 0,
     };
@@ -105,6 +117,48 @@ export function calculateMemberUpdateSummary({
     .filter(
       (item) => item.authorId !== memberId && item.createdAt > referencePoint,
     ).length;
+  const newRevealRequestBoxNames = Array.from(
+    new Set(
+      boxes
+        .filter((box) =>
+          box.revealRequestedBy.some(
+            (request) =>
+              request.userId !== memberId && request.requestedAt > referencePoint,
+          ),
+        )
+        .map((box) => box.name),
+    ),
+  );
+  const newRevealRequests = boxes.reduce(
+    (count, box) =>
+      count +
+      box.revealRequestedBy.filter(
+        (request) =>
+          request.userId !== memberId && request.requestedAt > referencePoint,
+      ).length,
+    0,
+  );
+  const newRevealBoxNames = Array.from(
+    new Set(
+      boxes
+        .filter((box) =>
+          box.revealHistory.some(
+            (entry) =>
+              entry.triggeredBy !== memberId && entry.revealedAt > referencePoint,
+          ),
+        )
+        .map((box) => box.name),
+    ),
+  );
+  const newReveals = boxes.reduce(
+    (count, box) =>
+      count +
+      box.revealHistory.filter(
+        (entry) =>
+          entry.triggeredBy !== memberId && entry.revealedAt > referencePoint,
+      ).length,
+    0,
+  );
 
   return {
     userId: memberId,
@@ -114,6 +168,10 @@ export function calculateMemberUpdateSummary({
     updatedBoxNames: updatedBoxMatches.map((box) => box.name),
     newItems,
     newItemBoxNames,
+    newRevealRequests,
+    newRevealRequestBoxNames,
+    newReveals,
+    newRevealBoxNames,
     lastSurfacedAt,
     updatedAt: Date.now(),
   };
@@ -127,6 +185,8 @@ export function hasMemberUpdateSummary(summary: MemberUpdateSummary | null): boo
   return (
     summary.createdBoxes > 0 ||
     summary.updatedBoxes > 0 ||
-    summary.newItems > 0
+    summary.newItems > 0 ||
+    summary.newRevealRequests > 0 ||
+    summary.newReveals > 0
   );
 }

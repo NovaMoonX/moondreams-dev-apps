@@ -79,6 +79,22 @@ function WorthTheWaitLayout() {
       );
     }
 
+    if (memberUpdateSummary.newRevealRequestBoxNames.length > 0) {
+      const revealRequestBoxNames = formatList(
+        memberUpdateSummary.newRevealRequestBoxNames,
+      );
+      items.push(
+        `${memberUpdateSummary.newRevealRequests === 1 ? 'New reveal request in' : 'New reveal requests in'} ${revealRequestBoxNames}`,
+      );
+    }
+
+    if (memberUpdateSummary.newRevealBoxNames.length > 0) {
+      const revealBoxNames = formatList(memberUpdateSummary.newRevealBoxNames);
+      items.push(
+        `${memberUpdateSummary.newReveals === 1 ? 'New reveal in' : 'New reveals in'} ${revealBoxNames}`,
+      );
+    }
+
     return items;
   }, [memberUpdateLoading, memberUpdateSummary]);
 
