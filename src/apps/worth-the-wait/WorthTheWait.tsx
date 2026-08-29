@@ -66,6 +66,8 @@ function WorthTheWait() {
     loading: itemsLoading,
     addItem,
     deleteItem,
+    updateItem,
+    revealItem,
   } = useItems(space?.id ?? '', boxIds, user?.uid ?? '');
   const {
     summary: memberUpdateSummary,
@@ -146,6 +148,8 @@ function WorthTheWait() {
           itemsLoading={itemsLoading}
           addItem={addItem}
           deleteItem={deleteItem}
+          updateItem={updateItem}
+          revealItem={revealItem}
           memberUpdateSummary={memberUpdateSummary}
           memberUpdateLoading={memberUpdateLoading}
           markMemberUpdatesAsSeen={markMemberUpdatesAsSeen}

@@ -6,6 +6,7 @@ import {
   getDoc,
   onSnapshot,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -235,6 +236,69 @@ export function useItems(
     [spaceId],
   );
 
+  const updateItem = useCallback(
+    async (targetBoxId: string, itemId: string, content: string) => {
+      if (!spaceId || !targetBoxId || !itemId) {
+        return;
+      }
+
+      const trimmedContent = content.trim();
+      if (!trimmedContent) {
+        throw new Error('Enter item text before saving the update.');
+      }
+
+      const itemRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+        'items',
+        itemId,
+      );
+      const spaceEncryption = await getSpaceEncryption(spaceId);
+      const encryptedContent = await encryptStringForSpace(
+        trimmedContent,
+        spaceEncryption,
+      );
+
+      await updateDoc(itemRef, {
+        content: encryptedContent,
+        lastEditedAt: Date.now(),
+      });
+    },
+    [spaceId],
+  );
+
+  const revealItem = useCallback(
+    async (targetBoxId: string, itemId: string) => {
+      if (!spaceId || !targetBoxId || !itemId) {
+        return;
+      }
+
+      const itemRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+        'items',
+        itemId,
+      );
+
+      await updateDoc(itemRef, {
+        isRevealed: true,
+        revealedAt: Date.now(),
+        revealedMethod: 'full_reveal',
+      });
+    },
+    [spaceId],
+  );
+
   const getItemsByBoxId = useCallback(
     (targetBoxId: string) => {
       return itemsByBoxId[targetBoxId] ?? [];
@@ -262,5 +326,7 @@ export function useItems(
     error: visibleError,
     addItem,
     deleteItem,
+    updateItem,
+    revealItem,
   };
 }

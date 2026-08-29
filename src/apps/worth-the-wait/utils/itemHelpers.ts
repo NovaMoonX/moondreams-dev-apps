@@ -4,6 +4,8 @@ import { Item } from '../types';
 
 export const RECENT_REVEAL_WINDOW_MS = 3_600_000;
 
+export const getBoxItemCardElementId = (itemId: string) => `box-item-card-${itemId}`;
+
 export function getWasRecentlyRevealed(item: Item): boolean {
   const now = Date.now();
   const hasRecentReveal =

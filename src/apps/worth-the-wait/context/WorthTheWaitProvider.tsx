@@ -19,6 +19,8 @@ interface WorthTheWaitProviderProps extends PropsWithChildren {
   itemsLoading: boolean;
   addItem: (boxId: string, content: string | { content: string }) => Promise<unknown>;
   deleteItem: (boxId: string, itemId: string) => Promise<void>;
+  updateItem: (boxId: string, itemId: string, content: string) => Promise<void>;
+  revealItem: (boxId: string, itemId: string) => Promise<void>;
   memberUpdateSummary: MemberUpdateSummary | null;
   memberUpdateLoading: boolean;
   markMemberUpdatesAsSeen: () => Promise<void>;
@@ -38,6 +40,8 @@ export function WorthTheWaitProvider({
   itemsLoading,
   addItem,
   deleteItem,
+  updateItem,
+  revealItem,
   memberUpdateSummary,
   memberUpdateLoading,
   markMemberUpdatesAsSeen,
@@ -73,6 +77,8 @@ export function WorthTheWaitProvider({
     itemsLoading,
     addItem,
     deleteItem,
+    updateItem,
+    revealItem,
     memberUpdateSummary,
     memberUpdateLoading,
     markMemberUpdatesAsSeen,
