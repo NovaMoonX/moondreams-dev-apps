@@ -36,11 +36,6 @@ function BoxCard() {
   const boxItems = getItemsByBoxId(box.id)
   const itemCount = boxItems.length;
 
-  const revealedItemsCount = useMemo(
-    () => boxItems.filter((item) => item.isRevealed).length,
-    [boxItems],
-  );
-
   const handleConfirmDelete = async () => {
     if (user?.uid !== box.createdBy) {
       alert({
@@ -167,17 +162,9 @@ function BoxCard() {
             </div>
 
             <div className='flex items-center gap-2'>
-              {revealedItemsCount > 0 && (
-                <Badge
-                  variant='base'
-                  className='bg-violet-300 text-violet-950 dark:bg-violet-900 dark:text-violet-100'
-                >
-                  {revealedItemsCount}
-                </Badge>
-              )}
               {itemCount > 0 && (
                 <Badge variant='muted' className='text-base! font-bold'>
-                  {itemCount - revealedItemsCount}
+                  {itemCount}
                 </Badge>
               )}
               {canManageCustomBox ? (
