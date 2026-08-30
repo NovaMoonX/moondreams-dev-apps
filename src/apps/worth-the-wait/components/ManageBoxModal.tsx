@@ -5,6 +5,7 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useState } from 'react';
+import { BOX_DESCRIPTION_MAX_LENGTH } from '../utils/boxHelpers';
 
 export type BoxDraft = {
   name: string;
@@ -44,7 +45,7 @@ function ManageBoxModal({
       description: description.trim(),
     };
 
-    if (!sanitizedDraft.name || sanitizedDraft.description.length > 50) {
+    if (!sanitizedDraft.name || sanitizedDraft.description.length > BOX_DESCRIPTION_MAX_LENGTH) {
       return;
     }
 
@@ -55,7 +56,7 @@ function ManageBoxModal({
     onClose();
   };
 
-  const descriptionRemaining = 50 - description.length;
+  const descriptionRemaining = BOX_DESCRIPTION_MAX_LENGTH - description.length;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
@@ -86,12 +87,12 @@ function ManageBoxModal({
           <Textarea
             value={description}
             onChange={(event) =>
-              setDescription(event.target.value.slice(0, 50))
+              setDescription(event.target.value.slice(0, BOX_DESCRIPTION_MAX_LENGTH))
             }
             placeholder='Short description'
             aria-label='Box description'
             name='box-description'
-            maxLength={50}
+            maxLength={BOX_DESCRIPTION_MAX_LENGTH}
             autoComplete='off'
           />
           <div className='text-muted-foreground mt-2 text-right text-xs'>
@@ -102,7 +103,7 @@ function ManageBoxModal({
         <Button
           type='button'
           onClick={() => void handleSubmit()}
-          disabled={isSubmitting || !name.trim() || description.length > 50}
+          disabled={isSubmitting || !name.trim() || description.length > BOX_DESCRIPTION_MAX_LENGTH}
           className='w-full'
         >
           {isSubmitting ? 'Saving...' : submitLabel}

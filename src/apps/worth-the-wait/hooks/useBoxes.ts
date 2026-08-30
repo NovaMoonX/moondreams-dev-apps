@@ -17,7 +17,7 @@ import {
 } from '../security';
 
 import type { Box, BoxDraft } from '../types';
-import { getDefaultBoxes, normalizeBox } from '../utils/boxHelpers';
+import { getDefaultBoxes, normalizeBox, BOX_DESCRIPTION_MAX_LENGTH } from '../utils/boxHelpers';
 
 const limitDescription = (description: string) => description.trim();
 
@@ -148,8 +148,8 @@ export function useBoxes(spaceId: string, userUid?: string) {
         throw new Error('Add a box name before creating it.');
       }
 
-      if (trimmedDescription.length > 50) {
-        throw new Error('Descriptions must be 50 characters or fewer.');
+      if (trimmedDescription.length > BOX_DESCRIPTION_MAX_LENGTH) {
+        throw new Error(`Descriptions must be ${BOX_DESCRIPTION_MAX_LENGTH} characters or fewer.`);
       }
 
       const boxCollection = collection(
@@ -206,8 +206,8 @@ export function useBoxes(spaceId: string, userUid?: string) {
         throw new Error('Add a box name before saving changes.');
       }
 
-      if (trimmedDescription.length > 50) {
-        throw new Error('Descriptions must be 50 characters or fewer.');
+      if (trimmedDescription.length > BOX_DESCRIPTION_MAX_LENGTH) {
+        throw new Error(`Descriptions must be ${BOX_DESCRIPTION_MAX_LENGTH} characters or fewer.`);
       }
 
       const boxRef = doc(

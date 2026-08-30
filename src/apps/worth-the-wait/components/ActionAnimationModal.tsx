@@ -56,12 +56,12 @@ function getCompletedItems(items: Item[], action: ActiveAction) {
 }
 
 function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
-  const { dismissPresentedAction, itemsByBoxId, openBox, presentedAction } =
+  const { dismissPresentedAction, getItemsByBoxId, openBox, presentedAction } =
     useWorthTheWait();
 
   const [now, setNow] = useState(() => Date.now());
   const activeBoxId = presentedAction?.boxId ?? '';
-  const items = itemsByBoxId[activeBoxId] ?? [];
+  const items = getItemsByBoxId(activeBoxId);
 
   useEffect(() => {
     if (presentedAction?.method !== 'raffle') {

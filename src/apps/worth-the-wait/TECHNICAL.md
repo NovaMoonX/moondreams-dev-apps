@@ -65,7 +65,7 @@ Represents a collection box (default or custom).
 | id | string | Unique box document ID |
 | name | string | Display name of the box |
 | emoji | string | Single emoji icon |
-| description | string | Short description (max 50 chars) |
+| description | string | Short description (max 80 chars) |
 | isDefault | boolean | true for pre-seeded boxes, false for custom |
 | createdBy | string | UID of creator ("system" for default boxes) |
 | revealRequestedBy | array<map> | Active reveal requests ([{ userId, method, requestedAt }]) |
@@ -90,7 +90,7 @@ Tracks each completed reveal event (raffle or full box reveal) for auditing and 
 | Field | Type | Description |
 | :---- | :---- | :---- |
 | id | string | Unique reveal event ID |
-| method | string (enum) | "full_reveal" | "raffle" |
+| method | string (enum) | "full_reveal" | "raffle" | "user_reveal" |
 | triggeredBy | string | UID of user who clicked the explicit trigger button |
 | revealedAt | timestamp | Server timestamp when the reveal occurred |
 | itemIds | array<string> | Array of item IDs revealed during this event |
@@ -106,7 +106,7 @@ Subcollection containing user-submitted items within a box.
 | content | string | Plain text item body |
 | isRevealed | boolean | Flag indicating if item is visible to both partners |
 | revealedAt | timestamp | null | Timestamp when the item was revealed |
-| revealedMethod | string (enum) | null | Method used: "full_reveal" | "raffle" | null |
+| revealedMethod | string (enum) | null | Method used: "full_reveal" | "raffle" | "user_reveal" | null |
 | createdAt | timestamp | Item creation timestamp |
 | lastEditedAt | timestamp | Timestamp when item content was last edited |
 
@@ -247,7 +247,7 @@ src/
         │   ├── BoxCard.tsx              # Box display card with reveal history badge  
         │   ├── BoxDetailDrawer.tsx      # Slide-out drawer/modal for box contents  
         │   ├── BoxGrid.tsx              # Grid layout for default and custom boxes  
-        │   ├── ManageBoxModal.tsx       # Modal form for custom boxes (50 char limit)  
+        │   ├── ManageBoxModal.tsx       # Modal form for custom boxes 
         │   ├── ItemCard.tsx             # Card displaying item content & revealMethod badge  
         │   ├── ItemForm.tsx             # Input form to stage/edit an item  
         │   ├── PendingApprovalModal.tsx # Prompt for Space Creator to accept/decline Member #2  

@@ -4,6 +4,8 @@ import { Item } from '../types';
 
 export const RECENT_REVEAL_WINDOW_MS = 3_600_000;
 
+export const getBoxItemCardElementId = (itemId: string) => `box-item-card-${itemId}`;
+
 export function getWasRecentlyRevealed(item: Item): boolean {
   const now = Date.now();
   const hasRecentReveal =
@@ -29,7 +31,9 @@ export async function normalizeItem(
     isRevealed: Boolean(data.isRevealed),
     revealedAt: typeof data.revealedAt === 'number' ? data.revealedAt : null,
     revealedMethod:
-      revealedMethodValue === 'full_reveal' || revealedMethodValue === 'raffle'
+      revealedMethodValue === 'full_reveal' ||
+      revealedMethodValue === 'raffle' ||
+      revealedMethodValue === 'user_reveal'
         ? revealedMethodValue
         : null,
     createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),

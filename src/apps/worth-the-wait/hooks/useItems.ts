@@ -1,11 +1,13 @@
 import { auth, db } from '@lib/firebase/config';
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
   getDoc,
   onSnapshot,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -235,6 +237,104 @@ export function useItems(
     [spaceId],
   );
 
+  const updateItem = useCallback(
+    async (targetBoxId: string, itemId: string, content: string) => {
+      if (!spaceId || !targetBoxId || !itemId) {
+        return;
+      }
+
+      const trimmedContent = content.trim();
+      if (!trimmedContent) {
+        throw new Error('Enter item text before saving the update.');
+      }
+
+      const itemRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+        'items',
+        itemId,
+      );
+      const spaceEncryption = await getSpaceEncryption(spaceId);
+      const encryptedContent = await encryptStringForSpace(
+        trimmedContent,
+        spaceEncryption,
+      );
+
+      await updateDoc(itemRef, {
+        content: encryptedContent,
+        lastEditedAt: Date.now(),
+      });
+    },
+    [spaceId],
+  );
+
+  const revealItem = useCallback(
+    async (targetBoxId: string, itemId: string) => {
+      if (!spaceId || !targetBoxId || !itemId) {
+        return;
+      }
+
+      const userId = auth.currentUser?.uid ?? userUid;
+      if (!userId) {
+        throw new Error('You must be signed in to reveal an item.');
+      }
+
+      const now = Date.now();
+      const itemRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+        'items',
+        itemId,
+      );
+      const boxRef = doc(
+        db,
+        'apps',
+        'worth-the-wait',
+        'spaces',
+        spaceId,
+        'boxes',
+        targetBoxId,
+      );
+
+      const historyEntry = {
+        id: `user-reveal-${itemId}-${now}`,
+        method: 'user_reveal',
+        triggeredBy: userId,
+        revealedAt: now,
+        itemIds: [itemId],
+      };
+
+      await Promise.all([
+        updateDoc(itemRef, {
+          isRevealed: true,
+          revealedAt: now,
+          revealedMethod: 'user_reveal',
+        }),
+        updateDoc(boxRef, {
+          revealHistory: arrayUnion(historyEntry),
+        }),
+      ]);
+    },
+    [spaceId, userUid],
+  );
+
+  const getItemsByBoxId = useCallback(
+    (targetBoxId: string) => {
+      return itemsByBoxId[targetBoxId] ?? [];
+    },
+    [itemsByBoxId],
+  );
+
   const visibleItems = useMemo(() => {
     const allItems = Object.values(itemsByBoxId).flat();
     return spaceId && (areBoxes || userUid) ? allItems : [];
@@ -250,9 +350,12 @@ export function useItems(
   return {
     items: visibleItems,
     itemsByBoxId: visibleItemsByBoxId,
+    getItemsByBoxId,
     loading: visibleLoading,
     error: visibleError,
     addItem,
     deleteItem,
+    updateItem,
+    revealItem,
   };
 }

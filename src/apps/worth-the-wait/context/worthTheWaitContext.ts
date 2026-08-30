@@ -10,9 +10,12 @@ export interface WorthTheWaitContextValue {
   editCustomBox: (boxId: string, draft: { name: string; emoji: string; description: string }) => Promise<void>;
   deleteBox: (boxId: string) => Promise<void>;
   itemsByBoxId: Record<string, Item[]>;
+  getItemsByBoxId: (boxId: string) => Item[];
   itemsLoading: boolean;
   addItem: (boxId: string, content: string | { content: string }) => Promise<unknown>;
   deleteItem: (boxId: string, itemId: string) => Promise<void>;
+  updateItem: (boxId: string, itemId: string, content: string) => Promise<void>;
+  revealItem: (boxId: string, itemId: string) => Promise<void>;
   memberUpdateSummary: MemberUpdateSummary | null;
   memberUpdateLoading: boolean;
   markMemberUpdatesAsSeen: () => Promise<void>;

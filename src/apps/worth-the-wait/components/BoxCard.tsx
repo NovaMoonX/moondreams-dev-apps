@@ -21,7 +21,7 @@ function BoxCard() {
   const { user } = useAuth();
   const [now, setNow] = useState<number | null>(null);
   const { box, onDelete, onEdit } = useBoxContext();
-  const { itemsByBoxId, openBox } = useWorthTheWait();
+  const { getItemsByBoxId, openBox } = useWorthTheWait();
   const { alert, confirm } = useActionModal();
   const { option, separator } = DropdownMenuFactories;
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -33,7 +33,8 @@ function BoxCard() {
       now !== null && entry.revealedAt >= now - RECENT_REVEAL_WINDOW_MS,
   );
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
-  const itemCount = itemsByBoxId[box.id]?.length ?? 0;
+  const boxItems = getItemsByBoxId(box.id);
+  const itemCount = boxItems.length;
 
   const handleConfirmDelete = async () => {
     if (user?.uid !== box.createdBy) {

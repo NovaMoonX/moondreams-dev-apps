@@ -5,12 +5,14 @@ import {
   Disclosure,
   Drawer,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useMemo, useState } from 'react';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useMemo, useRef, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
+import type { Item } from '../types';
 import { getWasRecentlyRevealed } from '../utils/itemHelpers';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
@@ -23,20 +25,35 @@ interface BoxDetailDrawerProps {
 
 function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   const { user } = useAuth();
+  const { confirm } = useActionModal();
   const { box } = useBoxContext();
   const {
     addItem,
     deleteItem,
-    itemsByBoxId,
+    getItemsByBoxId,
     itemsDisclosureOpen,
     itemsLoading,
+    revealItem,
     setItemsDisclosureOpen,
     space,
+    updateItem,
   } = useWorthTheWait();
-  const items = itemsByBoxId[box.id] ?? [];
+  const items = getItemsByBoxId(box.id);
+  const itemsById = useMemo(() => {
+    const map = items.reduce<Record<string, Item>>((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {});
+
+    return map;
+  }, [items]);
+
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
+  const [draftItemContent, setDraftItemContent] = useState('');
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [showRecentlyRevealedItems, setShowRecentlyRevealedItems] =
     useState(itemsDisclosureOpen);
+  const itemTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const partnerUid = useMemo(() => {
     if (!user || !space) {
@@ -128,6 +145,44 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     });
   };
 
+  const handleEditItem = async (item: Item) => {
+    const hasDraftContent = draftItemContent.trim().length > 0;
+    const isReplacingDraft =
+      hasDraftContent && draftItemContent.trim() !== item.content.trim();
+
+    if (isReplacingDraft) {
+      const confirmed = await confirm({
+        title: 'Replace current draft?',
+        message: 'This will replace the text in the item form. Continue?',
+      });
+
+      if (!confirmed) {
+        return false;
+      }
+    }
+
+    if (editingItemId && editingItemId !== item.id) {
+      handleToggleItemVisibility(editingItemId);
+    }
+
+    setEditingItemId(item.id);
+    setDraftItemContent(item.content);
+    console.log('will focus'); // REMOVE
+
+    setTimeout(() => {
+      console.log('reg focus'); // REMOVE
+      itemTextareaRef.current?.focus();
+    }, 0);
+
+    return true;
+  };
+
+  const clearEditingItem = () => {
+    handleToggleItemVisibility(editingItemId!);
+    setEditingItemId(null);
+    setDraftItemContent('');
+  };
+
   return (
     <Drawer
       isOpen={isOpen}
@@ -213,10 +268,10 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                   </div>
                 </div>
               }
-              className='border-border rounded-2xl border bg-slate-950/10'
+              className='border-border rounded-2xl border bg-slate-950/10 overflow-visible!'
               buttonClassName='w-full justify-between rounded-2xl px-4 py-3 text-left'
             >
-              <div className='space-y-3 px-4 pt-3 pb-4'>
+              <div className='space-y-3 px-4 pt-3 pb-4 '>
                 <div className='flex items-center justify-between gap-3'>
                   <span className='text-muted-foreground text-xs tracking-[0.14em] uppercase'>
                     {filteredItems.length} item
@@ -265,11 +320,13 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                     No items yet. Share your first thought with your partner.
                   </div>
                 ) : (
-                  filteredItems.map((item) => (
+                  filteredItems.map((item, idx) => (
                     <ItemCard
                       key={item.id}
+                      itemPos={idx}
                       item={item}
                       currentUserId={user?.uid}
+                      isEditing={editingItemId === item.id}
                       isAuthorHidden={
                         item.authorId === user?.uid &&
                         !visibleItemIds.has(item.id)
@@ -277,7 +334,12 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
                       onDelete={async (itemId) => {
                         await deleteItem(box.id, itemId);
                       }}
+                      onEdit={handleEditItem}
+                      onReveal={async (itemId) => {
+                        await revealItem(box.id, itemId);
+                      }}
                       onToggleVisibility={handleToggleItemVisibility}
+                      onFocusTextarea={() => itemTextareaRef.current?.focus()}
                     />
                   ))
                 )}
@@ -297,11 +359,27 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
 
           <div className='border-border border-t pt-4'>
             <ItemForm
+              textareaRef={itemTextareaRef}
+              value={draftItemContent}
+              onChange={setDraftItemContent}
+              editingItemId={editingItemId}
+              onCancelEdit={editingItemId ? clearEditingItem : undefined}
               onSubmit={async (content) => {
+                if (editingItemId) {
+                  await updateItem(box.id, editingItemId, content);
+                  clearEditingItem();
+                  return;
+                }
+
                 await addItem(box.id, content);
+                setDraftItemContent('');
                 setShowRecentlyRevealedItems(false);
               }}
-              placeholder='Write a thought, wish, or plan...'
+              placeholder={
+                editingItemId
+                  ? itemsById[editingItemId]?.content
+                  : 'Write a thought, wish, or plan...'
+              }
             />
           </div>
         </div>

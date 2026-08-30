@@ -43,7 +43,7 @@ Worth the Wait encrypts the private, user-authored content fields for each space
 ### Core MVP
 
 - [ ] Seeded default boxes (i.e. _Future Dates_, _Joys from Last Time_, _Appreciations of Each Other_, _Bedroom Desires_, _Places to Travel to Together_)
-- [ ] Custom box creation (name, emoji, short description under 50 characters)
+- [ ] Custom box creation (name, emoji, short description)
 - [ ] Box deletion with confirmation
 - [ ] Adding, viewing, removing items in a box
 - [ ] Items are hidden from others by defaults

@@ -40,6 +40,7 @@ export type Space = {
 };
 
 export type RevealMethod = 'full_reveal' | 'raffle';
+export type RevealHistoryMethod = RevealMethod | 'user_reveal';
 
 export type RevealRequestedBy = {
   userId: string;
@@ -49,7 +50,7 @@ export type RevealRequestedBy = {
 
 export type RevealHistory = {
   id: string;
-  method: RevealMethod;
+  method: RevealHistoryMethod;
   triggeredBy: string;
   revealedAt: number;
   itemIds: string[];
@@ -80,7 +81,7 @@ export type Item = {
   content: string;
   isRevealed: boolean;
   revealedAt: number | null;
-  revealedMethod: RevealMethod | null;
+  revealedMethod: RevealHistoryMethod | null;
   createdAt: number;
   lastEditedAt: number;
 };
@@ -97,6 +98,10 @@ export type MemberUpdateSummary = {
   updatedBoxNames: string[];
   newItems: number;
   newItemBoxNames: string[];
+  newRevealRequests: number;
+  newRevealRequestBoxNames: string[];
+  newReveals: number;
+  newRevealBoxNames: string[];
   lastSurfacedAt: number | null;
   updatedAt: number;
 };
