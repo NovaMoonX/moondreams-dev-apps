@@ -8,7 +8,6 @@ import type {
   Box,
   RevealHistory,
   RevealHistoryMethod,
-  RevealMethod,
   RevealRequestedBy,
 } from '../types';
 
@@ -150,7 +149,7 @@ export function getDefaultBoxes(now = Date.now()): Box[] {
 }
 
 export function getFriendlyRevealMethod(
-  method: RevealMethod | 'user_reveal',
+  method: RevealHistoryMethod,
   casing?: 'upper' | 'lower' | 'title',
 ): string {
   switch (method) {

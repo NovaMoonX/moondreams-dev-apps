@@ -1,5 +1,6 @@
 import { auth, db } from '@lib/firebase/config';
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -305,10 +306,6 @@ export function useItems(
         targetBoxId,
       );
 
-      const boxSnapshot = await getDoc(boxRef);
-      const existingHistory = Array.isArray(boxSnapshot.data()?.revealHistory)
-        ? boxSnapshot.data()?.revealHistory
-        : [];
       const historyEntry = {
         id: `user-reveal-${itemId}-${now}`,
         method: 'user_reveal',
@@ -324,7 +321,7 @@ export function useItems(
           revealedMethod: 'user_reveal',
         }),
         updateDoc(boxRef, {
-          revealHistory: [...existingHistory, historyEntry],
+          revealHistory: arrayUnion(historyEntry),
         }),
       ]);
     },

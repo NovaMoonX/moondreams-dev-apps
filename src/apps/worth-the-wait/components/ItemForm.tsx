@@ -1,9 +1,9 @@
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
-import { useState } from 'react';
+import { useState, type KeyboardEvent, type Ref, type SyntheticEvent } from 'react';
 import { getBoxItemCardElementId } from '../utils/itemHelpers';
 
 interface ItemFormProps {
-  textareaRef: React.Ref<HTMLTextAreaElement>;
+  textareaRef: Ref<HTMLTextAreaElement>;
   disabled?: boolean;
   placeholder?: string;
   value?: string;
@@ -56,9 +56,7 @@ function ItemForm({
   };
 
   const handleSubmit = async (
-    event:
-      | React.SyntheticEvent<HTMLFormElement>
-      | React.KeyboardEvent<HTMLTextAreaElement>,
+    event: SyntheticEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>,
   ) => {
     event.preventDefault();
 

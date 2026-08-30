@@ -74,8 +74,8 @@ function ItemCard({
   const handleEdit = async () => {
     if (onEdit) {
       const willEdit = await onEdit(item);
-      if (willEdit) {
-        onToggleVisibility?.(item.id);
+      if (willEdit && shouldHideOwnContent) {
+        await onToggleVisibility?.(item.id);
       }
     }
   };

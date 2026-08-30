@@ -12,7 +12,7 @@ import AppToggle from '@/components/AppToggle';
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
-import { Item } from '../types';
+import type { Item } from '../types';
 import { getWasRecentlyRevealed } from '../utils/itemHelpers';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';

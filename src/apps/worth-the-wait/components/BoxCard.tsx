@@ -33,7 +33,7 @@ function BoxCard() {
       now !== null && entry.revealedAt >= now - RECENT_REVEAL_WINDOW_MS,
   );
   const canManageCustomBox = !box.isDefault && user?.uid === box.createdBy;
-  const boxItems = getItemsByBoxId(box.id)
+  const boxItems = getItemsByBoxId(box.id);
   const itemCount = boxItems.length;
 
   const handleConfirmDelete = async () => {
