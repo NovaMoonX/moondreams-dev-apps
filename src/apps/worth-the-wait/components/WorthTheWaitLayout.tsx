@@ -91,7 +91,7 @@ function WorthTheWaitLayout() {
       status: 'initiating' as const,
       selectedItemIds: [],
       initiatedBy: latestRequest.userId,
-      startedAt: Date.now(),
+      startedAt: latestRequest.requestedAt,
       completedAt: null,
     };
   }, [pendingRevealRequest]);
