@@ -26,6 +26,13 @@ export type ActiveAction = {
   completedAt: number | null;
 };
 
+export type RevealStartRequest = {
+  boxId: string;
+  method: RevealMethod;
+  requestedBy: string[];
+  requestedAt: number;
+};
+
 export type Space = {
   id: string;
   createdBy: string;
@@ -35,6 +42,7 @@ export type Space = {
   inviteCode: string | null;
   pendingMember: PendingMember | null;
   activeAction: ActiveAction | null;
+  revealStartRequest: RevealStartRequest | null;
   welcomeSeenBy: Record<string, number>;
   encryption: SpaceEncryption | null;
 };
