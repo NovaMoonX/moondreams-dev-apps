@@ -4,7 +4,7 @@ import {
   RadioGroupItem,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
 import { useAuth } from '@hooks/useAuth';
@@ -21,9 +21,8 @@ function RevealAction() {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { activeAction, space } = useWorthTheWait();
-  const { toggleRevealRequest, startAction, loading } = useRevealRequest({
+  const { toggleRevealRequest, setRevealStartRequest, loading } = useRevealRequest({
     spaceId,
-    box,
     userUid: user?.uid,
   });
   const [startActionError, setStartActionError] = useState<string | null>(null);
@@ -60,34 +59,32 @@ function RevealAction() {
   const actionLocked = Boolean(
     activeAction && activeAction.status !== 'completed',
   );
-
-  const isTriggerEnabled =
-    Boolean(mutualMethod) && isPartnerAvailable && !actionLocked;
-
-  useEffect(() => {
-    if (!isTriggerEnabled || !mutualMethod || !user?.uid || loading) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void startAction(mutualMethod).catch((error) => {
-        console.error('Error starting action:', error);
-        setStartActionError(
-          'An error occurred while starting the action. Please try again.',
-        );
-      });
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isTriggerEnabled, mutualMethod, loading, startAction, user?.uid]);
+  const revealStartRequest = space?.revealStartRequest ?? null;
+  const hasPendingStartRequestForBox =
+    revealStartRequest?.boxId === box.id &&
+    revealStartRequest.method === mutualMethod &&
+    revealStartRequest.requestedBy.length > 0;
+  const isCurrentUserRequestingStart = Boolean(
+    user?.uid &&
+      hasPendingStartRequestForBox &&
+      revealStartRequest?.requestedBy.includes(user.uid),
+  );
 
   const getRevealStatusMessage = () => {
     if (actionLocked) {
       return null;
     }
 
+    if (hasPendingStartRequestForBox && isCurrentUserRequestingStart) {
+      return 'Your start request is pending. Wait for your partner to begin or cancel it.';
+    }
+
+    if (hasPendingStartRequestForBox) {
+      return 'Your partner requested to start this reveal. Open the reveal modal to continue.';
+    }
+
     if (mutualMethod) {
-      return 'Both of you requested the same reveal. We’ll begin automatically.';
+      return 'Both of you requested the same reveal. Send a start request when ready.';
     }
 
     if (selectedMethod && partnerRequest) {
@@ -126,7 +123,7 @@ function RevealAction() {
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => void toggleRevealRequest(selectedMethod)}
+            onClick={() => void toggleRevealRequest(box, selectedMethod)}
             disabled={actionLocked}
           >
             Remove request
@@ -137,7 +134,7 @@ function RevealAction() {
       <RadioGroup
         value={selectedMethod ?? ''}
         onChange={(nextValue) => {
-          void toggleRevealRequest(nextValue as RevealMethod);
+          void toggleRevealRequest(box, nextValue as RevealMethod);
         }}
         className='grid gap-2 sm:grid-cols-2'
       >
@@ -189,6 +186,26 @@ function RevealAction() {
           <span className='text-muted-foreground text-xs'>
             {isActionForCurrentBox ? 'Reveal in progress' : 'Another box is being revealed'}
           </span>
+        ) : mutualMethod && isPartnerAvailable ? (
+          <Button
+            type='button'
+            size='sm'
+            disabled={loading || hasPendingStartRequestForBox}
+            onClick={() => {
+              setStartActionError(null);
+              void setRevealStartRequest({
+                boxId: box.id,
+                method: mutualMethod,
+              }).catch((error) => {
+                console.error('Error requesting reveal start:', error);
+                setStartActionError(
+                  'An error occurred while requesting the reveal start. Please try again.',
+                );
+              });
+            }}
+          >
+            Request to start
+          </Button>
         ) : null}
       </div>
       <div className='my-1 text-right'>

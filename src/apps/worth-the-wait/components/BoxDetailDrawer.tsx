@@ -167,10 +167,8 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
 
     setEditingItemId(item.id);
     setDraftItemContent(item.content);
-    console.log('will focus'); // REMOVE
 
     setTimeout(() => {
-      console.log('reg focus'); // REMOVE
       itemTextareaRef.current?.focus();
     }, 0);
 

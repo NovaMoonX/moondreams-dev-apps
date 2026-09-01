@@ -4,13 +4,18 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useRaffleReveal } from '../hooks/useRaffleReveal';
-import type { ActiveAction, Box, Item } from '../types';
+import type { ActiveAction, Box, Item, RevealStartRequest } from '../types';
 import { getFriendlyRevealMethod } from '../utils/boxHelpers';
 import { useUserInfo } from '@/hooks/useUserInfo';
 
 interface ActionAnimationModalProps {
   boxes: Box[];
-  pendingAction?: ActiveAction | null;
+  currentUserUid?: string;
+  pendingRevealStartRequest?: RevealStartRequest | null;
+  pendingRevealStartRequestLoading?: boolean;
+  onClosePendingRevealStartRequest: () => void;
+  onCancelPendingRevealStartRequest: () => Promise<void>;
+  onStartPendingRevealStartRequest: () => Promise<void>;
 }
 
 const RAFFLE_TICK_MS = 300;
@@ -58,12 +63,24 @@ function getCompletedItems(items: Item[], action: ActiveAction) {
 
 function ActionAnimationModal({
   boxes,
-  pendingAction,
+  currentUserUid,
+  pendingRevealStartRequest,
+  pendingRevealStartRequestLoading,
+  onClosePendingRevealStartRequest,
+  onCancelPendingRevealStartRequest,
+  onStartPendingRevealStartRequest,
 }: ActionAnimationModalProps) {
   const { dismissPresentedAction, getItemsByBoxId, openBox, presentedAction } =
     useWorthTheWait();
 
-  const displayAction = presentedAction ?? pendingAction ?? null;
+  const displayAction = presentedAction ?? null;
+  const [pendingActionError, setPendingActionError] = useState<string | null>(null);
+  const isCurrentUserRevealStartRequester = Boolean(
+    currentUserUid &&
+      pendingRevealStartRequest?.requestedBy.includes(currentUserUid),
+  );
+  const revealStartRequesterUid = pendingRevealStartRequest?.requestedBy[0] ?? null;
+  const revealStartRequester = useUserInfo(revealStartRequesterUid);
   const [now, setNow] = useState(() => Date.now());
   const activeBoxId = displayAction?.boxId ?? '';
   const items = getItemsByBoxId(activeBoxId);
@@ -99,6 +116,95 @@ function ActionAnimationModal({
     now,
   });
 
+  const pendingTargetBox = useMemo(
+    () =>
+      boxes.find((box) => box.id === pendingRevealStartRequest?.boxId) ?? null,
+    [boxes, pendingRevealStartRequest?.boxId],
+  );
+
+  if (!displayAction && pendingRevealStartRequest && pendingTargetBox) {
+    const pendingDescription = isCurrentUserRevealStartRequester
+      ? 'Your start request is active. You can cancel while your partner decides.'
+      : `${revealStartRequester?.displayName ?? 'Your partner'} is requesting to start this reveal.`;
+
+    return (
+      <Modal
+        isOpen
+        onClose={onClosePendingRevealStartRequest}
+        contentOnly
+      >
+        <div className='bg-background/90 border-border bg-card relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 text-center shadow-2xl sm:p-8'>
+          <div className='from-primary/20 via-primary/5 pointer-events-none absolute inset-x-0 top-0 h-44 bg-linear-to-b to-transparent' />
+          <div className='relative space-y-6'>
+            <div className='space-y-2'>
+              <span className='text-muted-foreground text-xs font-semibold tracking-[0.18em] uppercase'>
+                {getFriendlyRevealMethod(pendingRevealStartRequest.method, 'upper')}
+              </span>
+              <h2 className='text-foreground text-3xl font-semibold tracking-tight'>
+                Ready to start this reveal?
+              </h2>
+              <p className='text-muted-foreground text-sm'>
+                {pendingTargetBox.emoji} {pendingTargetBox.name}
+              </p>
+            </div>
+            <div className='border-border bg-muted/40 rounded-3xl border p-6 text-sm'>
+              {pendingDescription}
+            </div>
+            <p className='text-destructive text-xs'>{pendingActionError}</p>
+            <div className='flex flex-col gap-2 sm:flex-row'>
+              {isCurrentUserRevealStartRequester ? (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className='w-full'
+                  disabled={pendingRevealStartRequestLoading}
+                  onClick={() => {
+                    setPendingActionError(null);
+                    void onCancelPendingRevealStartRequest().catch((error) => {
+                      console.error('Error canceling reveal start request:', error);
+                      setPendingActionError(
+                        'Unable to cancel the request right now. Please try again.',
+                      );
+                    });
+                  }}
+                >
+                  Cancel request
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className='w-full'
+                    onClick={onClosePendingRevealStartRequest}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    type='button'
+                    className='w-full'
+                    disabled={pendingRevealStartRequestLoading}
+                    onClick={() => {
+                      setPendingActionError(null);
+                      void onStartPendingRevealStartRequest().catch((error) => {
+                        console.error('Error starting reveal from request:', error);
+                        setPendingActionError(
+                          'Unable to start the reveal right now. Please try again.',
+                        );
+                      });
+                    }}
+                  >
+                    Start reveal
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   if (!displayAction || !targetBox) {
     return null;
   }
@@ -117,15 +223,17 @@ function ActionAnimationModal({
       : 'Opening your shared box';
 
   const handleViewItems = () => {
-    if (presentedAction) {
-      dismissPresentedAction();
-      openBox(presentedAction.boxId, { openItems: true });
+    const nextAction = presentedAction ?? displayAction;
+
+    if (!nextAction) {
       return;
     }
 
-    if (pendingAction) {
-      openBox(pendingAction.boxId, { openItems: true });
+    if (presentedAction) {
+      dismissPresentedAction();
     }
+
+    openBox(nextAction.boxId, { openItems: true });
   };
 
   return (

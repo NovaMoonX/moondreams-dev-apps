@@ -14,6 +14,7 @@ import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useEffect, useMemo, useState } from 'react';
 import { BoxProvider } from '../context/BoxProvider';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
+import { useRevealRequest } from '../hooks/useRevealRequest';
 import { useWelcomeModal } from '../hooks/useWelcomeModal';
 import { generateInviteLink } from '../utils/generateCode';
 import ActionAnimationModal from './ActionAnimationModal';
@@ -40,61 +41,68 @@ function WorthTheWaitLayout() {
     space,
   } = useWorthTheWait();
   const [isCreateBoxOpen, setIsCreateBoxOpen] = useState(false);
+  const [dismissedRevealStartRequestKey, setDismissedRevealStartRequestKey] =
+    useState<string | null>(null);
   const {
     isOpen: isWelcomeModalOpen,
     openManual,
     close,
   } = useWelcomeModal(space, user);
+  const {
+    cancelRevealStartRequest,
+    startAction,
+    loading: revealActionLoading,
+  } = useRevealRequest({
+    spaceId: space?.id ?? '',
+    userUid: user?.uid,
+  });
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
-  const pendingRevealRequest = useMemo(() => {
-    const requestBoxes = boxes.filter((box) => box.revealRequestedBy.length > 0);
-
-    if (requestBoxes.length === 0) {
+  const pendingRevealStartRequest = useMemo(() => {
+    if (!space?.revealStartRequest) {
       return null;
     }
 
-    return requestBoxes.reduce((latestBox, currentBox) => {
-      const latestRequest = [...currentBox.revealRequestedBy].sort(
-        (left, right) => right.requestedAt - left.requestedAt,
-      )[0];
-      const currentLatestRequest = latestBox
-        ? [...latestBox.revealRequestedBy].sort(
-            (left, right) => right.requestedAt - left.requestedAt,
-          )[0]
-        : null;
+    const request = space.revealStartRequest;
+    const matchingBox = boxes.find((box) => box.id === request.boxId);
 
-      if (!latestBox || (latestRequest && currentLatestRequest && latestRequest.requestedAt > currentLatestRequest.requestedAt)) {
-        return currentBox;
-      }
-
-      return latestBox;
-    }, null as (typeof requestBoxes)[number] | null);
-  }, [boxes]);
-  const pendingRevealAction = useMemo(() => {
-    if (!pendingRevealRequest) {
+    if (!matchingBox || request.requestedBy.length === 0) {
       return null;
     }
 
-    const latestRequest = [...pendingRevealRequest.revealRequestedBy].sort(
-      (left, right) => right.requestedAt - left.requestedAt,
-    )[0];
+    const membersWithMatchingMethod = new Set(
+      matchingBox.revealRequestedBy
+        .filter((entry) => entry.method === request.method)
+        .map((entry) => entry.userId),
+    );
+    const hasMutualMethod = space.members.every((memberUid) =>
+      membersWithMatchingMethod.has(memberUid),
+    );
 
-    if (!latestRequest) {
+    if (!hasMutualMethod) {
       return null;
     }
 
-    return {
-      actionId: `pending-request-${pendingRevealRequest.id}`,
-      boxId: pendingRevealRequest.id,
-      method: latestRequest.method,
-      status: 'initiating' as const,
-      selectedItemIds: [],
-      initiatedBy: latestRequest.userId,
-      startedAt: latestRequest.requestedAt,
-      completedAt: null,
-    };
-  }, [pendingRevealRequest]);
+    return request;
+  }, [boxes, space]);
+  const pendingRevealStartRequestKey = useMemo(() => {
+    if (!pendingRevealStartRequest) {
+      return null;
+    }
+
+    const result = `${pendingRevealStartRequest.boxId}-${pendingRevealStartRequest.method}-${pendingRevealStartRequest.requestedBy.join(',')}-${pendingRevealStartRequest.requestedAt}`;
+    return result;
+  }, [pendingRevealStartRequest]);
+  const isCurrentUserRevealStartRequester = Boolean(
+    user?.uid &&
+      pendingRevealStartRequest?.requestedBy.includes(user.uid),
+  );
+  const shouldShowPendingRevealStartRequest = Boolean(
+    pendingRevealStartRequest &&
+      pendingRevealStartRequestKey &&
+      (isCurrentUserRevealStartRequester ||
+        dismissedRevealStartRequestKey !== pendingRevealStartRequestKey),
+  );
   const selectedBox = useMemo(
     () => boxes.find((box) => box.id === selectedBoxId) ?? null,
     [boxes, selectedBoxId],
@@ -322,7 +330,32 @@ function WorthTheWaitLayout() {
         </BoxProvider>
       ) : null}
 
-      <ActionAnimationModal boxes={boxes} pendingAction={pendingRevealAction} />
+      <ActionAnimationModal
+        boxes={boxes}
+        currentUserUid={user?.uid}
+        pendingRevealStartRequest={
+          shouldShowPendingRevealStartRequest ? pendingRevealStartRequest : null
+        }
+        pendingRevealStartRequestLoading={revealActionLoading}
+        onClosePendingRevealStartRequest={() => {
+          if (pendingRevealStartRequestKey) {
+            setDismissedRevealStartRequestKey(pendingRevealStartRequestKey);
+          }
+        }}
+        onCancelPendingRevealStartRequest={async () => {
+          await cancelRevealStartRequest(pendingRevealStartRequest);
+        }}
+        onStartPendingRevealStartRequest={async () => {
+          if (!pendingRevealStartRequest) {
+            return;
+          }
+
+          await startAction({
+            boxId: pendingRevealStartRequest.boxId,
+            method: pendingRevealStartRequest.method,
+          });
+        }}
+      />
     </div>
   );
 }

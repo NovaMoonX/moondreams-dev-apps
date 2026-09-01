@@ -85,6 +85,7 @@ service cloud.firestore {
           && request.resource.data.inviteCode.size() == 6
           && request.resource.data.welcomeSeenBy is map
           && request.resource.data.activeAction == null
+          && request.resource.data.revealStartRequest == null
           && isEncryptionConfigValid();
       }
 
@@ -101,6 +102,7 @@ service cloud.firestore {
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.revealStartRequest == resource.data.revealStartRequest
           && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
           && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.pendingMember != null
@@ -113,13 +115,14 @@ service cloud.firestore {
         return request.auth != null
           && request.auth.uid == resource.data.createdBy
           && resource.data.pendingMember != null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'pendingMember', 'inviteCode', 'activeAction', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'pendingMember', 'inviteCode', 'activeAction', 'revealStartRequest', 'updatedAt'])
           && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.pendingMember == null
           && request.resource.data.inviteCode == null
           && request.resource.data.activeAction == null
+          && request.resource.data.revealStartRequest == null
           && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
           && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.members.size() == resource.data.members.size() + 1
@@ -140,6 +143,7 @@ service cloud.firestore {
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.revealStartRequest == resource.data.revealStartRequest
           && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
           && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.updatedAt is number;
@@ -156,10 +160,43 @@ service cloud.firestore {
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.pendingMember == resource.data.pendingMember
           && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.revealStartRequest == resource.data.revealStartRequest
           && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.updatedAt is number
           && request.resource.data.welcomeSeenBy is map
           && request.resource.data.welcomeSeenBy[request.auth.uid] is number;
+      }
+
+      function isRevealStartRequestUpdateValid() {
+        return request.auth != null
+          && request.auth.uid in resource.data.members
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealStartRequest', 'updatedAt'])
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMember == resource.data.pendingMember
+          && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.welcomeSeenBy == resource.data.welcomeSeenBy
+          && request.resource.data.encryption == resource.data.encryption
+          && request.resource.data.updatedAt is number
+          && (
+            request.resource.data.revealStartRequest == null
+            || (
+              request.resource.data.revealStartRequest is map
+              && request.resource.data.revealStartRequest.keys().hasOnly(['boxId', 'method', 'requestedBy', 'requestedAt'])
+              && request.resource.data.revealStartRequest.boxId is string
+              && request.resource.data.revealStartRequest.boxId.size() > 0
+              && (request.resource.data.revealStartRequest.method == 'full_reveal' || request.resource.data.revealStartRequest.method == 'raffle')
+              && request.resource.data.revealStartRequest.requestedBy is list
+              && request.resource.data.revealStartRequest.requestedBy.size() > 0
+              && request.resource.data.revealStartRequest.requestedBy.size() <= resource.data.members.size()
+              && resource.data.members.hasAll(request.resource.data.revealStartRequest.requestedBy)
+              && request.auth.uid in request.resource.data.revealStartRequest.requestedBy
+              && request.resource.data.revealStartRequest.requestedAt is number
+            )
+          );
       }
 
       function isActiveActionStartValid() {
@@ -182,6 +219,7 @@ service cloud.firestore {
         isPendingJoinRequestValid() ||
         (isCreator(resource.data) && (isApprovalValid() || isDeclineValid())) ||
         isWelcomeSeenUpdateValid() ||
+        isRevealStartRequestUpdateValid() ||
         isActiveActionStartValid() ||
         (
           isMember(resource.data)
@@ -190,6 +228,7 @@ service cloud.firestore {
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.pendingMember == resource.data.pendingMember
           && request.resource.data.activeAction == resource.data.activeAction
+          && request.resource.data.revealStartRequest == resource.data.revealStartRequest
           && isEncryptionConfigValid()
         )
       );

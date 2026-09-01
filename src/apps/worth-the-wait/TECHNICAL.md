@@ -45,6 +45,7 @@ Represents the shared environment between the two partners.
 | members | array<string> | Array of active member UIDs ([uidA, uidB]) |
 | inviteCode | string | null | Short string for partner pairing (cleared once locked) |
 | pendingMember | map | null | Pending request ({ uid: string, requestedAt: timestamp }) |
+| revealStartRequest | map | null | Pending reveal start request ({ boxId, method, requestedBy, requestedAt }) |
 | activeAction | map | null | Currently active synchronous action state (Full Reveal or Raffle) |
 | encryption | map | null | Per-space AES-256-GCM key bundle with `keyId`, `keyVersion`, and the raw secret key for the active member set |
 
@@ -157,13 +158,16 @@ To prevent race conditions (e.g., both partners clicking trigger simultaneously,
        [ Both Users Request Same Action ]  
                        │  
                        ▼  
+          [ Partner A Clicks "Request to Start" ]  
+                       │  
+                       ▼  
+          [ revealStartRequest written on space ]  
+                       │  
+                       ▼  
+          [ Partner B opens modal + clicks "Start Reveal" ]  
+                       │  
+                       ▼  
           [ Presence & Location Validated ]  
-                       │  
-                       ▼  
-          [ Primary Trigger Button Enabled ]  
-                       │  
-                       ▼  
-       [ Partner A Clicks "Start Action" ]  
                        │  
                        ▼  
        [ Transaction Check: activeAction ]  
@@ -200,10 +204,12 @@ Execution is strictly handled via the Cloud Function callable endpoint (triggerB
 * **Trigger:** Callable function invoked when a user clicks the enabled primary trigger button in RevealAction.tsx.  
 * **Payload:** { spaceId: string, boxId: string, method: "full_reveal" | "raffle" }  
 * **Execution Steps:**  
-  1. **Atomic Lock & Dual-Trigger Guard:**  
+  1. **Request + Atomic Lock & Dual-Trigger Guard:**  
+     * Verifies `spaces/{spaceId}.revealStartRequest` exists and matches the payload `{ boxId, method }`.  
+     * Verifies the caller is *not* in `revealStartRequest.requestedBy` (requester can cancel; partner starts).  
      * Runs within a database transaction reading spaces/{spaceId}.activeAction.  
      * If activeAction != null AND activeAction.status !== "completed", aborts immediately with error code already-in-progress.  
-     * Immediately writes spaces/{spaceId}.activeAction = { actionId, boxId, method, status: "initiating", selectedItemIds: [], initiatedBy: context.auth.uid, startedAt: serverTimestamp(), completedAt: null }.  
+     * Immediately writes spaces/{spaceId}.activeAction = { actionId, boxId, method, status: "initiating", selectedItemIds: [], initiatedBy: context.auth.uid, startedAt: serverTimestamp(), completedAt: null } and clears `revealStartRequest`.  
   2. **Matching Method Verification:**  
      * Asserts that both space members have matching entries in boxes/{boxId}.revealRequestedBy matching payload.method.  
   3. **Active Presence & Location Verification:**  
