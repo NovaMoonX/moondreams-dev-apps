@@ -47,6 +47,54 @@ function WorthTheWaitLayout() {
   } = useWelcomeModal(space, user);
 
   const hasLockedSpace = Boolean(space && space.members.length >= 2);
+  const pendingRevealRequest = useMemo(() => {
+    const requestBoxes = boxes.filter((box) => box.revealRequestedBy.length > 0);
+
+    if (requestBoxes.length === 0) {
+      return null;
+    }
+
+    return requestBoxes.reduce((latestBox, currentBox) => {
+      const latestRequest = [...currentBox.revealRequestedBy].sort(
+        (left, right) => right.requestedAt - left.requestedAt,
+      )[0];
+      const currentLatestRequest = latestBox
+        ? [...latestBox.revealRequestedBy].sort(
+            (left, right) => right.requestedAt - left.requestedAt,
+          )[0]
+        : null;
+
+      if (!latestBox || (latestRequest && currentLatestRequest && latestRequest.requestedAt > currentLatestRequest.requestedAt)) {
+        return currentBox;
+      }
+
+      return latestBox;
+    }, null as (typeof requestBoxes)[number] | null);
+  }, [boxes]);
+  const pendingRevealAction = useMemo(() => {
+    if (!pendingRevealRequest) {
+      return null;
+    }
+
+    const latestRequest = [...pendingRevealRequest.revealRequestedBy].sort(
+      (left, right) => right.requestedAt - left.requestedAt,
+    )[0];
+
+    if (!latestRequest) {
+      return null;
+    }
+
+    return {
+      actionId: `pending-request-${pendingRevealRequest.id}`,
+      boxId: pendingRevealRequest.id,
+      method: latestRequest.method,
+      status: 'initiating' as const,
+      selectedItemIds: [],
+      initiatedBy: latestRequest.userId,
+      startedAt: Date.now(),
+      completedAt: null,
+    };
+  }, [pendingRevealRequest]);
   const selectedBox = useMemo(
     () => boxes.find((box) => box.id === selectedBoxId) ?? null,
     [boxes, selectedBoxId],
@@ -274,7 +322,7 @@ function WorthTheWaitLayout() {
         </BoxProvider>
       ) : null}
 
-      <ActionAnimationModal boxes={boxes} />
+      <ActionAnimationModal boxes={boxes} pendingAction={pendingRevealAction} />
     </div>
   );
 }

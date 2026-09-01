@@ -10,6 +10,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 
 interface ActionAnimationModalProps {
   boxes: Box[];
+  pendingAction?: ActiveAction | null;
 }
 
 const RAFFLE_TICK_MS = 300;
@@ -55,16 +56,20 @@ function getCompletedItems(items: Item[], action: ActiveAction) {
   return result;
 }
 
-function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
+function ActionAnimationModal({
+  boxes,
+  pendingAction,
+}: ActionAnimationModalProps) {
   const { dismissPresentedAction, getItemsByBoxId, openBox, presentedAction } =
     useWorthTheWait();
 
+  const displayAction = presentedAction ?? pendingAction ?? null;
   const [now, setNow] = useState(() => Date.now());
-  const activeBoxId = presentedAction?.boxId ?? '';
+  const activeBoxId = displayAction?.boxId ?? '';
   const items = getItemsByBoxId(activeBoxId);
 
   useEffect(() => {
-    if (presentedAction?.method !== 'raffle') {
+    if (displayAction?.method !== 'raffle') {
       return;
     }
 
@@ -73,41 +78,35 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
     }, RAFFLE_TICK_MS);
 
     return () => clearInterval(intervalId);
-  }, [presentedAction?.method]);
+  }, [displayAction?.method]);
 
   const targetBox = useMemo(
-    () => boxes.find((box) => box.id === presentedAction?.boxId) ?? null,
-    [boxes, presentedAction?.boxId],
+    () => boxes.find((box) => box.id === displayAction?.boxId) ?? null,
+    [boxes, displayAction?.boxId],
   );
 
-  // const actionPhase = presentedAction
-  //   ? getActionPhase(presentedAction, now)
-  //   : null;
-  const completedItems = presentedAction
-    ? getCompletedItems(items, presentedAction)
+  const completedItems = displayAction
+    ? getCompletedItems(items, displayAction)
     : [];
-  const raffleItem = presentedAction
-    ? getRaffleItem(items, presentedAction, now)
-    : null;
-
+  const raffleItem = displayAction ? getRaffleItem(items, displayAction, now) : null;
 
   const raffleUser = useUserInfo(raffleItem?.authorId);
 
   const raffleReveal = useRaffleReveal({
     content: raffleItem?.content ?? null,
-    status: presentedAction?.status,
-    completedAt: presentedAction?.completedAt,
+    status: displayAction?.status,
+    completedAt: displayAction?.completedAt,
     now,
   });
 
-  if (!presentedAction || !targetBox) {
+  if (!displayAction || !targetBox) {
     return null;
   }
 
-  const isCompleted = presentedAction.status === 'completed';
+  const isCompleted = displayAction.status === 'completed';
 
   const raffleDisplayText = raffleReveal?.displayText;
-  const isRaffle = presentedAction.method === 'raffle';
+  const isRaffle = displayAction.method === 'raffle';
   const revealedItemCount = completedItems.length;
   const title = isCompleted
     ? isRaffle
@@ -118,8 +117,15 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
       : 'Opening your shared box';
 
   const handleViewItems = () => {
-    dismissPresentedAction();
-    openBox(presentedAction.boxId, { openItems: true });
+    if (presentedAction) {
+      dismissPresentedAction();
+      openBox(presentedAction.boxId, { openItems: true });
+      return;
+    }
+
+    if (pendingAction) {
+      openBox(pendingAction.boxId, { openItems: true });
+    }
   };
 
   return (
@@ -136,7 +142,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
         <div className='relative space-y-6'>
           <div className='space-y-2'>
             <span className='text-muted-foreground text-xs font-semibold tracking-[0.18em] uppercase'>
-              {getFriendlyRevealMethod(presentedAction.method, 'upper')}
+              {getFriendlyRevealMethod(displayAction.method, 'upper')}
             </span>
             <h2
               id='action-animation-title'

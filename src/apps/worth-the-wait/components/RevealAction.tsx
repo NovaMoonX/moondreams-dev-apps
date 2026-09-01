@@ -4,7 +4,7 @@ import {
   RadioGroupItem,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
 import { useAuth } from '@hooks/useAuth';
@@ -64,13 +64,22 @@ function RevealAction() {
   const isTriggerEnabled =
     Boolean(mutualMethod) && isPartnerAvailable && !actionLocked;
 
-  const handleStartAction = async () => {
-    if (!isTriggerEnabled || !mutualMethod || !user?.uid) {
+  useEffect(() => {
+    if (!isTriggerEnabled || !mutualMethod || !user?.uid || loading) {
       return;
     }
 
-    await startAction(mutualMethod);
-  };
+    const timeoutId = window.setTimeout(() => {
+      void startAction(mutualMethod).catch((error) => {
+        console.error('Error starting action:', error);
+        setStartActionError(
+          'An error occurred while starting the action. Please try again.',
+        );
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isTriggerEnabled, mutualMethod, loading, startAction, user?.uid]);
 
   const getRevealStatusMessage = () => {
     if (actionLocked) {
@@ -78,7 +87,7 @@ function RevealAction() {
     }
 
     if (mutualMethod) {
-      return 'Both you and your partner have matched and can now start the reveal!';
+      return 'Both of you requested the same reveal. We’ll begin automatically.';
     }
 
     if (selectedMethod && partnerRequest) {
@@ -94,7 +103,7 @@ function RevealAction() {
     }
 
     if (partnerUid) {
-      return 'Choose a reveal method to start matching with your partner.';
+      return 'Choose a reveal method to request a reveal with your partner.';
     }
 
     return 'Add your partner to start sharing a reveal request.';
@@ -176,32 +185,11 @@ function RevealAction() {
           {getRevealStatusMessage()}
         </div>
 
-        <Button
-          type='button'
-          size='sm'
-          disabled={!isTriggerEnabled}
-          onClick={() => {
-            handleStartAction().catch((error) => {
-              console.error('Error starting action:', error);
-              setStartActionError(
-                'An error occurred while starting the action. Please try again.',
-              );
-            });
-          }}
-          loading={loading}
-        >
-          <span
-            className={
-              actionLocked && isActionForCurrentBox ? 'animate-pulse' : ''
-            }
-          >
-            {!actionLocked
-              ? 'Start Action'
-              : isActionForCurrentBox
-                ? 'Reveal in progress'
-                : 'Another box is being revealed'}
+        {actionLocked ? (
+          <span className='text-muted-foreground text-xs'>
+            {isActionForCurrentBox ? 'Reveal in progress' : 'Another box is being revealed'}
           </span>
-        </Button>
+        ) : null}
       </div>
       <div className='my-1 text-right'>
         <span className='text-destructive text-xs'>{startActionError}</span>
