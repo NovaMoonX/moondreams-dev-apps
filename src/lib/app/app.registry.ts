@@ -22,6 +22,14 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
       'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
     createdAt: '2026-08-16',
   },
+  {
+    id: 'nine-lives',
+    name: 'Nine Lives',
+    path: '/nine-lives',
+    description:
+      'A private household dashboard for cat owners to track care, visits, health records, and reminders in one place.',
+    createdAt: '2026-09-10',
+  },
 ];
 
 export const APP_REGISTRY_ID_MAP = Object.fromEntries(
