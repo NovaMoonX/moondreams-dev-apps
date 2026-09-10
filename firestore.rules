@@ -30,16 +30,19 @@ service cloud.firestore {
           && request.resource.data.lastEditedAt is number;
       }
 
+      function isHouseholdUpdateValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMembers == resource.data.pendingMembers
+          && request.resource.data.lastEditedAt is number;
+      }
+
       allow read: if isHouseholdMember(householdId);
       allow create: if isHouseholdCreateValid();
-      allow update: if isHouseholdMember(householdId)
-        && request.resource.data.id == resource.data.id
-        && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.members == resource.data.members
-        && request.resource.data.inviteCode == resource.data.inviteCode
-        && request.resource.data.pendingMembers == resource.data.pendingMembers
-        && request.resource.data.lastEditedAt is number;
+      allow update: if isHouseholdMember(householdId) && isHouseholdUpdateValid();
       allow delete: if false;
     }
 

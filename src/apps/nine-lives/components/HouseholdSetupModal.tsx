@@ -1,5 +1,5 @@
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface HouseholdSetupModalProps {
   isOpen: boolean;
@@ -18,10 +18,6 @@ function HouseholdSetupModal({
 }: HouseholdSetupModalProps) {
   const [name, setName] = useState(defaultName);
 
-  useEffect(() => {
-    setName(defaultName);
-  }, [defaultName, isOpen]);
-
   const handleConfirm = async () => {
     const trimmedName = name.trim();
 
@@ -37,6 +33,7 @@ function HouseholdSetupModal({
       isOpen={isOpen}
       onClose={onClose ?? (() => undefined)}
       title='Set up your household'
+      hideCloseButton
     >
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>

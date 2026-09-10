@@ -7,6 +7,7 @@ import Loading from '@/ui/Loading';
 import HouseholdSetupModal from './components/HouseholdSetupModal';
 import { createHousehold } from './store/actions/householdsActions';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
+import AuthRequiredState from '@/ui/AuthRequiredState';
 
 function NineLives() {
   const { user, loading } = useAuth();
@@ -51,18 +52,13 @@ function NineLives() {
   }
 
   if (!user) {
-    return (
-      <div className='page'>
-        <div className='rounded-lg border border-border bg-card p-6'>
-          Please sign in to use Nine Lives.
-        </div>
-      </div>
-    );
+    return <AuthRequiredState message='Please sign in to use Nine Lives.' />;
   }
 
   if (!currentHousehold) {
     return (
       <HouseholdSetupModal
+        key={`${user.uid}-${defaultHouseholdName}`}
         isOpen
         defaultName={defaultHouseholdName}
         isSubmitting={isSubmitting}

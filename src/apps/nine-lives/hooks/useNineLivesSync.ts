@@ -32,10 +32,10 @@ export function useNineLivesSync(
       return null;
     }
 
-    return (
-      state.nineLives.households.items.find(
-        (household) => household.id === householdId,
-      ) ?? null
+    const household = state.nineLives.households.items.find(
+      (item) => item.id === householdId,
     );
+
+    return household ?? null;
   });
 }
