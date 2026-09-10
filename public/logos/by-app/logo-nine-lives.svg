@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Nine Lives logo">
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="cat" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="350" fill="#fff7ed" opacity="0.9"/>
+  <path d="M310 404L430 250L470 450Z" fill="#fbbf24"/>
+  <path d="M714 404L594 250L534 450Z" fill="#fbbf24"/>
+  <path d="M298 414C263 392 242 365 238 325C276 325 321 344 349 385C332 392 314 401 298 414Z" fill="#fbbf24"/>
+  <path d="M726 414C761 392 782 365 786 325C748 325 703 344 675 385C692 392 710 401 726 414Z" fill="#fbbf24"/>
+  <path d="M256 474C256 352 352 256 512 256C672 256 768 352 768 474V560C768 676 671 784 512 784C353 784 256 676 256 560V474Z" fill="url(#cat)"/>
+  <circle cx="402" cy="482" r="42" fill="#0f172a"/>
+  <circle cx="622" cy="482" r="42" fill="#0f172a"/>
+  <circle cx="388" cy="468" r="12" fill="#fff"/>
+  <circle cx="638" cy="468" r="12" fill="#fff"/>
+  <path d="M512 520L564 620C548 632 531 638 512 638C493 638 476 632 460 620L512 520Z" fill="#fbbf24"/>
+  <path d="M366 562C425 547 455 532 512 532C569 532 599 547 658 562" fill="none" stroke="#0f172a" stroke-width="22" stroke-linecap="round"/>
+  <path d="M282 640L392 620" stroke="#0f172a" stroke-width="18" stroke-linecap="round"/>
+  <path d="M742 640L632 620" stroke="#0f172a" stroke-width="18" stroke-linecap="round"/>
+  <path d="M362 700L442 654" stroke="#0f172a" stroke-width="18" stroke-linecap="round"/>
+  <path d="M662 700L582 654" stroke="#0f172a" stroke-width="18" stroke-linecap="round"/>
+  <path d="M460 704L486 756" stroke="#0f172a" stroke-width="20" stroke-linecap="round"/>
+  <path d="M564 704L538 756" stroke="#0f172a" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="512" cy="210" r="26" fill="#fbbf24" opacity="0.55"/>
+  <circle cx="674" cy="180" r="18" fill="#fdba74" opacity="0.6"/>
+  <circle cx="350" cy="180" r="18" fill="#fcd34d" opacity="0.5"/>
+</svg>

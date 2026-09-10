@@ -1,12 +1,12 @@
-export const APP_REGISTRY = [
+const APP_REGISTRY = [
   {
     id: 'worth-the-wait',
+    name: 'Worth the Wait',
     title: 'Worth the Wait - Moondreams Dev Apps',
     path: '/worth-the-wait',
     description:
-      'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives. Another Moondreams Dev App, built with passion, care, and intent.',
-    image:
-      'https://moondreams-dev-apps.web.app/banners/by-app/banner-worth-the-wait.png',
+      'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-worth-the-wait.png',
     params: {
       inviteCode: {
         isValid: (value) => value && value.length === 6,
@@ -16,11 +16,16 @@ export const APP_REGISTRY = [
       },
     },
   },
+  {
+    id: 'nine-lives',
+    name: 'Nine Lives',
+    title: 'Nine Lives - Moondreams Dev Apps',
+    path: '/nine-lives',
+    description:
+      'A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-nine-lives.png',
+  },
 ];
-
-export const APP_REGISTRY_PATH_MAP = Object.fromEntries(
-  APP_REGISTRY.map((app) => [app.path, app]),
-);
 
 export default {
   async fetch(request, env, ctx) {

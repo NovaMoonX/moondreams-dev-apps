@@ -27,7 +27,7 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     name: 'Nine Lives',
     path: '/nine-lives',
     description:
-      'A private household dashboard for cat owners to track care, visits, health records, and reminders in one place.',
+      'A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.',
     createdAt: '2026-09-10',
   },
 ];
