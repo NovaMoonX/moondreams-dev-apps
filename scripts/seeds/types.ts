@@ -22,9 +22,14 @@ export const FIXTURE_USERS = {
     email: 'jamie@example.test',
     displayName: 'Jamie Chen',
   },
+  nineLivesCaretaker: {
+    uid: 'seed-nine-lives-caretaker',
+    email: 'taylor@example.test',
+    displayName: 'Taylor Brooks',
+  },
 } as const;
 
-export type SeedScope = 'all' | 'core' | 'worth-the-wait';
+export type SeedScope = 'all' | 'core' | 'worth-the-wait' | 'nine-lives';
 
 export interface SeedContext {
   auth: Auth;

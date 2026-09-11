@@ -1,4 +1,5 @@
 import type { Cat } from '@apps/nine-lives/types';
+import { formatDateTime } from '@/utils';
 
 interface CatCardProps {
   cat: Cat;
@@ -7,7 +8,7 @@ interface CatCardProps {
 
 function CatCard({ cat, onClick }: CatCardProps) {
   const dateLabel =
-    cat.dateOfBirth > 0 ? new Date(cat.dateOfBirth).toLocaleDateString() : 'Unknown DOB';
+    cat.dateOfBirth > 0 ? formatDateTime(cat.dateOfBirth) : 'Unknown DOB';
 
   return (
     <button
