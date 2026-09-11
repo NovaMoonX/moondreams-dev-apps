@@ -9,6 +9,43 @@ service cloud.firestore {
       );
     }
 
+    match /apps/nine-lives/households/{householdId} {
+      function isHouseholdMember(householdId) {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId))
+          && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
+      }
+
+      function isHouseholdCreateValid() {
+        return request.auth != null
+          && request.resource.data.id == householdId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.members is list
+          && request.resource.data.members == [request.auth.uid]
+          && request.resource.data.inviteCode == null
+          && request.resource.data.pendingMembers is list
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is number
+          && request.resource.data.lastEditedAt is number;
+      }
+
+      function isHouseholdUpdateValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMembers == resource.data.pendingMembers
+          && request.resource.data.lastEditedAt is number;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isHouseholdCreateValid();
+      allow update: if isHouseholdMember(householdId) && isHouseholdUpdateValid();
+      allow delete: if false;
+    }
+
     match /apps/worth-the-wait {
       allow read: if !resource.data.isRestricted || (
         request.auth != null && (

@@ -30,6 +30,20 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'nine-lives',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: NineLives } = await import('@apps/nine-lives');
+          return {
+            Component: () => (
+              <ProtectedRoute appId='nine-lives'>
+                <NineLives />
+              </ProtectedRoute>
+            ),
+          };
+        },
+      },
+      {
         path: 'admin',
         HydrateFallback: Loading,
         lazy: async () => {
