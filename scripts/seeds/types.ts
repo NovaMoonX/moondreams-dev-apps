@@ -2,32 +2,13 @@ import type { Auth } from 'firebase-admin/auth';
 import type { Database } from 'firebase-admin/database';
 import type { Firestore } from 'firebase-admin/firestore';
 
+import {
+ FIXTURE_PASSWORD,
+ FIXTURE_USERS,
+} from '../../src/lib/dev/fixtureAccounts.ts';
+
 export const SEED_PROJECT_ID = 'moondreams-dev-apps';
-
-export const FIXTURE_PASSWORD = 'local-fixture-password';
-
-export const FIXTURE_USERS = {
-  admin: {
-    uid: 'seed-admin',
-    email: 'nova@moondreams.dev',
-    displayName: 'Nova Admin',
-  },
-  partnerOne: {
-    uid: 'seed-worth-the-wait-one',
-    email: 'alex@example.test',
-    displayName: 'Alex Rivera',
-  },
-  partnerTwo: {
-    uid: 'seed-worth-the-wait-two',
-    email: 'jamie@example.test',
-    displayName: 'Jamie Chen',
-  },
-  nineLivesCaretaker: {
-    uid: 'seed-nine-lives-caretaker',
-    email: 'taylor@example.test',
-    displayName: 'Taylor Brooks',
-  },
-} as const;
+export { FIXTURE_PASSWORD, FIXTURE_USERS };
 
 export type SeedScope = 'all' | 'core' | 'worth-the-wait' | 'nine-lives';
 
