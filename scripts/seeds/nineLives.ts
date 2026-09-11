@@ -42,6 +42,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       isDateOfBirthEstimated: true,
       lifestyle: 'indoor',
       microchipNumber: '985141000123456',
+      currentClinicId: 'seed-vet-clinic-blue-bark',
       shelterOrigin: {
         name: 'Moonlight Cat Rescue',
         address: '123 Adoption Lane',
@@ -88,6 +89,40 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const clinics = [
+    {
+      id: 'seed-vet-clinic-blue-bark',
+      name: 'Blue Bark Veterinary Clinic',
+      phone: '(415) 555-0147',
+      address: '272 Maple Avenue, Portland, OR',
+      isEmergency24Hour: true,
+      notes: '24-hour urgent care for after-hours emergencies.',
+    },
+    {
+      id: 'seed-vet-clinic-harbor',
+      name: 'Harbor Cat & Pet Center',
+      phone: '(415) 555-0192',
+      address: '184 River Street, Portland, OR',
+      isEmergency24Hour: false,
+      notes: 'Primary care visits and routine checkups.',
+    },
+  ] as const;
+
+  const doctors = [
+    {
+      id: 'seed-doctor-maya',
+      clinicId: 'seed-vet-clinic-blue-bark',
+      name: 'Dr. Maya Lee',
+      notes: 'Handles chronic condition follow-ups and urgent same-day visits.',
+    },
+    {
+      id: 'seed-doctor-daniela',
+      clinicId: 'seed-vet-clinic-harbor',
+      name: 'Dr. Daniela Ruiz',
+      notes: 'Routine wellness and dental visits.',
+    },
+  ] as const;
+
   cats.forEach((cat) => {
     const catRef = householdRef.collection('cats').doc(cat.id);
 
@@ -104,11 +139,40 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  clinics.forEach((clinic) => {
+    const clinicRef = householdRef.collection('vetClinics').doc(clinic.id);
+
+    batch.set(
+      clinicRef,
+      {
+        ...clinic,
+        householdId: HOUSEHOLD_ID,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+  });
+
+  doctors.forEach((doctor) => {
+    const doctorRef = householdRef.collection('doctors').doc(doctor.id);
+
+    batch.set(
+      doctorRef,
+      {
+        ...doctor,
+        householdId: HOUSEHOLD_ID,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
   await batch.commit();
 
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + cats.length,
+    firestoreDocuments: 1 + cats.length + clinics.length + doctors.length,
   };
 
   return result;
