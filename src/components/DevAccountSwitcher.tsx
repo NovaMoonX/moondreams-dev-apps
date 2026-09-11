@@ -43,7 +43,7 @@ export function DevAccountSwitcher() {
           type='button'
           variant={user?.email === account.email ? 'secondary' : 'tertiary'}
           size='sm'
-          className='min-w-[6.5rem] flex-col items-start px-2 py-1 text-left leading-tight'
+          className='min-w-26 flex-col items-start px-2 py-1 text-left leading-tight'
           disabled={isSigningIn}
           onClick={() => void signInAsFixture(account.email)}
           title={`Sign in as ${account.label} (${account.apps.join(', ')})`}

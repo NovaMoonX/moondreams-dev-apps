@@ -33,16 +33,6 @@ interface CatProfileFormData {
   customKeyDates: CatKeyDate[];
   notes: string;
 }
-
-interface SelectOption {
-  label: string;
-  value: string;
-}
-
-interface LifestyleOption extends SelectOption {
-  value: CatLifestyle;
-}
-
 interface KeyDatesFieldProps {
   value: CatKeyDate[];
   onValueChange: (value: CatKeyDate[]) => void;
@@ -53,7 +43,7 @@ const defaultLifestyle: CatLifestyle = 'indoor';
 const { checkbox, custom, input, select, textarea } = FormFactories;
 type FormInputFactoryField = Parameters<typeof input>[0];
 
-const breedOptions: SelectOption[] = [
+const breedOptions = [
   ...CAT_BREEDS.map((option) => ({
     label: option,
     value: option,
@@ -64,12 +54,12 @@ const breedOptions: SelectOption[] = [
   },
 ];
 
-const insuranceProviderOptions: SelectOption[] = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
+const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   label: option,
   value: option,
 }));
 
-const lifestyleOptions: LifestyleOption[] = [
+const lifestyleOptions = [
   {
     label: 'Indoor',
     value: 'indoor',
@@ -186,6 +176,7 @@ function buildCatInsurance(provider: string, policyNumber: string): CatInsurance
   return result;
 }
 
+// TASK: need to verify this renders as it should
 function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
   const result = input({
     ...field,
