@@ -18,6 +18,7 @@ export function useNineLivesSync(
   const dispatch = useAppDispatch();
   const activeUid = uidOverride ?? user?.uid ?? null;
 
+  // Sync the signed-in user's households so the current household can be discovered.
   useEffect(() => {
     if (!activeUid) {
       dispatch(setHouseholds([]));
@@ -31,6 +32,7 @@ export function useNineLivesSync(
     return unsubscribe;
   }, [activeUid, dispatch]);
 
+  // Sync the selected household's clinics and doctors for the active view.
   useEffect(() => {
     if (!householdId) {
       dispatch(setVetClinics([]));

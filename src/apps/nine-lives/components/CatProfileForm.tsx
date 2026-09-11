@@ -8,6 +8,7 @@ import {
   INSURANCE_PROVIDER_OPTIONS,
 } from '@apps/nine-lives/constants/presetOptions';
 import type { Cat, CatInsurance, CatKeyDate, CatLifestyle } from '@apps/nine-lives/types';
+import { fromDateInputValue, toDateInputValue } from '@/utils';
 
 interface CatProfileFormProps {
   householdId?: string;
@@ -73,31 +74,6 @@ const lifestyleOptions = [
     value: 'indoor_outdoor',
   },
 ];
-
-function toDateInputValue(timestamp?: number) {
-  if (!timestamp || Number.isNaN(timestamp)) {
-    return '';
-  }
-
-  const result = new Date(timestamp).toISOString().slice(0, 10);
-  return result;
-}
-
-function fromDateInputValue(value: string) {
-  if (!value) {
-    return undefined;
-  }
-
-  const [year, month, day] = value.split('-').map((part) => Number(part));
-  const hasInvalidDatePart = [year, month, day].some((part) => Number.isNaN(part));
-
-  if (hasInvalidDatePart) {
-    return undefined;
-  }
-
-  const result = Date.UTC(year, month - 1, day);
-  return result;
-}
 
 function KeyDatesField({ value, onValueChange, disabled }: KeyDatesFieldProps) {
   const keyDates = value.length > 0 ? value : [{ label: '', date: 0 }];

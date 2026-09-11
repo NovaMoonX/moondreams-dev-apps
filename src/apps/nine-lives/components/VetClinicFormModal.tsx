@@ -1,5 +1,5 @@
-import { Button, Input, Modal, Toggle } from '@moondreamsdev/dreamer-ui/components';
-import { useState } from 'react';
+import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { useMemo } from 'react';
 
 import type { VetClinic } from '@apps/nine-lives/types';
 
@@ -19,6 +19,8 @@ interface VetClinicFormModalProps {
   onClose?: () => void;
 }
 
+const { checkbox, input, textarea } = FormFactories;
+
 function VetClinicFormModal({
   isOpen,
   initialClinic,
@@ -26,16 +28,58 @@ function VetClinicFormModal({
   onSubmit,
   onClose,
 }: VetClinicFormModalProps) {
-  const [name, setName] = useState(initialClinic?.name ?? '');
-  const [phone, setPhone] = useState(initialClinic?.phone ?? '');
-  const [address, setAddress] = useState(initialClinic?.address ?? '');
-  const [notes, setNotes] = useState(initialClinic?.notes ?? '');
-  const [isEmergency24Hour, setIsEmergency24Hour] = useState(
-    Boolean(initialClinic?.isEmergency24Hour),
+  const formId = initialClinic?.id ?? 'new-vet-clinic';
+
+  const fields = useMemo(
+    () => [
+      input({
+        name: 'name',
+        label: 'Clinic name',
+        placeholder: 'Clinic name',
+        required: true,
+        variant: 'outline',
+      }),
+      input({
+        name: 'phone',
+        label: 'Phone number',
+        placeholder: 'Phone number',
+        variant: 'outline',
+      }),
+      input({
+        name: 'address',
+        label: 'Address',
+        placeholder: 'Address',
+        variant: 'outline',
+      }),
+      checkbox({
+        name: 'isEmergency24Hour',
+        label: '24-hour emergency clinic',
+        text: 'Available for urgent overnight care.',
+      }),
+      textarea({
+        name: 'notes',
+        label: 'Notes',
+        placeholder: 'Notes (optional)',
+        rows: 3,
+        variant: 'outline',
+      }),
+    ],
+    [],
   );
 
-  const handleSubmit = async () => {
-    const trimmedName = name.trim();
+  const initialData = useMemo(
+    () => ({
+      name: initialClinic?.name ?? '',
+      phone: initialClinic?.phone ?? '',
+      address: initialClinic?.address ?? '',
+      isEmergency24Hour: Boolean(initialClinic?.isEmergency24Hour),
+      notes: initialClinic?.notes ?? '',
+    }),
+    [initialClinic],
+  );
+
+  const handleSubmit = async (data: VetClinicFormValues) => {
+    const trimmedName = data.name.trim();
 
     if (!trimmedName) {
       return;
@@ -43,10 +87,10 @@ function VetClinicFormModal({
 
     await onSubmit({
       name: trimmedName,
-      phone: phone.trim() || undefined,
-      address: address.trim() || undefined,
-      isEmergency24Hour,
-      notes: notes.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      address: data.address?.trim() || undefined,
+      isEmergency24Hour: data.isEmergency24Hour,
+      notes: data.notes?.trim() || undefined,
     });
   };
 
@@ -56,49 +100,24 @@ function VetClinicFormModal({
       onClose={onClose ?? (() => undefined)}
       title={initialClinic?.id ? 'Edit clinic' : 'Add clinic'}
     >
-      <div className='space-y-4'>
-        <Input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder='Clinic name'
-          aria-label='Clinic name'
-          name='vet-clinic-name'
-        />
-        <Input
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          placeholder='Phone number'
-          aria-label='Clinic phone'
-          name='vet-clinic-phone'
-        />
-        <Input
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-          placeholder='Address'
-          aria-label='Clinic address'
-          name='vet-clinic-address'
-        />
-        <div className='flex items-center justify-between rounded-md border border-border bg-background px-3 py-2'>
-          <div>
-            <p className='font-medium'>24-hour emergency clinic</p>
-            <p className='text-muted-foreground text-xs'>Available for urgent overnight care.</p>
+      <Form
+        key={formId}
+        id={formId}
+        form={fields}
+        initialData={initialData}
+        columns={1}
+        spacing='normal'
+        onSubmit={(data) => {
+          void handleSubmit(data as VetClinicFormValues);
+        }}
+        submitButton={
+          <div className='flex justify-end'>
+            <Button type='submit' loading={isSubmitting}>
+              {isSubmitting ? 'Saving…' : initialClinic?.id ? 'Save clinic' : 'Add clinic'}
+            </Button>
           </div>
-          <Toggle
-            checked={isEmergency24Hour}
-            onCheckedChange={(checked) => setIsEmergency24Hour(Boolean(checked))}
-          />
-        </div>
-        <Input
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          placeholder='Notes (optional)'
-          aria-label='Clinic notes'
-          name='vet-clinic-notes'
-        />
-        <Button onClick={handleSubmit} disabled={isSubmitting || !name.trim()} className='w-full'>
-          {isSubmitting ? 'Saving…' : initialClinic?.id ? 'Save clinic' : 'Add clinic'}
-        </Button>
-      </div>
+        }
+      />
     </Modal>
   );
 }
