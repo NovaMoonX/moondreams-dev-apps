@@ -1,16 +1,10 @@
 import { useMemo } from 'react';
 
-import { formatDateInputValue, parseDateInputValue } from '@/utils';
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-  type FormCustomFieldProps,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import {
   CAT_BREEDS,
+  CUSTOM_BREED_OPTION,
   INSURANCE_PROVIDER_OPTIONS,
 } from '@apps/nine-lives/constants/presetOptions';
 import type { Cat, CatInsurance, CatKeyDate, CatLifestyle } from '@apps/nine-lives/types';
@@ -25,7 +19,8 @@ interface CatProfileFormProps {
 
 interface CatProfileFormData {
   name: string;
-  breed: string;
+  breedPreset: string;
+  customBreed: string;
   dateOfBirth: string;
   isDateOfBirthEstimated: boolean;
   lifestyle: CatLifestyle;
@@ -39,20 +34,42 @@ interface CatProfileFormData {
   notes: string;
 }
 
+interface SelectOption {
+  label: string;
+  value: string;
+}
+
+interface LifestyleOption extends SelectOption {
+  value: CatLifestyle;
+}
+
+interface KeyDatesFieldProps {
+  value: CatKeyDate[];
+  onValueChange: (value: CatKeyDate[]) => void;
+  disabled?: boolean;
+}
+
 const defaultLifestyle: CatLifestyle = 'indoor';
 const { checkbox, custom, input, select, textarea } = FormFactories;
+type FormInputFactoryField = Parameters<typeof input>[0];
 
-const breedOptions = CAT_BREEDS.map((option) => ({
+const breedOptions: SelectOption[] = [
+  ...CAT_BREEDS.map((option) => ({
+    label: option,
+    value: option,
+  })),
+  {
+    label: 'Custom breed',
+    value: CUSTOM_BREED_OPTION,
+  },
+];
+
+const insuranceProviderOptions: SelectOption[] = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   label: option,
   value: option,
 }));
 
-const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
-  label: option,
-  value: option,
-}));
-
-const lifestyleOptions = [
+const lifestyleOptions: LifestyleOption[] = [
   {
     label: 'Indoor',
     value: 'indoor',
@@ -67,34 +84,33 @@ const lifestyleOptions = [
   },
 ];
 
-function DateField({
-  value,
-  onValueChange,
-  disabled,
-  error,
-}: FormCustomFieldProps<unknown>) {
-  const inputValue = typeof value === 'string' ? value : '';
+function toDateInputValue(timestamp?: number) {
+  if (!timestamp || Number.isNaN(timestamp)) {
+    return '';
+  }
 
-  return (
-    <Input
-      type='date'
-      value={inputValue}
-      onChange={(event) => onValueChange(event.target.value)}
-      disabled={disabled}
-      errorMessage={error}
-      variant='outline'
-    />
-  );
+  const result = new Date(timestamp).toISOString().slice(0, 10);
+  return result;
 }
 
-function KeyDatesField({
-  value,
-  onValueChange,
-  disabled,
-}: FormCustomFieldProps<unknown>) {
-  const currentValue = Array.isArray(value) ? (value as CatKeyDate[]) : undefined;
-  const keyDates =
-    currentValue && currentValue.length > 0 ? currentValue : [{ label: '', date: 0 }];
+function fromDateInputValue(value: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const [year, month, day] = value.split('-').map((part) => Number(part));
+  const hasInvalidDatePart = [year, month, day].some((part) => Number.isNaN(part));
+
+  if (hasInvalidDatePart) {
+    return undefined;
+  }
+
+  const result = Date.UTC(year, month - 1, day);
+  return result;
+}
+
+function KeyDatesField({ value, onValueChange, disabled }: KeyDatesFieldProps) {
+  const keyDates = value.length > 0 ? value : [{ label: '', date: 0 }];
 
   const updateKeyDate = (index: number, nextValue: Partial<CatKeyDate>) => {
     const nextKeyDates = keyDates.map((entry, currentIndex) =>
@@ -126,7 +142,7 @@ function KeyDatesField({
 
       {keyDates.map((entry, index) => {
         const key = `${entry.label}-${index}`;
-        const dateValue = formatDateInputValue(entry.date);
+        const dateValue = toDateInputValue(entry.date);
 
         return (
           <div key={key} className='grid gap-3 md:grid-cols-2'>
@@ -144,7 +160,7 @@ function KeyDatesField({
               value={dateValue}
               onChange={(event) =>
                 updateKeyDate(index, {
-                  date: parseDateInputValue(event.target.value) ?? 0,
+                  date: fromDateInputValue(event.target.value) ?? 0,
                 })
               }
               variant='outline'
@@ -162,23 +178,47 @@ function buildCatInsurance(provider: string, policyNumber: string): CatInsurance
     return undefined;
   }
 
-  return {
+  const result = {
     provider: provider || 'Other',
     policyNumber: policyNumber || 'Unspecified',
   };
+
+  return result;
+}
+
+function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
+  const result = input({
+    ...field,
+    type: 'date',
+  } as unknown as FormInputFactoryField);
+
+  return result;
+}
+
+function getBreedInitialData(cat?: Cat | null) {
+  const savedBreed = cat?.breed ?? CAT_BREEDS[0];
+  const isPresetBreed = CAT_BREEDS.some((option) => option === savedBreed);
+  const result = {
+    breedPreset: isPresetBreed ? savedBreed : CUSTOM_BREED_OPTION,
+    customBreed: isPresetBreed ? '' : savedBreed,
+  };
+
+  return result;
 }
 
 function buildInitialData(cat?: Cat | null): CatProfileFormData {
+  const breedState = getBreedInitialData(cat);
   const result: CatProfileFormData = {
     name: cat?.name ?? '',
-    breed: cat?.breed ?? CAT_BREEDS[0],
-    dateOfBirth: formatDateInputValue(cat?.dateOfBirth),
+    breedPreset: breedState.breedPreset,
+    customBreed: breedState.customBreed,
+    dateOfBirth: toDateInputValue(cat?.dateOfBirth),
     isDateOfBirthEstimated: cat?.isDateOfBirthEstimated ?? false,
     lifestyle: cat?.lifestyle ?? defaultLifestyle,
     microchipNumber: cat?.microchipNumber ?? '',
     shelterName: cat?.shelterOrigin?.name ?? '',
     shelterAddress: cat?.shelterOrigin?.address ?? '',
-    adoptedAt: formatDateInputValue(cat?.adoptedAt),
+    adoptedAt: toDateInputValue(cat?.adoptedAt),
     insuranceProvider: cat?.insurance?.provider ?? INSURANCE_PROVIDER_OPTIONS[0],
     insurancePolicyNumber: cat?.insurance?.policyNumber ?? '',
     customKeyDates: cat?.customKeyDates ?? [{ label: '', date: 0 }],
@@ -188,13 +228,21 @@ function buildInitialData(cat?: Cat | null): CatProfileFormData {
   return result;
 }
 
+function resolveBreed(data: CatProfileFormData) {
+  const chosenBreed =
+    data.breedPreset === CUSTOM_BREED_OPTION ? data.customBreed : data.breedPreset;
+  const result = chosenBreed.trim() || CAT_BREEDS[0];
+
+  return result;
+}
+
 function buildPreparedCat(
   data: CatProfileFormData,
   householdId: string | undefined,
   cat?: Cat | null,
 ) {
-  const dateOfBirthMs = parseDateInputValue(data.dateOfBirth) ?? cat?.dateOfBirth ?? 0;
-  const adoptedAtMs = parseDateInputValue(data.adoptedAt);
+  const dateOfBirthMs = fromDateInputValue(data.dateOfBirth) ?? cat?.dateOfBirth ?? 0;
+  const adoptedAtMs = fromDateInputValue(data.adoptedAt);
   const keyDates = data.customKeyDates
     .filter((entry) => entry.label.trim() && entry.date > 0)
     .map((entry) => ({
@@ -209,7 +257,7 @@ function buildPreparedCat(
     id: cat?.id ?? '',
     householdId: householdId ?? cat?.householdId ?? 'new-household',
     name: data.name.trim(),
-    breed: data.breed.trim() || CAT_BREEDS[0],
+    breed: resolveBreed(data),
     dateOfBirth: dateOfBirthMs,
     isDateOfBirthEstimated: data.isDateOfBirthEstimated,
     lifestyle: data.lifestyle,
@@ -253,15 +301,22 @@ function CatProfileForm({
         variant: 'outline',
       }),
       select({
-        name: 'breed',
+        name: 'breedPreset',
         label: 'Breed',
         options: breedOptions,
         searchable: true,
       }),
-      custom({
+      input({
+        name: 'customBreed',
+        label: 'Custom breed',
+        placeholder: 'Enter a breed if it is not listed',
+        description: 'Use this when the preset list does not match your cat.',
+        variant: 'outline',
+      }),
+      createDateInputField({
         name: 'dateOfBirth',
         label: 'Date of birth',
-        renderComponent: DateField,
+        variant: 'outline',
       }),
       select({
         name: 'lifestyle',
@@ -291,10 +346,10 @@ function CatProfileForm({
         placeholder: 'Address',
         variant: 'outline',
       }),
-      custom({
+      createDateInputField({
         name: 'adoptedAt',
         label: 'Adoption date',
-        renderComponent: DateField,
+        variant: 'outline',
       }),
       select({
         name: 'insuranceProvider',
@@ -312,7 +367,13 @@ function CatProfileForm({
       custom({
         name: 'customKeyDates',
         label: 'Key dates',
-        renderComponent: KeyDatesField,
+        renderComponent: (props) => (
+          <KeyDatesField
+            value={Array.isArray(props.value) ? (props.value as CatKeyDate[]) : []}
+            onValueChange={(value) => props.onValueChange(value)}
+            disabled={props.disabled}
+          />
+        ),
         colSpan: 'full',
       }),
       textarea({
@@ -341,30 +402,33 @@ function CatProfileForm({
   };
 
   return (
-    <Form
-      key={formId}
-      id={formId}
-      form={fields}
-      initialData={initialData}
-      columns={2}
-      spacing='normal'
-      className='rounded-xl border border-border bg-card p-4'
-      onSubmit={(data) => {
-        void handleSubmit(data as CatProfileFormData);
-      }}
-      submitButton={
-        <div className='col-span-full flex justify-end gap-3'>
-          {onCancel && (
-            <Button type='button' variant='secondary' onClick={onCancel}>
-              Cancel
+    <div className='space-y-3 rounded-xl border border-border bg-card p-4'>
+      <Form
+        key={formId}
+        id={formId}
+        form={fields}
+        initialData={initialData}
+        columns={2}
+        spacing='normal'
+        onSubmit={(data) => {
+          void handleSubmit(data as CatProfileFormData);
+        }}
+        submitButton={
+          <div className='col-span-full flex justify-end'>
+            <Button type='submit' loading={isSubmitting}>
+              {submitLabel}
             </Button>
-          )}
-          <Button type='submit' loading={isSubmitting}>
-            {submitLabel}
+          </div>
+        }
+      />
+      {onCancel && (
+        <div className='flex justify-end'>
+          <Button type='button' variant='secondary' onClick={onCancel}>
+            Cancel
           </Button>
         </div>
-      }
-    />
+      )}
+    </div>
   );
 }
 

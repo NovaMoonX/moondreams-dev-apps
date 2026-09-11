@@ -1,17 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { FIXTURE_PASSWORD, FIXTURE_USERS } from '@lib/dev/fixtureAccounts';
 import { auth, isUsingFirebaseEmulators } from '@lib/firebase/config';
 
-const FIXTURE_PASSWORD = 'local-fixture-password';
-
-const fixtureAccounts = [
-  { label: 'Admin', email: 'nova@moondreams.dev' },
-  { label: 'Alex', email: 'alex@example.test' },
-  { label: 'Jamie', email: 'jamie@example.test' },
-] as const;
+const fixtureAccounts = Object.values(FIXTURE_USERS);
 
 export function DevAccountSwitcher() {
   const { user } = useAuth();
@@ -47,11 +43,22 @@ export function DevAccountSwitcher() {
           type='button'
           variant={user?.email === account.email ? 'secondary' : 'tertiary'}
           size='sm'
+          className='min-w-[6.5rem] flex-col items-start px-2 py-1 text-left leading-tight'
           disabled={isSigningIn}
           onClick={() => void signInAsFixture(account.email)}
-          title={`Sign in as ${account.label}`}
+          title={`Sign in as ${account.label} (${account.apps.join(', ')})`}
         >
-          {account.label}
+          <span>{account.label}</span>
+          <span
+            className={join(
+              'text-[10px]',
+              user?.email === account.email
+                ? 'text-foreground/70'
+                : 'text-muted-foreground',
+            )}
+          >
+            {account.apps.join(' • ')}
+          </span>
         </Button>
       ))}
       {user && (

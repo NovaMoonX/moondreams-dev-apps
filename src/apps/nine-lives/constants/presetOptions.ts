@@ -1,5 +1,8 @@
+export const CUSTOM_BREED_OPTION = 'custom';
+
 export const CAT_BREEDS = [
   'Domestic Shorthair',
+  'Domestic Mediumhair',
   'Domestic Longhair',
   'Abyssinian',
   'American Bobtail',
