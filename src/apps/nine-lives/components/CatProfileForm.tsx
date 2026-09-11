@@ -8,6 +8,7 @@ import {
   INSURANCE_PROVIDER_OPTIONS,
 } from '@apps/nine-lives/constants/presetOptions';
 import type { Cat, CatInsurance, CatKeyDate, CatLifestyle } from '@apps/nine-lives/types';
+import { fromDateInputValue, toDateInputValue } from '@/utils';
 
 interface CatProfileFormProps {
   householdId?: string;
@@ -33,16 +34,6 @@ interface CatProfileFormData {
   customKeyDates: CatKeyDate[];
   notes: string;
 }
-
-interface SelectOption {
-  label: string;
-  value: string;
-}
-
-interface LifestyleOption extends SelectOption {
-  value: CatLifestyle;
-}
-
 interface KeyDatesFieldProps {
   value: CatKeyDate[];
   onValueChange: (value: CatKeyDate[]) => void;
@@ -53,7 +44,7 @@ const defaultLifestyle: CatLifestyle = 'indoor';
 const { checkbox, custom, input, select, textarea } = FormFactories;
 type FormInputFactoryField = Parameters<typeof input>[0];
 
-const breedOptions: SelectOption[] = [
+const breedOptions = [
   ...CAT_BREEDS.map((option) => ({
     label: option,
     value: option,
@@ -64,12 +55,12 @@ const breedOptions: SelectOption[] = [
   },
 ];
 
-const insuranceProviderOptions: SelectOption[] = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
+const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   label: option,
   value: option,
 }));
 
-const lifestyleOptions: LifestyleOption[] = [
+const lifestyleOptions = [
   {
     label: 'Indoor',
     value: 'indoor',
@@ -83,31 +74,6 @@ const lifestyleOptions: LifestyleOption[] = [
     value: 'indoor_outdoor',
   },
 ];
-
-function toDateInputValue(timestamp?: number) {
-  if (!timestamp || Number.isNaN(timestamp)) {
-    return '';
-  }
-
-  const result = new Date(timestamp).toISOString().slice(0, 10);
-  return result;
-}
-
-function fromDateInputValue(value: string) {
-  if (!value) {
-    return undefined;
-  }
-
-  const [year, month, day] = value.split('-').map((part) => Number(part));
-  const hasInvalidDatePart = [year, month, day].some((part) => Number.isNaN(part));
-
-  if (hasInvalidDatePart) {
-    return undefined;
-  }
-
-  const result = Date.UTC(year, month - 1, day);
-  return result;
-}
 
 function KeyDatesField({ value, onValueChange, disabled }: KeyDatesFieldProps) {
   const keyDates = value.length > 0 ? value : [{ label: '', date: 0 }];
@@ -186,6 +152,7 @@ function buildCatInsurance(provider: string, policyNumber: string): CatInsurance
   return result;
 }
 
+// TASK: need to verify this renders as it should
 function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
   const result = input({
     ...field,

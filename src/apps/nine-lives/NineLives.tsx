@@ -70,7 +70,7 @@ function NineLives() {
 
   return (
     <div className='page'>
-      <div className='mx-auto max-w-5xl space-y-6'>
+      <div className='mx-auto max-w-5xl space-y-6 pt-8'>
         <header>
           <p className='text-muted-foreground text-sm uppercase tracking-[0.2em]'>
             Nine Lives

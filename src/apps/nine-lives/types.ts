@@ -67,3 +67,24 @@ export interface Cat {
   createdAt: number;
   lastEditedAt: number;
 }
+
+export interface VetClinic {
+  id: string;
+  householdId: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  isEmergency24Hour?: boolean;
+  notes?: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface Doctor {
+  id: string;
+  householdId: string;
+  clinicId: string;
+  name: string;
+  notes?: string;
+  createdAt: number;
+}

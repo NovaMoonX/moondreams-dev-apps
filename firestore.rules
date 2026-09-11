@@ -113,6 +113,91 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
     }
 
+    match /apps/nine-lives/households/{householdId}/vetClinics/{clinicId} {
+      function isVetClinicIdentityValid() {
+        return request.resource.data.id == clinicId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isVetClinicBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.phone == null || request.resource.data.phone is string)
+          && (request.resource.data.address == null || request.resource.data.address is string)
+          && (request.resource.data.isEmergency24Hour == null || request.resource.data.isEmergency24Hour is bool)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isVetClinicImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      function isVetClinicCreateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isVetClinicIdentityValid()
+          && isVetClinicBaseShapeValid();
+      }
+
+      function isVetClinicUpdateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isVetClinicImmutableFieldsValid()
+          && isVetClinicBaseShapeValid();
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isVetClinicCreateValid();
+      allow update: if isVetClinicUpdateValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/doctors/{doctorId} {
+      function isDoctorIdentityValid() {
+        return request.resource.data.id == doctorId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.clinicId is string
+          && request.resource.data.clinicId.size() > 0;
+      }
+
+      function isDoctorBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isDoctorImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.clinicId == resource.data.clinicId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      function isDoctorCreateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isDoctorIdentityValid()
+          && isDoctorBaseShapeValid();
+      }
+
+      function isDoctorUpdateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isDoctorImmutableFieldsValid()
+          && isDoctorBaseShapeValid();
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isDoctorCreateValid();
+      allow update: if isDoctorUpdateValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/worth-the-wait {
       allow read: if !resource.data.isRestricted || (
         request.auth != null && (
