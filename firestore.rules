@@ -9,13 +9,13 @@ service cloud.firestore {
       );
     }
 
-    match /apps/nine-lives/households/{householdId} {
-      function isHouseholdMember(householdId) {
-        return request.auth != null
-          && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId))
-          && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
-      }
+    function isHouseholdMember(householdId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId))
+        && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
+    }
 
+    match /apps/nine-lives/households/{householdId} {
       function isHouseholdCreateValid() {
         return request.auth != null
           && request.resource.data.id == householdId
@@ -44,6 +44,40 @@ service cloud.firestore {
       allow create: if isHouseholdCreateValid();
       allow update: if isHouseholdMember(householdId) && isHouseholdUpdateValid();
       allow delete: if false;
+    }
+
+    match /apps/nine-lives/households/{householdId}/cats/{catId} {
+      function isCatCreateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && request.resource.data.id == catId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.dateOfBirth is number
+          && request.resource.data.isDateOfBirthEstimated is bool
+          && request.resource.data.breed is string
+          && request.resource.data.breed.size() > 0
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is number
+          && request.resource.data.lastEditedAt is number;
+      }
+
+      function isCatUpdateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.lastEditedAt is number;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isCatCreateValid();
+      allow update: if isCatUpdateValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
     }
 
     match /apps/worth-the-wait {
