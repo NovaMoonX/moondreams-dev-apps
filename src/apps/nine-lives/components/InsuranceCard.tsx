@@ -1,3 +1,6 @@
+import { Card } from '@moondreamsdev/dreamer-ui/components';
+
+import { formatDateTime } from '@/utils';
 import type { CatInsurance } from '@apps/nine-lives/types';
 
 interface InsuranceCardProps {
@@ -7,30 +10,33 @@ interface InsuranceCardProps {
 function InsuranceCard({ insurance }: InsuranceCardProps) {
   if (!insurance) {
     return (
-      <div className='rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground'>
+      <Card className='border-dashed bg-card text-sm text-muted-foreground'>
         Insurance not on file.
-      </div>
+      </Card>
     );
   }
 
+  const monthlyPremiumLabel =
+    insurance.monthlyPremium !== undefined
+      ? `Monthly premium: $${insurance.monthlyPremium.toFixed(2)}`
+      : null;
+  const coverageStartLabel = insurance.coverageStartDate
+    ? `Coverage start: ${formatDateTime(insurance.coverageStartDate)}`
+    : null;
+
   return (
-    <div className='rounded-lg border border-border bg-card p-4'>
-      <h3 className='text-lg font-semibold'>{insurance.provider}</h3>
-      <p className='mt-2 text-sm text-muted-foreground'>Policy: {insurance.policyNumber}</p>
-      {insurance.monthlyPremium !== undefined && (
-        <p className='mt-1 text-sm text-muted-foreground'>
-          Monthly premium: ${insurance.monthlyPremium.toFixed(2)}
-        </p>
+    <Card className='bg-card' header={<h3 className='text-lg font-semibold'>{insurance.provider}</h3>}>
+      <p className='text-sm text-muted-foreground'>Policy: {insurance.policyNumber}</p>
+      {monthlyPremiumLabel && (
+        <p className='mt-1 text-sm text-muted-foreground'>{monthlyPremiumLabel}</p>
       )}
-      {insurance.coverageStartDate && (
-        <p className='mt-1 text-sm text-muted-foreground'>
-          Coverage start: {new Date(insurance.coverageStartDate).toLocaleDateString()}
-        </p>
+      {coverageStartLabel && (
+        <p className='mt-1 text-sm text-muted-foreground'>{coverageStartLabel}</p>
       )}
       {insurance.coverageNotes && (
         <p className='mt-2 text-sm text-foreground'>{insurance.coverageNotes}</p>
       )}
-    </div>
+    </Card>
   );
 }
 

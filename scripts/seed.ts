@@ -5,17 +5,23 @@ import {
   SEED_PROJECT_ID,
   type SeedScope,
 } from './seeds/types.ts';
+import { seedNineLives } from './seeds/nineLives.ts';
 import { seedWorthTheWait } from './seeds/worthTheWait.ts';
 
 function readScope(args: string[]): SeedScope {
   const scopeIndex = args.indexOf('--scope');
   const scope = scopeIndex >= 0 ? args[scopeIndex + 1] : 'all';
 
-  if (scope === 'all' || scope === 'core' || scope === 'worth-the-wait') {
+  if (
+    scope === 'all' ||
+    scope === 'core' ||
+    scope === 'worth-the-wait' ||
+    scope === 'nine-lives'
+  ) {
     return scope;
   }
 
-  throw new Error('Use --scope all, core, or worth-the-wait.');
+  throw new Error('Use --scope all, core, worth-the-wait, or nine-lives.');
 }
 
 async function main() {
@@ -30,12 +36,21 @@ async function main() {
 
   const results = [];
 
-  if (scope === 'all' || scope === 'core' || scope === 'worth-the-wait') {
+  if (
+    scope === 'all' ||
+    scope === 'core' ||
+    scope === 'worth-the-wait' ||
+    scope === 'nine-lives'
+  ) {
     results.push(await seedCore(context));
   }
 
   if (scope === 'all' || scope === 'worth-the-wait') {
     results.push(await seedWorthTheWait(context));
+  }
+
+  if (scope === 'all' || scope === 'nine-lives') {
+    results.push(await seedNineLives(context));
   }
 
   const result = combineSeedResults(...results);

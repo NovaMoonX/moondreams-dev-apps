@@ -8,6 +8,7 @@
 - Check Dreamer UI first before building custom UI.
 - Always use the project import aliases instead of relative paths when available.
 - Follow the existing folder organization and keep responsibilities separated by feature, UI, hooks, context, routes, lib, and utils.
+- Use shared date/time formatting helpers from `src/utils/formatUtils.ts` for timestamp display instead of inline `Date` formatting.
 
 ### File structure and imports
 - Follow the existing project structure and keep code organized by feature, UI, hooks, context, routes, lib, and utils.
@@ -62,6 +63,7 @@ src/
 - Keep app-side type shapes and Firestore data contracts aligned so `createdAt`, `updatedAt`, and request timestamps use consistent millisecond-number semantics in the client.
 - Do not add string-based or Firestore `Timestamp`-style values unless the feature truly requires them.
 - Keep Firestore rules and app state lifecycle logic aligned when creating or updating lifecycle-related fields such as `createdBy`, `members`, `pendingRequests`, or invite codes.
+- In Firestore rules, place repeated field assertions in helper functions instead of duplicating long inline checks inside `allow` expressions.
 
 ### React and state patterns
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
@@ -108,6 +110,8 @@ useEffect(() => {
 - **Always prefer configured project aliases over relative paths.**
 - **Treat time fields as timestamps, not strings.**
 - **Keep Firestore rules and app data lifecycle logic aligned.**
+- **Use `formatDateTime` from `src/utils/formatUtils.ts` for shared timestamp display formatting.**
+- **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
 
 ## Coding Styles
