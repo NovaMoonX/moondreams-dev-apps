@@ -1,4 +1,5 @@
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { useMemo } from 'react';
 
 import type { VetClinic } from '@apps/nine-lives/types';
@@ -16,6 +17,7 @@ interface VetClinicFormModalProps {
   initialClinic?: Partial<VetClinic> | null;
   isSubmitting?: boolean;
   onSubmit: (clinic: VetClinicFormValues) => Promise<void> | void;
+  onDelete?: (clinicId: string) => Promise<void> | void;
   onClose?: () => void;
 }
 
@@ -26,9 +28,12 @@ function VetClinicFormModal({
   initialClinic,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: VetClinicFormModalProps) {
+  const { confirm } = useActionModal();
   const formId = initialClinic?.id ?? 'new-vet-clinic';
+  const isEditing = Boolean(initialClinic?.id);
 
   const fields = useMemo(
     () => [
@@ -94,6 +99,22 @@ function VetClinicFormModal({
     });
   };
 
+  const handleDelete = async () => {
+    if (!initialClinic?.id || !onDelete) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete clinic',
+      message: `Are you sure you want to delete ${initialClinic.name ?? 'this clinic'}? This action cannot be undone.`,
+      destructive: true,
+    });
+
+    if (confirmed) {
+      await onDelete(initialClinic.id);
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -111,10 +132,24 @@ function VetClinicFormModal({
           void handleSubmit(data as VetClinicFormValues);
         }}
         submitButton={
-          <div className='flex justify-end'>
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : initialClinic?.id ? 'Save clinic' : 'Add clinic'}
-            </Button>
+          <div className='flex items-center justify-between gap-2'>
+            <div className='flex items-center gap-2'>
+              {isEditing && onDelete && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={() => void handleDelete()}
+                  disabled={isSubmitting}
+                >
+                  Delete clinic
+                </Button>
+              )}
+            </div>
+            <div className='flex justify-end'>
+              <Button type='submit' loading={isSubmitting}>
+                {isSubmitting ? 'Saving…' : initialClinic?.id ? 'Save clinic' : 'Add clinic'}
+              </Button>
+            </div>
           </div>
         }
       />

@@ -16,6 +16,7 @@ interface CatProfileFormProps {
   isSubmitting?: boolean;
   onSubmit: (nextCat: Cat) => Promise<void> | void;
   onCancel?: () => void;
+  onDelete?: () => Promise<void> | void;
 }
 
 interface InsuranceProviderValue {
@@ -363,6 +364,7 @@ function CatProfileForm({
   isSubmitting = false,
   onSubmit,
   onCancel,
+  onDelete,
 }: CatProfileFormProps) {
   const initialData = useMemo(() => buildInitialData(cat), [cat]);
   const formId = cat?.id ?? `${householdId ?? 'new-household'}-cat-profile`;
@@ -443,15 +445,29 @@ function CatProfileForm({
         void handleSubmit(data as CatProfileFormData);
       }}
       submitButton={
-        <div className='col-span-full flex justify-end gap-2'>
-          {onCancel && (
-            <Button type='button' variant='secondary' onClick={onCancel}>
-              Cancel
+        <div className='col-span-full flex items-center justify-between gap-2'>
+          <div className='flex items-center gap-2'>
+            {onDelete && (
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => void onDelete()}
+                disabled={isSubmitting}
+              >
+                Delete cat
+              </Button>
+            )}
+          </div>
+          <div className='flex items-center gap-2'>
+            {onCancel && (
+              <Button type='button' variant='secondary' onClick={onCancel}>
+                Cancel
+              </Button>
+            )}
+            <Button type='submit' loading={isSubmitting}>
+              {submitLabel}
             </Button>
-          )}
-          <Button type='submit' loading={isSubmitting}>
-            {submitLabel}
-          </Button>
+          </div>
         </div>
       }
     />

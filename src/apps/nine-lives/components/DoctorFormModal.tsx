@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+
+import type { Doctor } from '@apps/nine-lives/types';
 
 interface DoctorFormValues {
   name: string;
@@ -10,8 +13,10 @@ interface DoctorFormValues {
 interface DoctorFormModalProps {
   isOpen: boolean;
   clinicName: string;
+  initialDoctor?: Partial<Doctor> | null;
   isSubmitting?: boolean;
   onSubmit: (doctor: DoctorFormValues) => Promise<void> | void;
+  onDelete?: (doctorId: string) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -20,10 +25,16 @@ const { input, textarea } = FormFactories;
 function DoctorFormModal({
   isOpen,
   clinicName,
+  initialDoctor,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: DoctorFormModalProps) {
+  const { confirm } = useActionModal();
+  const isEditing = Boolean(initialDoctor?.id);
+  const formId = initialDoctor?.id ?? 'new-nine-lives-doctor';
+
   const fields = useMemo(
     () => [
       input({
@@ -57,21 +68,54 @@ function DoctorFormModal({
     });
   };
 
+  const handleDelete = async () => {
+    if (!initialDoctor?.id || !onDelete) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete doctor',
+      message: `Are you sure you want to delete ${initialDoctor.name ?? 'this doctor'}? This action cannot be undone.`,
+      destructive: true,
+    });
+
+    if (confirmed) {
+      await onDelete(initialDoctor.id);
+    }
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Add doctor to ${clinicName}`}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditing ? `Edit doctor at ${clinicName}` : `Add doctor to ${clinicName}`}
+    >
       <Form
-        id='nine-lives-doctor-form'
+        key={formId}
+        id={formId}
         form={fields}
-        initialData={{ name: '', notes: '' }}
+        initialData={{ name: initialDoctor?.name ?? '', notes: initialDoctor?.notes ?? '' }}
         columns={1}
         spacing='normal'
         onSubmit={(data) => {
           void handleSubmit(data as DoctorFormValues);
         }}
         submitButton={
-          <div className='flex justify-end'>
+          <div className='flex items-center justify-between gap-2'>
+            <div className='flex items-center gap-2'>
+              {isEditing && onDelete && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={() => void handleDelete()}
+                  disabled={isSubmitting}
+                >
+                  Delete doctor
+                </Button>
+              )}
+            </div>
             <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : 'Add doctor'}
+              {isSubmitting ? 'Saving…' : isEditing ? 'Save doctor' : 'Add doctor'}
             </Button>
           </div>
         }
