@@ -4,6 +4,7 @@
 
 The `triggerBoxAction` callable endpoint enforces the locked reveal workflow for Worth the Wait:
 
+- requires an active `revealStartRequest` from one partner before the other partner can trigger the reveal,
 - verifies both space members are online and still in the Worth the Wait flow,
 - rejects duplicate simultaneous triggers via a transaction on `apps/worth-the-wait/spaces/{spaceId}.activeAction`,
 - uses server-side randomness for raffles,

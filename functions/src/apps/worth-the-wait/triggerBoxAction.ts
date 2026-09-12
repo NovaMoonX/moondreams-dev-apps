@@ -28,6 +28,13 @@ type IndexedActionRecord = {
   completedAt: number | null;
 };
 
+type RevealStartRequestRecord = {
+  boxId: string;
+  method: RevealMethod;
+  requestedBy: string[];
+  requestedAt: number;
+};
+
 function isRevealMethod(value: unknown): value is RevealMethod {
   return value === 'full_reveal' || value === 'raffle';
 }
@@ -118,6 +125,74 @@ function assertMutualRequests(
   }
 }
 
+function normalizeRevealStartRequest(
+  value: unknown,
+): RevealStartRequestRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const request = value as Record<string, unknown>;
+  const boxId = typeof request.boxId === 'string' ? request.boxId : null;
+  const method = isRevealMethod(request.method) ? request.method : null;
+  const requestedBy = Array.isArray(request.requestedBy)
+    ? request.requestedBy.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  const requestedAt =
+    typeof request.requestedAt === 'number' ? request.requestedAt : null;
+
+  if (!boxId || !method || requestedBy.length === 0 || requestedAt == null) {
+    return null;
+  }
+
+  return {
+    boxId,
+    method,
+    requestedBy,
+    requestedAt,
+  };
+}
+
+function assertRevealStartRequest(
+  revealStartRequest: unknown,
+  members: string[],
+  authUid: string,
+  boxId: string,
+  method: RevealMethod,
+): void {
+  const request = normalizeRevealStartRequest(revealStartRequest);
+
+  if (!request) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A start request is required before triggering this reveal.',
+    );
+  }
+
+  if (request.boxId !== boxId || request.method !== method) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The pending start request no longer matches this reveal.',
+    );
+  }
+
+  const requesters = request.requestedBy.filter((userId) => members.includes(userId));
+
+  if (requesters.length === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The pending start request is invalid.',
+    );
+  }
+
+  if (requesters.includes(authUid)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Wait for your partner to start this reveal, or cancel your request first.',
+    );
+  }
+}
+
 export const triggerBoxAction = onCall(
   {
     region: 'us-central1',
@@ -190,6 +265,13 @@ export const triggerBoxAction = onCall(
     }
 
     await validatePresenceForMembers(realtimeDb, members);
+    assertRevealStartRequest(
+      spaceData.revealStartRequest,
+      members,
+      authUid,
+      boxId,
+      method,
+    );
     assertMutualRequests(
       boxSnapshot.data()?.revealRequestedBy,
       members,
@@ -222,6 +304,7 @@ export const triggerBoxAction = onCall(
           startedAt,
           completedAt: null,
         },
+        revealStartRequest: null,
       });
     });
 

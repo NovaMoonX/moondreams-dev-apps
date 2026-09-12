@@ -21,9 +21,8 @@ function RevealAction() {
   const { user } = useAuth();
   const { box, spaceId } = useBoxContext();
   const { activeAction, space } = useWorthTheWait();
-  const { toggleRevealRequest, startAction, loading } = useRevealRequest({
+  const { toggleRevealRequest, setRevealStartRequest, loading } = useRevealRequest({
     spaceId,
-    box,
     userUid: user?.uid,
   });
   const [startActionError, setStartActionError] = useState<string | null>(null);
@@ -60,25 +59,32 @@ function RevealAction() {
   const actionLocked = Boolean(
     activeAction && activeAction.status !== 'completed',
   );
-
-  const isTriggerEnabled =
-    Boolean(mutualMethod) && isPartnerAvailable && !actionLocked;
-
-  const handleStartAction = async () => {
-    if (!isTriggerEnabled || !mutualMethod || !user?.uid) {
-      return;
-    }
-
-    await startAction(mutualMethod);
-  };
+  const revealStartRequest = space?.revealStartRequest ?? null;
+  const hasPendingStartRequestForBox =
+    revealStartRequest?.boxId === box.id &&
+    revealStartRequest.method === mutualMethod &&
+    revealStartRequest.requestedBy.length > 0;
+  const isCurrentUserRequestingStart = Boolean(
+    user?.uid &&
+      hasPendingStartRequestForBox &&
+      revealStartRequest?.requestedBy.includes(user.uid),
+  );
 
   const getRevealStatusMessage = () => {
     if (actionLocked) {
       return null;
     }
 
+    if (hasPendingStartRequestForBox && isCurrentUserRequestingStart) {
+      return 'Your start request is pending. Wait for your partner to begin or cancel it.';
+    }
+
+    if (hasPendingStartRequestForBox) {
+      return 'Your partner requested to start this reveal. Open the reveal modal to continue.';
+    }
+
     if (mutualMethod) {
-      return 'Both you and your partner have matched and can now start the reveal!';
+      return 'Both of you requested the same reveal. Send a start request when ready.';
     }
 
     if (selectedMethod && partnerRequest) {
@@ -94,7 +100,7 @@ function RevealAction() {
     }
 
     if (partnerUid) {
-      return 'Choose a reveal method to start matching with your partner.';
+      return 'Choose a reveal method to request a reveal with your partner.';
     }
 
     return 'Add your partner to start sharing a reveal request.';
@@ -117,7 +123,7 @@ function RevealAction() {
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => void toggleRevealRequest(selectedMethod)}
+            onClick={() => void toggleRevealRequest(box, selectedMethod)}
             disabled={actionLocked}
           >
             Remove request
@@ -128,7 +134,7 @@ function RevealAction() {
       <RadioGroup
         value={selectedMethod ?? ''}
         onChange={(nextValue) => {
-          void toggleRevealRequest(nextValue as RevealMethod);
+          void toggleRevealRequest(box, nextValue as RevealMethod);
         }}
         className='grid gap-2 sm:grid-cols-2'
       >
@@ -176,32 +182,31 @@ function RevealAction() {
           {getRevealStatusMessage()}
         </div>
 
-        <Button
-          type='button'
-          size='sm'
-          disabled={!isTriggerEnabled}
-          onClick={() => {
-            handleStartAction().catch((error) => {
-              console.error('Error starting action:', error);
-              setStartActionError(
-                'An error occurred while starting the action. Please try again.',
-              );
-            });
-          }}
-          loading={loading}
-        >
-          <span
-            className={
-              actionLocked && isActionForCurrentBox ? 'animate-pulse' : ''
-            }
-          >
-            {!actionLocked
-              ? 'Start Action'
-              : isActionForCurrentBox
-                ? 'Reveal in progress'
-                : 'Another box is being revealed'}
+        {actionLocked ? (
+          <span className='text-muted-foreground text-xs'>
+            {isActionForCurrentBox ? 'Reveal in progress' : 'Another box is being revealed'}
           </span>
-        </Button>
+        ) : mutualMethod && isPartnerAvailable ? (
+          <Button
+            type='button'
+            size='sm'
+            disabled={loading || hasPendingStartRequestForBox}
+            onClick={() => {
+              setStartActionError(null);
+              void setRevealStartRequest({
+                boxId: box.id,
+                method: mutualMethod,
+              }).catch((error) => {
+                console.error('Error requesting reveal start:', error);
+                setStartActionError(
+                  'An error occurred while requesting the reveal start. Please try again.',
+                );
+              });
+            }}
+          >
+            Request to start
+          </Button>
+        ) : null}
       </div>
       <div className='my-1 text-right'>
         <span className='text-destructive text-xs'>{startActionError}</span>

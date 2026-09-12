@@ -14,7 +14,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { db } from '@lib/firebase/config';
 import { createSpaceEncryptionKey, normalizeSpaceEncryption } from '../security';
 
-import type { ActiveAction, PendingMember, Space } from '../types';
+import type {
+  ActiveAction,
+  PendingMember,
+  RevealStartRequest,
+  Space,
+} from '../types';
 
 const SPACE_COLLECTION = collection(db, 'apps', 'worth-the-wait', 'spaces');
 const INVITE_CODE_COLLECTION = collection(
@@ -116,6 +121,37 @@ function normalizeWelcomeSeenBy(value: unknown): Record<string, number> {
   );
 }
 
+function normalizeRevealStartRequest(value: unknown): RevealStartRequest | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const request = value as Record<string, unknown>;
+  const method =
+    request.method === 'full_reveal' || request.method === 'raffle'
+      ? request.method
+      : null;
+  const boxId = typeof request.boxId === 'string' ? request.boxId : null;
+  const requestedBy = Array.isArray(request.requestedBy)
+    ? request.requestedBy.filter((member): member is string => typeof member === 'string')
+    : [];
+  const requestedAt =
+    typeof request.requestedAt === 'number' ? request.requestedAt : null;
+
+  if (!method || !boxId || requestedBy.length === 0 || requestedAt == null) {
+    return null;
+  }
+
+  const result: RevealStartRequest = {
+    boxId,
+    method,
+    requestedBy,
+    requestedAt,
+  };
+
+  return result;
+}
+
 function normalizeSpace(id: string, data: DocumentData): Space {
   const pendingMemberValue = data.pendingMember as
     Record<string, unknown> | null | undefined;
@@ -140,6 +176,7 @@ function normalizeSpace(id: string, data: DocumentData): Space {
           }
         : null,
     activeAction: normalizeActiveAction(data.activeAction),
+    revealStartRequest: normalizeRevealStartRequest(data.revealStartRequest),
     welcomeSeenBy: normalizeWelcomeSeenBy(data.welcomeSeenBy),
     encryption: normalizeSpaceEncryption(data.encryption ?? null),
   };
@@ -268,6 +305,7 @@ export function useSpace(userUid: string) {
           inviteCode,
           pendingMember: null,
           activeAction: null,
+          revealStartRequest: null,
           welcomeSeenBy: {},
           encryption,
           updatedAt: now,
@@ -387,6 +425,7 @@ export function useSpace(userUid: string) {
       pendingMember: null,
       inviteCode: null,
       activeAction: null,
+      revealStartRequest: null,
       welcomeSeenBy: {
         ...(space.welcomeSeenBy ?? {}),
       },
@@ -403,6 +442,7 @@ export function useSpace(userUid: string) {
       pendingMember: null,
       inviteCode: null,
       activeAction: null,
+      revealStartRequest: null,
     });
     setPendingMember(null);
     setError(null);

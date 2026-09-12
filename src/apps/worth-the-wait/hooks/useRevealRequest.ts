@@ -4,23 +4,18 @@ import { useCallback, useState } from 'react';
 import { db, functions } from '@lib/firebase/config';
 
 import { httpsCallable } from 'firebase/functions';
-import type { Box, RevealMethod } from '../types';
+import type { Box, RevealMethod, RevealStartRequest } from '../types';
 
 interface UseRevealRequestArgs {
   spaceId: string;
-  box: Box;
   userUid?: string;
 }
 
-export function useRevealRequest({
-  spaceId,
-  box,
-  userUid,
-}: UseRevealRequestArgs) {
+export function useRevealRequest({ spaceId, userUid }: UseRevealRequestArgs) {
   const [loading, setLoading] = useState(false);
 
   const toggleRevealRequest = useCallback(
-    async (method: RevealMethod) => {
+    async (box: Box, method: RevealMethod) => {
       if (!userUid) {
         return;
       }
@@ -57,11 +52,54 @@ export function useRevealRequest({
         ],
       });
     },
-    [box.id, box.revealRequestedBy, spaceId, userUid],
+    [spaceId, userUid],
+  );
+
+  const setRevealStartRequest = useCallback(
+    async ({ boxId, method }: { boxId: string; method: RevealMethod }) => {
+      if (!spaceId || !userUid) {
+        return;
+      }
+
+      const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
+      const now = Date.now();
+
+      await updateDoc(spaceRef, {
+        revealStartRequest: {
+          boxId,
+          method,
+          requestedBy: [userUid],
+          requestedAt: now,
+        },
+        updatedAt: now,
+      });
+    },
+    [spaceId, userUid],
+  );
+
+  const cancelRevealStartRequest = useCallback(
+    async (request: RevealStartRequest | null) => {
+      if (!spaceId || !userUid || !request) {
+        return;
+      }
+
+      if (!request.requestedBy.includes(userUid)) {
+        return;
+      }
+
+      const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
+      const now = Date.now();
+
+      await updateDoc(spaceRef, {
+        revealStartRequest: null,
+        updatedAt: now,
+      });
+    },
+    [spaceId, userUid],
   );
 
   const startAction = useCallback(
-    async (method: RevealMethod) => {
+    async ({ boxId, method }: { boxId: string; method: RevealMethod }) => {
       if (!spaceId || !userUid) {
         return;
       }
@@ -72,7 +110,7 @@ export function useRevealRequest({
       try {
         await triggerBoxAction({
           spaceId,
-          boxId: box.id,
+          boxId,
           method,
         });
       } catch (error) {
@@ -87,10 +125,16 @@ export function useRevealRequest({
         setLoading(false);
       }
     },
-    [box.id, spaceId, userUid],
+    [spaceId, userUid],
   );
 
-  return { toggleRevealRequest, startAction, loading };
+  return {
+    toggleRevealRequest,
+    setRevealStartRequest,
+    cancelRevealStartRequest,
+    startAction,
+    loading,
+  };
 }
 
 export default useRevealRequest;
