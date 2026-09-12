@@ -59,7 +59,7 @@ service cloud.firestore {
         return isHouseholdImmutableFieldsValid();
       }
 
-      allow read: if isHouseholdMember(householdId);
+      allow read: if request.auth != null && request.auth.uid in resource.data.members;
       allow create: if isHouseholdCreateValid();
       allow update: if isHouseholdMember(householdId) && isHouseholdUpdateValid();
       allow delete: if false;

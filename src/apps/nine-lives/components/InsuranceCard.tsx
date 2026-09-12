@@ -17,7 +17,7 @@ function InsuranceCard({ insurance }: InsuranceCardProps) {
   }
 
   const monthlyPremiumLabel =
-    insurance.monthlyPremium !== undefined
+    insurance.monthlyPremium != null
       ? `Monthly premium: $${insurance.monthlyPremium.toFixed(2)}`
       : null;
   const coverageStartLabel = insurance.coverageStartDate

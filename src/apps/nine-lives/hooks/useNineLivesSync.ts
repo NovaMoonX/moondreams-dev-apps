@@ -2,10 +2,13 @@ import { useEffect } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollectionSlice';
 
+import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
+import { setCats } from '../store/slices/catsSlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setVetClinics } from '../store/slices/vetClinicsSlice';
@@ -32,14 +35,16 @@ export function useNineLivesSync(
     return unsubscribe;
   }, [activeUid, dispatch]);
 
-  // Sync the selected household's clinics and doctors for the active view.
+  // Sync the selected household's cats, clinics, and doctors for the active view.
   useEffect(() => {
     if (!householdId) {
-      dispatch(setVetClinics([]));
-      dispatch(setDoctors([]));
+      dispatch(clearCurrentHouseholdData());
       return;
     }
 
+    const unsubscribeCats = startCatsListener(householdId, (cats) => {
+      dispatch(setCats(cats));
+    });
     const unsubscribeVetClinics = startVetClinicsListener(householdId, (vetClinics) => {
       dispatch(setVetClinics(vetClinics));
     });
@@ -48,6 +53,7 @@ export function useNineLivesSync(
     });
 
     return () => {
+      unsubscribeCats();
       unsubscribeVetClinics();
       unsubscribeDoctors();
     };

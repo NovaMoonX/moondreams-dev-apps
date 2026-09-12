@@ -33,7 +33,20 @@ export const createCat = createAsyncThunk<
       doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats')).id;
 
     const nextCat: Cat = {
-      ...cat,
+      photoURL: cat.photoURL ?? null,
+      lifestyle: cat.lifestyle ?? null,
+      microchipNumber: cat.microchipNumber ?? null,
+      shelterOrigin: cat.shelterOrigin ?? null,
+      adoptedAt: cat.adoptedAt ?? null,
+      customKeyDates: cat.customKeyDates ?? null,
+      diet: cat.diet ?? null,
+      currentClinicId: cat.currentClinicId ?? null,
+      insurance: cat.insurance ?? null,
+      personalityTraits: cat.personalityTraits ?? null,
+      notes: cat.notes ?? null,
+      breed: cat.breed,
+      dateOfBirth: cat.dateOfBirth,
+      isDateOfBirthEstimated: cat.isDateOfBirthEstimated,
       id: catId,
       householdId,
       name: trimmedName,

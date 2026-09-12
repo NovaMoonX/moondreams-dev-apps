@@ -5,10 +5,10 @@ import type { VetClinic } from '@apps/nine-lives/types';
 
 interface VetClinicFormValues {
   name: string;
-  phone?: string;
-  address?: string;
+  phone?: string | null;
+  address?: string | null;
   isEmergency24Hour: boolean;
-  notes?: string;
+  notes?: string | null;
 }
 
 interface VetClinicFormModalProps {
@@ -87,10 +87,10 @@ function VetClinicFormModal({
 
     await onSubmit({
       name: trimmedName,
-      phone: data.phone?.trim() || undefined,
-      address: data.address?.trim() || undefined,
+      phone: data.phone?.trim() || null,
+      address: data.address?.trim() || null,
       isEmergency24Hour: data.isEmergency24Hour,
-      notes: data.notes?.trim() || undefined,
+      notes: data.notes?.trim() || null,
     });
   };
 

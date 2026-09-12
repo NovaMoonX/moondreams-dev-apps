@@ -1,6 +1,10 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { createAction, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+
+export const clearCurrentHouseholdData = createAction(
+  'nineLives/clearCurrentHouseholdData',
+);
 
 export interface OptimisticCollectionState<TDoc extends { id: string }> {
   items: TDoc[];
@@ -67,7 +71,9 @@ export function createOptimisticCollectionSlice<TDoc extends { id: string }>(
       },
     },
     extraReducers: (builder) => {
-      builder.addCase(resetAllState, () => initialState);
+      builder
+        .addCase(resetAllState, () => initialState)
+        .addCase(clearCurrentHouseholdData, () => initialState);
     },
   });
 }

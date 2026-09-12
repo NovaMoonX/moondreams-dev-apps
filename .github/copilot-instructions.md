@@ -64,6 +64,7 @@ src/
 - Do not add string-based or Firestore `Timestamp`-style values unless the feature truly requires them.
 - Keep Firestore rules and app state lifecycle logic aligned when creating or updating lifecycle-related fields such as `createdBy`, `members`, `pendingRequests`, or invite codes.
 - In Firestore rules, place repeated field assertions in helper functions instead of duplicating long inline checks inside `allow` expressions.
+- **Firestore document field types are the exception to the "prefer optional `?:`" rule below: model every field on a Firestore-backed type as a required key typed `T | null` (no `?`), and always write an explicit `null` (never `undefined`, never an omitted key) when a value is absent.** `setDoc`/`updateDoc` reject fields explicitly set to `undefined`, and this repo's `firestore.rules` are written expecting the key to exist (e.g. `request.resource.data.phone == null || request.resource.data.phone is string`) — a missing key throws a rules-evaluation error, not a passing check. Do not reach for `ignoreUndefinedProperties` on the Firestore client as a workaround; fix the type and the value instead. `create*` action thunks that accept a `Partial<Entity>` from callers (so quick-create/partial UI flows can omit fields) must normalize every non-required field to `?? null` when assembling the final document before calling `setDoc`.
 
 ### React and state patterns
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
@@ -110,6 +111,10 @@ useEffect(() => {
 - **Always prefer configured project aliases over relative paths.**
 - **Treat time fields as timestamps, not strings.**
 - **Keep Firestore rules and app data lifecycle logic aligned.**
+- **Firestore document fields: no optional `?:` — required `T | null` keys, and always write `null` (never `undefined`) for an absent value.**
+- **Never nest a bordered/`bg-card` container inside another one — pick one layer for the card treatment.**
+- **A "Custom"/"Other" follow-up input only renders once that option is selected, never unconditionally.**
+- **Large forms: keep only essential fields always visible; put optional/secondary fields in an Accordion or Disclosure.**
 - **Use `formatDateTime` from `src/utils/formatUtils.ts` for shared timestamp display formatting.**
 - **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
@@ -179,6 +184,7 @@ export function usePresence(userIds: string[] | null) {
 - Prefer `email?: string` over `email: string | undefined` when the field is optional by definition.
 - Prefer `displayName?: string` over `displayName: string | null` when the absence is just an omitted value.
 - Use explicit `null` only when the runtime semantics truly require it.
+- **Exception: Firestore document types.** For any type that models a Firestore document (or a nested object stored inside one), do the opposite — no `?:` optional keys; every field is required and typed `T | null`, with `null` written explicitly whenever the value is absent. See "Data and app patterns" above for why.
 
 ```ts
 // ❌ Avoid when the field is optional by definition
@@ -234,3 +240,12 @@ className={join('base-class', isActive ? 'active' : 'inactive')}
 - Check Dreamer UI first before creating custom components.
 - Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, and `/utils` when possible.
 - Review existing Dreamer UI props before applying custom styling or behavior.
+
+### Cards and layout density
+- **Never nest a bordered/`bg-card` container inside another bordered/`bg-card` container.** Cards within cards read as visual clutter. Pick one layer to carry the card treatment (usually the smaller, most specific unit — e.g. a single list item) and let the parent section be plain (heading + spacing, no border/background) instead of also boxing it.
+- Default to plainer layout — a heading, a divider (`divide-y`/`border-b`), or spacing — over a bordered card, especially for secondary/de-emphasized content. Reserve cards for content that should visually stand out as its own unit (a stat tile, a single record, a modal's content).
+- Before adding another `rounded-lg border border-border bg-card p-4` wrapper, check whether it's already inside one — if so, drop it.
+
+### Forms: custom/"other" inputs and progressive disclosure
+- When a select-style field offers a "Custom"/"Other" option that needs a follow-up text input, only render that input once that option is actually selected — never show it unconditionally alongside the preset options. Model this as one composite field (a small component holding `{ preset, customValue }`) so the two are visually and logically tied together. See `src/apps/nine-lives/components/BreedField.tsx` for the pattern.
+- For larger forms, don't dump every field into one flat, always-visible layout — it overwhelms the user. Keep only the essential/required fields visible by default, and group optional/secondary fields into an `Accordion` or `Disclosure` (both from Dreamer UI) so the user can expand what's relevant to them. See `src/apps/nine-lives/components/CatProfileForm.tsx` for the pattern (essential fields up top, an accordion of "Origin & identification" / "Insurance" / "Key dates & notes" below).
