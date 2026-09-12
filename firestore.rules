@@ -9,6 +9,195 @@ service cloud.firestore {
       );
     }
 
+    function isHouseholdMember(householdId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId))
+        && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
+    }
+
+    function isTimestampNumber(value) {
+      return value is number;
+    }
+
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    match /apps/nine-lives/households/{householdId} {
+      function isHouseholdIdentityValid() {
+        return request.resource.data.id == householdId
+          && request.resource.data.createdBy == request.auth.uid;
+      }
+
+      function isHouseholdBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && request.resource.data.members is list
+          && request.resource.data.members == [request.auth.uid]
+          && request.resource.data.inviteCode == null
+          && request.resource.data.pendingMembers is list
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isHouseholdImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.pendingMembers == resource.data.pendingMembers
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isHouseholdCreateValid() {
+        return request.auth != null
+          && isHouseholdIdentityValid()
+          && isHouseholdBaseShapeValid();
+      }
+
+      function isHouseholdUpdateValid() {
+        return isHouseholdImmutableFieldsValid();
+      }
+
+      allow read: if request.auth != null && request.auth.uid in resource.data.members;
+      allow create: if isHouseholdCreateValid();
+      allow update: if isHouseholdMember(householdId) && isHouseholdUpdateValid();
+      allow delete: if false;
+    }
+
+    match /apps/nine-lives/households/{householdId}/cats/{catId} {
+      function isCatIdentityValid() {
+        return request.resource.data.id == catId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCatBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && isTimestampNumber(request.resource.data.dateOfBirth)
+          && request.resource.data.isDateOfBirthEstimated is bool
+          && isNonEmptyString(request.resource.data.breed)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isCatCreateOwnershipValid() {
+        return request.resource.data.createdBy == request.auth.uid
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCatImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      function isCatCreateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isCatIdentityValid()
+          && isCatBaseShapeValid()
+          && isCatCreateOwnershipValid();
+      }
+
+      function isCatUpdateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isCatImmutableFieldsValid()
+          && isCatBaseShapeValid();
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isCatCreateValid();
+      allow update: if isCatUpdateValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /apps/nine-lives/households/{householdId}/vetClinics/{clinicId} {
+      function isVetClinicIdentityValid() {
+        return request.resource.data.id == clinicId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isVetClinicBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.phone == null || request.resource.data.phone is string)
+          && (request.resource.data.address == null || request.resource.data.address is string)
+          && (request.resource.data.isEmergency24Hour == null || request.resource.data.isEmergency24Hour is bool)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isVetClinicImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      function isVetClinicCreateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isVetClinicIdentityValid()
+          && isVetClinicBaseShapeValid();
+      }
+
+      function isVetClinicUpdateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isVetClinicImmutableFieldsValid()
+          && isVetClinicBaseShapeValid();
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isVetClinicCreateValid();
+      allow update: if isVetClinicUpdateValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/doctors/{doctorId} {
+      function isDoctorIdentityValid() {
+        return request.resource.data.id == doctorId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.clinicId is string
+          && request.resource.data.clinicId.size() > 0;
+      }
+
+      function isDoctorBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isDoctorImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.clinicId == resource.data.clinicId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      function isDoctorCreateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isDoctorIdentityValid()
+          && isDoctorBaseShapeValid();
+      }
+
+      function isDoctorUpdateValid() {
+        return request.auth != null
+          && isHouseholdMember(householdId)
+          && isDoctorImmutableFieldsValid()
+          && isDoctorBaseShapeValid();
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isDoctorCreateValid();
+      allow update: if isDoctorUpdateValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/worth-the-wait {
       allow read: if !resource.data.isRestricted || (
         request.auth != null && (

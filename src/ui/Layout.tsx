@@ -71,17 +71,17 @@ function Layout() {
       <LocationSync />
 
       {/* header */}
-      <div className='pointer-events-none absolute inset-x-0 top-0 z-10 flex h-20 items-center justify-between px-4 py-4 md:px-6'>
-        <div className='pointer-events-auto'>
+      <div className='pointer-events-none absolute inset-x-0 top-0 z-10 flex h-20 items-center gap-3 px-4 py-4 md:px-6'>
+        <div className='pointer-events-auto flex flex-1 items-center justify-start'>
           <ThemeToggle className='flex items-center' />
         </div>
 
-        <div className='pointer-events-auto'>
-          <AuthAvatar />
+        <div className='pointer-events-auto flex flex-1 items-center justify-center'>
+          <DevAccountSwitcher />
         </div>
 
-        <div className='pointer-events-auto absolute left-1/2 -translate-x-1/2'>
-          <DevAccountSwitcher />
+        <div className='pointer-events-auto flex flex-1 items-center justify-end'>
+          <AuthAvatar />
         </div>
       </div>
 

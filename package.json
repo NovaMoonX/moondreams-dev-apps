@@ -8,6 +8,7 @@
     "emulators": "firebase emulators:start --only auth,firestore,database,functions",
     "seed": "FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 GCLOUD_PROJECT=moondreams-dev-apps TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/seed.ts",
     "seed:core": "npm run seed -- --scope core",
+    "seed:nine-lives": "npm run seed -- --scope nine-lives",
     "seed:worth-the-wait": "npm run seed -- --scope worth-the-wait",
     "seed:reset": "npm run seed -- --scope all --reset",
     "emulators:seed": "firebase emulators:exec --project moondreams-dev-apps --only auth,firestore,database,functions \"npm run seed\"",
@@ -28,10 +29,12 @@
   },
   "dependencies": {
     "@moondreamsdev/dreamer-ui": "^1.7.26",
+    "@reduxjs/toolkit": "^2.12.0",
     "firebase": "12.16.0",
     "firebase-admin": "^13.10.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-redux": "^9.3.0",
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {

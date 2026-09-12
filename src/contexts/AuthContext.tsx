@@ -25,13 +25,18 @@ import {
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
 import { ensureDocExists } from '@/lib/firebase';
+import { resetAllState } from '@/store/actions/globalActions';
+import { useAppDispatch } from '@/store/index';
+import { setCurrentUser } from '@/store/slices/userSlice';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const dispatch = useAppDispatch();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDisplayNameUpdating, setIsDisplayNameUpdating] = useState(false);
   const currentLocationRef = useRef('home');
+  const previousUserIdRef = useRef<string | null | undefined>(undefined);
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
@@ -40,6 +45,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const nextUserId = firebaseUser?.uid ?? null;
+      const previousUserId = previousUserIdRef.current;
+
+      if (previousUserId !== undefined && previousUserId !== nextUserId) {
+        dispatch(resetAllState());
+      }
+
+      previousUserIdRef.current = nextUserId;
+
+      const nextUserState = firebaseUser
+        ? {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email ?? null,
+            displayName: firebaseUser.displayName ?? null,
+            photoURL: firebaseUser.photoURL ?? null,
+            isAdmin:
+              firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
+          }
+        : null;
+
+      dispatch(setCurrentUser(nextUserState));
       setUser(firebaseUser);
 
       if (firebaseUser) {
@@ -93,7 +119,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     if (!user) {

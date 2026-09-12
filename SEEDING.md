@@ -45,12 +45,13 @@ browser data behind. The Emulator Suite UI is available at `http://127.0.0.1:400
 | `npm run emulators` | Start Auth, Firestore, and RTDB emulators with their UI. |
 | `npm run seed` | Upsert all named fixtures into an already-running emulator. |
 | `npm run seed:core` | Upsert Auth users, profiles, app registry records, and presence. |
+| `npm run seed:nine-lives` | Upsert core data and Nine Lives household/cat fixtures. |
 | `npm run seed:worth-the-wait` | Upsert core data and Worth the Wait fixtures. |
 | `npm run seed:reset` | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures. |
 | `npm run emulators:seed` | Start emulators, seed all fixtures, and exit. |
 | `npm run emulators:seed:reset` | Start emulators, clear all fixtures, reseed, and exit. |
 
-Use `npm run seed -- --scope core`, `worth-the-wait`, or `all` to select a scope.
+Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, or `all` to select a scope.
 Normal runs are idempotent upserts and retain records created manually during local
 development. `--reset` is the explicit destructive local reset.
 
@@ -64,6 +65,7 @@ Auth Emulator:
 | Admin | `nova@moondreams.dev` | `seed-admin` | Admin app catalog access |
 | Alex | `alex@example.test` | `seed-worth-the-wait-one` | Worth the Wait partner and space creator |
 | Jamie | `jamie@example.test` | `seed-worth-the-wait-two` | Worth the Wait partner |
+| Taylor | `taylor@example.test` | `seed-nine-lives-caretaker` | Nine Lives household creator |
 
 When Vite uses the emulator configuration, the header provides local account buttons
 for these identities. This uses email/password so the selected account always owns the
@@ -80,6 +82,10 @@ catalog entries, and `status/{uid}` RTDB presence. App-specific seeders build on
 Faker-backed box content, revealed and unrevealed items, reveal history, a pending
 request, and a completed action. Faker is seeded with a fixed value, so the scenario
 is repeatable.
+
+`nine-lives` writes a shared household at
+`apps/nine-lives/households/seed-nine-lives-household` plus two representative cat
+profiles with insurance, origin, and key-date data for local CRUD and detail testing.
 
 To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its
