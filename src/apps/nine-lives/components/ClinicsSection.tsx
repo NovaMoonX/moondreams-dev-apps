@@ -4,9 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 
-import DetailsDisclosure from './DetailsDisclosure';
-import DoctorFormModal from './DoctorFormModal';
-import VetClinicFormModal from './VetClinicFormModal';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   createDoctor,
   deleteDoctor,
@@ -17,7 +15,13 @@ import {
   deleteVetClinic,
   updateVetClinic,
 } from '../store/actions/vetClinicsActions';
-import { selectClinicsByHousehold, selectDoctorsByHousehold } from '../store/selectors';
+import {
+  selectClinicsByHousehold,
+  selectDoctorsByHousehold,
+} from '../store/selectors';
+import DetailsDisclosure from './DetailsDisclosure';
+import DoctorFormModal from './DoctorFormModal';
+import VetClinicFormModal from './VetClinicFormModal';
 
 interface ClinicsSectionProps {
   householdId: string;
@@ -31,16 +35,20 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showClinicForm, setShowClinicForm] = useState(false);
   const [editingClinicId, setEditingClinicId] = useState<string | null>(null);
-  const [doctorModalClinicId, setDoctorModalClinicId] = useState<string | null>(null);
+  const [doctorModalClinicId, setDoctorModalClinicId] = useState<string | null>(
+    null,
+  );
   const [editingDoctorId, setEditingDoctorId] = useState<string | null>(null);
 
-  const editingClinic = clinics.find((clinic) => clinic.id === editingClinicId) ?? null;
-  const editingDoctor = doctors.find((doctor) => doctor.id === editingDoctorId) ?? null;
-  const doctorModalClinic = clinics.find((clinic) => clinic.id === doctorModalClinicId) ?? null;
-  const doctorFormClinic =
-    editingDoctor
-      ? clinics.find((clinic) => clinic.id === editingDoctor.clinicId) ?? null
-      : doctorModalClinic;
+  const editingClinic =
+    clinics.find((clinic) => clinic.id === editingClinicId) ?? null;
+  const editingDoctor =
+    doctors.find((doctor) => doctor.id === editingDoctorId) ?? null;
+  const doctorModalClinic =
+    clinics.find((clinic) => clinic.id === doctorModalClinicId) ?? null;
+  const doctorFormClinic = editingDoctor
+    ? (clinics.find((clinic) => clinic.id === editingDoctor.clinicId) ?? null)
+    : doctorModalClinic;
 
   const handleCreateClinic = async (clinic: {
     name: string;
@@ -91,7 +99,9 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
     setIsSubmitting(true);
 
     try {
-      await dispatch(deleteVetClinic({ householdId, vetClinicId: clinicId })).unwrap();
+      await dispatch(
+        deleteVetClinic({ householdId, vetClinicId: clinicId }),
+      ).unwrap();
       setEditingClinicId(null);
       setShowClinicForm(false);
       if (doctorModalClinicId === clinicId) {
@@ -102,7 +112,10 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
     }
   };
 
-  const handleCreateDoctor = async (doctor: { name: string; notes?: string | null }) => {
+  const handleCreateDoctor = async (doctor: {
+    name: string;
+    notes?: string | null;
+  }) => {
     if (!doctorModalClinicId) {
       return;
     }
@@ -124,7 +137,10 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
     }
   };
 
-  const handleUpdateDoctor = async (doctor: { name: string; notes?: string | null }) => {
+  const handleUpdateDoctor = async (doctor: {
+    name: string;
+    notes?: string | null;
+  }) => {
     if (!editingDoctorId) {
       return;
     }
@@ -163,43 +179,74 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
     <section>
       <DetailsDisclosure label='Vet clinics'>
         <div className='space-y-4'>
-          <Button type='button' variant='secondary' size='sm' onClick={() => setShowClinicForm(true)}>
-            Add clinic
-          </Button>
+          <div className='flex items-center justify-between gap-2 pb-2'>
+            <small className='text-muted-foreground text-sm'>
+              Manage your vet clinics here.
+            </small>
+            <Button
+              type='button'
+              variant='primary'
+              size='sm'
+              onClick={() => setShowClinicForm(true)}
+            >
+              Add clinic
+            </Button>
+          </div>
 
           {clinics.length === 0 && (
-            <p className='text-sm text-muted-foreground'>No clinics added yet.</p>
+            <p className='text-muted-foreground text-sm'>
+              No clinics added yet.
+            </p>
           )}
 
           {clinics.length > 0 && (
-            <div className='divide-y divide-border'>
+            <div className='divide-border divide-y'>
               {clinics.map((clinic) => {
-                const clinicDoctors = doctors.filter((doctor) => doctor.clinicId === clinic.id);
+                const clinicDoctors = doctors.filter(
+                  (doctor) => doctor.clinicId === clinic.id,
+                );
 
                 return (
                   <div key={clinic.id} className='py-3 first:pt-0 last:pb-0'>
-                    <div className='flex items-center justify-between gap-2'>
+                    <div className='flex flex-col sm:flex-row'>
                       <div>
                         <div className='flex items-center gap-2'>
-                          <p className='font-medium'>{clinic.name}</p>
-                          {clinic.isEmergency24Hour && (
-                            <span className='rounded-full bg-muted px-2 py-1 text-xs'>24hr</span>
-                          )}
+                          <Button
+                            className='text-left text-sm font-medium'
+                            variant='link'
+                            size='stripped'
+                            onClick={() => setEditingClinicId(clinic.id)}
+                          >
+                            {clinic.name}
+                          </Button>
+                          <span
+                            className={join(
+                              'bg-muted rounded-full px-2 py-1 text-xs',
+                              !clinic.isEmergency24Hour && 'hidden',
+                            )}
+                          >
+                            24hr
+                          </span>
                         </div>
                         {clinic.phone && (
-                          <p className='text-sm text-muted-foreground'>{clinic.phone}</p>
+                          <p className='text-muted-foreground text-sm'>
+                            {clinic.phone}
+                          </p>
                         )}
                         {clinic.address && (
-                          <p className='text-sm text-muted-foreground'>{clinic.address}</p>
+                          <p className='text-muted-foreground text-sm'>
+                            {clinic.address}
+                          </p>
                         )}
                       </div>
 
-                      <div className='flex items-center gap-2'>
+                      <div className='flex gap-2 my-1 sm:my-0'>
                         <Button
                           type='button'
                           variant='secondary'
                           size='sm'
                           onClick={() => setEditingClinicId(clinic.id)}
+                          className='shrink-0 grow'
                         >
                           Edit clinic
                         </Button>
@@ -208,6 +255,7 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
                           variant='secondary'
                           size='sm'
                           onClick={() => setDoctorModalClinicId(clinic.id)}
+                          className='shrink-0 grow'
                         >
                           Add doctor
                         </Button>
@@ -215,18 +263,25 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
                     </div>
 
                     {clinicDoctors.length > 0 && (
-                      <div className='mt-3 space-y-2 border-l-2 border-border pl-3'>
+                      <div className='border-border mt-3 space-y-2 border-l-2 pl-3'>
                         {clinicDoctors.map((doctor) => (
-                          <div key={doctor.id} className='flex items-start justify-between gap-3'>
+                          <div
+                            key={doctor.id}
+                            className='flex items-start justify-between gap-3'
+                          >
                             <div>
-                              <p className='text-sm font-medium'>{doctor.name}</p>
+                              <p className='text-sm font-medium'>
+                                {doctor.name}
+                              </p>
                               {doctor.notes && (
-                                <p className='text-sm text-muted-foreground'>{doctor.notes}</p>
+                                <p className='text-muted-foreground text-sm'>
+                                  {doctor.notes}
+                                </p>
                               )}
                             </div>
                             <Button
                               type='button'
-                              variant='secondary'
+                              variant='link'
                               size='sm'
                               onClick={() => setEditingDoctorId(doctor.id)}
                             >
@@ -249,7 +304,9 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
         initialClinic={editingClinic ?? undefined}
         isSubmitting={isSubmitting}
         onSubmit={editingClinic ? handleUpdateClinic : handleCreateClinic}
-        onDelete={editingClinic ? () => handleDeleteClinic(editingClinic.id) : undefined}
+        onDelete={
+          editingClinic ? () => handleDeleteClinic(editingClinic.id) : undefined
+        }
         onClose={() => {
           setShowClinicForm(false);
           setEditingClinicId(null);
@@ -262,7 +319,9 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
         initialDoctor={editingDoctor ?? undefined}
         isSubmitting={isSubmitting}
         onSubmit={editingDoctor ? handleUpdateDoctor : handleCreateDoctor}
-        onDelete={editingDoctor ? () => handleDeleteDoctor(editingDoctor.id) : undefined}
+        onDelete={
+          editingDoctor ? () => handleDeleteDoctor(editingDoctor.id) : undefined
+        }
         onClose={() => {
           setDoctorModalClinicId(null);
           setEditingDoctorId(null);

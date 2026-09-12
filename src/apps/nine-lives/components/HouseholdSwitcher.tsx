@@ -28,12 +28,17 @@ function HouseholdSwitcher({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const householdOptions = useMemo(
-    () => households.map((household) => ({ text: household.name, value: household.id })),
+    () =>
+      households.map((household) => ({
+        text: household.name,
+        value: household.id,
+      })),
     [households],
   );
 
   const defaultHouseholdName = useMemo(
-    () => (user?.displayName ? `${user.displayName}'s household` : 'My household'),
+    () =>
+      user?.displayName ? `${user.displayName}'s household` : 'My household',
     [user],
   );
 
@@ -56,29 +61,37 @@ function HouseholdSwitcher({
   };
 
   return (
-    <header className='flex flex-col gap-4 rounded-lg border border-border bg-card p-6 md:flex-row md:items-end md:justify-between'>
+    <header className='border-border bg-card flex flex-col gap-4 rounded-lg border p-6 md:flex-row md:items-end md:justify-between'>
       <div>
-        <p className='text-muted-foreground text-sm uppercase tracking-[0.2em]'>Nine Lives</p>
-        <h1 className='mt-2 text-3xl font-semibold'>{selectedHousehold?.name}</h1>
-        <p className='mt-2 text-sm text-muted-foreground'>
+        <p className='text-muted-foreground text-sm tracking-[0.2em] uppercase'>
+          Nine Lives
+        </p>
+        <h1 className='mt-2 text-3xl font-semibold'>
+          {selectedHousehold?.name}
+        </h1>
+        <p className='text-muted-foreground mt-2 text-sm'>
           {selectedHousehold?.members.length ?? 0} member(s) in this household
         </p>
       </div>
 
-      <div className='flex flex-col gap-2 md:items-end'>
+      <div className='flex flex-col gap-2 items-center sm:items-end'>
         <Label className='text-muted-foreground'>Household</Label>
-        <div className='flex gap-2'>
-          <div className='min-w-52 flex-1'>
+        <div className='flex flex-col items-center sm:items-end gap-3'>
+          <div className='flex-1 max-w-full'>
             <Select
               options={householdOptions}
               value={selectedHousehold?.id ?? ''}
               onChange={(value) => onSelectHousehold(value || null)}
               placeholder='Select a household'
-              searchable
-              clearable
+              searchable={householdOptions.length > 5}
             />
           </div>
-          <Button type='button' variant='secondary' onClick={() => setShowHouseholdModal(true)}>
+          <Button
+            type='button'
+            variant='link'
+            className='text-sm text-muted-foreground hover:text-foreground'
+            onClick={() => setShowHouseholdModal(true)}
+          >
             Add household
           </Button>
         </div>

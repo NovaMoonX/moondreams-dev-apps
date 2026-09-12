@@ -1,11 +1,28 @@
 import { useMemo } from 'react';
 
-import { Button, Form, FormFactories, Input, Label, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Form,
+  FormFactories,
+  Input,
+  Label,
+  Select,
+  Textarea,
+} from '@moondreamsdev/dreamer-ui/components';
 
-import { INSURANCE_PROVIDER_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
-import type { Cat, CatInsurance, CatKeyDate, CatLifestyle } from '@apps/nine-lives/types';
 import { fromDateInputValue, toDateInputValue } from '@/utils';
-import { getBreedInitialValue, resolveBreedValue, type BreedValue } from '@apps/nine-lives/utils/breedUtils';
+import { INSURANCE_PROVIDER_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
+import type {
+  Cat,
+  CatInsurance,
+  CatKeyDate,
+  CatLifestyle,
+} from '@apps/nine-lives/types';
+import {
+  getBreedInitialValue,
+  resolveBreedValue,
+  type BreedValue,
+} from '@apps/nine-lives/utils/breedUtils';
 
 import BreedField from './BreedField';
 import DetailsDisclosure from './DetailsDisclosure';
@@ -94,7 +111,9 @@ function buildCatInsurance(
   return result;
 }
 
-function getInsuranceProviderInitialValue(cat?: Cat | null): InsuranceProviderValue {
+function getInsuranceProviderInitialValue(
+  cat?: Cat | null,
+): InsuranceProviderValue {
   const savedProvider = cat?.insurance?.provider;
 
   if (!savedProvider) {
@@ -112,7 +131,9 @@ function getInsuranceProviderInitialValue(cat?: Cat | null): InsuranceProviderVa
   return { preset: OTHER_INSURANCE_PROVIDER, customProvider: savedProvider };
 }
 
-function getAdditionalDetailsInitialValue(cat?: Cat | null): AdditionalDetailsValue {
+function getAdditionalDetailsInitialValue(
+  cat?: Cat | null,
+): AdditionalDetailsValue {
   return {
     microchipNumber: cat?.microchipNumber ?? '',
     shelterName: cat?.shelterOrigin?.name ?? '',
@@ -131,11 +152,18 @@ interface AdditionalDetailsFieldsProps {
   disabled?: boolean;
 }
 
-function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalDetailsFieldsProps) {
+function AdditionalDetailsFields({
+  value,
+  onValueChange,
+  disabled,
+}: AdditionalDetailsFieldsProps) {
   const update = (changes: Partial<AdditionalDetailsValue>) =>
     onValueChange({ ...value, ...changes });
 
-  const keyDates = value.customKeyDates.length > 0 ? value.customKeyDates : [{ label: '', date: 0 }];
+  const keyDates =
+    value.customKeyDates.length > 0
+      ? value.customKeyDates
+      : [{ label: '', date: 0 }];
 
   const updateKeyDate = (index: number, changes: Partial<CatKeyDate>) => {
     const nextKeyDates = keyDates.map((entry, currentIndex) =>
@@ -152,7 +180,9 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
             <Label className='text-sm'>Microchip</Label>
             <Input
               value={value.microchipNumber}
-              onChange={(event) => update({ microchipNumber: event.target.value })}
+              onChange={(event) =>
+                update({ microchipNumber: event.target.value })
+              }
               placeholder='Microchip number'
               variant='outline'
               disabled={disabled}
@@ -172,7 +202,9 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
             <Label className='text-sm'>Shelter address</Label>
             <Input
               value={value.shelterAddress}
-              onChange={(event) => update({ shelterAddress: event.target.value })}
+              onChange={(event) =>
+                update({ shelterAddress: event.target.value })
+              }
               placeholder='Address'
               variant='outline'
               disabled={disabled}
@@ -209,8 +241,32 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
               searchable
               disabled={disabled}
             />
+            {value.insuranceProviderSelection.preset !==
+              OTHER_INSURANCE_PROVIDER && (
+              <div className='flex justify-end'>
+                <Button
+                  variant='link'
+                  size='sm'
+                  type='button'
+                  onClick={() =>
+                    update({
+                      insuranceProviderSelection: {
+                        preset: OTHER_INSURANCE_PROVIDER,
+                        customProvider: '',
+                      },
+                    })
+                  }
+                  disabled={disabled}
+                  className='text-muted-foreground hover:text-foreground text-xs'
+                >
+                  Don't see your provider? Click here to enter a custom
+                  provider.
+                </Button>
+              </div>
+            )}
           </div>
-          {value.insuranceProviderSelection.preset === OTHER_INSURANCE_PROVIDER && (
+          {value.insuranceProviderSelection.preset ===
+            OTHER_INSURANCE_PROVIDER && (
             <div className='space-y-1'>
               <Label className='text-sm'>Provider name</Label>
               <Input
@@ -233,7 +289,9 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
             <Label className='text-sm'>Insurance policy number</Label>
             <Input
               value={value.insurancePolicyNumber}
-              onChange={(event) => update({ insurancePolicyNumber: event.target.value })}
+              onChange={(event) =>
+                update({ insurancePolicyNumber: event.target.value })
+              }
               placeholder='Policy number'
               variant='outline'
               disabled={disabled}
@@ -246,12 +304,18 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
         <div className='space-y-4'>
           <div className='space-y-3'>
             <div className='flex items-center justify-between'>
-              <p className='text-sm text-muted-foreground'>Add memorable dates for this cat.</p>
+              <p className='text-muted-foreground text-sm'>
+                Add memorable dates for this cat.
+              </p>
               <Button
                 type='button'
                 variant='secondary'
                 size='sm'
-                onClick={() => update({ customKeyDates: [...keyDates, { label: '', date: 0 }] })}
+                onClick={() =>
+                  update({
+                    customKeyDates: [...keyDates, { label: '', date: 0 }],
+                  })
+                }
                 disabled={disabled}
               >
                 Add date
@@ -259,11 +323,16 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
             </div>
 
             {keyDates.map((entry, index) => (
-              <div key={`${entry.label}-${index}`} className='grid gap-3 md:grid-cols-2'>
+              <div
+                key={`${entry.label}-${index}`}
+                className='grid gap-3 md:grid-cols-2'
+              >
                 <div className='space-y-1'>
                   <Input
                     value={entry.label}
-                    onChange={(event) => updateKeyDate(index, { label: event.target.value })}
+                    onChange={(event) =>
+                      updateKeyDate(index, { label: event.target.value })
+                    }
                     variant='outline'
                     placeholder='e.g. Spayed/neutered'
                     disabled={disabled}
@@ -274,7 +343,9 @@ function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalD
                     type='date'
                     value={toDateInputValue(entry.date)}
                     onChange={(event) =>
-                      updateKeyDate(index, { date: fromDateInputValue(event.target.value) ?? 0 })
+                      updateKeyDate(index, {
+                        date: fromDateInputValue(event.target.value) ?? 0,
+                      })
                     }
                     variant='outline'
                     disabled={disabled}
@@ -317,8 +388,10 @@ function buildPreparedCat(
   householdId: string | undefined,
   cat?: Cat | null,
 ) {
-  const dateOfBirthMs = fromDateInputValue(data.dateOfBirth) ?? cat?.dateOfBirth ?? 0;
-  const adoptedAtMs = fromDateInputValue(data.additionalDetails.adoptedAt) ?? null;
+  const dateOfBirthMs =
+    fromDateInputValue(data.dateOfBirth) ?? cat?.dateOfBirth ?? 0;
+  const adoptedAtMs =
+    fromDateInputValue(data.additionalDetails.adoptedAt) ?? null;
   const keyDates = data.additionalDetails.customKeyDates
     .filter((entry) => entry.label.trim() && entry.date > 0)
     .map((entry) => ({ date: entry.date, label: entry.label.trim() }));
@@ -337,9 +410,11 @@ function buildPreparedCat(
     lifestyle: data.lifestyle,
     microchipNumber: data.additionalDetails.microchipNumber.trim() || null,
     shelterOrigin:
-      data.additionalDetails.shelterName || data.additionalDetails.shelterAddress
+      data.additionalDetails.shelterName ||
+      data.additionalDetails.shelterAddress
         ? {
-            name: data.additionalDetails.shelterName.trim() || 'Unknown shelter',
+            name:
+              data.additionalDetails.shelterName.trim() || 'Unknown shelter',
             address: data.additionalDetails.shelterAddress.trim() || null,
           }
         : null,
@@ -420,7 +495,11 @@ function CatProfileForm({
     [],
   );
 
-  const submitLabel = isSubmitting ? 'Saving…' : cat ? 'Save changes' : 'Create cat';
+  const submitLabel = isSubmitting
+    ? 'Saving…'
+    : cat
+      ? 'Save changes'
+      : 'Create cat';
 
   const handleSubmit = async (data: CatProfileFormData) => {
     const nextCatValue = buildPreparedCat(data, householdId, cat);
