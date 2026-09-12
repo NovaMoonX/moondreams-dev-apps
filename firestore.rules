@@ -23,6 +23,47 @@ service cloud.firestore {
       return value is string && value.size() > 0;
     }
 
+    // `dev` is only ever set by scripts/seeds/core.ts, which refuses to run
+    // against anything but a local emulator — so it never appears on a
+    // production token. Lets seeded users see every app locally.
+    function isDevUser() {
+      return request.auth != null && 'dev' in request.auth.token && request.auth.token.dev == true;
+    }
+
+    // Field access guarded with `'field' in appData`: an unfiltered list()
+    // query (used by admin/dev) fails outright if a rule can't prove it
+    // won't throw on a missing field.
+    function isAppVisibleToUser(appData) {
+      return ('status' in appData) && appData.status == 'public' && (
+        !(('isRestricted' in appData) && appData.isRestricted) || (
+          request.auth != null
+            && ('allowedUsers' in appData)
+            && appData.allowedUsers is list
+            && (
+              request.auth.uid in appData.allowedUsers ||
+              request.auth.token.email in appData.allowedUsers
+            )
+        )
+      );
+    }
+
+    // Shared read rule for every /apps/{appId} doc, used by each explicit
+    // app block plus the generic fallback below.
+    function canReadAppDoc(appData) {
+      return isAdmin() || isDevUser() || isAppVisibleToUser(appData);
+    }
+
+    // Apps below use explicit paths (not a generic wildcard) so each app's
+    // rules stay isolated, kept in alphabetical order by app id. A generic
+    // /apps/{appId} fallback for apps without a block yet is at the bottom.
+
+    // --- App: nine-lives ---
+
+    match /apps/nine-lives {
+      allow read: if canReadAppDoc(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /apps/nine-lives/households/{householdId} {
       function isHouseholdIdentityValid() {
         return request.resource.data.id == householdId
@@ -215,14 +256,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    // --- App: worth-the-wait ---
+
     match /apps/worth-the-wait {
-      allow read: if !resource.data.isRestricted || (
-        request.auth != null && (
-          request.auth.uid in resource.data.allowedUsers ||
-          request.auth.token.email in resource.data.allowedUsers ||
-          isAdmin()
-        )
-      );
+      allow read: if canReadAppDoc(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -479,14 +516,11 @@ service cloud.firestore {
       }
     }
 
+    // Fallback for any app doc that doesn't have an explicit /apps/{appId}
+    // block above — same rule as every explicit app block, so a new app
+    // works correctly even before it's given its own block.
     match /apps/{appId} {
-      allow read: if !resource.data.isRestricted || (
-        request.auth != null && (
-          request.auth.uid in resource.data.allowedUsers ||
-          request.auth.token.email in resource.data.allowedUsers ||
-          isAdmin()
-        )
-      );
+      allow read: if canReadAppDoc(resource.data);
       allow create, update, delete: if isAdmin();
     }
 

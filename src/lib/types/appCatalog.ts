@@ -1,10 +1,26 @@
 export type AppId = 'worth-the-wait' | 'nine-lives' | (string & {});
 
+export type AppStatus = 'draft' | 'public' | 'removed';
+
+export const APP_STATUS_OPTIONS: AppStatus[] = ['draft', 'public', 'removed'];
+
+export function normalizeAppStatus(
+  value: unknown,
+  fallback: AppStatus = 'draft',
+): AppStatus {
+  if (value === 'draft' || value === 'public' || value === 'removed') {
+    return value;
+  }
+
+  return fallback;
+}
+
 export interface AppMetadata {
   id: AppId;
   name: string;
   path: string;
   description: string;
+  status: AppStatus;
   isRestricted: boolean;
   allowedUsers: string[];
   createdAt?: string;

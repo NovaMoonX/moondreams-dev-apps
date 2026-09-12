@@ -2,6 +2,7 @@ import {
   Button,
   Input,
   Modal,
+  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -14,7 +15,13 @@ import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { ADMIN_EMAIL, getUnconfiguredRegistryApps } from '@lib/app';
 import { db } from '@lib/firebase/config';
-import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
+import {
+  APP_STATUS_OPTIONS,
+  normalizeAppStatus,
+  type AppMetadata,
+  type AppStatus,
+  type UserProfile,
+} from '@lib/types/appCatalog';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 
 type AppConfigEditorProps = {
@@ -32,6 +39,9 @@ function AppConfigEditor({
 }: AppConfigEditorProps) {
   const [name, setName] = useState(app.name);
   const [description, setDescription] = useState(app.description ?? '');
+  const [status, setStatus] = useState<AppStatus>(
+    normalizeAppStatus(app.status ?? 'draft'),
+  );
   const [isRestricted, setIsRestricted] = useState(app.isRestricted ?? false);
   const [allowedUsers, setAllowedUsers] = useState<string[]>(
     app.allowedUsers ?? [],
@@ -107,13 +117,14 @@ function AppConfigEditor({
     return (
       name.trim() !== app.name.trim() ||
       description.trim() !== (app.description ?? '').trim() ||
+      status !== app.status ||
       isRestricted !== app.isRestricted ||
       savedAllowedUsers.length !== nextAllowedUsers.length ||
       savedAllowedUsers.some(
         (value, index) => value !== nextAllowedUsers[index],
       )
     );
-  }, [allowedUsers, app, description, isRestricted, name]);
+  }, [allowedUsers, app, description, isRestricted, name, status]);
 
   useEffect(() => {
     onDirtyChange?.(app.id, hasUnsavedChanges);
@@ -184,6 +195,7 @@ function AppConfigEditor({
       await onSave(app.id, {
         name,
         description,
+        status,
         isRestricted,
         allowedUsers,
       });
@@ -226,6 +238,23 @@ function AppConfigEditor({
           <label className='text-foreground text-sm font-medium'>Path</label>
           <Input value={app.path} disabled />
         </div>
+      </div>
+
+      <div className='space-y-2'>
+        <label className='text-foreground text-sm font-medium'>Status</label>
+        <Select
+          options={APP_STATUS_OPTIONS.map((option) => ({
+            text:
+              option === 'draft'
+                ? 'Draft / In progress'
+                : option === 'public'
+                  ? 'Public / Ready'
+                  : 'Removed / Archived',
+            value: option,
+          }))}
+          value={status}
+          onChange={(nextStatus) => setStatus(nextStatus as AppStatus)}
+        />
       </div>
 
       <div className='space-y-2'>
