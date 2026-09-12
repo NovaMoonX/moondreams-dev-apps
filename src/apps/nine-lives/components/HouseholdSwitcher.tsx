@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react';
 
 import { Button, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch } from '@/store';
 
+import HouseholdMembersRow from './HouseholdMembersRow';
+import HouseholdPendingRequests from './HouseholdPendingRequests';
 import HouseholdSetupModal from './HouseholdSetupModal';
 import { createHousehold } from '../store/actions/householdsActions';
+import { requestToJoinHousehold } from '../store/actions/pendingRequestsActions';
 import type { Household } from '../types';
 
 interface HouseholdSwitcherProps {
@@ -24,6 +29,7 @@ function HouseholdSwitcher({
 }: HouseholdSwitcherProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
   const [showHouseholdModal, setShowHouseholdModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -60,52 +66,123 @@ function HouseholdSwitcher({
     }
   };
 
-  return (
-    <header className='border-border bg-card flex flex-col gap-4 rounded-lg border p-6 md:flex-row md:items-end md:justify-between'>
-      <div>
-        <p className='text-muted-foreground text-sm tracking-[0.2em] uppercase'>
-          Nine Lives
-        </p>
-        <h1 className='mt-2 text-3xl font-semibold'>
-          {selectedHousehold?.name}
-        </h1>
-        <p className='text-muted-foreground mt-2 text-sm'>
-          {selectedHousehold?.members.length ?? 0} member(s) in this household
-        </p>
-      </div>
+  const handleJoinHousehold = async (inviteCode: string) => {
+    if (!user?.uid) {
+      return;
+    }
 
-      <div className='flex flex-col gap-2 items-center sm:items-end'>
-        <Label className='text-muted-foreground'>Household</Label>
-        <div className='flex flex-col items-center sm:items-end gap-3'>
-          <div className='flex-1 max-w-full'>
-            <Select
-              options={householdOptions}
-              value={selectedHousehold?.id ?? ''}
-              onChange={(value) => onSelectHousehold(value || null)}
-              placeholder='Select a household'
-              searchable={householdOptions.length > 5}
-            />
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        requestToJoinHousehold({ uid: user.uid, inviteCode }),
+      ).unwrap();
+      setShowHouseholdModal(false);
+      addToast({
+        title: 'Join request sent',
+        description: 'The household has been notified and is waiting for approval.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCopyInviteCode = async () => {
+    if (!selectedHousehold?.inviteCode) {
+      return;
+    }
+
+    await copyToClipboard(selectedHousehold.inviteCode);
+    addToast({
+      title: 'Invite code copied',
+      description: 'Share this code with someone who needs to join the household.',
+    });
+  };
+
+  return (
+    <>
+      <header className='border-border bg-card flex flex-col gap-4 rounded-lg border p-6'>
+        <div className='flex flex-col gap-4 md:flex-row md:items-end md:justify-between'>
+          <div className='space-y-3'>
+            <div>
+              <p className='text-muted-foreground text-sm tracking-[0.2em] uppercase'>
+                Nine Lives
+              </p>
+              <h1 className='mt-2 text-3xl font-semibold'>
+                {selectedHousehold?.name}
+              </h1>
+            </div>
+
+            <div className='flex flex-wrap items-center gap-3'>
+              <HouseholdMembersRow memberIds={selectedHousehold?.members ?? []} />
+              {selectedHousehold?.inviteCode && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  onClick={handleCopyInviteCode}
+                >
+                  Invite
+                </Button>
+              )}
+            </div>
+
+            {selectedHousehold?.inviteCode && (
+              <div className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='text-muted-foreground'>Invite code</span>
+                <code className='border-border bg-muted rounded border px-2 py-1 font-mono tracking-[0.2em]'>
+                  {selectedHousehold.inviteCode}
+                </code>
+                <button
+                  type='button'
+                  className='text-muted-foreground hover:text-foreground underline underline-offset-4'
+                  onClick={handleCopyInviteCode}
+                >
+                  Copy
+                </button>
+              </div>
+            )}
           </div>
-          <Button
-            type='button'
-            variant='link'
-            className='text-sm text-muted-foreground hover:text-foreground'
-            onClick={() => setShowHouseholdModal(true)}
-          >
-            Add household
-          </Button>
+
+          <div className='flex flex-col gap-2 items-center sm:items-end'>
+            <Label className='text-muted-foreground'>Household</Label>
+            <div className='flex flex-col items-center sm:items-end gap-3'>
+              <div className='flex-1 max-w-full'>
+                <Select
+                  options={householdOptions}
+                  value={selectedHousehold?.id ?? ''}
+                  onChange={(value) => onSelectHousehold(value || null)}
+                  placeholder='Select a household'
+                  searchable={householdOptions.length > 5}
+                />
+              </div>
+              <Button
+                type='button'
+                variant='link'
+                className='text-sm text-muted-foreground hover:text-foreground'
+                onClick={() => setShowHouseholdModal(true)}
+              >
+                Add household
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
+
+      {selectedHousehold && (
+        <HouseholdPendingRequests householdId={selectedHousehold.id} />
+      )}
 
       <HouseholdSetupModal
         key={`add-household-${user?.uid ?? 'anon'}`}
         isOpen={showHouseholdModal}
         defaultName={defaultHouseholdName}
         isSubmitting={isSubmitting}
-        onConfirm={handleCreateHousehold}
+        onCreate={handleCreateHousehold}
+        onJoin={handleJoinHousehold}
         onClose={() => setShowHouseholdModal(false)}
       />
-    </header>
+    </>
   );
 }
 

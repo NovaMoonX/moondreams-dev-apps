@@ -1,17 +1,17 @@
-export interface PendingHouseholdMember {
-  uid: string;
-  requestedAt: number;
-}
-
 export interface Household {
   id: string;
   name: string;
   members: string[];
   inviteCode: string | null;
-  pendingMembers: PendingHouseholdMember[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
+}
+
+export interface PendingHouseholdRequest {
+  uid: string;
+  householdId: string;
+  requestedAt: number;
 }
 
 export type CatLifestyle = 'indoor' | 'outdoor' | 'indoor_outdoor';

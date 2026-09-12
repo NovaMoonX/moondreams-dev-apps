@@ -2,7 +2,7 @@
 
 > **Global Data Keying**: All application data is namespaced under the mini-app identifier `nine-lives` (e.g., Firestore root path `apps/nine-lives/...`), with two exceptions: the shared user profile (`users/{uid}`) and the cross-app reminder system (`reminders/{reminderId}`), both intentionally central so other mini-apps can use them too.
 
-> **Household model**: cats belong to a `Household`, not directly to a single user. `Household.members` is an array of UIDs — solo (just the creator) for MVP, but structured from day one so adding caretakers later (a stretch goal) doesn't require restructuring ownership. All household-owned data (cats, vet clinics, doctors, visits, emergency info, care instructions) is nested under `households/{householdId}` and access-checked against `members`, the same pattern Worth the Wait uses for `space.members`.
+> **Household model**: cats belong to a `Household`, not directly to a single user. `Household.members` is an array of UIDs and the household uses a shared `inviteCode` plus a `pendingRequests` subcollection to support multiple caretakers. All household-owned data (cats, vet clinics, doctors, visits, emergency info, care instructions) is nested under `households/{householdId}` and access-checked against `members`, the same pattern Worth the Wait uses for `space.members`.
 
 > **Timestamp convention**: every date and time field in this document is a millisecond Unix timestamp (`number`), never an ISO string — this matches the repo's existing convention (see `.github/copilot-instructions.md`). An earlier draft of this document used ISO date strings for a few fields (`Cat.dateOfBirth`, `CatKeyDate.date`, `Cat.adoptedAt`, `Cat.insurance.coverageStartDate`, `HealthRecord.recordDate`); that was an oversight, corrected below. Fields that represent a calendar date without a meaningful time-of-day (like a birthday) still store as `number` — midnight UTC of that date — rather than switching format just because there's no clock time involved.
 
@@ -12,27 +12,29 @@
 
 Path: `apps/nine-lives/households/{householdId}`
 
-`inviteCode` and `pendingMembers` exist now so the invite/approve flow (a stretch goal) doesn't require a schema migration later — they stay `null`/empty for MVP. Unlike Worth the Wait's two-person cap, a household isn't "locked" at any size, so multiple join requests can be pending at once.
+`inviteCode` is generated when a household is created and stays stable while the household is active. Join requests are stored in the `pendingRequests` subcollection so multiple people can request access without mutating a single list field. Unlike Worth the Wait's two-person cap, a household isn't "locked" at any size, so multiple join requests can be pending at once.
 
 ```typescript
-interface PendingHouseholdMember {
+interface PendingHouseholdRequest {
   uid: string;
+  householdId: string;
   requestedAt: number;
 }
 
 interface Household {
   id: string;
   name: string; // pre-filled as "{Full Name}'s household", editable
-  members: string[]; // UIDs; solo for MVP
+  members: string[]; // UIDs
   inviteCode: string | null;
-  pendingMembers: PendingHouseholdMember[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
 }
 ```
 
-A lightweight lookup collection mirrors Worth the Wait's invite pattern for when the invite flow ships: `apps/nine-lives/inviteCodes/{code} -> { householdId }`.
+Path: `apps/nine-lives/households/{householdId}/pendingRequests/{uid}`
+
+A pending request is a one-document write for the requester themselves: `{ uid, householdId, requestedAt }`. Any current household member can read the subcollection to review incoming requests and accept or decline them.
 
 ### 2. Cat
 

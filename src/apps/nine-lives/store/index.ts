@@ -12,12 +12,17 @@ import {
   type HouseholdsState,
 } from './slices/householdsSlice';
 import {
+  pendingRequestsReducer,
+  type PendingRequestsState,
+} from './slices/pendingRequestsSlice';
+import {
   vetClinicsReducer,
   type VetClinicsState,
 } from './slices/vetClinicsSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
+  pendingRequests: PendingRequestsState;
   cats: CatsState;
   vetClinics: VetClinicsState;
   doctors: DoctorsState;
@@ -25,6 +30,7 @@ export interface NineLivesState {
 
 export const nineLivesReducer = combineReducers({
   households: householdsReducer,
+  pendingRequests: pendingRequestsReducer,
   cats: catsReducer,
   vetClinics: vetClinicsReducer,
   doctors: doctorsReducer,

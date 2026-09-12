@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
@@ -15,11 +16,13 @@ import HouseholdSwitcher from './components/HouseholdSwitcher';
 import StatsSummary from './components/StatsSummary';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import { createHousehold } from './store/actions/householdsActions';
+import { requestToJoinHousehold } from './store/actions/pendingRequestsActions';
 
 function NineLives() {
   const { user, loading } = useAuth();
   const dispatch = useAppDispatch();
-  const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
 
   const households = useAppSelector((state) => {
@@ -58,7 +61,7 @@ function NineLives() {
       return;
     }
 
-    setIsCreatingHousehold(true);
+    setIsSubmitting(true);
 
     try {
       const createdHousehold = await dispatch(
@@ -66,8 +69,30 @@ function NineLives() {
       ).unwrap();
       setSelectedHouseholdId(createdHousehold.id);
     } finally {
-      setIsCreatingHousehold(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const handleJoinFirstHousehold = async (inviteCode: string) => {
+    if (!user?.uid) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        requestToJoinHousehold({ uid: user.uid, inviteCode }),
+      ).unwrap();
+      navigate('/');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloseSetupModal = () => {
+    setSelectedHouseholdId(null);
+    navigate('/');
   };
 
   if (loading) {
@@ -84,9 +109,10 @@ function NineLives() {
         key={`${user.uid}-${defaultHouseholdName}`}
         isOpen
         defaultName={defaultHouseholdName}
-        isSubmitting={isCreatingHousehold}
-        onConfirm={handleCreateFirstHousehold}
-        onClose={() => undefined}
+        isSubmitting={isSubmitting}
+        onCreate={handleCreateFirstHousehold}
+        onJoin={handleJoinFirstHousehold}
+        onClose={handleCloseSetupModal}
       />
     );
   }
