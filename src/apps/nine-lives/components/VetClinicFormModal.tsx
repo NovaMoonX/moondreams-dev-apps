@@ -7,6 +7,7 @@ import type { VetClinic } from '@apps/nine-lives/types';
 interface VetClinicFormValues {
   name: string;
   phone?: string | null;
+  email?: string | null;
   address?: string | null;
   isEmergency24Hour: boolean;
   notes?: string | null;
@@ -51,6 +52,13 @@ function VetClinicFormModal({
         variant: 'outline',
       }),
       input({
+        name: 'email',
+        label: 'Email address',
+        placeholder: 'Email address',
+        type: 'email',
+        variant: 'outline',
+      }),
+      input({
         name: 'address',
         label: 'Address',
         placeholder: 'Address',
@@ -76,6 +84,7 @@ function VetClinicFormModal({
     () => ({
       name: initialClinic?.name ?? '',
       phone: initialClinic?.phone ?? '',
+      email: initialClinic?.email ?? '',
       address: initialClinic?.address ?? '',
       isEmergency24Hour: Boolean(initialClinic?.isEmergency24Hour),
       notes: initialClinic?.notes ?? '',
@@ -93,6 +102,7 @@ function VetClinicFormModal({
     await onSubmit({
       name: trimmedName,
       phone: data.phone?.trim() || null,
+      email: data.email?.trim() || null,
       address: data.address?.trim() || null,
       isEmergency24Hour: data.isEmergency24Hour,
       notes: data.notes?.trim() || null,

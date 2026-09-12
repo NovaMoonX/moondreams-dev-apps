@@ -42,6 +42,7 @@ export const createVetClinic = createAsyncThunk<
       householdId,
       name: trimmedName,
       phone: clinic.phone?.trim() || null,
+      email: clinic.email?.trim() || null,
       address: clinic.address?.trim() || null,
       notes: clinic.notes?.trim() || null,
       isEmergency24Hour: Boolean(clinic.isEmergency24Hour),
