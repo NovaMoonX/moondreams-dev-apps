@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollectionSlice';
 
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
@@ -37,9 +38,7 @@ export function useNineLivesSync(
   // Sync the selected household's cats, clinics, and doctors for the active view.
   useEffect(() => {
     if (!householdId) {
-      dispatch(setCats([]));
-      dispatch(setVetClinics([]));
-      dispatch(setDoctors([]));
+      dispatch(clearCurrentHouseholdData());
       return;
     }
 

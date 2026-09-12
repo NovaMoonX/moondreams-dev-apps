@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -90,6 +90,16 @@ function NineLives() {
 
     return clinics[0].id;
   }, [clinics, doctorClinicId]);
+
+  const householdOptions = useMemo(
+    () => households.map((household) => ({ text: household.name, value: household.id })),
+    [households],
+  );
+
+  const clinicOptions = useMemo(
+    () => clinics.map((clinic) => ({ text: clinic.name, value: clinic.id })),
+    [clinics],
+  );
 
   const defaultHouseholdName = useMemo(
     () => (user?.displayName ? `${user.displayName}'s household` : 'My household'),
@@ -228,17 +238,16 @@ function NineLives() {
           <div className='flex flex-col gap-2 md:items-end'>
             <label className='text-sm font-medium text-muted-foreground'>Household</label>
             <div className='flex gap-2'>
-              <select
-                value={selectedHousehold?.id ?? ''}
-                onChange={(event) => setSelectedHouseholdId(event.target.value || null)}
-                className='rounded-md border border-border bg-background px-3 py-2 text-sm'
-              >
-                {households.map((household) => (
-                  <option key={household.id} value={household.id}>
-                    {household.name}
-                  </option>
-                ))}
-              </select>
+              <div className='min-w-52 flex-1'>
+                <Select
+                  options={householdOptions}
+                  value={selectedHousehold?.id ?? ''}
+                  onChange={(value) => setSelectedHouseholdId(value || null)}
+                  placeholder='Select a household'
+                  searchable
+                  clearable
+                />
+              </div>
               <Button type='button' variant='secondary' onClick={() => setShowHouseholdModal(true)}>
                 Add household
               </Button>
@@ -348,19 +357,14 @@ function NineLives() {
           <form onSubmit={handleCreateDoctor} className='space-y-4 rounded-md border border-border p-4'>
             <div className='space-y-2'>
               <label className='text-sm font-medium'>Clinic</label>
-              <select
+              <Select
+                options={clinicOptions}
                 value={activeDoctorClinicId}
-                onChange={(event) => setDoctorClinicId(event.target.value)}
-                className='w-full rounded-md border border-border bg-background px-3 py-2 text-sm'
+                onChange={(value) => setDoctorClinicId(value)}
+                placeholder={clinics.length ? 'Select a clinic' : 'Create a clinic first'}
                 disabled={!clinics.length}
-              >
-                {!clinics.length && <option value=''>Create a clinic first</option>}
-                {clinics.map((clinic) => (
-                  <option key={clinic.id} value={clinic.id}>
-                    {clinic.name}
-                  </option>
-                ))}
-              </select>
+                searchable
+              />
             </div>
 
             <div className='space-y-2'>
