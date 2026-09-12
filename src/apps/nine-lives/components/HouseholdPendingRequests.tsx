@@ -1,8 +1,8 @@
-import { Avatar, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getInitials } from '@/utils/accountUtils';
+import UserAvatar from '@/ui/UserAvatar';
 import { formatDateTime } from '@/utils/formatUtils';
 
 import {
@@ -40,7 +40,6 @@ function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps
           const member = members.find((user) => user.uid === request.uid);
           const displayName =
             member?.displayName?.trim() || member?.email || 'Household request';
-          const initials = member?.photoURL ? undefined : getInitials(displayName);
 
           return (
             <li
@@ -48,14 +47,7 @@ function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps
               className='border-border flex items-center justify-between gap-3 rounded-md border p-3'
             >
               <div className='flex items-center gap-3'>
-                <Avatar
-                  src={member?.photoURL ?? undefined}
-                  alt={displayName}
-                  title={displayName}
-                  initials={initials}
-                  size='md'
-                  shape='circle'
-                />
+                <UserAvatar user={member ?? null} size='md' />
                 <div>
                   <p className='font-medium'>{displayName}</p>
                   <p className='text-muted-foreground text-sm'>

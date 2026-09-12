@@ -9,6 +9,7 @@
 - Always use the project import aliases instead of relative paths when available.
 - Follow the existing folder organization and keep responsibilities separated by feature, UI, hooks, context, routes, lib, and utils.
 - Use shared date/time formatting helpers from `src/utils/formatUtils.ts` for timestamp display instead of inline `Date` formatting.
+- When showing a user or member avatar in the UI, prefer the shared `UserAvatar` component from `src/ui/UserAvatar.tsx` instead of raw `Avatar` components.
 
 ### File structure and imports
 - Follow the existing project structure and keep code organized by feature, UI, hooks, context, routes, lib, and utils.

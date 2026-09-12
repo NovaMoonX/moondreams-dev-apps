@@ -24,7 +24,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: HOUSEHOLD_ID,
       name: 'Taylor and Jamie’s household',
       members: [caretaker.uid, coCaretaker.uid],
-      inviteCode: 'TAYLOR',
+      inviteCode: 'LUNA7Q',
       createdBy: caretaker.uid,
       createdAt,
       lastEditedAt: context.now,

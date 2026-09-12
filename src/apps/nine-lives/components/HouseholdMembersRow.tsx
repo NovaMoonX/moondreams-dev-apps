@@ -1,8 +1,7 @@
-import { Avatar } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { getInitials } from '@/utils/accountUtils';
+import UserAvatar from '@/ui/UserAvatar';
 
 interface HouseholdMembersRowProps {
   memberIds: string[];
@@ -20,18 +19,12 @@ function HouseholdMembersRow({ memberIds, className }: HouseholdMembersRowProps)
       ) : (
         memberIds.map((memberId) => {
           const member = members.find((user) => user.uid === memberId);
-          const displayName = member?.displayName?.trim() || member?.email || 'Household member';
-          const initials = member?.photoURL ? undefined : getInitials(displayName);
 
           return (
-            <Avatar
+            <UserAvatar
               key={memberId}
-              src={member?.photoURL ?? undefined}
-              alt={displayName}
-              title={displayName}
-              initials={initials}
+              user={member ?? null}
               size='md'
-              shape='circle'
               className='ring-background ring-2'
             />
           );
