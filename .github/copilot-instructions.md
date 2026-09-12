@@ -112,6 +112,9 @@ useEffect(() => {
 - **Treat time fields as timestamps, not strings.**
 - **Keep Firestore rules and app data lifecycle logic aligned.**
 - **Firestore document fields: no optional `?:` — required `T | null` keys, and always write `null` (never `undefined`) for an absent value.**
+- **Never nest a bordered/`bg-card` container inside another one — pick one layer for the card treatment.**
+- **A "Custom"/"Other" follow-up input only renders once that option is selected, never unconditionally.**
+- **Large forms: keep only essential fields always visible; put optional/secondary fields in an Accordion or Disclosure.**
 - **Use `formatDateTime` from `src/utils/formatUtils.ts` for shared timestamp display formatting.**
 - **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
@@ -237,3 +240,12 @@ className={join('base-class', isActive ? 'active' : 'inactive')}
 - Check Dreamer UI first before creating custom components.
 - Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, and `/utils` when possible.
 - Review existing Dreamer UI props before applying custom styling or behavior.
+
+### Cards and layout density
+- **Never nest a bordered/`bg-card` container inside another bordered/`bg-card` container.** Cards within cards read as visual clutter. Pick one layer to carry the card treatment (usually the smaller, most specific unit — e.g. a single list item) and let the parent section be plain (heading + spacing, no border/background) instead of also boxing it.
+- Default to plainer layout — a heading, a divider (`divide-y`/`border-b`), or spacing — over a bordered card, especially for secondary/de-emphasized content. Reserve cards for content that should visually stand out as its own unit (a stat tile, a single record, a modal's content).
+- Before adding another `rounded-lg border border-border bg-card p-4` wrapper, check whether it's already inside one — if so, drop it.
+
+### Forms: custom/"other" inputs and progressive disclosure
+- When a select-style field offers a "Custom"/"Other" option that needs a follow-up text input, only render that input once that option is actually selected — never show it unconditionally alongside the preset options. Model this as one composite field (a small component holding `{ preset, customValue }`) so the two are visually and logically tied together. See `src/apps/nine-lives/components/BreedField.tsx` for the pattern.
+- For larger forms, don't dump every field into one flat, always-visible layout — it overwhelms the user. Keep only the essential/required fields visible by default, and group optional/secondary fields into an `Accordion` or `Disclosure` (both from Dreamer UI) so the user can expand what's relevant to them. See `src/apps/nine-lives/components/CatProfileForm.tsx` for the pattern (essential fields up top, an accordion of "Origin & identification" / "Insurance" / "Key dates & notes" below).

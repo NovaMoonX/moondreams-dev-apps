@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch } from '@/store';
@@ -66,7 +66,7 @@ function HouseholdSwitcher({
       </div>
 
       <div className='flex flex-col gap-2 md:items-end'>
-        <label className='text-sm font-medium text-muted-foreground'>Household</label>
+        <Label className='text-muted-foreground'>Household</Label>
         <div className='flex gap-2'>
           <div className='min-w-52 flex-1'>
             <Select

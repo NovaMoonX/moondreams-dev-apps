@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
-import { CAT_BREEDS, CUSTOM_BREED_OPTION } from '@apps/nine-lives/constants/presetOptions';
 import { fromDateInputValue } from '@/utils';
+import { getBreedInitialValue, resolveBreedValue, type BreedValue } from '@apps/nine-lives/utils/breedUtils';
+
+import BreedField from './BreedField';
 
 export interface CatQuickAddValues {
   name: string;
@@ -20,36 +22,24 @@ interface CatQuickAddFormProps {
 
 interface CatQuickAddFormData {
   name: string;
-  breedPreset: string;
-  customBreed: string;
+  breed: BreedValue;
   dateOfBirth: string;
   isDateOfBirthEstimated: boolean;
 }
 
-const { checkbox, input, select } = FormFactories;
+const { checkbox, custom, input } = FormFactories;
 type FormInputFactoryField = Parameters<typeof input>[0];
 
 function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
   return input({ ...field, type: 'date' } as unknown as FormInputFactoryField);
 }
 
-const breedOptions = [
-  ...CAT_BREEDS.map((option) => ({ label: option, value: option })),
-  { label: 'Custom breed', value: CUSTOM_BREED_OPTION },
-];
-
 const initialData: CatQuickAddFormData = {
   name: '',
-  breedPreset: CAT_BREEDS[0],
-  customBreed: '',
+  breed: getBreedInitialValue(),
   dateOfBirth: '',
   isDateOfBirthEstimated: false,
 };
-
-function resolveBreed(data: CatQuickAddFormData) {
-  const chosenBreed = data.breedPreset === CUSTOM_BREED_OPTION ? data.customBreed : data.breedPreset;
-  return chosenBreed.trim() || CAT_BREEDS[0];
-}
 
 function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickAddFormProps) {
   const fields = useMemo(
@@ -61,18 +51,16 @@ function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickA
         required: true,
         variant: 'outline',
       }),
-      select({
-        name: 'breedPreset',
+      custom({
+        name: 'breed',
         label: 'Breed',
-        options: breedOptions,
-        searchable: true,
-      }),
-      input({
-        name: 'customBreed',
-        label: 'Custom breed',
-        placeholder: 'Enter a breed if it is not listed',
-        description: 'Use this when the preset list does not match your cat.',
-        variant: 'outline',
+        renderComponent: (props) => (
+          <BreedField
+            value={props.value as BreedValue}
+            onValueChange={(value) => props.onValueChange(value)}
+            disabled={props.disabled}
+          />
+        ),
       }),
       createDateInputField({
         name: 'dateOfBirth',
@@ -97,7 +85,7 @@ function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickA
 
     await onSubmit({
       name: trimmedName,
-      breed: resolveBreed(data),
+      breed: resolveBreedValue(data.breed),
       dateOfBirth: fromDateInputValue(data.dateOfBirth) ?? 0,
       isDateOfBirthEstimated: data.isDateOfBirthEstimated,
     });

@@ -74,7 +74,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
       {cats.length === 0 && <p className='text-sm text-muted-foreground'>No cats added yet.</p>}
 
       {cats.length > 0 && (
-        <div className='flex flex-wrap gap-4'>
+        <div className='grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'>
           {cats.map((cat) => (
             <CatAvatarItem key={cat.id} cat={cat} onClick={setEditingCat} />
           ))}

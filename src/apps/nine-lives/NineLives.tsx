@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
 
+import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
+import NavButton from '@/ui/NavButton';
 
 import CatsSection from './components/CatsSection';
 import ClinicsSection from './components/ClinicsSection';
@@ -91,6 +94,12 @@ function NineLives() {
   return (
     <div className='page'>
       <div className='mx-auto max-w-6xl space-y-6 py-8'>
+        <div className='pb-2'>
+          <NavButton href='/' variant='link'>
+            <ChevronLeft /> Back home
+          </NavButton>
+        </div>
+
         <HouseholdSwitcher
           households={households}
           selectedHousehold={selectedHousehold}

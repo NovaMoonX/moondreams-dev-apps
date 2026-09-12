@@ -14,13 +14,13 @@ function CatAvatarItem({ cat, onClick }: CatAvatarItemProps) {
     <button
       type='button'
       onClick={() => onClick?.(cat)}
-      className='flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition hover:bg-muted/40'
+      className='flex flex-col items-center gap-2 rounded-lg p-2 text-center transition hover:bg-muted/40'
     >
       <Avatar
         src={cat.photoURL ?? undefined}
         alt={cat.name}
         initials={cat.photoURL ? undefined : getInitials(cat.name)}
-        size='lg'
+        size='2xl'
         shape='circle'
       />
       <div>

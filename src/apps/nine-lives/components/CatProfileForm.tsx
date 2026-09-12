@@ -1,14 +1,14 @@
 import { useMemo } from 'react';
 
-import { Button, Form, FormFactories, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Label, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
-import {
-  CAT_BREEDS,
-  CUSTOM_BREED_OPTION,
-  INSURANCE_PROVIDER_OPTIONS,
-} from '@apps/nine-lives/constants/presetOptions';
+import { INSURANCE_PROVIDER_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
 import type { Cat, CatInsurance, CatKeyDate, CatLifestyle } from '@apps/nine-lives/types';
 import { fromDateInputValue, toDateInputValue } from '@/utils';
+import { getBreedInitialValue, resolveBreedValue, type BreedValue } from '@apps/nine-lives/utils/breedUtils';
+
+import BreedField from './BreedField';
+import DetailsDisclosure from './DetailsDisclosure';
 
 interface CatProfileFormProps {
   householdId?: string;
@@ -18,13 +18,12 @@ interface CatProfileFormProps {
   onCancel?: () => void;
 }
 
-interface CatProfileFormData {
-  name: string;
-  breedPreset: string;
-  customBreed: string;
-  dateOfBirth: string;
-  isDateOfBirthEstimated: boolean;
-  lifestyle: CatLifestyle;
+interface InsuranceProviderValue {
+  preset: string;
+  customProvider: string;
+}
+
+interface AdditionalDetailsValue {
   microchipNumber: string;
   shelterName: string;
   shelterAddress: string;
@@ -34,37 +33,19 @@ interface CatProfileFormData {
   customKeyDates: CatKeyDate[];
   notes: string;
 }
-interface KeyDatesFieldProps {
-  value: CatKeyDate[];
-  onValueChange: (value: CatKeyDate[]) => void;
-  disabled?: boolean;
-}
 
-interface InsuranceProviderValue {
-  preset: string;
-  customProvider: string;
-}
-
-interface InsuranceProviderFieldProps {
-  value: InsuranceProviderValue;
-  onValueChange: (value: InsuranceProviderValue) => void;
-  disabled?: boolean;
+interface CatProfileFormData {
+  name: string;
+  breed: BreedValue;
+  dateOfBirth: string;
+  isDateOfBirthEstimated: boolean;
+  lifestyle: CatLifestyle;
+  additionalDetails: AdditionalDetailsValue;
 }
 
 const defaultLifestyle: CatLifestyle = 'indoor';
-const { checkbox, custom, input, select, textarea } = FormFactories;
+const { checkbox, custom, input, select } = FormFactories;
 type FormInputFactoryField = Parameters<typeof input>[0];
-
-const breedOptions = [
-  ...CAT_BREEDS.map((option) => ({
-    label: option,
-    value: option,
-  })),
-  {
-    label: 'Custom breed',
-    value: CUSTOM_BREED_OPTION,
-  },
-];
 
 const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   text: option,
@@ -74,109 +55,13 @@ const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
 const OTHER_INSURANCE_PROVIDER = 'Other';
 
 const lifestyleOptions = [
-  {
-    label: 'Indoor',
-    value: 'indoor',
-  },
-  {
-    label: 'Outdoor',
-    value: 'outdoor',
-  },
-  {
-    label: 'Indoor + outdoor',
-    value: 'indoor_outdoor',
-  },
+  { label: 'Indoor', value: 'indoor' },
+  { label: 'Outdoor', value: 'outdoor' },
+  { label: 'Indoor + outdoor', value: 'indoor_outdoor' },
 ];
 
-function InsuranceProviderField({ value, onValueChange, disabled }: InsuranceProviderFieldProps) {
-  const current = value ?? { preset: INSURANCE_PROVIDER_OPTIONS[0], customProvider: '' };
-
-  return (
-    <div className='space-y-3'>
-      <Select
-        options={insuranceProviderOptions}
-        value={current.preset}
-        onChange={(nextPreset) => onValueChange({ ...current, preset: nextPreset })}
-        searchable
-        disabled={disabled}
-      />
-      {current.preset === OTHER_INSURANCE_PROVIDER && (
-        <Input
-          value={current.customProvider}
-          onChange={(event) =>
-            onValueChange({ ...current, customProvider: event.target.value })
-          }
-          placeholder='Enter insurance provider name'
-          variant='outline'
-          disabled={disabled}
-        />
-      )}
-    </div>
-  );
-}
-
-function KeyDatesField({ value, onValueChange, disabled }: KeyDatesFieldProps) {
-  const keyDates = value.length > 0 ? value : [{ label: '', date: 0 }];
-
-  const updateKeyDate = (index: number, nextValue: Partial<CatKeyDate>) => {
-    const nextKeyDates = keyDates.map((entry, currentIndex) =>
-      currentIndex === index ? { ...entry, ...nextValue } : entry,
-    );
-
-    onValueChange(nextKeyDates);
-  };
-
-  const addKeyDate = () => {
-    const nextKeyDates = [...keyDates, { label: '', date: 0 }];
-    onValueChange(nextKeyDates);
-  };
-
-  return (
-    <div className='space-y-3'>
-      <div className='flex items-center justify-between'>
-        <p className='text-sm text-muted-foreground'>Add memorable dates for this cat.</p>
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          onClick={addKeyDate}
-          disabled={disabled}
-        >
-          Add date
-        </Button>
-      </div>
-
-      {keyDates.map((entry, index) => {
-        const key = `${entry.label}-${index}`;
-        const dateValue = toDateInputValue(entry.date);
-
-        return (
-          <div key={key} className='grid gap-3 md:grid-cols-2'>
-            <Input
-              value={entry.label}
-              onChange={(event) =>
-                updateKeyDate(index, { label: event.target.value })
-              }
-              variant='outline'
-              placeholder='e.g. Spayed/neutered'
-              disabled={disabled}
-            />
-            <Input
-              type='date'
-              value={dateValue}
-              onChange={(event) =>
-                updateKeyDate(index, {
-                  date: fromDateInputValue(event.target.value) ?? 0,
-                })
-              }
-              variant='outline'
-              disabled={disabled}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
+function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
+  return input({ ...field, type: 'date' } as unknown as FormInputFactoryField);
 }
 
 function resolveInsuranceProvider(selection: InsuranceProviderValue) {
@@ -208,7 +93,7 @@ function buildCatInsurance(
   return result;
 }
 
-function getInsuranceProviderInitialData(cat?: Cat | null): InsuranceProviderValue {
+function getInsuranceProviderInitialValue(cat?: Cat | null): InsuranceProviderValue {
   const savedProvider = cat?.insurance?.provider;
 
   if (!savedProvider) {
@@ -226,55 +111,204 @@ function getInsuranceProviderInitialData(cat?: Cat | null): InsuranceProviderVal
   return { preset: OTHER_INSURANCE_PROVIDER, customProvider: savedProvider };
 }
 
-// TASK: need to verify this renders as it should
-function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
-  const result = input({
-    ...field,
-    type: 'date',
-  } as unknown as FormInputFactoryField);
-
-  return result;
-}
-
-function getBreedInitialData(cat?: Cat | null) {
-  const savedBreed = cat?.breed ?? CAT_BREEDS[0];
-  const isPresetBreed = CAT_BREEDS.some((option) => option === savedBreed);
-  const result = {
-    breedPreset: isPresetBreed ? savedBreed : CUSTOM_BREED_OPTION,
-    customBreed: isPresetBreed ? '' : savedBreed,
-  };
-
-  return result;
-}
-
-function buildInitialData(cat?: Cat | null): CatProfileFormData {
-  const breedState = getBreedInitialData(cat);
-  const result: CatProfileFormData = {
-    name: cat?.name ?? '',
-    breedPreset: breedState.breedPreset,
-    customBreed: breedState.customBreed,
-    dateOfBirth: toDateInputValue(cat?.dateOfBirth),
-    isDateOfBirthEstimated: cat?.isDateOfBirthEstimated ?? false,
-    lifestyle: cat?.lifestyle ?? defaultLifestyle,
+function getAdditionalDetailsInitialValue(cat?: Cat | null): AdditionalDetailsValue {
+  return {
     microchipNumber: cat?.microchipNumber ?? '',
     shelterName: cat?.shelterOrigin?.name ?? '',
     shelterAddress: cat?.shelterOrigin?.address ?? '',
     adoptedAt: toDateInputValue(cat?.adoptedAt ?? undefined),
-    insuranceProviderSelection: getInsuranceProviderInitialData(cat),
+    insuranceProviderSelection: getInsuranceProviderInitialValue(cat),
     insurancePolicyNumber: cat?.insurance?.policyNumber ?? '',
     customKeyDates: cat?.customKeyDates ?? [{ label: '', date: 0 }],
     notes: cat?.notes ?? '',
   };
-
-  return result;
 }
 
-function resolveBreed(data: CatProfileFormData) {
-  const chosenBreed =
-    data.breedPreset === CUSTOM_BREED_OPTION ? data.customBreed : data.breedPreset;
-  const result = chosenBreed.trim() || CAT_BREEDS[0];
+interface AdditionalDetailsFieldsProps {
+  value: AdditionalDetailsValue;
+  onValueChange: (value: AdditionalDetailsValue) => void;
+  disabled?: boolean;
+}
 
-  return result;
+function AdditionalDetailsFields({ value, onValueChange, disabled }: AdditionalDetailsFieldsProps) {
+  const update = (changes: Partial<AdditionalDetailsValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  const keyDates = value.customKeyDates.length > 0 ? value.customKeyDates : [{ label: '', date: 0 }];
+
+  const updateKeyDate = (index: number, changes: Partial<CatKeyDate>) => {
+    const nextKeyDates = keyDates.map((entry, currentIndex) =>
+      currentIndex === index ? { ...entry, ...changes } : entry,
+    );
+    update({ customKeyDates: nextKeyDates });
+  };
+
+  return (
+    <div className='space-y-3'>
+      <DetailsDisclosure label='Origin & identification'>
+        <div className='grid gap-3 md:grid-cols-2'>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Microchip</Label>
+            <Input
+              value={value.microchipNumber}
+              onChange={(event) => update({ microchipNumber: event.target.value })}
+              placeholder='Microchip number'
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Shelter / origin</Label>
+            <Input
+              value={value.shelterName}
+              onChange={(event) => update({ shelterName: event.target.value })}
+              placeholder='Shelter name'
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Shelter address</Label>
+            <Input
+              value={value.shelterAddress}
+              onChange={(event) => update({ shelterAddress: event.target.value })}
+              placeholder='Address'
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Adoption date</Label>
+            <Input
+              type='date'
+              value={value.adoptedAt}
+              onChange={(event) => update({ adoptedAt: event.target.value })}
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      </DetailsDisclosure>
+
+      <DetailsDisclosure label='Insurance'>
+        <div className='space-y-3'>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Insurance provider</Label>
+            <Select
+              options={insuranceProviderOptions}
+              value={value.insuranceProviderSelection.preset}
+              onChange={(nextPreset) =>
+                update({
+                  insuranceProviderSelection: {
+                    ...value.insuranceProviderSelection,
+                    preset: nextPreset,
+                  },
+                })
+              }
+              searchable
+              disabled={disabled}
+            />
+          </div>
+          {value.insuranceProviderSelection.preset === OTHER_INSURANCE_PROVIDER && (
+            <div className='space-y-1'>
+              <Label className='text-sm'>Provider name</Label>
+              <Input
+                value={value.insuranceProviderSelection.customProvider}
+                onChange={(event) =>
+                  update({
+                    insuranceProviderSelection: {
+                      ...value.insuranceProviderSelection,
+                      customProvider: event.target.value,
+                    },
+                  })
+                }
+                placeholder='Enter insurance provider name'
+                variant='outline'
+                disabled={disabled}
+              />
+            </div>
+          )}
+          <div className='space-y-1'>
+            <Label className='text-sm'>Insurance policy number</Label>
+            <Input
+              value={value.insurancePolicyNumber}
+              onChange={(event) => update({ insurancePolicyNumber: event.target.value })}
+              placeholder='Policy number'
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      </DetailsDisclosure>
+
+      <DetailsDisclosure label='Key dates & notes'>
+        <div className='space-y-4'>
+          <div className='space-y-3'>
+            <div className='flex items-center justify-between'>
+              <p className='text-sm text-muted-foreground'>Add memorable dates for this cat.</p>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => update({ customKeyDates: [...keyDates, { label: '', date: 0 }] })}
+                disabled={disabled}
+              >
+                Add date
+              </Button>
+            </div>
+
+            {keyDates.map((entry, index) => (
+              <div key={`${entry.label}-${index}`} className='grid gap-3 md:grid-cols-2'>
+                <div className='space-y-1'>
+                  <Input
+                    value={entry.label}
+                    onChange={(event) => updateKeyDate(index, { label: event.target.value })}
+                    variant='outline'
+                    placeholder='e.g. Spayed/neutered'
+                    disabled={disabled}
+                  />
+                </div>
+                <div className='space-y-1'>
+                  <Input
+                    type='date'
+                    value={toDateInputValue(entry.date)}
+                    onChange={(event) =>
+                      updateKeyDate(index, { date: fromDateInputValue(event.target.value) ?? 0 })
+                    }
+                    variant='outline'
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className='space-y-1'>
+            <Label className='text-sm'>Notes</Label>
+            <Textarea
+              value={value.notes}
+              onChange={(event) => update({ notes: event.target.value })}
+              placeholder='Care notes, quirks, or anything relevant'
+              rows={4}
+              disabled={disabled}
+              variant='outline'
+            />
+          </div>
+        </div>
+      </DetailsDisclosure>
+    </div>
+  );
+}
+
+function buildInitialData(cat?: Cat | null): CatProfileFormData {
+  return {
+    name: cat?.name ?? '',
+    breed: getBreedInitialValue(cat?.breed),
+    dateOfBirth: toDateInputValue(cat?.dateOfBirth),
+    isDateOfBirthEstimated: cat?.isDateOfBirthEstimated ?? false,
+    lifestyle: cat?.lifestyle ?? defaultLifestyle,
+    additionalDetails: getAdditionalDetailsInitialValue(cat),
+  };
 }
 
 function buildPreparedCat(
@@ -283,32 +317,29 @@ function buildPreparedCat(
   cat?: Cat | null,
 ) {
   const dateOfBirthMs = fromDateInputValue(data.dateOfBirth) ?? cat?.dateOfBirth ?? 0;
-  const adoptedAtMs = fromDateInputValue(data.adoptedAt) ?? null;
-  const keyDates = data.customKeyDates
+  const adoptedAtMs = fromDateInputValue(data.additionalDetails.adoptedAt) ?? null;
+  const keyDates = data.additionalDetails.customKeyDates
     .filter((entry) => entry.label.trim() && entry.date > 0)
-    .map((entry) => ({
-      date: entry.date,
-      label: entry.label.trim(),
-    }));
+    .map((entry) => ({ date: entry.date, label: entry.label.trim() }));
   const nextInsurance = buildCatInsurance(
-    data.insuranceProviderSelection,
-    data.insurancePolicyNumber,
+    data.additionalDetails.insuranceProviderSelection,
+    data.additionalDetails.insurancePolicyNumber,
   );
   const result: Cat = {
     id: cat?.id ?? '',
     householdId: householdId ?? cat?.householdId ?? 'new-household',
     name: data.name.trim(),
-    breed: resolveBreed(data),
+    breed: resolveBreedValue(data.breed),
     dateOfBirth: dateOfBirthMs,
     isDateOfBirthEstimated: data.isDateOfBirthEstimated,
     photoURL: cat?.photoURL ?? null,
     lifestyle: data.lifestyle,
-    microchipNumber: data.microchipNumber.trim() || null,
+    microchipNumber: data.additionalDetails.microchipNumber.trim() || null,
     shelterOrigin:
-      data.shelterName || data.shelterAddress
+      data.additionalDetails.shelterName || data.additionalDetails.shelterAddress
         ? {
-            name: data.shelterName.trim() || 'Unknown shelter',
-            address: data.shelterAddress.trim() || null,
+            name: data.additionalDetails.shelterName.trim() || 'Unknown shelter',
+            address: data.additionalDetails.shelterAddress.trim() || null,
           }
         : null,
     adoptedAt: adoptedAtMs,
@@ -317,7 +348,7 @@ function buildPreparedCat(
     currentClinicId: cat?.currentClinicId ?? null,
     insurance: nextInsurance,
     personalityTraits: cat?.personalityTraits ?? null,
-    notes: data.notes.trim() || null,
+    notes: data.additionalDetails.notes.trim() || null,
     createdBy: cat?.createdBy ?? 'current-user',
     createdAt: cat?.createdAt ?? 0,
     lastEditedAt: cat?.lastEditedAt ?? 0,
@@ -345,18 +376,16 @@ function CatProfileForm({
         required: true,
         variant: 'outline',
       }),
-      select({
-        name: 'breedPreset',
+      custom({
+        name: 'breed',
         label: 'Breed',
-        options: breedOptions,
-        searchable: true,
-      }),
-      input({
-        name: 'customBreed',
-        label: 'Custom breed',
-        placeholder: 'Enter a breed if it is not listed',
-        description: 'Use this when the preset list does not match your cat.',
-        variant: 'outline',
+        renderComponent: (props) => (
+          <BreedField
+            value={props.value as BreedValue}
+            onValueChange={(value) => props.onValueChange(value)}
+            disabled={props.disabled}
+          />
+        ),
       }),
       createDateInputField({
         name: 'dateOfBirth',
@@ -373,65 +402,16 @@ function CatProfileForm({
         label: 'Date of birth is estimated',
         text: 'Date of birth is estimated',
       }),
-      input({
-        name: 'microchipNumber',
-        label: 'Microchip',
-        placeholder: 'Microchip number',
-        variant: 'outline',
-      }),
-      input({
-        name: 'shelterName',
-        label: 'Shelter / origin',
-        placeholder: 'Shelter name',
-        variant: 'outline',
-      }),
-      input({
-        name: 'shelterAddress',
-        label: 'Shelter address',
-        placeholder: 'Address',
-        variant: 'outline',
-      }),
-      createDateInputField({
-        name: 'adoptedAt',
-        label: 'Adoption date',
-        variant: 'outline',
-      }),
       custom({
-        name: 'insuranceProviderSelection',
-        label: 'Insurance provider',
+        name: 'additionalDetails',
+        label: 'More details (optional)',
         renderComponent: (props) => (
-          <InsuranceProviderField
-            value={props.value as InsuranceProviderValue}
+          <AdditionalDetailsFields
+            value={props.value as AdditionalDetailsValue}
             onValueChange={(value) => props.onValueChange(value)}
             disabled={props.disabled}
           />
         ),
-      }),
-      input({
-        name: 'insurancePolicyNumber',
-        label: 'Insurance policy number',
-        placeholder: 'Policy number',
-        variant: 'outline',
-        colSpan: 'full',
-      }),
-      custom({
-        name: 'customKeyDates',
-        label: 'Key dates',
-        renderComponent: (props) => (
-          <KeyDatesField
-            value={Array.isArray(props.value) ? (props.value as CatKeyDate[]) : []}
-            onValueChange={(value) => props.onValueChange(value)}
-            disabled={props.disabled}
-          />
-        ),
-        colSpan: 'full',
-      }),
-      textarea({
-        name: 'notes',
-        label: 'Notes',
-        placeholder: 'Care notes, quirks, or anything relevant',
-        rows: 4,
-        variant: 'outline',
         colSpan: 'full',
       }),
     ],
