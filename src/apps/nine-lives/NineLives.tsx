@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
@@ -40,35 +40,18 @@ function NineLives() {
   });
 
   const selectedHousehold = useMemo(() => {
+    if (households.length === 0) {
+      return null;
+    }
+
     if (!selectedHouseholdId) {
-      return households[0] ?? null;
+      return households[0];
     }
 
     return (
-      households.find((household) => household.id === selectedHouseholdId) ??
-      households[0] ??
-      null
+      households.find((household) => household.id === selectedHouseholdId) ?? households[0]
     );
   }, [households, selectedHouseholdId]);
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setSelectedHouseholdId(null);
-      return;
-    }
-
-    if (households.length === 0) {
-      setSelectedHouseholdId(null);
-      return;
-    }
-
-    if (
-      !selectedHouseholdId ||
-      !households.some((household) => household.id === selectedHouseholdId)
-    ) {
-      setSelectedHouseholdId(households[0].id);
-    }
-  }, [households, selectedHouseholdId, user?.uid]);
 
   useNineLivesSync(selectedHousehold?.id ?? null, user?.uid ?? null);
 
@@ -96,20 +79,21 @@ function NineLives() {
       : [],
   );
 
-  useEffect(() => {
+  const activeDoctorClinicId = useMemo(() => {
     if (clinics.length === 0) {
-      setDoctorClinicId('');
-      return;
+      return '';
     }
 
-    if (!doctorClinicId || !clinics.some((clinic) => clinic.id === doctorClinicId)) {
-      setDoctorClinicId(clinics[0].id);
+    if (doctorClinicId && clinics.some((clinic) => clinic.id === doctorClinicId)) {
+      return doctorClinicId;
     }
+
+    return clinics[0].id;
   }, [clinics, doctorClinicId]);
 
   const defaultHouseholdName = useMemo(
     () => (user?.displayName ? `${user.displayName}'s household` : 'My household'),
-    [user?.displayName],
+    [user],
   );
 
   const handleCreateHousehold = async (name: string) => {
@@ -180,7 +164,9 @@ function NineLives() {
   const handleCreateDoctor = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!user?.uid || !selectedHousehold?.id || !doctorClinicId || !doctorName.trim()) {
+    const resolvedClinicId = activeDoctorClinicId;
+
+    if (!user?.uid || !selectedHousehold?.id || !resolvedClinicId || !doctorName.trim()) {
       return;
     }
 
@@ -190,7 +176,7 @@ function NineLives() {
       await dispatch(
         createDoctor({
           householdId: selectedHousehold.id,
-          clinicId: doctorClinicId,
+          clinicId: resolvedClinicId,
           name: doctorName,
           notes: doctorNotes.trim() || undefined,
         }),
@@ -363,7 +349,7 @@ function NineLives() {
             <div className='space-y-2'>
               <label className='text-sm font-medium'>Clinic</label>
               <select
-                value={doctorClinicId}
+                value={activeDoctorClinicId}
                 onChange={(event) => setDoctorClinicId(event.target.value)}
                 className='w-full rounded-md border border-border bg-background px-3 py-2 text-sm'
                 disabled={!clinics.length}
