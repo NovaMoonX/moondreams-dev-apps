@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { Button, Form, FormFactories, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import {
   CAT_BREEDS,
@@ -29,7 +29,7 @@ interface CatProfileFormData {
   shelterName: string;
   shelterAddress: string;
   adoptedAt: string;
-  insuranceProvider: string;
+  insuranceProviderSelection: InsuranceProviderValue;
   insurancePolicyNumber: string;
   customKeyDates: CatKeyDate[];
   notes: string;
@@ -37,6 +37,17 @@ interface CatProfileFormData {
 interface KeyDatesFieldProps {
   value: CatKeyDate[];
   onValueChange: (value: CatKeyDate[]) => void;
+  disabled?: boolean;
+}
+
+interface InsuranceProviderValue {
+  preset: string;
+  customProvider: string;
+}
+
+interface InsuranceProviderFieldProps {
+  value: InsuranceProviderValue;
+  onValueChange: (value: InsuranceProviderValue) => void;
   disabled?: boolean;
 }
 
@@ -56,9 +67,11 @@ const breedOptions = [
 ];
 
 const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
-  label: option,
+  text: option,
   value: option,
 }));
+
+const OTHER_INSURANCE_PROVIDER = 'Other';
 
 const lifestyleOptions = [
   {
@@ -74,6 +87,33 @@ const lifestyleOptions = [
     value: 'indoor_outdoor',
   },
 ];
+
+function InsuranceProviderField({ value, onValueChange, disabled }: InsuranceProviderFieldProps) {
+  const current = value ?? { preset: INSURANCE_PROVIDER_OPTIONS[0], customProvider: '' };
+
+  return (
+    <div className='space-y-3'>
+      <Select
+        options={insuranceProviderOptions}
+        value={current.preset}
+        onChange={(nextPreset) => onValueChange({ ...current, preset: nextPreset })}
+        searchable
+        disabled={disabled}
+      />
+      {current.preset === OTHER_INSURANCE_PROVIDER && (
+        <Input
+          value={current.customProvider}
+          onChange={(event) =>
+            onValueChange({ ...current, customProvider: event.target.value })
+          }
+          placeholder='Enter insurance provider name'
+          variant='outline'
+          disabled={disabled}
+        />
+      )}
+    </div>
+  );
+}
 
 function KeyDatesField({ value, onValueChange, disabled }: KeyDatesFieldProps) {
   const keyDates = value.length > 0 ? value : [{ label: '', date: 0 }];
@@ -139,17 +179,51 @@ function KeyDatesField({ value, onValueChange, disabled }: KeyDatesFieldProps) {
   );
 }
 
-function buildCatInsurance(provider: string, policyNumber: string): CatInsurance | undefined {
-  if (!provider && !policyNumber) {
-    return undefined;
+function resolveInsuranceProvider(selection: InsuranceProviderValue) {
+  if (selection.preset === OTHER_INSURANCE_PROVIDER) {
+    return selection.customProvider.trim() || OTHER_INSURANCE_PROVIDER;
   }
 
-  const result = {
+  return selection.preset;
+}
+
+function buildCatInsurance(
+  providerSelection: InsuranceProviderValue,
+  policyNumber: string,
+): CatInsurance | null {
+  const provider = resolveInsuranceProvider(providerSelection);
+
+  if (!provider && !policyNumber) {
+    return null;
+  }
+
+  const result: CatInsurance = {
     provider: provider || 'Other',
     policyNumber: policyNumber || 'Unspecified',
+    monthlyPremium: null,
+    coverageStartDate: null,
+    coverageNotes: null,
   };
 
   return result;
+}
+
+function getInsuranceProviderInitialData(cat?: Cat | null): InsuranceProviderValue {
+  const savedProvider = cat?.insurance?.provider;
+
+  if (!savedProvider) {
+    return { preset: INSURANCE_PROVIDER_OPTIONS[0], customProvider: '' };
+  }
+
+  const isPresetProvider = INSURANCE_PROVIDER_OPTIONS.some(
+    (option) => option === savedProvider && option !== OTHER_INSURANCE_PROVIDER,
+  );
+
+  if (isPresetProvider) {
+    return { preset: savedProvider, customProvider: '' };
+  }
+
+  return { preset: OTHER_INSURANCE_PROVIDER, customProvider: savedProvider };
 }
 
 // TASK: need to verify this renders as it should
@@ -185,8 +259,8 @@ function buildInitialData(cat?: Cat | null): CatProfileFormData {
     microchipNumber: cat?.microchipNumber ?? '',
     shelterName: cat?.shelterOrigin?.name ?? '',
     shelterAddress: cat?.shelterOrigin?.address ?? '',
-    adoptedAt: toDateInputValue(cat?.adoptedAt),
-    insuranceProvider: cat?.insurance?.provider ?? INSURANCE_PROVIDER_OPTIONS[0],
+    adoptedAt: toDateInputValue(cat?.adoptedAt ?? undefined),
+    insuranceProviderSelection: getInsuranceProviderInitialData(cat),
     insurancePolicyNumber: cat?.insurance?.policyNumber ?? '',
     customKeyDates: cat?.customKeyDates ?? [{ label: '', date: 0 }],
     notes: cat?.notes ?? '',
@@ -209,7 +283,7 @@ function buildPreparedCat(
   cat?: Cat | null,
 ) {
   const dateOfBirthMs = fromDateInputValue(data.dateOfBirth) ?? cat?.dateOfBirth ?? 0;
-  const adoptedAtMs = fromDateInputValue(data.adoptedAt);
+  const adoptedAtMs = fromDateInputValue(data.adoptedAt) ?? null;
   const keyDates = data.customKeyDates
     .filter((entry) => entry.label.trim() && entry.date > 0)
     .map((entry) => ({
@@ -217,7 +291,7 @@ function buildPreparedCat(
       label: entry.label.trim(),
     }));
   const nextInsurance = buildCatInsurance(
-    data.insuranceProvider,
+    data.insuranceProviderSelection,
     data.insurancePolicyNumber,
   );
   const result: Cat = {
@@ -227,19 +301,23 @@ function buildPreparedCat(
     breed: resolveBreed(data),
     dateOfBirth: dateOfBirthMs,
     isDateOfBirthEstimated: data.isDateOfBirthEstimated,
+    photoURL: cat?.photoURL ?? null,
     lifestyle: data.lifestyle,
-    microchipNumber: data.microchipNumber.trim() || undefined,
+    microchipNumber: data.microchipNumber.trim() || null,
     shelterOrigin:
       data.shelterName || data.shelterAddress
         ? {
             name: data.shelterName.trim() || 'Unknown shelter',
-            address: data.shelterAddress.trim() || undefined,
+            address: data.shelterAddress.trim() || null,
           }
-        : undefined,
+        : null,
     adoptedAt: adoptedAtMs,
-    customKeyDates: keyDates.length > 0 ? keyDates : undefined,
+    customKeyDates: keyDates.length > 0 ? keyDates : null,
+    diet: cat?.diet ?? null,
+    currentClinicId: cat?.currentClinicId ?? null,
     insurance: nextInsurance,
-    notes: data.notes.trim() || undefined,
+    personalityTraits: cat?.personalityTraits ?? null,
+    notes: data.notes.trim() || null,
     createdBy: cat?.createdBy ?? 'current-user',
     createdAt: cat?.createdAt ?? 0,
     lastEditedAt: cat?.lastEditedAt ?? 0,
@@ -318,11 +396,16 @@ function CatProfileForm({
         label: 'Adoption date',
         variant: 'outline',
       }),
-      select({
-        name: 'insuranceProvider',
+      custom({
+        name: 'insuranceProviderSelection',
         label: 'Insurance provider',
-        options: insuranceProviderOptions,
-        searchable: true,
+        renderComponent: (props) => (
+          <InsuranceProviderField
+            value={props.value as InsuranceProviderValue}
+            onValueChange={(value) => props.onValueChange(value)}
+            disabled={props.disabled}
+          />
+        ),
       }),
       input({
         name: 'insurancePolicyNumber',
@@ -369,33 +452,29 @@ function CatProfileForm({
   };
 
   return (
-    <div className='space-y-3 rounded-xl border border-border bg-card p-4'>
-      <Form
-        key={formId}
-        id={formId}
-        form={fields}
-        initialData={initialData}
-        columns={2}
-        spacing='normal'
-        onSubmit={(data) => {
-          void handleSubmit(data as CatProfileFormData);
-        }}
-        submitButton={
-          <div className='col-span-full flex justify-end'>
-            <Button type='submit' loading={isSubmitting}>
-              {submitLabel}
+    <Form
+      key={formId}
+      id={formId}
+      form={fields}
+      initialData={initialData}
+      columns={2}
+      spacing='normal'
+      onSubmit={(data) => {
+        void handleSubmit(data as CatProfileFormData);
+      }}
+      submitButton={
+        <div className='col-span-full flex justify-end gap-2'>
+          {onCancel && (
+            <Button type='button' variant='secondary' onClick={onCancel}>
+              Cancel
             </Button>
-          </div>
-        }
-      />
-      {onCancel && (
-        <div className='flex justify-end'>
-          <Button type='button' variant='secondary' onClick={onCancel}>
-            Cancel
+          )}
+          <Button type='submit' loading={isSubmitting}>
+            {submitLabel}
           </Button>
         </div>
-      )}
-    </div>
+      }
+    />
   );
 }
 

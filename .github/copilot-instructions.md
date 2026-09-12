@@ -64,6 +64,7 @@ src/
 - Do not add string-based or Firestore `Timestamp`-style values unless the feature truly requires them.
 - Keep Firestore rules and app state lifecycle logic aligned when creating or updating lifecycle-related fields such as `createdBy`, `members`, `pendingRequests`, or invite codes.
 - In Firestore rules, place repeated field assertions in helper functions instead of duplicating long inline checks inside `allow` expressions.
+- **Firestore document field types are the exception to the "prefer optional `?:`" rule below: model every field on a Firestore-backed type as a required key typed `T | null` (no `?`), and always write an explicit `null` (never `undefined`, never an omitted key) when a value is absent.** `setDoc`/`updateDoc` reject fields explicitly set to `undefined`, and this repo's `firestore.rules` are written expecting the key to exist (e.g. `request.resource.data.phone == null || request.resource.data.phone is string`) — a missing key throws a rules-evaluation error, not a passing check. Do not reach for `ignoreUndefinedProperties` on the Firestore client as a workaround; fix the type and the value instead. `create*` action thunks that accept a `Partial<Entity>` from callers (so quick-create/partial UI flows can omit fields) must normalize every non-required field to `?? null` when assembling the final document before calling `setDoc`.
 
 ### React and state patterns
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
@@ -110,6 +111,7 @@ useEffect(() => {
 - **Always prefer configured project aliases over relative paths.**
 - **Treat time fields as timestamps, not strings.**
 - **Keep Firestore rules and app data lifecycle logic aligned.**
+- **Firestore document fields: no optional `?:` — required `T | null` keys, and always write `null` (never `undefined`) for an absent value.**
 - **Use `formatDateTime` from `src/utils/formatUtils.ts` for shared timestamp display formatting.**
 - **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
@@ -179,6 +181,7 @@ export function usePresence(userIds: string[] | null) {
 - Prefer `email?: string` over `email: string | undefined` when the field is optional by definition.
 - Prefer `displayName?: string` over `displayName: string | null` when the absence is just an omitted value.
 - Use explicit `null` only when the runtime semantics truly require it.
+- **Exception: Firestore document types.** For any type that models a Firestore document (or a nested object stored inside one), do the opposite — no `?:` optional keys; every field is required and typed `T | null`, with `null` written explicitly whenever the value is absent. See "Data and app patterns" above for why.
 
 ```ts
 // ❌ Avoid when the field is optional by definition

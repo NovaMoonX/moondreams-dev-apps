@@ -16,7 +16,7 @@ export const createDoctor = createAsyncThunk<
     householdId: string;
     clinicId: string;
     name: string;
-    notes?: string;
+    notes?: string | null;
   },
   { rejectValue: string }
 >(
@@ -49,7 +49,7 @@ export const createDoctor = createAsyncThunk<
       householdId,
       clinicId,
       name: trimmedName,
-      notes: notes?.trim() || undefined,
+      notes: notes?.trim() || null,
       createdAt: now,
     };
 
