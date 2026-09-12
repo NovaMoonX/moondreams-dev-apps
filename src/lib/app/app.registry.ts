@@ -1,10 +1,11 @@
-import { AppId } from '../types/appCatalog';
+import type { AppId, AppStatus } from '../types/appCatalog';
 
 export type AppRegistryEntry = {
   id: AppId;
   name: string;
   path: string;
   description: string;
+  status?: AppStatus;
   createdAt?: string; // YYYY-MM-DD
 };
 
@@ -20,6 +21,7 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     path: '/worth-the-wait',
     description:
       'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
+    status: 'public',
     createdAt: '2026-08-16',
   },
   {
@@ -28,6 +30,7 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     path: '/nine-lives',
     description:
       'A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.',
+    status: 'draft',
     createdAt: '2026-09-10',
   },
 ];
