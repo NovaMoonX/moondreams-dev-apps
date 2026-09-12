@@ -35,7 +35,10 @@ async function upsertFixtureUser(
     });
   }
 
-  await context.auth.setCustomUserClaims(fixture.uid, isAdmin ? { admin: true } : {});
+  await context.auth.setCustomUserClaims(
+    fixture.uid,
+    isAdmin ? { admin: true, dev: true } : { dev: true },
+  );
 }
 
 export async function seedCore(context: SeedContext): Promise<SeedResult> {
@@ -77,7 +80,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         name: app.name,
         description: app.description,
         path: app.path,
-        status: app.status ?? 'draft',
+        status: app.status ?? 'public',
         isRestricted: false,
         allowedUsers: [],
         createdAt,

@@ -20,7 +20,7 @@ import {
 } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { APP_REGISTRY, APP_REGISTRY_ID_MAP } from '@lib/app';
-import { db } from '@lib/firebase/config';
+import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
 import {
   normalizeAppStatus,
   type AppMetadata,
@@ -66,10 +66,16 @@ const STATIC_APP_REGISTRY: AppMetadata[] = APP_REGISTRY.map((app) => ({
   updatedAt: new Date().toISOString(),
 }));
 
+// Mirrors firestore.rules' canReadAppDoc(): admins, and anyone in the
+// local emulator, see every app regardless of status.
+function canSeeAllApps(isAdmin: boolean) {
+  return isAdmin || isUsingFirebaseEmulators;
+}
+
 function buildAppQueries(user: User | null, isAdmin: boolean) {
   const appsCollection = collection(db, 'apps');
 
-  if (isAdmin) {
+  if (canSeeAllApps(isAdmin)) {
     return [query(appsCollection)];
   }
 
@@ -161,12 +167,12 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   }, [isAdmin, user]);
 
   const apps = useMemo(() => {
-    if (!user) {
-      return allApps.filter((app) => app.status === 'public' && !app.isRestricted);
+    if (canSeeAllApps(isAdmin)) {
+      return allApps;
     }
 
-    if (isAdmin) {
-      return allApps;
+    if (!user) {
+      return allApps.filter((app) => app.status === 'public' && !app.isRestricted);
     }
 
     return allApps.filter((app) => {
