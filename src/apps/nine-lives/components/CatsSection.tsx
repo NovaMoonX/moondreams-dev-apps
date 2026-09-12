@@ -10,7 +10,7 @@ import CatAvatarItem from './CatAvatarItem';
 import CatDetailsModal from './CatDetailsModal';
 import CatDetailsPrompt from './CatDetailsPrompt';
 import type { CatQuickAddValues } from './CatQuickAddForm';
-import { createCat, updateCat } from '../store/actions/catsActions';
+import { createCat, deleteCat, updateCat } from '../store/actions/catsActions';
 import { selectCatsByHousehold } from '../store/selectors';
 import type { Cat } from '../types';
 
@@ -60,6 +60,18 @@ function CatsSection({ householdId }: CatsSectionProps) {
     }
   };
 
+  const handleDeleteCat = async (cat: Cat) => {
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(deleteCat({ householdId, catId: cat.id })).unwrap();
+      setPendingDetailsCat(null);
+      setEditingCat(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const detailsCat = editingCat ?? pendingDetailsCat;
 
   return (
@@ -101,6 +113,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
         householdId={householdId}
         isSubmitting={isSubmitting}
         onSubmit={handleSaveCatDetails}
+        onDelete={handleDeleteCat}
         onClose={() => {
           setEditingCat(null);
           setPendingDetailsCat(null);

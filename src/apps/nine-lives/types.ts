@@ -73,6 +73,7 @@ export interface VetClinic {
   householdId: string;
   name: string;
   phone: string | null;
+  email: string | null;
   address: string | null;
   isEmergency24Hour: boolean | null;
   notes: string | null;

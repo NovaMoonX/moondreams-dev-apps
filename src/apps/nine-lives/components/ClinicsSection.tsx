@@ -3,13 +3,24 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppDispatch, useAppSelector } from '@/store';
-
+import {
+  createDoctor,
+  deleteDoctor,
+  updateDoctor,
+} from '../store/actions/doctorsActions';
+import {
+  createVetClinic,
+  deleteVetClinic,
+  updateVetClinic,
+} from '../store/actions/vetClinicsActions';
+import {
+  selectClinicsByHousehold,
+  selectDoctorsByHousehold,
+} from '../store/selectors';
 import DetailsDisclosure from './DetailsDisclosure';
 import DoctorFormModal from './DoctorFormModal';
+import VetClinicRow from './VetClinicRow';
 import VetClinicFormModal from './VetClinicFormModal';
-import { createDoctor } from '../store/actions/doctorsActions';
-import { createVetClinic } from '../store/actions/vetClinicsActions';
-import { selectClinicsByHousehold, selectDoctorsByHousehold } from '../store/selectors';
 
 interface ClinicsSectionProps {
   householdId: string;
@@ -22,13 +33,26 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showClinicForm, setShowClinicForm] = useState(false);
-  const [doctorModalClinicId, setDoctorModalClinicId] = useState<string | null>(null);
+  const [editingClinicId, setEditingClinicId] = useState<string | null>(null);
+  const [doctorModalClinicId, setDoctorModalClinicId] = useState<string | null>(
+    null,
+  );
+  const [editingDoctorId, setEditingDoctorId] = useState<string | null>(null);
 
-  const doctorModalClinic = clinics.find((clinic) => clinic.id === doctorModalClinicId) ?? null;
+  const editingClinic =
+    clinics.find((clinic) => clinic.id === editingClinicId) ?? null;
+  const editingDoctor =
+    doctors.find((doctor) => doctor.id === editingDoctorId) ?? null;
+  const doctorModalClinic =
+    clinics.find((clinic) => clinic.id === doctorModalClinicId) ?? null;
+  const doctorFormClinic = editingDoctor
+    ? (clinics.find((clinic) => clinic.id === editingDoctor.clinicId) ?? null)
+    : doctorModalClinic;
 
   const handleCreateClinic = async (clinic: {
     name: string;
     phone?: string | null;
+    email?: string | null;
     address?: string | null;
     isEmergency24Hour?: boolean | null;
     notes?: string | null;
@@ -43,7 +67,56 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
     }
   };
 
-  const handleCreateDoctor = async (doctor: { name: string; notes?: string | null }) => {
+  const handleUpdateClinic = async (clinic: {
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    isEmergency24Hour?: boolean | null;
+    notes?: string | null;
+  }) => {
+    if (!editingClinicId) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        updateVetClinic({
+          householdId,
+          vetClinicId: editingClinicId,
+          changes: clinic,
+        }),
+      ).unwrap();
+      setEditingClinicId(null);
+      setShowClinicForm(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClinic = async (clinicId: string) => {
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        deleteVetClinic({ householdId, vetClinicId: clinicId }),
+      ).unwrap();
+      setEditingClinicId(null);
+      setShowClinicForm(false);
+      if (doctorModalClinicId === clinicId) {
+        setDoctorModalClinicId(null);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateDoctor = async (doctor: {
+    name: string;
+    notes?: string | null;
+  }) => {
     if (!doctorModalClinicId) {
       return;
     }
@@ -65,63 +138,87 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
     }
   };
 
+  const handleUpdateDoctor = async (doctor: {
+    name: string;
+    notes?: string | null;
+  }) => {
+    if (!editingDoctorId) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        updateDoctor({
+          householdId,
+          doctorId: editingDoctorId,
+          changes: {
+            name: doctor.name,
+            notes: doctor.notes ?? null,
+          },
+        }),
+      ).unwrap();
+      setEditingDoctorId(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteDoctor = async (doctorId: string) => {
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(deleteDoctor({ householdId, doctorId })).unwrap();
+      setEditingDoctorId(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <section>
       <DetailsDisclosure label='Vet clinics'>
         <div className='space-y-4'>
-          <Button type='button' variant='secondary' size='sm' onClick={() => setShowClinicForm(true)}>
-            Add clinic
-          </Button>
+          <div className='flex items-center justify-between gap-2 pb-2'>
+            <small className='text-muted-foreground text-sm'>
+              Manage your vet clinics here.
+            </small>
+            <Button
+              type='button'
+              variant='primary'
+              size='sm'
+              onClick={() => setShowClinicForm(true)}
+            >
+              Add clinic
+            </Button>
+          </div>
 
           {clinics.length === 0 && (
-            <p className='text-sm text-muted-foreground'>No clinics added yet.</p>
+            <p className='text-muted-foreground text-sm'>
+              No clinics added yet.
+            </p>
           )}
 
           {clinics.length > 0 && (
-            <div className='divide-y divide-border'>
+            <div className='divide-border divide-y'>
               {clinics.map((clinic) => {
-                const clinicDoctors = doctors.filter((doctor) => doctor.clinicId === clinic.id);
+                const clinicDoctors = doctors.filter(
+                  (doctor) => doctor.clinicId === clinic.id,
+                );
 
                 return (
-                  <div key={clinic.id} className='py-3 first:pt-0 last:pb-0'>
-                    <div className='flex items-center justify-between gap-2'>
-                      <div>
-                        <div className='flex items-center gap-2'>
-                          <p className='font-medium'>{clinic.name}</p>
-                          {clinic.isEmergency24Hour && (
-                            <span className='rounded-full bg-muted px-2 py-1 text-xs'>24hr</span>
-                          )}
-                        </div>
-                        {clinic.phone && (
-                          <p className='text-sm text-muted-foreground'>{clinic.phone}</p>
-                        )}
-                        {clinic.address && (
-                          <p className='text-sm text-muted-foreground'>{clinic.address}</p>
-                        )}
-                      </div>
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        size='sm'
-                        onClick={() => setDoctorModalClinicId(clinic.id)}
-                      >
-                        Add doctor
-                      </Button>
-                    </div>
-
-                    {clinicDoctors.length > 0 && (
-                      <div className='mt-3 space-y-2 border-l-2 border-border pl-3'>
-                        {clinicDoctors.map((doctor) => (
-                          <div key={doctor.id}>
-                            <p className='text-sm font-medium'>{doctor.name}</p>
-                            {doctor.notes && (
-                              <p className='text-sm text-muted-foreground'>{doctor.notes}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <VetClinicRow
+                    key={clinic.id}
+                    clinic={clinic}
+                    doctors={clinicDoctors}
+                    onEditClinic={(clinicId) => setEditingClinicId(clinicId)}
+                    onAddDoctor={(clinicId) => setDoctorModalClinicId(clinicId)}
+                    onDeleteClinic={async (clinicId) => {
+                      await handleDeleteClinic(clinicId);
+                    }}
+                    onEditDoctor={(doctorId) => setEditingDoctorId(doctorId)}
+                  />
                 );
               })}
             </div>
@@ -130,18 +227,32 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
       </DetailsDisclosure>
 
       <VetClinicFormModal
-        isOpen={showClinicForm}
+        isOpen={showClinicForm || Boolean(editingClinic)}
+        initialClinic={editingClinic ?? undefined}
         isSubmitting={isSubmitting}
-        onSubmit={handleCreateClinic}
-        onClose={() => setShowClinicForm(false)}
+        onSubmit={editingClinic ? handleUpdateClinic : handleCreateClinic}
+        onDelete={
+          editingClinic ? () => handleDeleteClinic(editingClinic.id) : undefined
+        }
+        onClose={() => {
+          setShowClinicForm(false);
+          setEditingClinicId(null);
+        }}
       />
 
       <DoctorFormModal
-        isOpen={Boolean(doctorModalClinic)}
-        clinicName={doctorModalClinic?.name ?? ''}
+        isOpen={Boolean(doctorModalClinic) || Boolean(editingDoctor)}
+        clinicName={doctorFormClinic?.name ?? ''}
+        initialDoctor={editingDoctor ?? undefined}
         isSubmitting={isSubmitting}
-        onSubmit={handleCreateDoctor}
-        onClose={() => setDoctorModalClinicId(null)}
+        onSubmit={editingDoctor ? handleUpdateDoctor : handleCreateDoctor}
+        onDelete={
+          editingDoctor ? () => handleDeleteDoctor(editingDoctor.id) : undefined
+        }
+        onClose={() => {
+          setDoctorModalClinicId(null);
+          setEditingDoctorId(null);
+        }}
       />
     </section>
   );
