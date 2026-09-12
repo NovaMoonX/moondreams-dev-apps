@@ -77,6 +77,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         name: app.name,
         description: app.description,
         path: app.path,
+        status: app.status ?? 'draft',
         isRestricted: false,
         allowedUsers: [],
         createdAt,

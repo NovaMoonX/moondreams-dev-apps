@@ -21,7 +21,10 @@ import {
 import { useAuth } from '@hooks/useAuth';
 import { APP_REGISTRY, APP_REGISTRY_ID_MAP } from '@lib/app';
 import { db } from '@lib/firebase/config';
-import type { AppMetadata } from '@lib/types/appCatalog';
+import {
+  normalizeAppStatus,
+  type AppMetadata,
+} from '@lib/types/appCatalog';
 import { User } from 'firebase/auth';
 
 function normalizeAppMetadata(
@@ -39,6 +42,7 @@ function normalizeAppMetadata(
     name: data.name?.trim() || registryEntry?.name || 'Untitled app',
     path: data.path ?? registryEntry?.path ?? `/${id}`,
     description: data.description?.trim() || registryEntry?.description || '',
+    status: normalizeAppStatus(data.status ?? registryEntry?.status ?? 'draft'),
     isRestricted: Boolean(data.isRestricted),
     allowedUsers: Array.isArray(data.allowedUsers)
       ? data.allowedUsers.map(String)
@@ -53,6 +57,7 @@ const STATIC_APP_REGISTRY: AppMetadata[] = APP_REGISTRY.map((app) => ({
   name: app.name,
   path: app.path,
   description: app.description,
+  status: normalizeAppStatus(app.status ?? 'draft'),
   isRestricted: false,
   allowedUsers: [],
   createdAt: app.createdAt
@@ -69,14 +74,30 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   }
 
   if (!user) {
-    return [query(appsCollection, where('isRestricted', '==', false))];
+    return [
+      query(
+        appsCollection,
+        where('status', '==', 'public'),
+        where('isRestricted', '==', false),
+      ),
+    ];
   }
 
-  const queries = [query(appsCollection, where('isRestricted', '==', false))];
+  const queries = [
+    query(
+      appsCollection,
+      where('status', '==', 'public'),
+      where('isRestricted', '==', false),
+    ),
+  ];
 
   if (user.uid) {
     queries.push(
-      query(appsCollection, where('allowedUsers', 'array-contains', user.uid)),
+      query(
+        appsCollection,
+        where('status', '==', 'public'),
+        where('allowedUsers', 'array-contains', user.uid),
+      ),
     );
   }
 
@@ -84,6 +105,7 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
     queries.push(
       query(
         appsCollection,
+        where('status', '==', 'public'),
         where('allowedUsers', 'array-contains', user.email),
       ),
     );
@@ -140,7 +162,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
 
   const apps = useMemo(() => {
     if (!user) {
-      return allApps.filter((app) => !app.isRestricted);
+      return allApps.filter((app) => app.status === 'public' && !app.isRestricted);
     }
 
     if (isAdmin) {
@@ -148,6 +170,10 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
     }
 
     return allApps.filter((app) => {
+      if (app.status !== 'public') {
+        return false;
+      }
+
       if (!app.isRestricted) {
         return true;
       }

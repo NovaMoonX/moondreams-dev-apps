@@ -23,6 +23,22 @@ service cloud.firestore {
       return value is string && value.size() > 0;
     }
 
+    function isAppVisibleToUser(appData) {
+      return appData.status == 'public' && (
+        !appData.isRestricted || (
+          request.auth != null && appData.allowedUsers is list && (
+            request.auth.uid in appData.allowedUsers ||
+            request.auth.token.email in appData.allowedUsers
+          )
+        )
+      );
+    }
+
+    match /apps/{appId} {
+      allow read: if isAdmin() || isAppVisibleToUser(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /apps/nine-lives/households/{householdId} {
       function isHouseholdIdentityValid() {
         return request.resource.data.id == householdId
@@ -199,13 +215,7 @@ service cloud.firestore {
     }
 
     match /apps/worth-the-wait {
-      allow read: if !resource.data.isRestricted || (
-        request.auth != null && (
-          request.auth.uid in resource.data.allowedUsers ||
-          request.auth.token.email in resource.data.allowedUsers ||
-          isAdmin()
-        )
-      );
+      allow read: if isAdmin() || isAppVisibleToUser(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
