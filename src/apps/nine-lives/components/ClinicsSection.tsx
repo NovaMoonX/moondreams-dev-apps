@@ -1,6 +1,12 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuFactories,
+} from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 
@@ -31,6 +37,8 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
   const dispatch = useAppDispatch();
   const clinics = useAppSelector(selectClinicsByHousehold(householdId));
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
+  const { confirm } = useActionModal();
+  const { option, separator } = DropdownMenuFactories;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showClinicForm, setShowClinicForm] = useState(false);
@@ -205,11 +213,29 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
                 const clinicDoctors = doctors.filter(
                   (doctor) => doctor.clinicId === clinic.id,
                 );
+                const clinicMenuItems = [
+                  option({
+                    label: 'Edit clinic',
+                    value: 'edit-clinic',
+                    description: 'Update this clinic’s details.',
+                  }),
+                  option({
+                    label: 'Add doctor',
+                    value: 'add-doctor',
+                    description: 'Add a doctor to this clinic.',
+                  }),
+                  separator(),
+                  option({
+                    label: 'Delete clinic',
+                    value: 'delete-clinic',
+                    description: 'Remove this clinic and its doctors.',
+                  }),
+                ];
 
                 return (
                   <div key={clinic.id} className='py-3 first:pt-0 last:pb-0'>
-                    <div className='flex flex-col sm:flex-row'>
-                      <div>
+                    <div className='flex items-start justify-between gap-3'>
+                      <div className='min-w-0 flex-1'>
                         <div className='flex items-center gap-2'>
                           <Button
                             className='text-left text-sm font-medium'
@@ -240,26 +266,50 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
                         )}
                       </div>
 
-                      <div className='flex gap-2 my-1 sm:my-0'>
-                        <Button
-                          type='button'
-                          variant='secondary'
-                          size='sm'
-                          onClick={() => setEditingClinicId(clinic.id)}
-                          className='shrink-0 grow'
-                        >
-                          Edit clinic
-                        </Button>
-                        <Button
-                          type='button'
-                          variant='secondary'
-                          size='sm'
-                          onClick={() => setDoctorModalClinicId(clinic.id)}
-                          className='shrink-0 grow'
-                        >
-                          Add doctor
-                        </Button>
-                      </div>
+                      <DropdownMenu
+                        items={clinicMenuItems}
+                        onItemSelect={async (value) => {
+                          if (value === 'edit-clinic') {
+                            setEditingClinicId(clinic.id);
+                            return;
+                          }
+
+                          if (value === 'add-doctor') {
+                            setDoctorModalClinicId(clinic.id);
+                            return;
+                          }
+
+                          if (value === 'delete-clinic') {
+                            const confirmed = await confirm({
+                              title: 'Delete clinic',
+                              message:
+                                'Are you sure you want to delete this clinic? This action cannot be undone.',
+                              destructive: true,
+                            });
+
+                            if (confirmed) {
+                              await handleDeleteClinic(clinic.id);
+                            }
+                          }
+                        }}
+                        placement='bottom'
+                        alignment='end'
+                        offset={8}
+                        trigger={
+                          <Button
+                            type='button'
+                            variant='secondary'
+                            size='sm'
+                            className='h-8 w-8 p-0'
+                            aria-label={`Open actions for clinic ${clinic.name}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            <DotsVertical className='h-4 w-4' />
+                          </Button>
+                        }
+                      />
                     </div>
 
                     {clinicDoctors.length > 0 && (
