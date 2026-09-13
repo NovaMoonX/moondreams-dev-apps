@@ -45,10 +45,13 @@ function PresenceBadge({ className }: PresenceBadgeProps) {
   const { user } = useAuth();
   const { space, pendingMember, forceOpenPendingApprovalModal } = useWorthTheWait();
 
-  const partnerUid = getPartnerUid(space, user, pendingMember);
+  // Active member only — a pending (not yet approved) requester must never
+  // be treated as the partner for presence/online-status purposes.
+  const partnerUid = getPartnerUid(space, user);
   const showPendingState = Boolean(space && pendingMember && !partnerUid);
+  const displayUid = partnerUid ?? (showPendingState ? pendingMember!.uid : null);
   const presence = usePresence(partnerUid, 'worth-the-wait');
-  const avatarUser = useUserInfo(partnerUid);
+  const avatarUser = useUserInfo(displayUid);
 
   const { text: statusText, variant: statusVariant } = getPresenceStatus({
     isPending: showPendingState,

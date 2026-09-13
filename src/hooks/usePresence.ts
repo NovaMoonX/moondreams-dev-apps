@@ -91,12 +91,19 @@ export function usePresence(
 
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
 
+  // Key on the id set's content, not `ids`' array identity — callers often
+  // pass a freshly-mapped/filtered array each render, which would otherwise
+  // tear down and resubscribe every presence listener on every re-render.
+  const idsKey = ids.join(',');
+
   useEffect(() => {
-    if (ids.length === 0) {
+    if (idsKey === '') {
       return;
     }
 
-    const listeners = ids.map((uid) => {
+    const currentIds = idsKey.split(',');
+
+    const listeners = currentIds.map((uid) => {
       const statusRef = ref(realtimeDb, `status/${uid}`);
 
       return onValue(statusRef, (snapshot) => {
@@ -112,7 +119,7 @@ export function usePresence(
     return () => {
       listeners.forEach((unsubscribe) => unsubscribe());
     };
-  }, [hereLocation, ids]);
+  }, [hereLocation, idsKey]);
 
   const presenceMap = useMemo(
     () =>

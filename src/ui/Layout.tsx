@@ -10,13 +10,20 @@ import ThemeToggle from '@ui/ThemeToggle';
 function LocationSync() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setCurrentLocation } = useAuth();
+  const { user, setCurrentLocation } = useAuth();
 
-  // Sync the user's current location with
-  // their status in the Firebase Realtime Database
+  // Sync the user's current location with their status in the Realtime
+  // Database. `setCurrentLocation` no-ops if auth hasn't resolved yet, so
+  // `user` must also be a dependency — otherwise a deep link/refresh that
+  // renders before auth resolves silently skips the write and never
+  // retries (pathname doesn't change again), leaving presence stale.
   useEffect(() => {
     if (!location.pathname) {
       navigate('/');
+      return;
+    }
+
+    if (!user) {
       return;
     }
 
@@ -31,7 +38,7 @@ function LocationSync() {
     }
 
     handleSetCurrentLocation(location.pathname);
-  }, [navigate, location.pathname, setCurrentLocation]);
+  }, [navigate, location.pathname, setCurrentLocation, user]);
 
   // Sync the manifest file based on the current location
   useEffect(() => {

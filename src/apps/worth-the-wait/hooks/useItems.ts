@@ -41,8 +41,11 @@ export function useItems(
     createSpaceBoxIdsKey(spaceId, boxIds ?? []),
   );
   const [itemsByBoxId, setItemsByBoxId] = useState<Record<string, Item[]>>({});
+  // Loading only ever has something to wait for when there are boxes to
+  // fetch items from — with zero boxes there's nothing to listen to, so
+  // there's nothing to load.
   const [loading, setLoading] = useState(
-    Boolean(spaceId && (userUid || (boxIds && boxIds.length > 0))),
+    Boolean(spaceId && boxIds && boxIds.length > 0),
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +54,7 @@ export function useItems(
   const latestSpaceBoxIdKey = createSpaceBoxIdsKey(spaceId, boxIds ?? []);
   if (_spaceBoxIdsKey !== latestSpaceBoxIdKey) {
     _setSpaceBoxIdsKey(latestSpaceBoxIdKey);
-    setLoading(Boolean(spaceId && (userUid || areBoxes)));
+    setLoading(Boolean(spaceId && areBoxes));
     setError(null);
     setItemsByBoxId((currentItemsByBoxId) => {
       const nextItemsByBoxId = { ...currentItemsByBoxId };
@@ -74,17 +77,10 @@ export function useItems(
     let isActive = true;
 
     const targetBoxIds = boxIds ?? [];
-    // setItemsByBoxId((currentItemsByBoxId) => {
-    //   const nextItemsByBoxId = { ...currentItemsByBoxId };
 
-    //   Object.keys(nextItemsByBoxId).forEach((currentBoxId) => {
-    //     if (!targetBoxIds.includes(currentBoxId)) {
-    //       delete nextItemsByBoxId[currentBoxId];
-    //     }
-    //   });
-
-    //   return nextItemsByBoxId;
-    // });
+    if (targetBoxIds.length === 0) {
+      return;
+    }
 
     const unsubscribeFns = targetBoxIds.map((targetBoxId) => {
       const itemCollection = collection(
