@@ -67,6 +67,34 @@ src/
 - In Firestore rules, place repeated field assertions in helper functions instead of duplicating long inline checks inside `allow` expressions.
 - **Firestore document field types are the exception to the "prefer optional `?:`" rule below: model every field on a Firestore-backed type as a required key typed `T | null` (no `?`), and always write an explicit `null` (never `undefined`, never an omitted key) when a value is absent.** `setDoc`/`updateDoc` reject fields explicitly set to `undefined`, and this repo's `firestore.rules` are written expecting the key to exist (e.g. `request.resource.data.phone == null || request.resource.data.phone is string`) — a missing key throws a rules-evaluation error, not a passing check. Do not reach for `ignoreUndefinedProperties` on the Firestore client as a workaround; fix the type and the value instead. `create*` action thunks that accept a `Partial<Entity>` from callers (so quick-create/partial UI flows can omit fields) must normalize every non-required field to `?? null` when assembling the final document before calling `setDoc`.
 
+### Invite / join / pending-request pattern
+Any mini-app feature where one user requests access to a resource owned/shared by others (joining a household, a space, a group, etc.) must use this exact shape. It is not a per-app judgment call — Nine Lives and Worth the Wait both use it, and it's the only supported pattern for new apps.
+
+**Collection shape — flat, sibling to the owning resource, never nested and never a `collectionGroup`:**
+```
+apps/{appId}/pendingRequests/{docId}
+```
+- Doc ID is the requester's own `uid` when a user can only ever hold one open request app-wide (e.g. a two-person space with a hard member cap).
+- Doc ID is `{uid}_{resourceId}` when a user can legitimately hold concurrent requests to different resources (e.g. household invites, where nothing stops requesting to join several households at once).
+- Never nest it under the resource (`.../households/{id}/pendingRequests/{uid}`) and never rely on a `{path=**}` wildcard rule or `collectionGroup()` query to read across resources. Flat + sibling makes "my requests" (`where('uid','==',me)`) and "requests for my resource" (`where('resourceId','==',id)`) both plain `COLLECTION`-scope queries — no wildcard security rule, no manual `firestore.indexes.json` entry, and no risk of one app's pending-request documents leaking into another app's `collectionGroup` results.
+
+**Firestore rule for the collection — one block, no wildcard:**
+- `allow create`: requester's own uid only, validated against the identity fields (uid, resourceId, any invite code) via a small helper function; require the target resource to `exist()` and require the requester is not already a member/participant.
+- `allow read`: `request.auth.uid == <uid derived from the doc, from path or split()>` (covers `get()` on a not-yet-existing doc *and* satisfies list-safety for the "my requests" query) `||` (`resource != null && resource.data.uid == request.auth.uid`) `||` (`resource != null && isMemberOf(resource.data.resourceId)`) for the "requests for my resource" query.
+- `allow delete`: requester (cancel) or an existing member/participant (decline) — same uid/membership checks as read.
+- `allow update`: `false`. A pending request is created, read, and deleted — never patched.
+
+**Client hooks — always build the pair, not just one side:**
+- Requester-facing: "pending requests you've sent," backed by a query filtered on `uid`, with a Remove/cancel action that deletes their own doc. If the doc ID is just `{uid}`, this can be a single `getDoc`/`onSnapshot(doc)` instead of a query.
+- Owner-facing: "requests for my resource," backed by a query filtered on the resource id, with Accept/Decline actions.
+- Approval must be one atomic `writeBatch`: add the uid to the resource's members/participants array *and* delete the pending-request doc in the same commit. Never do these as two separate writes.
+- If the owning resource document carries anything sensitive (an encryption key, private content), pending state must live only in `pendingRequests` — never add a `pendingMember`/`pendingUid` field to the resource document itself, since that resource's own read rule would then have to loosen to let a not-yet-approved requester read it.
+
+**Presence/derived-member pitfalls (found and fixed in this exact pattern — do not reintroduce):**
+- Never fall back to a pending requester's uid when computing "the active member/partner" for presence, avatars, or online-status UI. Keep "who is pending" and "who is an active member" as two separate values; only the active-member value may feed `usePresence`/`useUserInfo`.
+- Any hook that fans out into one listener per element of an array (e.g. one listener per box id, per member id) must treat a zero-length array as "loading complete, zero results" — not silently leave `loading` stuck `true` forever, since a zero-length array creates zero listeners and `setLoading(false)` never fires.
+- Any hook that computes its listener/query key from a caller-supplied array (`useUserInfo`, `usePresence`, etc.) must key its effect on the array's *content* (e.g. `ids.join(',')`), never the array's object identity — callers frequently pass a freshly `.map()`'d/`.filter()`'d array each render, and identity-keyed effects will tear down and resubscribe every listener on every unrelated re-render.
+
 ### React and state patterns
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
 - Prefer deriving values directly during render, or move the update into an event handler or computed value.
@@ -119,6 +147,9 @@ useEffect(() => {
 - **Use `formatDateTime` from `src/utils/formatUtils.ts` for shared timestamp display formatting.**
 - **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
+- **Invite/join flows: always use the flat, sibling `apps/{appId}/pendingRequests` collection pattern — never nested, never a `collectionGroup`.**
+- **A pending (not-yet-approved) requester must never be treated as an active member for presence, avatars, or reads of a resource document that carries sensitive data.**
+- **Array-driven hooks (`useUserInfo`, `usePresence`, or similar) must key their effect on the array's content, not its identity.**
 
 ## Coding Styles
 
