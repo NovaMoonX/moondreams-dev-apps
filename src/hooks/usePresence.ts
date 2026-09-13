@@ -91,6 +91,14 @@ export function usePresence(
 
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
 
+  // Key the effect on the id set's content, not `ids`' array identity —
+  // callers often pass a freshly-mapped/filtered array each render, which
+  // would otherwise tear down and resubscribe every presence listener on
+  // every unrelated re-render. `idsKey` only triggers the effect; `ids`
+  // itself (not a join/split round-trip, which would corrupt an id
+  // containing a comma) is what the effect body actually uses.
+  const idsKey = ids.join(',');
+
   useEffect(() => {
     if (ids.length === 0) {
       return;
@@ -112,7 +120,8 @@ export function usePresence(
     return () => {
       listeners.forEach((unsubscribe) => unsubscribe());
     };
-  }, [hereLocation, ids]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey is ids' content signal
+  }, [hereLocation, idsKey]);
 
   const presenceMap = useMemo(
     () =>

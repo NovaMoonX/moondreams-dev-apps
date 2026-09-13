@@ -18,7 +18,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 
 ## How it Works
 
-1. **Set up your household**: auto-created on first use, pre-filled as "{Your Name}'s household," renameable anytime. (Adding another caretaker to your household is a stretch goal — see below.)
+1. **Set up your household**: create one from a closable create/join modal, or request access with an invite code from someone already in the household. Household members can always share the current invite code and approve incoming requests.
 2. **Add a cat**: name, photo, date of birth, breed (pick from a default list or enter your own), indoor/outdoor lifestyle, microchip number, shelter/origin (name and address), adoption date and other key dates, current vet clinic, insurance (pick a common provider or enter your own), diet, and notes.
 3. **Build their health record**: upload documents (PDF or image — no video) like lab results or vet paperwork, attached directly to that cat.
 4. **Track visits**: schedule and log vet visits — for one cat, or several at once (say, both kittens seeing the vet the same day) — tagged with a reason (checkup, illness, accident, vaccination, follow-up, or custom) and the doctor seen, so future visits can just pick them from a list instead of retyping. Visits get a sensible default name based on time of day and date ("Morning Visit — Mar 4"), but you can always rename one. Logging a completed visit is also where you update the key things that actually change at the vet — vaccinations given, conditions diagnosed, current weight, and symptoms discussed — instead of hunting down separate screens afterward.
@@ -42,7 +42,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 
 ### Core MVP
 
-- [ ] Household setup: auto-created on first use, pre-filled as "{Name}'s household," renameable
+- [x] Household setup: create a household or join one with an invite code, with a closable modal instead of auto-creating on first entry
 - [ ] Cat profiles: name, profile photo, date of birth, breed, indoor/outdoor lifestyle, microchip number, shelter/origin (name and address), adoption date and other key dates, current vet clinic, insurance, notes
 - [ ] Default preset lists for breed, personality traits, and insurance provider, each with a "custom" option
 - [ ] Vet clinics and doctors: add a clinic, log doctors seen there, reusable as a select on future visits instead of retyping
@@ -71,7 +71,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Monthly growth photo timeline and weight chart over time per cat
 - [ ] Shareable vet-visit summary export (PDF)
 - [ ] Auto-parsing of uploaded vet documents to suggest structured health record data
-- [ ] Additional caretakers per household (invite/join, similar in spirit to Worth the Wait's pairing flow) — the household schema already supports this, so this is a UI/flow addition rather than a data migration
+- [x] Additional caretakers per household (invite/join flow with shared invite codes and pending requests)
 - [ ] Shareable "cat card": a downloadable image summary of a cat's profile
 - [ ] Care-taking instructions, both household-wide (joint) and per-cat — useful for pet-sitters or additional caretakers
 - [ ] Support for additional species beyond cats, built on the same schema

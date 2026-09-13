@@ -3,8 +3,9 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@hooks/useAuth';
 
 import Loading from '@/ui/Loading';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppEntryFallback from '@/ui/AppEntryFallback';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import MySpacePendingRequests from './components/MySpacePendingRequests';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import WorthTheWaitLayout from './components/WorthTheWaitLayout';
@@ -12,6 +13,7 @@ import { WorthTheWaitProvider } from './context/WorthTheWaitProvider';
 import { useBoxes } from './hooks/useBoxes';
 import { useItems } from './hooks/useItems';
 import { useMemberUpdates } from './hooks/useMemberUpdates';
+import { useMySpacePendingRequests } from './hooks/useMySpacePendingRequests';
 import { useSpace } from './hooks/useSpace';
 import {
   SPACE_CODE_LENGTH,
@@ -34,7 +36,9 @@ function WorthTheWait() {
     isCreatingSpace,
     joinRequestSent,
     declinePendingMember,
+    cancelJoinRequest,
   } = useSpace(user?.uid ?? '');
+  const myPendingRequests = useMySpacePendingRequests(user?.uid ?? null);
 
   const [
     hasPendingApprovalModalBeenDismissed,
@@ -118,26 +122,23 @@ function WorthTheWait() {
       />
 
       {shouldOnboardingBeOpen && hasOnboardingModalBeenDismissed && (
-        <div className='page relative pb-0!'>
-          <Button
-            onClick={() => setHasOnboardingModalBeenDismissed(false)}
-            className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
-          >
-            Enter app
-          </Button>
-          <Button
-            variant='link'
-            onClick={() => navigate('/')}
-            className='absolute top-1/2 left-1/2 mt-12 -translate-x-1/2'
-          >
-            Back home
-          </Button>
-        </div>
+        <AppEntryFallback
+          appName='Worth the Wait'
+          onEnterApp={() => setHasOnboardingModalBeenDismissed(false)}
+          onBackHome={() => navigate('/')}
+        >
+          {myPendingRequests.length > 0 && (
+            <div className='mx-auto max-w-2xl'>
+              <MySpacePendingRequests requests={myPendingRequests} onCancel={cancelJoinRequest} />
+            </div>
+          )}
+        </AppEntryFallback>
       )}
 
       {!shouldOnboardingBeOpen && (
         <WorthTheWaitProvider
           space={space}
+          pendingMember={pendingMember}
           boxes={boxes}
           boxesLoading={boxesLoading}
           createCustomBox={createCustomBox}

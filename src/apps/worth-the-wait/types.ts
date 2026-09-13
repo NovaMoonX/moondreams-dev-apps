@@ -5,6 +5,11 @@ export type PendingMember = {
   requestedAt: number;
 };
 
+export type PendingSpaceRequest = PendingMember & {
+  spaceId: string;
+  inviteCode: string;
+};
+
 export type UserPresence = {
   state: 'online' | 'offline';
   currentLocation: string | null;
@@ -33,7 +38,6 @@ export type Space = {
   updatedAt: number;
   members: string[];
   inviteCode: string | null;
-  pendingMember: PendingMember | null;
   activeAction: ActiveAction | null;
   welcomeSeenBy: Record<string, number>;
   encryption: SpaceEncryption | null;

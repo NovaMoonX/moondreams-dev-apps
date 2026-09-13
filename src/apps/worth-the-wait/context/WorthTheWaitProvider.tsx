@@ -1,6 +1,6 @@
 import { useCallback, useState, type PropsWithChildren } from 'react';
 
-import type { Box, Item, MemberUpdateSummary, Space } from '../types';
+import type { Box, Item, MemberUpdateSummary, PendingMember, Space } from '../types';
 import { useActiveAction } from '../hooks/useActiveAction';
 import {
   WorthTheWaitContext,
@@ -9,6 +9,7 @@ import {
 
 interface WorthTheWaitProviderProps extends PropsWithChildren {
   space: Space | null;
+  pendingMember: PendingMember | null;
   boxes: Box[];
   boxesLoading: boolean;
   createCustomBox: (draft: { name: string; emoji: string; description: string }) => Promise<unknown>;
@@ -30,6 +31,7 @@ interface WorthTheWaitProviderProps extends PropsWithChildren {
 export function WorthTheWaitProvider({
   children,
   space,
+  pendingMember,
   boxes,
   boxesLoading,
   createCustomBox,
@@ -67,6 +69,7 @@ export function WorthTheWaitProvider({
 
   const value: WorthTheWaitContextValue = {
     space,
+    pendingMember,
     boxes,
     boxesLoading,
     createCustomBox,

@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
@@ -12,14 +14,19 @@ import CatsSection from './components/CatsSection';
 import ClinicsSection from './components/ClinicsSection';
 import HouseholdSetupModal from './components/HouseholdSetupModal';
 import HouseholdSwitcher from './components/HouseholdSwitcher';
+import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
 import StatsSummary from './components/StatsSummary';
+import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import { createHousehold } from './store/actions/householdsActions';
+import { requestToJoinHousehold } from './store/actions/pendingRequestsActions';
 
 function NineLives() {
   const { user, loading } = useAuth();
   const dispatch = useAppDispatch();
-  const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSetupModalDismissed, setIsSetupModalDismissed] = useState(false);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
 
   const households = useAppSelector((state) => {
@@ -47,6 +54,7 @@ function NineLives() {
   }, [households, selectedHouseholdId]);
 
   useNineLivesSync(selectedHousehold?.id ?? null, user?.uid ?? null);
+  const myPendingRequests = useMyPendingHouseholdRequests(user?.uid ?? null);
 
   const defaultHouseholdName = useMemo(
     () => (user?.displayName ? `${user.displayName}'s household` : 'My household'),
@@ -58,16 +66,39 @@ function NineLives() {
       return;
     }
 
-    setIsCreatingHousehold(true);
+    setIsSubmitting(true);
 
     try {
       const createdHousehold = await dispatch(
         createHousehold({ uid: user.uid, name }),
       ).unwrap();
       setSelectedHouseholdId(createdHousehold.id);
+      setIsSetupModalDismissed(false);
     } finally {
-      setIsCreatingHousehold(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const handleJoinFirstHousehold = async (inviteCode: string) => {
+    if (!user?.uid) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        requestToJoinHousehold({ uid: user.uid, inviteCode }),
+      ).unwrap();
+      setIsSetupModalDismissed(true);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloseSetupModal = () => {
+    setSelectedHouseholdId(null);
+    setIsSetupModalDismissed(true);
   };
 
   if (loading) {
@@ -79,15 +110,37 @@ function NineLives() {
   }
 
   if (households.length === 0) {
+    const pendingRequestsContent = myPendingRequests.length > 0 && (
+      <div className='mx-auto max-w-2xl'>
+        <MyPendingHouseholdRequests requests={myPendingRequests} />
+      </div>
+    );
+
+    if (isSetupModalDismissed) {
+      return (
+        <AppEntryFallback
+          appName='Nine Lives'
+          onEnterApp={() => setIsSetupModalDismissed(false)}
+          onBackHome={() => navigate('/')}
+        >
+          {pendingRequestsContent}
+        </AppEntryFallback>
+      );
+    }
+
     return (
-      <HouseholdSetupModal
-        key={`${user.uid}-${defaultHouseholdName}`}
-        isOpen
-        defaultName={defaultHouseholdName}
-        isSubmitting={isCreatingHousehold}
-        onConfirm={handleCreateFirstHousehold}
-        onClose={() => undefined}
-      />
+      <>
+        {pendingRequestsContent && <div className='page pb-0!'>{pendingRequestsContent}</div>}
+        <HouseholdSetupModal
+          key={`${user.uid}-${defaultHouseholdName}`}
+          isOpen
+          defaultName={defaultHouseholdName}
+          isSubmitting={isSubmitting}
+          onCreate={handleCreateFirstHousehold}
+          onJoin={handleJoinFirstHousehold}
+          onClose={handleCloseSetupModal}
+        />
+      </>
     );
   }
 

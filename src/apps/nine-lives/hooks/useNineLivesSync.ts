@@ -7,10 +7,12 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
+import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
+import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
 import { setVetClinics } from '../store/slices/vetClinicsSlice';
 
 export function useNineLivesSync(
@@ -35,10 +37,11 @@ export function useNineLivesSync(
     return unsubscribe;
   }, [activeUid, dispatch]);
 
-  // Sync the selected household's cats, clinics, and doctors for the active view.
+  // Sync the selected household's cats, clinics, doctors, and incoming requests.
   useEffect(() => {
     if (!householdId) {
       dispatch(clearCurrentHouseholdData());
+      dispatch(setPendingRequests([]));
       return;
     }
 
@@ -51,11 +54,18 @@ export function useNineLivesSync(
     const unsubscribeDoctors = startDoctorsListener(householdId, (doctors) => {
       dispatch(setDoctors(doctors));
     });
+    const unsubscribePendingRequests = startPendingRequestsListener(
+      householdId,
+      (requests) => {
+        dispatch(setPendingRequests(requests));
+      },
+    );
 
     return () => {
       unsubscribeCats();
       unsubscribeVetClinics();
       unsubscribeDoctors();
+      unsubscribePendingRequests();
     };
   }, [dispatch, householdId]);
 

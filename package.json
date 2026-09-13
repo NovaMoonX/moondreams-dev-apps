@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "emulators": "firebase emulators:start --only auth,firestore,database,functions",
+    "emulators:kill": "pkill -f '[f]irebase emulators:start' ; pkill -f '[f]irebase-database-emulator' ; pkill -f '[c]loud-firestore-emulator' ; pkill -f '[f]irebase-auth-emulator' ; pkill -f '[p]ubsub-emulator' ; true",
     "seed": "FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 GCLOUD_PROJECT=moondreams-dev-apps TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/seed.ts",
     "seed:core": "npm run seed -- --scope core",
     "seed:nine-lives": "npm run seed -- --scope nine-lives",
@@ -25,7 +26,7 @@
     "fb:rules": "firebase deploy --only database,firestore:rules,storage",
     "fb:indexes": "firebase deploy --only firestore:indexes",
     "fb:functions": "cd functions && npm run build && firebase deploy --only functions",
-    "fb:all": "cd functions && npm run build && cd .. && firebase deploy --only firestore:database,rules,firestore:indexes,storage,functions"
+    "fb:all": "cd functions && npm run build && cd .. && firebase deploy --only database,firestore:rules,firestore:indexes,storage,functions"
   },
   "dependencies": {
     "@moondreamsdev/dreamer-ui": "^1.7.26",

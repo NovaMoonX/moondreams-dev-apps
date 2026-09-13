@@ -24,14 +24,21 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: HOUSEHOLD_ID,
       name: 'Taylor and Jamie’s household',
       members: [caretaker.uid, coCaretaker.uid],
-      inviteCode: null,
-      pendingMembers: [],
+      inviteCode: 'LUNA7Q',
       createdBy: caretaker.uid,
       createdAt,
       lastEditedAt: context.now,
     },
     { merge: true },
   );
+
+  const inviteCodeRef = context.firestore
+    .collection('apps')
+    .doc('nine-lives')
+    .collection('inviteCodes')
+    .doc('LUNA7Q');
+
+  batch.set(inviteCodeRef, { householdId: HOUSEHOLD_ID }, { merge: true });
 
   const cats = [
     {
@@ -174,7 +181,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
 
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + cats.length + clinics.length + doctors.length,
+    firestoreDocuments: 2 + cats.length + clinics.length + doctors.length,
   };
 
   return result;

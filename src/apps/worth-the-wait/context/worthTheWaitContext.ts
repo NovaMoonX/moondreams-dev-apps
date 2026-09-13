@@ -1,9 +1,17 @@
 import { createContext, useContext } from 'react';
 
-import type { ActiveAction, Box, Item, MemberUpdateSummary, Space } from '../types';
+import type {
+  ActiveAction,
+  Box,
+  Item,
+  MemberUpdateSummary,
+  PendingMember,
+  Space,
+} from '../types';
 
 export interface WorthTheWaitContextValue {
   space: Space | null;
+  pendingMember: PendingMember | null;
   boxes: Box[];
   boxesLoading: boolean;
   createCustomBox: (draft: { name: string; emoji: string; description: string }) => Promise<unknown>;
