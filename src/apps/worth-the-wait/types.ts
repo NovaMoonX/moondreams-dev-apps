@@ -7,6 +7,7 @@ export type PendingMember = {
 
 export type PendingSpaceRequest = PendingMember & {
   spaceId: string;
+  inviteCode: string;
 };
 
 export type UserPresence = {

@@ -44,9 +44,17 @@ function MySpacePendingRequests({ requests, onCancel }: MySpacePendingRequestsPr
             key={request.spaceId}
             className='border-border flex items-center justify-between gap-3 rounded-md border p-3'
           >
-            <p className='text-muted-foreground text-sm'>
-              Requested {formatDateTime(request.requestedAt)}
-            </p>
+            <div>
+              <p className='font-medium'>
+                Invite code{' '}
+                <code className='border-border bg-muted rounded border px-1.5 py-0.5 font-mono text-sm'>
+                  {request.inviteCode}
+                </code>
+              </p>
+              <p className='text-muted-foreground text-sm'>
+                Requested {formatDateTime(request.requestedAt)}
+              </p>
+            </div>
             <Button type='button' variant='secondary' size='sm' disabled={removing} onClick={handleRemove}>
               Remove
             </Button>

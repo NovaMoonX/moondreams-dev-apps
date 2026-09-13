@@ -100,7 +100,7 @@ function NineLives() {
 
   const handleCloseSetupModal = () => {
     setSelectedHouseholdId(null);
-    setIsSetupModalDismissed(true);
+    navigate('/');
   };
 
   if (loading) {

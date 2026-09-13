@@ -61,19 +61,20 @@ export function useUserInfo(
 
   const [users, setUsers] = useState<UserInfo[]>([]);
 
-  // Key on the id set's content, not `ids`' array identity — callers often
-  // pass a freshly-mapped/filtered array each render, which would otherwise
-  // tear down and resubscribe every listener on every unrelated re-render.
+  // Key the effect on the id set's content, not `ids`' array identity —
+  // callers often pass a freshly-mapped/filtered array each render, which
+  // would otherwise tear down and resubscribe every listener on every
+  // unrelated re-render. `idsKey` only triggers the effect; `ids` itself
+  // (not a join/split round-trip, which would corrupt an id containing a
+  // comma) is what the effect body actually uses.
   const idsKey = ids.join(',');
 
   useEffect(() => {
-    if (idsKey === '') {
+    if (ids.length === 0) {
       return;
     }
 
-    const currentIds = idsKey.split(',');
-
-    const listeners = currentIds.map((uid) => {
+    const listeners = ids.map((uid) => {
       const userDocRef = doc(db, 'users', uid);
 
       return onSnapshot(userDocRef, (docSnapshot) => {
@@ -89,6 +90,7 @@ export function useUserInfo(
     return () => {
       listeners.forEach((unsubscribe) => unsubscribe());
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey is ids' content signal
   }, [idsKey]);
 
   const usersMap = useMemo(

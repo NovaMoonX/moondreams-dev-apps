@@ -375,6 +375,7 @@ export function useSpace(userUid: string) {
         await setDoc(requestRef, {
           uid: userUid,
           spaceId,
+          inviteCode: trimmedCode,
           requestedAt,
         });
 
@@ -400,10 +401,11 @@ export function useSpace(userUid: string) {
 
     const nextMembers = Array.from(new Set([...space.members, pendingMember.uid]));
     const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', space.id);
-    const requestsSnapshot = await getDocs(
-      query(PENDING_REQUESTS_COLLECTION, where('spaceId', '==', space.id)),
-    );
 
+    // The rules require the approved uid's own request to be deleted in the
+    // same commit as the members update, so this batch is scoped to exactly
+    // that — not every stray request, which could exceed the 500-write
+    // batch limit and isn't something the rules need to verify atomically.
     const batch = writeBatch(db);
     batch.update(spaceRef, {
       members: nextMembers,
@@ -417,9 +419,7 @@ export function useSpace(userUid: string) {
     if (space.inviteCode) {
       batch.delete(createInviteCodeRef(space.inviteCode));
     }
-    // The space is now full — clear the approved request and any other
-    // stray ones (a second person may have requested in the meantime).
-    requestsSnapshot.docs.forEach((requestDoc) => batch.delete(requestDoc.ref));
+    batch.delete(pendingRequestRef(pendingMember.uid));
     await batch.commit();
 
     setSpace({
@@ -430,6 +430,23 @@ export function useSpace(userUid: string) {
     });
     setPendingMember(null);
     setError(null);
+
+    // Best-effort cleanup of any other stray requests (a second person may
+    // have requested in the meantime, before the space filled) — not part
+    // of the approval's atomicity guarantee, so failures here don't matter.
+    getDocs(query(PENDING_REQUESTS_COLLECTION, where('spaceId', '==', space.id)))
+      .then((strayRequests) => {
+        const strays = strayRequests.docs.filter((requestDoc) => requestDoc.id !== pendingMember.uid);
+
+        if (strays.length === 0) {
+          return;
+        }
+
+        const cleanupBatch = writeBatch(db);
+        strays.forEach((requestDoc) => cleanupBatch.delete(requestDoc.ref));
+        return cleanupBatch.commit();
+      })
+      .catch((cleanupError) => console.error('Failed to clean up stray pending requests:', cleanupError));
 
     return nextMembers;
   }, [space, pendingMember]);
@@ -451,6 +468,7 @@ export function useSpace(userUid: string) {
     }
 
     await deleteDoc(pendingRequestRef(userUid));
+    setJoinRequestSent(false);
   }, [userUid]);
 
   const value = useMemo(

@@ -65,6 +65,7 @@ A join request, keyed by the requester's own uid — top-level (sibling to `spac
 | :---- | :---- | :---- |
 | uid | string | UID of the requesting user |
 | spaceId | string | Target space document ID |
+| inviteCode | string | The code submitted; must match the target space's real code |
 | requestedAt | timestamp | When the request was submitted |
 
 Being flat rather than nested under a space means both "my request" (`useMySpacePendingRequests`, a single `getDoc` by uid — no query at all) and "requests for my space" (`where('spaceId','==',spaceId)`, used by the space creator's review UI) work without `collectionGroup` or any manual index.

@@ -86,7 +86,10 @@ service cloud.firestore {
           && getInviteHouseholdAfter().data.inviteCode == inviteCode;
       }
 
-      allow read: if request.auth != null;
+      // get() only — a household is joined by knowing its exact code, not
+      // by enumerating every code, so listing this collection is denied.
+      allow get: if request.auth != null;
+      allow list: if false;
       allow create: if isInviteCodeCreateValid();
       allow update: if false;
       allow delete: if false;
@@ -108,13 +111,26 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.lastEditedAt);
       }
 
+      // A member being added must correspond to a real pending request that
+      // existed before this write and is deleted in the same commit — the
+      // client batch is not itself a security boundary.
+      function isApprovedMemberAddition() {
+        let addedUids = request.resource.data.members.removeAll(resource.data.members);
+        return addedUids.size() == 1
+          && exists(/databases/$(database)/documents/apps/nine-lives/pendingRequests/$(addedUids[0] + '_' + householdId))
+          && !existsAfter(/databases/$(database)/documents/apps/nine-lives/pendingRequests/$(addedUids[0] + '_' + householdId));
+      }
+
       function isHouseholdUpdateValid() {
         return request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.members.size() >= resource.data.members.size()
           && request.resource.data.members.hasAll(resource.data.members)
-          && request.resource.data.inviteCode == resource.data.inviteCode
+          && (
+            request.resource.data.members == resource.data.members
+              || isApprovedMemberAddition()
+          )
+          && (request.resource.data.inviteCode == resource.data.inviteCode || resource.data.inviteCode == null)
           && isTimestampNumber(request.resource.data.lastEditedAt);
       }
 
@@ -149,6 +165,9 @@ service cloud.firestore {
           && request.auth.uid == request.resource.data.uid
           && exists(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId))
           && !isHouseholdMember(request.resource.data.householdId)
+          // The submitted code must be the household's real invite code —
+          // knowing a householdId alone must never be enough to request in.
+          && get(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)).data.inviteCode == request.resource.data.inviteCode
           && isPendingRequestIdentityValid();
       }
 
@@ -336,7 +355,10 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(resource.data.spaceId)).data.createdBy == request.auth.uid;
       }
 
-      allow read: if request.auth != null;
+      // get() only — a space is joined by knowing its exact code, not by
+      // enumerating every code, so listing this collection is denied.
+      allow get: if request.auth != null;
+      allow list: if false;
       allow create: if isInviteCodeCreateValid();
       allow delete: if isInviteCodeDeleteValid();
     }
@@ -346,6 +368,8 @@ service cloud.firestore {
         return request.resource.data.uid == uid
           && request.resource.data.spaceId is string
           && request.resource.data.spaceId.size() > 0
+          && request.resource.data.inviteCode is string
+          && request.resource.data.inviteCode.size() > 0
           && request.resource.data.requestedAt is number;
       }
 
@@ -361,6 +385,9 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId))
           && !isSpaceMemberForRequest(request.resource.data.spaceId)
           && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId)).data.members.size() < 2
+          // The submitted code must be the space's real invite code —
+          // knowing a spaceId alone must never be enough to request in.
+          && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId)).data.inviteCode == request.resource.data.inviteCode
           && isPendingRequestIdentityValid();
       }
 
@@ -413,6 +440,16 @@ service cloud.firestore {
 
       // Which uid is being approved isn't re-checked here; mirrors Nine
       // Lives' isHouseholdUpdateValid, which doesn't cross-check either.
+      // A member being added must correspond to a real pending request that
+      // existed before this write and is deleted in the same commit — the
+      // client batch is not itself a security boundary.
+      function isApprovedMemberAddition() {
+        let addedUids = request.resource.data.members.removeAll(resource.data.members);
+        return addedUids.size() == 1
+          && exists(/databases/$(database)/documents/apps/worth-the-wait/pendingRequests/$(addedUids[0]))
+          && !existsAfter(/databases/$(database)/documents/apps/worth-the-wait/pendingRequests/$(addedUids[0]));
+      }
+
       function isApprovalValid() {
         return request.auth != null
           && request.auth.uid == resource.data.createdBy
@@ -425,6 +462,7 @@ service cloud.firestore {
           && request.resource.data.encryption == resource.data.encryption
           && request.resource.data.members.size() == resource.data.members.size() + 1
           && request.resource.data.members.hasAll(resource.data.members)
+          && isApprovedMemberAddition()
           && request.resource.data.updatedAt is number;
       }
 
