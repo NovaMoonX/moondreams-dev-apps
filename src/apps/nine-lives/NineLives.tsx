@@ -90,8 +90,6 @@ function NineLives() {
       await dispatch(
         requestToJoinHousehold({ uid: user.uid, inviteCode }),
       ).unwrap();
-      // Stay on Nine Lives and close the modal — the pending request now
-      // shows on this same screen instead of navigating the user away.
       setIsSetupModalDismissed(true);
     } finally {
       setIsSubmitting(false);
@@ -100,7 +98,7 @@ function NineLives() {
 
   const handleCloseSetupModal = () => {
     setSelectedHouseholdId(null);
-    navigate('/');
+    setIsSetupModalDismissed(true);
   };
 
   if (loading) {
