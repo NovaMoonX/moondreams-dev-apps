@@ -61,12 +61,19 @@ export function useUserInfo(
 
   const [users, setUsers] = useState<UserInfo[]>([]);
 
+  // Key on the id set's content, not `ids`' array identity — callers often
+  // pass a freshly-mapped/filtered array each render, which would otherwise
+  // tear down and resubscribe every listener on every unrelated re-render.
+  const idsKey = ids.join(',');
+
   useEffect(() => {
-    if (ids.length === 0) {
+    if (idsKey === '') {
       return;
     }
 
-    const listeners = ids.map((uid) => {
+    const currentIds = idsKey.split(',');
+
+    const listeners = currentIds.map((uid) => {
       const userDocRef = doc(db, 'users', uid);
 
       return onSnapshot(userDocRef, (docSnapshot) => {
@@ -82,7 +89,7 @@ export function useUserInfo(
     return () => {
       listeners.forEach((unsubscribe) => unsubscribe());
     };
-  }, [ids]);
+  }, [idsKey]);
 
   const usersMap = useMemo(
     () =>

@@ -5,6 +5,7 @@ import { useAuth } from '@hooks/useAuth';
 import Loading from '@/ui/Loading';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import MySpacePendingRequests from './components/MySpacePendingRequests';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
 import WorthTheWaitLayout from './components/WorthTheWaitLayout';
@@ -12,6 +13,7 @@ import { WorthTheWaitProvider } from './context/WorthTheWaitProvider';
 import { useBoxes } from './hooks/useBoxes';
 import { useItems } from './hooks/useItems';
 import { useMemberUpdates } from './hooks/useMemberUpdates';
+import { useMySpacePendingRequests } from './hooks/useMySpacePendingRequests';
 import { useSpace } from './hooks/useSpace';
 import {
   SPACE_CODE_LENGTH,
@@ -34,7 +36,9 @@ function WorthTheWait() {
     isCreatingSpace,
     joinRequestSent,
     declinePendingMember,
+    cancelJoinRequest,
   } = useSpace(user?.uid ?? '');
+  const myPendingRequests = useMySpacePendingRequests(user?.uid ?? null);
 
   const [
     hasPendingApprovalModalBeenDismissed,
@@ -122,12 +126,19 @@ function WorthTheWait() {
           appName='Worth the Wait'
           onEnterApp={() => setHasOnboardingModalBeenDismissed(false)}
           onBackHome={() => navigate('/')}
-        />
+        >
+          {myPendingRequests.length > 0 && (
+            <div className='mx-auto max-w-2xl'>
+              <MySpacePendingRequests requests={myPendingRequests} onCancel={cancelJoinRequest} />
+            </div>
+          )}
+        </AppEntryFallback>
       )}
 
       {!shouldOnboardingBeOpen && (
         <WorthTheWaitProvider
           space={space}
+          pendingMember={pendingMember}
           boxes={boxes}
           boxesLoading={boxesLoading}
           createCustomBox={createCustomBox}

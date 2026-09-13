@@ -43,10 +43,10 @@ function getPresenceStatus({
 
 function PresenceBadge({ className }: PresenceBadgeProps) {
   const { user } = useAuth();
-  const { space, forceOpenPendingApprovalModal } = useWorthTheWait();
+  const { space, pendingMember, forceOpenPendingApprovalModal } = useWorthTheWait();
 
-  const partnerUid = getPartnerUid(space, user);
-  const showPendingState = Boolean(space && space.pendingMember && !partnerUid);
+  const partnerUid = getPartnerUid(space, user, pendingMember);
+  const showPendingState = Boolean(space && pendingMember && !partnerUid);
   const presence = usePresence(partnerUid, 'worth-the-wait');
   const avatarUser = useUserInfo(partnerUid);
 

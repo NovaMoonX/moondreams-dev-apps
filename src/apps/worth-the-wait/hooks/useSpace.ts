@@ -1,10 +1,12 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
-  updateDoc,
+  setDoc,
   where,
   writeBatch,
   type DocumentData,
@@ -12,7 +14,9 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { db } from '@lib/firebase/config';
+import { getUniqueInviteCode } from '@lib/firebase/firestore';
 import { createSpaceEncryptionKey, normalizeSpaceEncryption } from '../security';
+import { SPACE_CODE_LENGTH } from '../utils/generateCode';
 
 import type { ActiveAction, PendingMember, Space } from '../types';
 
@@ -27,6 +31,12 @@ const INVITE_CODE_COLLECTION = collection(
 function createInviteCodeRef(inviteCode: string) {
   const result = doc(INVITE_CODE_COLLECTION, inviteCode);
   return result;
+}
+
+const PENDING_REQUESTS_COLLECTION = collection(db, 'apps', 'worth-the-wait', 'pendingRequests');
+
+function pendingRequestRef(uid: string) {
+  return doc(PENDING_REQUESTS_COLLECTION, uid);
 }
 
 function normalizeActiveAction(value: unknown): ActiveAction | null {
@@ -117,9 +127,6 @@ function normalizeWelcomeSeenBy(value: unknown): Record<string, number> {
 }
 
 function normalizeSpace(id: string, data: DocumentData): Space {
-  const pendingMemberValue = data.pendingMember as
-    Record<string, unknown> | null | undefined;
-
   const now = Date.now();
 
   return {
@@ -129,19 +136,16 @@ function normalizeSpace(id: string, data: DocumentData): Space {
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : now,
     members: Array.isArray(data.members) ? data.members.map(String) : [],
     inviteCode: typeof data.inviteCode === 'string' ? data.inviteCode : null,
-    pendingMember:
-      pendingMemberValue && typeof pendingMemberValue.uid === 'string'
-        ? {
-            uid: pendingMemberValue.uid,
-            requestedAt:
-              typeof pendingMemberValue.requestedAt === 'number'
-                ? pendingMemberValue.requestedAt
-                : Date.now(),
-          }
-        : null,
     activeAction: normalizeActiveAction(data.activeAction),
     welcomeSeenBy: normalizeWelcomeSeenBy(data.welcomeSeenBy),
     encryption: normalizeSpaceEncryption(data.encryption ?? null),
+  };
+}
+
+function normalizePendingMember(id: string, data: DocumentData): PendingMember {
+  return {
+    uid: typeof data.uid === 'string' ? data.uid : id,
+    requestedAt: typeof data.requestedAt === 'number' ? data.requestedAt : Date.now(),
   };
 }
 
@@ -157,6 +161,7 @@ export function useSpace(userUid: string) {
   const [joinRequestSent, setJoinRequestSent] = useState(false);
   const [loading, setLoading] = useState(Boolean(userUid));
   const [error, setError] = useState<string | null>(null);
+  const [spaceId_, setSpaceId_] = useState<string | null>(null);
 
   if (userUid !== userUid_) {
     setUserUid_(userUid);
@@ -175,16 +180,13 @@ export function useSpace(userUid: string) {
     }
 
     let isActive = true;
-    let nextActiveSpace: Space | null = null;
-    let nextPendingMember: PendingMember | null = null;
 
+    // Only query by `members` — the creator is always written into `members`
+    // at creation, and a separate createdBy query isn't provably safe under
+    // the member-only read rule (Firestore can deny it in isolation).
     const activeQuery = query(
       SPACE_COLLECTION,
       where('members', 'array-contains', userUid),
-    );
-    const creatorQuery = query(
-      SPACE_COLLECTION,
-      where('createdBy', '==', userUid),
     );
 
     const activeUnsubscribe = onSnapshot(
@@ -194,13 +196,12 @@ export function useSpace(userUid: string) {
           return;
         }
 
-        nextActiveSpace =
+        const nextActiveSpace =
           snapshot.docs.length > 0
             ? normalizeSpace(snapshot.docs[0].id, snapshot.docs[0].data())
             : null;
 
-        setSpace(nextActiveSpace ?? null);
-        setPendingMember(nextPendingMember);
+        setSpace(nextActiveSpace);
         setLoading(false);
       },
       (queryError) => {
@@ -213,23 +214,45 @@ export function useSpace(userUid: string) {
       },
     );
 
-    const creatorUnsubscribe = onSnapshot(
-      creatorQuery,
+    return () => {
+      isActive = false;
+      activeUnsubscribe();
+    };
+  }, [userUid]);
+
+  // Pending join requests live in their own top-level collection (not a
+  // field on the space doc itself) so a not-yet-approved requester never
+  // needs read access to the space doc, which carries its encryption key.
+  const spaceId = space?.id ?? null;
+
+  if (spaceId !== spaceId_) {
+    setSpaceId_(spaceId);
+    setPendingMember(null);
+  }
+
+  useEffect(() => {
+    if (!spaceId) {
+      return;
+    }
+
+    let isActive = true;
+
+    const spaceRequestsQuery = query(
+      PENDING_REQUESTS_COLLECTION,
+      where('spaceId', '==', spaceId),
+    );
+
+    const unsubscribe = onSnapshot(
+      spaceRequestsQuery,
       (snapshot) => {
         if (!isActive) {
           return;
         }
 
-        const creatorSpaces = snapshot.docs.map((documentSnapshot) =>
-          normalizeSpace(documentSnapshot.id, documentSnapshot.data()),
+        const firstRequest = snapshot.docs[0];
+        setPendingMember(
+          firstRequest ? normalizePendingMember(firstRequest.id, firstRequest.data()) : null,
         );
-
-        const creatorSpace = creatorSpaces[0] ?? null;
-        const nextPending = creatorSpace?.pendingMember ?? null;
-
-        nextPendingMember = nextPending;
-        setPendingMember(nextPending);
-        setSpace(nextActiveSpace ?? creatorSpace ?? null);
       },
       (queryError) => {
         if (!isActive) {
@@ -242,10 +265,9 @@ export function useSpace(userUid: string) {
 
     return () => {
       isActive = false;
-      activeUnsubscribe();
-      creatorUnsubscribe();
+      unsubscribe();
     };
-  }, [userUid]);
+  }, [spaceId]);
 
   const createSpace = useCallback(
     async (inviteCode: string) => {
@@ -257,7 +279,11 @@ export function useSpace(userUid: string) {
 
       try {
         const spaceRef = doc(SPACE_COLLECTION);
-        const inviteCodeRef = createInviteCodeRef(inviteCode);
+        const uniqueInviteCode = await getUniqueInviteCode(INVITE_CODE_COLLECTION, {
+          length: SPACE_CODE_LENGTH,
+          preferredCode: inviteCode,
+        });
+        const inviteCodeRef = createInviteCodeRef(uniqueInviteCode);
         const now = Date.now();
         const encryption = createSpaceEncryptionKey();
         const payload = {
@@ -265,21 +291,12 @@ export function useSpace(userUid: string) {
           createdBy: userUid,
           createdAt: now,
           members: [userUid],
-          inviteCode,
-          pendingMember: null,
+          inviteCode: uniqueInviteCode,
           activeAction: null,
           welcomeSeenBy: {},
           encryption,
           updatedAt: now,
         };
-
-        const existingInviteCodeSnapshot = await getDoc(inviteCodeRef);
-
-        if (existingInviteCodeSnapshot.exists()) {
-          throw new Error(
-            'That invite code is already in use. Close this modal and try again.',
-          );
-        }
 
         const batch = writeBatch(db);
         batch.set(spaceRef, payload);
@@ -292,7 +309,7 @@ export function useSpace(userUid: string) {
         setPendingMember(null);
         setError(null);
         setIsCreatingSpace(false);
-        return inviteCode;
+        return uniqueInviteCode;
       } catch (createError) {
         setIsCreatingSpace(false);
         throw createError;
@@ -346,24 +363,28 @@ export function useSpace(userUid: string) {
       }
 
       try {
-        const requestedAt = Date.now();
-        const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
+        const requestRef = pendingRequestRef(userUid);
+        const existingRequestSnapshot = await getDoc(requestRef);
 
-        await updateDoc(spaceRef, {
-          pendingMember: {
-            uid: userUid,
-            requestedAt,
-          },
-          updatedAt: requestedAt,
+        if (existingRequestSnapshot.exists()) {
+          handleThrowError('You already have a pending request to join this space.');
+        }
+
+        const requestedAt = Date.now();
+
+        await setDoc(requestRef, {
+          uid: userUid,
+          spaceId,
+          requestedAt,
         });
 
         setError(null);
         setIsJoiningSpace(false);
         setJoinRequestSent(true);
-      } catch (updateError) {
+      } catch (writeError) {
         handleThrowError(
           'Unable to request access to this space. It may already be full or unavailable.',
-          updateError,
+          writeError,
         );
       }
 
@@ -373,18 +394,19 @@ export function useSpace(userUid: string) {
   );
 
   const approvePendingMember = useCallback(async () => {
-    if (!space || !space.pendingMember) {
+    if (!space || !pendingMember) {
       throw new Error('There is no pending member to approve.');
     }
 
-    const nextMembers = Array.from(
-      new Set([...space.members, space.pendingMember.uid]),
-    );
+    const nextMembers = Array.from(new Set([...space.members, pendingMember.uid]));
     const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', space.id);
+    const requestsSnapshot = await getDocs(
+      query(PENDING_REQUESTS_COLLECTION, where('spaceId', '==', space.id)),
+    );
+
     const batch = writeBatch(db);
     batch.update(spaceRef, {
       members: nextMembers,
-      pendingMember: null,
       inviteCode: null,
       activeAction: null,
       welcomeSeenBy: {
@@ -395,12 +417,14 @@ export function useSpace(userUid: string) {
     if (space.inviteCode) {
       batch.delete(createInviteCodeRef(space.inviteCode));
     }
+    // The space is now full — clear the approved request and any other
+    // stray ones (a second person may have requested in the meantime).
+    requestsSnapshot.docs.forEach((requestDoc) => batch.delete(requestDoc.ref));
     await batch.commit();
 
     setSpace({
       ...space,
       members: nextMembers,
-      pendingMember: null,
       inviteCode: null,
       activeAction: null,
     });
@@ -408,27 +432,26 @@ export function useSpace(userUid: string) {
     setError(null);
 
     return nextMembers;
-  }, [space]);
+  }, [space, pendingMember]);
 
   const declinePendingMember = useCallback(async () => {
-    if (!space || !space.pendingMember) {
+    if (!space || !pendingMember) {
       return;
     }
 
-    const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', space.id);
-
-    await updateDoc(spaceRef, {
-      pendingMember: null,
-      updatedAt: Date.now(),
-    });
+    await deleteDoc(pendingRequestRef(pendingMember.uid));
 
     setPendingMember(null);
-    setSpace({
-      ...space,
-      pendingMember: null,
-    });
     setError(null);
-  }, [space]);
+  }, [space, pendingMember]);
+
+  const cancelJoinRequest = useCallback(async () => {
+    if (!userUid) {
+      return;
+    }
+
+    await deleteDoc(pendingRequestRef(userUid));
+  }, [userUid]);
 
   const value = useMemo(
     () => ({
@@ -444,9 +467,11 @@ export function useSpace(userUid: string) {
       joinSpace,
       approvePendingMember,
       declinePendingMember,
+      cancelJoinRequest,
     }),
     [
       approvePendingMember,
+      cancelJoinRequest,
       createSpace,
       declinePendingMember,
       error,

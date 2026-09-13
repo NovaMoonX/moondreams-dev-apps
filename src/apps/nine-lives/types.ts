@@ -11,6 +11,7 @@ export interface Household {
 export interface PendingHouseholdRequest {
   uid: string;
   householdId: string;
+  inviteCode: string;
   requestedAt: number;
 }
 

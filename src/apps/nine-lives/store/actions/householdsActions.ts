@@ -1,7 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import type { RootState } from '@/store';
 import type { Household } from '@apps/nine-lives/types';
 
@@ -12,37 +13,9 @@ interface CreateHouseholdInput {
   name: string;
 }
 
-const HOUSEHOLD_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const HOUSEHOLD_CODE_LENGTH = 6;
+export const HOUSEHOLD_CODE_LENGTH = 6;
 
 const INVITE_CODE_COLLECTION = collection(db, 'apps', 'nine-lives', 'inviteCodes');
-
-function generateHouseholdInviteCode() {
-  let code = '';
-
-  for (let index = 0; index < HOUSEHOLD_CODE_LENGTH; index += 1) {
-    code +=
-      HOUSEHOLD_CODE_ALPHABET[
-        Math.floor(Math.random() * HOUSEHOLD_CODE_ALPHABET.length)
-      ];
-  }
-
-  return code;
-}
-
-async function getUniqueHouseholdInviteCode(): Promise<string> {
-  let candidate = generateHouseholdInviteCode();
-
-  while (true) {
-    const snapshot = await getDoc(doc(INVITE_CODE_COLLECTION, candidate));
-
-    if (!snapshot.exists()) {
-      return candidate;
-    }
-
-    candidate = generateHouseholdInviteCode();
-  }
-}
 
 export const createHousehold = createAsyncThunk<
   Household,
@@ -59,7 +32,9 @@ export const createHousehold = createAsyncThunk<
 
     const householdId = doc(collection(db, 'apps', 'nine-lives', 'households')).id;
     const now = Date.now();
-    const inviteCode = await getUniqueHouseholdInviteCode();
+    const inviteCode = await getUniqueInviteCode(INVITE_CODE_COLLECTION, {
+      length: HOUSEHOLD_CODE_LENGTH,
+    });
     const household: Household = {
       id: householdId,
       name: trimmedName,

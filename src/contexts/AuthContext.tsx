@@ -67,12 +67,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       dispatch(setCurrentUser(nextUserState));
       setUser(firebaseUser);
+      // Auth state itself is already known here — don't hold the loading
+      // gate open waiting on background Firestore writes below (profile
+      // sync, admin app provisioning). Those aren't required to render the
+      // app and can be slow on a cold local emulator.
+      setLoading(false);
 
       if (firebaseUser) {
         const isAdminUser =
           firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
         const profileRef = doc(db, 'users', firebaseUser.uid);
-        await setDoc(
+
+        setDoc(
           profileRef,
           {
             uid: firebaseUser.uid,
@@ -82,18 +88,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
             isAdmin: isAdminUser,
           },
           { merge: true },
-        );
-
-        // await ensureDocExists(profileRef, {
-        //   uid: firebaseUser.uid,
-        //   email: firebaseUser.email ?? '',
-        //   displayName: firebaseUser.displayName ?? firebaseUser.email ?? '',
-        //   photoURL: firebaseUser.photoURL ?? '',
-        //   isAdmin: isAdminUser,
-        // });
+        ).catch((error) => console.error('Failed to sync user profile:', error));
 
         if (isAdminUser) {
-          await Promise.all(
+          Promise.all(
             APP_REGISTRY.map(async (app) => {
               const defaultData = {
                 id: app.id,
@@ -112,11 +110,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
               const docRef = doc(db, 'apps', app.id);
               await ensureDocExists(docRef, defaultData);
             }),
-          );
+          ).catch((error) => console.error('Failed to provision app registry:', error));
         }
       }
-
-      setLoading(false);
     });
 
     return () => unsubscribe();

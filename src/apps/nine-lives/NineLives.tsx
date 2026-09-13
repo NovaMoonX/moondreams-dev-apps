@@ -14,7 +14,9 @@ import CatsSection from './components/CatsSection';
 import ClinicsSection from './components/ClinicsSection';
 import HouseholdSetupModal from './components/HouseholdSetupModal';
 import HouseholdSwitcher from './components/HouseholdSwitcher';
+import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
 import StatsSummary from './components/StatsSummary';
+import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import { createHousehold } from './store/actions/householdsActions';
 import { requestToJoinHousehold } from './store/actions/pendingRequestsActions';
@@ -52,6 +54,7 @@ function NineLives() {
   }, [households, selectedHouseholdId]);
 
   useNineLivesSync(selectedHousehold?.id ?? null, user?.uid ?? null);
+  const myPendingRequests = useMyPendingHouseholdRequests(user?.uid ?? null);
 
   const defaultHouseholdName = useMemo(
     () => (user?.displayName ? `${user.displayName}'s household` : 'My household'),
@@ -87,8 +90,9 @@ function NineLives() {
       await dispatch(
         requestToJoinHousehold({ uid: user.uid, inviteCode }),
       ).unwrap();
-      setIsSetupModalDismissed(false);
-      navigate('/');
+      // Stay on Nine Lives and close the modal — the pending request now
+      // shows on this same screen instead of navigating the user away.
+      setIsSetupModalDismissed(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -107,27 +111,38 @@ function NineLives() {
     return <AuthRequiredState message='Please sign in to use Nine Lives.' />;
   }
 
-  if (households.length === 0 && isSetupModalDismissed) {
-    return (
-      <AppEntryFallback
-        appName='Nine Lives'
-        onEnterApp={() => setIsSetupModalDismissed(false)}
-        onBackHome={() => navigate('/')}
-      />
-    );
-  }
-
   if (households.length === 0) {
+    const pendingRequestsContent = myPendingRequests.length > 0 && (
+      <div className='mx-auto max-w-2xl'>
+        <MyPendingHouseholdRequests requests={myPendingRequests} />
+      </div>
+    );
+
+    if (isSetupModalDismissed) {
+      return (
+        <AppEntryFallback
+          appName='Nine Lives'
+          onEnterApp={() => setIsSetupModalDismissed(false)}
+          onBackHome={() => navigate('/')}
+        >
+          {pendingRequestsContent}
+        </AppEntryFallback>
+      );
+    }
+
     return (
-      <HouseholdSetupModal
-        key={`${user.uid}-${defaultHouseholdName}`}
-        isOpen
-        defaultName={defaultHouseholdName}
-        isSubmitting={isSubmitting}
-        onCreate={handleCreateFirstHousehold}
-        onJoin={handleJoinFirstHousehold}
-        onClose={handleCloseSetupModal}
-      />
+      <>
+        {pendingRequestsContent && <div className='page pb-0!'>{pendingRequestsContent}</div>}
+        <HouseholdSetupModal
+          key={`${user.uid}-${defaultHouseholdName}`}
+          isOpen
+          defaultName={defaultHouseholdName}
+          isSubmitting={isSubmitting}
+          onCreate={handleCreateFirstHousehold}
+          onJoin={handleJoinFirstHousehold}
+          onClose={handleCloseSetupModal}
+        />
+      </>
     );
   }
 

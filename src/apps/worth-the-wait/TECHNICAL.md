@@ -27,9 +27,9 @@ When a user opens Worth the Wait without an active space, they are presented wit
 
 1. **Option Selection:**
    * **Create Space:** User A creates a space. User A becomes member #1 (createdBy = uidA), member array is initialized (members = [uidA]), and an inviteCode is generated. A lightweight lookup doc is also written at `apps/worth-the-wait/inviteCodes/{code}` with the matching `spaceId`.
-   * **Join Space:** User B enters an inviteCode. The app reads `apps/worth-the-wait/inviteCodes/{code}` to resolve the `spaceId`, then submits a join request by writing `pendingMember` on that space.
+   * **Join Space:** User B enters an inviteCode. The app reads `apps/worth-the-wait/inviteCodes/{code}` to resolve the `spaceId`, then submits a join request by writing to `apps/worth-the-wait/pendingRequests/{uidB}` (mirrors Nine Lives' top-level `pendingRequests` collection) — never to the space document itself, since that document carries the encryption key and must stay unreadable to anyone who isn't yet a member.
 2. **Approval Step:** User A receives an in-app prompt to accept or decline User B's join request.  
-3. **Space Lock:** Upon approval, User B is added to members (members.length == 2), pendingMember is cleared, the `inviteCodes/{code}` lookup is removed, inviteCode is invalidated, and no further users may join.
+3. **Space Lock:** Upon approval, User B is added to members (members.length == 2), the `pendingRequests/{uidB}` doc (and any other stray pending requests for the space) are deleted, the `inviteCodes/{code}` lookup is removed, inviteCode is invalidated, and no further users may join.
 
 ## **Data Schema**
 
@@ -44,9 +44,10 @@ Represents the shared environment between the two partners.
 | createdAt | timestamp | Timestamp when space was created |
 | members | array<string> | Array of active member UIDs ([uidA, uidB]) |
 | inviteCode | string | null | Short string for partner pairing (cleared once locked) |
-| pendingMember | map | null | Pending request ({ uid: string, requestedAt: timestamp }) |
 | activeAction | map | null | Currently active synchronous action state (Full Reveal or Raffle) |
 | encryption | map | null | Per-space AES-256-GCM key bundle with `keyId`, `keyVersion`, and the raw secret key for the active member set |
+
+Readable only by current `members` — never by a pending (not-yet-approved) requester, since this document carries the encryption key.
 
 ### **apps/worth-the-wait/inviteCodes/{code}**
 
@@ -55,6 +56,20 @@ Lightweight invite lookup used before a user is approved into a private space.
 | Field | Type | Description |
 | :---- | :---- | :---- |
 | spaceId | string | Target private space document ID |
+
+### **apps/worth-the-wait/pendingRequests/{uid}**
+
+A join request, keyed by the requester's own uid — top-level (sibling to `spaces`, not nested under one), enforced by the security rule, so a user can only ever have one open request across all of Worth the Wait, and can never write one as someone else.
+
+| Field | Type | Description |
+| :---- | :---- | :---- |
+| uid | string | UID of the requesting user |
+| spaceId | string | Target space document ID |
+| requestedAt | timestamp | When the request was submitted |
+
+Being flat rather than nested under a space means both "my request" (`useMySpacePendingRequests`, a single `getDoc` by uid — no query at all) and "requests for my space" (`where('spaceId','==',spaceId)`, used by the space creator's review UI) work without `collectionGroup` or any manual index.
+
+Readable by the requester themselves (so the client can tell "I already have a pending request" without touching the space doc) and by any current space member (to review and approve/decline it).
 
 ### **apps/worth-the-wait/spaces/{spaceId}/boxes/{boxId}**
 
@@ -232,7 +247,7 @@ Execution is strictly handled via the Cloud Function callable endpoint (triggerB
 * **App Namespacing:** All database transactions and security rules are restricted to paths prefixed with apps/worth-the-wait/.
 * **Space Membership Guard:** Reads of `spaces/{spaceId}` and all space subresources are restricted strictly to authenticated users listed in `members`.
 * **Invite Lookup Privacy:** `inviteCodes/{code}` can be read by authenticated users because it only exposes a `spaceId` mapping and no private space payload.
-* **Join Approval Security:** Pending users can write a join request to `pendingMember` during initial pairing, but cannot read the space, boxes, or items until accepted into `members`.
+* **Join Approval Security:** Pending users can write their own join request to `pendingRequests/{uid}`, and read that one document back, but cannot read the space document (or its encryption key), boxes, or items until accepted into `members`.
 * **Item Privacy (Unrevealed State):** Unrevealed items (isRevealed == false) created by a partner remain strictly unqueryable and unreadable by the non-author until flipped to isRevealed == true via Cloud Functions.
 * **Author Integrity:** Users may only write, edit, or delete items where authorId matches their authenticated UID.
 

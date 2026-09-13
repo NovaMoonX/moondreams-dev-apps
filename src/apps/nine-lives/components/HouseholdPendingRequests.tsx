@@ -1,9 +1,10 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import UserAvatar from '@/ui/UserAvatar';
-import { formatDateTime } from '@/utils/formatUtils';
+import { formatDateTime, getErrorMessage } from '@/utils';
 
 import {
   approveRequest,
@@ -16,6 +17,7 @@ interface HouseholdPendingRequestsProps {
 
 function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps) {
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
   const requests = useAppSelector((state) =>
     state.nineLives.pendingRequests.items.filter(
       (request) => request.householdId === householdId,
@@ -23,6 +25,30 @@ function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps
   );
   const userInfo = useUserInfo(requests.map((request) => request.uid));
   const members = userInfo?.users ?? [];
+
+  const handleApprove = async (uid: string) => {
+    try {
+      await dispatch(approveRequest({ householdId, uid })).unwrap();
+    } catch (error) {
+      addToast({
+        title: 'Unable to accept request',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
+
+  const handleDecline = async (uid: string) => {
+    try {
+      await dispatch(declineRequest({ householdId, uid })).unwrap();
+    } catch (error) {
+      addToast({
+        title: 'Unable to decline request',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
 
   if (requests.length === 0) {
     return null;
@@ -60,11 +86,7 @@ function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps
                 <Button
                   type='button'
                   size='sm'
-                  onClick={() =>
-                    dispatch(
-                      approveRequest({ householdId, uid: request.uid }),
-                    ).unwrap()
-                  }
+                  onClick={() => handleApprove(request.uid)}
                 >
                   Accept
                 </Button>
@@ -72,11 +94,7 @@ function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps
                   type='button'
                   variant='secondary'
                   size='sm'
-                  onClick={() =>
-                    dispatch(
-                      declineRequest({ householdId, uid: request.uid }),
-                    ).unwrap()
-                  }
+                  onClick={() => handleDecline(request.uid)}
                 >
                   Decline
                 </Button>

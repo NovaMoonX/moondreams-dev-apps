@@ -59,7 +59,6 @@ export async function seedWorthTheWait(
       updatedAt: context.now,
       members: [firstMember.uid, secondMember.uid],
       inviteCode: null,
-      pendingMember: null,
       activeAction: null,
       encryption: SEED_SPACE_ENCRYPTION,
     },

@@ -1,4 +1,4 @@
-import { collection, query, type Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
@@ -14,23 +14,13 @@ export function startPendingRequestsListener(
   }
 
   const pendingRequestQuery = query(
-    collection(
-      db,
-      'apps',
-      'nine-lives',
-      'households',
-      householdId,
-      'pendingRequests',
-    ),
+    collection(db, 'apps', 'nine-lives', 'pendingRequests'),
+    where('householdId', '==', householdId),
   );
 
   return createFirestoreCollectionListener<PendingHouseholdRequest>({
     query: pendingRequestQuery,
-    normalize: (id, data) => ({
-      uid: id,
-      householdId,
-      ...(data as Omit<PendingHouseholdRequest, 'uid' | 'householdId'>),
-    }),
+    normalize: (_id, data) => data as PendingHouseholdRequest,
     onData: onChange,
   });
 }

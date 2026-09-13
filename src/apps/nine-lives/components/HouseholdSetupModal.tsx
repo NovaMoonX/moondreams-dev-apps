@@ -2,6 +2,9 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useState } from 'react';
 
 import CreateOrJoinModal from '@/ui/CreateOrJoinModal';
+import { getErrorMessage } from '@/utils';
+
+import { HOUSEHOLD_CODE_LENGTH } from '../store/actions/householdsActions';
 
 interface HouseholdSetupModalProps {
   isOpen: boolean;
@@ -36,9 +39,7 @@ function HouseholdSetupModal({
     try {
       await onCreate(trimmedName);
     } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : 'Unable to create your household.',
-      );
+      setCreateError(getErrorMessage(error, 'Unable to create your household.'));
     }
   };
 
@@ -69,7 +70,7 @@ function HouseholdSetupModal({
         </>
       }
       joinDescription='Enter the code shared by someone already in the household.'
-      inviteCodeLength={6}
+      inviteCodeLength={HOUSEHOLD_CODE_LENGTH}
       joinFieldName='nine-lives-household-invite-code'
       onJoin={onJoin}
     />

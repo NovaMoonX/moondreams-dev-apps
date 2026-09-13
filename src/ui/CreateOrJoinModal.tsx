@@ -9,6 +9,8 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useState, type ReactNode } from 'react';
 
+import { getErrorMessage } from '@/utils';
+
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -74,9 +76,7 @@ function CreateOrJoinModal({
     try {
       await onJoin(trimmedCode);
     } catch (error) {
-      setJoinError(
-        error instanceof Error ? error.message : `Unable to join this ${noun}.`,
-      );
+      setJoinError(getErrorMessage(error, `Unable to join this ${noun}.`));
     }
   };
 

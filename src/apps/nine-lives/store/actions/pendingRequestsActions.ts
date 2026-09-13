@@ -3,6 +3,7 @@ import { deleteDoc, doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
+import { getErrorMessage } from '@/utils';
 import type { Household, PendingHouseholdRequest } from '@apps/nine-lives/types';
 
 import { upsertHousehold } from '../slices/householdsSlice';
@@ -10,6 +11,10 @@ import {
   removePendingRequest,
   upsertPendingRequest,
 } from '../slices/pendingRequestsSlice';
+
+function pendingRequestId(uid: string, householdId: string) {
+  return `${uid}_${householdId}`;
+}
 
 export const requestToJoinHousehold = createAsyncThunk<
   PendingHouseholdRequest,
@@ -43,22 +48,26 @@ export const requestToJoinHousehold = createAsyncThunk<
       return rejectWithValue('You are already a member of this household.');
     }
 
-    const requestedAt = Date.now();
-    const request: PendingHouseholdRequest = {
-      uid,
-      householdId,
-      requestedAt,
-    };
-
     const requestRef = doc(
       db,
       'apps',
       'nine-lives',
-      'households',
-      householdId,
       'pendingRequests',
-      uid,
+      pendingRequestId(uid, householdId),
     );
+    const existingRequestSnapshot = await getDoc(requestRef);
+
+    if (existingRequestSnapshot.exists()) {
+      return rejectWithValue('You already have a pending request to join this household.');
+    }
+
+    const requestedAt = Date.now();
+    const request: PendingHouseholdRequest = {
+      uid,
+      householdId,
+      inviteCode: trimmedCode,
+      requestedAt,
+    };
 
     await setDoc(requestRef, request);
     dispatch(upsertPendingRequest(request));
@@ -98,10 +107,8 @@ export const approveRequest = createAsyncThunk<
       db,
       'apps',
       'nine-lives',
-      'households',
-      householdId,
       'pendingRequests',
-      uid,
+      pendingRequestId(uid, householdId),
     );
     const requestSnapshot = await getDoc(requestRef);
 
@@ -126,13 +133,12 @@ export const approveRequest = createAsyncThunk<
     batch.delete(requestRef);
     await batch.commit();
 
+    const requestData = requestSnapshot.data();
     const approvedRequest: PendingHouseholdRequest = {
       uid,
       householdId,
-      requestedAt:
-        typeof requestSnapshot.data()?.requestedAt === 'number'
-          ? requestSnapshot.data()!.requestedAt
-          : now,
+      inviteCode: typeof requestData?.inviteCode === 'string' ? requestData.inviteCode : '',
+      requestedAt: typeof requestData?.requestedAt === 'number' ? requestData.requestedAt : now,
     };
 
     dispatch(
@@ -159,10 +165,8 @@ export const declineRequest = createAsyncThunk<
       db,
       'apps',
       'nine-lives',
-      'households',
-      householdId,
       'pendingRequests',
-      uid,
+      pendingRequestId(uid, householdId),
     );
 
     try {
@@ -170,9 +174,7 @@ export const declineRequest = createAsyncThunk<
       dispatch(removePendingRequest({ householdId, uid }));
       return { householdId, uid };
     } catch (error) {
-      return rejectWithValue(
-        error instanceof Error ? error.message : 'Unable to decline request.',
-      );
+      return rejectWithValue(getErrorMessage(error, 'Unable to decline request.'));
     }
   },
 );

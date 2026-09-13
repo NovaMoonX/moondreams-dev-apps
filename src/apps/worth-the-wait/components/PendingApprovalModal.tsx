@@ -26,7 +26,7 @@ function PendingApprovalModal({
   onClose,
 }: PendingApprovalModalProps) {
   const { user } = useAuth();
-  const partnerUid = getPartnerUid(space, user);
+  const partnerUid = getPartnerUid(space, user, pendingMember);
   const avatarUser = useUserInfo(partnerUid);
 
   const memberLabel = useMemo(
