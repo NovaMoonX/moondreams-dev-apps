@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@hooks/useAuth';
 
 import Loading from '@/ui/Loading';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppEntryFallback from '@/ui/AppEntryFallback';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import SpaceOnboardingModal from './components/SpaceOnboardingModal';
@@ -118,21 +118,11 @@ function WorthTheWait() {
       />
 
       {shouldOnboardingBeOpen && hasOnboardingModalBeenDismissed && (
-        <div className='page relative pb-0!'>
-          <Button
-            onClick={() => setHasOnboardingModalBeenDismissed(false)}
-            className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
-          >
-            Enter app
-          </Button>
-          <Button
-            variant='link'
-            onClick={() => navigate('/')}
-            className='absolute top-1/2 left-1/2 mt-12 -translate-x-1/2'
-          >
-            Back home
-          </Button>
-        </div>
+        <AppEntryFallback
+          appName='Worth the Wait'
+          onEnterApp={() => setHasOnboardingModalBeenDismissed(false)}
+          onBackHome={() => navigate('/')}
+        />
       )}
 
       {!shouldOnboardingBeOpen && (

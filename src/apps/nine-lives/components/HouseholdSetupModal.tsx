@@ -1,13 +1,14 @@
 import {
   Button,
   Input,
-  Modal,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useState } from 'react';
+
+import AppSetupModal from '@/ui/AppSetupModal';
 
 interface HouseholdSetupModalProps {
   isOpen: boolean;
@@ -70,9 +71,9 @@ function HouseholdSetupModal({
   };
 
   return (
-    <Modal
+    <AppSetupModal
       isOpen={isOpen}
-      onClose={onClose ?? (() => undefined)}
+      onClose={onClose}
       title='Create or join a household'
       hideCloseButton={false}
     >
@@ -126,7 +127,7 @@ function HouseholdSetupModal({
           </Button>
         </TabsContent>
       </Tabs>
-    </Modal>
+    </AppSetupModal>
   );
 }
 

@@ -5,6 +5,7 @@ import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
@@ -23,6 +24,7 @@ function NineLives() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSetupModalDismissed, setIsSetupModalDismissed] = useState(false);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
 
   const households = useAppSelector((state) => {
@@ -68,6 +70,7 @@ function NineLives() {
         createHousehold({ uid: user.uid, name }),
       ).unwrap();
       setSelectedHouseholdId(createdHousehold.id);
+      setIsSetupModalDismissed(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -84,6 +87,7 @@ function NineLives() {
       await dispatch(
         requestToJoinHousehold({ uid: user.uid, inviteCode }),
       ).unwrap();
+      setIsSetupModalDismissed(false);
       navigate('/');
     } finally {
       setIsSubmitting(false);
@@ -92,7 +96,7 @@ function NineLives() {
 
   const handleCloseSetupModal = () => {
     setSelectedHouseholdId(null);
-    navigate('/');
+    setIsSetupModalDismissed(true);
   };
 
   if (loading) {
@@ -101,6 +105,16 @@ function NineLives() {
 
   if (!user) {
     return <AuthRequiredState message='Please sign in to use Nine Lives.' />;
+  }
+
+  if (households.length === 0 && isSetupModalDismissed) {
+    return (
+      <AppEntryFallback
+        appName='Nine Lives'
+        onEnterApp={() => setIsSetupModalDismissed(false)}
+        onBackHome={() => navigate('/')}
+      />
+    );
   }
 
   if (households.length === 0) {

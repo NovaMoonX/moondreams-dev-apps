@@ -1,8 +1,8 @@
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import AppSetupModal from '@/ui/AppSetupModal';
 import {
   Button,
   Input,
-  Modal,
   Tabs,
   TabsContent,
   TabsList,
@@ -65,7 +65,7 @@ function SpaceOnboardingModal({
   };
 
   return (
-    <Modal
+    <AppSetupModal
       isOpen={isOpen}
       onClose={onClose}
       title={hasJoinBeenSubmitted ? 'Request Sent' : 'Create or join a space'}
@@ -142,7 +142,7 @@ function SpaceOnboardingModal({
           </TabsContent>
         </Tabs>
       )}
-    </Modal>
+    </AppSetupModal>
   );
 }
 
