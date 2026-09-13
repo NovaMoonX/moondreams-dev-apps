@@ -234,6 +234,93 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
     }
 
+    match /apps/nine-lives/households/{householdId}/cats/{catId}/vaccinations/{vaccinationId} {
+      function isVaccinationIdentityValid() {
+        return request.resource.data.id == vaccinationId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.catId == catId;
+      }
+
+      function isVaccinationBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && isTimestampNumber(request.resource.data.administeredAt)
+          && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
+          && (request.resource.data.clinicId == null || request.resource.data.clinicId is string)
+          && (request.resource.data.doctorId == null || request.resource.data.doctorId is string)
+          && (request.resource.data.lotNumber == null || request.resource.data.lotNumber is string)
+          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isVaccinationImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.catId == resource.data.catId
+          && request.resource.data.catId == catId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isVaccinationIdentityValid()
+        && isVaccinationBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isVaccinationImmutableFieldsValid()
+        && isVaccinationBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /{path=**}/vaccinations/{vaccinationId} {
+      allow read: if request.auth != null
+        && resource != null
+        && resource.data.householdId is string
+        && isHouseholdMember(resource.data.householdId);
+      allow create, update, delete: if false;
+    }
+
+    match /apps/nine-lives/households/{householdId}/cats/{catId}/weightEntries/{weightEntryId} {
+      function isWeightEntryIdentityValid() {
+        return request.resource.data.id == weightEntryId
+          && request.resource.data.catId == catId;
+      }
+
+      function isWeightEntryBaseShapeValid() {
+        return request.resource.data.weight is number
+          && request.resource.data.weight > 0
+          && (request.resource.data.unit == 'lb' || request.resource.data.unit == 'kg')
+          && isTimestampNumber(request.resource.data.measuredAt)
+          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isWeightEntryImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.catId == resource.data.catId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isWeightEntryIdentityValid()
+        && isWeightEntryBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isWeightEntryImmutableFieldsValid()
+        && isWeightEntryBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/nine-lives/households/{householdId}/vetClinics/{clinicId} {
       function isVetClinicIdentityValid() {
         return request.resource.data.id == clinicId

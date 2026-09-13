@@ -90,3 +90,30 @@ export interface Doctor {
   notes: string | null;
   createdAt: number;
 }
+
+export interface Vaccination {
+  id: string;
+  householdId: string;
+  catId: string;
+  name: string;
+  administeredAt: number;
+  expiresAt: number | null;
+  clinicId: string | null;
+  doctorId: string | null;
+  lotNumber: string | null;
+  linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface WeightEntry {
+  id: string;
+  catId: string;
+  weight: number;
+  unit: 'lb' | 'kg';
+  measuredAt: number;
+  linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+}
