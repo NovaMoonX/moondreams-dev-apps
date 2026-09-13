@@ -36,6 +36,10 @@ Path: `apps/nine-lives/households/{householdId}/pendingRequests/{uid}`
 
 A pending request is a one-document write for the requester themselves: `{ uid, householdId, requestedAt }`. Any current household member can read the subcollection to review incoming requests and accept or decline them.
 
+Path: `apps/nine-lives/inviteCodes/{inviteCode} -> { householdId }`
+
+A non-member can't read a household doc directly (it's member-scoped), so resolving an invite code before joining goes through this small, world-readable-to-any-signed-in-user lookup collection instead — mirroring Worth the Wait's own `inviteCodes` collection. It's written in the same batch as the household it points to, and never updated or deleted (unlike Worth the Wait's one-time code, a household's code is permanent since membership isn't capped).
+
 ### 2. Cat
 
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}`

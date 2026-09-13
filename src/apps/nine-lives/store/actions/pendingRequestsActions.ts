@@ -1,15 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  setDoc,
-  where,
-  writeBatch,
-} from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -27,37 +17,36 @@ export const requestToJoinHousehold = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/pendingRequests/request',
-  async ({ inviteCode, uid }, { dispatch, rejectWithValue }) => {
+  async ({ inviteCode, uid }, { dispatch, getState, rejectWithValue }) => {
     const trimmedCode = inviteCode.trim().toUpperCase();
 
     if (!trimmedCode) {
       return rejectWithValue('Enter a valid invite code.');
     }
 
-    const householdQuery = query(
-      collection(db, 'apps', 'nine-lives', 'households'),
-      where('inviteCode', '==', trimmedCode),
+    const inviteCodeSnapshot = await getDoc(
+      doc(db, 'apps', 'nine-lives', 'inviteCodes', trimmedCode),
     );
-    const householdSnapshot = await getDocs(householdQuery);
 
-    if (householdSnapshot.empty) {
+    if (!inviteCodeSnapshot.exists()) {
       return rejectWithValue('That invite code does not match a household.');
     }
 
-    const snapshot = householdSnapshot.docs[0];
-    const household = {
-      id: snapshot.id,
-      ...(snapshot.data() as Omit<Household, 'id'>),
-    } as Household;
+    const { householdId } = inviteCodeSnapshot.data() as { householdId: string };
 
-    if (household.members.includes(uid)) {
+    const state = getState() as RootState;
+    const isAlreadyMember = state.nineLives.households.items.some(
+      (item) => item.id === householdId,
+    );
+
+    if (isAlreadyMember) {
       return rejectWithValue('You are already a member of this household.');
     }
 
     const requestedAt = Date.now();
     const request: PendingHouseholdRequest = {
       uid,
-      householdId: household.id,
+      householdId,
       requestedAt,
     };
 
@@ -66,7 +55,7 @@ export const requestToJoinHousehold = createAsyncThunk<
       'apps',
       'nine-lives',
       'households',
-      household.id,
+      householdId,
       'pendingRequests',
       uid,
     );

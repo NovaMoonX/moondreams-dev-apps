@@ -1,14 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  setDoc,
-  updateDoc,
-  where,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -23,6 +14,8 @@ interface CreateHouseholdInput {
 
 const HOUSEHOLD_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const HOUSEHOLD_CODE_LENGTH = 6;
+
+const INVITE_CODE_COLLECTION = collection(db, 'apps', 'nine-lives', 'inviteCodes');
 
 function generateHouseholdInviteCode() {
   let code = '';
@@ -41,13 +34,9 @@ async function getUniqueHouseholdInviteCode(): Promise<string> {
   let candidate = generateHouseholdInviteCode();
 
   while (true) {
-    const householdQuery = query(
-      collection(db, 'apps', 'nine-lives', 'households'),
-      where('inviteCode', '==', candidate),
-    );
-    const snapshot = await getDocs(householdQuery);
+    const snapshot = await getDoc(doc(INVITE_CODE_COLLECTION, candidate));
 
-    if (snapshot.empty) {
+    if (!snapshot.exists()) {
       return candidate;
     }
 
@@ -81,57 +70,14 @@ export const createHousehold = createAsyncThunk<
       lastEditedAt: now,
     };
 
-    await setDoc(doc(db, 'apps', 'nine-lives', 'households', householdId), household);
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'apps', 'nine-lives', 'households', householdId), household);
+    batch.set(doc(INVITE_CODE_COLLECTION, inviteCode), { householdId });
+    await batch.commit();
+
     dispatch(upsertHousehold(household));
 
     return household;
-  },
-);
-
-export const joinHousehold = createAsyncThunk<
-  Household,
-  { householdId: string; uid: string },
-  { rejectValue: string }
->(
-  'nineLives/households/join',
-  async ({ householdId, uid }, { dispatch, getState, rejectWithValue }) => {
-    const state = getState() as RootState;
-    let household = state.nineLives.households.items.find(
-      (item) => item.id === householdId,
-    );
-
-    if (!household) {
-      const householdSnapshot = await getDoc(
-        doc(db, 'apps', 'nine-lives', 'households', householdId),
-      );
-
-      if (!householdSnapshot.exists()) {
-        return rejectWithValue('Household not found.');
-      }
-
-      household = {
-        id: householdSnapshot.id,
-        ...(householdSnapshot.data() as Omit<Household, 'id'>),
-      } as Household;
-    }
-
-    if (household.members.includes(uid)) {
-      return rejectWithValue('You are already a member of this household.');
-    }
-
-    const updatedHousehold: Household = {
-      ...household,
-      members: Array.from(new Set([...household.members, uid])),
-      lastEditedAt: Date.now(),
-    };
-
-    await updateDoc(doc(db, 'apps', 'nine-lives', 'households', householdId), {
-      members: updatedHousehold.members,
-      lastEditedAt: updatedHousehold.lastEditedAt,
-    });
-    dispatch(upsertHousehold(updatedHousehold));
-
-    return updatedHousehold;
   },
 );
 

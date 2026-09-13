@@ -64,6 +64,34 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /apps/nine-lives/inviteCodes/{inviteCode} {
+      function isInviteCodeShapeValid() {
+        return request.resource.data.keys().hasOnly(['householdId'])
+          && request.resource.data.householdId is string
+          && request.resource.data.householdId.size() > 0;
+      }
+
+      function getInviteHouseholdAfter() {
+        return getAfter(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId));
+      }
+
+      function isInviteCodeCreateValid() {
+        return request.auth != null
+          && inviteCode.size() == 6
+          && isInviteCodeShapeValid()
+          && !exists(/databases/$(database)/documents/apps/nine-lives/inviteCodes/$(inviteCode))
+          && existsAfter(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId))
+          && getInviteHouseholdAfter().data.createdBy == request.auth.uid
+          && request.auth.uid in getInviteHouseholdAfter().data.members
+          && getInviteHouseholdAfter().data.inviteCode == inviteCode;
+      }
+
+      allow read: if request.auth != null;
+      allow create: if isInviteCodeCreateValid();
+      allow update: if false;
+      allow delete: if false;
+    }
+
     match /apps/nine-lives/households/{householdId} {
       function isHouseholdIdentityValid() {
         return request.resource.data.id == householdId
