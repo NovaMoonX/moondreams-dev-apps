@@ -1,5 +1,7 @@
-import { Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Avatar, Modal, Tabs, TabsContent, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+
+import { getInitials } from '@/utils/accountUtils';
 
 import { useCatDetailSync } from '../hooks/useCatDetailSync';
 import type { Cat } from '../types';
@@ -47,25 +49,55 @@ function CatDetailsModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={cat ? `${cat.name}'s details` : 'Cat details'}>
-      <div className='space-y-4'>
-        <CatProfileForm
-          key={cat?.id}
-          cat={cat}
-          householdId={householdId}
-          isSubmitting={isSubmitting}
-          onSubmit={onSubmit}
-          onCancel={onClose}
-          onDelete={handleDelete}
-        />
+    <Modal isOpen={isOpen} onClose={onClose}>
+      {cat && (
+        <div className='mb-4 flex flex-col items-center gap-2'>
+          <Avatar
+            src={cat.photoURL ?? undefined}
+            alt={cat.name}
+            initials={cat.photoURL ? undefined : getInitials(cat.name)}
+            size='2xl'
+            shape='circle'
+          />
+          <h2 className='text-lg font-semibold'>{cat.name}</h2>
+        </div>
+      )}
+
+      <Tabs defaultValue='details' tabsWidth='full' variant='pills'>
+        <TabsList>
+          <TabsTrigger value='details'>Details</TabsTrigger>
+          <TabsTrigger value='vaccinations' disabled={!cat || !householdId}>
+            Vaccinations
+          </TabsTrigger>
+          <TabsTrigger value='weight' disabled={!cat || !householdId}>
+            Weight history
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value='details' className='pt-4'>
+          <CatProfileForm
+            key={cat?.id}
+            cat={cat}
+            householdId={householdId}
+            isSubmitting={isSubmitting}
+            onSubmit={onSubmit}
+            onCancel={onClose}
+            onDelete={handleDelete}
+          />
+        </TabsContent>
 
         {cat && householdId && (
           <>
-            <VaccinationsSection householdId={householdId} catId={cat.id} catName={cat.name} />
-            <WeightEntriesSection householdId={householdId} catId={cat.id} catName={cat.name} />
+            <TabsContent value='vaccinations' className='pt-4'>
+              <VaccinationsSection householdId={householdId} catId={cat.id} catName={cat.name} />
+            </TabsContent>
+
+            <TabsContent value='weight' className='pt-4'>
+              <WeightEntriesSection householdId={householdId} catId={cat.id} catName={cat.name} />
+            </TabsContent>
           </>
         )}
-      </div>
+      </Tabs>
     </Modal>
   );
 }

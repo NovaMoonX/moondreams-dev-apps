@@ -12,7 +12,6 @@ import {
 } from '../store/actions/vaccinationsActions';
 import { selectVaccinationsByCat } from '../store/selectors';
 import type { Vaccination } from '../types';
-import DetailsDisclosure from './DetailsDisclosure';
 import VaccinationFormModal from './VaccinationFormModal';
 import VaccinationTimeline from './VaccinationTimeline';
 
@@ -78,19 +77,15 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
   };
 
   return (
-    <section>
-      <DetailsDisclosure label='Vaccinations'>
-        <div className='space-y-4'>
-          <div className='flex items-center justify-between gap-2 pb-2'>
-            <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s vaccinations here.</small>
-            <Button type='button' variant='primary' size='sm' onClick={() => setShowAddForm(true)}>
-              Add vaccination
-            </Button>
-          </div>
+    <div className='space-y-4'>
+      <div className='flex items-center justify-between gap-2'>
+        <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s vaccinations here.</small>
+        <Button type='button' variant='primary' size='sm' onClick={() => setShowAddForm(true)}>
+          Add vaccination
+        </Button>
+      </div>
 
-          <VaccinationTimeline vaccinations={vaccinations} onEdit={setEditingVaccination} />
-        </div>
-      </DetailsDisclosure>
+      <VaccinationTimeline vaccinations={vaccinations} onEdit={setEditingVaccination} />
 
       <VaccinationFormModal
         isOpen={showAddForm || Boolean(editingVaccination)}
@@ -105,7 +100,7 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
           setEditingVaccination(null);
         }}
       />
-    </section>
+    </div>
   );
 }
 

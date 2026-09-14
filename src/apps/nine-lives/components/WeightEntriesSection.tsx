@@ -12,7 +12,6 @@ import {
 } from '../store/actions/weightEntriesActions';
 import { selectWeightEntriesByCat } from '../store/selectors';
 import type { WeightEntry } from '../types';
-import DetailsDisclosure from './DetailsDisclosure';
 import WeightEntryFormModal from './WeightEntryFormModal';
 import WeightHistoryList from './WeightHistoryList';
 
@@ -76,19 +75,15 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
   };
 
   return (
-    <section>
-      <DetailsDisclosure label='Weight history'>
-        <div className='space-y-4'>
-          <div className='flex items-center justify-between gap-2 pb-2'>
-            <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s weight over time.</small>
-            <Button type='button' variant='primary' size='sm' onClick={() => setShowAddForm(true)}>
-              Add weight entry
-            </Button>
-          </div>
+    <div className='space-y-4'>
+      <div className='flex items-center justify-between gap-2'>
+        <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s weight over time.</small>
+        <Button type='button' variant='primary' size='sm' onClick={() => setShowAddForm(true)}>
+          Add weight entry
+        </Button>
+      </div>
 
-          <WeightHistoryList entries={weightEntries} onEdit={setEditingEntry} />
-        </div>
-      </DetailsDisclosure>
+      <WeightHistoryList entries={weightEntries} onEdit={setEditingEntry} />
 
       <WeightEntryFormModal
         isOpen={showAddForm || Boolean(editingEntry)}
@@ -102,7 +97,7 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
           setEditingEntry(null);
         }}
       />
-    </section>
+    </div>
   );
 }
 
