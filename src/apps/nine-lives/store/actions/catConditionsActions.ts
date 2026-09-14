@@ -80,7 +80,6 @@ export const createCatCondition = createAsyncThunk<
 
     const nextCondition: CatCondition = {
       id: catConditionId,
-      householdId,
       catId,
       source: condition.source ?? 'custom',
       libraryConditionId: condition.libraryConditionId ?? null,
@@ -132,7 +131,6 @@ export const updateCatCondition = createAsyncThunk<
       ...current,
       ...sanitizedChanges,
       id: catConditionId,
-      householdId,
       catId,
       name: sanitizedChanges.name?.trim() || current.name,
       lastEditedAt: Date.now(),

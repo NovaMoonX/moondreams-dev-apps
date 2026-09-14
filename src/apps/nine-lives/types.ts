@@ -141,7 +141,6 @@ export type CatConditionStatus = 'active' | 'ongoing' | 'resolved';
 
 export interface CatCondition {
   id: string;
-  householdId: string;
   catId: string;
   source: CatConditionSource;
   libraryConditionId: string | null;

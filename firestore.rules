@@ -242,7 +242,6 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/cats/{catId}/conditions/{conditionId} {
       function isConditionIdentityValid() {
         return request.resource.data.id == conditionId
-          && request.resource.data.householdId == householdId
           && request.resource.data.catId == catId;
       }
 
@@ -274,8 +273,6 @@ service cloud.firestore {
 
       function isConditionImmutableFieldsValid() {
         return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
           && request.resource.data.catId == resource.data.catId
           && request.resource.data.catId == catId
           && request.resource.data.createdBy == resource.data.createdBy
