@@ -6,6 +6,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import type { WeightEntry } from '@apps/nine-lives/types';
 
 interface WeightEntryFormValues {
+  catId?: string;
   weight: string;
   unit: string;
   measuredAt: string;
@@ -15,6 +16,8 @@ interface WeightEntryFormValues {
 interface WeightEntryFormModalProps {
   isOpen: boolean;
   catName?: string;
+  /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
+  catOptions?: { label: string; value: string }[];
   initialWeightEntry?: Partial<WeightEntry> | null;
   isSubmitting?: boolean;
   onSubmit: (
@@ -24,11 +27,12 @@ interface WeightEntryFormModalProps {
   onClose: () => void;
 }
 
-const { input } = FormFactories;
+const { input, select } = FormFactories;
 
 function WeightEntryFormModal({
   isOpen,
   catName,
+  catOptions,
   initialWeightEntry,
   isSubmitting = false,
   onSubmit,
@@ -38,9 +42,19 @@ function WeightEntryFormModal({
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialWeightEntry?.id);
   const formId = initialWeightEntry?.id ?? 'new-nine-lives-weight-entry';
+  const showCatField = Boolean(catOptions && catOptions.length > 0);
 
   const fields = useMemo(
     () => [
+      ...(showCatField
+        ? [
+            select({
+              name: 'catId',
+              label: 'Cat',
+              options: catOptions ?? [],
+            }),
+          ]
+        : []),
       input({
         name: 'weight',
         label: 'Weight',
@@ -69,7 +83,7 @@ function WeightEntryFormModal({
         variant: 'outline',
       }),
     ],
-    [],
+    [showCatField, catOptions],
   );
 
   const toTimestamp = (value: string | null | undefined) => {
@@ -86,12 +100,13 @@ function WeightEntryFormModal({
     const measuredAt = toTimestamp(data.measuredAt);
     const normalizedUnit = data.unit.trim().toLowerCase() === 'kg' ? 'kg' : 'lb';
 
-    if (!Number.isFinite(weight) || weight <= 0 || measuredAt === null) {
+    if (!Number.isFinite(weight) || weight <= 0 || measuredAt === null || (showCatField && !data.catId)) {
       return;
     }
 
     await onSubmit({
       id: initialWeightEntry?.id,
+      catId: data.catId || initialWeightEntry?.catId,
       weight,
       unit: normalizedUnit,
       measuredAt,
@@ -138,6 +153,7 @@ function WeightEntryFormModal({
         id={formId}
         form={fields}
         initialData={{
+          catId: initialWeightEntry?.catId ?? '',
           weight: initialWeightEntry?.weight?.toString() ?? '',
           unit: initialWeightEntry?.unit ?? 'lb',
           measuredAt: defaultDate(initialWeightEntry?.measuredAt ?? null),

@@ -10,6 +10,7 @@ import type { Vaccination } from '@apps/nine-lives/types';
 const NONE_OPTION_VALUE = '';
 
 interface VaccinationFormValues {
+  catId?: string;
   name: string;
   administeredAt: string;
   expiresAt?: string | null;
@@ -23,6 +24,8 @@ interface VaccinationFormModalProps {
   isOpen: boolean;
   householdId?: string;
   catName?: string;
+  /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
+  catOptions?: { label: string; value: string }[];
   initialVaccination?: Partial<Vaccination> | null;
   isSubmitting?: boolean;
   onSubmit: (
@@ -38,6 +41,7 @@ function VaccinationFormModal({
   isOpen,
   householdId,
   catName,
+  catOptions,
   initialVaccination,
   isSubmitting = false,
   onSubmit,
@@ -49,6 +53,7 @@ function VaccinationFormModal({
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
   const isEditing = Boolean(initialVaccination?.id);
   const formId = initialVaccination?.id ?? 'new-nine-lives-vaccination';
+  const showCatField = Boolean(catOptions && catOptions.length > 0);
 
   const clinicOptions = useMemo(
     () => [
@@ -68,6 +73,15 @@ function VaccinationFormModal({
 
   const fields = useMemo(
     () => [
+      ...(showCatField
+        ? [
+            select({
+              name: 'catId',
+              label: 'Cat',
+              options: catOptions ?? [],
+            }),
+          ]
+        : []),
       input({
         name: 'name',
         label: 'Vaccine name',
@@ -111,7 +125,7 @@ function VaccinationFormModal({
         variant: 'outline',
       }),
     ],
-    [clinicOptions, doctorOptions],
+    [showCatField, catOptions, clinicOptions, doctorOptions],
   );
 
   const toTimestamp = (value: string | null | undefined) => {
@@ -127,12 +141,13 @@ function VaccinationFormModal({
     const trimmedName = data.name.trim();
     const administeredAt = toTimestamp(data.administeredAt);
 
-    if (!trimmedName || administeredAt === null) {
+    if (!trimmedName || administeredAt === null || (showCatField && !data.catId)) {
       return;
     }
 
     await onSubmit({
       id: initialVaccination?.id,
+      catId: data.catId || initialVaccination?.catId,
       name: trimmedName,
       administeredAt,
       expiresAt: toTimestamp(data.expiresAt ?? null),
@@ -182,6 +197,7 @@ function VaccinationFormModal({
         id={formId}
         form={fields}
         initialData={{
+          catId: initialVaccination?.catId ?? '',
           name: initialVaccination?.name ?? '',
           administeredAt: defaultDate(initialVaccination?.administeredAt ?? null),
           expiresAt: defaultDate(initialVaccination?.expiresAt ?? null),

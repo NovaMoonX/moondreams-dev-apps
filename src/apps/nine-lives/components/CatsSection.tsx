@@ -10,6 +10,8 @@ import CatAvatarItem from './CatAvatarItem';
 import CatDetailsModal from './CatDetailsModal';
 import CatDetailsPrompt from './CatDetailsPrompt';
 import type { CatQuickAddValues } from './CatQuickAddForm';
+import QuickAddVaccinationModal from './QuickAddVaccinationModal';
+import QuickAddWeightEntryModal from './QuickAddWeightEntryModal';
 import { createCat, deleteCat, updateCat } from '../store/actions/catsActions';
 import { selectCatsByHousehold } from '../store/selectors';
 import type { Cat } from '../types';
@@ -25,6 +27,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddCatModal, setShowAddCatModal] = useState(false);
+  const [showQuickAddVaccination, setShowQuickAddVaccination] = useState(false);
+  const [showQuickAddWeightEntry, setShowQuickAddWeightEntry] = useState(false);
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
 
@@ -76,11 +80,31 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
   return (
     <section className='rounded-lg border border-border bg-card p-4'>
-      <div className='mb-4 flex items-center justify-between'>
+      <div className='mb-4 flex items-center justify-between gap-2'>
         <h2 className='text-xl font-semibold'>Cats</h2>
-        <Button type='button' onClick={() => setShowAddCatModal(true)}>
-          Add cat
-        </Button>
+        <div className='flex items-center gap-2'>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            disabled={cats.length === 0}
+            onClick={() => setShowQuickAddVaccination(true)}
+          >
+            Log vaccination
+          </Button>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            disabled={cats.length === 0}
+            onClick={() => setShowQuickAddWeightEntry(true)}
+          >
+            Log weight
+          </Button>
+          <Button type='button' onClick={() => setShowAddCatModal(true)}>
+            Add cat
+          </Button>
+        </div>
       </div>
 
       {cats.length === 0 && <p className='text-sm text-muted-foreground'>No cats added yet.</p>}
@@ -118,6 +142,20 @@ function CatsSection({ householdId }: CatsSectionProps) {
           setEditingCat(null);
           setPendingDetailsCat(null);
         }}
+      />
+
+      <QuickAddVaccinationModal
+        isOpen={showQuickAddVaccination}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddVaccination(false)}
+      />
+
+      <QuickAddWeightEntryModal
+        isOpen={showQuickAddWeightEntry}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddWeightEntry(false)}
       />
     </section>
   );
