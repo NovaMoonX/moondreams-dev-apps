@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -12,6 +13,7 @@ import {
 } from '../store/actions/weightEntriesActions';
 import { selectWeightEntriesByCat } from '../store/selectors';
 import type { WeightEntry } from '../types';
+import WeightEntryFormFields from './WeightEntryFormFields';
 import WeightEntryFormModal from './WeightEntryFormModal';
 import WeightHistoryList from './WeightHistoryList';
 
@@ -30,7 +32,7 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WeightEntry | null>(null);
 
-  const handleSubmit = async (
+  const handleCreate = async (
     weightEntry: Partial<WeightEntry> & Pick<WeightEntry, 'weight' | 'unit' | 'measuredAt'>,
   ) => {
     if (!user?.uid) {
@@ -40,22 +42,26 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
     setIsSubmitting(true);
 
     try {
-      if (editingEntry) {
-        await dispatch(
-          updateWeightEntry({
-            householdId,
-            catId,
-            weightEntryId: editingEntry.id,
-            changes: weightEntry,
-          }),
-        ).unwrap();
-      } else {
-        await dispatch(
-          createWeightEntry({ householdId, catId, uid: user.uid, weightEntry }),
-        ).unwrap();
-      }
-
+      await dispatch(createWeightEntry({ householdId, catId, uid: user.uid, weightEntry })).unwrap();
       setShowAddForm(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdate = async (
+    weightEntry: Partial<WeightEntry> & Pick<WeightEntry, 'weight' | 'unit' | 'measuredAt'>,
+  ) => {
+    if (!editingEntry) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        updateWeightEntry({ householdId, catId, weightEntryId: editingEntry.id, changes: weightEntry }),
+      ).unwrap();
       setEditingEntry(null);
     } finally {
       setIsSubmitting(false);
@@ -67,12 +73,38 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
 
     try {
       await dispatch(deleteWeightEntry({ householdId, catId, weightEntryId })).unwrap();
-      setShowAddForm(false);
       setEditingEntry(null);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (editingEntry) {
+    return (
+      <div className='space-y-4'>
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          onClick={() => setEditingEntry(null)}
+          disabled={isSubmitting}
+          className='gap-1 px-0'
+        >
+          <ChevronLeft className='h-4 w-4' />
+          Back to weight history
+        </Button>
+
+        <WeightEntryFormFields
+          catName={catName}
+          initialWeightEntry={editingEntry}
+          isSubmitting={isSubmitting}
+          onSubmit={handleUpdate}
+          onDelete={handleDelete}
+          onCancel={() => setEditingEntry(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className='space-y-4'>
@@ -86,16 +118,11 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
       <WeightHistoryList entries={weightEntries} onEdit={setEditingEntry} />
 
       <WeightEntryFormModal
-        isOpen={showAddForm || Boolean(editingEntry)}
+        isOpen={showAddForm}
         catName={catName}
-        initialWeightEntry={editingEntry}
         isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-        onDelete={editingEntry ? handleDelete : undefined}
-        onClose={() => {
-          setShowAddForm(false);
-          setEditingEntry(null);
-        }}
+        onSubmit={handleCreate}
+        onClose={() => setShowAddForm(false)}
       />
     </div>
   );

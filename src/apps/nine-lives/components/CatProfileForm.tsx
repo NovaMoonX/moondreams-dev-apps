@@ -10,7 +10,7 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import { fromDateInputValue, toDateInputValue } from '@/utils';
+import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 import { INSURANCE_PROVIDER_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
 import type {
   Cat,
@@ -63,7 +63,6 @@ interface CatProfileFormData {
 
 const defaultLifestyle: CatLifestyle = 'indoor';
 const { checkbox, custom, input, select } = FormFactories;
-type FormInputFactoryField = Parameters<typeof input>[0];
 
 const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   text: option,
@@ -77,10 +76,6 @@ const lifestyleOptions = [
   { label: 'Outdoor', value: 'outdoor' },
   { label: 'Indoor + outdoor', value: 'indoor_outdoor' },
 ];
-
-function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
-  return input({ ...field, type: 'date' } as unknown as FormInputFactoryField);
-}
 
 function resolveInsuranceProvider(selection: InsuranceProviderValue) {
   if (selection.preset === OTHER_INSURANCE_PROVIDER) {

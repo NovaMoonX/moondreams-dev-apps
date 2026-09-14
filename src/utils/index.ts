@@ -3,4 +3,5 @@ export * from './clipboardUtils';
 export * from './dateInputUtils';
 export * from './errorUtils';
 export * from './formatUtils';
+export * from './formFactoryHelpers';
 export * from './inviteCodeUtils';

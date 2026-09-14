@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -12,6 +13,7 @@ import {
 } from '../store/actions/vaccinationsActions';
 import { selectVaccinationsByCat } from '../store/selectors';
 import type { Vaccination } from '../types';
+import VaccinationFormFields from './VaccinationFormFields';
 import VaccinationFormModal from './VaccinationFormModal';
 import VaccinationTimeline from './VaccinationTimeline';
 
@@ -30,9 +32,7 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingVaccination, setEditingVaccination] = useState<Vaccination | null>(null);
 
-  const activeVaccination = editingVaccination;
-
-  const handleSubmit = async (
+  const handleCreate = async (
     vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
   ) => {
     if (!user?.uid) {
@@ -42,22 +42,26 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
     setIsSubmitting(true);
 
     try {
-      if (activeVaccination) {
-        await dispatch(
-          updateVaccination({
-            householdId,
-            catId,
-            vaccinationId: activeVaccination.id,
-            changes: vaccination,
-          }),
-        ).unwrap();
-      } else {
-        await dispatch(
-          createVaccination({ householdId, catId, uid: user.uid, vaccination }),
-        ).unwrap();
-      }
-
+      await dispatch(createVaccination({ householdId, catId, uid: user.uid, vaccination })).unwrap();
       setShowAddForm(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdate = async (
+    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
+  ) => {
+    if (!editingVaccination) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await dispatch(
+        updateVaccination({ householdId, catId, vaccinationId: editingVaccination.id, changes: vaccination }),
+      ).unwrap();
       setEditingVaccination(null);
     } finally {
       setIsSubmitting(false);
@@ -69,12 +73,38 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
 
     try {
       await dispatch(deleteVaccination({ householdId, catId, vaccinationId })).unwrap();
-      setShowAddForm(false);
       setEditingVaccination(null);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (editingVaccination) {
+    return (
+      <div className='space-y-4'>
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          onClick={() => setEditingVaccination(null)}
+          disabled={isSubmitting}
+          className='gap-1 px-0'
+        >
+          <ChevronLeft className='h-4 w-4' />
+          Back to vaccinations
+        </Button>
+
+        <VaccinationFormFields
+          householdId={householdId}
+          initialVaccination={editingVaccination}
+          isSubmitting={isSubmitting}
+          onSubmit={handleUpdate}
+          onDelete={handleDelete}
+          onCancel={() => setEditingVaccination(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className='space-y-4'>
@@ -88,17 +118,12 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
       <VaccinationTimeline vaccinations={vaccinations} onEdit={setEditingVaccination} />
 
       <VaccinationFormModal
-        isOpen={showAddForm || Boolean(editingVaccination)}
+        isOpen={showAddForm}
         householdId={householdId}
         catName={catName}
-        initialVaccination={editingVaccination}
         isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-        onDelete={editingVaccination ? handleDelete : undefined}
-        onClose={() => {
-          setShowAddForm(false);
-          setEditingVaccination(null);
-        }}
+        onSubmit={handleCreate}
+        onClose={() => setShowAddForm(false)}
       />
     </div>
   );
