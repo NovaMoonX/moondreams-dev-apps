@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollectionSlice';
 
+import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
@@ -11,6 +12,7 @@ import { startPendingRequestsListener } from '../store/listeners/pendingRequests
 import { startVaccinationsListener } from '../store/listeners/vaccinationsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
+import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
@@ -29,14 +31,21 @@ export function useNineLivesSync(
   useEffect(() => {
     if (!activeUid) {
       dispatch(setHouseholds([]));
+      dispatch(setConditionLibrary([]));
       return;
     }
 
-    const unsubscribe = startHouseholdListener(activeUid, (households) => {
+    const unsubscribeHouseholds = startHouseholdListener(activeUid, (households) => {
       dispatch(setHouseholds(households));
     });
+    const unsubscribeConditionLibrary = startConditionLibraryListener((conditions) => {
+      dispatch(setConditionLibrary(conditions));
+    });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeHouseholds();
+      unsubscribeConditionLibrary();
+    };
   }, [activeUid, dispatch]);
 
   // Sync the selected household's cats, clinics, doctors, and incoming requests.

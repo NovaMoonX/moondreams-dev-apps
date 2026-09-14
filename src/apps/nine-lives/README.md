@@ -50,8 +50,8 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Vaccination tracking: vaccine name, date administered, next due date
 - [ ] Weight entries: log a cat's current weight, optionally as part of a visit
 - [ ] Visit tracking: schedule/log visits with a reason (checkup, illness, accident, vaccination, follow-up, custom), supporting one or several cats in a single entry, with a sensible default name based on time of day, and vaccinations/conditions/weight/symptoms updatable in the same completion flow
-- [ ] Condition/incident library seeded from a public data source, browsable and searchable — covering illnesses as well as injuries, with full visit history per condition
-- [ ] Attach known conditions or incidents to a cat — from the library or as a fully custom entry
+- [x] Condition/incident library seeded from a public data source, browsable and searchable — covering illnesses as well as injuries, with full visit history per condition
+- [x] Attach known conditions or incidents to a cat — from the library or as a fully custom entry
 - [ ] Symptom log with quick-tap cat-specific tags plus free text, optionally linked to one or more visits and/or a condition
 - [ ] Budgeting with default category presets (adoption fee, insurance, food, litter, vet, grooming, supplies, medication, microchipping/spay-neuter, other), monthly totals, and a running lifetime total
 - [ ] Emergency readiness: a dedicated place for an emergency/after-hours vet contact, with a dashboard nudge until it's filled in
