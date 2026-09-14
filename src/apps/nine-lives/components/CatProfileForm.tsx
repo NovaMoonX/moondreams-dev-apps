@@ -10,7 +10,7 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import { fromDateInputValue, toDateInputValue } from '@/utils';
+import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 import { INSURANCE_PROVIDER_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
 import type {
   Cat,
@@ -63,7 +63,6 @@ interface CatProfileFormData {
 
 const defaultLifestyle: CatLifestyle = 'indoor';
 const { checkbox, custom, input, select } = FormFactories;
-type FormInputFactoryField = Parameters<typeof input>[0];
 
 const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   text: option,
@@ -77,10 +76,6 @@ const lifestyleOptions = [
   { label: 'Outdoor', value: 'outdoor' },
   { label: 'Indoor + outdoor', value: 'indoor_outdoor' },
 ];
-
-function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
-  return input({ ...field, type: 'date' } as unknown as FormInputFactoryField);
-}
 
 function resolveInsuranceProvider(selection: InsuranceProviderValue) {
   if (selection.preset === OTHER_INSURANCE_PROVIDER) {
@@ -300,74 +295,72 @@ function AdditionalDetailsFields({
         </div>
       </DetailsDisclosure>
 
-      <DetailsDisclosure label='Key dates & notes'>
-        <div className='space-y-4'>
-          <div className='space-y-3'>
-            <div className='flex items-center justify-between'>
-              <p className='text-muted-foreground text-sm'>
-                Add memorable dates for this cat.
-              </p>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                onClick={() =>
-                  update({
-                    customKeyDates: [...keyDates, { label: '', date: 0 }],
-                  })
-                }
-                disabled={disabled}
-              >
-                Add date
-              </Button>
-            </div>
-
-            {keyDates.map((entry, index) => (
-              <div
-                key={`${entry.label}-${index}`}
-                className='grid gap-3 md:grid-cols-2'
-              >
-                <div className='space-y-1'>
-                  <Input
-                    value={entry.label}
-                    onChange={(event) =>
-                      updateKeyDate(index, { label: event.target.value })
-                    }
-                    variant='outline'
-                    placeholder='e.g. Spayed/neutered'
-                    disabled={disabled}
-                  />
-                </div>
-                <div className='space-y-1'>
-                  <Input
-                    type='date'
-                    value={toDateInputValue(entry.date)}
-                    onChange={(event) =>
-                      updateKeyDate(index, {
-                        date: fromDateInputValue(event.target.value) ?? 0,
-                      })
-                    }
-                    variant='outline'
-                    disabled={disabled}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className='space-y-1'>
-            <Label className='text-sm'>Notes</Label>
-            <Textarea
-              value={value.notes}
-              onChange={(event) => update({ notes: event.target.value })}
-              placeholder='Care notes, quirks, or anything relevant'
-              rows={4}
+      <DetailsDisclosure label='Key dates'>
+        <div className='space-y-3'>
+          <div className='flex items-center justify-between'>
+            <p className='text-muted-foreground text-sm'>
+              Add memorable dates for this cat.
+            </p>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={() =>
+                update({
+                  customKeyDates: [...keyDates, { label: '', date: 0 }],
+                })
+              }
               disabled={disabled}
-              variant='outline'
-            />
+            >
+              Add date
+            </Button>
           </div>
+
+          {keyDates.map((entry, index) => (
+            <div
+              key={`${entry.label}-${index}`}
+              className='grid gap-3 md:grid-cols-2'
+            >
+              <div className='space-y-1'>
+                <Input
+                  value={entry.label}
+                  onChange={(event) =>
+                    updateKeyDate(index, { label: event.target.value })
+                  }
+                  variant='outline'
+                  placeholder='e.g. Spayed/neutered'
+                  disabled={disabled}
+                />
+              </div>
+              <div className='space-y-1'>
+                <Input
+                  type='date'
+                  value={toDateInputValue(entry.date)}
+                  onChange={(event) =>
+                    updateKeyDate(index, {
+                      date: fromDateInputValue(event.target.value) ?? 0,
+                    })
+                  }
+                  variant='outline'
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </DetailsDisclosure>
+
+      <div className='space-y-1'>
+        <Label className='text-sm'>Notes</Label>
+        <Textarea
+          value={value.notes}
+          onChange={(event) => update({ notes: event.target.value })}
+          placeholder='Care notes, quirks, or anything relevant'
+          rows={4}
+          disabled={disabled}
+          variant='outline'
+        />
+      </div>
     </div>
   );
 }

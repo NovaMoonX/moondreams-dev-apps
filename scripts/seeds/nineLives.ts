@@ -132,6 +132,69 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const vaccinationsByCat: Record<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      administeredAt: number;
+      expiresAt: number | null;
+      clinicId: string | null;
+      doctorId: string | null;
+      lotNumber: string | null;
+    }>
+  > = {
+    'seed-cat-mochi': [
+      {
+        id: 'seed-vaccination-mochi-rabies',
+        name: 'Rabies',
+        administeredAt: context.now - 15_552_000_000,
+        expiresAt: context.now + 47_520_000_000,
+        clinicId: 'seed-vet-clinic-blue-bark',
+        doctorId: 'seed-doctor-maya',
+        lotNumber: 'L-1024',
+      },
+      {
+        id: 'seed-vaccination-mochi-fvrcp',
+        name: 'FVRCP',
+        administeredAt: context.now - 31_536_000_000,
+        expiresAt: context.now + 31_536_000_000,
+        clinicId: 'seed-vet-clinic-blue-bark',
+        doctorId: 'seed-doctor-maya',
+        lotNumber: 'L-0876',
+      },
+    ],
+    'seed-cat-juniper': [
+      {
+        id: 'seed-vaccination-juniper-rabies',
+        name: 'Rabies',
+        administeredAt: context.now - 23_328_000_000,
+        expiresAt: context.now + 39_744_000_000,
+        clinicId: 'seed-vet-clinic-harbor',
+        doctorId: 'seed-doctor-daniela',
+        lotNumber: 'L-2201',
+      },
+    ],
+  };
+
+  const weightEntriesByCat: Record<
+    string,
+    Array<{ id: string; weight: number; unit: 'lb' | 'kg'; measuredAt: number }>
+  > = {
+    'seed-cat-mochi': [
+      { id: 'seed-weight-mochi-1', weight: 8.2, unit: 'lb', measuredAt: context.now - 15_552_000_000 },
+      { id: 'seed-weight-mochi-2', weight: 8.6, unit: 'lb', measuredAt: context.now - 7_776_000_000 },
+      { id: 'seed-weight-mochi-3', weight: 8.9, unit: 'lb', measuredAt: context.now - 2_592_000_000 },
+    ],
+    'seed-cat-juniper': [
+      { id: 'seed-weight-juniper-1', weight: 9.4, unit: 'lb', measuredAt: context.now - 15_552_000_000 },
+      { id: 'seed-weight-juniper-2', weight: 9.1, unit: 'lb', measuredAt: context.now - 5_184_000_000 },
+    ],
+  };
+
+  let vaccinationCount = 0;
+  let weightEntryCount = 0;
+
   cats.forEach((cat) => {
     const catRef = householdRef.collection('cats').doc(cat.id);
 
@@ -146,6 +209,42 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       },
       { merge: true },
     );
+
+    (vaccinationsByCat[cat.id] ?? []).forEach((vaccination) => {
+      const vaccinationRef = catRef.collection('vaccinations').doc(vaccination.id);
+
+      batch.set(
+        vaccinationRef,
+        {
+          ...vaccination,
+          householdId: HOUSEHOLD_ID,
+          catId: cat.id,
+          linkedVisitId: null,
+          createdBy: caretaker.uid,
+          createdAt,
+          lastEditedAt: context.now,
+        },
+        { merge: true },
+      );
+      vaccinationCount += 1;
+    });
+
+    (weightEntriesByCat[cat.id] ?? []).forEach((weightEntry) => {
+      const weightEntryRef = catRef.collection('weightEntries').doc(weightEntry.id);
+
+      batch.set(
+        weightEntryRef,
+        {
+          ...weightEntry,
+          catId: cat.id,
+          linkedVisitId: null,
+          createdBy: caretaker.uid,
+          createdAt,
+        },
+        { merge: true },
+      );
+      weightEntryCount += 1;
+    });
   });
 
   clinics.forEach((clinic) => {
@@ -181,7 +280,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
 
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 2 + cats.length + clinics.length + doctors.length,
+    firestoreDocuments:
+      2 + cats.length + clinics.length + doctors.length + vaccinationCount + weightEntryCount,
   };
 
   return result;

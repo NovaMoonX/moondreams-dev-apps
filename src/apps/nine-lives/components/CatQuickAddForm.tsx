@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
-import { fromDateInputValue } from '@/utils';
+import { createDateInputField, fromDateInputValue } from '@/utils';
 import { getBreedInitialValue, resolveBreedValue, type BreedValue } from '@apps/nine-lives/utils/breedUtils';
 
 import BreedField from './BreedField';
@@ -28,11 +28,6 @@ interface CatQuickAddFormData {
 }
 
 const { checkbox, custom, input } = FormFactories;
-type FormInputFactoryField = Parameters<typeof input>[0];
-
-function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
-  return input({ ...field, type: 'date' } as unknown as FormInputFactoryField);
-}
 
 const initialData: CatQuickAddFormData = {
   name: '',

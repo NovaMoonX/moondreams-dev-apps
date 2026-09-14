@@ -16,9 +16,17 @@ import {
   type PendingRequestsState,
 } from './slices/pendingRequestsSlice';
 import {
+  vaccinationsReducer,
+  type VaccinationsState,
+} from './slices/vaccinationsSlice';
+import {
   vetClinicsReducer,
   type VetClinicsState,
 } from './slices/vetClinicsSlice';
+import {
+  weightEntriesReducer,
+  type WeightEntriesState,
+} from './slices/weightEntriesSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -26,6 +34,8 @@ export interface NineLivesState {
   cats: CatsState;
   vetClinics: VetClinicsState;
   doctors: DoctorsState;
+  vaccinations: VaccinationsState;
+  weightEntries: WeightEntriesState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -34,6 +44,8 @@ export const nineLivesReducer = combineReducers({
   cats: catsReducer,
   vetClinics: vetClinicsReducer,
   doctors: doctorsReducer,
+  vaccinations: vaccinationsReducer,
+  weightEntries: weightEntriesReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

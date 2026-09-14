@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -10,6 +11,8 @@ import CatAvatarItem from './CatAvatarItem';
 import CatDetailsModal from './CatDetailsModal';
 import CatDetailsPrompt from './CatDetailsPrompt';
 import type { CatQuickAddValues } from './CatQuickAddForm';
+import QuickAddVaccinationModal from './QuickAddVaccinationModal';
+import QuickAddWeightEntryModal from './QuickAddWeightEntryModal';
 import { createCat, deleteCat, updateCat } from '../store/actions/catsActions';
 import { selectCatsByHousehold } from '../store/selectors';
 import type { Cat } from '../types';
@@ -25,6 +28,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddCatModal, setShowAddCatModal] = useState(false);
+  const [showQuickAddVaccination, setShowQuickAddVaccination] = useState(false);
+  const [showQuickAddWeightEntry, setShowQuickAddWeightEntry] = useState(false);
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
 
@@ -73,14 +78,48 @@ function CatsSection({ householdId }: CatsSectionProps) {
   };
 
   const detailsCat = editingCat ?? pendingDetailsCat;
+  const { option } = DropdownMenuFactories;
+  const logMenuItems = [
+    option({
+      label: 'Log vaccination',
+      value: 'log-vaccination',
+      description: 'Add a vaccination record for a cat.',
+    }),
+    option({
+      label: 'Log weight',
+      value: 'log-weight',
+      description: 'Add a weight entry for a cat.',
+    }),
+  ];
 
   return (
     <section className='rounded-lg border border-border bg-card p-4'>
-      <div className='mb-4 flex items-center justify-between'>
+      <div className='mb-4 flex items-center justify-between gap-2'>
         <h2 className='text-xl font-semibold'>Cats</h2>
-        <Button type='button' onClick={() => setShowAddCatModal(true)}>
-          Add cat
-        </Button>
+        <div className='flex items-center gap-2'>
+          <DropdownMenu
+            items={logMenuItems}
+            onItemSelect={(value) => {
+              if (value === 'log-vaccination') {
+                setShowQuickAddVaccination(true);
+              } else if (value === 'log-weight') {
+                setShowQuickAddWeightEntry(true);
+              }
+            }}
+            placement='bottom'
+            alignment='end'
+            offset={8}
+            trigger={
+              <Button type='button' variant='secondary' disabled={cats.length === 0} className='gap-1'>
+                Log
+                <ChevronDown className='h-4 w-4' />
+              </Button>
+            }
+          />
+          <Button type='button' onClick={() => setShowAddCatModal(true)}>
+            Add cat
+          </Button>
+        </div>
       </div>
 
       {cats.length === 0 && <p className='text-sm text-muted-foreground'>No cats added yet.</p>}
@@ -118,6 +157,20 @@ function CatsSection({ householdId }: CatsSectionProps) {
           setEditingCat(null);
           setPendingDetailsCat(null);
         }}
+      />
+
+      <QuickAddVaccinationModal
+        isOpen={showQuickAddVaccination}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddVaccination(false)}
+      />
+
+      <QuickAddWeightEntryModal
+        isOpen={showQuickAddWeightEntry}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddWeightEntry(false)}
       />
     </section>
   );

@@ -8,11 +8,13 @@ import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
+import { startVaccinationsListener } from '../store/listeners/vaccinationsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
+import { setVaccinations } from '../store/slices/vaccinationsSlice';
 import { setVetClinics } from '../store/slices/vetClinicsSlice';
 
 export function useNineLivesSync(
@@ -42,6 +44,7 @@ export function useNineLivesSync(
     if (!householdId) {
       dispatch(clearCurrentHouseholdData());
       dispatch(setPendingRequests([]));
+      dispatch(setVaccinations([]));
       return;
     }
 
@@ -60,12 +63,16 @@ export function useNineLivesSync(
         dispatch(setPendingRequests(requests));
       },
     );
+    const unsubscribeVaccinations = startVaccinationsListener(householdId, (vaccinations) => {
+      dispatch(setVaccinations(vaccinations));
+    });
 
     return () => {
       unsubscribeCats();
       unsubscribeVetClinics();
       unsubscribeDoctors();
       unsubscribePendingRequests();
+      unsubscribeVaccinations();
     };
   }, [dispatch, householdId]);
 

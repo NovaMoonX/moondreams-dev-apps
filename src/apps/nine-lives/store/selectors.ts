@@ -22,3 +22,9 @@ export const selectDoctorsByClinic =
           (doctor) => doctor.householdId === householdId && doctor.clinicId === clinicId,
         )
       : [];
+
+export const selectVaccinationsByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.vaccinations.items.filter((vaccination) => vaccination.catId === catId) : [];
+
+export const selectWeightEntriesByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.weightEntries.items.filter((entry) => entry.catId === catId) : [];
