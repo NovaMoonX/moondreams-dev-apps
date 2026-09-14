@@ -117,3 +117,30 @@ export interface WeightEntry {
   createdBy: string;
   createdAt: number;
 }
+
+export type SymptomSeverity = 'mild' | 'moderate' | 'severe';
+
+export type SymptomQuickTag =
+  | 'litter_box_change'
+  | 'appetite_change'
+  | 'vomiting'
+  | 'lethargy'
+  | 'hiding'
+  | 'playfulness_change'
+  | 'grooming_change'
+  | 'other';
+
+export interface Symptom {
+  id: string;
+  catId: string;
+  description: string;
+  quickTags: SymptomQuickTag[];
+  firstNoticedAt: number;
+  severity: SymptomSeverity | null;
+  linkedVisitIds: string[];
+  linkedConditionId: string | null;
+  resolvedAt: number | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}

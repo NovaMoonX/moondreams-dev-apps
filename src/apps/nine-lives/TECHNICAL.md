@@ -329,19 +329,19 @@ interface Symptom {
   id: string;
   catId: string;
   description: string;
-  quickTags?: SymptomQuickTag[];
+  quickTags: SymptomQuickTag[];
   firstNoticedAt: number;
-  severity?: SymptomSeverity;
-  linkedVisitIds?: string[]; // every visit where this symptom was reported or discussed
-  linkedConditionId?: string;
-  resolvedAt?: number;
+  severity: SymptomSeverity | null;
+  linkedVisitIds: string[]; // every visit where this symptom was reported or discussed
+  linkedConditionId: string | null;
+  resolvedAt: number | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
 }
 ```
 
-Same reasoning as conditions: a persistent or recurring symptom (say, intermittent vomiting tracked across three visits while a cause gets narrowed down) can reasonably span more than one visit, so this is an array too, kept in sync with `Visit.linkedSymptomIds`.
+Symptoms can be logged with quick tags only, free text only, or both. The quick-tag set stays cat-focused (litter box changes, appetite, hiding, playfulness, grooming, plus common red flags like vomiting/lethargy) because cats often hide illness via subtle behavior shifts rather than loud, obvious signs. Same reasoning as conditions: a persistent or recurring symptom (say, intermittent vomiting tracked across three visits while a cause gets narrowed down) can reasonably span more than one visit, so this is an array too, kept in sync with `Visit.linkedSymptomIds`.
 
 ### 12. Vaccine Library (shared, global reference)
 
