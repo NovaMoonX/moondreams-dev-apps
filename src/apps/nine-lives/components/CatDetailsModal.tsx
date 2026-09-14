@@ -1,8 +1,11 @@
 import { Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import CatProfileForm from './CatProfileForm';
+import { useCatDetailSync } from '../hooks/useCatDetailSync';
 import type { Cat } from '../types';
+import CatProfileForm from './CatProfileForm';
+import VaccinationsSection from './VaccinationsSection';
+import WeightEntriesSection from './WeightEntriesSection';
 
 interface CatDetailsModalProps {
   isOpen: boolean;
@@ -25,6 +28,8 @@ function CatDetailsModal({
 }: CatDetailsModalProps) {
   const { confirm } = useActionModal();
 
+  useCatDetailSync(householdId, cat?.id);
+
   const handleDelete = async () => {
     if (!cat || !onDelete) {
       return;
@@ -43,15 +48,24 @@ function CatDetailsModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={cat ? `${cat.name}'s details` : 'Cat details'}>
-      <CatProfileForm
-        key={cat?.id}
-        cat={cat}
-        householdId={householdId}
-        isSubmitting={isSubmitting}
-        onSubmit={onSubmit}
-        onCancel={onClose}
-        onDelete={handleDelete}
-      />
+      <div className='space-y-4'>
+        <CatProfileForm
+          key={cat?.id}
+          cat={cat}
+          householdId={householdId}
+          isSubmitting={isSubmitting}
+          onSubmit={onSubmit}
+          onCancel={onClose}
+          onDelete={handleDelete}
+        />
+
+        {cat && householdId && (
+          <>
+            <VaccinationsSection householdId={householdId} catId={cat.id} catName={cat.name} />
+            <WeightEntriesSection householdId={householdId} catId={cat.id} catName={cat.name} />
+          </>
+        )}
+      </div>
     </Modal>
   );
 }

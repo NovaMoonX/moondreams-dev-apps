@@ -3,7 +3,11 @@ import { useMemo } from 'react';
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { useAppSelector } from '@/store';
+import { selectClinicsByHousehold, selectDoctorsByHousehold } from '@apps/nine-lives/store/selectors';
 import type { Vaccination } from '@apps/nine-lives/types';
+
+const NONE_OPTION_VALUE = '';
 
 interface VaccinationFormValues {
   name: string;
@@ -17,6 +21,7 @@ interface VaccinationFormValues {
 
 interface VaccinationFormModalProps {
   isOpen: boolean;
+  householdId?: string;
   catName?: string;
   initialVaccination?: Partial<Vaccination> | null;
   isSubmitting?: boolean;
@@ -27,10 +32,11 @@ interface VaccinationFormModalProps {
   onClose: () => void;
 }
 
-const { input } = FormFactories;
+const { input, select } = FormFactories;
 
 function VaccinationFormModal({
   isOpen,
+  householdId,
   catName,
   initialVaccination,
   isSubmitting = false,
@@ -39,8 +45,26 @@ function VaccinationFormModal({
   onClose,
 }: VaccinationFormModalProps) {
   const { confirm } = useActionModal();
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
   const isEditing = Boolean(initialVaccination?.id);
   const formId = initialVaccination?.id ?? 'new-nine-lives-vaccination';
+
+  const clinicOptions = useMemo(
+    () => [
+      { label: 'None', value: NONE_OPTION_VALUE },
+      ...clinics.map((clinic) => ({ label: clinic.name, value: clinic.id })),
+    ],
+    [clinics],
+  );
+
+  const doctorOptions = useMemo(
+    () => [
+      { label: 'None', value: NONE_OPTION_VALUE },
+      ...doctors.map((doctor) => ({ label: doctor.name, value: doctor.id })),
+    ],
+    [doctors],
+  );
 
   const fields = useMemo(
     () => [
@@ -64,17 +88,15 @@ function VaccinationFormModal({
         placeholder: '2026-03-10',
         variant: 'outline',
       }),
-      input({
+      select({
         name: 'clinicId',
-        label: 'Clinic ID (optional)',
-        placeholder: 'Clinic reference',
-        variant: 'outline',
+        label: 'Clinic (optional)',
+        options: clinicOptions,
       }),
-      input({
+      select({
         name: 'doctorId',
-        label: 'Doctor ID (optional)',
-        placeholder: 'Doctor reference',
-        variant: 'outline',
+        label: 'Doctor (optional)',
+        options: doctorOptions,
       }),
       input({
         name: 'lotNumber',
@@ -89,7 +111,7 @@ function VaccinationFormModal({
         variant: 'outline',
       }),
     ],
-    [],
+    [clinicOptions, doctorOptions],
   );
 
   const toTimestamp = (value: string | null | undefined) => {
