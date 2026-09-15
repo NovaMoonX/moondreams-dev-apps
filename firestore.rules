@@ -586,6 +586,7 @@ service cloud.firestore {
           && (data.coverImageUrl == null || data.coverImageUrl is string)
           && isTimestampNumber(data.startDate)
           && isTimestampNumber(data.endDate)
+          && data.endDate >= data.startDate
           && (data.defaultCurrency == null || data.defaultCurrency is string)
           && data.members is map
           && (data.inviteCode == null || data.inviteCode is string)

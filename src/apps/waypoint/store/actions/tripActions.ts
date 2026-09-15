@@ -3,13 +3,12 @@ import { collection, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { TripSpace } from '@apps/waypoint/types';
-
 import {
   createTripSpace,
   TRIP_COLLECTION_PATH,
   validateTripDates,
-} from '../../security';
-import { upsertTrip } from '../slices/tripSlice';
+} from '@apps/waypoint/security';
+import { upsertTrip } from '@apps/waypoint/store/slices/tripSlice';
 
 interface CreateTripInput {
   uid: string;

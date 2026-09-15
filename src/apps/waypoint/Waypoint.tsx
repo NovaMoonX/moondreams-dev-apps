@@ -9,17 +9,18 @@ import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
 
-import CreateTripModal from './components/CreateTripModal';
-import { createTrip } from './store/actions/tripActions';
-import { startTripListener } from './store/listeners/tripListeners';
-import { setTrips } from './store/slices/tripSlice';
+import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
+import { createTrip } from '@apps/waypoint/store/actions/tripActions';
+import { startTripListener } from '@apps/waypoint/store/listeners/tripListeners';
+import { selectTrips } from '@apps/waypoint/store/selectors';
+import { setTrips } from '@apps/waypoint/store/slices/tripSlice';
 
 function Waypoint() {
   const { user, loading } = useAuth();
   const dispatch = useAppDispatch();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const trips = useAppSelector((state) => state.waypoint.trip.items);
+  const trips = useAppSelector(selectTrips);
   const tripsLoaded = useAppSelector((state) => state.waypoint.trip.loaded);
 
   useEffect(() => {
@@ -78,11 +79,13 @@ function Waypoint() {
               Create a trip to start planning together.
             </p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)}>Create trip</Button>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            Create trip
+          </Button>
         </div>
 
         {trips.length === 0 ? (
-          <div className='rounded-lg border border-dashed border-border p-8 text-center'>
+          <div className='border-border rounded-lg border border-dashed p-8 text-center'>
             <p className='text-muted-foreground text-sm'>
               You do not belong to any trips yet.
             </p>
@@ -95,11 +98,12 @@ function Waypoint() {
             {trips.map((trip) => (
               <div
                 key={trip.id}
-                className='rounded-lg border border-border bg-card p-4'
+                className='border-border bg-card rounded-lg border p-4'
               >
                 <h2 className='text-lg font-semibold'>{trip.title}</h2>
                 <p className='text-muted-foreground mt-2 text-sm'>
-                  {formatDateTime(trip.startDate)} – {formatDateTime(trip.endDate)}
+                  {formatDateTime(trip.startDate)} –{' '}
+                  {formatDateTime(trip.endDate)}
                 </p>
               </div>
             ))}

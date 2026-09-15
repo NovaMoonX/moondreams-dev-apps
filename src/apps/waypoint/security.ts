@@ -35,7 +35,10 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
   return trip;
 }
 
-export function validateTripDates(startDate: number, endDate: number): string | null {
+export function validateTripDates(
+  startDate: number,
+  endDate: number,
+): string | null {
   if (!Number.isFinite(startDate) || !Number.isFinite(endDate)) {
     return 'Enter both trip dates.';
   }

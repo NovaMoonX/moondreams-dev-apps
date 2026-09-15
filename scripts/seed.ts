@@ -23,7 +23,9 @@ function readScope(args: string[]): SeedScope {
     return scope;
   }
 
-  throw new Error('Use --scope all, core, worth-the-wait, nine-lives, or waypoint.');
+  throw new Error(
+    'Use --scope all, core, worth-the-wait, nine-lives, or waypoint.',
+  );
 }
 
 async function main() {
