@@ -21,6 +21,7 @@ interface VisitTimelineProps {
   emptyLabel?: string;
   onEdit?: (visit: Visit) => void;
   onComplete?: (visit: Visit) => void;
+  onReopen?: (visit: Visit) => void;
 }
 
 type StatusFilter = 'all' | Visit['status'];
@@ -63,6 +64,7 @@ function VisitTimeline({
   emptyLabel = 'No visits scheduled yet.',
   onEdit,
   onComplete,
+  onReopen,
 }: VisitTimelineProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -235,6 +237,16 @@ function VisitTimeline({
                       onClick={() => onComplete(visit)}
                     >
                       Complete
+                    </Button>
+                  )}
+                  {onReopen && visit.status === 'cancelled' && (
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      onClick={() => onReopen(visit)}
+                    >
+                      Reopen
                     </Button>
                   )}
                   {onEdit && (

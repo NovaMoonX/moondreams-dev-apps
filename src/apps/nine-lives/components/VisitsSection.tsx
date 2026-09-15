@@ -11,6 +11,7 @@ import {
   completeVisit,
   createVisit,
   deleteVisit,
+  reopenVisit,
   updateVisit,
   type VisitOutcome,
 } from '../store/actions/visitsActions';
@@ -121,6 +122,22 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
     }
   };
 
+  const handleReopen = async () => {
+    if (!selectedVisit) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await dispatch(
+        reopenVisit({ householdId, visitId: selectedVisit.id }),
+      ).unwrap();
+      closeModal();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!selectedVisit) {
       return;
@@ -169,11 +186,15 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
           setSelectedVisit(visit);
           setModalMode('complete');
         }}
+        onReopen={(visit) => {
+          void dispatch(reopenVisit({ householdId, visitId: visit.id }));
+        }}
       />
 
       <VisitFormModal
         isOpen={modalMode !== null}
         cats={cats}
+        householdId={householdId}
         clinics={clinics}
         doctors={doctors}
         visits={visits}
@@ -183,6 +204,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
         onSubmit={handleSubmit}
         onComplete={handleComplete}
         onCancelVisit={handleCancel}
+        onReopenVisit={handleReopen}
         onDelete={selectedVisit ? handleDelete : undefined}
         onClose={closeModal}
       />

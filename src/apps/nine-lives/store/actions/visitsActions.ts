@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, doc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -23,7 +29,11 @@ const getVisitsCollectionRef = (householdId: string) =>
 const getVisitDocRef = (householdId: string, visitId: string) =>
   doc(getVisitsCollectionRef(householdId), visitId);
 
-const getCatConditionDocRef = (householdId: string, catId: string, conditionId: string) =>
+const getCatConditionDocRef = (
+  householdId: string,
+  catId: string,
+  conditionId: string,
+) =>
   doc(
     db,
     'apps',
@@ -36,7 +46,11 @@ const getCatConditionDocRef = (householdId: string, catId: string, conditionId: 
     conditionId,
   );
 
-const getSymptomDocRef = (householdId: string, catId: string, symptomId: string) =>
+const getSymptomDocRef = (
+  householdId: string,
+  catId: string,
+  symptomId: string,
+) =>
   doc(
     db,
     'apps',
@@ -49,7 +63,11 @@ const getSymptomDocRef = (householdId: string, catId: string, symptomId: string)
     symptomId,
   );
 
-const getVaccinationDocRef = (householdId: string, catId: string, vaccinationId: string) =>
+const getVaccinationDocRef = (
+  householdId: string,
+  catId: string,
+  vaccinationId: string,
+) =>
   doc(
     db,
     'apps',
@@ -62,7 +80,11 @@ const getVaccinationDocRef = (householdId: string, catId: string, vaccinationId:
     vaccinationId,
   );
 
-const getWeightEntryDocRef = (householdId: string, catId: string, weightEntryId: string) =>
+const getWeightEntryDocRef = (
+  householdId: string,
+  catId: string,
+  weightEntryId: string,
+) =>
   doc(
     db,
     'apps',
@@ -78,15 +100,23 @@ const getWeightEntryDocRef = (householdId: string, catId: string, weightEntryId:
 export interface VisitOutcome {
   summary?: string | null;
   vaccinations?: Array<
-    Partial<Vaccination> & Pick<Vaccination, 'catId' | 'name' | 'administeredAt'>
+    Partial<Vaccination> &
+      Pick<Vaccination, 'catId' | 'name' | 'administeredAt'>
   >;
   conditions?: Array<
-    Partial<CatCondition> & Pick<CatCondition, 'catId' | 'name' | 'category' | 'status' | 'occurredAt'>
+    Partial<CatCondition> &
+      Pick<
+        CatCondition,
+        'catId' | 'name' | 'category' | 'status' | 'occurredAt'
+      >
   >;
   weightEntries?: Array<
-    Partial<WeightEntry> & Pick<WeightEntry, 'catId' | 'weight' | 'unit' | 'measuredAt'>
+    Partial<WeightEntry> &
+      Pick<WeightEntry, 'catId' | 'weight' | 'unit' | 'measuredAt'>
   >;
-  symptoms?: Array<Partial<Symptom> & Pick<Symptom, 'catId' | 'firstNoticedAt'>>;
+  symptoms?: Array<
+    Partial<Symptom> & Pick<Symptom, 'catId' | 'firstNoticedAt'>
+  >;
 }
 
 function normalizeVisitChanges(changes: Partial<Visit>): Partial<Visit> {
@@ -115,7 +145,12 @@ function normalizeVisitCreateInput(changes: Partial<Visit>): Partial<Visit> {
   };
 }
 
-function validateVisit(visit: Pick<Visit, 'catIds' | 'reason' | 'followUpOfVisitId' | 'customReasonLabel'>) {
+function validateVisit(
+  visit: Pick<
+    Visit,
+    'catIds' | 'reason' | 'followUpOfVisitId' | 'customReasonLabel'
+  >,
+) {
   if (visit.catIds.length === 0) {
     return 'Select at least one cat.';
   }
@@ -141,7 +176,10 @@ export const createVisit = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/visits/create',
-  async ({ householdId, uid, visit }, { dispatch, getState, rejectWithValue }) => {
+  async (
+    { householdId, uid, visit },
+    { dispatch, getState, rejectWithValue },
+  ) => {
     const normalized = normalizeVisitCreateInput(visit);
     const validationError = validateVisit({
       catIds: normalized.catIds ?? [],
@@ -206,9 +244,14 @@ export const updateVisit = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/visits/update',
-  async ({ householdId, visitId, changes }, { dispatch, getState, rejectWithValue }) => {
+  async (
+    { householdId, visitId, changes },
+    { dispatch, getState, rejectWithValue },
+  ) => {
     const state = getState() as RootState;
-    const current = state.nineLives.visits.items.find((visit) => visit.id === visitId);
+    const current = state.nineLives.visits.items.find(
+      (visit) => visit.id === visitId,
+    );
 
     if (!current) {
       return rejectWithValue('Visit not found.');
@@ -249,7 +292,9 @@ export const updateVisit = createAsyncThunk<
       return nextVisit;
     } catch (error) {
       dispatch(revertVisit({ id: visitId }));
-      return rejectWithValue(error instanceof Error ? error.message : 'Unable to update visit.');
+      return rejectWithValue(
+        error instanceof Error ? error.message : 'Unable to update visit.',
+      );
     }
   },
 );
@@ -265,9 +310,14 @@ export const completeVisit = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/visits/complete',
-  async ({ householdId, uid, visitId, outcome = {} }, { dispatch, getState, rejectWithValue }) => {
+  async (
+    { householdId, uid, visitId, outcome = {} },
+    { dispatch, getState, rejectWithValue },
+  ) => {
     const state = getState() as RootState;
-    const current = state.nineLives.visits.items.find((visit) => visit.id === visitId);
+    const current = state.nineLives.visits.items.find(
+      (visit) => visit.id === visitId,
+    );
 
     if (!current) {
       return rejectWithValue('Visit not found.');
@@ -285,7 +335,20 @@ export const completeVisit = createAsyncThunk<
     const batch = writeBatch(db);
 
     for (const input of outcome.vaccinations ?? []) {
-      const id = input.id ?? doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', input.catId, 'vaccinations')).id;
+      const id =
+        input.id ??
+        doc(
+          collection(
+            db,
+            'apps',
+            'nine-lives',
+            'households',
+            householdId,
+            'cats',
+            input.catId,
+            'vaccinations',
+          ),
+        ).id;
       const vaccination: Vaccination = {
         id,
         householdId,
@@ -301,13 +364,29 @@ export const completeVisit = createAsyncThunk<
         createdAt: input.createdAt ?? now,
         lastEditedAt: now,
       };
-      batch.set(getVaccinationDocRef(householdId, input.catId, id), vaccination);
+      batch.set(
+        getVaccinationDocRef(householdId, input.catId, id),
+        vaccination,
+      );
       linkedVaccinationIds.push(id);
       createdVaccinations.push(vaccination);
     }
 
     for (const input of outcome.weightEntries ?? []) {
-      const id = input.id ?? doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', input.catId, 'weightEntries')).id;
+      const id =
+        input.id ??
+        doc(
+          collection(
+            db,
+            'apps',
+            'nine-lives',
+            'households',
+            householdId,
+            'cats',
+            input.catId,
+            'weightEntries',
+          ),
+        ).id;
       const weightEntry: WeightEntry = {
         id,
         catId: input.catId,
@@ -318,7 +397,10 @@ export const completeVisit = createAsyncThunk<
         createdBy: uid,
         createdAt: input.createdAt ?? now,
       };
-      batch.set(getWeightEntryDocRef(householdId, input.catId, id), weightEntry);
+      batch.set(
+        getWeightEntryDocRef(householdId, input.catId, id),
+        weightEntry,
+      );
       linkedWeightEntryIds.push(id);
       createdWeightEntries.push(weightEntry);
     }
@@ -326,16 +408,36 @@ export const completeVisit = createAsyncThunk<
     for (const input of outcome.conditions ?? []) {
       const existing = input.id
         ? state.nineLives.catConditions.items.find(
-            (condition) => condition.id === input.id && condition.catId === input.catId,
+            (condition) =>
+              condition.id === input.id && condition.catId === input.catId,
           )
         : undefined;
-      const id = input.id ?? doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', input.catId, 'conditions')).id;
-      const linkedVisitIds = [...new Set([...(existing?.linkedVisitIds ?? input.linkedVisitIds ?? []), visitId])];
+      const id =
+        input.id ??
+        doc(
+          collection(
+            db,
+            'apps',
+            'nine-lives',
+            'households',
+            householdId,
+            'cats',
+            input.catId,
+            'conditions',
+          ),
+        ).id;
+      const linkedVisitIds = [
+        ...new Set([
+          ...(existing?.linkedVisitIds ?? input.linkedVisitIds ?? []),
+          visitId,
+        ]),
+      ];
       const condition: CatCondition = {
         id,
         catId: input.catId,
         source: input.source ?? existing?.source ?? 'custom',
-        libraryConditionId: input.libraryConditionId ?? existing?.libraryConditionId ?? null,
+        libraryConditionId:
+          input.libraryConditionId ?? existing?.libraryConditionId ?? null,
         name: input.name.trim(),
         category: input.category,
         status: input.status,
@@ -343,8 +445,8 @@ export const completeVisit = createAsyncThunk<
         resolvedAt: input.resolvedAt ?? existing?.resolvedAt ?? null,
         description: input.description ?? existing?.description ?? null,
         linkedVisitIds,
-        createdBy: existing?.createdBy ?? uid,
-        createdAt: existing?.createdAt ?? now,
+        createdBy: input.createdBy ?? existing?.createdBy ?? uid,
+        createdAt: input.createdAt ?? existing?.createdAt ?? now,
         lastEditedAt: now,
       };
       batch.set(getCatConditionDocRef(householdId, input.catId, id), condition);
@@ -355,11 +457,30 @@ export const completeVisit = createAsyncThunk<
     for (const input of outcome.symptoms ?? []) {
       const existing = input.id
         ? state.nineLives.symptoms.items.find(
-            (symptom) => symptom.id === input.id && symptom.catId === input.catId,
+            (symptom) =>
+              symptom.id === input.id && symptom.catId === input.catId,
           )
         : undefined;
-      const id = input.id ?? doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', input.catId, 'symptoms')).id;
-      const linkedVisitIds = [...new Set([...(existing?.linkedVisitIds ?? input.linkedVisitIds ?? []), visitId])];
+      const id =
+        input.id ??
+        doc(
+          collection(
+            db,
+            'apps',
+            'nine-lives',
+            'households',
+            householdId,
+            'cats',
+            input.catId,
+            'symptoms',
+          ),
+        ).id;
+      const linkedVisitIds = [
+        ...new Set([
+          ...(existing?.linkedVisitIds ?? input.linkedVisitIds ?? []),
+          visitId,
+        ]),
+      ];
       const symptom: Symptom = {
         id,
         catId: input.catId,
@@ -368,10 +489,11 @@ export const completeVisit = createAsyncThunk<
         firstNoticedAt: input.firstNoticedAt,
         severity: input.severity ?? existing?.severity ?? null,
         linkedVisitIds,
-        linkedConditionId: input.linkedConditionId ?? existing?.linkedConditionId ?? null,
+        linkedConditionId:
+          input.linkedConditionId ?? existing?.linkedConditionId ?? null,
         resolvedAt: input.resolvedAt ?? existing?.resolvedAt ?? null,
-        createdBy: existing?.createdBy ?? uid,
-        createdAt: existing?.createdAt ?? now,
+        createdBy: input.createdBy ?? existing?.createdBy ?? uid,
+        createdAt: input.createdAt ?? existing?.createdAt ?? now,
         lastEditedAt: now,
       };
       batch.set(getSymptomDocRef(householdId, input.catId, id), symptom);
@@ -383,7 +505,8 @@ export const completeVisit = createAsyncThunk<
       ...current,
       status: 'completed',
       completedAt: now,
-      summary: outcome.summary === undefined ? current.summary : outcome.summary,
+      summary:
+        outcome.summary === undefined ? current.summary : outcome.summary,
       linkedVaccinationIds: [...new Set(linkedVaccinationIds)],
       linkedWeightEntryIds: [...new Set(linkedWeightEntryIds)],
       linkedConditionIds: [...new Set(linkedConditionIds)],
@@ -404,13 +527,21 @@ export const completeVisit = createAsyncThunk<
     try {
       await batch.commit();
       dispatch(upsertVisit(nextVisit));
-      createdVaccinations.forEach((vaccination) => dispatch(upsertVaccination(vaccination)));
-      createdWeightEntries.forEach((entry) => dispatch(upsertWeightEntry(entry)));
-      changedConditions.forEach((condition) => dispatch(upsertCatCondition(condition)));
+      createdVaccinations.forEach((vaccination) =>
+        dispatch(upsertVaccination(vaccination)),
+      );
+      createdWeightEntries.forEach((entry) =>
+        dispatch(upsertWeightEntry(entry)),
+      );
+      changedConditions.forEach((condition) =>
+        dispatch(upsertCatCondition(condition)),
+      );
       changedSymptoms.forEach((symptom) => dispatch(upsertSymptom(symptom)));
       return nextVisit;
     } catch (error) {
-      return rejectWithValue(error instanceof Error ? error.message : 'Unable to complete visit.');
+      return rejectWithValue(
+        error instanceof Error ? error.message : 'Unable to complete visit.',
+      );
     }
   },
 );
@@ -420,11 +551,27 @@ export const cancelVisit = createAsyncThunk<
   { householdId: string; visitId: string },
   { rejectValue: string }
 >('nineLives/visits/cancel', async ({ householdId, visitId }, { dispatch }) =>
-  dispatch(updateVisit({
-    householdId,
-    visitId,
-    changes: { status: 'cancelled', completedAt: null },
-  })).unwrap(),
+  dispatch(
+    updateVisit({
+      householdId,
+      visitId,
+      changes: { status: 'cancelled', completedAt: null },
+    }),
+  ).unwrap(),
+);
+
+export const reopenVisit = createAsyncThunk<
+  Visit,
+  { householdId: string; visitId: string },
+  { rejectValue: string }
+>('nineLives/visits/reopen', async ({ householdId, visitId }, { dispatch }) =>
+  dispatch(
+    updateVisit({
+      householdId,
+      visitId,
+      changes: { status: 'upcoming' },
+    }),
+  ).unwrap(),
 );
 
 export const deleteVisit = createAsyncThunk<
@@ -435,7 +582,9 @@ export const deleteVisit = createAsyncThunk<
   'nineLives/visits/delete',
   async ({ householdId, visitId }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
-    const current = state.nineLives.visits.items.find((visit) => visit.id === visitId);
+    const current = state.nineLives.visits.items.find(
+      (visit) => visit.id === visitId,
+    );
 
     if (!current) {
       return rejectWithValue('Visit not found.');
@@ -475,7 +624,9 @@ export const deleteVisit = createAsyncThunk<
       return { id: visitId };
     } catch (error) {
       dispatch(revertVisit({ id: visitId }));
-      return rejectWithValue(error instanceof Error ? error.message : 'Unable to delete visit.');
+      return rejectWithValue(
+        error instanceof Error ? error.message : 'Unable to delete visit.',
+      );
     }
   },
 );

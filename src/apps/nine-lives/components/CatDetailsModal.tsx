@@ -1,17 +1,21 @@
-import { Avatar, Modal, Tabs, TabsContent, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Avatar,
+  Modal,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { useAppSelector } from '@/store';
 import { getInitials } from '@/utils/accountUtils';
 
 import { useCatDetailSync } from '../hooks/useCatDetailSync';
-import { selectVisitsByCat } from '../store/selectors';
 import type { Cat } from '../types';
 import CatConditionsSection from './CatConditionsSection';
 import CatProfileForm from './CatProfileForm';
 import SymptomsSection from './SymptomsSection';
 import VaccinationsSection from './VaccinationsSection';
-import VisitTimeline from './VisitTimeline';
 import WeightEntriesSection from './WeightEntriesSection';
 
 interface CatDetailsModalProps {
@@ -34,7 +38,6 @@ function CatDetailsModal({
   onClose,
 }: CatDetailsModalProps) {
   const { confirm } = useActionModal();
-  const visits = useAppSelector(selectVisitsByCat(cat?.id));
 
   useCatDetailSync(householdId, cat?.id);
 
@@ -84,9 +87,6 @@ function CatDetailsModal({
           <TabsTrigger value='symptoms' disabled={!cat || !householdId}>
             Symptoms
           </TabsTrigger>
-          <TabsTrigger value='visits' disabled={!cat || !householdId}>
-            Visits
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value='details' className='pt-4'>
@@ -104,26 +104,34 @@ function CatDetailsModal({
         {cat && householdId && (
           <>
             <TabsContent value='vaccinations' className='pt-4'>
-              <VaccinationsSection householdId={householdId} catId={cat.id} catName={cat.name} />
+              <VaccinationsSection
+                householdId={householdId}
+                catId={cat.id}
+                catName={cat.name}
+              />
             </TabsContent>
 
             <TabsContent value='weight' className='pt-4'>
-              <WeightEntriesSection householdId={householdId} catId={cat.id} catName={cat.name} />
+              <WeightEntriesSection
+                householdId={householdId}
+                catId={cat.id}
+                catName={cat.name}
+              />
             </TabsContent>
 
             <TabsContent value='conditions' className='pt-4'>
-              <CatConditionsSection householdId={householdId} catId={cat.id} catName={cat.name} />
+              <CatConditionsSection
+                householdId={householdId}
+                catId={cat.id}
+                catName={cat.name}
+              />
             </TabsContent>
 
             <TabsContent value='symptoms' className='pt-4'>
-              <SymptomsSection householdId={householdId} catId={cat.id} catName={cat.name} />
-            </TabsContent>
-
-            <TabsContent value='visits' className='pt-4'>
-              <VisitTimeline
-                visits={visits}
-                cats={[cat]}
-                emptyLabel='No visits for this cat yet.'
+              <SymptomsSection
+                householdId={householdId}
+                catId={cat.id}
+                catName={cat.name}
               />
             </TabsContent>
           </>
