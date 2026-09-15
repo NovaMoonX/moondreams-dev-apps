@@ -32,13 +32,18 @@ export function getExpenseCategoryLabel(category: ExpenseCategory): string {
   return labels[category] ?? 'Other';
 }
 
-export function getRecurringCycleCount(expense: Expense, now: number = Date.now()): number {
-  if (!expense.isRecurring || expense.incurredAt > now) {
+export function getRecurringCycleCount(
+  expense: Pick<Expense, 'isRecurring' | 'incurredAt' | 'recurrenceInterval' | 'recurrenceEndedAt'>,
+  now: number = Date.now(),
+): number {
+  const effectiveEnd = expense.recurrenceEndedAt != null ? Math.min(expense.recurrenceEndedAt, now) : now;
+
+  if (!expense.isRecurring || expense.incurredAt > effectiveEnd) {
     return 0;
   }
 
   const start = new Date(expense.incurredAt);
-  const end = new Date(now);
+  const end = new Date(effectiveEnd);
 
   if (expense.recurrenceInterval === 'yearly') {
     const yearDelta = end.getFullYear() - start.getFullYear();
@@ -56,10 +61,10 @@ export function getRecurringCycleCount(expense: Expense, now: number = Date.now(
   return Math.max(1, monthDelta + (currentMonthCycle ? 1 : 0));
 }
 
-/** Sums recurring expenses as their monthly-equivalent cost (a yearly charge is divided by 12). */
+/** Sums currently-active recurring expenses as their monthly-equivalent cost (a yearly charge is divided by 12). */
 export function calculateRecurringMonthlyTotal(expenses: Expense[]): number {
   return expenses.reduce((total, expense) => {
-    if (!expense.isRecurring) {
+    if (!expense.isRecurring || expense.recurrenceEndedAt != null) {
       return total;
     }
 
@@ -67,10 +72,10 @@ export function calculateRecurringMonthlyTotal(expenses: Expense[]): number {
   }, 0);
 }
 
-/** Sums recurring expenses as their yearly-equivalent cost (a monthly charge is multiplied by 12). */
+/** Sums currently-active recurring expenses as their yearly-equivalent cost (a monthly charge is multiplied by 12). */
 export function calculateRecurringYearlyTotal(expenses: Expense[]): number {
   return expenses.reduce((total, expense) => {
-    if (!expense.isRecurring) {
+    if (!expense.isRecurring || expense.recurrenceEndedAt != null) {
       return total;
     }
 

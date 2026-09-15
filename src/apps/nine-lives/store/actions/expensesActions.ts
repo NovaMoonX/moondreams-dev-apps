@@ -24,8 +24,15 @@ function normalizeExpenseInput(value: Partial<Expense>): Partial<Expense> {
 
   if (!next.isRecurring) {
     next.recurrenceInterval = null;
-  } else if (next.recurrenceInterval === undefined) {
-    next.recurrenceInterval = 'monthly';
+    next.recurrenceEndedAt = null;
+  } else {
+    if (next.recurrenceInterval === undefined) {
+      next.recurrenceInterval = 'monthly';
+    }
+
+    if (next.recurrenceEndedAt === undefined) {
+      next.recurrenceEndedAt = null;
+    }
   }
 
   return next;
@@ -68,6 +75,7 @@ export const createExpense = createAsyncThunk<
       recurrenceInterval: normalizedExpense.isRecurring
         ? normalizedExpense.recurrenceInterval ?? 'monthly'
         : null,
+      recurrenceEndedAt: normalizedExpense.isRecurring ? normalizedExpense.recurrenceEndedAt ?? null : null,
       incurredAt: expense.incurredAt,
       notes: normalizedExpense.notes ?? null,
       createdBy: uid,
@@ -117,6 +125,12 @@ export const updateExpense = createAsyncThunk<
         sanitizedChanges.isRecurring === false
           ? null
           : sanitizedChanges.recurrenceInterval ?? current.recurrenceInterval ?? null,
+      recurrenceEndedAt:
+        sanitizedChanges.isRecurring === false
+          ? null
+          : 'recurrenceEndedAt' in changes
+            ? sanitizedChanges.recurrenceEndedAt ?? null
+            : current.recurrenceEndedAt ?? null,
       incurredAt: sanitizedChanges.incurredAt ?? current.incurredAt,
       label: sanitizedChanges.label ?? current.label ?? null,
       notes: sanitizedChanges.notes ?? current.notes ?? null,

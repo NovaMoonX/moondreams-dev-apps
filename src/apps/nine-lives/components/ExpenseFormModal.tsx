@@ -6,7 +6,11 @@ import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/ut
 
 import type { Expense } from '@apps/nine-lives/types';
 
-import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
+import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  getExpenseCategoryLabel,
+  getRecurringCycleCount,
+} from '../utils/budgetCalculators';
 
 interface ExpenseFormValues {
   catIds: string[];
@@ -16,6 +20,8 @@ interface ExpenseFormValues {
   amount: string;
   isRecurring: boolean;
   recurrenceInterval?: string;
+  isStopped?: boolean;
+  recurrenceEndedAt?: string;
   notes?: string | null;
 }
 
@@ -51,6 +57,17 @@ function ExpenseFormModal({
   const isEditing = Boolean(initialExpense?.id);
 
   const [isRecurring, setIsRecurring] = useState(Boolean(initialExpense?.isRecurring));
+  const [isStopped, setIsStopped] = useState(Boolean(initialExpense?.recurrenceEndedAt));
+  const [cycleCount, setCycleCount] = useState(() =>
+    initialExpense?.recurrenceEndedAt && initialExpense.incurredAt
+      ? getRecurringCycleCount({
+          isRecurring: true,
+          incurredAt: initialExpense.incurredAt,
+          recurrenceInterval: initialExpense.recurrenceInterval ?? 'monthly',
+          recurrenceEndedAt: initialExpense.recurrenceEndedAt,
+        })
+      : 0,
+  );
   const [labelOpen, setLabelOpen] = useState(Boolean(initialExpense?.label));
   const [notesOpen, setNotesOpen] = useState(Boolean(initialExpense?.notes));
   const [isValid, setIsValid] = useState(
@@ -115,7 +132,7 @@ function ExpenseFormModal({
           }),
       createDateInputField({
         name: 'incurredAt',
-        label: 'Date incurred',
+        label: isRecurring ? 'Date started' : 'Date incurred',
         variant: 'outline',
       }),
       input({
@@ -137,6 +154,33 @@ function ExpenseFormModal({
               label: 'Billing cadence',
               options: recurrenceOptions,
             }),
+            ...(isEditing
+              ? [
+                  checkbox({
+                    name: 'isStopped',
+                    label: '',
+                    text: 'This recurring expense has stopped',
+                  }),
+                  ...(isStopped
+                    ? [
+                        createDateInputField({
+                          name: 'recurrenceEndedAt',
+                          label: 'Stopped on',
+                          variant: 'outline',
+                        }),
+                        custom({
+                          name: '_cycleCountInfo',
+                          label: '',
+                          renderComponent: () => (
+                            <p className='text-muted-foreground text-sm'>
+                              Billed {cycleCount} time{cycleCount === 1 ? '' : 's'} before stopping.
+                            </p>
+                          ),
+                        }),
+                      ]
+                    : []),
+                ]
+              : []),
           ]
         : []),
       notesOpen
@@ -163,7 +207,17 @@ function ExpenseFormModal({
             ),
           }),
     ],
-    [catOptions, categoryOptions, recurrenceOptions, isRecurring, labelOpen, notesOpen],
+    [
+      catOptions,
+      categoryOptions,
+      recurrenceOptions,
+      isRecurring,
+      isEditing,
+      isStopped,
+      cycleCount,
+      labelOpen,
+      notesOpen,
+    ],
   );
 
   const initialData = useMemo(
@@ -175,6 +229,8 @@ function ExpenseFormModal({
       amount: initialExpense?.amount ? String(initialExpense.amount) : '',
       isRecurring: Boolean(initialExpense?.isRecurring),
       recurrenceInterval: initialExpense?.recurrenceInterval ?? 'monthly',
+      isStopped: Boolean(initialExpense?.recurrenceEndedAt),
+      recurrenceEndedAt: toDateInputValue(initialExpense?.recurrenceEndedAt ?? undefined),
       notes: initialExpense?.notes ?? '',
     }),
     [initialExpense],
@@ -205,6 +261,10 @@ function ExpenseFormModal({
       recurrenceInterval: data.isRecurring
         ? (data.recurrenceInterval === 'yearly' ? 'yearly' : 'monthly')
         : null,
+      recurrenceEndedAt:
+        data.isRecurring && data.isStopped
+          ? fromDateInputValue(data.recurrenceEndedAt ?? '') ?? null
+          : null,
       incurredAt,
       notes: data.notes?.trim() || null,
     });
@@ -245,6 +305,28 @@ function ExpenseFormModal({
 
           if (nextIsRecurring !== isRecurring) {
             setIsRecurring(nextIsRecurring);
+          }
+
+          const nextIsStopped = Boolean(values.isStopped);
+
+          if (nextIsStopped !== isStopped) {
+            setIsStopped(nextIsStopped);
+          }
+
+          if (nextIsRecurring && nextIsStopped) {
+            const incurredAtValue = fromDateInputValue(values.incurredAt);
+            const recurrenceEndedAtValue = fromDateInputValue(values.recurrenceEndedAt ?? '');
+
+            setCycleCount(
+              incurredAtValue !== undefined && recurrenceEndedAtValue !== undefined
+                ? getRecurringCycleCount({
+                    isRecurring: true,
+                    incurredAt: incurredAtValue,
+                    recurrenceInterval: values.recurrenceInterval === 'yearly' ? 'yearly' : 'monthly',
+                    recurrenceEndedAt: recurrenceEndedAtValue,
+                  })
+                : 0,
+            );
           }
 
           const amount = Number(values.amount);

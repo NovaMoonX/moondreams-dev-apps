@@ -575,6 +575,10 @@ service cloud.firestore {
             request.resource.data.recurrenceInterval == null
               || request.resource.data.recurrenceInterval in ['monthly', 'yearly']
           )
+          && (
+            request.resource.data.recurrenceEndedAt == null
+              || (request.resource.data.isRecurring == true && isTimestampNumber(request.resource.data.recurrenceEndedAt))
+          )
           && isTimestampNumber(request.resource.data.incurredAt)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.createdBy is string

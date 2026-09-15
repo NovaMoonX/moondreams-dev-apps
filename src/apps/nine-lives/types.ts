@@ -176,6 +176,8 @@ export interface Expense {
   amount: number;
   isRecurring: boolean;
   recurrenceInterval: RecurrenceInterval | null;
+  /** When set, this recurring expense has stopped billing as of this date. Always null when `isRecurring` is false. */
+  recurrenceEndedAt: number | null;
   incurredAt: number;
   notes: string | null;
   createdBy: string;

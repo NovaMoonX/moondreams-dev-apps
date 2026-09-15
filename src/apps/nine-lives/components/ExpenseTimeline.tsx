@@ -13,7 +13,7 @@ interface ExpenseTimelineProps {
   onEdit?: (expense: Expense) => void;
 }
 
-type CadenceFilter = 'all' | 'one_time' | 'monthly' | 'yearly';
+type CadenceFilter = 'all' | 'one_time' | 'monthly' | 'yearly' | 'stopped';
 type SortOption = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc';
 
 const CADENCE_FILTER_OPTIONS: { text: string; value: CadenceFilter }[] = [
@@ -21,6 +21,7 @@ const CADENCE_FILTER_OPTIONS: { text: string; value: CadenceFilter }[] = [
   { text: 'One-time', value: 'one_time' },
   { text: 'Monthly', value: 'monthly' },
   { text: 'Yearly', value: 'yearly' },
+  { text: 'Stopped', value: 'stopped' },
 ];
 
 const SORT_OPTIONS: { text: string; value: SortOption }[] = [
@@ -92,7 +93,11 @@ function ExpenseTimeline({
         return false;
       }
 
-      if (cadenceFilter !== 'all') {
+      if (cadenceFilter === 'stopped') {
+        if (!expense.isRecurring || expense.recurrenceEndedAt == null) {
+          return false;
+        }
+      } else if (cadenceFilter !== 'all') {
         const expenseCadence = expense.isRecurring
           ? (expense.recurrenceInterval ?? 'monthly')
           : 'one_time';
@@ -235,7 +240,11 @@ function ExpenseTimeline({
                       year: 'numeric',
                     })}
                     {catNames ? ` · ${catNames}` : ''}
-                    {expense.isRecurring ? ` · ${expense.recurrenceInterval ?? 'monthly'}` : ''}
+                    {expense.isRecurring
+                      ? ` · ${expense.recurrenceInterval ?? 'monthly'}${
+                          expense.recurrenceEndedAt != null ? ' (stopped)' : ''
+                        }`
+                      : ''}
                   </div>
                 </div>
                 <div className='shrink-0 font-semibold'>
