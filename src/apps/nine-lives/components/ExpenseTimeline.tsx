@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Input, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { Cat, Expense } from '../types';
@@ -13,7 +13,7 @@ interface ExpenseTimelineProps {
   onEdit?: (expense: Expense) => void;
 }
 
-type CadenceFilter = 'all' | 'one_time' | 'monthly' | 'yearly' | 'stopped';
+type CadenceFilter = 'all' | 'one_time' | 'monthly' | 'yearly';
 type SortOption = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc';
 
 const CADENCE_FILTER_OPTIONS: { text: string; value: CadenceFilter }[] = [
@@ -21,7 +21,6 @@ const CADENCE_FILTER_OPTIONS: { text: string; value: CadenceFilter }[] = [
   { text: 'One-time', value: 'one_time' },
   { text: 'Monthly', value: 'monthly' },
   { text: 'Yearly', value: 'yearly' },
-  { text: 'Stopped', value: 'stopped' },
 ];
 
 const SORT_OPTIONS: { text: string; value: SortOption }[] = [
@@ -60,7 +59,13 @@ function ExpenseTimeline({
   const [catFilter, setCatFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [cadenceFilter, setCadenceFilter] = useState<CadenceFilter>('all');
+  const [showStopped, setShowStopped] = useState(true);
   const [sortOption, setSortOption] = useState<SortOption>('date_desc');
+
+  const hasStoppedExpenses = useMemo(
+    () => expenses.some((expense) => expense.isRecurring && expense.recurrenceEndedAt != null),
+    [expenses],
+  );
 
   const catFilterOptions = useMemo(
     () => [
@@ -93,11 +98,11 @@ function ExpenseTimeline({
         return false;
       }
 
-      if (cadenceFilter === 'stopped') {
-        if (!expense.isRecurring || expense.recurrenceEndedAt == null) {
-          return false;
-        }
-      } else if (cadenceFilter !== 'all') {
+      if (!showStopped && expense.isRecurring && expense.recurrenceEndedAt != null) {
+        return false;
+      }
+
+      if (cadenceFilter !== 'all') {
         const expenseCadence = expense.isRecurring
           ? (expense.recurrenceInterval ?? 'monthly')
           : 'one_time';
@@ -134,7 +139,7 @@ function ExpenseTimeline({
         ? right[sortField] - left[sortField]
         : left[sortField] - right[sortField],
     );
-  }, [expenses, cats, searchQuery, catFilter, categoryFilter, cadenceFilter, sortOption]);
+  }, [expenses, cats, searchQuery, catFilter, categoryFilter, cadenceFilter, showStopped, sortOption]);
 
   const hasExpenses = expenses.length > 0;
   const visibleTotal = visibleExpenses.reduce((total, expense) => total + expense.amount, 0);
@@ -152,33 +157,41 @@ function ExpenseTimeline({
             />
           </div>
 
-          <div className='flex flex-wrap items-center gap-2'>
-            <span className='text-muted-foreground text-sm'>Filter by:</span>
-            {cats.length > 1 && (
-              <div className='max-w-36 flex-1'>
+          <div className='flex gap-2'>
+            <span className='text-muted-foreground shrink-0 text-sm pt-1'>Filter by:</span>
+            <div className='flex flex-wrap items-center gap-2'>
+              {cats.length > 1 && (
+                <div className='max-w-36 flex-1'>
+                  <Select
+                    options={catFilterOptions}
+                    value={catFilter}
+                    onChange={setCatFilter}
+                    size='sm'
+                  />
+                </div>
+              )}
+              <div className='max-w-40 flex-1'>
                 <Select
-                  options={catFilterOptions}
-                  value={catFilter}
-                  onChange={setCatFilter}
+                  options={categoryFilterOptions}
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
                   size='sm'
                 />
               </div>
-            )}
-            <div className='max-w-40 flex-1'>
-              <Select
-                options={categoryFilterOptions}
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                size='sm'
-              />
-            </div>
-            <div className='max-w-36 flex-1'>
-              <Select
-                options={CADENCE_FILTER_OPTIONS}
-                value={cadenceFilter}
-                onChange={(value) => setCadenceFilter(value as CadenceFilter)}
-                size='sm'
-              />
+              <div className='max-w-36 flex-1'>
+                <Select
+                  options={CADENCE_FILTER_OPTIONS}
+                  value={cadenceFilter}
+                  onChange={(value) => setCadenceFilter(value as CadenceFilter)}
+                  size='sm'
+                />
+              </div>
+              {hasStoppedExpenses && cadenceFilter !== 'one_time' && (
+                <label className='flex items-center gap-2 text-sm'>
+                  <Toggle size='sm' checked={showStopped} onCheckedChange={setShowStopped} />
+                  Show stopped
+                </label>
+              )}
             </div>
           </div>
 
