@@ -406,10 +406,21 @@ PDF/image upload and management for a cat's health records, plus persisted custo
 
 #### Success Criteria
 
-- [ ] Uploading a PDF or image succeeds and appears in the cat's record list immediately.
-- [ ] Attempting to upload an unsupported file type is rejected client-side with a clear message.
-- [ ] Typing a new custom record type label once makes it available as a select option on every subsequent record, for any cat in the household.
-- [ ] Only household members can read or write a given cat's health record files, verified in both `firestore.rules` and `storage.rules`.
+- [x] Uploading a PDF or image succeeds and appears in the cat's record list immediately.
+- [x] Attempting to upload an unsupported file type is rejected client-side with a clear message.
+- [x] Typing a new custom record type label once makes it available as a select option on every subsequent record, for any cat in the household.
+- [x] Only household members can read or write a given cat's health record files, verified in both `firestore.rules` and `storage.rules`.
+
+#### CRUD & Entry-Point Requirements
+
+- [x] Upload a record from the dedicated Records tab on a cat's details view.
+- [x] Open a record's uploaded file from the record list.
+- [x] Edit record metadata without re-uploading the file.
+- [x] Delete a record with confirmation, removing both its Firestore document and Storage file.
+
+#### Documentation
+
+- [x] README and this technical roadmap describe the shipped health record flow.
 
 ### Issue 11: Budgeting Tool with Default Category Presets
 

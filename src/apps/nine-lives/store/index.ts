@@ -28,6 +28,10 @@ import {
   type CatConditionsState,
 } from './slices/catConditionsSlice';
 import {
+  expensesReducer,
+  type ExpensesState,
+} from './slices/expensesSlice';
+import {
   vaccinationsReducer,
   type VaccinationsState,
 } from './slices/vaccinationsSlice';
@@ -43,6 +47,14 @@ import {
   visitsReducer,
   type VisitsState,
 } from './slices/visitsSlice';
+import {
+  healthRecordsReducer,
+  type HealthRecordsState,
+} from './slices/healthRecordsSlice';
+import {
+  customHealthRecordTypesReducer,
+  type CustomHealthRecordTypesState,
+} from './slices/customHealthRecordTypesSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -53,9 +65,12 @@ export interface NineLivesState {
   symptoms: SymptomsState;
   conditionLibrary: ConditionLibraryState;
   catConditions: CatConditionsState;
+  expenses: ExpensesState;
   vaccinations: VaccinationsState;
   weightEntries: WeightEntriesState;
   visits: VisitsState;
+  healthRecords: HealthRecordsState;
+  customHealthRecordTypes: CustomHealthRecordTypesState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -67,9 +82,12 @@ export const nineLivesReducer = combineReducers({
   symptoms: symptomsReducer,
   conditionLibrary: conditionLibraryReducer,
   catConditions: catConditionsReducer,
+  expenses: expensesReducer,
   vaccinations: vaccinationsReducer,
   weightEntries: weightEntriesReducer,
   visits: visitsReducer,
+  healthRecords: healthRecordsReducer,
+  customHealthRecordTypes: customHealthRecordTypesReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

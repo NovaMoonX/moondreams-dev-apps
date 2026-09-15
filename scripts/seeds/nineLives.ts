@@ -312,6 +312,167 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     ],
   };
 
+  const expenses = [
+    {
+      id: 'seed-expense-mochi-adoption',
+      catIds: ['seed-cat-mochi'],
+      category: 'adoption_fee',
+      label: null,
+      amount: 125,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 47_520_000_000,
+      notes: 'Adoption fee at Moonlight Cat Rescue.',
+    },
+    {
+      id: 'seed-expense-mochi-insurance',
+      catIds: ['seed-cat-mochi'],
+      category: 'insurance',
+      label: null,
+      amount: 34.75,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 47_433_600_000,
+      notes: 'Trupanion monthly premium.',
+    },
+    {
+      id: 'seed-expense-mochi-checkup',
+      catIds: ['seed-cat-mochi'],
+      category: 'vet',
+      label: null,
+      amount: 82,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 2_592_000_000,
+      notes: 'Routine checkup at Blue Bark Veterinary Clinic.',
+    },
+    {
+      id: 'seed-expense-juniper-food',
+      catIds: ['seed-cat-juniper'],
+      category: 'food',
+      label: null,
+      amount: 48.5,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 5_184_000_000,
+      notes: 'Grain-free dry food subscription.',
+    },
+    {
+      id: 'seed-expense-juniper-dental',
+      catIds: ['seed-cat-juniper'],
+      category: 'vet',
+      label: 'Dental cleaning',
+      amount: 310,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 7_776_000_000,
+      notes: 'Dental cleaning at Harbor Cat & Pet Center.',
+    },
+    {
+      id: 'seed-expense-household-annual-checkup',
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      category: 'vet',
+      label: 'Annual wellness visit',
+      amount: 168,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 2_592_000_000,
+      notes: 'Shared annual wellness visit for both cats.',
+    },
+    {
+      id: 'seed-expense-mochi-old-insurance',
+      catIds: ['seed-cat-mochi'],
+      category: 'insurance',
+      label: 'Previous provider',
+      amount: 28,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      recurrenceEndedAt: context.now - 31_536_000_000,
+      incurredAt: context.now - 63_072_000_000,
+      notes: 'Cancelled after switching to Trupanion.',
+    },
+    {
+      id: 'seed-expense-juniper-membership',
+      catIds: ['seed-cat-juniper'],
+      category: 'other',
+      label: 'Pet club membership',
+      amount: 60,
+      isRecurring: true,
+      recurrenceInterval: 'yearly',
+      recurrenceEndedAt: context.now - 15_552_000_000,
+      incurredAt: context.now - 47_520_000_000,
+      notes: 'Annual membership, not renewed.',
+    },
+  ] as const;
+
+  const customHealthRecordTypes = [
+    {
+      id: 'seed-custom-record-type-allergy-test',
+      label: 'Allergy test',
+    },
+  ] as const;
+
+  const healthRecords = [
+    {
+      id: 'seed-health-record-mochi-labs',
+      catIds: ['seed-cat-mochi'],
+      fileURL: 'https://example.com/seed-files/mochi-bloodwork.pdf',
+      fileType: 'pdf' as const,
+      fileName: 'mochi-bloodwork-results.pdf',
+      label: null,
+      recordType: 'lab_result' as const,
+      customRecordTypeId: null,
+      recordDate: context.now - 2_592_000_000,
+      linkedVisitId: 'seed-visit-mochi-checkup',
+      notes: 'Bloodwork from the routine checkup.',
+    },
+    {
+      id: 'seed-health-record-juniper-allergy',
+      catIds: ['seed-cat-juniper'],
+      fileURL: 'https://example.com/seed-files/juniper-allergy-panel.pdf',
+      fileType: 'pdf' as const,
+      fileName: 'juniper-allergy-panel.pdf',
+      label: null,
+      recordType: 'custom' as const,
+      customRecordTypeId: 'seed-custom-record-type-allergy-test',
+      recordDate: context.now - 7_776_000_000,
+      linkedVisitId: null,
+      notes: null,
+    },
+    {
+      id: 'seed-health-record-household-insurance',
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      fileURL: 'https://example.com/seed-files/household-insurance-policy.pdf',
+      fileType: 'pdf' as const,
+      fileName: 'household-insurance-policy.pdf',
+      label: null,
+      recordType: 'insurance' as const,
+      customRecordTypeId: null,
+      recordDate: null,
+      linkedVisitId: null,
+      notes: 'Shared insurance policy covering both cats.',
+    },
+    {
+      id: 'seed-health-record-juniper-ear-photo',
+      catIds: ['seed-cat-juniper'],
+      fileURL: 'https://example.com/seed-files/IMG_2481.jpg',
+      fileType: 'image' as const,
+      fileName: 'IMG_2481.jpg',
+      label: 'Ear infection photo',
+      recordType: 'miscellaneous' as const,
+      customRecordTypeId: null,
+      recordDate: context.now - 1_296_000_000,
+      linkedVisitId: null,
+      notes: 'Photo sent to the vet before scheduling a follow-up.',
+    },
+  ] as const;
+
   const visits = [
     {
       id: 'seed-visit-mochi-checkup',
@@ -385,6 +546,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
 
   let vaccinationCount = 0;
   let weightEntryCount = 0;
+  let expenseCount = 0;
+  let healthRecordCount = 0;
   let conditionLibraryCount = 0;
   let symptomCount = 0;
   let visitCount = 0;
@@ -513,6 +676,57 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     visitCount += 1;
   });
 
+  expenses.forEach((expense) => {
+    const expenseRef = householdRef.collection('expenses').doc(expense.id);
+
+    batch.set(
+      expenseRef,
+      {
+        ...expense,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    expenseCount += 1;
+  });
+
+  customHealthRecordTypes.forEach((customType) => {
+    const customTypeRef = householdRef
+      .collection('customHealthRecordTypes')
+      .doc(customType.id);
+
+    batch.set(
+      customTypeRef,
+      {
+        ...customType,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
+  healthRecords.forEach((record) => {
+    const recordRef = householdRef.collection('healthRecords').doc(record.id);
+
+    batch.set(
+      recordRef,
+      {
+        ...record,
+        householdId: HOUSEHOLD_ID,
+        uploadedBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    healthRecordCount += 1;
+  });
+
   doctors.forEach((doctor) => {
     const doctorRef = householdRef.collection('doctors').doc(doctor.id);
 
@@ -539,6 +753,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       doctors.length +
       vaccinationCount +
       weightEntryCount +
+      expenseCount +
+      customHealthRecordTypes.length +
+      healthRecordCount +
       symptomCount +
       visitCount,
   };

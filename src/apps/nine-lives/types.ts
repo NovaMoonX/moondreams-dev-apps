@@ -91,6 +91,42 @@ export interface Doctor {
   createdAt: number;
 }
 
+export type HealthRecordType =
+  | 'lab_result'
+  | 'vet_paperwork'
+  | 'insurance'
+  | 'shelter_adoption'
+  | 'prescription'
+  | 'microchip_registration'
+  | 'miscellaneous'
+  | 'custom';
+
+export interface HealthRecord {
+  id: string;
+  householdId: string;
+  catIds: string[];
+  fileURL: string;
+  fileType: 'pdf' | 'image';
+  fileName: string;
+  label: string | null;
+  recordType: HealthRecordType;
+  customRecordTypeId: string | null;
+  recordDate: number | null;
+  linkedVisitId: string | null;
+  notes: string | null;
+  uploadedBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface CustomHealthRecordType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
 export type VisitStatus = 'upcoming' | 'completed' | 'cancelled';
 export type VisitReason =
   | 'checkup'
@@ -150,6 +186,39 @@ export interface WeightEntry {
   linkedVisitId: string | null;
   createdBy: string;
   createdAt: number;
+}
+
+export type ExpenseCategory =
+  | 'adoption_fee'
+  | 'insurance'
+  | 'food'
+  | 'litter'
+  | 'vet'
+  | 'grooming'
+  | 'supplies'
+  | 'medication'
+  | 'microchipping'
+  | 'spay_neuter'
+  | 'other';
+
+export type RecurrenceInterval = 'monthly' | 'yearly';
+
+export interface Expense {
+  id: string;
+  householdId: string;
+  catIds: string[];
+  category: ExpenseCategory;
+  label: string | null;
+  amount: number;
+  isRecurring: boolean;
+  recurrenceInterval: RecurrenceInterval | null;
+  /** When set, this recurring expense has stopped billing as of this date. Always null when `isRecurring` is false. */
+  recurrenceEndedAt: number | null;
+  incurredAt: number;
+  notes: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
 }
 
 export type SymptomSeverity = 'mild' | 'moderate' | 'severe';

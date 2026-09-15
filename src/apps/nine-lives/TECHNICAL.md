@@ -137,7 +137,9 @@ interface Doctor {
 
 ### 5. Health Record
 
-Path: `apps/nine-lives/households/{householdId}/cats/{catId}/healthRecords/{recordId}`
+Path: `apps/nine-lives/households/{householdId}/healthRecords/{recordId}`
+
+Household-scoped, not cat-scoped — a record can be attached to more than one cat (`catIds`), the same tradeoff as `Expense` and `Visit`, since paperwork like a shared insurance policy or joint checkup often covers multiple cats.
 
 Custom record types are their own small, household-scoped entity rather than a free-text field copied onto every record — the same reasoning as `Doctor`: type it once, reuse it via a select from then on. This was a real tradeoff worth spelling out, since it wasn't the only reasonable option:
 
@@ -145,19 +147,29 @@ Custom record types are their own small, household-scoped entity rather than a f
 - **Chosen: a dedicated `CustomHealthRecordType` entity.** A record references it by ID rather than embedding the label as a string. Reading the small reference list is cheap, there's no drift between entries, and if a label ever does get renamed, every record referencing it updates for free — a nice side effect, even though (as you noted) it's not really why this exists; the main win is just not re-typing the same label every time.
 
 ```typescript
-type HealthRecordType = 'lab_result' | 'vet_paperwork' | 'other' | 'custom';
+type HealthRecordType =
+  | 'lab_result'
+  | 'vet_paperwork'
+  | 'insurance'
+  | 'shelter_adoption'
+  | 'prescription'
+  | 'microchip_registration'
+  | 'miscellaneous'
+  | 'custom';
 
 interface HealthRecord {
   id: string;
-  catId: string;
+  householdId: string;
+  catIds: string[];
   fileURL: string;
   fileType: 'pdf' | 'image';
   fileName: string;
+  label: string | null; // user-facing display name; falls back to fileName when unset (most useful for images, whose filenames rarely describe the content)
   recordType: HealthRecordType;
-  customRecordTypeId?: string; // present only if recordType === 'custom', ref to CustomHealthRecordType
-  recordDate?: number;
-  linkedVisitId?: string; // convenience back-pointer, mirrors the other linked entities
-  notes?: string;
+  customRecordTypeId: string | null; // present only if recordType === 'custom', ref to CustomHealthRecordType
+  recordDate: number | null;
+  linkedVisitId: string | null; // convenience back-pointer, mirrors the other linked entities
+  notes: string | null;
   uploadedBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -175,6 +187,16 @@ interface CustomHealthRecordType {
   createdAt: number;
 }
 ```
+
+Health record files are stored at
+`nine-lives/households/{householdId}/health-records/{recordId}` in Storage.
+Records live in their own household-level "Records" section (alongside
+Expenses and Vet Clinics), not the cat details modal, and the listener starts
+as soon as a household is selected. The section supports opening files,
+editing record metadata, and deleting both the Firestore record and its
+Storage object. New custom labels are upserted into the household's reference
+collection before the record is created, so they are available to every cat
+in that household.
 
 ### 6. Vaccination
 
@@ -834,7 +856,7 @@ src/apps/nine-lives/
 │   ├── InsuranceCard.tsx
 │   ├── EmergencyReadinessBanner.tsx
 │   ├── HealthRecordUploadModal.tsx  # includes custom type select/create, upsert-on-first-mention like Doctor
-│   ├── HealthRecordList.tsx
+│   ├── HealthRecordTimeline.tsx  # search, cat/type filters, date/name sort — mirrors ExpenseTimeline
 │   ├── VaccinationFormModal.tsx
 │   ├── VaccinationTimeline.tsx
 │   ├── WeightEntryFormModal.tsx
@@ -898,14 +920,15 @@ src/apps/nine-lives/
 │   │   ├── householdListener.ts
 │   │   ├── catsListener.ts
 │   │   ├── vetClinicsListener.ts
-│   │   ├── doctorsListener.ts
+│   │   ├── doctorsListener.ts             # household-wide reference data
 │   │   ├── conditionLibraryListener.ts
 │   │   ├── vaccineLibraryListener.ts
 │   │   ├── glossaryListener.ts
 │   │   ├── resourcesListener.ts
 │   │   ├── visitsListener.ts
 │   │   ├── vaccinationsListener.ts  # collectionGroup query, household-scoped
-│   │   └── catDetailListeners.ts    # healthRecords, weightEntries, catConditions, symptoms, expenses, growthPhotos, careInstructions; customHealthRecordTypes loads household-wide alongside doctors
+│   │   ├── catDetailListeners.ts    # healthRecords, weightEntries, catConditions, symptoms, expenses, growthPhotos, careInstructions
+│   │   └── customHealthRecordTypesListener.ts
 │   ├── selectors.ts
 │   └── index.ts                     # exports NineLivesState, nineLivesReducer, selectNineLives
 ├── hooks/
