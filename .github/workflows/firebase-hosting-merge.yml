@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: npm ci && npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -32,3 +34,17 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
           channelId: live
           projectId: moondreams-dev-apps
+      - name: Check for Cloudflare Worker changes
+        id: worker_changes
+        run: |
+          if git diff --quiet ${{ github.event.before }} ${{ github.sha }} -- cloudflare-worker.js wrangler.toml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Cloudflare Worker
+        if: steps.worker_changes.outputs.changed == 'true'
+        continue-on-error: true
+        run: npm run cf:worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

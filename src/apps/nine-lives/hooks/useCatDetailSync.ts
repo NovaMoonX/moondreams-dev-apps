@@ -4,13 +4,13 @@ import { useAppDispatch } from '@/store';
 
 import {
   startCatConditionsListener,
-  startHealthRecordsListener,
   startSymptomsListener,
 } from '../store/listeners/catDetailListeners';
-import { setHealthRecords } from '../store/slices/healthRecordsSlice';
+import { startVaccinationsListener } from '../store/listeners/vaccinationsListener';
 import { startWeightEntriesListener } from '../store/listeners/weightEntriesListener';
 import { setCatConditions } from '../store/slices/catConditionsSlice';
 import { setSymptoms } from '../store/slices/symptomsSlice';
+import { setVaccinations } from '../store/slices/vaccinationsSlice';
 import { setWeightEntries } from '../store/slices/weightEntriesSlice';
 
 export function useCatDetailSync(householdId: string | null | undefined, catId: string | null | undefined) {
@@ -21,7 +21,7 @@ export function useCatDetailSync(householdId: string | null | undefined, catId: 
       dispatch(setWeightEntries([]));
       dispatch(setSymptoms([]));
       dispatch(setCatConditions([]));
-      dispatch(setHealthRecords([]));
+      dispatch(setVaccinations([]));
       return;
     }
 
@@ -34,15 +34,15 @@ export function useCatDetailSync(householdId: string | null | undefined, catId: 
     const unsubscribeCatConditions = startCatConditionsListener(householdId, catId, (conditions) => {
       dispatch(setCatConditions(conditions));
     });
-    const unsubscribeHealthRecords = startHealthRecordsListener(householdId, catId, (records) => {
-      dispatch(setHealthRecords(records));
+    const unsubscribeVaccinations = startVaccinationsListener(householdId, catId, (vaccinations) => {
+      dispatch(setVaccinations(vaccinations));
     });
 
     return () => {
       unsubscribeWeightEntries();
       unsubscribeSymptoms();
       unsubscribeCatConditions();
-      unsubscribeHealthRecords();
+      unsubscribeVaccinations();
     };
   }, [dispatch, householdId, catId]);
 }

@@ -28,6 +28,10 @@ import {
   type CatConditionsState,
 } from './slices/catConditionsSlice';
 import {
+  expensesReducer,
+  type ExpensesState,
+} from './slices/expensesSlice';
+import {
   vaccinationsReducer,
   type VaccinationsState,
 } from './slices/vaccinationsSlice';
@@ -61,6 +65,7 @@ export interface NineLivesState {
   symptoms: SymptomsState;
   conditionLibrary: ConditionLibraryState;
   catConditions: CatConditionsState;
+  expenses: ExpensesState;
   vaccinations: VaccinationsState;
   weightEntries: WeightEntriesState;
   visits: VisitsState;
@@ -77,6 +82,7 @@ export const nineLivesReducer = combineReducers({
   symptoms: symptomsReducer,
   conditionLibrary: conditionLibraryReducer,
   catConditions: catConditionsReducer,
+  expenses: expensesReducer,
   vaccinations: vaccinationsReducer,
   weightEntries: weightEntriesReducer,
   visits: visitsReducer,

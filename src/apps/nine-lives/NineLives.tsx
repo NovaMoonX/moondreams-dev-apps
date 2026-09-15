@@ -12,6 +12,7 @@ import NavButton from '@/ui/NavButton';
 
 import CatsSection from './components/CatsSection';
 import ClinicsSection from './components/ClinicsSection';
+import ExpensesSection from './components/ExpensesSection';
 import HouseholdSetupModal from './components/HouseholdSetupModal';
 import HouseholdSwitcher from './components/HouseholdSwitcher';
 import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
@@ -176,6 +177,9 @@ function NineLives() {
         )}
         {selectedHousehold && (
           <VisitsSection householdId={selectedHousehold.id} />
+        )}
+        {selectedHousehold && (
+          <ExpensesSection householdId={selectedHousehold.id} />
         )}
         {selectedHousehold && (
           <ClinicsSection householdId={selectedHousehold.id} />
