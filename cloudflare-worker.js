@@ -6,7 +6,8 @@ const APP_REGISTRY = [
     path: '/worth-the-wait',
     description:
       'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
-    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-worth-the-wait.png',
+    image:
+      'https://moondreams-dev-apps.web.app/banners/by-app/banner-worth-the-wait.png',
     params: {
       inviteCode: {
         isValid: (value) => value && value.length === 6,
@@ -23,7 +24,18 @@ const APP_REGISTRY = [
     path: '/nine-lives',
     description:
       'A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.',
-    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-nine-lives.png',
+    image:
+      'https://moondreams-dev-apps.web.app/banners/by-app/banner-nine-lives.png',
+  },
+  {
+    id: 'waypoint',
+    name: 'Waypoint',
+    title: 'Waypoint - Moondreams Dev Apps',
+    path: '/waypoint',
+    description:
+      'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
+    image:
+      'https://moondreams-dev-apps.web.app/banners/by-app/banner-waypoint.png',
   },
 ];
 

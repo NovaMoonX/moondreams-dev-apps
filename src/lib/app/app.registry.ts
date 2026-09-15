@@ -33,6 +33,15 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     status: 'draft',
     createdAt: '2026-09-10',
   },
+  {
+    id: 'waypoint',
+    name: 'Waypoint',
+    path: '/waypoint',
+    description:
+      'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
+    status: 'draft',
+    createdAt: '2026-09-15',
+  },
 ];
 
 export const APP_REGISTRY_ID_MAP = Object.fromEntries(
