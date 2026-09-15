@@ -44,6 +44,14 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'apps/waypoint',
+        lazy: async () => {
+          const { default: Waypoint } =
+            await import('@apps/waypoint/Waypoint');
+          return { Component: Waypoint };
+        },
+      },
+      {
         path: 'admin',
         HydrateFallback: Loading,
         lazy: async () => {
