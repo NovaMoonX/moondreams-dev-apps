@@ -26,7 +26,8 @@
     "fb:rules": "firebase deploy --only database,firestore:rules,storage",
     "fb:indexes": "firebase deploy --only firestore:indexes",
     "fb:functions": "cd functions && npm run build && firebase deploy --only functions",
-    "fb:all": "cd functions && npm run build && cd .. && firebase deploy --only database,firestore:rules,firestore:indexes,storage,functions"
+    "fb:deploy:smart": "tsx scripts/fbDeploySmart.ts",
+    "fb:all": "npm run fb:deploy:smart"
   },
   "dependencies": {
     "@moondreamsdev/dreamer-ui": "^1.7.26",
