@@ -100,6 +100,7 @@ export interface HealthRecord {
   fileURL: string;
   fileType: 'pdf' | 'image';
   fileName: string;
+  label: string | null;
   recordType: HealthRecordType;
   customRecordTypeId: string | null;
   recordDate: number | null;

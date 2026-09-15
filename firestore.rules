@@ -540,6 +540,7 @@ service cloud.firestore {
           && isNonEmptyString(request.resource.data.fileURL)
           && (request.resource.data.fileType == 'pdf' || request.resource.data.fileType == 'image')
           && isNonEmptyString(request.resource.data.fileName)
+          && (request.resource.data.label == null || request.resource.data.label is string)
           && request.resource.data.recordType in ['lab_result', 'vet_paperwork', 'other', 'custom']
           && (request.resource.data.customRecordTypeId == null || request.resource.data.customRecordTypeId is string)
           && (request.resource.data.recordDate == null || isTimestampNumber(request.resource.data.recordDate))

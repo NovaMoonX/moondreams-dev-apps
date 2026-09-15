@@ -49,7 +49,9 @@ function HealthRecordList({
             className='flex items-center justify-between gap-3 py-3 first:pt-0'
           >
             <div className='min-w-0'>
-              <strong className='block truncate text-sm'>{record.fileName}</strong>
+              <strong className='block truncate text-sm'>
+                {record.label ?? record.fileName}
+              </strong>
               <div className='text-muted-foreground text-sm'>
                 {recordTypeLabel}
                 {catNames.length > 0 && ` · ${catNames.join(', ')}`}

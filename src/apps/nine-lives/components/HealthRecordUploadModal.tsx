@@ -28,7 +28,9 @@ import type {
   HealthRecordType,
 } from '../types';
 
-const { checkboxGroup, custom } = FormFactories;
+const { checkboxGroup, custom, input } = FormFactories;
+
+const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
 const NEW_TYPE_VALUE = '__new__';
 const MAX_HEALTH_RECORD_BYTES = 10 * 1024 * 1024;
@@ -47,6 +49,7 @@ interface RecordTypeChoice {
 interface HealthRecordFormValues {
   catIds: string[];
   file: File | null;
+  label?: string | null;
   recordType: RecordTypeChoice;
   recordDate: string;
 }
@@ -219,6 +222,7 @@ function HealthRecordUploadModal({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [labelOpen, setLabelOpen] = useState(Boolean(initialRecord?.label));
   const isEditing = Boolean(initialRecord?.id);
   const formId = initialRecord?.id ?? 'new-nine-lives-health-record';
 
@@ -246,6 +250,28 @@ function HealthRecordUploadModal({
             />
           ),
       }),
+      labelOpen
+        ? input({
+            name: 'label',
+            label: 'Label',
+            placeholder: 'e.g. Rabies certificate photo',
+            variant: 'outline',
+          })
+        : custom({
+            name: '_addLabel',
+            label: '',
+            renderComponent: () => (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={() => setLabelOpen(true)}
+              >
+                + Add label
+              </Button>
+            ),
+          }),
       custom({
         name: 'recordType',
         label: 'Record type',
@@ -265,7 +291,7 @@ function HealthRecordUploadModal({
         variant: 'outline',
       }),
     ],
-    [catOptions, customTypes, initialRecord?.fileName, isEditing],
+    [catOptions, customTypes, initialRecord?.fileName, isEditing, labelOpen],
   );
 
   const handleSubmit = async (data: HealthRecordFormValues) => {
@@ -305,6 +331,8 @@ function HealthRecordUploadModal({
         ? fromDateInputValue(data.recordDate)
         : null;
 
+      const label = data.label?.trim() || null;
+
       if (isEditing && initialRecord) {
         await dispatch(
           updateHealthRecord({
@@ -312,6 +340,7 @@ function HealthRecordUploadModal({
             recordId: initialRecord.id,
             changes: {
               catIds,
+              label,
               recordType,
               customRecordTypeId,
               recordDate,
@@ -325,6 +354,7 @@ function HealthRecordUploadModal({
             catIds,
             uid,
             file: data.file,
+            label,
             recordType,
             customRecordTypeId,
             recordDate,
@@ -383,6 +413,7 @@ function HealthRecordUploadModal({
         initialData={{
           catIds: initialRecord?.catIds ?? [],
           file: null,
+          label: initialRecord?.label ?? '',
           recordType: getInitialRecordTypeChoice(initialRecord),
           recordDate: toDateInputValue(initialRecord?.recordDate ?? undefined),
         }}

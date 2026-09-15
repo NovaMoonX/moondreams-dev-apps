@@ -56,6 +56,7 @@ function normalizeHealthRecordChanges(
 ): Partial<HealthRecord> {
   const normalized: Partial<HealthRecord> = {
     ...changes,
+    label: changes.label ?? null,
     customRecordTypeId: changes.customRecordTypeId ?? null,
     recordDate: changes.recordDate ?? null,
     linkedVisitId: changes.linkedVisitId ?? null,
@@ -76,6 +77,7 @@ export const createHealthRecord = createAsyncThunk<
     catIds: string[];
     uid: string;
     file: File;
+    label?: string | null;
     recordType: HealthRecordType;
     customRecordTypeId?: string | null;
     recordDate?: number | null;
@@ -91,6 +93,7 @@ export const createHealthRecord = createAsyncThunk<
       catIds,
       uid,
       file,
+      label,
       recordType,
       customRecordTypeId,
       recordDate,
@@ -128,6 +131,7 @@ export const createHealthRecord = createAsyncThunk<
         fileURL,
         fileType: getHealthRecordFileType(file) as HealthRecord['fileType'],
         fileName: file.name,
+        label: label?.trim() || null,
         recordType,
         customRecordTypeId: recordType === 'custom' ? customRecordTypeId ?? null : null,
         recordDate: recordDate ?? null,
