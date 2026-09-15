@@ -1,6 +1,7 @@
 ---
 name: finish-pr
-description: "Drive an open PR (esp. Copilot-authored ones) to a genuinely mergeable state: verify CRUD completeness, entry points, design/UI conventions, copilot-instructions.md compliance, and seed data, fix what's missing, run all verification, and push/update the PR. Use when the user says \"finish this PR\", \"drive PR #N to execution\", or asks to close out a Copilot agent PR."
+description: "Drive an open PR (esp. Copilot-authored ones) to a genuinely mergeable state: verify CRUD completeness, entry points, design/UI conventions, copilot-instructions.md compliance, and seed data, fix what's missing, run all verification, and push/update the PR. Invoke explicitly with /finish-pr <PR#>."
+disable-model-invocation: true
 ---
 
 # Finish PR
