@@ -37,6 +37,10 @@ const MAX_HEALTH_RECORD_BYTES = 10 * 1024 * 1024;
 const BUILT_IN_TYPE_OPTIONS = [
   { label: 'Lab result', value: 'lab_result' },
   { label: 'Vet paperwork', value: 'vet_paperwork' },
+  { label: 'Insurance', value: 'insurance' },
+  { label: 'Adoption / shelter', value: 'shelter_adoption' },
+  { label: 'Prescription', value: 'prescription' },
+  { label: 'Microchip registration', value: 'microchip_registration' },
   { label: 'Other', value: 'other' },
 ] as const;
 

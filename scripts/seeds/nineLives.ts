@@ -452,7 +452,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       fileType: 'pdf' as const,
       fileName: 'household-insurance-policy.pdf',
       label: null,
-      recordType: 'vet_paperwork' as const,
+      recordType: 'insurance' as const,
       customRecordTypeId: null,
       recordDate: null,
       linkedVisitId: null,

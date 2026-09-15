@@ -14,6 +14,10 @@ interface HealthRecordListProps {
 const BUILT_IN_LABELS: Record<string, string> = {
   lab_result: 'Lab result',
   vet_paperwork: 'Vet paperwork',
+  insurance: 'Insurance',
+  shelter_adoption: 'Adoption / shelter',
+  prescription: 'Prescription',
+  microchip_registration: 'Microchip registration',
   other: 'Other',
 };
 

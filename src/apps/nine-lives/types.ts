@@ -91,7 +91,15 @@ export interface Doctor {
   createdAt: number;
 }
 
-export type HealthRecordType = 'lab_result' | 'vet_paperwork' | 'other' | 'custom';
+export type HealthRecordType =
+  | 'lab_result'
+  | 'vet_paperwork'
+  | 'insurance'
+  | 'shelter_adoption'
+  | 'prescription'
+  | 'microchip_registration'
+  | 'other'
+  | 'custom';
 
 export interface HealthRecord {
   id: string;
