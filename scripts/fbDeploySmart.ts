@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 const targets: string[] = [];
 
 if (existsSync('functions')) {
+  execSync('npm ci', { cwd: 'functions', stdio: 'inherit' });
   execSync('npm run build', { cwd: 'functions', stdio: 'inherit' });
   targets.push('functions');
 }
