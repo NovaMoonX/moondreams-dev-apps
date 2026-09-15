@@ -147,7 +147,15 @@ Custom record types are their own small, household-scoped entity rather than a f
 - **Chosen: a dedicated `CustomHealthRecordType` entity.** A record references it by ID rather than embedding the label as a string. Reading the small reference list is cheap, there's no drift between entries, and if a label ever does get renamed, every record referencing it updates for free — a nice side effect, even though (as you noted) it's not really why this exists; the main win is just not re-typing the same label every time.
 
 ```typescript
-type HealthRecordType = 'lab_result' | 'vet_paperwork' | 'other' | 'custom';
+type HealthRecordType =
+  | 'lab_result'
+  | 'vet_paperwork'
+  | 'insurance'
+  | 'shelter_adoption'
+  | 'prescription'
+  | 'microchip_registration'
+  | 'miscellaneous'
+  | 'custom';
 
 interface HealthRecord {
   id: string;
@@ -848,7 +856,7 @@ src/apps/nine-lives/
 │   ├── InsuranceCard.tsx
 │   ├── EmergencyReadinessBanner.tsx
 │   ├── HealthRecordUploadModal.tsx  # includes custom type select/create, upsert-on-first-mention like Doctor
-│   ├── HealthRecordList.tsx
+│   ├── HealthRecordTimeline.tsx  # search, cat/type filters, date/name sort — mirrors ExpenseTimeline
 │   ├── VaccinationFormModal.tsx
 │   ├── VaccinationTimeline.tsx
 │   ├── WeightEntryFormModal.tsx

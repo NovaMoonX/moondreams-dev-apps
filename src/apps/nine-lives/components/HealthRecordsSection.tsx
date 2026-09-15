@@ -13,7 +13,7 @@ import {
 } from '../store/selectors';
 import type { HealthRecord } from '../types';
 import DetailsDisclosure from './DetailsDisclosure';
-import HealthRecordList from './HealthRecordList';
+import HealthRecordTimeline from './HealthRecordTimeline';
 import HealthRecordUploadModal from './HealthRecordUploadModal';
 
 interface HealthRecordsSectionProps {
@@ -75,7 +75,7 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
             </Button>
           </div>
 
-          <HealthRecordList
+          <HealthRecordTimeline
             records={records}
             cats={cats}
             customTypes={customTypes}

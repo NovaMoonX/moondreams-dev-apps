@@ -465,7 +465,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       fileType: 'image' as const,
       fileName: 'IMG_2481.jpg',
       label: 'Ear infection photo',
-      recordType: 'other' as const,
+      recordType: 'miscellaneous' as const,
       customRecordTypeId: null,
       recordDate: context.now - 1_296_000_000,
       linkedVisitId: null,

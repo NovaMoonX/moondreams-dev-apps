@@ -41,7 +41,7 @@ const BUILT_IN_TYPE_OPTIONS = [
   { label: 'Adoption / shelter', value: 'shelter_adoption' },
   { label: 'Prescription', value: 'prescription' },
   { label: 'Microchip registration', value: 'microchip_registration' },
-  { label: 'Other', value: 'other' },
+  { label: 'Miscellaneous', value: 'miscellaneous' },
 ] as const;
 
 interface RecordTypeChoice {
@@ -167,6 +167,7 @@ function RecordTypeField({
         value={selectedValue}
         placeholder='Select a record type'
         disabled={disabled}
+        searchable
         onChange={(nextValue) => {
           if (nextValue === NEW_TYPE_VALUE) {
             onValueChange({

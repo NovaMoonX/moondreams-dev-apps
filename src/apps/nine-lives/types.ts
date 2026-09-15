@@ -98,7 +98,7 @@ export type HealthRecordType =
   | 'shelter_adoption'
   | 'prescription'
   | 'microchip_registration'
-  | 'other'
+  | 'miscellaneous'
   | 'custom';
 
 export interface HealthRecord {
