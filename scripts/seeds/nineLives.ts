@@ -137,7 +137,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-upper-respiratory',
       name: 'Upper respiratory infection',
       category: 'illness',
-      description: 'Sneezing, nasal discharge, and lethargy consistent with a common upper respiratory infection.',
+      description:
+        'Sneezing, nasal discharge, and lethargy consistent with a common upper respiratory infection.',
       source: 'seed',
       sourceRef: null,
     },
@@ -145,7 +146,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-laceration',
       name: 'Laceration',
       category: 'injury',
-      description: 'A skin wound or cut that may need cleaning, monitoring, or follow-up care.',
+      description:
+        'A skin wound or cut that may need cleaning, monitoring, or follow-up care.',
       source: 'seed',
       sourceRef: null,
     },
@@ -153,7 +155,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-arthritis',
       name: 'Arthritis',
       category: 'chronic',
-      description: 'Chronic joint pain or stiffness that often needs ongoing monitoring and treatment.',
+      description:
+        'Chronic joint pain or stiffness that often needs ongoing monitoring and treatment.',
       source: 'seed',
       sourceRef: null,
     },
@@ -161,7 +164,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-flea-burden',
       name: 'Flea burden',
       category: 'parasite',
-      description: 'Visible flea presence or itchy skin irritation from external parasites.',
+      description:
+        'Visible flea presence or itchy skin irritation from external parasites.',
       source: 'seed',
       sourceRef: null,
     },
@@ -169,7 +173,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-food-allergy',
       name: 'Food allergy',
       category: 'allergy',
-      description: 'Gentle rash, itchy skin, or digestive upset linked to a food or ingredient exposure.',
+      description:
+        'Gentle rash, itchy skin, or digestive upset linked to a food or ingredient exposure.',
       source: 'seed',
       sourceRef: null,
     },
@@ -177,7 +182,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-unclassified',
       name: 'Other',
       category: 'other',
-      description: 'A condition that does not fit the standard illness, injury, chronic, parasite, or allergy categories.',
+      description:
+        'A condition that does not fit the standard illness, injury, chronic, parasite, or allergy categories.',
       source: 'seed',
       sourceRef: null,
     },
@@ -233,13 +239,38 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     Array<{ id: string; weight: number; unit: 'lb' | 'kg'; measuredAt: number }>
   > = {
     'seed-cat-mochi': [
-      { id: 'seed-weight-mochi-1', weight: 8.2, unit: 'lb', measuredAt: context.now - 15_552_000_000 },
-      { id: 'seed-weight-mochi-2', weight: 8.6, unit: 'lb', measuredAt: context.now - 7_776_000_000 },
-      { id: 'seed-weight-mochi-3', weight: 8.9, unit: 'lb', measuredAt: context.now - 2_592_000_000 },
+      {
+        id: 'seed-weight-mochi-1',
+        weight: 8.2,
+        unit: 'lb',
+        measuredAt: context.now - 15_552_000_000,
+      },
+      {
+        id: 'seed-weight-mochi-2',
+        weight: 8.6,
+        unit: 'lb',
+        measuredAt: context.now - 7_776_000_000,
+      },
+      {
+        id: 'seed-weight-mochi-3',
+        weight: 8.9,
+        unit: 'lb',
+        measuredAt: context.now - 2_592_000_000,
+      },
     ],
     'seed-cat-juniper': [
-      { id: 'seed-weight-juniper-1', weight: 9.4, unit: 'lb', measuredAt: context.now - 15_552_000_000 },
-      { id: 'seed-weight-juniper-2', weight: 9.1, unit: 'lb', measuredAt: context.now - 5_184_000_000 },
+      {
+        id: 'seed-weight-juniper-1',
+        weight: 9.4,
+        unit: 'lb',
+        measuredAt: context.now - 15_552_000_000,
+      },
+      {
+        id: 'seed-weight-juniper-2',
+        weight: 9.1,
+        unit: 'lb',
+        measuredAt: context.now - 5_184_000_000,
+      },
     ],
   };
 
@@ -258,7 +289,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     'seed-cat-mochi': [
       {
         id: 'seed-symptom-mochi-appetite',
-        description: 'Skipped breakfast two days in a row but drinking water normally.',
+        description:
+          'Skipped breakfast two days in a row but drinking water normally.',
         quickTags: ['appetite_change'],
         firstNoticedAt: context.now - 1_728_000_000,
         severity: 'mild',
@@ -269,7 +301,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     'seed-cat-juniper': [
       {
         id: 'seed-symptom-juniper-hiding',
-        description: 'Hiding under the bed more than usual and avoiding the living room.',
+        description:
+          'Hiding under the bed more than usual and avoiding the living room.',
         quickTags: ['hiding', 'playfulness_change'],
         firstNoticedAt: context.now - 864_000_000,
         severity: 'moderate',
@@ -279,10 +312,82 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     ],
   };
 
+  const visits = [
+    {
+      id: 'seed-visit-mochi-checkup',
+      catIds: ['seed-cat-mochi'],
+      clinicId: 'seed-vet-clinic-blue-bark',
+      doctorId: 'seed-doctor-maya',
+      status: 'completed' as const,
+      reason: 'checkup' as const,
+      customReasonLabel: null,
+      followUpOfVisitId: null,
+      followUpNote: null,
+      title: null,
+      scheduledAt: context.now - 2_592_000_000,
+      completedAt: context.now - 2_592_000_000,
+      summary:
+        'Routine checkup; weighed in and due for a rabies booster next cycle.',
+      linkedSymptomIds: [],
+      linkedConditionIds: [],
+      linkedHealthRecordIds: [],
+      linkedVaccinationIds: ['seed-vaccination-mochi-rabies'],
+      linkedWeightEntryIds: ['seed-weight-mochi-3'],
+    },
+    {
+      id: 'seed-visit-mochi-follow-up',
+      catIds: ['seed-cat-mochi'],
+      clinicId: 'seed-vet-clinic-blue-bark',
+      doctorId: 'seed-doctor-maya',
+      status: 'upcoming' as const,
+      reason: 'follow_up' as const,
+      customReasonLabel: null,
+      followUpOfVisitId: 'seed-visit-mochi-checkup',
+      followUpNote: 'Recheck weight and appetite in two weeks.',
+      title: null,
+      scheduledAt: context.now + 1_209_600_000,
+      completedAt: null,
+      summary: null,
+      linkedSymptomIds: [],
+      linkedConditionIds: [],
+      linkedHealthRecordIds: [],
+      linkedVaccinationIds: [],
+      linkedWeightEntryIds: [],
+    },
+    {
+      id: 'seed-visit-household-annual',
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      clinicId: 'seed-vet-clinic-harbor',
+      doctorId: 'seed-doctor-daniela',
+      status: 'upcoming' as const,
+      reason: 'checkup' as const,
+      customReasonLabel: null,
+      followUpOfVisitId: null,
+      followUpNote: null,
+      title: null,
+      scheduledAt: context.now + 2_592_000_000,
+      completedAt: null,
+      summary: null,
+      linkedSymptomIds: [],
+      linkedConditionIds: [],
+      linkedHealthRecordIds: [],
+      linkedVaccinationIds: [],
+      linkedWeightEntryIds: [],
+    },
+  ] as const;
+
+  const linkedVaccinationVisits: Record<string, string> = {
+    'seed-vaccination-mochi-rabies': 'seed-visit-mochi-checkup',
+  };
+  const linkedWeightEntryVisits: Record<string, string> = {
+    'seed-weight-mochi-3': 'seed-visit-mochi-checkup',
+  };
+
   let vaccinationCount = 0;
   let weightEntryCount = 0;
   let conditionLibraryCount = 0;
   let symptomCount = 0;
+  let visitCount = 0;
 
   conditionLibraryEntries.forEach((condition) => {
     const conditionRef = context.firestore
@@ -318,7 +423,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
 
     (vaccinationsByCat[cat.id] ?? []).forEach((vaccination) => {
-      const vaccinationRef = catRef.collection('vaccinations').doc(vaccination.id);
+      const vaccinationRef = catRef
+        .collection('vaccinations')
+        .doc(vaccination.id);
 
       batch.set(
         vaccinationRef,
@@ -326,7 +433,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
           ...vaccination,
           householdId: HOUSEHOLD_ID,
           catId: cat.id,
-          linkedVisitId: null,
+          linkedVisitId: linkedVaccinationVisits[vaccination.id] ?? null,
           createdBy: caretaker.uid,
           createdAt,
           lastEditedAt: context.now,
@@ -337,14 +444,16 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     });
 
     (weightEntriesByCat[cat.id] ?? []).forEach((weightEntry) => {
-      const weightEntryRef = catRef.collection('weightEntries').doc(weightEntry.id);
+      const weightEntryRef = catRef
+        .collection('weightEntries')
+        .doc(weightEntry.id);
 
       batch.set(
         weightEntryRef,
         {
           ...weightEntry,
           catId: cat.id,
-          linkedVisitId: null,
+          linkedVisitId: linkedWeightEntryVisits[weightEntry.id] ?? null,
           createdBy: caretaker.uid,
           createdAt,
         },
@@ -387,6 +496,23 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  visits.forEach((visit) => {
+    const visitRef = householdRef.collection('visits').doc(visit.id);
+
+    batch.set(
+      visitRef,
+      {
+        ...visit,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    visitCount += 1;
+  });
+
   doctors.forEach((doctor) => {
     const doctorRef = householdRef.collection('doctors').doc(doctor.id);
 
@@ -413,7 +539,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       doctors.length +
       vaccinationCount +
       weightEntryCount +
-      symptomCount,
+      symptomCount +
+      visitCount,
   };
 
   return result;

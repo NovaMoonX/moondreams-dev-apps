@@ -261,6 +261,8 @@ interface Visit {
 
 See **Visit Outcome Flow** below for how vaccinations, conditions, weight entries, and symptoms get logged as part of completing a visit, and how the five `linked*Ids` arrays above turn a visit into a complete record of everything that happened during it.
 
+The shipped client keeps visits in the household Redux sync and exposes scheduling and editing from the household dashboard only — the per-cat details modal does not repeat a visits tab. `VisitTimeline` supports free-text search, a status filter, a cat filter (household view only), and toggling the date sort direction. Cancelling keeps the record for historical context and can be undone (a cancelled visit can be reopened back to upcoming); deleting an original visit clears its follow-up references in the same batch.
+
 ### 9. Condition Library (shared, global reference)
 
 Path: `apps/nine-lives/conditionLibrary/{conditionId}`
@@ -526,6 +528,8 @@ Marking a visit completed opens the same form back up with a lightweight "what h
 - **Symptoms reported** → creates or links existing `Symptom` entries, appending the visit to `linkedVisitIds` and the symptom to `Visit.linkedSymptomIds` — usually *why* the visit happened in the first place.
 
 None of this is required to mark a visit completed — it's an optional, streamlined path so the common case (you were just at the vet, several things changed at once) doesn't require navigating to separate screens afterward. Each created record remains independently editable later, same as if it had been entered standalone.
+
+The outcome form is a drill-down: a summary field plus one tappable card per selected cat (avatar, name, an "Added" badge once that cat has entries), each opening a per-cat screen where existing open symptoms/conditions can be linked via checkbox instead of retyped, alongside repeatable "add another" inputs for new symptoms, conditions, and vaccinations (a visit can produce more than one of each) and a single weight field. Submitting moves to a review screen listing everything that will be attached, each removable, before the visit is actually marked completed. The "Complete without entries" action skips straight to completion with an empty outcome via the same completion thunk.
 
 **Follow-up visits**: a visit with `reason: 'follow_up'` sets `followUpOfVisitId` pointing at the original visit, plus an optional `followUpNote` — useful because the original visit might have covered several things (say, a checkup plus a skin issue), and the follow-up is usually about just one of them.
 
@@ -838,6 +842,7 @@ src/apps/nine-lives/
 │   ├── CatDietForm.tsx
 │   ├── VisitFormModal.tsx          # multi-cat selection, follow-up linking, outcome flow (vaccinations/conditions/weight/symptoms)
 │   ├── VisitTimeline.tsx
+│   ├── VisitsSection.tsx            # household dashboard entry point and visit CRUD
 │   ├── VetClinicFormModal.tsx
 │   ├── ConditionLibraryBrowser.tsx
 │   ├── CatConditionFormModal.tsx

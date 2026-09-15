@@ -36,3 +36,12 @@ export const selectConditionLibrary = (state: RootState) => state.nineLives.cond
 
 export const selectConditionsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.catConditions.items.filter((condition) => condition.catId === catId) : [];
+
+export const selectVisitsByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.visits.items.filter((visit) => visit.householdId === householdId)
+      : [];
+
+export const selectVisitsByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.visits.items.filter((visit) => visit.catIds.includes(catId)) : [];
