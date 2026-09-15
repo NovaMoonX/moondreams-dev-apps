@@ -137,7 +137,9 @@ interface Doctor {
 
 ### 5. Health Record
 
-Path: `apps/nine-lives/households/{householdId}/cats/{catId}/healthRecords/{recordId}`
+Path: `apps/nine-lives/households/{householdId}/healthRecords/{recordId}`
+
+Household-scoped, not cat-scoped — a record can be attached to more than one cat (`catIds`), the same tradeoff as `Expense` and `Visit`, since paperwork like a shared insurance policy or joint checkup often covers multiple cats.
 
 Custom record types are their own small, household-scoped entity rather than a free-text field copied onto every record — the same reasoning as `Doctor`: type it once, reuse it via a select from then on. This was a real tradeoff worth spelling out, since it wasn't the only reasonable option:
 
@@ -149,7 +151,8 @@ type HealthRecordType = 'lab_result' | 'vet_paperwork' | 'other' | 'custom';
 
 interface HealthRecord {
   id: string;
-  catId: string;
+  householdId: string;
+  catIds: string[];
   fileURL: string;
   fileType: 'pdf' | 'image';
   fileName: string;
@@ -177,12 +180,14 @@ interface CustomHealthRecordType {
 ```
 
 Health record files are stored at
-`nine-lives/households/{householdId}/cats/{catId}/health-records/{recordId}` in
-Storage. The records listener is lazy and starts when a cat details modal is
-open. The Records tab supports opening files, editing record metadata, and
-deleting both the Firestore record and its Storage object. New custom labels
-are upserted into the household's reference collection before the record is
-created, so they are available to every cat in that household.
+`nine-lives/households/{householdId}/health-records/{recordId}` in Storage.
+Records live in their own household-level "Records" section (alongside
+Expenses and Vet Clinics), not the cat details modal, and the listener starts
+as soon as a household is selected. The section supports opening files,
+editing record metadata, and deleting both the Firestore record and its
+Storage object. New custom labels are upserted into the household's reference
+collection before the record is created, so they are available to every cat
+in that household.
 
 ### 6. Vaccination
 

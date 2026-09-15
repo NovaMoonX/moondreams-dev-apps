@@ -2,13 +2,11 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
 
-import type {
-  CustomHealthRecordType,
-  HealthRecord,
-} from '../types';
+import type { Cat, CustomHealthRecordType, HealthRecord } from '../types';
 
 interface HealthRecordListProps {
   records: HealthRecord[];
+  cats: Cat[];
   customTypes: CustomHealthRecordType[];
   onEdit: (record: HealthRecord) => void;
 }
@@ -21,6 +19,7 @@ const BUILT_IN_LABELS: Record<string, string> = {
 
 function HealthRecordList({
   records,
+  cats,
   customTypes,
   onEdit,
 }: HealthRecordListProps) {
@@ -40,6 +39,9 @@ function HealthRecordList({
         );
         const recordTypeLabel =
           customType?.label ?? BUILT_IN_LABELS[record.recordType] ?? 'Custom record';
+        const catNames = record.catIds
+          .map((catId) => cats.find((cat) => cat.id === catId)?.name)
+          .filter((name): name is string => Boolean(name));
 
         return (
           <div
@@ -50,6 +52,7 @@ function HealthRecordList({
               <strong className='block truncate text-sm'>{record.fileName}</strong>
               <div className='text-muted-foreground text-sm'>
                 {recordTypeLabel}
+                {catNames.length > 0 && ` · ${catNames.join(', ')}`}
                 {record.recordDate !== null && ` · ${formatDateTime(record.recordDate)}`}
               </div>
             </div>

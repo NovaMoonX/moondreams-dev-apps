@@ -528,14 +528,16 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/healthRecords/{recordId} {
+    match /apps/nine-lives/households/{householdId}/healthRecords/{recordId} {
       function isHealthRecordIdentityValid() {
         return request.resource.data.id == recordId
-          && request.resource.data.catId == catId;
+          && request.resource.data.householdId == householdId;
       }
 
       function isHealthRecordShapeValid() {
-        return isNonEmptyString(request.resource.data.fileURL)
+        return request.resource.data.catIds is list
+          && request.resource.data.catIds.size() > 0
+          && isNonEmptyString(request.resource.data.fileURL)
           && (request.resource.data.fileType == 'pdf' || request.resource.data.fileType == 'image')
           && isNonEmptyString(request.resource.data.fileName)
           && request.resource.data.recordType in ['lab_result', 'vet_paperwork', 'other', 'custom']
@@ -555,8 +557,8 @@ service cloud.firestore {
 
       function isHealthRecordImmutableFieldsValid() {
         return request.resource.data.id == resource.data.id
-          && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
           && request.resource.data.fileURL == resource.data.fileURL
           && request.resource.data.fileType == resource.data.fileType
           && request.resource.data.fileName == resource.data.fileName

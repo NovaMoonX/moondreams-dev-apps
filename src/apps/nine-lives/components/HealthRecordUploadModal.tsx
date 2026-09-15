@@ -28,6 +28,8 @@ import type {
   HealthRecordType,
 } from '../types';
 
+const { checkboxGroup, custom } = FormFactories;
+
 const NEW_TYPE_VALUE = '__new__';
 const MAX_HEALTH_RECORD_BYTES = 10 * 1024 * 1024;
 const BUILT_IN_TYPE_OPTIONS = [
@@ -43,6 +45,7 @@ interface RecordTypeChoice {
 }
 
 interface HealthRecordFormValues {
+  catIds: string[];
   file: File | null;
   recordType: RecordTypeChoice;
   recordDate: string;
@@ -51,15 +54,12 @@ interface HealthRecordFormValues {
 interface HealthRecordUploadModalProps {
   isOpen: boolean;
   householdId: string;
-  catId: string;
-  catName: string;
+  catOptions: { label: string; value: string }[];
   uid: string;
   initialRecord?: HealthRecord | null;
   onDelete?: (recordId: string) => Promise<void> | void;
   onClose: () => void;
 }
-
-const { custom } = FormFactories;
 
 function getInitialRecordTypeChoice(
   record: HealthRecord | null | undefined,
@@ -206,8 +206,7 @@ function RecordTypeField({
 function HealthRecordUploadModal({
   isOpen,
   householdId,
-  catId,
-  catName,
+  catOptions,
   uid,
   initialRecord = null,
   onDelete,
@@ -225,6 +224,11 @@ function HealthRecordUploadModal({
 
   const fields = useMemo(
     () => [
+      checkboxGroup({
+        name: 'catIds',
+        label: 'Cats',
+        options: catOptions,
+      }),
       custom({
         name: 'file',
         label: 'File',
@@ -261,11 +265,19 @@ function HealthRecordUploadModal({
         variant: 'outline',
       }),
     ],
-    [customTypes, initialRecord?.fileName, isEditing],
+    [catOptions, customTypes, initialRecord?.fileName, isEditing],
   );
 
   const handleSubmit = async (data: HealthRecordFormValues) => {
     setSubmitError(null);
+
+    const catIds = data.catIds.length > 0 ? data.catIds : initialRecord?.catIds ?? [];
+
+    if (catIds.length === 0) {
+      setSubmitError('Select at least one cat.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -297,9 +309,9 @@ function HealthRecordUploadModal({
         await dispatch(
           updateHealthRecord({
             householdId,
-            catId,
             recordId: initialRecord.id,
             changes: {
+              catIds,
               recordType,
               customRecordTypeId,
               recordDate,
@@ -310,7 +322,7 @@ function HealthRecordUploadModal({
         await dispatch(
           createHealthRecord({
             householdId,
-            catId,
+            catIds,
             uid,
             file: data.file,
             recordType,
@@ -362,13 +374,14 @@ function HealthRecordUploadModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Edit health record' : `Add health record for ${catName}`}
+      title={isEditing ? 'Edit health record' : 'Add health record'}
     >
       <Form
         key={formId}
         id={formId}
         form={fields}
         initialData={{
+          catIds: initialRecord?.catIds ?? [],
           file: null,
           recordType: getInitialRecordTypeChoice(initialRecord),
           recordDate: toDateInputValue(initialRecord?.recordDate ?? undefined),

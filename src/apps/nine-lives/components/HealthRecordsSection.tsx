@@ -1,40 +1,40 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 
+import { deleteHealthRecord } from '../store/actions/healthRecordsActions';
 import {
-  deleteHealthRecord,
-} from '../store/actions/healthRecordsActions';
-import {
+  selectCatsByHousehold,
   selectCustomHealthRecordTypesByHousehold,
-  selectHealthRecordsByCat,
+  selectHealthRecordsByHousehold,
 } from '../store/selectors';
 import type { HealthRecord } from '../types';
+import DetailsDisclosure from './DetailsDisclosure';
 import HealthRecordList from './HealthRecordList';
 import HealthRecordUploadModal from './HealthRecordUploadModal';
 
 interface HealthRecordsSectionProps {
   householdId: string;
-  catId: string;
-  catName: string;
 }
 
-function HealthRecordsSection({
-  householdId,
-  catId,
-  catName,
-}: HealthRecordsSectionProps) {
+function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const records = useAppSelector(selectHealthRecordsByCat(catId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId));
+  const records = useAppSelector(selectHealthRecordsByHousehold(householdId));
   const customTypes = useAppSelector(
     selectCustomHealthRecordTypesByHousehold(householdId),
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord | null>(null);
+
+  const catOptions = useMemo(
+    () => cats.map((cat) => ({ label: cat.name, value: cat.id })),
+    [cats],
+  );
 
   const openCreate = () => {
     setEditingRecord(null);
@@ -52,49 +52,51 @@ function HealthRecordsSection({
   };
 
   const handleDelete = async (recordId: string) => {
-    await dispatch(
-      deleteHealthRecord({ householdId, catId, recordId }),
-    ).unwrap();
+    await dispatch(deleteHealthRecord({ householdId, recordId })).unwrap();
     handleClose();
   };
 
   return (
-    <div className='space-y-4'>
-      <div className='flex items-center justify-between gap-2'>
-        <small className='text-muted-foreground text-sm'>
-          Upload and manage {catName}&rsquo;s lab results and vet paperwork.
-        </small>
-        <Button
-          type='button'
-          variant='primary'
-          size='sm'
-          onClick={openCreate}
-          disabled={!user?.uid}
-        >
-          Add record
-        </Button>
-      </div>
+    <section>
+      <DetailsDisclosure label='Records'>
+        <div className='space-y-4'>
+          <div className='flex items-center justify-between gap-2 pb-2'>
+            <small className='text-muted-foreground text-sm'>
+              Upload and manage lab results and vet paperwork for any cat.
+            </small>
+            <Button
+              type='button'
+              variant='primary'
+              size='sm'
+              onClick={openCreate}
+              disabled={!user?.uid || cats.length === 0}
+            >
+              Add record
+            </Button>
+          </div>
 
-      <HealthRecordList
-        records={records}
-        customTypes={customTypes}
-        onEdit={openEdit}
-      />
+          <HealthRecordList
+            records={records}
+            cats={cats}
+            customTypes={customTypes}
+            onEdit={openEdit}
+          />
+        </div>
+      </DetailsDisclosure>
 
       {user?.uid && (
         <HealthRecordUploadModal
           key={editingRecord?.id ?? 'new'}
           isOpen={isModalOpen}
           householdId={householdId}
-          catId={catId}
-          catName={catName}
+          catOptions={catOptions}
           uid={user.uid}
           initialRecord={editingRecord}
           onDelete={handleDelete}
           onClose={handleClose}
         />
       )}
-    </div>
+    </section>
   );
 }
 

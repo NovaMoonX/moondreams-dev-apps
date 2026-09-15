@@ -95,7 +95,8 @@ export type HealthRecordType = 'lab_result' | 'vet_paperwork' | 'other' | 'custo
 
 export interface HealthRecord {
   id: string;
-  catId: string;
+  householdId: string;
+  catIds: string[];
   fileURL: string;
   fileType: 'pdf' | 'image';
   fileName: string;

@@ -14,29 +14,14 @@ import {
 
 const MAX_HEALTH_RECORD_BYTES = 10 * 1024 * 1024;
 
-export const getHealthRecordStoragePath = (
-  householdId: string,
-  catId: string,
-  recordId: string,
-) => `nine-lives/households/${householdId}/cats/${catId}/health-records/${recordId}`;
+export const getHealthRecordStoragePath = (householdId: string, recordId: string) =>
+  `nine-lives/households/${householdId}/health-records/${recordId}`;
 
-const getHealthRecordsCollectionRef = (householdId: string, catId: string) =>
-  collection(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'healthRecords',
-  );
+const getHealthRecordsCollectionRef = (householdId: string) =>
+  collection(db, 'apps', 'nine-lives', 'households', householdId, 'healthRecords');
 
-const getHealthRecordDocRef = (
-  householdId: string,
-  catId: string,
-  recordId: string,
-) => doc(getHealthRecordsCollectionRef(householdId, catId), recordId);
+const getHealthRecordDocRef = (householdId: string, recordId: string) =>
+  doc(getHealthRecordsCollectionRef(householdId), recordId);
 
 export function getHealthRecordFileType(file: File): HealthRecord['fileType'] | null {
   if (file.type === 'application/pdf') {
@@ -62,23 +47,33 @@ function validateHealthRecordFile(file: File) {
   return null;
 }
 
+function normalizeCatIds(catIds: string[]): string[] {
+  return Array.from(new Set(catIds));
+}
+
 function normalizeHealthRecordChanges(
   changes: Partial<HealthRecord>,
 ): Partial<HealthRecord> {
-  return {
+  const normalized: Partial<HealthRecord> = {
     ...changes,
     customRecordTypeId: changes.customRecordTypeId ?? null,
     recordDate: changes.recordDate ?? null,
     linkedVisitId: changes.linkedVisitId ?? null,
     notes: changes.notes ?? null,
   };
+
+  if (changes.catIds) {
+    normalized.catIds = normalizeCatIds(changes.catIds);
+  }
+
+  return normalized;
 }
 
 export const createHealthRecord = createAsyncThunk<
   HealthRecord,
   {
     householdId: string;
-    catId: string;
+    catIds: string[];
     uid: string;
     file: File;
     recordType: HealthRecordType;
@@ -93,7 +88,7 @@ export const createHealthRecord = createAsyncThunk<
   async (
     {
       householdId,
-      catId,
+      catIds,
       uid,
       file,
       recordType,
@@ -110,19 +105,26 @@ export const createHealthRecord = createAsyncThunk<
       return rejectWithValue(fileError);
     }
 
+    const normalizedCatIds = normalizeCatIds(catIds);
+
+    if (normalizedCatIds.length === 0) {
+      return rejectWithValue('Select at least one cat.');
+    }
+
     if (recordType === 'custom' && !customRecordTypeId) {
       return rejectWithValue('Select a custom record type.');
     }
 
-    const recordId = doc(getHealthRecordsCollectionRef(householdId, catId)).id;
-    const storagePath = getHealthRecordStoragePath(householdId, catId, recordId);
+    const recordId = doc(getHealthRecordsCollectionRef(householdId)).id;
+    const storagePath = getHealthRecordStoragePath(householdId, recordId);
     const now = Date.now();
 
     try {
       const fileURL = await uploadFile(storagePath, file);
       const nextRecord: HealthRecord = {
         id: recordId,
-        catId,
+        householdId,
+        catIds: normalizedCatIds,
         fileURL,
         fileType: getHealthRecordFileType(file) as HealthRecord['fileType'],
         fileName: file.name,
@@ -136,7 +138,7 @@ export const createHealthRecord = createAsyncThunk<
         lastEditedAt: now,
       };
 
-      await setDoc(getHealthRecordDocRef(householdId, catId, recordId), nextRecord);
+      await setDoc(getHealthRecordDocRef(householdId, recordId), nextRecord);
       dispatch(upsertHealthRecord(nextRecord));
 
       return nextRecord;
@@ -157,20 +159,16 @@ export const updateHealthRecord = createAsyncThunk<
   HealthRecord,
   {
     householdId: string;
-    catId: string;
     recordId: string;
     changes: Partial<HealthRecord>;
   },
   { rejectValue: string }
 >(
   'nineLives/healthRecords/update',
-  async (
-    { householdId, catId, recordId, changes },
-    { dispatch, getState, rejectWithValue },
-  ) => {
+  async ({ householdId, recordId, changes }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.healthRecords.items.find(
-      (record) => record.id === recordId && record.catId === catId,
+      (record) => record.id === recordId,
     );
 
     if (!current) {
@@ -183,6 +181,8 @@ export const updateHealthRecord = createAsyncThunk<
       recordType === 'custom'
         ? normalized.customRecordTypeId ?? current.customRecordTypeId
         : null;
+    const catIds =
+      normalized.catIds && normalized.catIds.length > 0 ? normalized.catIds : current.catIds;
 
     if (recordType === 'custom' && !customRecordTypeId) {
       return rejectWithValue('Select a custom record type.');
@@ -192,7 +192,8 @@ export const updateHealthRecord = createAsyncThunk<
       ...current,
       ...normalized,
       id: recordId,
-      catId,
+      householdId,
+      catIds,
       recordType,
       customRecordTypeId,
       lastEditedAt: Date.now(),
@@ -201,8 +202,9 @@ export const updateHealthRecord = createAsyncThunk<
     dispatch(upsertHealthRecord(nextRecord));
 
     try {
-      await updateDoc(getHealthRecordDocRef(householdId, catId, recordId), {
+      await updateDoc(getHealthRecordDocRef(householdId, recordId), {
         ...normalized,
+        catIds,
         recordType,
         customRecordTypeId,
         lastEditedAt: nextRecord.lastEditedAt,
@@ -219,17 +221,14 @@ export const updateHealthRecord = createAsyncThunk<
 
 export const deleteHealthRecord = createAsyncThunk<
   { id: string },
-  { householdId: string; catId: string; recordId: string },
+  { householdId: string; recordId: string },
   { rejectValue: string }
 >(
   'nineLives/healthRecords/delete',
-  async (
-    { householdId, catId, recordId },
-    { dispatch, getState, rejectWithValue },
-  ) => {
+  async ({ householdId, recordId }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.healthRecords.items.find(
-      (record) => record.id === recordId && record.catId === catId,
+      (record) => record.id === recordId,
     );
 
     if (!current) {
@@ -240,8 +239,8 @@ export const deleteHealthRecord = createAsyncThunk<
 
     try {
       await Promise.all([
-        deleteDoc(getHealthRecordDocRef(householdId, catId, recordId)),
-        deleteFile(getHealthRecordStoragePath(householdId, catId, recordId)),
+        deleteDoc(getHealthRecordDocRef(householdId, recordId)),
+        deleteFile(getHealthRecordStoragePath(householdId, recordId)),
       ]);
       return { id: recordId };
     } catch (error) {

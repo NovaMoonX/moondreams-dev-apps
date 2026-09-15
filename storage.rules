@@ -16,7 +16,7 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
-    match /nine-lives/households/{householdId}/cats/{catId}/health-records/{recordId} {
+    match /nine-lives/households/{householdId}/health-records/{recordId} {
       function isHouseholdMember() {
         return request.auth != null
           && request.auth.uid in firestore.get(
