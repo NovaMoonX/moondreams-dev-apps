@@ -1,8 +1,7 @@
 import { useState } from 'react';
 
-import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -15,7 +14,12 @@ import {
   updateVisit,
   type VisitOutcome,
 } from '../store/actions/visitsActions';
-import { selectCatsByHousehold, selectClinicsByHousehold, selectDoctorsByHousehold, selectVisitsByHousehold } from '../store/selectors';
+import {
+  selectCatsByHousehold,
+  selectClinicsByHousehold,
+  selectDoctorsByHousehold,
+  selectVisitsByHousehold,
+} from '../store/selectors';
 import type { Visit } from '../types';
 import VisitFormModal from './VisitFormModal';
 import VisitTimeline from './VisitTimeline';
@@ -37,14 +41,6 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const [modalMode, setModalMode] = useState<VisitModalMode>(null);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { option } = DropdownMenuFactories;
-  const quickActions = [
-    option({
-      label: 'Log visit',
-      value: 'log-visit',
-      description: 'Schedule a visit for one or more cats.',
-    }),
-  ];
 
   const closeModal = () => {
     setModalMode(null);
@@ -62,10 +58,16 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
     try {
       if (selectedVisit) {
         await dispatch(
-          updateVisit({ householdId, visitId: selectedVisit.id, changes: visit }),
+          updateVisit({
+            householdId,
+            visitId: selectedVisit.id,
+            changes: visit,
+          }),
         ).unwrap();
       } else {
-        await dispatch(createVisit({ householdId, uid: user.uid, visit })).unwrap();
+        await dispatch(
+          createVisit({ householdId, uid: user.uid, visit }),
+        ).unwrap();
       }
       closeModal();
     } finally {
@@ -81,7 +83,12 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
     setIsSubmitting(true);
     try {
       await dispatch(
-        completeVisit({ householdId, uid: user.uid, visitId: selectedVisit.id, outcome }),
+        completeVisit({
+          householdId,
+          uid: user.uid,
+          visitId: selectedVisit.id,
+          outcome,
+        }),
       ).unwrap();
       closeModal();
     } finally {
@@ -105,7 +112,9 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
 
     setIsSubmitting(true);
     try {
-      await dispatch(cancelVisit({ householdId, visitId: selectedVisit.id })).unwrap();
+      await dispatch(
+        cancelVisit({ householdId, visitId: selectedVisit.id }),
+      ).unwrap();
       closeModal();
     } finally {
       setIsSubmitting(false);
@@ -119,7 +128,9 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
 
     setIsSubmitting(true);
     try {
-      await dispatch(deleteVisit({ householdId, visitId: selectedVisit.id })).unwrap();
+      await dispatch(
+        deleteVisit({ householdId, visitId: selectedVisit.id }),
+      ).unwrap();
       closeModal();
     } finally {
       setIsSubmitting(false);
@@ -127,28 +138,24 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   };
 
   return (
-    <section className='rounded-lg border border-border bg-card p-4'>
+    <section className='border-border bg-card rounded-lg border p-4'>
       <div className='mb-4 flex items-center justify-between gap-2'>
         <div>
           <h2 className='text-xl font-semibold'>Visits</h2>
-          <p className='text-muted-foreground text-sm'>Schedule visits for one or more cats.</p>
+          <p className='text-muted-foreground text-sm'>
+            Keep track of every vet visit, big or small.
+          </p>
         </div>
-        <DropdownMenu
-          items={quickActions}
-          onItemSelect={() => {
+        <Button
+          type='button'
+          disabled={cats.length === 0}
+          onClick={() => {
             setSelectedVisit(null);
             setModalMode('create');
           }}
-          placement='bottom'
-          alignment='end'
-          offset={8}
-          trigger={
-            <Button type='button' disabled={cats.length === 0} className='gap-1'>
-              Log
-              <ChevronDown className='h-4 w-4' />
-            </Button>
-          }
-        />
+        >
+          Log visit
+        </Button>
       </div>
 
       <VisitTimeline

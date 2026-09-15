@@ -261,7 +261,7 @@ interface Visit {
 
 See **Visit Outcome Flow** below for how vaccinations, conditions, weight entries, and symptoms get logged as part of completing a visit, and how the five `linked*Ids` arrays above turn a visit into a complete record of everything that happened during it.
 
-The shipped client keeps visits in the household Redux sync, exposes scheduling and editing from the household dashboard, and exposes a filtered visit timeline from each cat's detail view. Cancelling keeps the record for historical context; deleting an original visit clears its follow-up references in the same batch.
+The shipped client keeps visits in the household Redux sync, exposes scheduling and editing from the household dashboard, and exposes a filtered visit timeline from each cat's detail view. `VisitTimeline` supports free-text search, a status filter, a cat filter (household view only), and toggling the date sort direction. Cancelling keeps the record for historical context; deleting an original visit clears its follow-up references in the same batch.
 
 ### 9. Condition Library (shared, global reference)
 

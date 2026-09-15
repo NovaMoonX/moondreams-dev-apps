@@ -1,15 +1,21 @@
 import { useMemo } from 'react';
 
-import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Form,
+  FormFactories,
+  Input,
+  Label,
+  Modal,
+  Select,
+  Textarea,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import type {
-  Cat,
-  Visit,
-  VisitReason,
-} from '../types';
+import type { Cat, Visit, VisitReason } from '../types';
 import type { VisitOutcome } from '../store/actions/visitsActions';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
+import DetailsDisclosure from './DetailsDisclosure';
 
 interface VisitFormModalProps {
   isOpen: boolean;
@@ -20,23 +26,33 @@ interface VisitFormModalProps {
   initialVisit?: Visit | null;
   isSubmitting?: boolean;
   isCompleting?: boolean;
-  onSubmit: (visit: Partial<Visit> & Pick<Visit, 'catIds' | 'reason' | 'scheduledAt'>) => Promise<void> | void;
+  onSubmit: (
+    visit: Partial<Visit> & Pick<Visit, 'catIds' | 'reason' | 'scheduledAt'>,
+  ) => Promise<void> | void;
   onComplete?: (outcome: VisitOutcome) => Promise<void> | void;
   onCancelVisit?: () => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
-interface VisitFormValues {
-  catIds: string[];
-  scheduledAt: string;
+interface VisitReasonValue {
   reason: VisitReason;
   customReasonLabel: string;
   followUpOfVisitId: string;
   followUpNote: string;
+}
+
+interface VisitMoreDetailsValue {
   title: string;
   clinicId: string;
   doctorId: string;
+}
+
+interface VisitFormValues {
+  catIds: string[];
+  scheduledAt: string;
+  reasonDetails: VisitReasonValue;
+  moreDetails: VisitMoreDetailsValue;
 }
 
 interface VisitOutcomeValues {
@@ -44,7 +60,7 @@ interface VisitOutcomeValues {
   [key: string]: string;
 }
 
-const { input, select, textarea, checkboxGroup } = FormFactories;
+const { input, textarea, checkboxGroup, custom } = FormFactories;
 
 const REASON_OPTIONS = [
   { label: 'Checkup', value: 'checkup' },
@@ -74,6 +90,146 @@ function fromDateTimeInputValue(value: string) {
 
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+interface VisitReasonFieldProps {
+  value: VisitReasonValue;
+  onValueChange: (value: VisitReasonValue) => void;
+  originalVisitOptions: Array<{ label: string; value: string }>;
+  disabled?: boolean;
+}
+
+function VisitReasonField({
+  value,
+  onValueChange,
+  originalVisitOptions,
+  disabled,
+}: VisitReasonFieldProps) {
+  const update = (changes: Partial<VisitReasonValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <div className='space-y-3'>
+      <Select
+        options={REASON_OPTIONS.map((option) => ({
+          text: option.label,
+          value: option.value,
+        }))}
+        value={value.reason}
+        onChange={(nextReason) => update({ reason: nextReason as VisitReason })}
+        disabled={disabled}
+      />
+
+      {value.reason === 'custom' && (
+        <div className='space-y-1'>
+          <Label className='text-sm'>What's the visit for?</Label>
+          <Input
+            value={value.customReasonLabel}
+            onChange={(event) =>
+              update({ customReasonLabel: event.target.value })
+            }
+            placeholder='e.g. Nail trim'
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+      )}
+
+      {value.reason === 'follow_up' && (
+        <div className='space-y-3'>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Original visit</Label>
+            <Select
+              options={originalVisitOptions.map((option) => ({
+                text: option.label,
+                value: option.value,
+              }))}
+              value={value.followUpOfVisitId}
+              onChange={(nextValue) => update({ followUpOfVisitId: nextValue })}
+              placeholder='Select the visit this follows up on'
+              disabled={disabled}
+            />
+          </div>
+          <div className='space-y-1'>
+            <Label className='text-sm'>Follow-up note (optional)</Label>
+            <Textarea
+              rows={2}
+              value={value.followUpNote}
+              onChange={(event) => update({ followUpNote: event.target.value })}
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface VisitMoreDetailsFieldsProps {
+  value: VisitMoreDetailsValue;
+  onValueChange: (value: VisitMoreDetailsValue) => void;
+  clinics: Array<{ id: string; name: string }>;
+  doctors: Array<{ id: string; name: string }>;
+  disabled?: boolean;
+}
+
+function VisitMoreDetailsFields({
+  value,
+  onValueChange,
+  clinics,
+  doctors,
+  disabled,
+}: VisitMoreDetailsFieldsProps) {
+  const update = (changes: Partial<VisitMoreDetailsValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <DetailsDisclosure label='More details'>
+      <div className='space-y-3'>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Title override</Label>
+          <Input
+            value={value.title}
+            onChange={(event) => update({ title: event.target.value })}
+            placeholder='Leave blank for the default title'
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Clinic</Label>
+          <Select
+            options={[
+              { text: 'None', value: '' },
+              ...clinics.map((clinic) => ({
+                text: clinic.name,
+                value: clinic.id,
+              })),
+            ]}
+            value={value.clinicId}
+            onChange={(nextValue) => update({ clinicId: nextValue })}
+            disabled={disabled}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Doctor</Label>
+          <Select
+            options={[
+              { text: 'None', value: '' },
+              ...doctors.map((doctor) => ({
+                text: doctor.name,
+                value: doctor.id,
+              })),
+            ]}
+            value={value.doctorId}
+            onChange={(nextValue) => update({ doctorId: nextValue })}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+    </DetailsDisclosure>
+  );
 }
 
 function VisitOutcomeForm({
@@ -143,7 +299,11 @@ function VisitOutcomeForm({
       }
 
       const weight = Number(data[`weight_${cat.id}`]);
-      if (data[`weight_${cat.id}`]?.trim() && Number.isFinite(weight) && weight > 0) {
+      if (
+        data[`weight_${cat.id}`]?.trim() &&
+        Number.isFinite(weight) &&
+        weight > 0
+      ) {
         outcome.weightEntries?.push({
           catId: cat.id,
           weight,
@@ -226,6 +386,25 @@ function VisitFormModal({
   const isEditing = Boolean(initialVisit?.id);
   const showOutcome = Boolean(isCompleting && initialVisit && onComplete);
   const formId = initialVisit?.id ?? 'new-nine-lives-visit';
+  const originalVisitOptions = useMemo(
+    () =>
+      visits
+        .filter((visit) => visit.id !== initialVisit?.id)
+        .map((visit) => ({
+          label: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
+          value: visit.id,
+        })),
+    [visits, initialVisit?.id],
+  );
+  const clinicSummaries = useMemo(
+    () => clinics.map(({ id, name }) => ({ id, name })),
+    [clinics],
+  );
+  const doctorSummaries = useMemo(
+    () => doctors.map(({ id, name }) => ({ id, name })),
+    [doctors],
+  );
+
   const fields = useMemo(
     () => [
       checkboxGroup({
@@ -241,59 +420,34 @@ function VisitFormModal({
         required: true,
         variant: 'outline',
       }),
-      select({
-        name: 'reason',
+      custom({
+        name: 'reasonDetails',
         label: 'Reason',
-        options: REASON_OPTIONS,
+        renderComponent: (props) => (
+          <VisitReasonField
+            value={props.value as VisitReasonValue}
+            onValueChange={(value) => props.onValueChange(value)}
+            originalVisitOptions={originalVisitOptions}
+            disabled={props.disabled}
+          />
+        ),
       }),
-      input({
-        name: 'customReasonLabel',
-        label: 'Custom reason (when selected)',
-        variant: 'outline',
-      }),
-      select({
-        name: 'followUpOfVisitId',
-        label: 'Original visit (for follow-up)',
-        placeholder: 'Select an original visit',
-        options: visits
-          .filter((visit) => visit.id !== initialVisit?.id)
-          .map((visit) => ({
-            label: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
-            value: visit.id,
-          })),
-      }),
-      textarea({
-        name: 'followUpNote',
-        label: 'Follow-up note (optional)',
-        rows: 2,
-        variant: 'outline',
-      }),
-      input({
-        name: 'title',
-        label: 'Title override (optional)',
-        placeholder: 'Leave blank for the default title',
-        variant: 'outline',
-      }),
-      select({
-        name: 'clinicId',
-        label: 'Clinic (optional)',
-        placeholder: 'None',
-        options: [
-          { label: 'None', value: '' },
-          ...clinics.map((clinic) => ({ label: clinic.name, value: clinic.id })),
-        ],
-      }),
-      select({
-        name: 'doctorId',
-        label: 'Doctor (optional)',
-        placeholder: 'None',
-        options: [
-          { label: 'None', value: '' },
-          ...doctors.map((doctor) => ({ label: doctor.name, value: doctor.id })),
-        ],
+      custom({
+        name: 'moreDetails',
+        label: 'More details',
+        renderComponent: (props) => (
+          <VisitMoreDetailsFields
+            value={props.value as VisitMoreDetailsValue}
+            onValueChange={(value) => props.onValueChange(value)}
+            clinics={clinicSummaries}
+            doctors={doctorSummaries}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
     ],
-    [cats, visits, initialVisit?.id, clinics, doctors],
+    [cats, originalVisitOptions, clinicSummaries, doctorSummaries],
   );
 
   const handleSubmit = async (data: VisitFormValues) => {
@@ -306,13 +460,13 @@ function VisitFormModal({
       id: initialVisit?.id,
       catIds: data.catIds,
       scheduledAt,
-      reason: data.reason,
-      customReasonLabel: data.customReasonLabel.trim() || null,
-      followUpOfVisitId: data.followUpOfVisitId || null,
-      followUpNote: data.followUpNote.trim() || null,
-      title: data.title.trim() || null,
-      clinicId: data.clinicId || null,
-      doctorId: data.doctorId || null,
+      reason: data.reasonDetails.reason,
+      customReasonLabel: data.reasonDetails.customReasonLabel.trim() || null,
+      followUpOfVisitId: data.reasonDetails.followUpOfVisitId || null,
+      followUpNote: data.reasonDetails.followUpNote.trim() || null,
+      title: data.moreDetails.title.trim() || null,
+      clinicId: data.moreDetails.clinicId || null,
+      doctorId: data.moreDetails.doctorId || null,
     });
   };
 
@@ -323,7 +477,8 @@ function VisitFormModal({
 
     const confirmed = await confirm({
       title: 'Delete visit',
-      message: 'Are you sure you want to delete this visit? Follow-up links will be cleared.',
+      message:
+        'Are you sure you want to delete this visit? Follow-up links will be cleared.',
       destructive: true,
     });
     if (confirmed) {
@@ -335,7 +490,13 @@ function VisitFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={showOutcome ? 'Complete visit' : isEditing ? 'Edit visit' : 'Schedule visit'}
+      title={
+        showOutcome
+          ? 'Complete visit'
+          : isEditing
+            ? 'Edit visit'
+            : 'Schedule visit'
+      }
     >
       {showOutcome ? (
         <VisitOutcomeForm
@@ -351,13 +512,17 @@ function VisitFormModal({
           initialData={{
             catIds: initialVisit?.catIds ?? [],
             scheduledAt: toDateTimeInputValue(initialVisit?.scheduledAt),
-            reason: initialVisit?.reason ?? 'checkup',
-            customReasonLabel: initialVisit?.customReasonLabel ?? '',
-            followUpOfVisitId: initialVisit?.followUpOfVisitId ?? '',
-            followUpNote: initialVisit?.followUpNote ?? '',
-            title: initialVisit?.title ?? '',
-            clinicId: initialVisit?.clinicId ?? '',
-            doctorId: initialVisit?.doctorId ?? '',
+            reasonDetails: {
+              reason: initialVisit?.reason ?? 'checkup',
+              customReasonLabel: initialVisit?.customReasonLabel ?? '',
+              followUpOfVisitId: initialVisit?.followUpOfVisitId ?? '',
+              followUpNote: initialVisit?.followUpNote ?? '',
+            },
+            moreDetails: {
+              title: initialVisit?.title ?? '',
+              clinicId: initialVisit?.clinicId ?? '',
+              doctorId: initialVisit?.doctorId ?? '',
+            },
           }}
           columns={1}
           spacing='normal'
@@ -368,22 +533,43 @@ function VisitFormModal({
             <div className='flex items-center justify-between gap-2'>
               <div className='flex items-center gap-2'>
                 {isEditing && onDelete && (
-                  <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={() => void handleDelete()}
+                    disabled={isSubmitting}
+                  >
                     Delete
                   </Button>
                 )}
-                {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
-                  <Button type='button' variant='secondary' onClick={() => void onCancelVisit()} disabled={isSubmitting}>
-                    Cancel visit
-                  </Button>
-                )}
+                {isEditing &&
+                  onCancelVisit &&
+                  initialVisit?.status === 'upcoming' && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={() => void onCancelVisit()}
+                      disabled={isSubmitting}
+                    >
+                      Cancel visit
+                    </Button>
+                  )}
               </div>
               <div className='flex items-center gap-2'>
-                <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                >
                   Close
                 </Button>
                 <Button type='submit' loading={isSubmitting}>
-                  {isSubmitting ? 'Saving…' : isEditing ? 'Save visit' : 'Schedule visit'}
+                  {isSubmitting
+                    ? 'Saving…'
+                    : isEditing
+                      ? 'Save visit'
+                      : 'Schedule visit'}
                 </Button>
               </div>
             </div>
