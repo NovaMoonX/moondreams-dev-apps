@@ -379,6 +379,45 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/cats/{catId}/symptoms/{symptomId} {
+      function isSymptomIdentityValid() {
+        return request.resource.data.id == symptomId
+          && request.resource.data.catId == catId;
+      }
+
+      function isSymptomBaseShapeValid() {
+        return request.resource.data.description is string
+          && request.resource.data.quickTags is list
+          && request.resource.data.firstNoticedAt is number
+          && (request.resource.data.severity == null || request.resource.data.severity in ['mild', 'moderate', 'severe'])
+          && request.resource.data.linkedVisitIds is list
+          && (request.resource.data.linkedConditionId == null || request.resource.data.linkedConditionId is string)
+          && (request.resource.data.resolvedAt == null || isTimestampNumber(request.resource.data.resolvedAt))
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isSymptomImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.catId == resource.data.catId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isSymptomIdentityValid()
+        && isSymptomBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isSymptomImmutableFieldsValid()
+        && isSymptomBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/nine-lives/households/{householdId}/vetClinics/{clinicId} {
       function isVetClinicIdentityValid() {
         return request.resource.data.id == clinicId

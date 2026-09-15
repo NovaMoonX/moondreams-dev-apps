@@ -36,7 +36,7 @@ function CatConditionTimeline({
 
   return (
     <div>
-      <h3 className='text-sm font-medium'>{title}</h3>
+      <h3 className='text-sm font-medium pb-1'>{title}</h3>
       <div className='divide-border divide-y'>
         {sortedConditions.map((condition) => (
           <div key={condition.id} className='flex items-start justify-between gap-3 py-2 first:pt-0'>

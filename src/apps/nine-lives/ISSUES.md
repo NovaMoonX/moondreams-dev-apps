@@ -314,9 +314,9 @@ Per-cat symptom logging with cat-specific quick-tap tags (litter box changes, ap
 
 #### Success Criteria
 
-- [ ] A symptom can be logged with quick tags only, free text only, or both.
-- [ ] Linking a symptom to a condition works from the symptom form.
-- [ ] Rules and seed data cover the collection.
+- [x] A symptom can be logged with quick tags only, free text only, or both.
+- [x] Linking a symptom to a condition works from the symptom form.
+- [x] Rules and seed data cover the collection.
 
 ### Issue 9: Visit Scheduling, Multi-Cat Support, Follow-Ups & Visit Outcome Flow
 

@@ -26,6 +26,9 @@ export const selectDoctorsByClinic =
 export const selectVaccinationsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.vaccinations.items.filter((vaccination) => vaccination.catId === catId) : [];
 
+export const selectSymptomsByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.symptoms.items.filter((symptom) => symptom.catId === catId) : [];
+
 export const selectWeightEntriesByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.weightEntries.items.filter((entry) => entry.catId === catId) : [];
 
