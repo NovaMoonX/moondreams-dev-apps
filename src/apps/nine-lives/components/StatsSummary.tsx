@@ -1,9 +1,21 @@
+import { useAppSelector } from '@/store';
+
+import { selectVisitsByHousehold } from '../store/selectors';
 import StatTile from './StatTile';
 
-function StatsSummary() {
+interface StatsSummaryProps {
+  householdId: string;
+}
+
+function StatsSummary({ householdId }: StatsSummaryProps) {
+  const visits = useAppSelector(selectVisitsByHousehold(householdId));
+  const completedVisitCount = visits.filter(
+    (visit) => visit.status === 'completed',
+  ).length;
+
   return (
-    <div className='gap-4 grid sm:grid-cols-2'>
-      <StatTile label='Visits so far' value={0} />
+    <div className='grid gap-4 sm:grid-cols-2'>
+      <StatTile label='Visits so far' value={completedVisitCount} />
       <StatTile label='Total cost so far' value='$0' />
     </div>
   );

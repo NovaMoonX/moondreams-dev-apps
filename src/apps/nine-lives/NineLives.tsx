@@ -28,7 +28,9 @@ function NineLives() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSetupModalDismissed, setIsSetupModalDismissed] = useState(false);
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(
+    null,
+  );
 
   const households = useAppSelector((state) => {
     if (!user?.uid) {
@@ -50,7 +52,8 @@ function NineLives() {
     }
 
     return (
-      households.find((household) => household.id === selectedHouseholdId) ?? households[0]
+      households.find((household) => household.id === selectedHouseholdId) ??
+      households[0]
     );
   }, [households, selectedHouseholdId]);
 
@@ -58,7 +61,8 @@ function NineLives() {
   const myPendingRequests = useMyPendingHouseholdRequests(user?.uid ?? null);
 
   const defaultHouseholdName = useMemo(
-    () => (user?.displayName ? `${user.displayName}'s household` : 'My household'),
+    () =>
+      user?.displayName ? `${user.displayName}'s household` : 'My household',
     [user],
   );
 
@@ -131,7 +135,9 @@ function NineLives() {
 
     return (
       <>
-        {pendingRequestsContent && <div className='page pb-0!'>{pendingRequestsContent}</div>}
+        {pendingRequestsContent && (
+          <div className='page pb-0!'>{pendingRequestsContent}</div>
+        )}
         <HouseholdSetupModal
           key={`${user.uid}-${defaultHouseholdName}`}
           isOpen
@@ -161,11 +167,19 @@ function NineLives() {
           onHouseholdCreated={setSelectedHouseholdId}
         />
 
-        <StatsSummary />
+        {selectedHousehold && (
+          <StatsSummary householdId={selectedHousehold.id} />
+        )}
 
-        {selectedHousehold && <CatsSection householdId={selectedHousehold.id} />}
-        {selectedHousehold && <VisitsSection householdId={selectedHousehold.id} />}
-        {selectedHousehold && <ClinicsSection householdId={selectedHousehold.id} />}
+        {selectedHousehold && (
+          <CatsSection householdId={selectedHousehold.id} />
+        )}
+        {selectedHousehold && (
+          <VisitsSection householdId={selectedHousehold.id} />
+        )}
+        {selectedHousehold && (
+          <ClinicsSection householdId={selectedHousehold.id} />
+        )}
       </div>
     </div>
   );
