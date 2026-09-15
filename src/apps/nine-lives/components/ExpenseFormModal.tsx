@@ -1,6 +1,6 @@
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
@@ -9,30 +9,32 @@ import type { Expense } from '@apps/nine-lives/types';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
 
 interface ExpenseFormValues {
-  catId?: string;
+  catIds: string[];
   category: string;
+  incurredAt: string;
   amount: string;
   isRecurring: boolean;
   recurrenceInterval?: string;
-  incurredAt: string;
   notes?: string | null;
 }
 
 interface ExpenseFormModalProps {
   isOpen: boolean;
-  /** Renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
+  /** Renders a "Cats" checkbox group as the first field so the expense can be attached to multiple cats. */
   catOptions: { label: string; value: string }[];
   initialExpense?: Partial<Expense> | null;
   isSubmitting?: boolean;
   onSubmit: (
     expense: Partial<Expense> &
-      Pick<Expense, 'catId' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
+      Pick<Expense, 'catIds' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
   ) => Promise<void> | void;
   onDelete?: (expenseId: string) => Promise<void> | void;
   onClose?: () => void;
 }
 
-const { checkbox, input, select, textarea } = FormFactories;
+const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
+
+const { checkbox, checkboxGroup, input, select, textarea, custom } = FormFactories;
 
 function ExpenseFormModal({
   isOpen,
@@ -46,6 +48,17 @@ function ExpenseFormModal({
   const { confirm } = useActionModal();
   const formId = initialExpense?.id ?? 'new-nine-lives-expense';
   const isEditing = Boolean(initialExpense?.id);
+
+  const [isRecurring, setIsRecurring] = useState(Boolean(initialExpense?.isRecurring));
+  const [notesOpen, setNotesOpen] = useState(Boolean(initialExpense?.notes));
+  const [isValid, setIsValid] = useState(
+    Boolean(
+      initialExpense?.catIds?.length &&
+        initialExpense?.category &&
+        initialExpense?.incurredAt &&
+        initialExpense?.amount,
+    ),
+  );
 
   const categoryOptions = useMemo(
     () =>
@@ -66,62 +79,77 @@ function ExpenseFormModal({
 
   const fields = useMemo(
     () => [
-      select({
-        name: 'catId',
-        label: 'Cat',
+      checkboxGroup({
+        name: 'catIds',
+        label: 'Cats',
         options: catOptions,
-        required: true,
       }),
       select({
         name: 'category',
         label: 'Category',
         options: categoryOptions,
-        required: true,
+      }),
+      createDateInputField({
+        name: 'incurredAt',
+        label: 'Date incurred',
+        variant: 'outline',
       }),
       input({
         name: 'amount',
         label: 'Amount',
         type: 'number',
-        step: '0.01',
         placeholder: '72.00',
-        required: true,
         variant: 'outline',
       }),
       checkbox({
         name: 'isRecurring',
-        label: 'Recurring expense',
-        text: 'Count this again each month or year.',
+        label: '',
+        text: 'This is a recurring expense',
       }),
-      select({
-        name: 'recurrenceInterval',
-        label: 'Billing cadence',
-        options: recurrenceOptions,
-      }),
-      createDateInputField({
-        name: 'incurredAt',
-        label: 'Date incurred',
-        required: true,
-        variant: 'outline',
-      }),
-      textarea({
-        name: 'notes',
-        label: 'Notes (optional)',
-        placeholder: 'Vet visit, food refill, or other context',
-        rows: 3,
-        variant: 'outline',
-      }),
+      ...(isRecurring
+        ? [
+            select({
+              name: 'recurrenceInterval',
+              label: 'Billing cadence',
+              options: recurrenceOptions,
+            }),
+          ]
+        : []),
+      notesOpen
+        ? textarea({
+            name: 'notes',
+            label: 'Notes',
+            placeholder: 'Vet visit, food refill, or other context',
+            rows: 3,
+            variant: 'outline',
+          })
+        : custom({
+            name: '_addNotes',
+            label: '',
+            renderComponent: () => (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={() => setNotesOpen(true)}
+              >
+                + Add notes
+              </Button>
+            ),
+          }),
     ],
-    [catOptions, categoryOptions, recurrenceOptions],
+    [catOptions, categoryOptions, recurrenceOptions, isRecurring, notesOpen],
   );
 
   const initialData = useMemo(
     () => ({
-      catId: initialExpense?.catId ?? '',
+      catIds: initialExpense?.catIds ?? [],
       category: initialExpense?.category ?? DEFAULT_EXPENSE_CATEGORIES[0],
+      incurredAt: toDateInputValue(initialExpense?.incurredAt ?? undefined),
       amount: initialExpense?.amount ? String(initialExpense.amount) : '',
       isRecurring: Boolean(initialExpense?.isRecurring),
       recurrenceInterval: initialExpense?.recurrenceInterval ?? 'monthly',
-      incurredAt: toDateInputValue(initialExpense?.incurredAt ?? undefined),
       notes: initialExpense?.notes ?? '',
     }),
     [initialExpense],
@@ -130,15 +158,21 @@ function ExpenseFormModal({
   const handleSubmit = async (data: ExpenseFormValues) => {
     const amount = Number(data.amount);
     const incurredAt = fromDateInputValue(data.incurredAt);
-    const catId = data.catId || initialExpense?.catId;
+    const catIds = data.catIds.length > 0 ? data.catIds : initialExpense?.catIds ?? [];
 
-    if (!catId || !data.category || !Number.isFinite(amount) || amount <= 0 || incurredAt === null) {
+    if (
+      catIds.length === 0 ||
+      !data.category ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      incurredAt === undefined
+    ) {
       return;
     }
 
     await onSubmit({
       id: initialExpense?.id,
-      catId,
+      catIds,
       category: data.category as Expense['category'],
       amount,
       isRecurring: Boolean(data.isRecurring),
@@ -179,6 +213,26 @@ function ExpenseFormModal({
         initialData={initialData}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => {
+          const values = data as ExpenseFormValues;
+          const nextIsRecurring = Boolean(values.isRecurring);
+
+          if (nextIsRecurring !== isRecurring) {
+            setIsRecurring(nextIsRecurring);
+          }
+
+          const amount = Number(values.amount);
+          const hasCat = values.catIds.length > 0 || Boolean(initialExpense?.catIds?.length);
+          const nextIsValid = Boolean(
+            hasCat &&
+              values.category &&
+              values.incurredAt &&
+              Number.isFinite(amount) &&
+              amount > 0,
+          );
+
+          setIsValid(nextIsValid);
+        }}
         onSubmit={(data) => {
           void handleSubmit(data as ExpenseFormValues);
         }}
@@ -197,7 +251,7 @@ function ExpenseFormModal({
               )}
             </div>
             <div className='flex justify-end'>
-              <Button type='submit' loading={isSubmitting}>
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
                 {isSubmitting ? 'Saving…' : initialExpense?.id ? 'Save expense' : 'Add expense'}
               </Button>
             </div>

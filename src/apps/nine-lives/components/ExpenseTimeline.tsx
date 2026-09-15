@@ -84,7 +84,7 @@ function ExpenseTimeline({
     const searchTerm = searchQuery.trim().toLowerCase();
 
     const filtered = expenses.filter((expense) => {
-      if (catFilter !== 'all' && expense.catId !== catFilter) {
+      if (catFilter !== 'all' && !expense.catIds.includes(catFilter)) {
         return false;
       }
 
@@ -106,9 +106,12 @@ function ExpenseTimeline({
         return true;
       }
 
+      const catNames = expense.catIds
+        .map((catId) => cats.find((cat) => cat.id === catId)?.name ?? '')
+        .join(' ');
       const searchableText = [
         getExpenseCategoryLabel(expense.category),
-        cats.find((cat) => cat.id === expense.catId)?.name ?? '',
+        catNames,
         expense.notes ?? '',
       ]
         .join(' ')
@@ -203,7 +206,10 @@ function ExpenseTimeline({
       ) : (
         <div className={join('divide-border divide-y', hasExpenses && 'mt-0')}>
           {visibleExpenses.map((expense) => {
-            const catName = cats.find((cat) => cat.id === expense.catId)?.name;
+            const catNames = expense.catIds
+              .map((catId) => cats.find((cat) => cat.id === catId)?.name)
+              .filter(Boolean)
+              .join(', ');
 
             return (
               <button
@@ -223,7 +229,7 @@ function ExpenseTimeline({
                       day: 'numeric',
                       year: 'numeric',
                     })}
-                    {catName ? ` · ${catName}` : ''}
+                    {catNames ? ` · ${catNames}` : ''}
                     {expense.isRecurring ? ` · ${expense.recurrenceInterval ?? 'monthly'}` : ''}
                   </div>
                 </div>

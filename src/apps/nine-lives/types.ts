@@ -170,7 +170,7 @@ export type RecurrenceInterval = 'monthly' | 'yearly';
 export interface Expense {
   id: string;
   householdId: string;
-  catId: string;
+  catIds: string[];
   category: ExpenseCategory;
   amount: number;
   isRecurring: boolean;

@@ -1,4 +1,4 @@
-import { collectionGroup, query, type Unsubscribe, where } from 'firebase/firestore';
+import { collection, query, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
@@ -14,8 +14,7 @@ export function startExpensesListener(
   }
 
   const expensesQuery = query(
-    collectionGroup(db, 'expenses'),
-    where('householdId', '==', householdId),
+    collection(db, 'apps', 'nine-lives', 'households', householdId, 'expenses'),
   );
 
   return createFirestoreCollectionListener<Expense>({

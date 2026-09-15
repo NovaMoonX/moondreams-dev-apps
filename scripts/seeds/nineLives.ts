@@ -312,68 +312,68 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     ],
   };
 
-  const expensesByCat: Record<
-    string,
-    Array<{
-      id: string;
-      category: string;
-      amount: number;
-      isRecurring: boolean;
-      recurrenceInterval: 'monthly' | 'yearly' | null;
-      incurredAt: number;
-      notes: string | null;
-    }>
-  > = {
-    'seed-cat-mochi': [
-      {
-        id: 'seed-expense-mochi-adoption',
-        category: 'adoption_fee',
-        amount: 125,
-        isRecurring: false,
-        recurrenceInterval: null,
-        incurredAt: context.now - 47_520_000_000,
-        notes: 'Adoption fee at Moonlight Cat Rescue.',
-      },
-      {
-        id: 'seed-expense-mochi-insurance',
-        category: 'insurance',
-        amount: 34.75,
-        isRecurring: true,
-        recurrenceInterval: 'monthly',
-        incurredAt: context.now - 47_433_600_000,
-        notes: 'Trupanion monthly premium.',
-      },
-      {
-        id: 'seed-expense-mochi-checkup',
-        category: 'vet',
-        amount: 82,
-        isRecurring: false,
-        recurrenceInterval: null,
-        incurredAt: context.now - 2_592_000_000,
-        notes: 'Routine checkup at Blue Bark Veterinary Clinic.',
-      },
-    ],
-    'seed-cat-juniper': [
-      {
-        id: 'seed-expense-juniper-food',
-        category: 'food',
-        amount: 48.5,
-        isRecurring: true,
-        recurrenceInterval: 'monthly',
-        incurredAt: context.now - 5_184_000_000,
-        notes: 'Grain-free dry food subscription.',
-      },
-      {
-        id: 'seed-expense-juniper-dental',
-        category: 'vet',
-        amount: 310,
-        isRecurring: false,
-        recurrenceInterval: null,
-        incurredAt: context.now - 7_776_000_000,
-        notes: 'Dental cleaning at Harbor Cat & Pet Center.',
-      },
-    ],
-  };
+  const expenses = [
+    {
+      id: 'seed-expense-mochi-adoption',
+      catIds: ['seed-cat-mochi'],
+      category: 'adoption_fee',
+      amount: 125,
+      isRecurring: false,
+      recurrenceInterval: null,
+      incurredAt: context.now - 47_520_000_000,
+      notes: 'Adoption fee at Moonlight Cat Rescue.',
+    },
+    {
+      id: 'seed-expense-mochi-insurance',
+      catIds: ['seed-cat-mochi'],
+      category: 'insurance',
+      amount: 34.75,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      incurredAt: context.now - 47_433_600_000,
+      notes: 'Trupanion monthly premium.',
+    },
+    {
+      id: 'seed-expense-mochi-checkup',
+      catIds: ['seed-cat-mochi'],
+      category: 'vet',
+      amount: 82,
+      isRecurring: false,
+      recurrenceInterval: null,
+      incurredAt: context.now - 2_592_000_000,
+      notes: 'Routine checkup at Blue Bark Veterinary Clinic.',
+    },
+    {
+      id: 'seed-expense-juniper-food',
+      catIds: ['seed-cat-juniper'],
+      category: 'food',
+      amount: 48.5,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      incurredAt: context.now - 5_184_000_000,
+      notes: 'Grain-free dry food subscription.',
+    },
+    {
+      id: 'seed-expense-juniper-dental',
+      catIds: ['seed-cat-juniper'],
+      category: 'vet',
+      amount: 310,
+      isRecurring: false,
+      recurrenceInterval: null,
+      incurredAt: context.now - 7_776_000_000,
+      notes: 'Dental cleaning at Harbor Cat & Pet Center.',
+    },
+    {
+      id: 'seed-expense-household-annual-checkup',
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      category: 'vet',
+      amount: 168,
+      isRecurring: false,
+      recurrenceInterval: null,
+      incurredAt: context.now - 2_592_000_000,
+      notes: 'Shared annual wellness visit for both cats.',
+    },
+  ] as const;
 
   const visits = [
     {
@@ -543,24 +543,6 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       );
       symptomCount += 1;
     });
-
-    (expensesByCat[cat.id] ?? []).forEach((expense) => {
-      const expenseRef = catRef.collection('expenses').doc(expense.id);
-
-      batch.set(
-        expenseRef,
-        {
-          ...expense,
-          householdId: HOUSEHOLD_ID,
-          catId: cat.id,
-          createdBy: caretaker.uid,
-          createdAt,
-          lastEditedAt: context.now,
-        },
-        { merge: true },
-      );
-      expenseCount += 1;
-    });
   });
 
   clinics.forEach((clinic) => {
@@ -593,6 +575,23 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       { merge: true },
     );
     visitCount += 1;
+  });
+
+  expenses.forEach((expense) => {
+    const expenseRef = householdRef.collection('expenses').doc(expense.id);
+
+    batch.set(
+      expenseRef,
+      {
+        ...expense,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    expenseCount += 1;
   });
 
   doctors.forEach((doctor) => {

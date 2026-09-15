@@ -10,6 +10,10 @@ import { removeExpense, revertExpense, upsertExpense } from '../slices/expensesS
 function normalizeExpenseInput(value: Partial<Expense>): Partial<Expense> {
   const next = { ...value };
 
+  if (next.catIds) {
+    next.catIds = [...new Set(next.catIds)];
+  }
+
   if (next.notes === undefined) {
     next.notes = null;
   }
@@ -23,88 +27,85 @@ function normalizeExpenseInput(value: Partial<Expense>): Partial<Expense> {
   return next;
 }
 
-const getExpenseDocRef = (householdId: string, catId: string, expenseId: string) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'expenses',
-    expenseId,
-  );
+const getExpenseDocRef = (householdId: string, expenseId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'expenses', expenseId);
 
 export const createExpense = createAsyncThunk<
   Expense,
   {
     householdId: string;
-    catId: string;
     uid: string;
-    expense: Partial<Expense> & Pick<Expense, 'category' | 'amount' | 'isRecurring' | 'incurredAt'>;
+    expense: Partial<Expense> &
+      Pick<Expense, 'catIds' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>;
   },
   { rejectValue: string }
 >(
   'nineLives/expenses/create',
-  async ({ householdId, catId, uid, expense }, { dispatch }) => {
+  async ({ householdId, uid, expense }, { dispatch, rejectWithValue }) => {
     const normalizedExpense = normalizeExpenseInput(expense);
+
+    if (!normalizedExpense.catIds || normalizedExpense.catIds.length === 0) {
+      return rejectWithValue('Select at least one cat.');
+    }
+
     const now = Date.now();
     const expenseId =
-      normalizedExpense.id ?? doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId, 'expenses')).id;
+      normalizedExpense.id ??
+      doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'expenses')).id;
 
     const nextExpense: Expense = {
       id: expenseId,
       householdId,
-      catId,
-      category: normalizedExpense.category,
-      amount: Number(normalizedExpense.amount ?? 0),
+      catIds: normalizedExpense.catIds,
+      category: expense.category,
+      amount: Number(expense.amount),
       isRecurring: Boolean(normalizedExpense.isRecurring),
       recurrenceInterval: normalizedExpense.isRecurring
         ? normalizedExpense.recurrenceInterval ?? 'monthly'
         : null,
-      incurredAt: normalizedExpense.incurredAt,
+      incurredAt: expense.incurredAt,
       notes: normalizedExpense.notes ?? null,
       createdBy: uid,
       createdAt: now,
       lastEditedAt: now,
     };
 
-    await setDoc(getExpenseDocRef(householdId, catId, expenseId), nextExpense);
+    await setDoc(getExpenseDocRef(householdId, expenseId), nextExpense);
     dispatch(upsertExpense(nextExpense));
 
     return nextExpense;
   },
-  );
+);
 
 export const updateExpense = createAsyncThunk<
   Expense,
   {
     householdId: string;
-    catId: string;
     expenseId: string;
     changes: Partial<Expense>;
   },
   { rejectValue: string }
 >(
   'nineLives/expenses/update',
-  async ({ householdId, catId, expenseId, changes }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, expenseId, changes }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
-    const current = state.nineLives.expenses.items.find(
-      (item) => item.id === expenseId && item.catId === catId,
-    );
+    const current = state.nineLives.expenses.items.find((item) => item.id === expenseId);
 
     if (!current) {
       return rejectWithValue('Expense not found.');
     }
 
     const sanitizedChanges = normalizeExpenseInput(changes);
+
+    if (sanitizedChanges.catIds && sanitizedChanges.catIds.length === 0) {
+      return rejectWithValue('Select at least one cat.');
+    }
+
     const nextExpense: Expense = {
       ...current,
       ...sanitizedChanges,
       id: expenseId,
       householdId,
-      catId,
       amount: Number(sanitizedChanges.amount ?? current.amount),
       isRecurring: sanitizedChanges.isRecurring ?? current.isRecurring,
       recurrenceInterval:
@@ -119,7 +120,10 @@ export const updateExpense = createAsyncThunk<
     dispatch(upsertExpense(nextExpense));
 
     try {
-      await updateDoc(getExpenseDocRef(householdId, catId, expenseId), sanitizedChanges);
+      await updateDoc(getExpenseDocRef(householdId, expenseId), {
+        ...sanitizedChanges,
+        lastEditedAt: nextExpense.lastEditedAt,
+      });
       return nextExpense;
     } catch (error) {
       dispatch(revertExpense({ id: expenseId }));
@@ -132,15 +136,13 @@ export const updateExpense = createAsyncThunk<
 
 export const deleteExpense = createAsyncThunk<
   { id: string },
-  { householdId: string; catId: string; expenseId: string },
+  { householdId: string; expenseId: string },
   { rejectValue: string }
 >(
   'nineLives/expenses/delete',
-  async ({ householdId, catId, expenseId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, expenseId }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
-    const current = state.nineLives.expenses.items.find(
-      (item) => item.id === expenseId && item.catId === catId,
-    );
+    const current = state.nineLives.expenses.items.find((item) => item.id === expenseId);
 
     if (!current) {
       return rejectWithValue('Expense not found.');
@@ -149,7 +151,7 @@ export const deleteExpense = createAsyncThunk<
     dispatch(removeExpense({ id: expenseId }));
 
     try {
-      await deleteDoc(getExpenseDocRef(householdId, catId, expenseId));
+      await deleteDoc(getExpenseDocRef(householdId, expenseId));
       return { id: expenseId };
     } catch (error) {
       dispatch(revertExpense({ id: expenseId }));

@@ -34,9 +34,6 @@ export const selectSymptomsByCat = (catId: string | null | undefined) => (state:
 export const selectWeightEntriesByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.weightEntries.items.filter((entry) => entry.catId === catId) : [];
 
-export const selectExpensesByCat = (catId: string | null | undefined) => (state: RootState) =>
-  catId ? state.nineLives.expenses.items.filter((expense) => expense.catId === catId) : [];
-
 export const selectExpensesByHousehold =
   (householdId: string | null | undefined) => (state: RootState) =>
     householdId

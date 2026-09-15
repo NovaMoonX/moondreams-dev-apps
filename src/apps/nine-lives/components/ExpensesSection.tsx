@@ -39,7 +39,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
 
   const handleSubmit = async (
     expense: Partial<Expense> &
-      Pick<Expense, 'catId' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
+      Pick<Expense, 'catIds' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
   ) => {
     if (!user?.uid) {
       return;
@@ -52,14 +52,13 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
         await dispatch(
           updateExpense({
             householdId,
-            catId: editingExpense.catId,
             expenseId: editingExpense.id,
             changes: expense,
           }),
         ).unwrap();
       } else {
         await dispatch(
-          createExpense({ householdId, catId: expense.catId, uid: user.uid, expense }),
+          createExpense({ householdId, uid: user.uid, expense }),
         ).unwrap();
       }
       closeModal();
@@ -69,16 +68,10 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   };
 
   const handleDelete = async (expenseId: string) => {
-    if (!editingExpense) {
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      await dispatch(
-        deleteExpense({ householdId, catId: editingExpense.catId, expenseId }),
-      ).unwrap();
+      await dispatch(deleteExpense({ householdId, expenseId })).unwrap();
       closeModal();
     } finally {
       setIsSubmitting(false);
