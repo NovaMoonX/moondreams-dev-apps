@@ -6,16 +6,20 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 
 import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
+import { startCustomHealthRecordTypesListener } from '../store/listeners/customHealthRecordTypesListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startExpensesListener } from '../store/listeners/expensesListener';
+import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
 import { startVisitsListener } from '../store/listeners/visitsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
+import { setCustomHealthRecordTypes } from '../store/slices/customHealthRecordTypesSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setExpenses } from '../store/slices/expensesSlice';
+import { setHealthRecords } from '../store/slices/healthRecordsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
 import { setVisits } from '../store/slices/visitsSlice';
@@ -56,6 +60,8 @@ export function useNineLivesSync(
       dispatch(clearCurrentHouseholdData());
       dispatch(setPendingRequests([]));
       dispatch(setVisits([]));
+      dispatch(setCustomHealthRecordTypes([]));
+      dispatch(setHealthRecords([]));
       dispatch(setExpenses([]));
       return;
     }
@@ -69,6 +75,12 @@ export function useNineLivesSync(
     const unsubscribeDoctors = startDoctorsListener(householdId, (doctors) => {
       dispatch(setDoctors(doctors));
     });
+    const unsubscribeCustomHealthRecordTypes = startCustomHealthRecordTypesListener(
+      householdId,
+      (types) => {
+        dispatch(setCustomHealthRecordTypes(types));
+      },
+    );
     const unsubscribePendingRequests = startPendingRequestsListener(
       householdId,
       (requests) => {
@@ -81,14 +93,19 @@ export function useNineLivesSync(
     const unsubscribeExpenses = startExpensesListener(householdId, (expenses) => {
       dispatch(setExpenses(expenses));
     });
+    const unsubscribeHealthRecords = startHealthRecordsListener(householdId, (records) => {
+      dispatch(setHealthRecords(records));
+    });
 
     return () => {
       unsubscribeCats();
       unsubscribeVetClinics();
       unsubscribeDoctors();
+      unsubscribeCustomHealthRecordTypes();
       unsubscribePendingRequests();
       unsubscribeVisits();
       unsubscribeExpenses();
+      unsubscribeHealthRecords();
     };
   }, [dispatch, householdId]);
 

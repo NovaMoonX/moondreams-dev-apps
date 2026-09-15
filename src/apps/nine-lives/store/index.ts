@@ -47,6 +47,14 @@ import {
   visitsReducer,
   type VisitsState,
 } from './slices/visitsSlice';
+import {
+  healthRecordsReducer,
+  type HealthRecordsState,
+} from './slices/healthRecordsSlice';
+import {
+  customHealthRecordTypesReducer,
+  type CustomHealthRecordTypesState,
+} from './slices/customHealthRecordTypesSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -61,6 +69,8 @@ export interface NineLivesState {
   vaccinations: VaccinationsState;
   weightEntries: WeightEntriesState;
   visits: VisitsState;
+  healthRecords: HealthRecordsState;
+  customHealthRecordTypes: CustomHealthRecordTypesState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -76,6 +86,8 @@ export const nineLivesReducer = combineReducers({
   vaccinations: vaccinationsReducer,
   weightEntries: weightEntriesReducer,
   visits: visitsReducer,
+  healthRecords: healthRecordsReducer,
+  customHealthRecordTypes: customHealthRecordTypesReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

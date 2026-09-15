@@ -411,6 +411,68 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const customHealthRecordTypes = [
+    {
+      id: 'seed-custom-record-type-allergy-test',
+      label: 'Allergy test',
+    },
+  ] as const;
+
+  const healthRecords = [
+    {
+      id: 'seed-health-record-mochi-labs',
+      catIds: ['seed-cat-mochi'],
+      fileURL: 'https://example.com/seed-files/mochi-bloodwork.pdf',
+      fileType: 'pdf' as const,
+      fileName: 'mochi-bloodwork-results.pdf',
+      label: null,
+      recordType: 'lab_result' as const,
+      customRecordTypeId: null,
+      recordDate: context.now - 2_592_000_000,
+      linkedVisitId: 'seed-visit-mochi-checkup',
+      notes: 'Bloodwork from the routine checkup.',
+    },
+    {
+      id: 'seed-health-record-juniper-allergy',
+      catIds: ['seed-cat-juniper'],
+      fileURL: 'https://example.com/seed-files/juniper-allergy-panel.pdf',
+      fileType: 'pdf' as const,
+      fileName: 'juniper-allergy-panel.pdf',
+      label: null,
+      recordType: 'custom' as const,
+      customRecordTypeId: 'seed-custom-record-type-allergy-test',
+      recordDate: context.now - 7_776_000_000,
+      linkedVisitId: null,
+      notes: null,
+    },
+    {
+      id: 'seed-health-record-household-insurance',
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      fileURL: 'https://example.com/seed-files/household-insurance-policy.pdf',
+      fileType: 'pdf' as const,
+      fileName: 'household-insurance-policy.pdf',
+      label: null,
+      recordType: 'insurance' as const,
+      customRecordTypeId: null,
+      recordDate: null,
+      linkedVisitId: null,
+      notes: 'Shared insurance policy covering both cats.',
+    },
+    {
+      id: 'seed-health-record-juniper-ear-photo',
+      catIds: ['seed-cat-juniper'],
+      fileURL: 'https://example.com/seed-files/IMG_2481.jpg',
+      fileType: 'image' as const,
+      fileName: 'IMG_2481.jpg',
+      label: 'Ear infection photo',
+      recordType: 'miscellaneous' as const,
+      customRecordTypeId: null,
+      recordDate: context.now - 1_296_000_000,
+      linkedVisitId: null,
+      notes: 'Photo sent to the vet before scheduling a follow-up.',
+    },
+  ] as const;
+
   const visits = [
     {
       id: 'seed-visit-mochi-checkup',
@@ -485,6 +547,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   let vaccinationCount = 0;
   let weightEntryCount = 0;
   let expenseCount = 0;
+  let healthRecordCount = 0;
   let conditionLibraryCount = 0;
   let symptomCount = 0;
   let visitCount = 0;
@@ -630,6 +693,40 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     expenseCount += 1;
   });
 
+  customHealthRecordTypes.forEach((customType) => {
+    const customTypeRef = householdRef
+      .collection('customHealthRecordTypes')
+      .doc(customType.id);
+
+    batch.set(
+      customTypeRef,
+      {
+        ...customType,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
+  healthRecords.forEach((record) => {
+    const recordRef = householdRef.collection('healthRecords').doc(record.id);
+
+    batch.set(
+      recordRef,
+      {
+        ...record,
+        householdId: HOUSEHOLD_ID,
+        uploadedBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    healthRecordCount += 1;
+  });
+
   doctors.forEach((doctor) => {
     const doctorRef = householdRef.collection('doctors').doc(doctor.id);
 
@@ -657,6 +754,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       vaccinationCount +
       weightEntryCount +
       expenseCount +
+      customHealthRecordTypes.length +
+      healthRecordCount +
       symptomCount +
       visitCount,
   };

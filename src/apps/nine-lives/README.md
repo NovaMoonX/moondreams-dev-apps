@@ -20,7 +20,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 
 1. **Set up your household**: create one from a closable create/join modal, or request access with an invite code from someone already in the household. Household members can always share the current invite code and approve incoming requests.
 2. **Add a cat**: name, photo, date of birth, breed (pick from a default list or enter your own), indoor/outdoor lifestyle, microchip number, shelter/origin (name and address), adoption date and other key dates, current vet clinic, insurance (pick a common provider or enter your own), diet, and notes.
-3. **Build their health record**: upload documents (PDF or image — no video) like lab results or vet paperwork, attached directly to that cat.
+3. **Build their health record**: upload documents (PDF or image — no video) like lab results or vet paperwork, attached directly to that cat. Records can be opened, edited, and deleted from the cat's Records tab, and custom record labels are saved for reuse across the household.
 4. **Track visits**: schedule and log vet visits — for one cat, or several at once (say, both kittens seeing the vet the same day) — tagged with a reason (checkup, illness, accident, vaccination, follow-up, or custom) and the doctor seen, so future visits can just pick them from a list instead of retyping. Visits get a sensible default name based on time of day and date ("Morning Visit — Mar 4"), but you can always rename one. Logging a completed visit is also where you update the key things that actually change at the vet — vaccinations given, conditions diagnosed, current weight, and symptoms discussed — instead of hunting down separate screens afterward.
 5. **Track conditions and incidents**: browse the shared condition library, log accidents/injuries, or add a fully custom entry specific to your cat.
 6. **Track symptoms**: quick-tag cat behavior changes like litter box changes, appetite shifts, hiding, playfulness, and grooming, or write your own note; log either quick tags, free text, or both, and link them to a visit or condition so the timeline connects.
@@ -46,7 +46,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Cat profiles: name, profile photo, date of birth, breed, indoor/outdoor lifestyle, microchip number, shelter/origin (name and address), adoption date and other key dates, current vet clinic, insurance, notes
 - [ ] Default preset lists for breed, personality traits, and insurance provider, each with a "custom" option
 - [ ] Vet clinics and doctors: add a clinic, log doctors seen there, reusable as a select on future visits instead of retyping
-- [ ] Health record file uploads (PDF, image) attached to a cat, with persisted custom record types (typed once, reused as a select — not retyped every time)
+- [x] Health record file uploads (PDF, image) attached to a cat, with persisted custom record types (typed once, reused as a select — not retyped every time)
 - [ ] Vaccination tracking: vaccine name, date administered, next due date
 - [ ] Weight entries: log a cat's current weight, optionally as part of a visit
 - [x] Visit tracking: schedule/log visits with a reason (checkup, illness, accident, vaccination, follow-up, custom), supporting one or several cats in a single entry, with a sensible default name based on time of day, and vaccinations/conditions/weight/symptoms updatable in the same completion flow

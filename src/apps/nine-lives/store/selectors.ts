@@ -31,6 +31,14 @@ export const selectDoctorsByClinic =
         )
       : [];
 
+export const selectCustomHealthRecordTypesByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.customHealthRecordTypes.items.filter(
+          (type) => type.householdId === householdId,
+        )
+      : [];
+
 export const selectVaccinationsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.vaccinations.items.filter((vaccination) => vaccination.catId === catId) : [];
 
@@ -39,6 +47,14 @@ export const selectSymptomsByCat = (catId: string | null | undefined) => (state:
 
 export const selectWeightEntriesByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.weightEntries.items.filter((entry) => entry.catId === catId) : [];
+
+export const selectHealthRecordsByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.healthRecords.items.filter(
+          (record) => record.householdId === householdId,
+        )
+      : [];
 
 export const selectExpensesByHousehold =
   (householdId: string | null | undefined) => (state: RootState) =>
