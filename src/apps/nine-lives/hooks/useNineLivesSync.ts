@@ -7,17 +7,17 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
+import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
-import { startVaccinationsListener } from '../store/listeners/vaccinationsListener';
 import { startVisitsListener } from '../store/listeners/visitsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
+import { setExpenses } from '../store/slices/expensesSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
-import { setVaccinations } from '../store/slices/vaccinationsSlice';
 import { setVisits } from '../store/slices/visitsSlice';
 import { setVetClinics } from '../store/slices/vetClinicsSlice';
 
@@ -55,8 +55,8 @@ export function useNineLivesSync(
     if (!householdId) {
       dispatch(clearCurrentHouseholdData());
       dispatch(setPendingRequests([]));
-      dispatch(setVaccinations([]));
       dispatch(setVisits([]));
+      dispatch(setExpenses([]));
       return;
     }
 
@@ -75,11 +75,11 @@ export function useNineLivesSync(
         dispatch(setPendingRequests(requests));
       },
     );
-    const unsubscribeVaccinations = startVaccinationsListener(householdId, (vaccinations) => {
-      dispatch(setVaccinations(vaccinations));
-    });
     const unsubscribeVisits = startVisitsListener(householdId, (visits) => {
       dispatch(setVisits(visits));
+    });
+    const unsubscribeExpenses = startExpensesListener(householdId, (expenses) => {
+      dispatch(setExpenses(expenses));
     });
 
     return () => {
@@ -87,8 +87,8 @@ export function useNineLivesSync(
       unsubscribeVetClinics();
       unsubscribeDoctors();
       unsubscribePendingRequests();
-      unsubscribeVaccinations();
       unsubscribeVisits();
+      unsubscribeExpenses();
     };
   }, [dispatch, householdId]);
 

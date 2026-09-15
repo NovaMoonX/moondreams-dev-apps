@@ -312,6 +312,105 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     ],
   };
 
+  const expenses = [
+    {
+      id: 'seed-expense-mochi-adoption',
+      catIds: ['seed-cat-mochi'],
+      category: 'adoption_fee',
+      label: null,
+      amount: 125,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 47_520_000_000,
+      notes: 'Adoption fee at Moonlight Cat Rescue.',
+    },
+    {
+      id: 'seed-expense-mochi-insurance',
+      catIds: ['seed-cat-mochi'],
+      category: 'insurance',
+      label: null,
+      amount: 34.75,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 47_433_600_000,
+      notes: 'Trupanion monthly premium.',
+    },
+    {
+      id: 'seed-expense-mochi-checkup',
+      catIds: ['seed-cat-mochi'],
+      category: 'vet',
+      label: null,
+      amount: 82,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 2_592_000_000,
+      notes: 'Routine checkup at Blue Bark Veterinary Clinic.',
+    },
+    {
+      id: 'seed-expense-juniper-food',
+      catIds: ['seed-cat-juniper'],
+      category: 'food',
+      label: null,
+      amount: 48.5,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 5_184_000_000,
+      notes: 'Grain-free dry food subscription.',
+    },
+    {
+      id: 'seed-expense-juniper-dental',
+      catIds: ['seed-cat-juniper'],
+      category: 'vet',
+      label: 'Dental cleaning',
+      amount: 310,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 7_776_000_000,
+      notes: 'Dental cleaning at Harbor Cat & Pet Center.',
+    },
+    {
+      id: 'seed-expense-household-annual-checkup',
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      category: 'vet',
+      label: 'Annual wellness visit',
+      amount: 168,
+      isRecurring: false,
+      recurrenceInterval: null,
+      recurrenceEndedAt: null,
+      incurredAt: context.now - 2_592_000_000,
+      notes: 'Shared annual wellness visit for both cats.',
+    },
+    {
+      id: 'seed-expense-mochi-old-insurance',
+      catIds: ['seed-cat-mochi'],
+      category: 'insurance',
+      label: 'Previous provider',
+      amount: 28,
+      isRecurring: true,
+      recurrenceInterval: 'monthly',
+      recurrenceEndedAt: context.now - 31_536_000_000,
+      incurredAt: context.now - 63_072_000_000,
+      notes: 'Cancelled after switching to Trupanion.',
+    },
+    {
+      id: 'seed-expense-juniper-membership',
+      catIds: ['seed-cat-juniper'],
+      category: 'other',
+      label: 'Pet club membership',
+      amount: 60,
+      isRecurring: true,
+      recurrenceInterval: 'yearly',
+      recurrenceEndedAt: context.now - 15_552_000_000,
+      incurredAt: context.now - 47_520_000_000,
+      notes: 'Annual membership, not renewed.',
+    },
+  ] as const;
+
   const visits = [
     {
       id: 'seed-visit-mochi-checkup',
@@ -385,6 +484,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
 
   let vaccinationCount = 0;
   let weightEntryCount = 0;
+  let expenseCount = 0;
   let conditionLibraryCount = 0;
   let symptomCount = 0;
   let visitCount = 0;
@@ -513,6 +613,23 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     visitCount += 1;
   });
 
+  expenses.forEach((expense) => {
+    const expenseRef = householdRef.collection('expenses').doc(expense.id);
+
+    batch.set(
+      expenseRef,
+      {
+        ...expense,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    expenseCount += 1;
+  });
+
   doctors.forEach((doctor) => {
     const doctorRef = householdRef.collection('doctors').doc(doctor.id);
 
@@ -539,6 +656,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       doctors.length +
       vaccinationCount +
       weightEntryCount +
+      expenseCount +
       symptomCount +
       visitCount,
   };

@@ -335,14 +335,6 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /{path=**}/vaccinations/{vaccinationId} {
-      allow read: if request.auth != null
-        && resource != null
-        && resource.data.householdId is string
-        && isHouseholdMember(resource.data.householdId);
-      allow create, update, delete: if false;
-    }
-
     match /apps/nine-lives/households/{householdId}/cats/{catId}/weightEntries/{weightEntryId} {
       function isWeightEntryIdentityValid() {
         return request.resource.data.id == weightEntryId
@@ -551,6 +543,59 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isVisitImmutableFieldsValid()
         && isVisitBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/expenses/{expenseId} {
+      function isExpenseIdentityValid() {
+        return request.resource.data.id == expenseId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isExpenseBaseShapeValid() {
+        return request.resource.data.catIds is list
+          && request.resource.data.catIds.size() > 0
+          && request.resource.data.category in [
+            'adoption_fee', 'insurance', 'food', 'litter', 'vet',
+            'grooming', 'supplies', 'medication', 'microchipping', 'spay_neuter', 'other'
+          ]
+          && (request.resource.data.label == null || request.resource.data.label is string)
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.isRecurring is bool
+          && (
+            request.resource.data.recurrenceInterval == null
+              || request.resource.data.recurrenceInterval in ['monthly', 'yearly']
+          )
+          && (
+            request.resource.data.recurrenceEndedAt == null
+              || (request.resource.data.isRecurring == true && isTimestampNumber(request.resource.data.recurrenceEndedAt))
+          )
+          && isTimestampNumber(request.resource.data.incurredAt)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isExpenseImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isExpenseIdentityValid()
+        && isExpenseBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isExpenseImmutableFieldsValid()
+        && isExpenseBaseShapeValid();
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
