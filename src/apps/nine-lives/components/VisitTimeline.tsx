@@ -136,7 +136,7 @@ function VisitTimeline({
 
           <div className='flex flex-wrap items-center gap-2'>
             <span className='text-muted-foreground text-sm'>Filter by:</span>
-            <div className='w-40'>
+            <div className='max-w-40 flex-1'>
               <Select
                 options={STATUS_FILTER_OPTIONS}
                 value={statusFilter}
@@ -145,7 +145,7 @@ function VisitTimeline({
               />
             </div>
             {cats.length > 1 && (
-              <div className='w-36'>
+              <div className='max-w-36 flex-1'>
                 <Select
                   options={catFilterOptions}
                   value={catFilter}

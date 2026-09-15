@@ -50,17 +50,17 @@ interface VisitMoreDetailsValue {
 
 interface VisitFormValues {
   catIds: string[];
-  scheduledAt: string;
+  scheduledAt: VisitDateTimeValue;
   reasonDetails: VisitReasonValue;
   moreDetails: VisitMoreDetailsValue;
 }
 
 interface VisitOutcomeValues {
   summary: string;
-  [key: string]: string;
+  [key: string]: string | VisitOutcomeCatValue;
 }
 
-const { input, textarea, checkboxGroup, custom } = FormFactories;
+const { textarea, checkboxGroup, custom } = FormFactories;
 
 const REASON_OPTIONS = [
   { label: 'Checkup', value: 'checkup' },
@@ -71,25 +71,80 @@ const REASON_OPTIONS = [
   { label: 'Custom', value: 'custom' },
 ];
 
-function toDateTimeInputValue(timestamp?: number | null) {
+interface VisitDateTimeValue {
+  date: string;
+  time: string;
+}
+
+function toDateInputValue(timestamp?: number | null) {
   if (!timestamp) {
     return '';
   }
 
   const date = new Date(timestamp);
   const pad = (value: number) => value.toString().padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function fromDateTimeInputValue(value: string) {
-  if (!value) {
+function toTimeInputValue(timestamp?: number | null) {
+  if (!timestamp) {
+    return '';
+  }
+
+  const date = new Date(timestamp);
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromDateTimeValue(value: VisitDateTimeValue) {
+  if (!value.date) {
     return undefined;
   }
 
-  const timestamp = new Date(value).getTime();
+  const timestamp = new Date(
+    `${value.date}T${value.time || '00:00'}`,
+  ).getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+interface VisitDateTimeFieldProps {
+  value: VisitDateTimeValue;
+  onValueChange: (value: VisitDateTimeValue) => void;
+  disabled?: boolean;
+}
+
+function VisitDateTimeField({
+  value,
+  onValueChange,
+  disabled,
+}: VisitDateTimeFieldProps) {
+  const update = (changes: Partial<VisitDateTimeValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <div className='grid grid-cols-2 gap-3'>
+      <div className='space-y-1'>
+        <Label className='text-sm'>Date</Label>
+        <Input
+          type='date'
+          value={value.date}
+          onChange={(event) => update({ date: event.target.value })}
+          variant='outline'
+          disabled={disabled}
+        />
+      </div>
+      <div className='space-y-1'>
+        <Label className='text-sm'>Time</Label>
+        <Input
+          type='time'
+          value={value.time}
+          onChange={(event) => update({ time: event.target.value })}
+          variant='outline'
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
 }
 
 interface VisitReasonFieldProps {
@@ -151,7 +206,7 @@ function VisitReasonField({
             />
           </div>
           <div className='space-y-1'>
-            <Label className='text-sm'>Follow-up note (optional)</Label>
+            <Label className='text-sm'>Follow-up note</Label>
             <Textarea
               rows={2}
               value={value.followUpNote}
@@ -232,6 +287,80 @@ function VisitMoreDetailsFields({
   );
 }
 
+interface VisitOutcomeCatValue {
+  vaccination: string;
+  weight: string;
+  condition: string;
+  symptom: string;
+}
+
+const EMPTY_OUTCOME_CAT_VALUE: VisitOutcomeCatValue = {
+  vaccination: '',
+  weight: '',
+  condition: '',
+  symptom: '',
+};
+
+interface VisitOutcomeCatFieldsProps {
+  value: VisitOutcomeCatValue;
+  onValueChange: (value: VisitOutcomeCatValue) => void;
+  disabled?: boolean;
+}
+
+function VisitOutcomeCatFields({
+  value,
+  onValueChange,
+  disabled,
+}: VisitOutcomeCatFieldsProps) {
+  const update = (changes: Partial<VisitOutcomeCatValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <div className='space-y-3'>
+      <div className='space-y-1'>
+        <Label className='text-sm'>Vaccination given</Label>
+        <Input
+          value={value.vaccination}
+          onChange={(event) => update({ vaccination: event.target.value })}
+          placeholder='Rabies'
+          variant='outline'
+          disabled={disabled}
+        />
+      </div>
+      <div className='space-y-1'>
+        <Label className='text-sm'>Current weight</Label>
+        <Input
+          value={value.weight}
+          onChange={(event) => update({ weight: event.target.value })}
+          placeholder='5.4'
+          variant='outline'
+          disabled={disabled}
+        />
+      </div>
+      <div className='space-y-1'>
+        <Label className='text-sm'>Condition diagnosed</Label>
+        <Input
+          value={value.condition}
+          onChange={(event) => update({ condition: event.target.value })}
+          placeholder='Dental disease'
+          variant='outline'
+          disabled={disabled}
+        />
+      </div>
+      <div className='space-y-1'>
+        <Label className='text-sm'>Symptom discussed</Label>
+        <Textarea
+          rows={2}
+          value={value.symptom}
+          onChange={(event) => update({ symptom: event.target.value })}
+          variant='outline'
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
+}
+
 function VisitOutcomeForm({
   cats,
   isSubmitting,
@@ -245,43 +374,31 @@ function VisitOutcomeForm({
     () => [
       textarea({
         name: 'summary',
-        label: 'Visit summary (optional)',
+        label: 'Visit summary',
         rows: 3,
         variant: 'outline',
       }),
-      ...cats.flatMap((cat) => [
-        input({
-          name: `vaccination_${cat.id}`,
-          label: `${cat.name}: vaccination given (optional)`,
-          placeholder: 'Rabies',
-          variant: 'outline',
+      ...cats.map((cat) =>
+        custom({
+          name: `outcome_${cat.id}`,
+          label: cats.length > 1 ? cat.name : '',
+          renderComponent: (props) => (
+            <VisitOutcomeCatFields
+              value={props.value as VisitOutcomeCatValue}
+              onValueChange={(value) => props.onValueChange(value)}
+              disabled={props.disabled}
+            />
+          ),
+          colSpan: 'full' as const,
         }),
-        input({
-          name: `weight_${cat.id}`,
-          label: `${cat.name}: current weight (optional)`,
-          placeholder: '5.4',
-          variant: 'outline',
-        }),
-        input({
-          name: `condition_${cat.id}`,
-          label: `${cat.name}: condition diagnosed (optional)`,
-          placeholder: 'Dental disease',
-          variant: 'outline',
-        }),
-        textarea({
-          name: `symptom_${cat.id}`,
-          label: `${cat.name}: symptom discussed (optional)`,
-          rows: 2,
-          variant: 'outline',
-        }),
-      ]),
+      ),
     ],
     [cats],
   );
 
   const handleSubmit = async (data: VisitOutcomeValues) => {
     const outcome: VisitOutcome = {
-      summary: data.summary.trim() || null,
+      summary: (data.summary as string).trim() || null,
       vaccinations: [],
       weightEntries: [],
       conditions: [],
@@ -289,7 +406,11 @@ function VisitOutcomeForm({
     };
 
     cats.forEach((cat) => {
-      const vaccinationName = data[`vaccination_${cat.id}`]?.trim();
+      const catOutcome =
+        (data[`outcome_${cat.id}`] as VisitOutcomeCatValue | undefined) ??
+        EMPTY_OUTCOME_CAT_VALUE;
+
+      const vaccinationName = catOutcome.vaccination.trim();
       if (vaccinationName) {
         outcome.vaccinations?.push({
           catId: cat.id,
@@ -298,12 +419,8 @@ function VisitOutcomeForm({
         });
       }
 
-      const weight = Number(data[`weight_${cat.id}`]);
-      if (
-        data[`weight_${cat.id}`]?.trim() &&
-        Number.isFinite(weight) &&
-        weight > 0
-      ) {
+      const weight = Number(catOutcome.weight);
+      if (catOutcome.weight.trim() && Number.isFinite(weight) && weight > 0) {
         outcome.weightEntries?.push({
           catId: cat.id,
           weight,
@@ -312,7 +429,7 @@ function VisitOutcomeForm({
         });
       }
 
-      const conditionName = data[`condition_${cat.id}`]?.trim();
+      const conditionName = catOutcome.condition.trim();
       if (conditionName) {
         outcome.conditions?.push({
           catId: cat.id,
@@ -324,7 +441,7 @@ function VisitOutcomeForm({
         });
       }
 
-      const symptomDescription = data[`symptom_${cat.id}`]?.trim();
+      const symptomDescription = catOutcome.symptom.trim();
       if (symptomDescription) {
         outcome.symptoms?.push({
           catId: cat.id,
@@ -339,31 +456,41 @@ function VisitOutcomeForm({
   };
 
   return (
-    <Form
-      id='nine-lives-visit-outcome'
-      form={outcomeFields}
-      initialData={{ summary: '' }}
-      columns={1}
-      spacing='normal'
-      onSubmit={(data) => {
-        void handleSubmit(data as VisitOutcomeValues);
-      }}
-      submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={() => void onComplete({})}
-            disabled={isSubmitting}
-          >
-            Complete without entries
-          </Button>
-          <Button type='submit' loading={isSubmitting}>
-            {isSubmitting ? 'Completing…' : 'Complete visit'}
-          </Button>
-        </div>
-      }
-    />
+    <div className='space-y-3'>
+      <p className='text-muted-foreground text-sm'>
+        All fields are optional — skip anything you don't have yet.
+      </p>
+      <Form
+        id='nine-lives-visit-outcome'
+        form={outcomeFields}
+        initialData={{
+          summary: '',
+          ...Object.fromEntries(
+            cats.map((cat) => [`outcome_${cat.id}`, EMPTY_OUTCOME_CAT_VALUE]),
+          ),
+        }}
+        columns={1}
+        spacing='normal'
+        onSubmit={(data) => {
+          void handleSubmit(data as VisitOutcomeValues);
+        }}
+        submitButton={
+          <div className='flex items-center justify-between gap-2'>
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={() => void onComplete({})}
+              disabled={isSubmitting}
+            >
+              Complete without entries
+            </Button>
+            <Button type='submit' loading={isSubmitting}>
+              {isSubmitting ? 'Completing…' : 'Complete visit'}
+            </Button>
+          </div>
+        }
+      />
+    </div>
   );
 }
 
@@ -412,13 +539,16 @@ function VisitFormModal({
         label: 'Cats',
         options: cats.map((cat) => ({ label: cat.name, value: cat.id })),
       }),
-      input({
+      custom({
         name: 'scheduledAt',
         label: 'Date and time',
-        type: 'text',
-        placeholder: '2026-03-04 09:00',
-        required: true,
-        variant: 'outline',
+        renderComponent: (props) => (
+          <VisitDateTimeField
+            value={props.value as VisitDateTimeValue}
+            onValueChange={(value) => props.onValueChange(value)}
+            disabled={props.disabled}
+          />
+        ),
       }),
       custom({
         name: 'reasonDetails',
@@ -434,7 +564,7 @@ function VisitFormModal({
       }),
       custom({
         name: 'moreDetails',
-        label: 'More details',
+        label: '',
         renderComponent: (props) => (
           <VisitMoreDetailsFields
             value={props.value as VisitMoreDetailsValue}
@@ -451,7 +581,7 @@ function VisitFormModal({
   );
 
   const handleSubmit = async (data: VisitFormValues) => {
-    const scheduledAt = fromDateTimeInputValue(data.scheduledAt);
+    const scheduledAt = fromDateTimeValue(data.scheduledAt);
     if (!scheduledAt || data.catIds.length === 0) {
       return;
     }
@@ -511,7 +641,10 @@ function VisitFormModal({
           form={fields}
           initialData={{
             catIds: initialVisit?.catIds ?? [],
-            scheduledAt: toDateTimeInputValue(initialVisit?.scheduledAt),
+            scheduledAt: {
+              date: toDateInputValue(initialVisit?.scheduledAt),
+              time: toTimeInputValue(initialVisit?.scheduledAt),
+            },
             reasonDetails: {
               reason: initialVisit?.reason ?? 'checkup',
               customReasonLabel: initialVisit?.customReasonLabel ?? '',
