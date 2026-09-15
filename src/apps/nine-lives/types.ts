@@ -91,6 +91,40 @@ export interface Doctor {
   createdAt: number;
 }
 
+export type VisitStatus = 'upcoming' | 'completed' | 'cancelled';
+export type VisitReason =
+  | 'checkup'
+  | 'illness'
+  | 'accident'
+  | 'vaccination'
+  | 'follow_up'
+  | 'custom';
+
+export interface Visit {
+  id: string;
+  householdId: string;
+  catIds: string[];
+  clinicId: string | null;
+  doctorId: string | null;
+  status: VisitStatus;
+  reason: VisitReason;
+  customReasonLabel: string | null;
+  followUpOfVisitId: string | null;
+  followUpNote: string | null;
+  title: string | null;
+  scheduledAt: number;
+  completedAt: number | null;
+  summary: string | null;
+  linkedSymptomIds: string[];
+  linkedConditionIds: string[];
+  linkedHealthRecordIds: string[];
+  linkedVaccinationIds: string[];
+  linkedWeightEntryIds: string[];
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export interface Vaccination {
   id: string;
   householdId: string;
