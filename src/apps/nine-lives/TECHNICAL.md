@@ -156,6 +156,7 @@ interface HealthRecord {
   fileURL: string;
   fileType: 'pdf' | 'image';
   fileName: string;
+  label: string | null; // user-facing display name; falls back to fileName when unset (most useful for images, whose filenames rarely describe the content)
   recordType: HealthRecordType;
   customRecordTypeId: string | null; // present only if recordType === 'custom', ref to CustomHealthRecordType
   recordDate: number | null;
