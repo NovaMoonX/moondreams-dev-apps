@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /nine-lives/households/{householdId}/cats/{catId}/{fileName} {
+      function isHouseholdMember() {
+        return request.auth != null
+          && request.auth.uid in firestore.get(
+            /databases/(default)/documents/apps/nine-lives/households/$(householdId)
+          ).data.members;
+      }
+
+      allow read: if isHouseholdMember();
+      allow write: if isHouseholdMember()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
