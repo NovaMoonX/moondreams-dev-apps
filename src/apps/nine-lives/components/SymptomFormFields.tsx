@@ -8,6 +8,7 @@ import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/ut
 import type { CatCondition, Symptom, SymptomQuickTag, SymptomSeverity } from '../types';
 
 interface SymptomFormValues {
+  catId?: string;
   description: string;
   quickTags: SymptomQuickTag[];
   firstNoticedAt: string;
@@ -17,6 +18,8 @@ interface SymptomFormValues {
 
 interface SymptomFormFieldsProps {
   conditions: CatCondition[];
+  /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
+  catOptions?: { label: string; value: string }[];
   initialSymptom?: Partial<Symptom> | null;
   isSubmitting?: boolean;
   onSubmit: (symptom: Partial<Symptom> & Pick<Symptom, 'firstNoticedAt'>) => Promise<void> | void;
@@ -45,6 +48,7 @@ const { textarea, checkboxGroup, select } = FormFactories;
 
 function SymptomFormFields({
   conditions,
+  catOptions,
   initialSymptom,
   isSubmitting = false,
   onSubmit,
@@ -54,9 +58,19 @@ function SymptomFormFields({
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialSymptom?.id);
   const formId = initialSymptom?.id ?? 'new-nine-lives-symptom';
+  const showCatField = Boolean(catOptions && catOptions.length > 0);
 
   const fields = useMemo(
     () => [
+      ...(showCatField
+        ? [
+            select({
+              name: 'catId',
+              label: 'Cat',
+              options: catOptions ?? [],
+            }),
+          ]
+        : []),
       checkboxGroup({
         name: 'quickTags',
         label: 'Quick tags',
@@ -94,18 +108,19 @@ function SymptomFormFields({
           ]
         : []),
     ],
-    [conditions],
+    [showCatField, catOptions, conditions],
   );
 
   const handleSubmit = async (data: SymptomFormValues) => {
     const firstNoticedAt = fromDateInputValue(data.firstNoticedAt) ?? null;
 
-    if (firstNoticedAt === null) {
+    if (firstNoticedAt === null || (showCatField && !data.catId)) {
       return;
     }
 
     await onSubmit({
       id: initialSymptom?.id,
+      catId: data.catId || initialSymptom?.catId,
       description: data.description.trim(),
       quickTags: data.quickTags,
       firstNoticedAt,
@@ -135,6 +150,7 @@ function SymptomFormFields({
       id={formId}
       form={fields}
       initialData={{
+        catId: initialSymptom?.catId ?? '',
         description: initialSymptom?.description ?? '',
         quickTags: initialSymptom?.quickTags ?? [],
         firstNoticedAt: toDateInputValue(initialSymptom?.firstNoticedAt ?? undefined),

@@ -20,6 +20,8 @@ interface CatConditionFormValues {
 
 interface CatConditionFormFieldsProps {
   libraryConditions: LibraryCondition[];
+  /** When provided, renders a required "Cat" selector so the form isn't tied to one cat. */
+  catOptions?: { label: string; value: string }[];
   initialCondition?: Partial<CatCondition> | null;
   isSubmitting?: boolean;
   onSubmit: (
@@ -50,6 +52,7 @@ const { input, select, textarea, checkbox, custom } = FormFactories;
 
 function CatConditionFormFields({
   libraryConditions,
+  catOptions,
   initialCondition,
   isSubmitting = false,
   onSubmit,
@@ -59,7 +62,9 @@ function CatConditionFormFields({
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialCondition?.id);
   const formId = initialCondition?.id ?? 'new-nine-lives-cat-condition';
+  const showCatField = Boolean(catOptions && catOptions.length > 0);
 
+  const [catId, setCatId] = useState(initialCondition?.catId ?? '');
   const [status, setStatus] = useState<CatCondition['status']>(initialCondition?.status ?? 'active');
   const [mode, setMode] = useState<'library' | 'custom'>(
     initialCondition?.source === 'custom' ? 'custom' : 'library',
@@ -156,7 +161,7 @@ function CatConditionFormFields({
   const handleSubmit = async (data: CatConditionFormValues) => {
     const occurredAt = fromDateInputValue(data.occurredAt) ?? null;
 
-    if (occurredAt === null) {
+    if (occurredAt === null || (showCatField && !catId)) {
       return;
     }
 
@@ -171,6 +176,7 @@ function CatConditionFormFields({
 
       await onSubmit({
         id: initialCondition?.id,
+        catId: catId || initialCondition?.catId,
         source: 'custom',
         libraryConditionId: null,
         name: trimmedName,
@@ -190,6 +196,7 @@ function CatConditionFormFields({
 
     await onSubmit({
       id: initialCondition?.id,
+      catId: catId || initialCondition?.catId,
       source: 'library',
       libraryConditionId: selectedLibraryCondition.id,
       name: selectedLibraryCondition.name,
@@ -219,6 +226,18 @@ function CatConditionFormFields({
 
   return (
     <div className='space-y-4'>
+      {showCatField && (
+        <div className='max-w-40 space-y-1'>
+          <Label className='text-sm'>Cat</Label>
+          <Select
+            options={(catOptions ?? []).map((option) => ({ text: option.label, value: option.value }))}
+            value={catId}
+            placeholder='Select a cat'
+            onChange={(value) => setCatId(value)}
+          />
+        </div>
+      )}
+
       <div className='max-w-40 space-y-1'>
         <div className='flex items-center space-x-1'>
           <Label className='text-sm'>Status</Label>

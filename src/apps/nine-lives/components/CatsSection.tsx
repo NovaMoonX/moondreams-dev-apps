@@ -11,6 +11,8 @@ import CatAvatarItem from './CatAvatarItem';
 import CatDetailsModal from './CatDetailsModal';
 import CatDetailsPrompt from './CatDetailsPrompt';
 import type { CatQuickAddValues } from './CatQuickAddForm';
+import QuickAddConditionModal from './QuickAddConditionModal';
+import QuickAddSymptomModal from './QuickAddSymptomModal';
 import QuickAddVaccinationModal from './QuickAddVaccinationModal';
 import QuickAddWeightEntryModal from './QuickAddWeightEntryModal';
 import { createCat, deleteCat, updateCat } from '../store/actions/catsActions';
@@ -30,6 +32,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
   const [showAddCatModal, setShowAddCatModal] = useState(false);
   const [showQuickAddVaccination, setShowQuickAddVaccination] = useState(false);
   const [showQuickAddWeightEntry, setShowQuickAddWeightEntry] = useState(false);
+  const [showQuickAddCondition, setShowQuickAddCondition] = useState(false);
+  const [showQuickAddSymptom, setShowQuickAddSymptom] = useState(false);
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
 
@@ -90,6 +94,16 @@ function CatsSection({ householdId }: CatsSectionProps) {
       value: 'log-weight',
       description: 'Add a weight entry for a cat.',
     }),
+    option({
+      label: 'Log condition',
+      value: 'log-condition',
+      description: 'Add a condition for a cat.',
+    }),
+    option({
+      label: 'Log symptom',
+      value: 'log-symptom',
+      description: 'Add a symptom for a cat.',
+    }),
   ];
 
   return (
@@ -104,6 +118,10 @@ function CatsSection({ householdId }: CatsSectionProps) {
                 setShowQuickAddVaccination(true);
               } else if (value === 'log-weight') {
                 setShowQuickAddWeightEntry(true);
+              } else if (value === 'log-condition') {
+                setShowQuickAddCondition(true);
+              } else if (value === 'log-symptom') {
+                setShowQuickAddSymptom(true);
               }
             }}
             placement='bottom'
@@ -171,6 +189,20 @@ function CatsSection({ householdId }: CatsSectionProps) {
         householdId={householdId}
         cats={cats}
         onClose={() => setShowQuickAddWeightEntry(false)}
+      />
+
+      <QuickAddConditionModal
+        isOpen={showQuickAddCondition}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddCondition(false)}
+      />
+
+      <QuickAddSymptomModal
+        isOpen={showQuickAddSymptom}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddSymptom(false)}
       />
     </section>
   );
