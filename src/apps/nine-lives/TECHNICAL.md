@@ -261,6 +261,8 @@ interface Visit {
 
 See **Visit Outcome Flow** below for how vaccinations, conditions, weight entries, and symptoms get logged as part of completing a visit, and how the five `linked*Ids` arrays above turn a visit into a complete record of everything that happened during it.
 
+The shipped client keeps visits in the household Redux sync, exposes scheduling and editing from the household dashboard, and exposes a filtered visit timeline from each cat's detail view. Cancelling keeps the record for historical context; deleting an original visit clears its follow-up references in the same batch.
+
 ### 9. Condition Library (shared, global reference)
 
 Path: `apps/nine-lives/conditionLibrary/{conditionId}`
@@ -526,6 +528,8 @@ Marking a visit completed opens the same form back up with a lightweight "what h
 - **Symptoms reported** → creates or links existing `Symptom` entries, appending the visit to `linkedVisitIds` and the symptom to `Visit.linkedSymptomIds` — usually *why* the visit happened in the first place.
 
 None of this is required to mark a visit completed — it's an optional, streamlined path so the common case (you were just at the vet, several things changed at once) doesn't require navigating to separate screens afterward. Each created record remains independently editable later, same as if it had been entered standalone.
+
+The outcome form offers one optional vaccination, weight entry, condition, and symptom per selected cat. The "Complete without entries" action uses the same completion thunk with an empty outcome, so skipping the step does not block completion.
 
 **Follow-up visits**: a visit with `reason: 'follow_up'` sets `followUpOfVisitId` pointing at the original visit, plus an optional `followUpNote` — useful because the original visit might have covered several things (say, a checkup plus a skin issue), and the follow-up is usually about just one of them.
 
@@ -838,6 +842,7 @@ src/apps/nine-lives/
 │   ├── CatDietForm.tsx
 │   ├── VisitFormModal.tsx          # multi-cat selection, follow-up linking, outcome flow (vaccinations/conditions/weight/symptoms)
 │   ├── VisitTimeline.tsx
+│   ├── VisitsSection.tsx            # household dashboard entry point and visit CRUD
 │   ├── VetClinicFormModal.tsx
 │   ├── ConditionLibraryBrowser.tsx
 │   ├── CatConditionFormModal.tsx

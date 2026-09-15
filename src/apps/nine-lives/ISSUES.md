@@ -353,11 +353,22 @@ Household-level visit scheduling supporting one or more cats per entry, follow-u
 
 #### Success Criteria
 
-- [ ] A single visit can be created for two or more cats and shows up correctly on each cat's individual timeline.
-- [ ] A follow-up visit correctly links to its original visit and displays the optional note.
-- [ ] Completing a visit can create a vaccination, a condition, a weight entry, and a symptom in one flow, each correctly linked back, with the visit's forward arrays updated in the same batch.
-- [ ] Skipping the outcome step entirely still allows marking a visit completed.
-- [ ] A visit's default title reflects its time-of-day and date, and can be overridden.
+- [x] A single visit can be created for two or more cats and shows up correctly on each cat's individual timeline.
+- [x] A follow-up visit correctly links to its original visit and displays the optional note.
+- [x] Completing a visit can create a vaccination, a condition, a weight entry, and a symptom in one flow, each correctly linked back, with the visit's forward arrays updated in the same batch.
+- [x] Skipping the outcome step entirely still allows marking a visit completed.
+- [x] A visit's default title reflects its time-of-day and date, and can be overridden.
+
+#### CRUD & Entry-Point Requirements
+
+- [x] Schedule a visit from the household dashboard and view it in the household timeline.
+- [x] View visits in each linked cat's detail view.
+- [x] Edit visit details after creation.
+- [x] Cancel or delete a visit with confirmation; deleting an original clears follow-up references.
+
+#### Documentation
+
+- [x] README and this technical roadmap describe the shipped visit flow.
 
 ### Issue 10: Health Record File Uploads & Custom Record Types
 

@@ -1,7 +1,7 @@
 const VISIT_TIME_BUCKETS = [
   { start: 5, end: 12, label: 'Morning' },
   { start: 12, end: 17, label: 'Afternoon' },
-  { start: 17, end: 22, label: 'Evening' },
+  { start: 17, end: 21, label: 'Evening' },
 ] as const;
 
 export function getDefaultVisitTitle(scheduledAt: number): string {

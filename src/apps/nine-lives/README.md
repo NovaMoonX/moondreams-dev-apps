@@ -49,7 +49,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Health record file uploads (PDF, image) attached to a cat, with persisted custom record types (typed once, reused as a select — not retyped every time)
 - [ ] Vaccination tracking: vaccine name, date administered, next due date
 - [ ] Weight entries: log a cat's current weight, optionally as part of a visit
-- [ ] Visit tracking: schedule/log visits with a reason (checkup, illness, accident, vaccination, follow-up, custom), supporting one or several cats in a single entry, with a sensible default name based on time of day, and vaccinations/conditions/weight/symptoms updatable in the same completion flow
+- [x] Visit tracking: schedule/log visits with a reason (checkup, illness, accident, vaccination, follow-up, custom), supporting one or several cats in a single entry, with a sensible default name based on time of day, and vaccinations/conditions/weight/symptoms updatable in the same completion flow
 - [x] Condition/incident library seeded from a public data source, browsable and searchable — covering illnesses as well as injuries, with full visit history per condition
 - [x] Attach known conditions or incidents to a cat — from the library or as a fully custom entry
 - [ ] Symptom log with quick-tap cat-specific tags plus free text, optionally linked to one or more visits and/or a condition

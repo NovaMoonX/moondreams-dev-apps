@@ -16,6 +16,7 @@ import HouseholdSetupModal from './components/HouseholdSetupModal';
 import HouseholdSwitcher from './components/HouseholdSwitcher';
 import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
 import StatsSummary from './components/StatsSummary';
+import VisitsSection from './components/VisitsSection';
 import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import { createHousehold } from './store/actions/householdsActions';
@@ -163,6 +164,7 @@ function NineLives() {
         <StatsSummary />
 
         {selectedHousehold && <CatsSection householdId={selectedHousehold.id} />}
+        {selectedHousehold && <VisitsSection householdId={selectedHousehold.id} />}
         {selectedHousehold && <ClinicsSection householdId={selectedHousehold.id} />}
       </div>
     </div>

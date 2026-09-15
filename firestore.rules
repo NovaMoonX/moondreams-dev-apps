@@ -503,6 +503,57 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/visits/{visitId} {
+      function isVisitIdentityValid() {
+        return request.resource.data.id == visitId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isVisitBaseShapeValid() {
+        return request.resource.data.catIds is list
+          && request.resource.data.catIds.size() > 0
+          && request.resource.data.status in ['upcoming', 'completed', 'cancelled']
+          && request.resource.data.reason in ['checkup', 'illness', 'accident', 'vaccination', 'follow_up', 'custom']
+          && (request.resource.data.customReasonLabel == null || request.resource.data.customReasonLabel is string)
+          && (request.resource.data.followUpOfVisitId == null || request.resource.data.followUpOfVisitId is string)
+          && (request.resource.data.followUpNote == null || request.resource.data.followUpNote is string)
+          && (request.resource.data.title == null || request.resource.data.title is string)
+          && isTimestampNumber(request.resource.data.scheduledAt)
+          && (request.resource.data.completedAt == null || isTimestampNumber(request.resource.data.completedAt))
+          && (request.resource.data.summary == null || request.resource.data.summary is string)
+          && request.resource.data.linkedSymptomIds is list
+          && request.resource.data.linkedConditionIds is list
+          && request.resource.data.linkedHealthRecordIds is list
+          && request.resource.data.linkedVaccinationIds is list
+          && request.resource.data.linkedWeightEntryIds is list
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (request.resource.data.reason != 'custom' || request.resource.data.customReasonLabel is string)
+          && (request.resource.data.reason != 'follow_up' || request.resource.data.followUpOfVisitId is string);
+      }
+
+      function isVisitImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isVisitIdentityValid()
+        && isVisitBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isVisitImmutableFieldsValid()
+        && isVisitBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {
