@@ -6,6 +6,7 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 
 import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
+import { startCustomHealthRecordTypesListener } from '../store/listeners/customHealthRecordTypesListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
@@ -13,6 +14,7 @@ import { startVaccinationsListener } from '../store/listeners/vaccinationsListen
 import { startVisitsListener } from '../store/listeners/visitsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
+import { setCustomHealthRecordTypes } from '../store/slices/customHealthRecordTypesSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
@@ -57,6 +59,7 @@ export function useNineLivesSync(
       dispatch(setPendingRequests([]));
       dispatch(setVaccinations([]));
       dispatch(setVisits([]));
+      dispatch(setCustomHealthRecordTypes([]));
       return;
     }
 
@@ -69,6 +72,12 @@ export function useNineLivesSync(
     const unsubscribeDoctors = startDoctorsListener(householdId, (doctors) => {
       dispatch(setDoctors(doctors));
     });
+    const unsubscribeCustomHealthRecordTypes = startCustomHealthRecordTypesListener(
+      householdId,
+      (types) => {
+        dispatch(setCustomHealthRecordTypes(types));
+      },
+    );
     const unsubscribePendingRequests = startPendingRequestsListener(
       householdId,
       (requests) => {
@@ -86,6 +95,7 @@ export function useNineLivesSync(
       unsubscribeCats();
       unsubscribeVetClinics();
       unsubscribeDoctors();
+      unsubscribeCustomHealthRecordTypes();
       unsubscribePendingRequests();
       unsubscribeVaccinations();
       unsubscribeVisits();

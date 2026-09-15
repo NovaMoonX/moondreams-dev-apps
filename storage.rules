@@ -15,5 +15,23 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
+
+    match /nine-lives/households/{householdId}/cats/{catId}/health-records/{recordId} {
+      function isHouseholdMember() {
+        return request.auth != null
+          && request.auth.uid in firestore.get(
+            /databases/(default)/documents/apps/nine-lives/households/$(householdId)
+          ).data.members;
+      }
+
+      allow read: if isHouseholdMember();
+      allow create, update: if isHouseholdMember()
+        && request.resource.size < 10 * 1024 * 1024
+        && (
+          request.resource.contentType == 'application/pdf'
+          || request.resource.contentType.matches('image/.*')
+        );
+      allow delete: if isHouseholdMember();
+    }
   }
 }

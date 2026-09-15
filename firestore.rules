@@ -503,6 +503,88 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/customHealthRecordTypes/{typeId} {
+      function isCustomHealthRecordTypeIdentityValid() {
+        return request.resource.data.id == typeId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomHealthRecordTypeShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomHealthRecordTypeImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomHealthRecordTypeIdentityValid()
+        && isCustomHealthRecordTypeShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomHealthRecordTypeImmutableFieldsValid()
+        && isCustomHealthRecordTypeShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/cats/{catId}/healthRecords/{recordId} {
+      function isHealthRecordIdentityValid() {
+        return request.resource.data.id == recordId
+          && request.resource.data.catId == catId;
+      }
+
+      function isHealthRecordShapeValid() {
+        return isNonEmptyString(request.resource.data.fileURL)
+          && (request.resource.data.fileType == 'pdf' || request.resource.data.fileType == 'image')
+          && isNonEmptyString(request.resource.data.fileName)
+          && request.resource.data.recordType in ['lab_result', 'vet_paperwork', 'other', 'custom']
+          && (request.resource.data.customRecordTypeId == null || request.resource.data.customRecordTypeId is string)
+          && (request.resource.data.recordDate == null || isTimestampNumber(request.resource.data.recordDate))
+          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.uploadedBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (
+            request.resource.data.customRecordTypeId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customHealthRecordTypes/$(request.resource.data.customRecordTypeId))
+          )
+          && (request.resource.data.recordType != 'custom' || request.resource.data.customRecordTypeId is string);
+      }
+
+      function isHealthRecordImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.catId == resource.data.catId
+          && request.resource.data.catId == catId
+          && request.resource.data.fileURL == resource.data.fileURL
+          && request.resource.data.fileType == resource.data.fileType
+          && request.resource.data.fileName == resource.data.fileName
+          && request.resource.data.uploadedBy == resource.data.uploadedBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isHealthRecordIdentityValid()
+        && isHealthRecordShapeValid()
+        && request.resource.data.uploadedBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isHealthRecordImmutableFieldsValid()
+        && isHealthRecordShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/nine-lives/households/{householdId}/visits/{visitId} {
       function isVisitIdentityValid() {
         return request.resource.data.id == visitId

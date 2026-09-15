@@ -17,6 +17,7 @@ import { useCatDetailSync } from '../hooks/useCatDetailSync';
 import type { Cat } from '../types';
 import CatConditionsSection from './CatConditionsSection';
 import CatProfileForm from './CatProfileForm';
+import HealthRecordsSection from './HealthRecordsSection';
 import SymptomsSection from './SymptomsSection';
 import VaccinationsSection from './VaccinationsSection';
 import WeightEntriesSection from './WeightEntriesSection';
@@ -151,6 +152,9 @@ function CatDetailsModalContent({
           <TabsTrigger value='symptoms' disabled={!householdId}>
             Symptoms
           </TabsTrigger>
+          <TabsTrigger value='records' disabled={!householdId}>
+            Records
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value='details' className='pt-4'>
@@ -192,6 +196,14 @@ function CatDetailsModalContent({
 
             <TabsContent value='symptoms' className='pt-4'>
               <SymptomsSection
+                householdId={householdId}
+                catId={cat.id}
+                catName={cat.name}
+              />
+            </TabsContent>
+
+            <TabsContent value='records' className='pt-4'>
+              <HealthRecordsSection
                 householdId={householdId}
                 catId={cat.id}
                 catName={cat.name}

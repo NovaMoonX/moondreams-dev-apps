@@ -91,6 +91,32 @@ export interface Doctor {
   createdAt: number;
 }
 
+export type HealthRecordType = 'lab_result' | 'vet_paperwork' | 'other' | 'custom';
+
+export interface HealthRecord {
+  id: string;
+  catId: string;
+  fileURL: string;
+  fileType: 'pdf' | 'image';
+  fileName: string;
+  recordType: HealthRecordType;
+  customRecordTypeId: string | null;
+  recordDate: number | null;
+  linkedVisitId: string | null;
+  notes: string | null;
+  uploadedBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface CustomHealthRecordType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
 export type VisitStatus = 'upcoming' | 'completed' | 'cancelled';
 export type VisitReason =
   | 'checkup'

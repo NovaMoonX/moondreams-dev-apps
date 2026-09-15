@@ -154,10 +154,10 @@ interface HealthRecord {
   fileType: 'pdf' | 'image';
   fileName: string;
   recordType: HealthRecordType;
-  customRecordTypeId?: string; // present only if recordType === 'custom', ref to CustomHealthRecordType
-  recordDate?: number;
-  linkedVisitId?: string; // convenience back-pointer, mirrors the other linked entities
-  notes?: string;
+  customRecordTypeId: string | null; // present only if recordType === 'custom', ref to CustomHealthRecordType
+  recordDate: number | null;
+  linkedVisitId: string | null; // convenience back-pointer, mirrors the other linked entities
+  notes: string | null;
   uploadedBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -175,6 +175,14 @@ interface CustomHealthRecordType {
   createdAt: number;
 }
 ```
+
+Health record files are stored at
+`nine-lives/households/{householdId}/cats/{catId}/health-records/{recordId}` in
+Storage. The records listener is lazy and starts when a cat details modal is
+open. The Records tab supports opening files, editing record metadata, and
+deleting both the Firestore record and its Storage object. New custom labels
+are upserted into the household's reference collection before the record is
+created, so they are available to every cat in that household.
 
 ### 6. Vaccination
 
@@ -898,14 +906,15 @@ src/apps/nine-lives/
 │   │   ├── householdListener.ts
 │   │   ├── catsListener.ts
 │   │   ├── vetClinicsListener.ts
-│   │   ├── doctorsListener.ts
+│   │   ├── doctorsListener.ts             # household-wide reference data
 │   │   ├── conditionLibraryListener.ts
 │   │   ├── vaccineLibraryListener.ts
 │   │   ├── glossaryListener.ts
 │   │   ├── resourcesListener.ts
 │   │   ├── visitsListener.ts
 │   │   ├── vaccinationsListener.ts  # collectionGroup query, household-scoped
-│   │   └── catDetailListeners.ts    # healthRecords, weightEntries, catConditions, symptoms, expenses, growthPhotos, careInstructions; customHealthRecordTypes loads household-wide alongside doctors
+│   │   ├── catDetailListeners.ts    # healthRecords, weightEntries, catConditions, symptoms, expenses, growthPhotos, careInstructions
+│   │   └── customHealthRecordTypesListener.ts
 │   ├── selectors.ts
 │   └── index.ts                     # exports NineLivesState, nineLivesReducer, selectNineLives
 ├── hooks/
