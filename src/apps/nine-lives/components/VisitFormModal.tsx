@@ -430,26 +430,30 @@ function VisitOutcomeCatCard({
     <Button
       type='button'
       variant='secondary'
-      className='flex w-full items-center justify-between gap-3'
+      className='w-full'
       onClick={onClick}
       disabled={disabled}
     >
-      <span className='flex items-center gap-3'>
-        <Avatar
-          src={cat.photoURL ?? undefined}
-          alt={cat.name}
-          initials={cat.photoURL ? undefined : getInitials(cat.name)}
-          size='sm'
-          shape='circle'
-        />
-        <span className='font-medium'>{cat.name}</span>
-        {hasEntries && (
-          <Badge variant='success' size='xs'>
-            Added
-          </Badge>
-        )}
+      <span className='flex w-full items-center justify-between gap-3'>
+        <span className='flex items-center gap-3'>
+          <Avatar
+            src={cat.photoURL ?? undefined}
+            alt={cat.name}
+            initials={cat.photoURL ? undefined : getInitials(cat.name)}
+            size='sm'
+            shape='circle'
+          />
+          <span className='font-medium'>{cat.name}</span>
+        </span>
+        <span className='flex items-center gap-2'>
+          {hasEntries && (
+            <Badge variant='success' size='xs'>
+              Added
+            </Badge>
+          )}
+          <ChevronRight className='h-4 w-4 shrink-0' />
+        </span>
       </span>
-      <ChevronRight className='h-4 w-4 shrink-0' />
     </Button>
   );
 }
