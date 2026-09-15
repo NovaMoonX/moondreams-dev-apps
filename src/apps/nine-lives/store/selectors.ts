@@ -1,6 +1,12 @@
+import { createSelector } from '@reduxjs/toolkit';
+
 import type { RootState } from '@/store';
 
-import { calculateLifetimeExpenseTotal, calculateMonthlyExpenseTotal } from '../utils/budgetCalculators';
+import {
+  calculateLifetimeExpenseTotal,
+  calculateRecurringMonthlyTotal,
+  calculateRecurringYearlyTotal,
+} from '../utils/budgetCalculators';
 
 export const selectCatsByHousehold = (householdId: string | null | undefined) => (state: RootState) =>
   householdId
@@ -40,15 +46,34 @@ export const selectExpensesByHousehold =
       ? state.nineLives.expenses.items.filter((expense) => expense.householdId === householdId)
       : [];
 
-export const selectMonthlyExpenseTotalByHousehold = (
-  householdId: string | null | undefined,
-) => (state: RootState): number =>
-  calculateMonthlyExpenseTotal(selectExpensesByHousehold(householdId)(state));
+export interface ExpenseTotals {
+  recurringMonthly: number;
+  recurringYearly: number;
+  lifetime: number;
+}
 
-export const selectLifetimeExpenseTotalByHousehold = (
+const selectExpenseItems = (state: RootState) => state.nineLives.expenses.items;
+
+/**
+ * Creates a memoized selector for one household's expense totals — recompute only happens
+ * when `expenses.items` actually changes, not on every unrelated render. Callers must build
+ * the selector once per householdId (e.g. `useMemo(() => makeSelectExpenseTotalsByHousehold(householdId), [householdId])`)
+ * and reuse that instance, since each call here returns a fresh selector with its own cache.
+ */
+export const makeSelectExpenseTotalsByHousehold = (
   householdId: string | null | undefined,
-) => (state: RootState): number =>
-  calculateLifetimeExpenseTotal(selectExpensesByHousehold(householdId)(state));
+) =>
+  createSelector([selectExpenseItems], (items): ExpenseTotals => {
+    const expenses = householdId
+      ? items.filter((expense) => expense.householdId === householdId)
+      : [];
+
+    return {
+      recurringMonthly: calculateRecurringMonthlyTotal(expenses),
+      recurringYearly: calculateRecurringYearlyTotal(expenses),
+      lifetime: calculateLifetimeExpenseTotal(expenses),
+    };
+  });
 
 export const selectConditionLibrary = (state: RootState) => state.nineLives.conditionLibrary.items;
 

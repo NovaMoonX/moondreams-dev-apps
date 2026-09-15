@@ -32,16 +32,6 @@ export function getExpenseCategoryLabel(category: ExpenseCategory): string {
   return labels[category] ?? 'Other';
 }
 
-function isExpenseInCurrentMonth(expense: Expense, now: number = Date.now()): boolean {
-  const comparisonDate = new Date(now);
-  const expenseDate = new Date(expense.incurredAt);
-
-  return (
-    comparisonDate.getFullYear() === expenseDate.getFullYear() &&
-    comparisonDate.getMonth() === expenseDate.getMonth()
-  );
-}
-
 export function getRecurringCycleCount(expense: Expense, now: number = Date.now()): number {
   if (!expense.isRecurring || expense.incurredAt > now) {
     return 0;
@@ -66,17 +56,25 @@ export function getRecurringCycleCount(expense: Expense, now: number = Date.now(
   return Math.max(1, monthDelta + (currentMonthCycle ? 1 : 0));
 }
 
-export function calculateMonthlyExpenseTotal(expenses: Expense[], now: number = Date.now()): number {
+/** Sums recurring expenses as their monthly-equivalent cost (a yearly charge is divided by 12). */
+export function calculateRecurringMonthlyTotal(expenses: Expense[]): number {
   return expenses.reduce((total, expense) => {
-    if (expense.isRecurring) {
-      return total + expense.amount;
+    if (!expense.isRecurring) {
+      return total;
     }
 
-    if (isExpenseInCurrentMonth(expense, now)) {
-      return total + expense.amount;
+    return total + (expense.recurrenceInterval === 'yearly' ? expense.amount / 12 : expense.amount);
+  }, 0);
+}
+
+/** Sums recurring expenses as their yearly-equivalent cost (a monthly charge is multiplied by 12). */
+export function calculateRecurringYearlyTotal(expenses: Expense[]): number {
+  return expenses.reduce((total, expense) => {
+    if (!expense.isRecurring) {
+      return total;
     }
 
-    return total;
+    return total + (expense.recurrenceInterval === 'yearly' ? expense.amount : expense.amount * 12);
   }, 0);
 }
 
