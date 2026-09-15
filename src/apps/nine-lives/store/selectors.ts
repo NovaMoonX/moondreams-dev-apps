@@ -37,15 +37,21 @@ export const selectWeightEntriesByCat = (catId: string | null | undefined) => (s
 export const selectExpensesByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.expenses.items.filter((expense) => expense.catId === catId) : [];
 
-export const selectMonthlyExpenseTotal = (state: RootState, catId: string): number =>
-  calculateMonthlyExpenseTotal(
-    state.nineLives.expenses.items.filter((expense) => expense.catId === catId),
-  );
+export const selectExpensesByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.expenses.items.filter((expense) => expense.householdId === householdId)
+      : [];
 
-export const selectLifetimeExpenseTotal = (state: RootState, catId: string): number =>
-  calculateLifetimeExpenseTotal(
-    state.nineLives.expenses.items.filter((expense) => expense.catId === catId),
-  );
+export const selectMonthlyExpenseTotalByHousehold = (
+  householdId: string | null | undefined,
+) => (state: RootState): number =>
+  calculateMonthlyExpenseTotal(selectExpensesByHousehold(householdId)(state));
+
+export const selectLifetimeExpenseTotalByHousehold = (
+  householdId: string | null | undefined,
+) => (state: RootState): number =>
+  calculateLifetimeExpenseTotal(selectExpensesByHousehold(householdId)(state));
 
 export const selectConditionLibrary = (state: RootState) => state.nineLives.conditionLibrary.items;
 

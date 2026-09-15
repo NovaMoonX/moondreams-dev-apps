@@ -169,13 +169,14 @@ export type RecurrenceInterval = 'monthly' | 'yearly';
 
 export interface Expense {
   id: string;
+  householdId: string;
   catId: string;
   category: ExpenseCategory;
   amount: number;
   isRecurring: boolean;
-  recurrenceInterval?: RecurrenceInterval | null;
+  recurrenceInterval: RecurrenceInterval | null;
   incurredAt: number;
-  notes?: string | null;
+  notes: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

@@ -7,6 +7,7 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
+import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
 import { startVaccinationsListener } from '../store/listeners/vaccinationsListener';
@@ -15,6 +16,7 @@ import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
+import { setExpenses } from '../store/slices/expensesSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
 import { setVaccinations } from '../store/slices/vaccinationsSlice';
@@ -57,6 +59,7 @@ export function useNineLivesSync(
       dispatch(setPendingRequests([]));
       dispatch(setVaccinations([]));
       dispatch(setVisits([]));
+      dispatch(setExpenses([]));
       return;
     }
 
@@ -81,6 +84,9 @@ export function useNineLivesSync(
     const unsubscribeVisits = startVisitsListener(householdId, (visits) => {
       dispatch(setVisits(visits));
     });
+    const unsubscribeExpenses = startExpensesListener(householdId, (expenses) => {
+      dispatch(setExpenses(expenses));
+    });
 
     return () => {
       unsubscribeCats();
@@ -89,6 +95,7 @@ export function useNineLivesSync(
       unsubscribePendingRequests();
       unsubscribeVaccinations();
       unsubscribeVisits();
+      unsubscribeExpenses();
     };
   }, [dispatch, householdId]);
 

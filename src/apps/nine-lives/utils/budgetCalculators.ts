@@ -1,4 +1,3 @@
-import type { RootState } from '@/store';
 import type { Expense, ExpenseCategory } from '@apps/nine-lives/types';
 
 export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
@@ -90,13 +89,3 @@ export function calculateLifetimeExpenseTotal(expenses: Expense[], now: number =
     return total + expense.amount;
   }, 0);
 }
-
-export const selectMonthlyExpenseTotal = (state: RootState, catId: string): number =>
-  calculateMonthlyExpenseTotal(
-    state.nineLives.expenses.items.filter((expense) => expense.catId === catId),
-  );
-
-export const selectLifetimeExpenseTotal = (state: RootState, catId: string): number =>
-  calculateLifetimeExpenseTotal(
-    state.nineLives.expenses.items.filter((expense) => expense.catId === catId),
-  );

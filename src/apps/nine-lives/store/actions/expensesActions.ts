@@ -47,7 +47,7 @@ export const createExpense = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/expenses/create',
-  async ({ householdId, catId, uid, expense }, { dispatch, rejectWithValue }) => {
+  async ({ householdId, catId, uid, expense }, { dispatch }) => {
     const normalizedExpense = normalizeExpenseInput(expense);
     const now = Date.now();
     const expenseId =
@@ -55,6 +55,7 @@ export const createExpense = createAsyncThunk<
 
     const nextExpense: Expense = {
       id: expenseId,
+      householdId,
       catId,
       category: normalizedExpense.category,
       amount: Number(normalizedExpense.amount ?? 0),
@@ -102,6 +103,7 @@ export const updateExpense = createAsyncThunk<
       ...current,
       ...sanitizedChanges,
       id: expenseId,
+      householdId,
       catId,
       amount: Number(sanitizedChanges.amount ?? current.amount),
       isRecurring: sanitizedChanges.isRecurring ?? current.isRecurring,

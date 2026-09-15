@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -8,28 +10,36 @@ import {
   deleteExpense,
   updateExpense,
 } from '../store/actions/expensesActions';
-import { selectExpensesByCat } from '../store/selectors';
+import { selectCatsByHousehold, selectExpensesByHousehold } from '../store/selectors';
 import type { Expense } from '../types';
-import BudgetSummary from './BudgetSummary';
+import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseFormModal from './ExpenseFormModal';
+import ExpenseTimeline from './ExpenseTimeline';
 
 interface ExpensesSectionProps {
   householdId: string;
-  catId: string;
-  catName: string;
 }
 
-function ExpensesSection({ householdId, catId, catName }: ExpensesSectionProps) {
+function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const expenses = useAppSelector(selectExpensesByCat(catId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId));
+  const expenses = useAppSelector(selectExpensesByHousehold(householdId));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const handleCreate = async (
-    expense: Partial<Expense> & Pick<Expense, 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
+  const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
+
+  const closeModal = () => {
+    setIsFormOpen(false);
+    setEditingExpense(null);
+  };
+
+  const handleSubmit = async (
+    expense: Partial<Expense> &
+      Pick<Expense, 'catId' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
   ) => {
     if (!user?.uid) {
       return;
@@ -38,18 +48,27 @@ function ExpensesSection({ householdId, catId, catName }: ExpensesSectionProps) 
     setIsSubmitting(true);
 
     try {
-      await dispatch(
-        createExpense({ householdId, catId, uid: user.uid, expense }),
-      ).unwrap();
-      setIsFormOpen(false);
+      if (editingExpense) {
+        await dispatch(
+          updateExpense({
+            householdId,
+            catId: editingExpense.catId,
+            expenseId: editingExpense.id,
+            changes: expense,
+          }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          createExpense({ householdId, catId: expense.catId, uid: user.uid, expense }),
+        ).unwrap();
+      }
+      closeModal();
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleUpdate = async (
-    expense: Partial<Expense> & Pick<Expense, 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
-  ) => {
+  const handleDelete = async (expenseId: string) => {
     if (!editingExpense) {
       return;
     }
@@ -58,62 +77,56 @@ function ExpensesSection({ householdId, catId, catName }: ExpensesSectionProps) 
 
     try {
       await dispatch(
-        updateExpense({
-          householdId,
-          catId,
-          expenseId: editingExpense.id,
-          changes: expense,
-        }),
+        deleteExpense({ householdId, catId: editingExpense.catId, expenseId }),
       ).unwrap();
-      setIsFormOpen(false);
-      setEditingExpense(null);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (expenseId: string) => {
-    setIsSubmitting(true);
-
-    try {
-      await dispatch(deleteExpense({ householdId, catId, expenseId })).unwrap();
-      setIsFormOpen(false);
-      setEditingExpense(null);
+      closeModal();
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className='space-y-4'>
-      <div className='flex items-center justify-between gap-2'>
-        <small className='text-sm text-muted-foreground'>Track {catName}&rsquo;s spending and recurring costs.</small>
-      </div>
+    <section>
+      <DetailsDisclosure label='Expenses'>
+        <div className='space-y-4'>
+          <div className='flex items-center justify-between gap-2 pb-2'>
+            <small className='text-muted-foreground text-sm'>
+              Track spending and recurring costs across every cat.
+            </small>
+            <Button
+              type='button'
+              size='sm'
+              disabled={cats.length === 0}
+              onClick={() => {
+                setEditingExpense(null);
+                setIsFormOpen(true);
+              }}
+            >
+              Log expense
+            </Button>
+          </div>
 
-      <BudgetSummary
-        expenses={expenses}
-        onAddExpense={() => {
-          setEditingExpense(null);
-          setIsFormOpen(true);
-        }}
-        onEditExpense={(expense) => {
-          setEditingExpense(expense);
-          setIsFormOpen(true);
-        }}
-      />
+          <ExpenseTimeline
+            expenses={expenses}
+            cats={cats}
+            onEdit={(expense) => {
+              setEditingExpense(expense);
+              setIsFormOpen(true);
+            }}
+          />
+        </div>
+      </DetailsDisclosure>
 
       <ExpenseFormModal
         isOpen={isFormOpen}
+        catOptions={catOptions}
         initialExpense={editingExpense}
         isSubmitting={isSubmitting}
-        onSubmit={editingExpense ? handleUpdate : handleCreate}
+        onSubmit={handleSubmit}
         onDelete={editingExpense ? handleDelete : undefined}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingExpense(null);
-        }}
+        onClose={closeModal}
       />
-    </div>
+    </section>
   );
 }
 

@@ -9,6 +9,7 @@ import type { Expense } from '@apps/nine-lives/types';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
 
 interface ExpenseFormValues {
+  catId?: string;
   category: string;
   amount: string;
   isRecurring: boolean;
@@ -19,10 +20,13 @@ interface ExpenseFormValues {
 
 interface ExpenseFormModalProps {
   isOpen: boolean;
+  /** Renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
+  catOptions: { label: string; value: string }[];
   initialExpense?: Partial<Expense> | null;
   isSubmitting?: boolean;
   onSubmit: (
-    expense: Partial<Expense> & Pick<Expense, 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
+    expense: Partial<Expense> &
+      Pick<Expense, 'catId' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
   ) => Promise<void> | void;
   onDelete?: (expenseId: string) => Promise<void> | void;
   onClose?: () => void;
@@ -32,6 +36,7 @@ const { checkbox, input, select, textarea } = FormFactories;
 
 function ExpenseFormModal({
   isOpen,
+  catOptions,
   initialExpense,
   isSubmitting = false,
   onSubmit,
@@ -61,6 +66,12 @@ function ExpenseFormModal({
 
   const fields = useMemo(
     () => [
+      select({
+        name: 'catId',
+        label: 'Cat',
+        options: catOptions,
+        required: true,
+      }),
       select({
         name: 'category',
         label: 'Category',
@@ -100,11 +111,12 @@ function ExpenseFormModal({
         variant: 'outline',
       }),
     ],
-    [categoryOptions, recurrenceOptions],
+    [catOptions, categoryOptions, recurrenceOptions],
   );
 
   const initialData = useMemo(
     () => ({
+      catId: initialExpense?.catId ?? '',
       category: initialExpense?.category ?? DEFAULT_EXPENSE_CATEGORIES[0],
       amount: initialExpense?.amount ? String(initialExpense.amount) : '',
       isRecurring: Boolean(initialExpense?.isRecurring),
@@ -118,13 +130,15 @@ function ExpenseFormModal({
   const handleSubmit = async (data: ExpenseFormValues) => {
     const amount = Number(data.amount);
     const incurredAt = fromDateInputValue(data.incurredAt);
+    const catId = data.catId || initialExpense?.catId;
 
-    if (!data.category || !Number.isFinite(amount) || amount <= 0 || incurredAt === null) {
+    if (!catId || !data.category || !Number.isFinite(amount) || amount <= 0 || incurredAt === null) {
       return;
     }
 
     await onSubmit({
       id: initialExpense?.id,
+      catId,
       category: data.category as Expense['category'],
       amount,
       isRecurring: Boolean(data.isRecurring),
