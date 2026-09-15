@@ -31,3 +31,8 @@ export const selectSymptomsByCat = (catId: string | null | undefined) => (state:
 
 export const selectWeightEntriesByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.weightEntries.items.filter((entry) => entry.catId === catId) : [];
+
+export const selectConditionLibrary = (state: RootState) => state.nineLives.conditionLibrary.items;
+
+export const selectConditionsByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.catConditions.items.filter((condition) => condition.catId === catId) : [];

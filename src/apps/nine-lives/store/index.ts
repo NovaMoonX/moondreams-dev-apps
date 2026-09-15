@@ -20,6 +20,14 @@ import {
   type SymptomsState,
 } from './slices/symptomsSlice';
 import {
+  conditionLibraryReducer,
+  type ConditionLibraryState,
+} from './slices/conditionLibrarySlice';
+import {
+  catConditionsReducer,
+  type CatConditionsState,
+} from './slices/catConditionsSlice';
+import {
   vaccinationsReducer,
   type VaccinationsState,
 } from './slices/vaccinationsSlice';
@@ -39,6 +47,8 @@ export interface NineLivesState {
   vetClinics: VetClinicsState;
   doctors: DoctorsState;
   symptoms: SymptomsState;
+  conditionLibrary: ConditionLibraryState;
+  catConditions: CatConditionsState;
   vaccinations: VaccinationsState;
   weightEntries: WeightEntriesState;
 }
@@ -50,6 +60,8 @@ export const nineLivesReducer = combineReducers({
   vetClinics: vetClinicsReducer,
   doctors: doctorsReducer,
   symptoms: symptomsReducer,
+  conditionLibrary: conditionLibraryReducer,
+  catConditions: catConditionsReducer,
   vaccinations: vaccinationsReducer,
   weightEntries: weightEntriesReducer,
 });

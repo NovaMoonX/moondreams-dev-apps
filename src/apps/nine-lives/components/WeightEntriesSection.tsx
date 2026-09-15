@@ -14,7 +14,6 @@ import {
 import { selectWeightEntriesByCat } from '../store/selectors';
 import type { WeightEntry } from '../types';
 import WeightEntryFormFields from './WeightEntryFormFields';
-import WeightEntryFormModal from './WeightEntryFormModal';
 import WeightHistoryList from './WeightHistoryList';
 
 interface WeightEntriesSectionProps {
@@ -106,6 +105,31 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
     );
   }
 
+  if (showAddForm) {
+    return (
+      <div className='space-y-4'>
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          onClick={() => setShowAddForm(false)}
+          disabled={isSubmitting}
+          className='gap-1 px-0'
+        >
+          <ChevronLeft className='h-4 w-4' />
+          Back to weight history
+        </Button>
+
+        <WeightEntryFormFields
+          catName={catName}
+          isSubmitting={isSubmitting}
+          onSubmit={handleCreate}
+          onCancel={() => setShowAddForm(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className='space-y-4'>
       <div className='flex items-center justify-between gap-2'>
@@ -116,14 +140,6 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
       </div>
 
       <WeightHistoryList entries={weightEntries} onEdit={setEditingEntry} />
-
-      <WeightEntryFormModal
-        isOpen={showAddForm}
-        catName={catName}
-        isSubmitting={isSubmitting}
-        onSubmit={handleCreate}
-        onClose={() => setShowAddForm(false)}
-      />
     </div>
   );
 }

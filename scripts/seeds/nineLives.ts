@@ -132,6 +132,57 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const conditionLibraryEntries = [
+    {
+      id: 'seed-condition-upper-respiratory',
+      name: 'Upper respiratory infection',
+      category: 'illness',
+      description: 'Sneezing, nasal discharge, and lethargy consistent with a common upper respiratory infection.',
+      source: 'seed',
+      sourceRef: null,
+    },
+    {
+      id: 'seed-condition-laceration',
+      name: 'Laceration',
+      category: 'injury',
+      description: 'A skin wound or cut that may need cleaning, monitoring, or follow-up care.',
+      source: 'seed',
+      sourceRef: null,
+    },
+    {
+      id: 'seed-condition-arthritis',
+      name: 'Arthritis',
+      category: 'chronic',
+      description: 'Chronic joint pain or stiffness that often needs ongoing monitoring and treatment.',
+      source: 'seed',
+      sourceRef: null,
+    },
+    {
+      id: 'seed-condition-flea-burden',
+      name: 'Flea burden',
+      category: 'parasite',
+      description: 'Visible flea presence or itchy skin irritation from external parasites.',
+      source: 'seed',
+      sourceRef: null,
+    },
+    {
+      id: 'seed-condition-food-allergy',
+      name: 'Food allergy',
+      category: 'allergy',
+      description: 'Gentle rash, itchy skin, or digestive upset linked to a food or ingredient exposure.',
+      source: 'seed',
+      sourceRef: null,
+    },
+    {
+      id: 'seed-condition-unclassified',
+      name: 'Other',
+      category: 'other',
+      description: 'A condition that does not fit the standard illness, injury, chronic, parasite, or allergy categories.',
+      source: 'seed',
+      sourceRef: null,
+    },
+  ] as const;
+
   const vaccinationsByCat: Record<
     string,
     Array<{
@@ -194,6 +245,25 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
 
   let vaccinationCount = 0;
   let weightEntryCount = 0;
+  let conditionLibraryCount = 0;
+
+  conditionLibraryEntries.forEach((condition) => {
+    const conditionRef = context.firestore
+      .collection('apps')
+      .doc('nine-lives')
+      .collection('conditionLibrary')
+      .doc(condition.id);
+
+    batch.set(
+      conditionRef,
+      {
+        ...condition,
+        createdAt: context.now - 3_153_600_000,
+      },
+      { merge: true },
+    );
+    conditionLibraryCount += 1;
+  });
 
   cats.forEach((cat) => {
     const catRef = householdRef.collection('cats').doc(cat.id);
@@ -281,7 +351,13 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      2 + cats.length + clinics.length + doctors.length + vaccinationCount + weightEntryCount,
+      2 +
+      conditionLibraryCount +
+      cats.length +
+      clinics.length +
+      doctors.length +
+      vaccinationCount +
+      weightEntryCount,
   };
 
   return result;
