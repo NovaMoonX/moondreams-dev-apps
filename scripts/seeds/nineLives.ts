@@ -243,9 +243,46 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     ],
   };
 
+  const symptomsByCat: Record<
+    string,
+    Array<{
+      id: string;
+      description: string;
+      quickTags: string[];
+      firstNoticedAt: number;
+      severity: 'mild' | 'moderate' | 'severe' | null;
+      linkedConditionId: string | null;
+      resolvedAt: number | null;
+    }>
+  > = {
+    'seed-cat-mochi': [
+      {
+        id: 'seed-symptom-mochi-appetite',
+        description: 'Skipped breakfast two days in a row but drinking water normally.',
+        quickTags: ['appetite_change'],
+        firstNoticedAt: context.now - 1_728_000_000,
+        severity: 'mild',
+        linkedConditionId: null,
+        resolvedAt: context.now - 1_209_600_000,
+      },
+    ],
+    'seed-cat-juniper': [
+      {
+        id: 'seed-symptom-juniper-hiding',
+        description: 'Hiding under the bed more than usual and avoiding the living room.',
+        quickTags: ['hiding', 'playfulness_change'],
+        firstNoticedAt: context.now - 864_000_000,
+        severity: 'moderate',
+        linkedConditionId: null,
+        resolvedAt: null,
+      },
+    ],
+  };
+
   let vaccinationCount = 0;
   let weightEntryCount = 0;
   let conditionLibraryCount = 0;
+  let symptomCount = 0;
 
   conditionLibraryEntries.forEach((condition) => {
     const conditionRef = context.firestore
@@ -315,6 +352,24 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       );
       weightEntryCount += 1;
     });
+
+    (symptomsByCat[cat.id] ?? []).forEach((symptom) => {
+      const symptomRef = catRef.collection('symptoms').doc(symptom.id);
+
+      batch.set(
+        symptomRef,
+        {
+          ...symptom,
+          catId: cat.id,
+          linkedVisitIds: [],
+          createdBy: caretaker.uid,
+          createdAt,
+          lastEditedAt: context.now,
+        },
+        { merge: true },
+      );
+      symptomCount += 1;
+    });
   });
 
   clinics.forEach((clinic) => {
@@ -357,7 +412,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       clinics.length +
       doctors.length +
       vaccinationCount +
-      weightEntryCount,
+      weightEntryCount +
+      symptomCount,
   };
 
   return result;

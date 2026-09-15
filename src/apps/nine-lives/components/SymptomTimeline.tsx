@@ -1,7 +1,7 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
-import type { Symptom } from '@apps/nine-lives/types';
+import type { CatCondition, Symptom } from '@apps/nine-lives/types';
 
 const symptomTagLabels: Record<string, string> = {
   litter_box_change: 'Litter box change',
@@ -16,18 +16,18 @@ const symptomTagLabels: Record<string, string> = {
 
 interface SymptomTimelineProps {
   symptoms: Symptom[];
+  conditions?: CatCondition[];
   title?: string;
   emptyLabel?: string;
   onEdit?: (symptom: Symptom) => void;
-  onDelete?: (symptom: Symptom) => void;
 }
 
 function SymptomTimeline({
   symptoms,
+  conditions = [],
   title = 'Symptoms',
   emptyLabel = 'No symptoms logged yet.',
   onEdit,
-  onDelete,
 }: SymptomTimelineProps) {
   const sortedSymptoms = [...symptoms].sort(
     (left, right) => right.firstNoticedAt - left.firstNoticedAt,
@@ -52,12 +52,9 @@ function SymptomTimeline({
               <div className='flex flex-wrap gap-1 pb-1'>
                 {symptom.quickTags.length > 0 ? (
                   symptom.quickTags.map((tag) => (
-                    <span
-                      key={`${symptom.id}-${tag}`}
-                      className='rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground'
-                    >
+                    <Badge key={`${symptom.id}-${tag}`} variant='muted' outline size='xs'>
                       {symptomTagLabels[tag] ?? tag}
-                    </span>
+                    </Badge>
                   ))
                 ) : (
                   <span className='text-muted-foreground text-xs'>Free text only</span>
@@ -72,22 +69,19 @@ function SymptomTimeline({
                 <div className='text-muted-foreground text-sm'>Severity: {symptom.severity}</div>
               ) : null}
               {symptom.linkedConditionId ? (
-                <div className='text-muted-foreground text-sm'>Linked condition</div>
+                <div className='text-muted-foreground text-sm'>
+                  Linked condition:{' '}
+                  {conditions.find((condition) => condition.id === symptom.linkedConditionId)?.name ??
+                    'Unknown'}
+                </div>
               ) : null}
             </div>
 
-            <div className='flex shrink-0 items-center gap-2'>
-              {onEdit && (
-                <Button type='button' variant='link' size='sm' onClick={() => onEdit(symptom)}>
-                  Edit
-                </Button>
-              )}
-              {onDelete && (
-                <Button type='button' variant='link' size='sm' onClick={() => onDelete(symptom)}>
-                  Delete
-                </Button>
-              )}
-            </div>
+            {onEdit && (
+              <Button type='button' variant='link' size='sm' onClick={() => onEdit(symptom)}>
+                Edit
+              </Button>
+            )}
           </div>
         ))}
       </div>
