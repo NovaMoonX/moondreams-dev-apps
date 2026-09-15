@@ -1,5 +1,7 @@
 import type { RootState } from '@/store';
 
+import { calculateLifetimeExpenseTotal, calculateMonthlyExpenseTotal } from '../utils/budgetCalculators';
+
 export const selectCatsByHousehold = (householdId: string | null | undefined) => (state: RootState) =>
   householdId
     ? state.nineLives.cats.items.filter((cat) => cat.householdId === householdId)
@@ -31,6 +33,19 @@ export const selectSymptomsByCat = (catId: string | null | undefined) => (state:
 
 export const selectWeightEntriesByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.weightEntries.items.filter((entry) => entry.catId === catId) : [];
+
+export const selectExpensesByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.expenses.items.filter((expense) => expense.catId === catId) : [];
+
+export const selectMonthlyExpenseTotal = (state: RootState, catId: string): number =>
+  calculateMonthlyExpenseTotal(
+    state.nineLives.expenses.items.filter((expense) => expense.catId === catId),
+  );
+
+export const selectLifetimeExpenseTotal = (state: RootState, catId: string): number =>
+  calculateLifetimeExpenseTotal(
+    state.nineLives.expenses.items.filter((expense) => expense.catId === catId),
+  );
 
 export const selectConditionLibrary = (state: RootState) => state.nineLives.conditionLibrary.items;
 

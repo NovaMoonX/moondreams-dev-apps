@@ -152,6 +152,35 @@ export interface WeightEntry {
   createdAt: number;
 }
 
+export type ExpenseCategory =
+  | 'adoption_fee'
+  | 'insurance'
+  | 'food'
+  | 'litter'
+  | 'vet'
+  | 'grooming'
+  | 'supplies'
+  | 'medication'
+  | 'microchipping'
+  | 'spay_neuter'
+  | 'other';
+
+export type RecurrenceInterval = 'monthly' | 'yearly';
+
+export interface Expense {
+  id: string;
+  catId: string;
+  category: ExpenseCategory;
+  amount: number;
+  isRecurring: boolean;
+  recurrenceInterval?: RecurrenceInterval | null;
+  incurredAt: number;
+  notes?: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export type SymptomSeverity = 'mild' | 'moderate' | 'severe';
 
 export type SymptomQuickTag =
