@@ -1,109 +1,90 @@
 import { useMemo, useState } from 'react';
 
-import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
-import type { ConditionCategory, LibraryCondition } from '@apps/nine-lives/types';
+import type { ConditionCategory, LibraryCondition } from '../types';
 
 interface ConditionLibraryBrowserProps {
   conditions: LibraryCondition[];
-  selectedCategory?: ConditionCategory | 'all';
-  searchTerm?: string;
-  onCategoryChange?: (category: ConditionCategory | 'all') => void;
-  onSelect?: (condition: LibraryCondition) => void;
+  selectedConditionId?: string | null;
+  onSelect: (condition: LibraryCondition) => void;
 }
 
-export function ConditionLibraryBrowser({
+const CATEGORY_FILTERS: Array<ConditionCategory | 'all'> = [
+  'all',
+  'illness',
+  'injury',
+  'chronic',
+  'parasite',
+  'allergy',
+  'other',
+];
+
+function ConditionLibraryBrowser({
   conditions,
-  selectedCategory = 'all',
-  searchTerm = '',
-  onCategoryChange,
+  selectedConditionId,
   onSelect,
 }: ConditionLibraryBrowserProps) {
-  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
-  const activeCategory = selectedCategory;
-  const activeSearchTerm = localSearchTerm.trim().toLowerCase();
-
-  const categories: Array<ConditionCategory | 'all'> = [
-    'all',
-    'illness',
-    'injury',
-    'chronic',
-    'parasite',
-    'allergy',
-    'other',
-  ];
+  const [activeCategory, setActiveCategory] = useState<ConditionCategory | 'all'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const filteredConditions = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
     return conditions.filter((condition) => {
-      const matchesCategory =
-        activeCategory === 'all' || condition.category === activeCategory;
+      const matchesCategory = activeCategory === 'all' || condition.category === activeCategory;
       const matchesSearch =
-        activeSearchTerm.length === 0 ||
-        condition.name.toLowerCase().includes(activeSearchTerm) ||
-        condition.description.toLowerCase().includes(activeSearchTerm);
+        normalizedSearch.length === 0 ||
+        condition.name.toLowerCase().includes(normalizedSearch) ||
+        condition.description.toLowerCase().includes(normalizedSearch);
 
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, activeSearchTerm, conditions]);
+  }, [activeCategory, conditions, searchTerm]);
 
   return (
-    <div className={join('space-y-4 rounded-lg border border-border bg-card p-4')}>
-      <div className="flex flex-wrap gap-2">
-        {categories.map((category) => {
-          const label = category === 'all' ? 'All' : category;
-          const isActive = activeCategory === category;
-
-          return (
-            <button
-              key={category}
-              type="button"
-              className={join(
-                'rounded-full border px-3 py-1 text-sm transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-muted bg-transparent text-foreground',
-              )}
-              onClick={() => onCategoryChange?.(category)}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <input
-        type="text"
-        value={localSearchTerm}
-        onChange={(event) => setLocalSearchTerm(event.target.value)}
-        className={join(
-          'w-full rounded-md border border-border bg-background px-3 py-2 text-sm',
-        )}
-        placeholder="Search the condition library"
+    <div className='space-y-3'>
+      <Input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        placeholder='Search the condition library'
+        variant='outline'
       />
 
-      <div className="space-y-2">
+      <div className='flex flex-wrap gap-2'>
+        {CATEGORY_FILTERS.map((category) => (
+          <Button
+            key={category}
+            type='button'
+            size='sm'
+            variant={activeCategory === category ? 'primary' : 'outline'}
+            onClick={() => setActiveCategory(category)}
+          >
+            {category === 'all' ? 'All' : category}
+          </Button>
+        ))}
+      </div>
+
+      <div className='max-h-64 space-y-2 overflow-y-auto'>
         {filteredConditions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No matching condition library entries found.
-          </p>
+          <p className='text-muted-foreground text-sm'>No matching condition library entries found.</p>
         ) : (
           filteredConditions.map((condition) => (
-            <button
+            <Button
               key={condition.id}
-              type="button"
-              className={join(
-                'flex w-full flex-col items-start rounded-md border border-border bg-background p-3 text-left transition-colors hover:bg-muted/50',
-              )}
-              onClick={() => onSelect?.(condition)}
+              type='button'
+              variant={condition.id === selectedConditionId ? 'primary' : 'secondary'}
+              onClick={() => onSelect(condition)}
+              className='flex w-full flex-col items-start gap-1 text-left'
             >
-              <span className="font-medium text-foreground">{condition.name}</span>
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                {condition.category}
+              <span className='flex w-full items-center justify-between gap-2'>
+                <span className='font-medium'>{condition.name}</span>
+                <Badge variant='muted' outline>
+                  {condition.category}
+                </Badge>
               </span>
-              <span className="mt-1 text-sm text-muted-foreground">
-                {condition.description}
-              </span>
-            </button>
+              <span className='text-sm opacity-80'>{condition.description}</span>
+            </Button>
           ))
         )}
       </div>

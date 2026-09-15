@@ -5,6 +5,7 @@ import { getInitials } from '@/utils/accountUtils';
 
 import { useCatDetailSync } from '../hooks/useCatDetailSync';
 import type { Cat } from '../types';
+import CatConditionsSection from './CatConditionsSection';
 import CatProfileForm from './CatProfileForm';
 import VaccinationsSection from './VaccinationsSection';
 import WeightEntriesSection from './WeightEntriesSection';
@@ -72,6 +73,9 @@ function CatDetailsModal({
           <TabsTrigger value='weight' disabled={!cat || !householdId}>
             Weight history
           </TabsTrigger>
+          <TabsTrigger value='conditions' disabled={!cat || !householdId}>
+            Conditions
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value='details' className='pt-4'>
@@ -94,6 +98,10 @@ function CatDetailsModal({
 
             <TabsContent value='weight' className='pt-4'>
               <WeightEntriesSection householdId={householdId} catId={cat.id} catName={cat.name} />
+            </TabsContent>
+
+            <TabsContent value='conditions' className='pt-4'>
+              <CatConditionsSection householdId={householdId} catId={cat.id} catName={cat.name} />
             </TabsContent>
           </>
         )}

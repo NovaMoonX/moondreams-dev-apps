@@ -7,32 +7,33 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 
 import {
-  createVaccination,
-  deleteVaccination,
-  updateVaccination,
-} from '../store/actions/vaccinationsActions';
-import { selectVaccinationsByCat } from '../store/selectors';
-import type { Vaccination } from '../types';
-import VaccinationFormFields from './VaccinationFormFields';
-import VaccinationTimeline from './VaccinationTimeline';
+  createCatCondition,
+  deleteCatCondition,
+  updateCatCondition,
+} from '../store/actions/catConditionsActions';
+import { selectConditionLibrary, selectConditionsByCat } from '../store/selectors';
+import type { CatCondition } from '../types';
+import CatConditionFormFields from './CatConditionFormFields';
+import CatConditionTimeline from './CatConditionTimeline';
 
-interface VaccinationsSectionProps {
+interface CatConditionsSectionProps {
   householdId: string;
   catId: string;
   catName: string;
 }
 
-function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectionProps) {
+function CatConditionsSection({ householdId, catId, catName }: CatConditionsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const vaccinations = useAppSelector(selectVaccinationsByCat(catId));
+  const conditions = useAppSelector(selectConditionsByCat(catId));
+  const libraryConditions = useAppSelector(selectConditionLibrary);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingVaccination, setEditingVaccination] = useState<Vaccination | null>(null);
+  const [editingCondition, setEditingCondition] = useState<CatCondition | null>(null);
 
   const handleCreate = async (
-    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
+    condition: Partial<CatCondition> & Pick<CatCondition, 'name' | 'category' | 'status' | 'occurredAt'>,
   ) => {
     if (!user?.uid) {
       return;
@@ -41,7 +42,7 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
     setIsSubmitting(true);
 
     try {
-      await dispatch(createVaccination({ householdId, catId, uid: user.uid, vaccination })).unwrap();
+      await dispatch(createCatCondition({ householdId, catId, uid: user.uid, condition })).unwrap();
       setShowAddForm(false);
     } finally {
       setIsSubmitting(false);
@@ -49,9 +50,9 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
   };
 
   const handleUpdate = async (
-    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
+    condition: Partial<CatCondition> & Pick<CatCondition, 'name' | 'category' | 'status' | 'occurredAt'>,
   ) => {
-    if (!editingVaccination) {
+    if (!editingCondition) {
       return;
     }
 
@@ -59,47 +60,47 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
 
     try {
       await dispatch(
-        updateVaccination({ householdId, catId, vaccinationId: editingVaccination.id, changes: vaccination }),
+        updateCatCondition({ householdId, catId, catConditionId: editingCondition.id, changes: condition }),
       ).unwrap();
-      setEditingVaccination(null);
+      setEditingCondition(null);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (vaccinationId: string) => {
+  const handleDelete = async (catConditionId: string) => {
     setIsSubmitting(true);
 
     try {
-      await dispatch(deleteVaccination({ householdId, catId, vaccinationId })).unwrap();
-      setEditingVaccination(null);
+      await dispatch(deleteCatCondition({ householdId, catId, catConditionId })).unwrap();
+      setEditingCondition(null);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (editingVaccination) {
+  if (editingCondition) {
     return (
       <div className='space-y-4'>
         <Button
           type='button'
           variant='link'
           size='sm'
-          onClick={() => setEditingVaccination(null)}
+          onClick={() => setEditingCondition(null)}
           disabled={isSubmitting}
           className='gap-1 px-0'
         >
           <ChevronLeft className='h-4 w-4' />
-          Back to vaccinations
+          Back to conditions
         </Button>
 
-        <VaccinationFormFields
-          householdId={householdId}
-          initialVaccination={editingVaccination}
+        <CatConditionFormFields
+          libraryConditions={libraryConditions}
+          initialCondition={editingCondition}
           isSubmitting={isSubmitting}
           onSubmit={handleUpdate}
           onDelete={handleDelete}
-          onCancel={() => setEditingVaccination(null)}
+          onCancel={() => setEditingCondition(null)}
         />
       </div>
     );
@@ -117,11 +118,11 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
           className='gap-1 px-0'
         >
           <ChevronLeft className='h-4 w-4' />
-          Back to vaccinations
+          Back to conditions
         </Button>
 
-        <VaccinationFormFields
-          householdId={householdId}
+        <CatConditionFormFields
+          libraryConditions={libraryConditions}
           isSubmitting={isSubmitting}
           onSubmit={handleCreate}
           onCancel={() => setShowAddForm(false)}
@@ -133,15 +134,15 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
   return (
     <div className='space-y-4'>
       <div className='flex items-center justify-between gap-2'>
-        <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s vaccinations here.</small>
+        <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s conditions here.</small>
         <Button type='button' variant='primary' size='sm' onClick={() => setShowAddForm(true)}>
-          Add vaccination
+          Add condition
         </Button>
       </div>
 
-      <VaccinationTimeline vaccinations={vaccinations} onEdit={setEditingVaccination} />
+      <CatConditionTimeline conditions={conditions} onEdit={setEditingCondition} />
     </div>
   );
 }
 
-export default VaccinationsSection;
+export default CatConditionsSection;
