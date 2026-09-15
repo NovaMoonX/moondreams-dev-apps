@@ -39,7 +39,7 @@ for word in "${words[@]}"; do
 done
 LABEL="$label (App)"
 
-args=("$ISSUES_FILE" --label "$LABEL" --project-number 3)
+args=("$ISSUES_FILE" --label "$LABEL" --project-number 3 --project-status-value Ready)
 if [[ "${npm_lifecycle_event:-}" == *dry-run* ]]; then
   args+=(--dry-run)
 fi
