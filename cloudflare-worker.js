@@ -25,6 +25,15 @@ const APP_REGISTRY = [
       'A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.',
     image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-nine-lives.png',
   },
+  {
+    id: 'waypoint',
+    name: 'Waypoint',
+    title: 'Waypoint - Moondreams Dev Apps',
+    path: '/waypoint',
+    description:
+      'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-waypoint.png',
+  },
 ];
 
 export default {
@@ -42,9 +51,12 @@ export default {
     const response = await fetch(request);
 
     // Match the route path
-    const appMeta = APP_REGISTRY.find((app) =>
-      url.pathname.startsWith(app.path),
-    );
+    const appMeta =
+      APP_REGISTRY.find(
+        (app) =>
+          url.pathname.startsWith(app.path) ||
+          (app.id === 'waypoint' && url.pathname.startsWith('/apps/waypoint')),
+      ) || null;
 
     if (appMeta && appMeta.params) {
       // Check for query parameters and validate them
