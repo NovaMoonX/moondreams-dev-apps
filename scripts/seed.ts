@@ -7,6 +7,7 @@ import {
 } from './seeds/types.ts';
 import { seedNineLives } from './seeds/nineLives.ts';
 import { seedWorthTheWait } from './seeds/worthTheWait.ts';
+import { seedWaypoint } from './seeds/waypoint.ts';
 
 function readScope(args: string[]): SeedScope {
   const scopeIndex = args.indexOf('--scope');
@@ -16,12 +17,13 @@ function readScope(args: string[]): SeedScope {
     scope === 'all' ||
     scope === 'core' ||
     scope === 'worth-the-wait' ||
-    scope === 'nine-lives'
+    scope === 'nine-lives' ||
+    scope === 'waypoint'
   ) {
     return scope;
   }
 
-  throw new Error('Use --scope all, core, worth-the-wait, or nine-lives.');
+  throw new Error('Use --scope all, core, worth-the-wait, nine-lives, or waypoint.');
 }
 
 async function main() {
@@ -40,7 +42,8 @@ async function main() {
     scope === 'all' ||
     scope === 'core' ||
     scope === 'worth-the-wait' ||
-    scope === 'nine-lives'
+    scope === 'nine-lives' ||
+    scope === 'waypoint'
   ) {
     results.push(await seedCore(context));
   }
@@ -51,6 +54,10 @@ async function main() {
 
   if (scope === 'all' || scope === 'nine-lives') {
     results.push(await seedNineLives(context));
+  }
+
+  if (scope === 'all' || scope === 'waypoint') {
+    results.push(await seedWaypoint(context));
   }
 
   const result = combineSeedResults(...results);
