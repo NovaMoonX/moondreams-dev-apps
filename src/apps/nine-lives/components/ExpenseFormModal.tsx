@@ -11,6 +11,7 @@ import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/bu
 interface ExpenseFormValues {
   catIds: string[];
   category: string;
+  label?: string | null;
   incurredAt: string;
   amount: string;
   isRecurring: boolean;
@@ -50,6 +51,7 @@ function ExpenseFormModal({
   const isEditing = Boolean(initialExpense?.id);
 
   const [isRecurring, setIsRecurring] = useState(Boolean(initialExpense?.isRecurring));
+  const [labelOpen, setLabelOpen] = useState(Boolean(initialExpense?.label));
   const [notesOpen, setNotesOpen] = useState(Boolean(initialExpense?.notes));
   const [isValid, setIsValid] = useState(
     Boolean(
@@ -89,6 +91,28 @@ function ExpenseFormModal({
         label: 'Category',
         options: categoryOptions,
       }),
+      labelOpen
+        ? input({
+            name: 'label',
+            label: 'Label',
+            placeholder: 'e.g. Annual wellness visit',
+            variant: 'outline',
+          })
+        : custom({
+            name: '_addLabel',
+            label: '',
+            renderComponent: () => (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={() => setLabelOpen(true)}
+              >
+                + Add label
+              </Button>
+            ),
+          }),
       createDateInputField({
         name: 'incurredAt',
         label: 'Date incurred',
@@ -139,13 +163,14 @@ function ExpenseFormModal({
             ),
           }),
     ],
-    [catOptions, categoryOptions, recurrenceOptions, isRecurring, notesOpen],
+    [catOptions, categoryOptions, recurrenceOptions, isRecurring, labelOpen, notesOpen],
   );
 
   const initialData = useMemo(
     () => ({
       catIds: initialExpense?.catIds ?? [],
       category: initialExpense?.category ?? DEFAULT_EXPENSE_CATEGORIES[0],
+      label: initialExpense?.label ?? '',
       incurredAt: toDateInputValue(initialExpense?.incurredAt ?? undefined),
       amount: initialExpense?.amount ? String(initialExpense.amount) : '',
       isRecurring: Boolean(initialExpense?.isRecurring),
@@ -174,6 +199,7 @@ function ExpenseFormModal({
       id: initialExpense?.id,
       catIds,
       category: data.category as Expense['category'],
+      label: data.label?.trim() || null,
       amount,
       isRecurring: Boolean(data.isRecurring),
       recurrenceInterval: data.isRecurring

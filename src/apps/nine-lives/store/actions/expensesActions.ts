@@ -14,6 +14,10 @@ function normalizeExpenseInput(value: Partial<Expense>): Partial<Expense> {
     next.catIds = [...new Set(next.catIds)];
   }
 
+  if (next.label === undefined) {
+    next.label = null;
+  }
+
   if (next.notes === undefined) {
     next.notes = null;
   }
@@ -58,6 +62,7 @@ export const createExpense = createAsyncThunk<
       householdId,
       catIds: normalizedExpense.catIds,
       category: expense.category,
+      label: normalizedExpense.label ?? null,
       amount: Number(expense.amount),
       isRecurring: Boolean(normalizedExpense.isRecurring),
       recurrenceInterval: normalizedExpense.isRecurring
@@ -113,6 +118,7 @@ export const updateExpense = createAsyncThunk<
           ? null
           : sanitizedChanges.recurrenceInterval ?? current.recurrenceInterval ?? null,
       incurredAt: sanitizedChanges.incurredAt ?? current.incurredAt,
+      label: sanitizedChanges.label ?? current.label ?? null,
       notes: sanitizedChanges.notes ?? current.notes ?? null,
       lastEditedAt: Date.now(),
     };

@@ -111,6 +111,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
       </DetailsDisclosure>
 
       <ExpenseFormModal
+        key={editingExpense?.id ?? 'new'}
         isOpen={isFormOpen}
         catOptions={catOptions}
         initialExpense={editingExpense}

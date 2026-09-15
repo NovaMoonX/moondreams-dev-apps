@@ -111,6 +111,7 @@ function ExpenseTimeline({
         .join(' ');
       const searchableText = [
         getExpenseCategoryLabel(expense.category),
+        expense.label ?? '',
         catNames,
         expense.notes ?? '',
       ]
@@ -222,7 +223,11 @@ function ExpenseTimeline({
                 )}
               >
                 <div className='min-w-0'>
-                  <strong className='text-sm'>{getExpenseCategoryLabel(expense.category)}</strong>
+                  <strong className='text-sm'>
+                    {expense.label
+                      ? `${expense.label} (${getExpenseCategoryLabel(expense.category)})`
+                      : getExpenseCategoryLabel(expense.category)}
+                  </strong>
                   <div className='text-muted-foreground text-sm'>
                     {new Date(expense.incurredAt).toLocaleDateString('en-US', {
                       month: 'short',

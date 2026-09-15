@@ -172,6 +172,7 @@ export interface Expense {
   householdId: string;
   catIds: string[];
   category: ExpenseCategory;
+  label: string | null;
   amount: number;
   isRecurring: boolean;
   recurrenceInterval: RecurrenceInterval | null;

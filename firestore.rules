@@ -567,6 +567,7 @@ service cloud.firestore {
             'adoption_fee', 'insurance', 'food', 'litter', 'vet',
             'grooming', 'supplies', 'medication', 'microchipping', 'spay_neuter', 'other'
           ]
+          && (request.resource.data.label == null || request.resource.data.label is string)
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
           && request.resource.data.isRecurring is bool
