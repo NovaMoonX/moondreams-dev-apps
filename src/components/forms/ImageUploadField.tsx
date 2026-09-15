@@ -7,6 +7,8 @@ interface ImageUploadFieldProps {
   initials?: string;
   error?: string | null;
   disabled?: boolean;
+  /** Omit the built-in avatar preview when the caller already renders its own, bound to the same `previewUrl`. */
+  hideAvatar?: boolean;
   onSelect: (file: File | null) => void;
   onRemove: () => void;
 }
@@ -17,6 +19,7 @@ function ImageUploadField({
   initials,
   error,
   disabled = false,
+  hideAvatar = false,
   onSelect,
   onRemove,
 }: ImageUploadFieldProps) {
@@ -24,9 +27,17 @@ function ImageUploadField({
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className='flex items-center gap-4'>
-      <Avatar src={previewUrl ?? undefined} initials={initials} size='lg' />
-      <div className='flex flex-col gap-1'>
+    <div
+      className={
+        hideAvatar
+          ? 'flex flex-col items-center gap-1'
+          : 'flex items-center gap-4'
+      }
+    >
+      {!hideAvatar && (
+        <Avatar src={previewUrl ?? undefined} initials={initials} size='lg' />
+      )}
+      <div className='flex flex-col items-center gap-1'>
         <div className='flex items-center gap-2'>
           <input
             ref={inputRef}

@@ -10,15 +10,11 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import ImageUploadField from '@/components/forms/ImageUploadField';
-import { useImageUpload } from '@/hooks/useImageUpload';
 import {
   createDateInputField,
   fromDateInputValue,
   toDateInputValue,
 } from '@/utils';
-import { getInitials } from '@/utils/accountUtils';
-import { deleteFile, uploadFile } from '@lib/firebase/storage';
 import { INSURANCE_PROVIDER_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
 import type {
   Cat,
@@ -444,9 +440,6 @@ function CatProfileForm({
 }: CatProfileFormProps) {
   const initialData = useMemo(() => buildInitialData(cat), [cat]);
   const formId = cat?.id ?? `${householdId ?? 'new-household'}-cat-profile`;
-  const photoUpload = useImageUpload(cat?.photoURL ?? null);
-  const photoRemoved =
-    photoUpload.previewUrl === null && Boolean(cat?.photoURL);
 
   const fields = useMemo(
     () => [
@@ -507,22 +500,8 @@ function CatProfileForm({
 
   const handleSubmit = async (data: CatProfileFormData) => {
     const nextCatValue = buildPreparedCat(data, householdId, cat);
-    let photoURL = nextCatValue.photoURL;
-
-    if (cat?.id && householdId) {
-      const photoPath = `nine-lives/households/${householdId}/cats/${cat.id}/photo`;
-
-      if (photoUpload.file) {
-        photoURL = await uploadFile(photoPath, photoUpload.file);
-      } else if (photoRemoved) {
-        await deleteFile(photoPath);
-        photoURL = null;
-      }
-    }
-
     const preparedCat: Cat = {
       ...nextCatValue,
-      photoURL,
       createdAt: nextCatValue.createdAt || Date.now(),
       lastEditedAt: Date.now(),
     };
@@ -531,57 +510,43 @@ function CatProfileForm({
   };
 
   return (
-    <div className='space-y-4'>
-      <ImageUploadField
-        previewUrl={photoUpload.previewUrl}
-        initials={
-          photoUpload.previewUrl
-            ? undefined
-            : getInitials(initialData.name || 'New cat')
-        }
-        error={photoUpload.error}
-        disabled={isSubmitting}
-        onSelect={photoUpload.pick}
-        onRemove={photoUpload.clear}
-      />
-      <Form
-        key={formId}
-        id={formId}
-        form={fields}
-        initialData={initialData}
-        columns={2}
-        spacing='normal'
-        onSubmit={(data) => {
-          void handleSubmit(data as CatProfileFormData);
-        }}
-        submitButton={
-          <div className='col-span-full flex items-center justify-between gap-2'>
-            <div className='flex items-center gap-2'>
-              {onDelete && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={() => void onDelete()}
-                  disabled={isSubmitting}
-                >
-                  Delete cat
-                </Button>
-              )}
-            </div>
-            <div className='flex items-center gap-2'>
-              {onCancel && (
-                <Button type='button' variant='secondary' onClick={onCancel}>
-                  Cancel
-                </Button>
-              )}
-              <Button type='submit' loading={isSubmitting}>
-                {submitLabel}
+    <Form
+      key={formId}
+      id={formId}
+      form={fields}
+      initialData={initialData}
+      columns={2}
+      spacing='normal'
+      onSubmit={(data) => {
+        void handleSubmit(data as CatProfileFormData);
+      }}
+      submitButton={
+        <div className='col-span-full flex items-center justify-between gap-2'>
+          <div className='flex items-center gap-2'>
+            {onDelete && (
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => void onDelete()}
+                disabled={isSubmitting}
+              >
+                Delete cat
               </Button>
-            </div>
+            )}
           </div>
-        }
-      />
-    </div>
+          <div className='flex items-center gap-2'>
+            {onCancel && (
+              <Button type='button' variant='secondary' onClick={onCancel}>
+                Cancel
+              </Button>
+            )}
+            <Button type='submit' loading={isSubmitting}>
+              {submitLabel}
+            </Button>
+          </div>
+        </div>
+      }
+    />
   );
 }
 
