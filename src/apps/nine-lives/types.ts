@@ -117,3 +117,41 @@ export interface WeightEntry {
   createdBy: string;
   createdAt: number;
 }
+
+export type ConditionCategory =
+  | 'illness'
+  | 'injury'
+  | 'chronic'
+  | 'parasite'
+  | 'allergy'
+  | 'other';
+
+export interface LibraryCondition {
+  id: string;
+  name: string;
+  category: ConditionCategory;
+  description: string;
+  source: 'seed' | 'api';
+  sourceRef: string | null;
+  createdAt: number;
+}
+
+export type CatConditionSource = 'library' | 'custom';
+export type CatConditionStatus = 'active' | 'ongoing' | 'resolved';
+
+export interface CatCondition {
+  id: string;
+  catId: string;
+  source: CatConditionSource;
+  libraryConditionId: string | null;
+  name: string;
+  category: ConditionCategory;
+  status: CatConditionStatus;
+  occurredAt: number;
+  resolvedAt: number | null;
+  description: string | null;
+  linkedVisitIds: string[];
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}

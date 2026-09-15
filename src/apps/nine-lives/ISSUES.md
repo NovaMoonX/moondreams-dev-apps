@@ -243,6 +243,8 @@ Standalone vaccination and weight logging. Each is a discrete, append-only event
 
 ### Issue 7: Condition Library Browsing & Cat Conditions
 
+- [x] Complete
+
 **Prerequisites:** Issue 4
 
 **Target PR Size:** ~330 lines

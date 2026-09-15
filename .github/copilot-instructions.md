@@ -6,6 +6,8 @@
 - Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`).
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check Dreamer UI first before building custom UI.
+- **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
+- **Never call `setState` synchronously inside a `useEffect` body or during render to mirror props/derive values — see "React and state patterns" below.**
 - Always use the project import aliases instead of relative paths when available.
 - Follow the existing folder organization and keep responsibilities separated by feature, UI, hooks, context, routes, lib, and utils.
 - Use shared date/time formatting helpers from `src/utils/formatUtils.ts` for timestamp display instead of inline `Date` formatting.
@@ -128,6 +130,11 @@ useEffect(() => {
 }, [hasPendingUser, pendingMember?.uid]);
 ```
 
+### Definition of done for a GitHub issue
+- **Every checklist section in the issue is mandatory, not just the first one you reach.** An issue with separate `Success Criteria`, `CRUD & Entry-Point Requirements`, and `Documentation` checklists is not done when the first list is checked off — all of them are the acceptance criteria. Re-read the full issue body immediately before opening the PR and confirm each checkbox, not just the ones near the top.
+- **A component that exists in the codebase but is never rendered from a screen a user can actually reach does not satisfy a "Create/Read/Update/Delete" or "browse/view" requirement.** Building `FooSection.tsx` is not the same as wiring it into a tab, route, or modal. If the issue names a specific entry point (e.g. "a dedicated tab on the cat details view, following the same pattern as X"), grep the target file (e.g. `CatDetailsModal.tsx`) and confirm the new tab/route is actually there before considering the work complete.
+- If an issue has a `CRUD & Entry-Point Requirements` section, treat it as equally binding as `Success Criteria` — it exists specifically because "the store/actions/types are built" and "a user can actually use the feature end-to-end" have been two different, both-required outcomes on past issues in this repo.
+
 ### Documentation quality
 - Keep the root `README.md` and relevant mini-app docs current and minimal whenever code or behavior changes.
 - Preserve the existing structure and tone of existing docs; do not rewrite them into a different format or voice.
@@ -150,6 +157,9 @@ useEffect(() => {
 - **Invite/join flows: always use the flat, sibling `apps/{appId}/pendingRequests` collection pattern — never nested, never a `collectionGroup`.**
 - **A pending (not-yet-approved) requester must never be treated as an active member for presence, avatars, or reads of a resource document that carries sensitive data.**
 - **Array-driven hooks (`useUserInfo`, `usePresence`, or similar) must key their effect on the array's content, not its identity.**
+- **No raw `<button>`/`<input>`/`<select>`/`<textarea>` in `.tsx` files — always the matching Dreamer UI component, or `Form`/`FormFactories` for multi-field UI. Grep the diff for these tags before finishing any PR.**
+- **`setState` inside a `useEffect` body or during render, to mirror props or derive values, is a bug — not a style nit. Derive the value during render or move the update into an event handler.**
+- **An issue's checklist sections are all mandatory — a `CRUD & Entry-Point Requirements` section is not optional supplementary work. Before opening the PR, re-read the whole issue and confirm the new feature is actually wired into a reachable screen, not just present in the codebase.**
 
 ## Coding Styles
 
@@ -272,6 +282,9 @@ className={join('base-class', isActive ? 'active' : 'inactive')}
 - Check Dreamer UI first before creating custom components.
 - Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, and `/utils` when possible.
 - Review existing Dreamer UI props before applying custom styling or behavior.
+- **No raw HTML form/interactive elements.** Never write `<button>`, `<input>`, `<select>`, `<textarea>`, or `<a>` directly — always use the Dreamer UI equivalent (`Button`, `Input`, `Select`, `Textarea`, a `Button` with `href`). This applies even to small/internal-looking components (list-item toggles, filter chips, category pickers) — there is no size threshold under which raw HTML becomes acceptable.
+- **Any UI that collects more than one or two fields must use the `Form` component with `FormFactories`** (`input`, `textarea`, `select`, `radio`, `checkbox`, `custom`, etc. from `@moondreamsdev/dreamer-ui/components`) instead of hand-rolled `useState` + raw elements. `FormFactories.custom` lets you embed a bespoke picker (search/filter list, calendar, etc.) as one field while still getting the shared value/validation/submit wiring. See `src/apps/nine-lives/components/VaccinationFormFields.tsx` (straightforward form) and `CatConditionFormFields.tsx` (a form with a `custom` field embedding a searchable library browser) for the pattern.
+- Before submitting a PR, grep the diff for `<button`, `<input`, `<select`, and `<textarea` — any match on a `.tsx` file under `src/` is almost certainly a bug.
 
 ### Cards and layout density
 - **Never nest a bordered/`bg-card` container inside another bordered/`bg-card` container.** Cards within cards read as visual clutter. Pick one layer to carry the card treatment (usually the smaller, most specific unit — e.g. a single list item) and let the parent section be plain (heading + spacing, no border/background) instead of also boxing it.

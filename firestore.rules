@@ -186,6 +186,11 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    match /apps/nine-lives/conditionLibrary/{conditionId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if false;
+    }
+
     match /apps/nine-lives/households/{householdId}/cats/{catId} {
       function isCatIdentityValid() {
         return request.resource.data.id == catId
@@ -232,6 +237,59 @@ service cloud.firestore {
       allow create: if isCatCreateValid();
       allow update: if isCatUpdateValid();
       allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /apps/nine-lives/households/{householdId}/cats/{catId}/conditions/{conditionId} {
+      function isConditionIdentityValid() {
+        return request.resource.data.id == conditionId
+          && request.resource.data.catId == catId;
+      }
+
+      function isConditionBaseShapeValid() {
+        return (
+          request.resource.data.source == 'library' || request.resource.data.source == 'custom'
+        )
+          && isNonEmptyString(request.resource.data.name)
+          && (
+            request.resource.data.category == 'illness'
+              || request.resource.data.category == 'injury'
+              || request.resource.data.category == 'chronic'
+              || request.resource.data.category == 'parasite'
+              || request.resource.data.category == 'allergy'
+              || request.resource.data.category == 'other'
+          )
+          && isTimestampNumber(request.resource.data.occurredAt)
+          && (request.resource.data.resolvedAt == null || isTimestampNumber(request.resource.data.resolvedAt))
+          && (request.resource.data.description == null || request.resource.data.description is string)
+          && request.resource.data.linkedVisitIds is list
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (
+            (request.resource.data.source == 'library' && request.resource.data.libraryConditionId is string && request.resource.data.libraryConditionId.size() > 0)
+              || (request.resource.data.source == 'custom' && request.resource.data.libraryConditionId == null)
+          );
+      }
+
+      function isConditionImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.catId == resource.data.catId
+          && request.resource.data.catId == catId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isConditionIdentityValid()
+        && isConditionBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isConditionImmutableFieldsValid()
+        && isConditionBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
     match /apps/nine-lives/households/{householdId}/cats/{catId}/vaccinations/{vaccinationId} {
