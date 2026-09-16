@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import { Button, Form, FormFactories, Input, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -323,137 +324,27 @@ function LitterBoxFormModal({
   );
 }
 
-interface LitterBoxesManagerProps {
-  householdId: string;
+interface LitterBoxItemProps {
+  box: LitterBox;
+  selected?: boolean;
+  onClick?: (box: LitterBox) => void;
 }
 
-function LitterBoxesManager({ householdId }: LitterBoxesManagerProps) {
-  const { user } = useAuth();
-  const dispatch = useAppDispatch();
-  const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingBox, setEditingBox] = useState<LitterBox | null>(null);
-
-  const existingLocations = useMemo(
-    () =>
-      Array.from(
-        new Set(litterBoxes.map((box) => box.location).filter((location): location is string => Boolean(location))),
-      ),
-    [litterBoxes],
-  );
-
-  const closeForm = () => {
-    setIsFormOpen(false);
-    setEditingBox(null);
-  };
-
-  const handleSubmit = async (box: { name: string; location: string | null }) => {
-    if (!user?.uid) {
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      if (editingBox) {
-        await dispatch(
-          updateLitterBox({ householdId, litterBoxId: editingBox.id, changes: box }),
-        ).unwrap();
-      } else {
-        await dispatch(
-          createLitterBox({ householdId, uid: user.uid, litterBox: box }),
-        ).unwrap();
-      }
-      closeForm();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (litterBoxId: string) => {
-    setIsSubmitting(true);
-
-    try {
-      await dispatch(deleteLitterBox({ householdId, litterBoxId })).unwrap();
-      closeForm();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleActive = async (box: LitterBox) => {
-    await dispatch(
-      updateLitterBox({ householdId, litterBoxId: box.id, changes: { isActive: !box.isActive } }),
-    ).unwrap();
-  };
-
+function LitterBoxItem({ box, selected = false, onClick }: LitterBoxItemProps) {
   return (
-    <DetailsDisclosure label={`Litter boxes (${litterBoxes.length})`}>
-      <div className='space-y-3'>
-        <div className='flex justify-end'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className={mutedLinkClassName}
-            onClick={() => {
-              setEditingBox(null);
-              setIsFormOpen(true);
-            }}
-          >
-            + Add litter box
-          </Button>
-        </div>
-
-        {litterBoxes.length === 0 && (
-          <p className='text-muted-foreground text-sm'>No litter boxes added yet.</p>
-        )}
-
-        {litterBoxes.length > 0 && (
-          <div className='divide-border divide-y'>
-            {litterBoxes.map((box) => (
-              <div key={box.id} className='flex items-center justify-between gap-3 py-2 first:pt-0'>
-                <div className='min-w-0'>
-                  <div className='text-sm'>
-                    {box.name}
-                    {!box.isActive && <span className='text-muted-foreground'> (inactive)</span>}
-                  </div>
-                  {box.location && <div className='text-muted-foreground text-sm'>{box.location}</div>}
-                </div>
-                <div className='flex shrink-0 items-center gap-2'>
-                  <Button type='button' variant='link' size='sm' onClick={() => void handleToggleActive(box)}>
-                    {box.isActive ? 'Archive' : 'Reactivate'}
-                  </Button>
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    onClick={() => {
-                      setEditingBox(box);
-                      setIsFormOpen(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <LitterBoxFormModal
-          key={editingBox?.id ?? 'new'}
-          isOpen={isFormOpen}
-          initialBox={editingBox}
-          existingLocations={existingLocations}
-          isSubmitting={isSubmitting}
-          onSubmit={handleSubmit}
-          onDelete={editingBox ? handleDelete : undefined}
-          onCancel={closeForm}
-        />
-      </div>
-    </DetailsDisclosure>
+    <button
+      type='button'
+      onClick={() => onClick?.(box)}
+      className={join(
+        'min-w-32 rounded-lg border-2 border-border p-3 text-left transition hover:bg-muted/40',
+        selected && 'bg-muted/60 ring-2 ring-primary',
+        !box.isActive && 'opacity-60',
+      )}
+    >
+      <p className='font-medium leading-tight'>{box.name}</p>
+      {box.location && <p className='text-muted-foreground text-sm leading-tight'>{box.location}</p>}
+      {!box.isActive && <p className='text-muted-foreground text-sm leading-tight'>Inactive</p>}
+    </button>
   );
 }
 
@@ -809,7 +700,6 @@ function LittersManager({ householdId }: LittersManagerProps) {
 }
 
 interface LitterEntryFormValues {
-  litterBoxId: string;
   litterId: string;
   weight: string;
   weightUnit: string;
@@ -822,8 +712,8 @@ interface LitterEntryFormValues {
 
 interface LitterEntryFormModalProps {
   isOpen: boolean;
+  litterBoxId: string;
   initialEntry?: LitterEntry | null;
-  litterBoxes: LitterBox[];
   litters: Litter[];
   customTypes: CustomLitterType[];
   isSubmitting: boolean;
@@ -834,8 +724,8 @@ interface LitterEntryFormModalProps {
 
 function LitterEntryFormModal({
   isOpen,
+  litterBoxId,
   initialEntry,
-  litterBoxes,
   litters,
   customTypes,
   isSubmitting,
@@ -849,21 +739,9 @@ function LitterEntryFormModal({
   const [isChangedOpen, setIsChangedOpen] = useState(Boolean(initialEntry?.changedAt));
   const [isNotesOpen, setIsNotesOpen] = useState(Boolean(initialEntry?.notes));
   const [isValid, setIsValid] = useState(
-    Boolean(
-      initialEntry?.litterBoxId &&
-        initialEntry?.litterId &&
-        initialEntry.weight > 0 &&
-        initialEntry.loggedAt,
-    ),
+    Boolean(initialEntry?.litterId && initialEntry.weight > 0 && initialEntry.loggedAt),
   );
 
-  const litterBoxOptions = useMemo(
-    () =>
-      litterBoxes
-        .filter((box) => box.isActive || box.id === initialEntry?.litterBoxId)
-        .map((box) => ({ label: box.name, value: box.id })),
-    [litterBoxes, initialEntry?.litterBoxId],
-  );
   const litterOptions = useMemo(
     () =>
       litters.map((litter) => ({
@@ -875,12 +753,6 @@ function LitterEntryFormModal({
 
   const fields = useMemo(
     () => [
-      select({
-        name: 'litterBoxId',
-        label: 'Litter box',
-        options: litterBoxOptions,
-        required: true,
-      }),
       select({
         name: 'litterId',
         label: 'Litter',
@@ -951,7 +823,7 @@ function LitterEntryFormModal({
             ),
           }),
     ],
-    [litterBoxOptions, litterOptions, isChangedOpen, isNotesOpen],
+    [litterOptions, isChangedOpen, isNotesOpen],
   );
 
   const handleSubmit = async (data: LitterEntryFormValues) => {
@@ -959,19 +831,13 @@ function LitterEntryFormModal({
     const loggedAt = fromDateInputValue(data.loggedAt);
     const changedAt = isChangedOpen && data.changedAt ? fromDateInputValue(data.changedAt) ?? null : null;
 
-    if (
-      !data.litterBoxId ||
-      !data.litterId ||
-      !Number.isFinite(weight) ||
-      weight <= 0 ||
-      loggedAt === undefined
-    ) {
+    if (!data.litterId || !Number.isFinite(weight) || weight <= 0 || loggedAt === undefined) {
       return;
     }
 
     await onSubmit({
       id: initialEntry?.id,
-      litterBoxId: data.litterBoxId,
+      litterBoxId,
       litterId: data.litterId,
       weight,
       weightUnit: data.weightUnit === 'kg' ? 'kg' : 'lb',
@@ -1004,7 +870,6 @@ function LitterEntryFormModal({
         id={formId}
         form={fields}
         initialData={{
-          litterBoxId: initialEntry?.litterBoxId ?? litterBoxes[0]?.id ?? '',
           litterId: initialEntry?.litterId ?? litters[0]?.id ?? '',
           weight: initialEntry?.weight?.toString() ?? '',
           weightUnit: initialEntry?.weightUnit ?? 'lb',
@@ -1018,8 +883,7 @@ function LitterEntryFormModal({
           const values = data as LitterEntryFormValues;
           setIsValid(
             Boolean(
-              values.litterBoxId &&
-                values.litterId &&
+              values.litterId &&
                 Number.isFinite(Number(values.weight)) &&
                 Number(values.weight) > 0 &&
                 values.loggedAt,
@@ -1053,58 +917,46 @@ function LitterEntryFormModal({
   );
 }
 
-interface LitterLogSectionProps {
+const sortOptions = [
+  { text: 'Newest first', value: 'newest' },
+  { text: 'Oldest first', value: 'oldest' },
+];
+
+interface SelectedLitterBoxPanelProps {
   householdId: string;
+  box: LitterBox;
+  onEditDetails: () => void;
 }
 
-function LitterLogSection({ householdId }: LitterLogSectionProps) {
+function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLitterBoxPanelProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const entries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
-  const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
   const litters = useAppSelector(selectLittersByHousehold(householdId), shallowEqual);
   const customTypes = useAppSelector(selectCustomLitterTypesByHousehold(householdId), shallowEqual);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
-  const [boxFilter, setBoxFilter] = useState('all');
   const [sortOption, setSortOption] = useState<'newest' | 'oldest'>('newest');
 
-  const boxFilterOptions = useMemo(
-    () => [
-      { text: 'All boxes', value: 'all' },
-      ...litterBoxes.map((box) => ({ text: box.name, value: box.id })),
-    ],
-    [litterBoxes],
-  );
-
-  const sortOptions = [
-    { text: 'Newest first', value: 'newest' },
-    { text: 'Oldest first', value: 'oldest' },
-  ];
-
-  const litterBoxesById = useMemo(
-    () => new Map(litterBoxes.map((box) => [box.id, box])),
-    [litterBoxes],
-  );
   const littersById = useMemo(() => new Map(litters.map((litter) => [litter.id, litter])), [litters]);
 
-  const sortedEntries = useMemo(
-    () => [...entries].sort((left, right) => left.loggedAt - right.loggedAt),
-    [entries],
+  const boxEntriesAscending = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.litterBoxId === box.id)
+        .sort((left, right) => left.loggedAt - right.loggedAt),
+    [entries, box.id],
   );
 
-  const latestChangeByBox = useMemo(() => {
-    const latest = new Map<string, number>();
-
-    entries.forEach((entry) => {
-      if (entry.changedAt !== null && (latest.get(entry.litterBoxId) ?? 0) < entry.changedAt) {
-        latest.set(entry.litterBoxId, entry.changedAt);
-      }
-    });
-
-    return [...latest.entries()];
-  }, [entries]);
+  const latestChangedAt = useMemo(
+    () =>
+      boxEntriesAscending.reduce<number | null>(
+        (latest, entry) => (entry.changedAt !== null && entry.changedAt > (latest ?? 0) ? entry.changedAt : latest),
+        null,
+      ),
+    [boxEntriesAscending],
+  );
 
   const closeForm = () => {
     setIsFormOpen(false);
@@ -1154,157 +1006,151 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
     }
   };
 
-  const canLogEntry = litterBoxes.some((box) => box.isActive) && litters.length > 0;
+  const handleToggleActive = async () => {
+    await dispatch(
+      updateLitterBox({ householdId, litterBoxId: box.id, changes: { isActive: !box.isActive } }),
+    ).unwrap();
+  };
+
+  const canLogEntry = box.isActive && litters.length > 0;
 
   return (
-    <section>
-      <DetailsDisclosure label='Litter usage'>
-        <div className='space-y-6'>
-          <LitterBoxesManager householdId={householdId} />
-          <LittersManager householdId={householdId} />
+    <div className='bg-background border-border mt-6 rounded-lg border p-4'>
+      <div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
+        <div>
+          <h3 className='text-lg font-semibold'>
+            {box.name}
+            {!box.isActive && <span className='text-muted-foreground text-sm font-normal'> (inactive)</span>}
+          </h3>
+          {box.location && <p className='text-muted-foreground text-sm'>{box.location}</p>}
+          {latestChangedAt !== null && (
+            <p className='text-muted-foreground text-sm'>
+              {getDaysSince(latestChangedAt) === 0
+                ? 'Litter changed today'
+                : `${getDaysSince(latestChangedAt)} day${getDaysSince(latestChangedAt) === 1 ? '' : 's'} since litter changed`}
+            </p>
+          )}
+        </div>
+        <div className='flex items-center gap-2'>
+          <Button type='button' variant='secondary' size='sm' onClick={() => void handleToggleActive()}>
+            {box.isActive ? 'Archive' : 'Reactivate'}
+          </Button>
+          <Button type='button' variant='secondary' size='sm' onClick={onEditDetails}>
+            Edit details
+          </Button>
+        </div>
+      </div>
 
-          <div className='space-y-4 border-t pt-4'>
-            <div className='flex items-center justify-between gap-2 pb-2'>
-              <small className='text-muted-foreground text-sm'>
-                Weigh litter over time to see usage and cost, and track how long each box has gone since its last
-                change.
-              </small>
-              {canLogEntry && (
-                <Button
-                  type='button'
-                  size='sm'
-                  onClick={() => {
-                    setEditingEntry(null);
-                    setIsFormOpen(true);
-                  }}
-                >
-                  Log weigh-in
-                </Button>
-              )}
-            </div>
+      <div className='flex flex-wrap items-center justify-between gap-2 border-t pt-4'>
+        <span className='text-muted-foreground text-sm'>
+          {boxEntriesAscending.length} weigh-in{boxEntriesAscending.length === 1 ? '' : 's'} logged
+        </span>
+        {canLogEntry ? (
+          <Button
+            type='button'
+            size='sm'
+            onClick={() => {
+              setEditingEntry(null);
+              setIsFormOpen(true);
+            }}
+          >
+            Log weigh-in
+          </Button>
+        ) : (
+          !box.isActive && (
+            <span className='text-muted-foreground text-sm'>Reactivate this box to log a new weigh-in.</span>
+          )
+        )}
+      </div>
 
-            {!canLogEntry && (
-              <p className='text-muted-foreground text-sm'>
-                Add a litter box and a litter product above before logging a weigh-in.
-              </p>
-            )}
+      {box.isActive && litters.length === 0 && (
+        <p className='text-muted-foreground mt-2 text-sm'>
+          Add a litter product above before logging a weigh-in.
+        </p>
+      )}
 
-            {sortedEntries.length > 0 && (
-              <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
-                {litterBoxes.length > 1 && (
-                  <div className='flex items-center gap-2'>
-                    <span className='text-muted-foreground text-sm'>Filter by box:</span>
-                    <div className='max-w-48 flex-1'>
-                      <Select options={boxFilterOptions} value={boxFilter} onChange={setBoxFilter} size='sm' />
-                    </div>
-                  </div>
-                )}
-                <div className='flex items-center gap-2'>
-                  <span className='text-muted-foreground text-sm'>Sort by:</span>
-                  <div className='max-w-40 flex-1'>
-                    <Select
-                      options={sortOptions}
-                      value={sortOption}
-                      onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
-                      size='sm'
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {latestChangeByBox.length > 0 && (
-              <div className='text-muted-foreground space-y-1 text-sm'>
-                <strong className='text-foreground'>Litter box changes</strong>
-                {latestChangeByBox
-                  .filter(([boxId]) => boxFilter === 'all' || boxId === boxFilter)
-                  .map(([boxId, changedAt]) => {
-                    const days = getDaysSince(changedAt);
-                    const boxName = litterBoxesById.get(boxId)?.name ?? 'Deleted box';
-                    return (
-                      <div key={boxId}>
-                        {boxName}: {days === 0 ? 'changed today' : `${days} day${days === 1 ? '' : 's'} since changed`}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-
-            {sortedEntries.length === 0 ? (
-              <p className='text-muted-foreground text-sm'>No litter weigh-ins logged yet.</p>
-            ) : (
-              <div className='divide-border divide-y'>
-                {sortedEntries
-                  .map((entry, index) => ({ entry, index }))
-                  .filter(({ entry }) => boxFilter === 'all' || entry.litterBoxId === boxFilter)
-                  .sort((left, right) =>
-                    sortOption === 'newest' ? right.index - left.index : left.index - right.index,
-                  )
-                  .map(({ entry, index }) => {
-                  const previous = [...sortedEntries]
-                    .slice(0, index)
-                    .reverse()
-                    .find((item) => item.litterBoxId === entry.litterBoxId);
-                  const usage = previous
-                    ? convertWeight(previous.weight, previous.weightUnit, entry.weightUnit) - entry.weight
-                    : null;
-                  const litter = littersById.get(entry.litterId) ?? null;
-                  const usageCost =
-                    usage !== null && usage > 0 && litter
-                      ? calculateLitterUsageCost(usage, entry.weightUnit, litter)
-                      : null;
-                  const boxName = litterBoxesById.get(entry.litterBoxId)?.name ?? 'Deleted box';
-                  const litterLabel = litter
-                    ? `${litter.brand} (${getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)})`
-                    : 'Deleted litter';
-
-                  return (
-                    <div key={entry.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
-                      <div className='min-w-0'>
-                        <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
-                          <strong className='text-sm'>{formatWeight(entry.weight, entry.weightUnit)}</strong>
-                          <span className='text-muted-foreground text-sm'>{boxName}</span>
-                        </div>
-                        <div className='text-muted-foreground text-sm'>
-                          {litterLabel}
-                          {' · '}
-                          {formatDateTime(entry.loggedAt)}
-                        </div>
-                        {usage !== null && (
-                          <div className='text-sm'>
-                            {usage >= 0
-                              ? `${formatWeight(usage, entry.weightUnit)} used since previous weigh-in`
-                              : `${formatWeight(Math.abs(usage), entry.weightUnit)} added since previous weigh-in`}
-                            {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
-                          </div>
-                        )}
-                        {entry.changedAt !== null && (
-                          <div className='text-muted-foreground text-sm'>
-                            Box changed: {formatDateTime(entry.changedAt)} ({getDaysSince(entry.changedAt)} days ago)
-                          </div>
-                        )}
-                        {entry.notes && <div className='text-muted-foreground text-sm'>{entry.notes}</div>}
-                      </div>
-                      <Button type='button' variant='link' size='sm' onClick={() => {
-                        setEditingEntry(entry);
-                        setIsFormOpen(true);
-                      }}>
-                        Edit
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+      {boxEntriesAscending.length > 1 && (
+        <div className='mt-3 flex items-center gap-2'>
+          <span className='text-muted-foreground text-sm'>Sort by:</span>
+          <div className='max-w-40 flex-1'>
+            <Select
+              options={sortOptions}
+              value={sortOption}
+              onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
+              size='sm'
+            />
           </div>
         </div>
-      </DetailsDisclosure>
+      )}
+
+      <div className='mt-3'>
+        {boxEntriesAscending.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>No weigh-ins logged for this box yet.</p>
+        ) : (
+          <div className='divide-border divide-y'>
+            {boxEntriesAscending
+              .map((entry, index) => ({ entry, index }))
+              .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index))
+              .map(({ entry, index }) => {
+                const previous = index > 0 ? boxEntriesAscending[index - 1] : null;
+                const usage = previous
+                  ? convertWeight(previous.weight, previous.weightUnit, entry.weightUnit) - entry.weight
+                  : null;
+                const litter = littersById.get(entry.litterId) ?? null;
+                const usageCost =
+                  usage !== null && usage > 0 && litter
+                    ? calculateLitterUsageCost(usage, entry.weightUnit, litter)
+                    : null;
+                const litterLabel = litter
+                  ? `${litter.brand} (${getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)})`
+                  : 'Deleted litter';
+
+                return (
+                  <div key={entry.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
+                    <div className='min-w-0'>
+                      <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
+                        <strong className='text-sm'>{formatWeight(entry.weight, entry.weightUnit)}</strong>
+                        <span className='text-muted-foreground text-sm'>{formatDateTime(entry.loggedAt)}</span>
+                      </div>
+                      <div className='text-muted-foreground text-sm'>{litterLabel}</div>
+                      {usage !== null && (
+                        <div className='text-sm'>
+                          {usage >= 0
+                            ? `${formatWeight(usage, entry.weightUnit)} used since previous weigh-in`
+                            : `${formatWeight(Math.abs(usage), entry.weightUnit)} added since previous weigh-in`}
+                          {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
+                        </div>
+                      )}
+                      {entry.changedAt !== null && (
+                        <div className='text-muted-foreground text-sm'>
+                          Box changed: {formatDateTime(entry.changedAt)} ({getDaysSince(entry.changedAt)} days ago)
+                        </div>
+                      )}
+                      {entry.notes && <div className='text-muted-foreground text-sm'>{entry.notes}</div>}
+                    </div>
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      onClick={() => {
+                        setEditingEntry(entry);
+                        setIsFormOpen(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </div>
 
       <LitterEntryFormModal
         key={editingEntry?.id ?? 'new'}
         isOpen={isFormOpen}
+        litterBoxId={box.id}
         initialEntry={editingEntry}
-        litterBoxes={litterBoxes}
         litters={litters}
         customTypes={customTypes}
         isSubmitting={isSubmitting}
@@ -1312,6 +1158,145 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
         onDelete={editingEntry ? handleDelete : undefined}
         onCancel={closeForm}
       />
+    </div>
+  );
+}
+
+interface LitterLogSectionProps {
+  householdId: string;
+}
+
+function LitterLogSection({ householdId }: LitterLogSectionProps) {
+  const { user } = useAuth();
+  const dispatch = useAppDispatch();
+  const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
+  const [isBoxSubmitting, setIsBoxSubmitting] = useState(false);
+  const [isBoxFormOpen, setIsBoxFormOpen] = useState(false);
+  const [editingBox, setEditingBox] = useState<LitterBox | null>(null);
+  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const selectedBox = selectedBoxId ? litterBoxes.find((box) => box.id === selectedBoxId) ?? null : null;
+
+  const existingLocations = useMemo(
+    () =>
+      Array.from(
+        new Set(litterBoxes.map((box) => box.location).filter((location): location is string => Boolean(location))),
+      ),
+    [litterBoxes],
+  );
+
+  const closeBoxForm = () => {
+    setIsBoxFormOpen(false);
+    setEditingBox(null);
+  };
+
+  const handleSubmitBox = async (box: { name: string; location: string | null }) => {
+    if (!user?.uid) {
+      return;
+    }
+
+    setIsBoxSubmitting(true);
+
+    try {
+      if (editingBox) {
+        await dispatch(
+          updateLitterBox({ householdId, litterBoxId: editingBox.id, changes: box }),
+        ).unwrap();
+      } else {
+        const createdBox = await dispatch(
+          createLitterBox({ householdId, uid: user.uid, litterBox: box }),
+        ).unwrap();
+        setSelectedBoxId(createdBox.id);
+      }
+      closeBoxForm();
+    } finally {
+      setIsBoxSubmitting(false);
+    }
+  };
+
+  const handleDeleteBox = async (litterBoxId: string) => {
+    setIsBoxSubmitting(true);
+
+    try {
+      await dispatch(deleteLitterBox({ householdId, litterBoxId })).unwrap();
+      setSelectedBoxId((current) => (current === litterBoxId ? null : current));
+      closeBoxForm();
+    } finally {
+      setIsBoxSubmitting(false);
+    }
+  };
+
+  return (
+    <section>
+      <DetailsDisclosure label='Litter usage'>
+        <div className='space-y-6'>
+          <div className='space-y-3'>
+            <div className='flex items-center justify-between gap-2'>
+              <strong className='text-sm'>Litter boxes</strong>
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={() => {
+                  setEditingBox(null);
+                  setIsBoxFormOpen(true);
+                }}
+              >
+                + Add litter box
+              </Button>
+            </div>
+
+            {litterBoxes.length === 0 ? (
+              <p className='text-muted-foreground text-sm'>No litter boxes added yet.</p>
+            ) : (
+              <>
+                <div className='flex flex-wrap gap-3'>
+                  {litterBoxes.map((box) => (
+                    <LitterBoxItem
+                      key={box.id}
+                      box={box}
+                      selected={box.id === selectedBoxId}
+                      onClick={(clickedBox) =>
+                        setSelectedBoxId((current) => (current === clickedBox.id ? null : clickedBox.id))
+                      }
+                    />
+                  ))}
+                </div>
+                {!selectedBox && (
+                  <p className='text-muted-foreground text-sm'>
+                    Select a litter box to log a weigh-in and see its history.
+                  </p>
+                )}
+              </>
+            )}
+
+            <LitterBoxFormModal
+              key={editingBox?.id ?? 'new'}
+              isOpen={isBoxFormOpen}
+              initialBox={editingBox}
+              existingLocations={existingLocations}
+              isSubmitting={isBoxSubmitting}
+              onSubmit={handleSubmitBox}
+              onDelete={editingBox ? handleDeleteBox : undefined}
+              onCancel={closeBoxForm}
+            />
+          </div>
+
+          <LittersManager householdId={householdId} />
+
+          {selectedBox && (
+            <SelectedLitterBoxPanel
+              key={selectedBox.id}
+              householdId={householdId}
+              box={selectedBox}
+              onEditDetails={() => {
+                setEditingBox(selectedBox);
+                setIsBoxFormOpen(true);
+              }}
+            />
+          )}
+        </div>
+      </DetailsDisclosure>
     </section>
   );
 }
