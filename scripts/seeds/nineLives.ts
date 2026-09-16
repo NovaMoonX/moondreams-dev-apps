@@ -658,6 +658,21 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
           },
         ],
       },
+      {
+        id: 'seed-vaccination-mochi-felv',
+        name: 'FeLV',
+        doses: [
+          {
+            // Overdue, so "needs attention" has a second overdue vaccination-adjacent example.
+            id: 'seed-vaccination-mochi-felv-dose-1',
+            administeredAt: context.now - 32_659_200_000,
+            expiresAt: context.now - 86_400_000,
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            lotNumber: 'L-4471',
+          },
+        ],
+      },
     ],
     'seed-cat-juniper': [
       {
@@ -1028,6 +1043,12 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       location: 'Home office',
       isActive: true,
     },
+    {
+      id: 'seed-litter-box-basement',
+      name: 'Basement litter box',
+      location: 'Basement',
+      isActive: true,
+    },
   ] as const;
 
   const customLitterTypes = [
@@ -1136,6 +1157,18 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       // Overdue for a change, so it shows up in the dashboard's "needs attention" section.
       loggedAt: context.now - 32 * 86_400_000,
       notes: null,
+    },
+    {
+      id: 'seed-litter-basement-1',
+      litterBoxId: 'seed-litter-box-basement',
+      litterId: 'seed-litter-tidy-cats',
+      weightBefore: 2,
+      weightUnit: 'lb',
+      refillWeight: 20,
+      isFullChange: true,
+      // Approaching the 30-day mark, so it shows up as "coming up" rather than overdue.
+      loggedAt: context.now - 25 * 86_400_000,
+      notes: 'Full change — fresh Tidy Cats.',
     },
   ] as const;
 
@@ -1298,11 +1331,32 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       customReasonLabel: null,
       followUpOfVisitId: 'seed-visit-mochi-checkup',
       followUpNote: 'Recheck weight and appetite in two weeks.',
-      title: null,
+      title: "Mochi's two-week recheck",
       // Scheduled for today, so it shows up in the dashboard's "needs attention" section.
       scheduledAt: context.now + 3 * 3_600_000,
       completedAt: null,
       summary: null,
+      linkedSymptomIds: [],
+      linkedConditionIds: [],
+      linkedHealthRecordIds: [],
+      linkedVaccinationIds: [],
+      linkedWeightEntryIds: [],
+    },
+    {
+      id: 'seed-visit-juniper-limp-check',
+      catIds: ['seed-cat-juniper'],
+      clinicId: 'seed-vet-clinic-harbor',
+      doctorId: 'seed-doctor-daniela',
+      status: 'upcoming' as const,
+      reason: 'illness' as const,
+      customReasonLabel: null,
+      followUpOfVisitId: null,
+      followUpNote: null,
+      title: "Juniper's limp check-up",
+      // Also scheduled for today, so "needs attention" has two same-day visits (one per cat).
+      scheduledAt: context.now + 5 * 3_600_000,
+      completedAt: null,
+      summary: "Favoring her left front paw since yesterday morning — nothing swollen, but worth a look.",
       linkedSymptomIds: [],
       linkedConditionIds: [],
       linkedHealthRecordIds: [],
@@ -1319,8 +1373,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       customReasonLabel: null,
       followUpOfVisitId: null,
       followUpNote: null,
-      title: null,
-      scheduledAt: context.now + 2_592_000_000,
+      title: 'Annual wellness exam',
+      // A few days out, so "needs attention" also has a multi-cat visit beyond today's.
+      scheduledAt: context.now + 4 * 86_400_000,
       completedAt: null,
       summary: null,
       linkedSymptomIds: [],

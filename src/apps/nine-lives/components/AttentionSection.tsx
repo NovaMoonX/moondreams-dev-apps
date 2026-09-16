@@ -1,25 +1,33 @@
 import { useMemo } from 'react';
 
-import { Avatar, Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, DropdownMenu, Pagination } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Trash2 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
-import { getInitials } from '@/utils/accountUtils';
+import AvatarStack from '@/ui/AvatarStack';
 
 import { useAttentionFocus } from '../context/attentionFocusContext';
 import {
   selectCatsByHousehold,
+  selectClinicsByHousehold,
+  selectDoctorsByHousehold,
   selectLitterBoxesByHousehold,
   selectLitterEntriesByHousehold,
   selectPreventivesByHousehold,
   selectVaccinationsByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
-import type { Cat } from '../types';
+import type { VetClinic } from '../types';
 import { buildAttentionItems, type AttentionItem, type AttentionSeverity } from '../utils/attentionItems';
+import { getClinicContactMenuItems, handleClinicContactAction } from '../utils/clinicContactMenu';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
+import { usePagination } from '../utils/usePagination';
+
+const OTHER_ROWS_PAGE_SIZE = 5;
 
 interface AttentionSectionProps {
   householdId: string;
@@ -36,18 +44,21 @@ interface AttentionRow {
   dueLabel: string;
   actionLabel: string;
   onAction: () => void;
+  /** Visit rows only — lets the card surface the vet's contact info. */
+  clinic?: VetClinic | null;
+  doctorName?: string | null;
 }
 
 type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
-/** Matches dreamer-ui's Avatar size scale, so the litter-box icon circle lines up with cat avatars next to it. */
+/** Matches dreamer-ui's real Avatar size scale, so the litter-box icon circle lines up exactly with cat avatars next to it. */
 const AVATAR_SIZE_CLASSES: Record<AvatarSize, string> = {
-  xs: 'h-6 w-6',
-  sm: 'h-8 w-8',
-  md: 'h-10 w-10',
-  lg: 'h-12 w-12',
-  xl: 'h-14 w-14',
-  '2xl': 'h-16 w-16',
+  xs: 'h-8 w-8',
+  sm: 'h-10 w-10',
+  md: 'h-12 w-12',
+  lg: 'h-16 w-16',
+  xl: 'h-20 w-20',
+  '2xl': 'h-24 w-24',
 };
 
 /** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
@@ -79,63 +90,17 @@ function getSeverityBadge(severity: AttentionSeverity, dueLabel: string): { vari
   return { variant: 'warning', label: 'This week' };
 }
 
-/** One avatar for a single cat, or a small overlapping stack (capped, with a "+N" overflow) for several. */
-function CatAvatarGroup({ catIds, cats, size = 'sm' }: { catIds: string[]; cats: Cat[]; size?: AvatarSize }) {
-  const matchedCats = catIds
-    .map((catId) => cats.find((cat) => cat.id === catId))
-    .filter((cat): cat is Cat => Boolean(cat));
-
-  if (matchedCats.length === 0) {
-    return null;
-  }
-
-  if (matchedCats.length === 1) {
-    const cat = matchedCats[0];
-    return (
-      <Avatar
-        src={cat.photoURL ?? undefined}
-        alt={cat.name}
-        initials={cat.photoURL ? undefined : getInitials(cat.name)}
-        size={size}
-        shape='circle'
-      />
-    );
-  }
-
-  const stackedSize: AvatarSize = size === 'lg' || size === 'xl' || size === '2xl' ? 'sm' : 'xs';
-  const visibleCats = matchedCats.slice(0, 3);
-  const overflowCount = matchedCats.length - visibleCats.length;
-
-  return (
-    <div className='flex shrink-0 items-center'>
-      {visibleCats.map((cat, index) => (
-        <Avatar
-          key={cat.id}
-          src={cat.photoURL ?? undefined}
-          alt={cat.name}
-          initials={cat.photoURL ? undefined : getInitials(cat.name)}
-          size={stackedSize}
-          shape='circle'
-          className={join('ring-2 ring-card', index > 0 && '-ml-2')}
-        />
-      ))}
-      {overflowCount > 0 && (
-        <span className='text-muted-foreground bg-muted border-border ring-card -ml-2 flex h-6 w-6 items-center justify-center rounded-full border text-xs ring-2'>
-          +{overflowCount}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function AttentionSection({ householdId }: AttentionSectionProps) {
   const { requestFocus } = useAttentionFocus();
+  const { addToast } = useToast();
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
   const litterEntries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
   const vaccinations = useAppSelector(selectVaccinationsByHousehold(householdId), shallowEqual);
   const preventives = useAppSelector(selectPreventivesByHousehold(householdId), shallowEqual);
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
 
   const items = useMemo(
     () =>
@@ -170,6 +135,8 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           actionLabel: 'Complete',
           onAction: () =>
             requestFocus({ kind: 'visit-complete', requestedAt: Date.now(), visitId: item.visitId }),
+          clinic: visit.clinicId ? (clinics.find((entry) => entry.id === visit.clinicId) ?? null) : null,
+          doctorName: visit.doctorId ? (doctors.find((entry) => entry.id === visit.doctorId)?.name ?? null) : null,
         };
       }
       case 'litter': {
@@ -204,7 +171,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           title: vaccination.name,
           subtitle: catName(item.catId),
           dueLabel: formatDueLabel(item.expiresAt, now),
-          actionLabel: 'Log dose',
+          actionLabel: 'Log vaccine',
           onAction: () =>
             requestFocus({
               kind: 'vaccination-log-dose',
@@ -243,6 +210,13 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
   const rows = items.map((item) => toRow(item, now)).filter((row): row is AttentionRow => row !== null);
   const visitRows = rows.filter((row) => row.kind === 'visit');
   const otherRows = rows.filter((row) => row.kind !== 'visit');
+  const {
+    page: otherRowsPage,
+    pageCount: otherRowsPageCount,
+    setPage: setOtherRowsPage,
+    pagedItems: pagedOtherRows,
+    shouldPaginate: shouldPaginateOtherRows,
+  } = usePagination(otherRows, OTHER_ROWS_PAGE_SIZE);
 
   if (rows.length === 0) {
     return null;
@@ -269,8 +243,53 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
         <Trash2 className='h-4 w-4' />
       </div>
     ) : (
-      <CatAvatarGroup catIds={row.catIds} cats={cats} size={size} />
+      <AvatarStack
+        people={row.catIds.map((catId) => {
+          const cat = cats.find((entry) => entry.id === catId);
+          return { id: catId, name: cat?.name ?? 'Cat', photoURL: cat?.photoURL };
+        })}
+        size={size}
+      />
     );
+
+  const renderClinicInfo = (row: AttentionRow) => {
+    if (!row.clinic) {
+      return null;
+    }
+
+    const clinic = row.clinic;
+    const contactItems = getClinicContactMenuItems(clinic);
+    const label = row.doctorName ? `${clinic.name} · Dr. ${row.doctorName}` : clinic.name;
+
+    return (
+      <div className='mt-1 flex items-center gap-1'>
+        <p className='text-muted-foreground truncate text-sm'>{label}</p>
+        {contactItems.length > 0 && (
+          <DropdownMenu
+            items={contactItems}
+            onItemSelect={(value) => {
+              void handleClinicContactAction(value, clinic, addToast);
+            }}
+            placement='bottom'
+            alignment='start'
+            offset={4}
+            trigger={
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                className='h-6 w-6 shrink-0 p-0'
+                aria-label={`Contact ${clinic.name}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <DotsVertical className='h-3.5 w-3.5' />
+              </Button>
+            }
+          />
+        )}
+      </div>
+    );
+  };
 
   const isSingleVisit = visitRows.length === 1;
 
@@ -285,7 +304,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                 isSingleVisit ? (
                   <div key={row.key} className='rounded-lg border border-border p-4'>
                     <div className='flex items-center gap-3'>
-                      {renderRowAvatar(row, 'lg')}
+                      {renderRowAvatar(row, 'md')}
                       <div className='min-w-0'>
                         <div className='flex flex-wrap items-center gap-2'>
                           <p className='text-base font-semibold'>{row.title}</p>
@@ -294,6 +313,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                         <p className='text-muted-foreground text-sm'>
                           {row.subtitle} · {row.dueLabel}
                         </p>
+                        {renderClinicInfo(row)}
                       </div>
                     </div>
                     <Button type='button' size='sm' onClick={row.onAction} className='mt-3 w-full sm:w-auto'>
@@ -304,7 +324,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                   <div key={row.key} className='rounded-lg border border-border p-3'>
                     <div className='flex items-center justify-between gap-3'>
                       <div className='flex min-w-0 items-center gap-3'>
-                        {renderRowAvatar(row, 'sm')}
+                        {renderRowAvatar(row, 'xs')}
                         <div className='min-w-0'>
                           <div className='flex flex-wrap items-center gap-2'>
                             <p className='text-sm font-medium'>{row.title}</p>
@@ -313,6 +333,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                           <p className='text-muted-foreground text-sm'>
                             {row.subtitle} · {row.dueLabel}
                           </p>
+                          {renderClinicInfo(row)}
                         </div>
                       </div>
                       <Button
@@ -336,10 +357,10 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           <div>
             <h2 className='text-lg font-semibold'>Keep an eye on</h2>
             <div className='divide-border divide-y'>
-              {otherRows.map((row) => (
+              {pagedOtherRows.map((row) => (
                 <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
                   <div className='flex min-w-0 items-center gap-3'>
-                    {renderRowAvatar(row, 'sm')}
+                    <div className='flex min-w-8 shrink-0 justify-start'>{renderRowAvatar(row, 'xs')}</div>
                     <div className='min-w-0'>
                       <div className='flex flex-wrap items-center gap-2'>
                         <p className='text-sm font-medium'>{row.title}</p>
@@ -351,18 +372,23 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                       </p>
                     </div>
                   </div>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    onClick={row.onAction}
-                    className='shrink-0'
-                  >
+                  <Button type='button' variant='link' size='sm' onClick={row.onAction} className='shrink-0'>
                     {row.actionLabel}
                   </Button>
                 </div>
               ))}
             </div>
+            {shouldPaginateOtherRows && (
+              <div className='mt-3 flex justify-center'>
+                <Pagination
+                  page={otherRowsPage}
+                  pageCount={otherRowsPageCount}
+                  onPageChange={setOtherRowsPage}
+                  size='sm'
+                  showFirstLast={false}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
