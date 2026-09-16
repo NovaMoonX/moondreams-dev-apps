@@ -43,7 +43,6 @@ import type { CustomLitterType, Litter, LitterBox, LitterEntry, LitterType } fro
 import { calculateLitterUsageCost, convertWeight } from '@apps/nine-lives/utils/litterCalculators';
 
 import DetailsDisclosure from './DetailsDisclosure';
-import StatTile from './StatTile';
 
 const { input, select, textarea, custom } = FormFactories;
 
@@ -1026,35 +1025,28 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
 
   return (
     <div className='bg-background border-border mt-6 rounded-lg border p-4'>
-      <div className='mb-4 flex flex-wrap items-start justify-between gap-4'>
+      <div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
         <div>
           <h3 className='text-lg font-semibold'>
             {box.name}
             {!box.isActive && <span className='text-muted-foreground text-sm font-normal'> (inactive)</span>}
           </h3>
           {box.location && <p className='text-muted-foreground text-sm'>{box.location}</p>}
-        </div>
-        <div className='flex flex-wrap items-center gap-3'>
           {latestChangedAt !== null && (
-            <div className='w-44'>
-              <StatTile
-                label='Since litter changed'
-                value={
-                  getDaysSince(latestChangedAt) === 0
-                    ? 'Today'
-                    : `${getDaysSince(latestChangedAt)} day${getDaysSince(latestChangedAt) === 1 ? '' : 's'}`
-                }
-              />
-            </div>
+            <p className='text-muted-foreground text-sm'>
+              {getDaysSince(latestChangedAt) === 0
+                ? 'Litter changed today'
+                : `${getDaysSince(latestChangedAt)} day${getDaysSince(latestChangedAt) === 1 ? '' : 's'} since litter changed`}
+            </p>
           )}
-          <div className='flex items-center gap-2'>
-            <Button type='button' variant='secondary' size='sm' onClick={() => void handleToggleActive()}>
-              {box.isActive ? 'Archive' : 'Reactivate'}
-            </Button>
-            <Button type='button' variant='secondary' size='sm' onClick={onEditDetails}>
-              Edit details
-            </Button>
-          </div>
+        </div>
+        <div className='flex items-center gap-2'>
+          <Button type='button' variant='secondary' size='sm' onClick={() => void handleToggleActive()}>
+            {box.isActive ? 'Archive' : 'Reactivate'}
+          </Button>
+          <Button type='button' variant='secondary' size='sm' onClick={onEditDetails}>
+            Edit details
+          </Button>
         </div>
       </div>
 
@@ -1253,7 +1245,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
               <TabsTrigger value='products'>Litter products ({litters.length})</TabsTrigger>
             </TabsList>
 
-            <TabsContent value='boxes' className='pt-4'>
+            <TabsContent value='boxes' className='pt-2'>
               <div className='space-y-3'>
                 <div className='flex justify-end'>
                   <Button
@@ -1307,7 +1299,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
               </div>
             </TabsContent>
 
-            <TabsContent value='products' className='pt-4'>
+            <TabsContent value='products' className='pt-2'>
               <LittersManager householdId={householdId} />
             </TabsContent>
           </Tabs>
