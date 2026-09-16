@@ -27,10 +27,14 @@ export function startTripListener(
   return onSnapshot(
     tripsQuery,
     (snapshot) => {
-      const trips = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<TripSpace, 'id'>),
-      }));
+      const trips = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data() as Omit<TripSpace, 'id'>;
+        return {
+          id: docSnapshot.id,
+          ...data,
+          isArchived: data.isArchived ?? false,
+        };
+      });
 
       onChange(trips);
     },
