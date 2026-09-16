@@ -43,7 +43,9 @@ export const selectVaccinationsByCat = (catId: string | null | undefined) => (st
   catId ? state.nineLives.vaccinations.items.filter((vaccination) => vaccination.catId === catId) : [];
 
 export const selectPreventivesByCat = (catId: string | null | undefined) => (state: RootState) =>
-  catId ? state.nineLives.preventives.items.filter((preventive) => preventive.catId === catId) : [];
+  catId
+    ? state.nineLives.preventives.items.filter((preventive) => preventive.catIds.includes(catId))
+    : [];
 
 export const selectCustomPreventiveProductsByHousehold =
   (householdId: string | null | undefined) => (state: RootState) =>

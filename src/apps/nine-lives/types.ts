@@ -177,12 +177,19 @@ export interface Vaccination {
   lastEditedAt: number;
 }
 
-export type PreventiveType = 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other' | 'custom';
+export type PreventiveType =
+  | 'flea-tick'
+  | 'heartworm'
+  | 'mite'
+  | 'dewormer'
+  | 'medication'
+  | 'other'
+  | 'custom';
 
 export interface Preventive {
   id: string;
   householdId: string;
-  catId: string;
+  catIds: string[];
   name: string;
   customProductId: string | null;
   type: PreventiveType;

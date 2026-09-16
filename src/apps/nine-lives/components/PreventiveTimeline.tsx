@@ -1,11 +1,14 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
-import type { CustomPreventiveType, Preventive } from '@apps/nine-lives/types';
+import type { Cat, CustomPreventiveType, Preventive } from '@apps/nine-lives/types';
 
 interface PreventiveTimelineProps {
   preventives: Preventive[];
   customTypes: CustomPreventiveType[];
+  /** When provided along with `catId`, entries assigned to more than one cat note the others by name. */
+  cats?: Cat[];
+  catId?: string;
   onEdit?: (preventive: Preventive) => void;
 }
 
@@ -14,6 +17,7 @@ const TYPE_LABELS: Record<Exclude<Preventive['type'], 'custom'>, string> = {
   heartworm: 'Heartworm',
   mite: 'Mite',
   dewormer: 'Dewormer',
+  medication: 'Medication',
   other: 'Other',
 };
 
@@ -26,7 +30,7 @@ function getPreventiveTypeLabel(preventive: Preventive, customTypes: CustomPreve
   return TYPE_LABELS[preventive.type];
 }
 
-function PreventiveTimeline({ preventives, customTypes, onEdit }: PreventiveTimelineProps) {
+function PreventiveTimeline({ preventives, customTypes, cats = [], catId, onEdit }: PreventiveTimelineProps) {
   const sortedPreventives = [...preventives].sort(
     (left, right) => right.administeredAt - left.administeredAt,
   );
@@ -54,6 +58,16 @@ function PreventiveTimeline({ preventives, customTypes, onEdit }: PreventiveTime
             ) : null}
             {preventive.dosage ? (
               <div className='text-muted-foreground text-sm'>Dosage: {preventive.dosage}</div>
+            ) : null}
+            {preventive.catIds.length > 1 ? (
+              <div className='text-muted-foreground text-sm'>
+                Also given to:{' '}
+                {preventive.catIds
+                  .filter((id) => id !== catId)
+                  .map((id) => cats.find((cat) => cat.id === id)?.name)
+                  .filter(Boolean)
+                  .join(', ')}
+              </div>
             ) : null}
           </div>
           {onEdit ? (

@@ -67,6 +67,7 @@ export const PREVENTIVE_TYPE_OPTIONS = [
   { value: 'heartworm', label: 'Heartworm' },
   { value: 'mite', label: 'Mite' },
   { value: 'dewormer', label: 'Dewormer' },
+  { value: 'medication', label: 'Medication' },
   { value: 'other', label: 'Other' },
 ] as const;
 

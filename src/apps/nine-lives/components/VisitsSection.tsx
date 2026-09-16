@@ -194,7 +194,6 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
       <VisitFormModal
         isOpen={modalMode !== null}
         cats={cats}
-        householdId={householdId}
         clinics={clinics}
         doctors={doctors}
         visits={visits}
