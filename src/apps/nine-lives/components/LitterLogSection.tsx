@@ -44,7 +44,7 @@ import { calculateLitterUsageCost, convertWeight } from '@apps/nine-lives/utils/
 
 import DetailsDisclosure from './DetailsDisclosure';
 
-const { input, select, textarea, custom } = FormFactories;
+const { input, select, textarea, checkbox, custom } = FormFactories;
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 const NEW_LITTER_TYPE_VALUE = 'new-custom-litter-type';
@@ -713,8 +713,7 @@ interface LitterEntryFormValues {
   weight: string;
   weightUnit: string;
   loggedAt: string;
-  changedOpen?: boolean;
-  changedAt?: string;
+  wasChanged: boolean;
   notesOpen?: boolean;
   notes?: string;
 }
@@ -745,7 +744,6 @@ function LitterEntryFormModal({
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialEntry?.id);
   const formId = initialEntry?.id ?? 'new-nine-lives-litter-entry';
-  const [isChangedOpen, setIsChangedOpen] = useState(Boolean(initialEntry?.changedAt));
   const [isNotesOpen, setIsNotesOpen] = useState(Boolean(initialEntry?.notes));
   const [isValid, setIsValid] = useState(
     Boolean(initialEntry?.litterId && initialEntry.weight > 0 && initialEntry.loggedAt),
@@ -784,30 +782,15 @@ function LitterEntryFormModal({
       createDateInputField({
         name: 'loggedAt',
         label: 'Weigh-in date',
+        description: 'The day you weighed this box — used to track usage between weigh-ins.',
         required: true,
         variant: 'outline',
       }),
-      isChangedOpen
-        ? createDateInputField({
-            name: 'changedAt',
-            label: 'Litter box changed on',
-            variant: 'outline',
-          })
-        : custom({
-            name: '_addChangedAt',
-            label: '',
-            renderComponent: () => (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className={mutedLinkClassName}
-                onClick={() => setIsChangedOpen(true)}
-              >
-                + Log a box change
-              </Button>
-            ),
-          }),
+      checkbox({
+        name: 'wasChanged',
+        label: 'Litter change',
+        text: 'The litter was also emptied and refilled on this date.',
+      }),
       isNotesOpen
         ? textarea({
             name: 'notes',
@@ -832,15 +815,15 @@ function LitterEntryFormModal({
             ),
           }),
     ],
-    [litterOptions, isChangedOpen, isNotesOpen],
+    [litterOptions, isNotesOpen],
   );
 
   const handleSubmit = async (data: LitterEntryFormValues) => {
     const weight = Number(data.weight);
     const loggedAt = fromDateInputValue(data.loggedAt);
-    const changedAt = isChangedOpen && data.changedAt ? fromDateInputValue(data.changedAt) ?? null : null;
+    const now = Date.now();
 
-    if (!data.litterId || !Number.isFinite(weight) || weight <= 0 || loggedAt === undefined) {
+    if (!data.litterId || !Number.isFinite(weight) || weight <= 0 || loggedAt === undefined || loggedAt > now) {
       return;
     }
 
@@ -851,7 +834,7 @@ function LitterEntryFormModal({
       weight,
       weightUnit: data.weightUnit === 'kg' ? 'kg' : 'lb',
       loggedAt,
-      changedAt,
+      changedAt: data.wasChanged ? loggedAt : null,
       notes: isNotesOpen ? data.notes?.trim() || null : null,
     });
   };
@@ -883,19 +866,23 @@ function LitterEntryFormModal({
           weight: initialEntry?.weight?.toString() ?? '',
           weightUnit: initialEntry?.weightUnit ?? 'lb',
           loggedAt: toDateInputValue(initialEntry?.loggedAt),
-          changedAt: toDateInputValue(initialEntry?.changedAt ?? undefined),
+          wasChanged: Boolean(initialEntry?.changedAt),
           notes: initialEntry?.notes ?? '',
         }}
         columns={1}
         spacing='normal'
         onDataChange={(data) => {
           const values = data as LitterEntryFormValues;
+          const now = Date.now();
+          const loggedAt = values.loggedAt ? fromDateInputValue(values.loggedAt) : undefined;
+
           setIsValid(
             Boolean(
               values.litterId &&
                 Number.isFinite(Number(values.weight)) &&
                 Number(values.weight) > 0 &&
-                values.loggedAt,
+                loggedAt !== undefined &&
+                loggedAt <= now,
             ),
           );
         }}
