@@ -83,6 +83,32 @@ export const selectExpensesByHousehold =
       ? state.nineLives.expenses.items.filter((expense) => expense.householdId === householdId)
       : [];
 
+export const selectLitterEntriesByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.litterEntries.items.filter((entry) => entry.householdId === householdId)
+      : [];
+
+export const selectLitterBoxesByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.litterBoxes.items.filter((box) => box.householdId === householdId)
+      : [];
+
+export const selectLittersByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.litters.items.filter((litter) => litter.householdId === householdId)
+      : [];
+
+export const selectCustomLitterTypesByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.customLitterTypes.items.filter(
+          (type) => type.householdId === householdId,
+        )
+      : [];
+
 export interface ExpenseTotals {
   recurringMonthly: number;
   recurringYearly: number;

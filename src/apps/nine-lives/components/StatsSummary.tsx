@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 
-import { makeSelectExpenseTotalsByHousehold, selectVisitsByHousehold } from '../store/selectors';
+import {
+  makeSelectExpenseTotalsByHousehold,
+  selectLitterBoxesByHousehold,
+  selectLitterEntriesByHousehold,
+  selectVisitsByHousehold,
+} from '../store/selectors';
 import StatTile from './StatTile';
 
 interface StatsSummaryProps {
@@ -20,10 +25,17 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
   currency: 'USD',
 });
 
+function getDaysSince(timestamp: number) {
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
+}
+
 function StatsSummary({ householdId }: StatsSummaryProps) {
   const [recurringView, setRecurringView] = useState<RecurringView>('monthly');
+  const [selectedLitterBoxId, setSelectedLitterBoxId] = useState<string | null>(null);
 
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
+  const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
+  const litterEntries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
   const selectExpenseTotals = useMemo(
     () => makeSelectExpenseTotalsByHousehold(householdId),
     [householdId],
@@ -36,8 +48,49 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   const recurringTotal =
     recurringView === 'monthly' ? expenseTotals.recurringMonthly : expenseTotals.recurringYearly;
 
+  const activeLitterBoxes = useMemo(() => litterBoxes.filter((box) => box.isActive), [litterBoxes]);
+
+  const latestChangedAtByBox = useMemo(() => {
+    const latest = new Map<string, number>();
+
+    litterEntries.forEach((entry) => {
+      if (!entry.isFullChange) {
+        return;
+      }
+
+      if ((latest.get(entry.litterBoxId) ?? 0) < entry.loggedAt) {
+        latest.set(entry.litterBoxId, entry.loggedAt);
+      }
+    });
+
+    return latest;
+  }, [litterEntries]);
+
+  // The box that's gone longest without a change is the one that most needs attention, so it's the default.
+  const mostOverdueBoxId = useMemo(() => {
+    let overdueBoxId: string | null = null;
+    let overdueChangedAt = Infinity;
+
+    activeLitterBoxes.forEach((box) => {
+      const changedAt = latestChangedAtByBox.get(box.id);
+
+      if (changedAt !== undefined && changedAt < overdueChangedAt) {
+        overdueChangedAt = changedAt;
+        overdueBoxId = box.id;
+      }
+    });
+
+    return overdueBoxId;
+  }, [activeLitterBoxes, latestChangedAtByBox]);
+
+  const selectedLitterBox =
+    activeLitterBoxes.find((box) => box.id === (selectedLitterBoxId ?? mostOverdueBoxId)) ?? null;
+  const selectedLitterBoxChangedAt = selectedLitterBox
+    ? latestChangedAtByBox.get(selectedLitterBox.id) ?? null
+    : null;
+
   return (
-    <div className='grid gap-4 sm:grid-cols-3'>
+    <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
       <StatTile label='Visits so far' value={completedVisitCount} />
 
       <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>
@@ -68,6 +121,34 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
       </div>
 
       <StatTile label='Lifetime expenses' value={currencyFormatter.format(expenseTotals.lifetime)} />
+
+      {selectedLitterBox && (
+        <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>
+          <div className='flex items-center justify-center gap-2 sm:justify-between'>
+            <p className='text-sm text-muted-foreground'>Since litter changed</p>
+            {activeLitterBoxes.length > 1 && (
+              <div className='max-w-28'>
+                <Select
+                  options={activeLitterBoxes.map((box) => ({ text: box.name, value: box.id }))}
+                  value={selectedLitterBox.id}
+                  onChange={setSelectedLitterBoxId}
+                  size='sm'
+                />
+              </div>
+            )}
+          </div>
+          <p className='mt-2 text-2xl font-semibold'>
+            {selectedLitterBoxChangedAt === null
+              ? 'No changes logged'
+              : getDaysSince(selectedLitterBoxChangedAt) === 0
+                ? 'Today'
+                : `${getDaysSince(selectedLitterBoxChangedAt)} day${getDaysSince(selectedLitterBoxChangedAt) === 1 ? '' : 's'}`}
+          </p>
+          {activeLitterBoxes.length === 1 && (
+            <p className='mt-1 text-sm text-muted-foreground'>{selectedLitterBox.name}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

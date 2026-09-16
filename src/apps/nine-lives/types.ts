@@ -232,6 +232,74 @@ export interface WeightEntry {
   createdAt: number;
 }
 
+export type LitterType =
+  | 'clumping_clay'
+  | 'non_clumping_clay'
+  | 'pine_wood_pellet'
+  | 'paper'
+  | 'crystal_silica'
+  | 'corn'
+  | 'wheat'
+  | 'walnut'
+  | 'custom';
+
+export interface LitterBox {
+  id: string;
+  householdId: string;
+  name: string;
+  location: string | null;
+  /** When false, the box is retired (e.g. after switching litter) and hidden from new weigh-ins, but its history is kept. */
+  isActive: boolean;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface CustomLitterType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+/** A specific litter product (brand + type + bag size + price), used to derive per-entry usage cost. */
+export interface Litter {
+  id: string;
+  householdId: string;
+  brand: string;
+  litterType: LitterType;
+  customLitterTypeId: string | null;
+  weight: number;
+  weightUnit: 'lb' | 'kg';
+  cost: number | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface LitterEntry {
+  id: string;
+  householdId: string;
+  litterBoxId: string;
+  litterId: string;
+  /** The box's weight after sifting — before any litter is added during this check. */
+  weightBefore: number;
+  weightUnit: 'lb' | 'kg';
+  /**
+   * The box's weight after adding litter during this check, if any was added.
+   * Null means this was just a reading, with nothing topped off or changed.
+   */
+  refillWeight: number | null;
+  /** Only meaningful when `refillWeight` is set: true if the box was fully emptied before refilling, false if it was just topped off. */
+  isFullChange: boolean;
+  loggedAt: number;
+  notes: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export type ExpenseCategory =
   | 'adoption_fee'
   | 'insurance'

@@ -802,6 +802,168 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/litterBoxes/{litterBoxId} {
+      function isLitterBoxIdentityValid() {
+        return request.resource.data.id == litterBoxId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterBoxBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.location == null || request.resource.data.location is string)
+          && request.resource.data.isActive is bool
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isLitterBoxImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterBoxIdentityValid()
+        && isLitterBoxBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterBoxImmutableFieldsValid()
+        && isLitterBoxBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customLitterTypes/{typeId} {
+      function isCustomLitterTypeIdentityValid() {
+        return request.resource.data.id == typeId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomLitterTypeShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomLitterTypeImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomLitterTypeIdentityValid()
+        && isCustomLitterTypeShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomLitterTypeImmutableFieldsValid()
+        && isCustomLitterTypeShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/litters/{litterId} {
+      function isLitterIdentityValid() {
+        return request.resource.data.id == litterId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.brand)
+          && request.resource.data.litterType in [
+            'clumping_clay', 'non_clumping_clay', 'pine_wood_pellet', 'paper',
+            'crystal_silica', 'corn', 'wheat', 'walnut', 'custom'
+          ]
+          && (request.resource.data.customLitterTypeId == null || request.resource.data.customLitterTypeId is string)
+          && request.resource.data.weight is number
+          && request.resource.data.weight > 0
+          && request.resource.data.weightUnit in ['lb', 'kg']
+          && (request.resource.data.cost == null || (request.resource.data.cost is number && request.resource.data.cost >= 0))
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (request.resource.data.litterType != 'custom' || isNonEmptyString(request.resource.data.customLitterTypeId))
+          && (
+            request.resource.data.customLitterTypeId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customLitterTypes/$(request.resource.data.customLitterTypeId))
+          );
+      }
+
+      function isLitterImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterIdentityValid()
+        && isLitterBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterImmutableFieldsValid()
+        && isLitterBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/litterEntries/{entryId} {
+      function isLitterEntryIdentityValid() {
+        return request.resource.data.id == entryId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterEntryBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.litterBoxId)
+          && isNonEmptyString(request.resource.data.litterId)
+          && request.resource.data.weightBefore is number
+          && request.resource.data.weightBefore > 0
+          && request.resource.data.weightUnit in ['lb', 'kg']
+          && (request.resource.data.refillWeight == null || (request.resource.data.refillWeight is number && request.resource.data.refillWeight > 0))
+          && request.resource.data.isFullChange is bool
+          && (request.resource.data.isFullChange == false || request.resource.data.refillWeight != null)
+          && isTimestampNumber(request.resource.data.loggedAt)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/litterBoxes/$(request.resource.data.litterBoxId))
+          && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/litters/$(request.resource.data.litterId));
+      }
+
+      function isLitterEntryImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterEntryIdentityValid()
+        && isLitterEntryBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterEntryImmutableFieldsValid()
+        && isLitterEntryBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {
