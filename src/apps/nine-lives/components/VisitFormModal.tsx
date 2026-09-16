@@ -43,6 +43,7 @@ import type {
 import type { VisitOutcome } from '../store/actions/visitsActions';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
 import { getVisitOptions } from '../utils/visitOptions';
+import CatPillSelector from './CatPillSelector';
 import DetailsDisclosure from './DetailsDisclosure';
 
 export interface VisitExpenseDraft {
@@ -91,7 +92,7 @@ interface VisitFormValues {
   moreDetails: VisitMoreDetailsValue;
 }
 
-const { checkboxGroup, custom } = FormFactories;
+const { custom } = FormFactories;
 
 const REASON_OPTIONS = [
   { label: 'Checkup', value: 'checkup' },
@@ -1155,10 +1156,18 @@ function VisitFormModal({
 
   const fields = useMemo(
     () => [
-      checkboxGroup({
+      custom({
         name: 'catIds',
         label: 'Cats',
-        options: cats.map((cat) => ({ label: cat.name, value: cat.id })),
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={cats.map((cat) => ({ label: cat.name, value: cat.id, photoURL: cat.photoURL }))}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       custom({
         name: 'scheduledAt',

@@ -13,6 +13,7 @@ import type { CatCondition, ConditionCategory, LibraryCondition } from '../types
 import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
 import { getVisitOptions } from '../utils/visitOptions';
 import ConditionLibraryBrowser from './ConditionLibraryBrowser';
+import LinkedVisitsField from './LinkedVisitsField';
 
 interface CatConditionFormValues {
   name: string;
@@ -46,7 +47,7 @@ const STATUS_OPTIONS = [
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
-const { input, select, textarea, checkbox, checkboxGroup, custom } = FormFactories;
+const { input, select, textarea, checkbox, custom } = FormFactories;
 
 function CatConditionFormFields({
   householdId,
@@ -160,10 +161,18 @@ function CatConditionFormFields({
         : []),
       ...(visitOptions.length > 0
         ? [
-            checkboxGroup({
+            custom({
               name: 'linkedVisitIds',
               label: 'Linked visits',
-              options: visitOptions,
+              renderComponent: (props) => (
+                <LinkedVisitsField
+                  value={props.value as string[]}
+                  onValueChange={props.onValueChange}
+                  visitOptions={visitOptions}
+                  disabled={props.disabled}
+                />
+              ),
+              colSpan: 'full',
             }),
           ]
         : []),

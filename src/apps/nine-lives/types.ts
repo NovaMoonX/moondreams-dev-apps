@@ -356,11 +356,20 @@ export type SymptomQuickTag =
   | 'grooming_change'
   | 'other';
 
+export interface CustomSymptomQuickTag {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
 export interface Symptom {
   id: string;
   catId: string;
   description: string;
-  quickTags: SymptomQuickTag[];
+  /** Preset `SymptomQuickTag` values or a household's custom tag labels (see `CustomSymptomQuickTag`). */
+  quickTags: string[];
   firstNoticedAt: number;
   severity: SymptomSeverity | null;
   linkedVisitIds: string[];

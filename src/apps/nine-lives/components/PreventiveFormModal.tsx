@@ -30,6 +30,7 @@ import {
 import type { Preventive, PreventiveType } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
+import CatPillSelector from './CatPillSelector';
 import DetailsDisclosure from './DetailsDisclosure';
 
 const NEW_PRODUCT_VALUE = '__new_preventive_product__';
@@ -296,10 +297,18 @@ function PreventiveFormModal({
   const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
   const fields = useMemo(
     () => [
-      FormFactories.checkboxGroup({
+      FormFactories.custom({
         name: 'catIds',
         label: 'Cats',
-        options: catOptions,
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={catOptions}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       FormFactories.custom({
         name: 'product',

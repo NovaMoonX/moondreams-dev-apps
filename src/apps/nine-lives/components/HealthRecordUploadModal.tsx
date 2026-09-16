@@ -29,8 +29,9 @@ import type {
   HealthRecordType,
 } from '../types';
 import { getVisitOptions } from '../utils/visitOptions';
+import CatPillSelector from './CatPillSelector';
 
-const { checkboxGroup, custom, input, select } = FormFactories;
+const { custom, input, select } = FormFactories;
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
@@ -243,10 +244,18 @@ function HealthRecordUploadModal({
 
   const fields = useMemo(
     () => [
-      checkboxGroup({
+      custom({
         name: 'catIds',
         label: 'Cats',
-        options: catOptions,
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={catOptions}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       custom({
         name: 'file',

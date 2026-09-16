@@ -1,24 +1,124 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Form, FormFactories, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
 
-import { useAppSelector } from '@/store';
+import { useAuth } from '@/hooks/useAuth';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
-import { selectVisitsByHousehold } from '../store/selectors';
+import { createCustomSymptomQuickTag } from '../store/actions/customSymptomQuickTagsActions';
+import { selectCustomSymptomQuickTagsByHousehold, selectVisitsByHousehold } from '../store/selectors';
 import type { CatCondition, Symptom, SymptomQuickTag, SymptomSeverity } from '../types';
 import { getVisitOptions } from '../utils/visitOptions';
+import LinkedVisitsField from './LinkedVisitsField';
 
 interface SymptomFormValues {
   catId?: string;
   description: string;
-  quickTags: SymptomQuickTag[];
+  quickTags: string[];
   firstNoticedAt: string;
   severity: string;
   linkedConditionId: string;
   linkedVisitIds: string[];
+}
+
+const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
+
+function QuickTagsField({
+  value,
+  onValueChange,
+  options,
+  disabled,
+  onCustomTagAdded,
+}: {
+  value: string[];
+  onValueChange: (value: string[]) => void;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+  onCustomTagAdded: (label: string) => void;
+}) {
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+
+  const toggleTag = (tagValue: string) => {
+    onValueChange(value.includes(tagValue) ? value.filter((v) => v !== tagValue) : [...value, tagValue]);
+  };
+
+  const handleAddCustom = () => {
+    const trimmed = customInput.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    const existingMatch = options.find((option) => option.label.toLowerCase() === trimmed.toLowerCase());
+
+    if (!existingMatch) {
+      onCustomTagAdded(trimmed);
+    }
+
+    const canonicalValue = existingMatch?.value ?? trimmed;
+
+    if (!value.includes(canonicalValue)) {
+      onValueChange([...value, canonicalValue]);
+    }
+
+    setCustomInput('');
+    setIsAddingCustom(false);
+  };
+
+  return (
+    <div className='space-y-2'>
+      <div role='group' aria-label='Quick tags' className='flex flex-wrap gap-2'>
+        {options.map((option) => {
+          const isSelected = value.includes(option.value);
+
+          return (
+            <button
+              key={option.value}
+              type='button'
+              aria-pressed={isSelected}
+              disabled={disabled}
+              onClick={() => toggleTag(option.value)}
+            >
+              <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
+                {option.label}
+              </Badge>
+            </button>
+          );
+        })}
+      </div>
+      {isAddingCustom ? (
+        <div className='flex items-center gap-2'>
+          <Input
+            value={customInput}
+            onChange={(event) => setCustomInput(event.target.value)}
+            placeholder='Custom tag'
+            variant='outline'
+            disabled={disabled}
+            autoFocus
+          />
+          <Button type='button' size='sm' onClick={handleAddCustom} disabled={disabled}>
+            Add
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className={join('text-xs', mutedLinkClassName)}
+          onClick={() => setIsAddingCustom(true)}
+          disabled={disabled}
+        >
+          + Add a custom tag
+        </Button>
+      )}
+    </div>
+  );
 }
 
 interface SymptomFormFieldsProps {
@@ -50,7 +150,7 @@ const SEVERITY_OPTIONS: Array<{ value: SymptomSeverity; label: string }> = [
   { value: 'severe', label: 'Severe' },
 ];
 
-const { textarea, checkboxGroup, select } = FormFactories;
+const { textarea, custom, select } = FormFactories;
 
 function SymptomFormFields({
   householdId,
@@ -62,13 +162,29 @@ function SymptomFormFields({
   onDelete,
   onCancel,
 }: SymptomFormFieldsProps) {
+  const { user } = useAuth();
+  const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
+  const customQuickTags = useAppSelector(selectCustomSymptomQuickTagsByHousehold(householdId), shallowEqual);
   const isEditing = Boolean(initialSymptom?.id);
   const formId = initialSymptom?.id ?? 'new-nine-lives-symptom';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
 
+  const [pendingNewTagLabels, setPendingNewTagLabels] = useState<string[]>([]);
+
   const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
+
+  const quickTagOptions = useMemo(
+    () => [
+      ...QUICK_TAG_OPTIONS.map((option) => ({ value: option.value as string, label: option.label })),
+      ...customQuickTags.map((tag) => ({ value: tag.label, label: tag.label })),
+      ...pendingNewTagLabels
+        .filter((label) => !customQuickTags.some((tag) => tag.label.toLowerCase() === label.toLowerCase()))
+        .map((label) => ({ value: label, label })),
+    ],
+    [customQuickTags, pendingNewTagLabels],
+  );
 
   const fields = useMemo(
     () => [
@@ -81,10 +197,25 @@ function SymptomFormFields({
             }),
           ]
         : []),
-      checkboxGroup({
+      custom({
         name: 'quickTags',
         label: 'Quick tags',
-        options: QUICK_TAG_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+        renderComponent: (props) => (
+          <QuickTagsField
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            options={quickTagOptions}
+            disabled={props.disabled}
+            onCustomTagAdded={(label) =>
+              setPendingNewTagLabels((current) =>
+                current.some((existing) => existing.toLowerCase() === label.toLowerCase())
+                  ? current
+                  : [...current, label],
+              )
+            }
+          />
+        ),
+        colSpan: 'full',
       }),
       textarea({
         name: 'description',
@@ -119,15 +250,23 @@ function SymptomFormFields({
         : []),
       ...(visitOptions.length > 0
         ? [
-            checkboxGroup({
+            custom({
               name: 'linkedVisitIds',
               label: 'Linked visits',
-              options: visitOptions,
+              renderComponent: (props) => (
+                <LinkedVisitsField
+                  value={props.value as string[]}
+                  onValueChange={props.onValueChange}
+                  visitOptions={visitOptions}
+                  disabled={props.disabled}
+                />
+              ),
+              colSpan: 'full',
             }),
           ]
         : []),
     ],
-    [showCatField, catOptions, conditions, visitOptions],
+    [showCatField, catOptions, conditions, visitOptions, quickTagOptions],
   );
 
   const handleSubmit = async (data: SymptomFormValues) => {
@@ -135,6 +274,16 @@ function SymptomFormFields({
 
     if (firstNoticedAt === null || (showCatField && !data.catId)) {
       return;
+    }
+
+    const usedPendingLabels = pendingNewTagLabels.filter((label) => data.quickTags.includes(label));
+
+    if (usedPendingLabels.length > 0 && householdId && user?.uid) {
+      await Promise.all(
+        usedPendingLabels.map((label) =>
+          dispatch(createCustomSymptomQuickTag({ householdId, uid: user.uid, label })).unwrap(),
+        ),
+      );
     }
 
     await onSubmit({

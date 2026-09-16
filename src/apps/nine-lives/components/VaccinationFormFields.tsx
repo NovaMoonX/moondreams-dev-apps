@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { shallowEqual } from 'react-redux';
 
@@ -14,17 +14,98 @@ import {
 import type { Vaccination } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
+import DetailsDisclosure from './DetailsDisclosure';
+import LinkedVisitsField from './LinkedVisitsField';
+
 const NONE_OPTION_VALUE = '';
+
+interface AdditionalDetailsValue {
+  expiresAt: string;
+  clinicId: string;
+  doctorId: string;
+  lotNumber: string;
+  linkedVisitId: string;
+}
 
 interface VaccinationFormValues {
   catId?: string;
   name: string;
   administeredAt: string;
-  expiresAt?: string | null;
-  clinicId?: string | null;
-  doctorId?: string | null;
-  lotNumber?: string | null;
-  linkedVisitId?: string | null;
+  additionalDetails: AdditionalDetailsValue;
+}
+
+function AdditionalDetailsFields({
+  value,
+  onValueChange,
+  disabled,
+  clinicOptions,
+  doctorOptions,
+  visitOptions,
+}: {
+  value: AdditionalDetailsValue;
+  onValueChange: (value: AdditionalDetailsValue) => void;
+  disabled?: boolean;
+  clinicOptions: { label: string; value: string }[];
+  doctorOptions: { label: string; value: string }[];
+  visitOptions: { label: string; value: string }[];
+}) {
+  const update = (changes: Partial<AdditionalDetailsValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <DetailsDisclosure label='Additional details'>
+      <div className='space-y-3'>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Next due date</Label>
+          <Input
+            type='date'
+            value={value.expiresAt}
+            onChange={(event) => update({ expiresAt: event.target.value })}
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Clinic</Label>
+          <Select
+            options={clinicOptions.map((option) => ({ text: option.label, value: option.value }))}
+            value={value.clinicId}
+            disabled={disabled}
+            onChange={(clinicId) => update({ clinicId })}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Doctor</Label>
+          <Select
+            options={doctorOptions.map((option) => ({ text: option.label, value: option.value }))}
+            value={value.doctorId}
+            disabled={disabled}
+            onChange={(doctorId) => update({ doctorId })}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Lot number</Label>
+          <Input
+            value={value.lotNumber}
+            onChange={(event) => update({ lotNumber: event.target.value })}
+            placeholder='L-1024'
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Linked visit</Label>
+          <LinkedVisitsField
+            value={value.linkedVisitId ? [value.linkedVisitId] : []}
+            onValueChange={(ids) => update({ linkedVisitId: ids[0] ?? '' })}
+            visitOptions={visitOptions}
+            disabled={disabled}
+            multiple={false}
+          />
+        </div>
+      </div>
+    </DetailsDisclosure>
+  );
 }
 
 interface VaccinationFormFieldsProps {
@@ -41,7 +122,7 @@ interface VaccinationFormFieldsProps {
   onCancel?: () => void;
 }
 
-const { input, select } = FormFactories;
+const { input, select, custom } = FormFactories;
 
 function VaccinationFormFields({
   householdId,
@@ -76,10 +157,7 @@ function VaccinationFormFields({
     [doctors],
   );
 
-  const visitOptions = useMemo(
-    () => [{ label: 'None', value: NONE_OPTION_VALUE }, ...getVisitOptions(visits)],
-    [visits],
-  );
+  const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
 
   const fields = useMemo(
     () => [
@@ -105,31 +183,20 @@ function VaccinationFormFields({
         required: true,
         variant: 'outline',
       }),
-      createDateInputField({
-        name: 'expiresAt',
-        label: 'Next due date (optional)',
-        variant: 'outline',
-      }),
-      select({
-        name: 'clinicId',
-        label: 'Clinic (optional)',
-        options: clinicOptions,
-      }),
-      select({
-        name: 'doctorId',
-        label: 'Doctor (optional)',
-        options: doctorOptions,
-      }),
-      input({
-        name: 'lotNumber',
-        label: 'Lot number (optional)',
-        placeholder: initialVaccination?.lotNumber || 'L-1024',
-        variant: 'outline',
-      }),
-      select({
-        name: 'linkedVisitId',
-        label: 'Linked visit (optional)',
-        options: visitOptions,
+      custom({
+        name: 'additionalDetails',
+        label: '',
+        renderComponent: (props) => (
+          <AdditionalDetailsFields
+            value={props.value as AdditionalDetailsValue}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+            clinicOptions={clinicOptions}
+            doctorOptions={doctorOptions}
+            visitOptions={visitOptions}
+          />
+        ),
+        colSpan: 'full',
       }),
     ],
     [showCatField, catOptions, clinicOptions, doctorOptions, visitOptions, initialVaccination],
@@ -148,11 +215,13 @@ function VaccinationFormFields({
       catId: data.catId || initialVaccination?.catId,
       name: trimmedName,
       administeredAt,
-      expiresAt: data.expiresAt ? (fromDateInputValue(data.expiresAt) ?? null) : null,
-      clinicId: data.clinicId?.trim() || null,
-      doctorId: data.doctorId?.trim() || null,
-      lotNumber: data.lotNumber?.trim() || null,
-      linkedVisitId: data.linkedVisitId?.trim() || null,
+      expiresAt: data.additionalDetails.expiresAt
+        ? (fromDateInputValue(data.additionalDetails.expiresAt) ?? null)
+        : null,
+      clinicId: data.additionalDetails.clinicId?.trim() || null,
+      doctorId: data.additionalDetails.doctorId?.trim() || null,
+      lotNumber: data.additionalDetails.lotNumber?.trim() || null,
+      linkedVisitId: data.additionalDetails.linkedVisitId?.trim() || null,
     });
   };
 
@@ -181,11 +250,13 @@ function VaccinationFormFields({
         catId: initialVaccination?.catId ?? '',
         name: initialVaccination?.name ?? '',
         administeredAt: toDateInputValue(initialVaccination?.administeredAt ?? undefined),
-        expiresAt: toDateInputValue(initialVaccination?.expiresAt ?? undefined),
-        clinicId: initialVaccination?.clinicId ?? '',
-        doctorId: initialVaccination?.doctorId ?? '',
-        lotNumber: initialVaccination?.lotNumber ?? '',
-        linkedVisitId: initialVaccination?.linkedVisitId ?? '',
+        additionalDetails: {
+          expiresAt: toDateInputValue(initialVaccination?.expiresAt ?? undefined),
+          clinicId: initialVaccination?.clinicId ?? '',
+          doctorId: initialVaccination?.doctorId ?? '',
+          lotNumber: initialVaccination?.lotNumber ?? '',
+          linkedVisitId: initialVaccination?.linkedVisitId ?? '',
+        },
       }}
       columns={1}
       spacing='normal'

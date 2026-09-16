@@ -15,6 +15,7 @@ import {
   getRecurringCycleCount,
 } from '../utils/budgetCalculators';
 import { getVisitOptions } from '../utils/visitOptions';
+import CatPillSelector from './CatPillSelector';
 
 type ExpenseMode = 'simple' | 'itemized';
 
@@ -62,7 +63,7 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
   currency: 'USD',
 });
 
-const { checkbox, checkboxGroup, custom, input, select, textarea } = FormFactories;
+const { checkbox, custom, input, select, textarea } = FormFactories;
 
 function createEmptyLineItem(): LineItemValue {
   return { id: crypto.randomUUID(), label: '', amount: '' };
@@ -213,10 +214,18 @@ function ExpenseFormModal({
 
   const fields = useMemo(
     () => [
-      checkboxGroup({
+      custom({
         name: 'catIds',
         label: 'Cats',
-        options: catOptions,
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={catOptions}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       custom({
         name: 'mode',

@@ -645,6 +645,39 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/customSymptomQuickTags/{tagId} {
+      function isCustomSymptomQuickTagIdentityValid() {
+        return request.resource.data.id == tagId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomSymptomQuickTagShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomSymptomQuickTagImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomSymptomQuickTagIdentityValid()
+        && isCustomSymptomQuickTagShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomSymptomQuickTagImmutableFieldsValid()
+        && isCustomSymptomQuickTagShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/nine-lives/households/{householdId}/healthRecords/{recordId} {
       function isHealthRecordIdentityValid() {
         return request.resource.data.id == recordId
