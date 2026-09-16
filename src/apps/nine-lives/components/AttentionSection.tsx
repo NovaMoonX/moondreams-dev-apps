@@ -226,7 +226,13 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     const badge = getSeverityBadge(row.severity, row.dueLabel);
 
     return (
-      <Badge variant={badge.variant} outline size='xs' use={row.severity === 'now' ? 'alert' : 'status'}>
+      <Badge
+        variant={badge.variant}
+        outline
+        size='xs'
+        use={row.severity === 'now' ? 'alert' : 'status'}
+        className={join('border-transparent', badge.variant === 'destructive' ? 'bg-destructive/10' : 'bg-warning/10')}
+      >
         {badge.label}
       </Badge>
     );
