@@ -37,6 +37,16 @@ function CreateTripModal({
   onClose,
 }: CreateTripModalProps) {
   const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<CreateTripFormData>({
+    title: '',
+    startDate: '',
+    endDate: '',
+  });
+
+  const isFormComplete =
+    formData.title.trim() !== '' &&
+    fromDateInputValue(formData.startDate) !== undefined &&
+    fromDateInputValue(formData.endDate) !== undefined;
 
   const fields = useMemo(
     () => [
@@ -44,19 +54,16 @@ function CreateTripModal({
         name: 'title',
         label: 'Trip title',
         placeholder: 'Tokyo Summer 2026',
-        required: true,
         variant: 'outline',
       }),
       createDateInputField({
         name: 'startDate',
         label: 'Estimated start date',
-        required: true,
         variant: 'outline',
       }),
       createDateInputField({
         name: 'endDate',
         label: 'Estimated end date',
-        required: true,
         variant: 'outline',
       }),
     ],
@@ -90,6 +97,7 @@ function CreateTripModal({
         initialData={{ title: '', startDate: '', endDate: '' }}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => setFormData(data as CreateTripFormData)}
         onSubmit={(data) => {
           void handleSubmit(data as CreateTripFormData);
         }}
@@ -98,7 +106,11 @@ function CreateTripModal({
             <Button type='button' variant='secondary' onClick={onClose}>
               Cancel
             </Button>
-            <Button type='submit' loading={isSubmitting}>
+            <Button
+              type='submit'
+              loading={isSubmitting}
+              disabled={isSubmitting || !isFormComplete}
+            >
               {isSubmitting ? 'Creating…' : 'Create trip'}
             </Button>
           </div>
