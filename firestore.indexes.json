@@ -1,19 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "preventives",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "householdId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "administeredAt",
-          "order": "DESCENDING"
-        }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

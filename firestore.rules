@@ -335,9 +335,9 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    // Preventives are read through a collection-group query, so household
-    // ownership comes from the denormalized field rather than path variables.
-    match /apps/nine-lives/{path=**}/preventives/{preventiveId} {
+    // Read via a collection-group query, so the wildcard must anchor the match path
+    // (not a literal prefix) and ownership uses the denormalized field, not a path variable.
+    match /{path=**}/preventives/{preventiveId} {
       function isPreventiveIdentityValid() {
         return request.resource.data.id == preventiveId
           && request.resource.data.householdId is string
