@@ -56,7 +56,7 @@ function WeightHistoryList({
 
       {shouldPaginate && (
         <div className='mt-3 flex justify-center'>
-          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' />
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' showFirstLast={pageCount >= 5} />
         </div>
       )}
     </div>

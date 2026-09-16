@@ -1244,7 +1244,13 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
             </div>
             {shouldPaginateEntries && (
               <div className='mt-3 flex justify-center'>
-                <Pagination page={entriesPage} pageCount={entriesPageCount} onPageChange={setEntriesPage} size='sm' />
+                <Pagination
+                  page={entriesPage}
+                  pageCount={entriesPageCount}
+                  onPageChange={setEntriesPage}
+                  size='sm'
+                  showFirstLast={entriesPageCount >= 5}
+                />
               </div>
             )}
             </div>

@@ -303,7 +303,13 @@ function VisitTimeline({
 
       {visibleVisits.length > PAGE_SIZE && (
         <div className='mt-3 flex justify-center'>
-          <Pagination page={clampedPage} pageCount={pageCount} onPageChange={setPage} size='sm' />
+          <Pagination
+            page={clampedPage}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            size='sm'
+            showFirstLast={pageCount >= 5}
+          />
         </div>
       )}
     </div>
