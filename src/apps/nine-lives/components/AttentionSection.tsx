@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 
-import { Badge, Button, DropdownMenu, Pagination } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Disclosure, Pagination, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Trash2 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import AvatarStack from '@/ui/AvatarStack';
 
 import { useAttentionFocus } from '../context/attentionFocusContext';
@@ -23,7 +23,6 @@ import {
 } from '../store/selectors';
 import type { VetClinic } from '../types';
 import { buildAttentionItems, type AttentionItem, type AttentionSeverity } from '../utils/attentionItems';
-import { getClinicContactMenuItems, handleClinicContactAction } from '../utils/clinicContactMenu';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
 import { usePagination } from '../utils/usePagination';
 
@@ -81,13 +80,24 @@ function formatDueLabel(timestamp: number, now: number): string {
   return `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`;
 }
 
-/** Severity maps onto the design system's existing warning/destructive tokens (light + dark mode already handled by those). Outline keeps it low-contrast rather than a loud solid fill. */
-function getSeverityBadge(severity: AttentionSeverity, dueLabel: string): { variant: 'destructive' | 'warning'; label: string } {
-  if (severity === 'now') {
-    return { variant: 'destructive', label: dueLabel === 'Today' ? 'Today' : 'Overdue' };
+/** Reminders only get a tag when they're actually overdue — "coming up this week" is the default state for everything here, so tagging it too was just noise. */
+function getReminderBadgeLabel(severity: AttentionSeverity): string | null {
+  return severity === 'now' ? 'Overdue' : null;
+}
+
+/**
+ * Visits get plain colored text instead of a pill: green for "today" (informational, not a
+ * warning — you're just going, nothing's wrong), red for genuinely missed/overdue. Nothing for
+ * later-this-week, same as reminders.
+ */
+function getVisitStatusText(severity: AttentionSeverity, dueLabel: string): { text: string; className: string } | null {
+  if (severity !== 'now') {
+    return null;
   }
 
-  return { variant: 'warning', label: 'This week' };
+  return dueLabel === 'Today'
+    ? { text: 'Today', className: 'text-success font-semibold' }
+    : { text: 'Overdue', className: 'text-destructive font-semibold' };
 }
 
 function AttentionSection({ householdId }: AttentionSectionProps) {
@@ -222,20 +232,28 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     return null;
   }
 
-  const renderBadge = (row: AttentionRow) => {
-    const badge = getSeverityBadge(row.severity, row.dueLabel);
+  const renderReminderBadge = (row: AttentionRow) => {
+    const label = getReminderBadgeLabel(row.severity);
+
+    if (!label) {
+      return null;
+    }
 
     return (
-      <Badge
-        variant={badge.variant}
-        outline
-        size='xs'
-        use={row.severity === 'now' ? 'alert' : 'status'}
-        className={join('border-transparent', badge.variant === 'destructive' ? 'bg-destructive/10' : 'bg-warning/10')}
-      >
-        {badge.label}
+      <Badge variant='destructive' outline size='xs' use='alert' className='bg-destructive/10 border-transparent'>
+        {label}
       </Badge>
     );
+  };
+
+  const renderVisitStatus = (row: AttentionRow) => {
+    const status = getVisitStatusText(row.severity, row.dueLabel);
+
+    if (!status) {
+      return null;
+    }
+
+    return <span className={join('text-sm', status.className)}>{status.text}</span>;
   };
 
   const renderRowAvatar = (row: AttentionRow, size: AvatarSize) =>
@@ -258,42 +276,71 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
       />
     );
 
-  const renderClinicInfo = (row: AttentionRow) => {
+  const renderClinicDetailsContent = (clinic: VetClinic, doctorName?: string | null) => {
+    const copyField = async (label: string, value: string) => {
+      const copied = await copyToClipboard(value);
+      if (copied) {
+        addToast({ title: `${label} copied`, description: `Clinic ${label.toLowerCase()} copied to your clipboard.` });
+      }
+    };
+
+    return (
+      <div className='w-64 space-y-2 p-3 text-sm'>
+        <p className='font-medium'>{clinic.name}</p>
+        {doctorName && <p className='text-muted-foreground'>Dr. {doctorName}</p>}
+        {clinic.phone && (
+          <div className='flex items-center justify-between gap-2'>
+            <span className='text-muted-foreground'>{clinic.phone}</span>
+            <Button type='button' variant='link' size='sm' onClick={() => void copyField('Phone', clinic.phone!)}>
+              Copy
+            </Button>
+          </div>
+        )}
+        {clinic.address && (
+          <div className='flex items-center justify-between gap-2'>
+            <span className='text-muted-foreground'>{clinic.address}</span>
+            <Button type='button' variant='link' size='sm' onClick={() => void copyField('Address', clinic.address!)}>
+              Copy
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /**
+   * Two different interaction patterns for the vet details, alternated across rows on purpose so
+   * both are visible side by side — pending a decision on which one to keep everywhere.
+   */
+  const renderClinicInfo = (row: AttentionRow, pattern: 'popover' | 'disclosure') => {
     if (!row.clinic) {
       return null;
     }
 
     const clinic = row.clinic;
-    const contactItems = getClinicContactMenuItems(clinic);
-    const label = row.doctorName ? `${clinic.name} · Dr. ${row.doctorName}` : clinic.name;
 
-    return (
-      <div className='mt-1 flex items-center gap-1'>
-        <p className='text-muted-foreground truncate text-sm'>{label}</p>
-        {contactItems.length > 0 && (
-          <DropdownMenu
-            items={contactItems}
-            onItemSelect={(value) => {
-              void handleClinicContactAction(value, clinic, addToast);
-            }}
-            placement='bottom'
-            alignment='start'
-            offset={4}
+    if (pattern === 'popover') {
+      return (
+        <div className='mt-1'>
+          <Popover
             trigger={
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                className='h-6 w-6 shrink-0 p-0'
-                aria-label={`Contact ${clinic.name}`}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <DotsVertical className='h-3.5 w-3.5' />
+              <Button type='button' variant='link' size='sm' className='h-auto p-0'>
+                Details
               </Button>
             }
-          />
-        )}
-      </div>
+            placement='bottom'
+            alignment='start'
+          >
+            {renderClinicDetailsContent(clinic, row.doctorName)}
+          </Popover>
+        </div>
+      );
+    }
+
+    return (
+      <Disclosure label='Details' buttonClassName='text-primary text-sm p-0 hover:underline' className='mt-1'>
+        {renderClinicDetailsContent(clinic, row.doctorName)}
+      </Disclosure>
     );
   };
 
@@ -304,9 +351,11 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
       <div className='grid gap-6 md:grid-cols-2'>
         {visitRows.length > 0 && (
           <div>
-            <h2 className='text-lg font-semibold'>Upcoming visits</h2>
+            <div className='flex items-center justify-between'>
+              <h2 className='text-lg font-semibold'>Upcoming visits</h2>
+            </div>
             <div className='mt-3 space-y-3'>
-              {visitRows.map((row) =>
+              {visitRows.map((row, index) =>
                 isSingleVisit ? (
                   <div key={row.key} className='rounded-lg border border-border p-4'>
                     <div className='flex items-center gap-3'>
@@ -314,15 +363,15 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                       <div className='min-w-0'>
                         <div className='flex flex-wrap items-center gap-2'>
                           <p className='text-base font-semibold'>{row.title}</p>
-                          {renderBadge(row)}
+                          {renderVisitStatus(row)}
                         </div>
                         <p className='text-muted-foreground text-sm'>
                           {row.subtitle} · {row.dueLabel}
                         </p>
-                        {renderClinicInfo(row)}
+                        {renderClinicInfo(row, 'popover')}
                       </div>
                     </div>
-                    <Button type='button' size='sm' onClick={row.onAction} className='mt-3 w-full sm:w-auto'>
+                    <Button type='button' variant='link' size='sm' onClick={row.onAction} className='mt-3 px-0'>
                       {row.actionLabel}
                     </Button>
                   </div>
@@ -334,17 +383,17 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                         <div className='min-w-0'>
                           <div className='flex flex-wrap items-center gap-2'>
                             <p className='text-sm font-medium'>{row.title}</p>
-                            {renderBadge(row)}
+                            {renderVisitStatus(row)}
                           </div>
                           <p className='text-muted-foreground text-sm'>
                             {row.subtitle} · {row.dueLabel}
                           </p>
-                          {renderClinicInfo(row)}
+                          {renderClinicInfo(row, index % 2 === 0 ? 'popover' : 'disclosure')}
                         </div>
                       </div>
                       <Button
                         type='button'
-                        variant='secondary'
+                        variant='link'
                         size='sm'
                         onClick={row.onAction}
                         className='shrink-0'
@@ -361,7 +410,12 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
         {otherRows.length > 0 && (
           <div>
-            <h2 className='text-lg font-semibold'>Keep an eye on</h2>
+            <div className='flex items-center justify-between'>
+              <h2 className='text-lg font-semibold'>Care reminders</h2>
+              <span className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
+                Take action
+              </span>
+            </div>
             <div className='divide-border divide-y'>
               {pagedOtherRows.map((row) => (
                 <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
@@ -370,7 +424,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                     <div className='min-w-0'>
                       <div className='flex flex-wrap items-center gap-2'>
                         <p className='text-sm font-medium'>{row.title}</p>
-                        {renderBadge(row)}
+                        {renderReminderBadge(row)}
                       </div>
                       <p className='text-muted-foreground text-sm'>
                         {row.subtitle}

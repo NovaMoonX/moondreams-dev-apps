@@ -63,13 +63,13 @@ function AvatarStack({ people, size = 'sm', max = 3, className }: AvatarStackPro
           initials={person.photoURL ? undefined : getInitials(person.name)}
           size={stackedSize}
           shape='circle'
-          className={join('ring-card ring-2', index > 0 && '-ml-2')}
+          className={join('ring-card ring-1', index > 0 && '-ml-2')}
         />
       ))}
       {overflowCount > 0 && (
         <span
           className={join(
-            'text-muted-foreground bg-muted border-border ring-card -ml-2 flex items-center justify-center rounded-full border ring-2',
+            'text-muted-foreground bg-muted border-border ring-card -ml-2 flex items-center justify-center rounded-full border ring-1',
             OVERFLOW_BADGE_SIZE_CLASSES[stackedSize],
           )}
         >
