@@ -1,4 +1,4 @@
-import type { Expense, ExpenseCategory } from '@apps/nine-lives/types';
+import type { Expense, ExpenseCategory, ExpenseLineItem } from '@apps/nine-lives/types';
 
 export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'adoption_fee',
@@ -30,6 +30,15 @@ export function getExpenseCategoryLabel(category: ExpenseCategory): string {
   };
 
   return labels[category] ?? 'Other';
+}
+
+export function calculateExpenseItemsTotal(items: Pick<ExpenseLineItem, 'amount'>[]): number {
+  return items.reduce((total, item) => total + item.amount, 0);
+}
+
+/** The distinct categories across an expense's line items, in the order they first appear. */
+export function getExpenseCategories(expense: Pick<Expense, 'items'>): ExpenseCategory[] {
+  return Array.from(new Set(expense.items.map((item) => item.category)));
 }
 
 export function getRecurringCycleCount(

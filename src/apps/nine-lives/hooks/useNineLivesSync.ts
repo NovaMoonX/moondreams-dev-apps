@@ -13,6 +13,7 @@ import { startCatsListener } from '../store/listeners/catsListener';
 import { startCustomHealthRecordTypesListener } from '../store/listeners/customHealthRecordTypesListener';
 import { startCustomPreventiveProductsListener } from '../store/listeners/customPreventiveProductsListener';
 import { startCustomPreventiveTypesListener } from '../store/listeners/customPreventiveTypesListener';
+import { startCustomSymptomQuickTagsListener } from '../store/listeners/customSymptomQuickTagsListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
@@ -32,6 +33,7 @@ import { setCatConditions } from '../store/slices/catConditionsSlice';
 import { setCustomHealthRecordTypes } from '../store/slices/customHealthRecordTypesSlice';
 import { setCustomPreventiveProducts } from '../store/slices/customPreventiveProductsSlice';
 import { setCustomPreventiveTypes } from '../store/slices/customPreventiveTypesSlice';
+import { setCustomSymptomQuickTags } from '../store/slices/customSymptomQuickTagsSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setExpenses } from '../store/slices/expensesSlice';
@@ -98,6 +100,7 @@ export function useNineLivesSync(
       dispatch(setWeightEntries([]));
       dispatch(setCatConditions([]));
       dispatch(setSymptoms([]));
+      dispatch(setCustomSymptomQuickTags([]));
       return;
     }
 
@@ -173,6 +176,12 @@ export function useNineLivesSync(
     const unsubscribeSymptoms = startSymptomsListener(householdId, (symptoms) => {
       dispatch(setSymptoms(symptoms));
     });
+    const unsubscribeCustomSymptomQuickTags = startCustomSymptomQuickTagsListener(
+      householdId,
+      (tags) => {
+        dispatch(setCustomSymptomQuickTags(tags));
+      },
+    );
 
     return () => {
       unsubscribeCats();
@@ -194,6 +203,7 @@ export function useNineLivesSync(
       unsubscribeWeightEntries();
       unsubscribeCatConditions();
       unsubscribeSymptoms();
+      unsubscribeCustomSymptomQuickTags();
     };
   }, [dispatch, householdId]);
 

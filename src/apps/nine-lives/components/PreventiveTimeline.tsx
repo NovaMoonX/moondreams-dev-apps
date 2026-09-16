@@ -1,7 +1,10 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Pagination } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
 import type { Cat, CustomPreventiveType, Preventive } from '@apps/nine-lives/types';
+import { usePagination } from '@apps/nine-lives/utils/usePagination';
+
+const PAGE_SIZE = 5;
 
 interface PreventiveTimelineProps {
   preventives: Preventive[];
@@ -34,14 +37,16 @@ function PreventiveTimeline({ preventives, customTypes, cats = [], catId, onEdit
   const sortedPreventives = [...preventives].sort(
     (left, right) => right.administeredAt - left.administeredAt,
   );
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(sortedPreventives, PAGE_SIZE);
 
   if (sortedPreventives.length === 0) {
     return <p className='text-muted-foreground text-sm'>No preventive doses logged yet.</p>;
   }
 
   return (
-    <div className='divide-border divide-y'>
-      {sortedPreventives.map((preventive) => (
+    <div>
+      <div className='divide-border divide-y'>
+      {pagedItems.map((preventive) => (
         <div key={preventive.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
           <div className='min-w-0'>
             <strong className='text-sm'>{preventive.name}</strong>
@@ -77,6 +82,13 @@ function PreventiveTimeline({ preventives, customTypes, cats = [], catId, onEdit
           ) : null}
         </div>
       ))}
+      </div>
+
+      {shouldPaginate && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' showFirstLast={pageCount >= 5} />
+        </div>
+      )}
     </div>
   );
 }

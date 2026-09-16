@@ -7,6 +7,7 @@ import {
   FormFactories,
   Input,
   Modal,
+  Pagination,
   Select,
   Tabs,
   TabsContent,
@@ -47,8 +48,11 @@ import {
   convertWeight,
   getLitterEntryEndingWeight,
 } from '@apps/nine-lives/utils/litterCalculators';
+import { usePagination } from '@apps/nine-lives/utils/usePagination';
 
 import DetailsDisclosure from './DetailsDisclosure';
+import TrendLineChart from './TrendLineChart';
+import ViewToggle, { type ViewToggleValue } from './ViewToggle';
 
 const { input, select, textarea, custom } = FormFactories;
 
@@ -982,6 +986,7 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
   const [sortOption, setSortOption] = useState<'newest' | 'oldest'>('newest');
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
+  const [activeView, setActiveView] = useState<ViewToggleValue>('list');
 
   const littersById = useMemo(() => new Map(litters.map((litter) => [litter.id, litter])), [litters]);
 
@@ -1000,6 +1005,50 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
         null,
       ),
     [boxEntriesAscending],
+  );
+
+  const entriesWithUsage = useMemo(
+    () =>
+      boxEntriesAscending.map((entry, index) => {
+        const previous = index > 0 ? boxEntriesAscending[index - 1] : null;
+        const usage = previous
+          ? convertWeight(getLitterEntryEndingWeight(previous), previous.weightUnit, entry.weightUnit) -
+            entry.weightBefore
+          : null;
+        const litter = littersById.get(entry.litterId) ?? null;
+        const usageCost =
+          usage !== null && usage > 0 && litter ? calculateLitterUsageCost(usage, entry.weightUnit, litter) : null;
+
+        return { entry, index, usage, usageCost, litter };
+      }),
+    [boxEntriesAscending, littersById],
+  );
+
+  const visibleListEntries = useMemo(
+    () =>
+      entriesWithUsage
+        .filter(({ entry }) => !showOnlyChanges || entry.isFullChange)
+        .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index)),
+    [entriesWithUsage, showOnlyChanges, sortOption],
+  );
+  const {
+    page: entriesPage,
+    pageCount: entriesPageCount,
+    setPage: setEntriesPage,
+    pagedItems: pagedListEntries,
+    shouldPaginate: shouldPaginateEntries,
+  } = usePagination(visibleListEntries, 5);
+
+  const chartUnit = boxEntriesAscending[boxEntriesAscending.length - 1]?.weightUnit ?? 'lb';
+  const usageChartData = useMemo(
+    () =>
+      entriesWithUsage
+        .filter(({ usage }) => usage !== null && usage >= 0)
+        .map(({ entry, usage }) => ({
+          x: entry.loggedAt,
+          y: convertWeight(usage as number, entry.weightUnit, chartUnit),
+        })),
+    [entriesWithUsage, chartUnit],
   );
 
   const closeForm = () => {
@@ -1114,99 +1163,140 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
       )}
 
       {boxEntriesAscending.length > 1 && (
-        <div className='mt-3 flex flex-wrap items-center gap-x-4 gap-y-2'>
-          <div className='flex items-center gap-2'>
-            <span className='text-muted-foreground text-sm'>Sort by:</span>
-            <div className='max-w-40 flex-1'>
-              <Select
-                options={sortOptions}
-                value={sortOption}
-                onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
-                size='sm'
-              />
+        <div className='mt-3'>
+          <div className='mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2'>
+            <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+              <div className='flex items-center gap-2'>
+                <span className='text-muted-foreground text-sm'>Sort by:</span>
+                <div className='max-w-40 flex-1'>
+                  <Select
+                    options={sortOptions}
+                    value={sortOption}
+                    onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
+                    size='sm'
+                  />
+                </div>
+              </div>
+              {boxEntriesAscending.some((entry) => entry.isFullChange) && (
+                <label className='flex items-center gap-2 text-sm'>
+                  <Toggle checked={showOnlyChanges} onCheckedChange={setShowOnlyChanges} size='sm' />
+                  Full changes only
+                </label>
+              )}
             </div>
+            <ViewToggle value={activeView} onChange={setActiveView} />
           </div>
-          {boxEntriesAscending.some((entry) => entry.isFullChange) && (
-            <label className='flex items-center gap-2 text-sm'>
-              <Toggle checked={showOnlyChanges} onCheckedChange={setShowOnlyChanges} size='sm' />
-              Full changes only
-            </label>
+
+          {activeView === 'list' ? (
+            <div>
+            <div className='divide-border divide-y'>
+              {pagedListEntries
+                .map(({ entry, usage, usageCost, litter }) => {
+                  const refillAmount = entry.refillWeight !== null ? entry.refillWeight - entry.weightBefore : null;
+                  const litterLabel = litter
+                    ? `${litter.brand} (${getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)})`
+                    : 'Deleted litter';
+
+                  return (
+                    <div key={entry.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
+                      <div className='min-w-0'>
+                        <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
+                          <strong className='text-sm'>{formatWeight(entry.weightBefore, entry.weightUnit)}</strong>
+                          <span className='text-muted-foreground text-sm'>{formatDateTime(entry.loggedAt)}</span>
+                          {entry.refillWeight !== null && (
+                            <Badge variant={entry.isFullChange ? 'success' : 'muted'} size='xs'>
+                              {entry.isFullChange ? 'Full change' : 'Topped off'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className='text-muted-foreground text-sm'>{litterLabel}</div>
+                        {usage !== null && (
+                          <div className='text-sm'>
+                            {usage >= 0
+                              ? `${formatWeight(usage, entry.weightUnit)} used since previous check`
+                              : `${formatWeight(Math.abs(usage), entry.weightUnit)} more than expected since previous check`}
+                            {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
+                          </div>
+                        )}
+                        {entry.refillWeight !== null && (
+                          <div className='text-muted-foreground text-sm'>
+                            {entry.isFullChange ? 'Refilled' : 'Topped off'} to{' '}
+                            {formatWeight(entry.refillWeight, entry.weightUnit)}
+                            {refillAmount !== null && refillAmount > 0 && ` (+${formatWeight(refillAmount, entry.weightUnit)})`}
+                          </div>
+                        )}
+                        {entry.notes && <div className='text-muted-foreground text-sm'>{entry.notes}</div>}
+                      </div>
+                      <Button
+                        type='button'
+                        variant='link'
+                        size='sm'
+                        onClick={() => {
+                          setEditingEntry(entry);
+                          setIsFormOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  );
+                })}
+            </div>
+            {shouldPaginateEntries && (
+              <div className='mt-3 flex justify-center'>
+                <Pagination
+                  page={entriesPage}
+                  pageCount={entriesPageCount}
+                  onPageChange={setEntriesPage}
+                  size='sm'
+                  showFirstLast={entriesPageCount >= 5}
+                />
+              </div>
+            )}
+            </div>
+          ) : (
+            <TrendLineChart
+              data={usageChartData}
+              yLabel={`Usage (${chartUnit})`}
+              formatY={(value: number) => `${value.toFixed(1)} ${chartUnit}`}
+              emptyLabel='Log at least two weigh-ins to see a usage trend chart.'
+            />
           )}
         </div>
       )}
 
-      <div className='mt-3'>
-        {boxEntriesAscending.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>No weigh-ins logged for this box yet.</p>
-        ) : (
-          <div className='divide-border divide-y'>
-            {boxEntriesAscending
-              .map((entry, index) => ({ entry, index }))
-              .filter(({ entry }) => !showOnlyChanges || entry.isFullChange)
-              .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index))
-              .map(({ entry, index }) => {
-                const previous = index > 0 ? boxEntriesAscending[index - 1] : null;
-                const usage = previous
-                  ? convertWeight(getLitterEntryEndingWeight(previous), previous.weightUnit, entry.weightUnit) -
-                    entry.weightBefore
-                  : null;
-                const litter = littersById.get(entry.litterId) ?? null;
-                const usageCost =
-                  usage !== null && usage > 0 && litter
-                    ? calculateLitterUsageCost(usage, entry.weightUnit, litter)
-                    : null;
-                const refillAmount = entry.refillWeight !== null ? entry.refillWeight - entry.weightBefore : null;
-                const litterLabel = litter
-                  ? `${litter.brand} (${getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)})`
-                  : 'Deleted litter';
-
-                return (
-                  <div key={entry.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
-                    <div className='min-w-0'>
-                      <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
-                        <strong className='text-sm'>{formatWeight(entry.weightBefore, entry.weightUnit)}</strong>
-                        <span className='text-muted-foreground text-sm'>{formatDateTime(entry.loggedAt)}</span>
-                        {entry.refillWeight !== null && (
-                          <Badge variant={entry.isFullChange ? 'success' : 'muted'} size='xs'>
-                            {entry.isFullChange ? 'Full change' : 'Topped off'}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className='text-muted-foreground text-sm'>{litterLabel}</div>
-                      {usage !== null && (
-                        <div className='text-sm'>
-                          {usage >= 0
-                            ? `${formatWeight(usage, entry.weightUnit)} used since previous check`
-                            : `${formatWeight(Math.abs(usage), entry.weightUnit)} more than expected since previous check`}
-                          {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
-                        </div>
-                      )}
-                      {entry.refillWeight !== null && (
-                        <div className='text-muted-foreground text-sm'>
-                          {entry.isFullChange ? 'Refilled' : 'Topped off'} to{' '}
-                          {formatWeight(entry.refillWeight, entry.weightUnit)}
-                          {refillAmount !== null && refillAmount > 0 && ` (+${formatWeight(refillAmount, entry.weightUnit)})`}
-                        </div>
-                      )}
-                      {entry.notes && <div className='text-muted-foreground text-sm'>{entry.notes}</div>}
-                    </div>
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      onClick={() => {
-                        setEditingEntry(entry);
-                        setIsFormOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
+      {boxEntriesAscending.length <= 1 && (
+        <div className='mt-3'>
+          {boxEntriesAscending.length === 0 ? (
+            <p className='text-muted-foreground text-sm'>No weigh-ins logged for this box yet.</p>
+          ) : (
+            entriesWithUsage.map(({ entry, litter }) => (
+              <div key={entry.id} className='flex items-start justify-between gap-3 py-2'>
+                <div className='min-w-0'>
+                  <strong className='text-sm'>{formatWeight(entry.weightBefore, entry.weightUnit)}</strong>{' '}
+                  <span className='text-muted-foreground text-sm'>{formatDateTime(entry.loggedAt)}</span>
+                  <div className='text-muted-foreground text-sm'>
+                    {litter
+                      ? `${litter.brand} (${getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)})`
+                      : 'Deleted litter'}
                   </div>
-                );
-              })}
-          </div>
-        )}
-      </div>
+                </div>
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  onClick={() => {
+                    setEditingEntry(entry);
+                    setIsFormOpen(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       <LitterEntryFormModal
         key={editingEntry?.id ?? 'new'}

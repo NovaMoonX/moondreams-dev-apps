@@ -63,6 +63,14 @@ export const selectCustomPreventiveTypesByHousehold =
         )
       : [];
 
+export const selectCustomSymptomQuickTagsByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.customSymptomQuickTags.items.filter(
+          (tag) => tag.householdId === householdId,
+        )
+      : [];
+
 export const selectSymptomsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.symptoms.items.filter((symptom) => symptom.catId === catId) : [];
 

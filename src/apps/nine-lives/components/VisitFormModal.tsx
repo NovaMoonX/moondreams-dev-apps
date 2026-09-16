@@ -34,13 +34,24 @@ import {
 import type {
   Cat,
   CatCondition,
+  ExpenseLineItem,
   Symptom,
   Visit,
   VisitReason,
 } from '../types';
 import type { VisitOutcome } from '../store/actions/visitsActions';
-import { getDefaultVisitTitle } from '../utils/dateHelpers';
+import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
+import { getVisitOptions } from '../utils/visitOptions';
+import CatPillSelector from './CatPillSelector';
 import DetailsDisclosure from './DetailsDisclosure';
+import ExpenseLineItemsField from './ExpenseLineItemsField';
+
+export interface VisitExpenseDraft {
+  catIds: string[];
+  items: ExpenseLineItem[];
+  incurredAt: number;
+  label: string | null;
+}
 
 interface VisitFormModalProps {
   isOpen: boolean;
@@ -54,7 +65,7 @@ interface VisitFormModalProps {
   onSubmit: (
     visit: Partial<Visit> & Pick<Visit, 'catIds' | 'reason' | 'scheduledAt'>,
   ) => Promise<void> | void;
-  onComplete?: (outcome: VisitOutcome) => Promise<void> | void;
+  onComplete?: (outcome: VisitOutcome, expenseDraft?: VisitExpenseDraft) => Promise<void> | void;
   onCancelVisit?: () => Promise<void> | void;
   onReopenVisit?: () => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
@@ -81,7 +92,7 @@ interface VisitFormValues {
   moreDetails: VisitMoreDetailsValue;
 }
 
-const { checkboxGroup, custom } = FormFactories;
+const { custom } = FormFactories;
 
 const REASON_OPTIONS = [
   { label: 'Checkup', value: 'checkup' },
@@ -864,7 +875,74 @@ function VisitOutcomeReview({
           Back
         </Button>
         <Button type='button' onClick={onConfirm} loading={isSubmitting}>
-          {isSubmitting ? 'Completing…' : 'Complete visit'}
+          Continue
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function VisitOutcomeExpenseStep({
+  visit,
+  isSubmitting,
+  onSkip,
+  onConfirm,
+}: {
+  visit: Visit;
+  isSubmitting: boolean;
+  onSkip: () => void;
+  onConfirm: (expenseDraft: VisitExpenseDraft) => void;
+}) {
+  const [items, setItems] = useState<LineItemValue[]>(() => [createEmptyLineItem()]);
+
+  const validItems = items.filter((item) => {
+    const amount = Number(item.amount);
+    return Number.isFinite(amount) && amount > 0;
+  });
+  const isValid = validItems.length > 0;
+
+  const handleAdd = () => {
+    if (!isValid) {
+      return;
+    }
+
+    onConfirm({
+      catIds: visit.catIds,
+      items: validItems.map((item) => ({
+        id: item.id,
+        category: 'other',
+        label: item.label.trim() || null,
+        amount: Number(item.amount),
+      })),
+      incurredAt: visit.completedAt ?? visit.scheduledAt,
+      label: null,
+    });
+  };
+
+  return (
+    <div className='space-y-4'>
+      <p className='text-muted-foreground text-sm'>
+        Want to log an expense for this visit? You can always add one later.
+      </p>
+
+      <ExpenseLineItemsField value={items} onValueChange={setItems} disabled={isSubmitting} />
+
+      <div className='flex items-center justify-between gap-2'>
+        <Button
+          type='button'
+          variant='secondary'
+          onClick={onSkip}
+          disabled={isSubmitting}
+        >
+          Skip
+        </Button>
+        <Button
+          type='button'
+          onClick={handleAdd}
+          loading={isSubmitting}
+          disabled={!isValid}
+        >
+          {isSubmitting ? 'Completing…' : 'Complete with expense'}
         </Button>
       </div>
     </div>
@@ -872,13 +950,15 @@ function VisitOutcomeReview({
 }
 
 function VisitOutcomeForm({
+  visit,
   cats,
   isSubmitting,
   onComplete,
 }: {
+  visit: Visit;
   cats: Cat[];
   isSubmitting: boolean;
-  onComplete: (outcome: VisitOutcome) => Promise<void> | void;
+  onComplete: (outcome: VisitOutcome, expenseDraft?: VisitExpenseDraft) => Promise<void> | void;
 }) {
   const [summary, setSummary] = useState('');
   const [catValues, setCatValues] = useState<
@@ -892,9 +972,21 @@ function VisitOutcomeForm({
   const [pendingOutcome, setPendingOutcome] = useState<VisitOutcome | null>(
     null,
   );
+  const [showExpenseStep, setShowExpenseStep] = useState(false);
 
   const updateCatValue = (catId: string, value: VisitOutcomeCatValue) =>
     setCatValues((current) => ({ ...current, [catId]: value }));
+
+  if (showExpenseStep && pendingOutcome) {
+    return (
+      <VisitOutcomeExpenseStep
+        visit={visit}
+        isSubmitting={isSubmitting}
+        onSkip={() => void onComplete(pendingOutcome)}
+        onConfirm={(expenseDraft) => void onComplete(pendingOutcome, expenseDraft)}
+      />
+    );
+  }
 
   if (pendingOutcome) {
     return (
@@ -908,7 +1000,7 @@ function VisitOutcomeForm({
             current ? removeReviewItem(current, item) : current,
           )
         }
-        onConfirm={() => void onComplete(pendingOutcome)}
+        onConfirm={() => setShowExpenseStep(true)}
       />
     );
   }
@@ -966,7 +1058,10 @@ function VisitOutcomeForm({
         <Button
           type='button'
           variant='secondary'
-          onClick={() => void onComplete({})}
+          onClick={() => {
+            setPendingOutcome({});
+            setShowExpenseStep(true);
+          }}
           disabled={isSubmitting}
         >
           Complete without entries
@@ -1005,13 +1100,7 @@ function VisitFormModal({
   const showOutcome = Boolean(isCompleting && initialVisit && onComplete);
   const formId = initialVisit?.id ?? 'new-nine-lives-visit';
   const originalVisitOptions = useMemo(
-    () =>
-      visits
-        .filter((visit) => visit.id !== initialVisit?.id)
-        .map((visit) => ({
-          label: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
-          value: visit.id,
-        })),
+    () => getVisitOptions(visits, { excludeVisitId: initialVisit?.id }),
     [visits, initialVisit?.id],
   );
   const defaultClinicAndDoctor = useMemo(() => {
@@ -1039,10 +1128,18 @@ function VisitFormModal({
 
   const fields = useMemo(
     () => [
-      checkboxGroup({
+      custom({
         name: 'catIds',
         label: 'Cats',
-        options: cats.map((cat) => ({ label: cat.name, value: cat.id })),
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={cats.map((cat) => ({ label: cat.name, value: cat.id, photoURL: cat.photoURL }))}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       custom({
         name: 'scheduledAt',
@@ -1138,6 +1235,7 @@ function VisitFormModal({
     >
       {showOutcome ? (
         <VisitOutcomeForm
+          visit={initialVisit!}
           cats={cats.filter((cat) => initialVisit?.catIds.includes(cat.id))}
           isSubmitting={isSubmitting}
           onComplete={onComplete!}

@@ -415,7 +415,7 @@ The shipped client keeps visits in the household Redux sync and exposes scheduli
 Path: `apps/nine-lives/conditionLibrary/{conditionId}`
 
 ```typescript
-type ConditionCategory = 'illness' | 'injury' | 'chronic' | 'parasite' | 'allergy' | 'other';
+type ConditionCategory = 'illness' | 'injury' | 'chronic' | 'parasite' | 'allergy';
 
 interface LibraryCondition {
   id: string;
@@ -508,7 +508,7 @@ interface LibraryVaccine {
 
 ### 14. Expense
 
-Path: `apps/nine-lives/households/{householdId}/cats/{catId}/expenses/{expenseId}`
+Path: `apps/nine-lives/households/{householdId}/expenses/{expenseId}`
 
 ```typescript
 type ExpenseCategory =
@@ -525,22 +525,33 @@ type ExpenseCategory =
   | 'other';
 type RecurrenceInterval = 'monthly' | 'yearly';
 
+interface ExpenseLineItem {
+  id: string;
+  category: ExpenseCategory;
+  label: string | null;
+  amount: number;
+}
+
 interface Expense {
   id: string;
-  catId: string;
-  category: ExpenseCategory;
-  amount: number;
+  householdId: string;
+  catIds: string[];
+  items: ExpenseLineItem[]; // e.g. exam + bloodwork for one vet visit; always at least one
+  amount: number; // denormalized sum of items[].amount
+  label: string | null;
   isRecurring: boolean;
-  recurrenceInterval?: RecurrenceInterval;
+  recurrenceInterval: RecurrenceInterval | null;
+  recurrenceEndedAt: number | null;
   incurredAt: number;
-  notes?: string;
+  visitId: string | null;
+  notes: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
 }
 ```
 
-`ExpenseCategory` doubles as the default preset list on the expense form — no separate template collection needed.
+`ExpenseCategory` doubles as the default preset list on each line item — no separate template collection needed. An expense can be attached to more than one cat via `catIds`, the same tradeoff as `HealthRecord` and `Visit`.
 
 ### 15. Emergency Info
 

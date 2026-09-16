@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
+import { Activity, Pill, Scale, Stethoscope, Syringe } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -89,31 +90,32 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
   const detailsCat = editingCat ?? pendingDetailsCat;
   const { option } = DropdownMenuFactories;
+  const iconClassName = 'h-4 w-4';
   const logMenuItems = [
     option({
-      label: 'Log vaccination',
+      label: 'Vaccination',
       value: 'log-vaccination',
-      description: 'Add a vaccination record for a cat.',
+      icon: <Syringe className={iconClassName} />,
     }),
     option({
-      label: 'Log preventive / med',
+      label: 'Preventive / med',
       value: 'log-preventive',
-      description: 'Add a preventive or medication dose for one or more cats.',
+      icon: <Pill className={iconClassName} />,
     }),
     option({
-      label: 'Log weight',
+      label: 'Weight',
       value: 'log-weight',
-      description: 'Add a weight entry for a cat.',
+      icon: <Scale className={iconClassName} />,
     }),
     option({
-      label: 'Log condition',
+      label: 'Condition',
       value: 'log-condition',
-      description: 'Add a condition for a cat.',
+      icon: <Stethoscope className={iconClassName} />,
     }),
     option({
-      label: 'Log symptom',
+      label: 'Symptom',
       value: 'log-symptom',
-      description: 'Add a symptom for a cat.',
+      icon: <Activity className={iconClassName} />,
     }),
   ];
 

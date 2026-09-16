@@ -25,9 +25,12 @@ import {
   selectCustomPreventiveProductsByHousehold,
   selectCustomPreventiveTypesByHousehold,
   selectDoctorsByHousehold,
+  selectVisitsByHousehold,
 } from '@apps/nine-lives/store/selectors';
 import type { Preventive, PreventiveType } from '@apps/nine-lives/types';
+import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
+import CatPillSelector from './CatPillSelector';
 import DetailsDisclosure from './DetailsDisclosure';
 
 const NEW_PRODUCT_VALUE = '__new_preventive_product__';
@@ -190,12 +193,14 @@ function AdditionalDetailsFields({
   disabled,
   clinicOptions,
   doctorOptions,
+  visitOptions,
 }: {
   value: AdditionalDetailsValue;
   onValueChange: (value: AdditionalDetailsValue) => void;
   disabled?: boolean;
   clinicOptions: { label: string; value: string }[];
   doctorOptions: { label: string; value: string }[];
+  visitOptions: { label: string; value: string }[];
 }) {
   const update = (changes: Partial<AdditionalDetailsValue>) =>
     onValueChange({ ...value, ...changes });
@@ -232,13 +237,13 @@ function AdditionalDetailsFields({
           />
         </div>
         <div className='space-y-1'>
-          <Label className='text-sm'>Linked visit ID</Label>
-          <Input
+          <Label className='text-sm'>Linked visit</Label>
+          <Select
+            options={[{ text: 'None', value: '' }, ...visitOptions.map((option) => ({ text: option.label, value: option.value }))]}
             value={value.linkedVisitId}
-            onChange={(event) => update({ linkedVisitId: event.target.value })}
-            placeholder='visit-id'
-            variant='outline'
+            placeholder='Select a visit'
             disabled={disabled}
+            onChange={(linkedVisitId) => update({ linkedVisitId })}
           />
         </div>
       </div>
@@ -262,6 +267,7 @@ function PreventiveFormModal({
   const { confirm } = useActionModal();
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const customProducts = useAppSelector(
     selectCustomPreventiveProductsByHousehold(householdId),
     shallowEqual,
@@ -288,12 +294,21 @@ function PreventiveFormModal({
     ],
     [doctors],
   );
+  const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
   const fields = useMemo(
     () => [
-      FormFactories.checkboxGroup({
+      FormFactories.custom({
         name: 'catIds',
         label: 'Cats',
-        options: catOptions,
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={catOptions}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       FormFactories.custom({
         name: 'product',
@@ -342,12 +357,13 @@ function PreventiveFormModal({
             disabled={props.disabled}
             clinicOptions={clinicOptions}
             doctorOptions={doctorOptions}
+            visitOptions={visitOptions}
           />
         ),
         colSpan: 'full',
       }),
     ],
-    [catOptions, clinicOptions, customProducts, customTypes, doctorOptions],
+    [catOptions, clinicOptions, customProducts, customTypes, doctorOptions, visitOptions],
   );
 
   const handleSubmit = async (data: PreventiveFormValues) => {

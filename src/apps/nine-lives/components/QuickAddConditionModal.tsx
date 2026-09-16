@@ -45,6 +45,7 @@ function QuickAddConditionModal({ isOpen, householdId, cats, onClose }: QuickAdd
   return (
     <CatConditionFormModal
       isOpen={isOpen}
+      householdId={householdId}
       libraryConditions={libraryConditions}
       catOptions={catOptions}
       isSubmitting={isSubmitting}

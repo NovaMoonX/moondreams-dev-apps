@@ -2,9 +2,13 @@ import { useMemo } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
+import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
+import { selectVisitsByHousehold } from '@apps/nine-lives/store/selectors';
 import type { WeightEntry } from '@apps/nine-lives/types';
+import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 interface WeightEntryFormValues {
   catId?: string;
@@ -15,6 +19,7 @@ interface WeightEntryFormValues {
 }
 
 interface WeightEntryFormFieldsProps {
+  householdId?: string;
   catName?: string;
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
@@ -31,6 +36,7 @@ interface WeightEntryFormFieldsProps {
 const { input, select } = FormFactories;
 
 function WeightEntryFormFields({
+  householdId,
   catName,
   catOptions,
   initialWeightEntry,
@@ -40,9 +46,15 @@ function WeightEntryFormFields({
   onCancel,
 }: WeightEntryFormFieldsProps) {
   const { confirm } = useActionModal();
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const isEditing = Boolean(initialWeightEntry?.id);
   const formId = initialWeightEntry?.id ?? 'new-nine-lives-weight-entry';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
+
+  const visitOptions = useMemo(
+    () => [{ label: 'None', value: '' }, ...getVisitOptions(visits)],
+    [visits],
+  );
 
   const fields = useMemo(
     () => [
@@ -75,15 +87,13 @@ function WeightEntryFormFields({
         required: true,
         variant: 'outline',
       }),
-      // TODO: replace with a select populated from this cat's visits once visit records exist.
-      input({
+      select({
         name: 'linkedVisitId',
-        label: 'Linked visit ID (optional)',
-        placeholder: initialWeightEntry?.linkedVisitId || 'visit-id',
-        variant: 'outline',
+        label: 'Linked visit (optional)',
+        options: visitOptions,
       }),
     ],
-    [showCatField, catOptions, initialWeightEntry],
+    [showCatField, catOptions, visitOptions, initialWeightEntry],
   );
 
   const handleSubmit = async (data: WeightEntryFormValues) => {

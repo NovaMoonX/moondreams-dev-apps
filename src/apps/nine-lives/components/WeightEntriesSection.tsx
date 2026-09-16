@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
@@ -13,6 +13,9 @@ import {
 } from '../store/actions/weightEntriesActions';
 import { selectWeightEntriesByCat } from '../store/selectors';
 import type { WeightEntry } from '../types';
+import { convertWeight } from '../utils/litterCalculators';
+import TrendLineChart from './TrendLineChart';
+import ViewToggle, { type ViewToggleValue } from './ViewToggle';
 import WeightEntryFormModal from './WeightEntryFormModal';
 import WeightHistoryList from './WeightHistoryList';
 
@@ -30,6 +33,17 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WeightEntry | null>(null);
+  const [activeView, setActiveView] = useState<ViewToggleValue>('list');
+
+  const chartUnit = weightEntries[0]?.unit ?? 'lb';
+  const chartData = useMemo(
+    () =>
+      weightEntries.map((entry) => ({
+        x: entry.measuredAt,
+        y: convertWeight(entry.weight, entry.unit, chartUnit),
+      })),
+    [weightEntries, chartUnit],
+  );
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -90,17 +104,31 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
         </Button>
       </div>
 
-      <WeightHistoryList
-        entries={weightEntries}
-        onEdit={(entry) => {
-          setEditingEntry(entry);
-          setIsModalOpen(true);
-        }}
-      />
+      <div className='flex justify-end'>
+        <ViewToggle value={activeView} onChange={setActiveView} />
+      </div>
+
+      {activeView === 'list' ? (
+        <WeightHistoryList
+          entries={weightEntries}
+          onEdit={(entry) => {
+            setEditingEntry(entry);
+            setIsModalOpen(true);
+          }}
+        />
+      ) : (
+        <TrendLineChart
+          data={chartData}
+          yLabel={`Weight (${chartUnit})`}
+          formatY={(value) => `${value.toFixed(1)} ${chartUnit}`}
+          emptyLabel='Log at least two weight entries to see a trend chart.'
+        />
+      )}
 
       <WeightEntryFormModal
         key={editingEntry?.id ?? 'new'}
         isOpen={isModalOpen}
+        householdId={householdId}
         catName={catName}
         initialWeightEntry={editingEntry}
         isSubmitting={isSubmitting}
