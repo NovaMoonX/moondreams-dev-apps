@@ -50,6 +50,7 @@ import {
 
 import DetailsDisclosure from './DetailsDisclosure';
 import TrendLineChart from './TrendLineChart';
+import ViewToggle, { type ViewToggleValue } from './ViewToggle';
 
 const { input, select, textarea, custom } = FormFactories;
 
@@ -983,7 +984,7 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
   const [sortOption, setSortOption] = useState<'newest' | 'oldest'>('newest');
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
-  const [activeView, setActiveView] = useState('list');
+  const [activeView, setActiveView] = useState<ViewToggleValue>('list');
 
   const littersById = useMemo(() => new Map(litters.map((litter) => [litter.id, litter])), [litters]);
 
@@ -1145,14 +1146,9 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
       )}
 
       {boxEntriesAscending.length > 1 && (
-        <Tabs value={activeView} onValueChange={setActiveView} tabsWidth='full' variant='pills' className='mt-3'>
-          <TabsList>
-            <TabsTrigger value='list'>List</TabsTrigger>
-            <TabsTrigger value='chart'>Chart</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value='list' className='pt-3'>
-            <div className='mb-3 flex flex-wrap items-center gap-x-4 gap-y-2'>
+        <div className='mt-3'>
+          <div className='mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2'>
+            <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
               <div className='flex items-center gap-2'>
                 <span className='text-muted-foreground text-sm'>Sort by:</span>
                 <div className='max-w-40 flex-1'>
@@ -1171,7 +1167,10 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
                 </label>
               )}
             </div>
+            <ViewToggle value={activeView} onChange={setActiveView} />
+          </div>
 
+          {activeView === 'list' ? (
             <div className='divide-border divide-y'>
               {entriesWithUsage
                 .filter(({ entry }) => !showOnlyChanges || entry.isFullChange)
@@ -1227,17 +1226,15 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
                   );
                 })}
             </div>
-          </TabsContent>
-
-          <TabsContent value='chart' className='pt-3'>
+          ) : (
             <TrendLineChart
               data={usageChartData}
               yLabel={`Usage (${chartUnit})`}
               formatY={(value: number) => `${value.toFixed(1)} ${chartUnit}`}
               emptyLabel='Log at least two weigh-ins to see a usage trend chart.'
             />
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
       )}
 
       {boxEntriesAscending.length <= 1 && (
