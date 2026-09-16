@@ -7,7 +7,7 @@ import { shallowEqual } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 
-import { createExpense } from '../store/actions/expensesActions';
+import { createExpense, deleteExpense, updateExpense } from '../store/actions/expensesActions';
 import {
   cancelVisit,
   completeVisit,
@@ -21,11 +21,12 @@ import {
   selectCatsByHousehold,
   selectClinicsByHousehold,
   selectDoctorsByHousehold,
+  selectExpensesByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
 import type { Expense, Visit } from '../types';
 import ExpenseFormModal from './ExpenseFormModal';
-import VisitFormModal from './VisitFormModal';
+import VisitFormModal, { type VisitExpenseDraft } from './VisitFormModal';
 import VisitTimeline from './VisitTimeline';
 
 interface VisitsSectionProps {
@@ -42,10 +43,11 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
+  const expenses = useAppSelector(selectExpensesByHousehold(householdId), shallowEqual);
   const [modalMode, setModalMode] = useState<VisitModalMode>(null);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [completedVisitForExpense, setCompletedVisitForExpense] = useState<Visit | null>(null);
+  const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
   const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
@@ -83,7 +85,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
     }
   };
 
-  const handleComplete = async (outcome: VisitOutcome = {}) => {
+  const handleComplete = async (outcome: VisitOutcome = {}, expenseDraft?: VisitExpenseDraft) => {
     if (!user?.uid || !selectedVisit) {
       return;
     }
@@ -98,24 +100,53 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
           outcome,
         }),
       ).unwrap();
+
+      if (expenseDraft) {
+        await dispatch(
+          createExpense({
+            householdId,
+            uid: user.uid,
+            expense: {
+              catIds: expenseDraft.catIds,
+              items: expenseDraft.items,
+              label: expenseDraft.label,
+              isRecurring: false,
+              incurredAt: expenseDraft.incurredAt,
+              visitId: completedVisit.id,
+            },
+          }),
+        ).unwrap();
+      }
+
       closeModal();
-      setCompletedVisitForExpense(completedVisit);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleAddExpenseForVisit = async (
+  const handleUpdateExpense = async (
     expense: Partial<Expense> & Pick<Expense, 'catIds' | 'items' | 'isRecurring' | 'incurredAt'>,
   ) => {
-    if (!user?.uid) {
+    if (!viewingExpense) {
       return;
     }
 
     setIsSubmittingExpense(true);
     try {
-      await dispatch(createExpense({ householdId, uid: user.uid, expense })).unwrap();
-      setCompletedVisitForExpense(null);
+      await dispatch(
+        updateExpense({ householdId, expenseId: viewingExpense.id, changes: expense }),
+      ).unwrap();
+      setViewingExpense(null);
+    } finally {
+      setIsSubmittingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    setIsSubmittingExpense(true);
+    try {
+      await dispatch(deleteExpense({ householdId, expenseId })).unwrap();
+      setViewingExpense(null);
     } finally {
       setIsSubmittingExpense(false);
     }
@@ -203,6 +234,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
       <VisitTimeline
         visits={visits}
         cats={cats}
+        expenses={expenses}
         onEdit={(visit) => {
           setSelectedVisit(visit);
           setModalMode('edit');
@@ -214,6 +246,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
         onReopen={(visit) => {
           void dispatch(reopenVisit({ householdId, visitId: visit.id }));
         }}
+        onViewExpense={setViewingExpense}
       />
 
       <VisitFormModal
@@ -233,19 +266,16 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
         onClose={closeModal}
       />
 
-      {completedVisitForExpense && (
+      {viewingExpense && (
         <ExpenseFormModal
           isOpen
           householdId={householdId}
           catOptions={catOptions}
-          initialExpense={{
-            catIds: completedVisitForExpense.catIds,
-            incurredAt: completedVisitForExpense.completedAt ?? completedVisitForExpense.scheduledAt,
-            visitId: completedVisitForExpense.id,
-          }}
+          initialExpense={viewingExpense}
           isSubmitting={isSubmittingExpense}
-          onSubmit={handleAddExpenseForVisit}
-          onClose={() => setCompletedVisitForExpense(null)}
+          onSubmit={handleUpdateExpense}
+          onDelete={handleDeleteExpense}
+          onClose={() => setViewingExpense(null)}
         />
       )}
     </section>
