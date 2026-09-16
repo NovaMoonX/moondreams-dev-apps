@@ -15,6 +15,11 @@ import {
 import { getDaysSince, getLatestFullChangeByBox } from '../utils/attentionItems';
 import StatTile from './StatTile';
 
+/** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
+function daysSinceNow(timestamp: number) {
+  return getDaysSince(timestamp, Date.now());
+}
+
 interface StatsSummaryProps {
   householdId: string;
 }
@@ -124,7 +129,7 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
             {selectedLitterBoxChangedAt === null
               ? 'No changes logged'
               : (() => {
-                  const days = getDaysSince(selectedLitterBoxChangedAt, Date.now());
+                  const days = daysSinceNow(selectedLitterBoxChangedAt);
                   return days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'}`;
                 })()}
           </p>

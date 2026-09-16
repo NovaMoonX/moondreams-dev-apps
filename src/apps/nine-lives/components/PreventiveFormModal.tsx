@@ -97,10 +97,10 @@ function getInitialProductChoice(preventive: PreventiveFormInitialValues | null 
   }
 
   if (PREVENTIVE_NAME_OPTIONS.includes(preventive.name as (typeof PREVENTIVE_NAME_OPTIONS)[number])) {
-    return { preset: preventive.name, customLabel: '' };
+    return { preset: preventive.name ?? PREVENTIVE_NAME_OPTIONS[0], customLabel: '' };
   }
 
-  return { preset: NEW_PRODUCT_VALUE, customLabel: preventive.name };
+  return { preset: NEW_PRODUCT_VALUE, customLabel: preventive.name ?? '' };
 }
 
 function getInitialTypeChoice(preventive: PreventiveFormInitialValues | null | undefined): TypeChoice {
@@ -112,7 +112,7 @@ function getInitialTypeChoice(preventive: PreventiveFormInitialValues | null | u
     return { preset: `custom:${preventive.customTypeId}`, customLabel: '' };
   }
 
-  return { preset: preventive.type, customLabel: '' };
+  return { preset: preventive.type ?? 'flea-tick', customLabel: '' };
 }
 
 function ProductField({

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -53,23 +53,18 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
+  const [handledFocusRequestedAt, setHandledFocusRequestedAt] = useState<number | undefined>(undefined);
 
-  useEffect(() => {
-    if (focusRequest?.kind !== 'visit-complete') {
-      return;
-    }
+  if (focusRequest?.kind === 'visit-complete' && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
 
     const target = visits.find((visit) => visit.id === focusRequest.visitId);
 
-    if (!target) {
-      return;
+    if (target) {
+      setSelectedVisit(target);
+      setModalMode('complete');
     }
-
-    setSelectedVisit(target);
-    setModalMode('complete');
-    // Only re-run when a new request comes in, not on every `visits` change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusRequest]);
+  }
 
   const closeModal = () => {
     setModalMode(null);

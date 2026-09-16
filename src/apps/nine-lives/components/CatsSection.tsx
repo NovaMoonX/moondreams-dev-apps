@@ -45,18 +45,24 @@ function CatsSection({ householdId }: CatsSectionProps) {
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
+  const [handledFocusRequestedAt, setHandledFocusRequestedAt] = useState<number | undefined>(undefined);
   const selectedCat = selectedCatId ? cats.find((cat) => cat.id === selectedCatId) ?? null : null;
 
+  const isCatFocusRequest =
+    focusRequest?.kind === 'vaccination-log-dose' || focusRequest?.kind === 'preventive-log-dose';
+
+  if (isCatFocusRequest && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
+    setSelectedCatId(focusRequest.catId);
+  }
+
   useEffect(() => {
-    if (focusRequest?.kind !== 'vaccination-log-dose' && focusRequest?.kind !== 'preventive-log-dose') {
+    if (!isCatFocusRequest) {
       return;
     }
 
-    setSelectedCatId(focusRequest.catId);
     sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // Only re-run when a new request comes in.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusRequest]);
+  }, [isCatFocusRequest, focusRequest]);
 
   const handleCreateCat = async (values: CatQuickAddValues) => {
     if (!user?.uid) {

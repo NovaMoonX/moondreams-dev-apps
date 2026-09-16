@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -60,24 +60,19 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
   const [editingVaccination, setEditingVaccination] = useState<Vaccination | null>(null);
   const [loggingDoseFor, setLoggingDoseFor] = useState<Vaccination | null>(null);
   const [historyRecordId, setHistoryRecordId] = useState<string | null>(null);
+  const [handledFocusRequestedAt, setHandledFocusRequestedAt] = useState<number | undefined>(undefined);
 
-  useEffect(() => {
-    if (focusRequest?.kind !== 'vaccination-log-dose') {
-      return;
-    }
+  if (focusRequest?.kind === 'vaccination-log-dose' && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
 
     const target = vaccinations.find((vaccination) => vaccination.id === focusRequest.vaccinationId);
 
-    if (!target) {
-      return;
+    if (target) {
+      setEditingVaccination(null);
+      setLoggingDoseFor(target);
+      setIsModalOpen(true);
     }
-
-    setEditingVaccination(null);
-    setLoggingDoseFor(target);
-    setIsModalOpen(true);
-    // Only re-run when a new request comes in, not on every `vaccinations` change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusRequest]);
+  }
 
   const closeModal = () => {
     setIsModalOpen(false);

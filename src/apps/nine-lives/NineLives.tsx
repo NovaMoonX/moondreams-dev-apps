@@ -11,6 +11,7 @@ import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
 
+import AttentionSection from './components/AttentionSection';
 import CatsSection from './components/CatsSection';
 import ClinicsSection from './components/ClinicsSection';
 import ExpensesSection from './components/ExpensesSection';
@@ -20,6 +21,7 @@ import HouseholdSwitcher from './components/HouseholdSwitcher';
 import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
 import StatsSummary from './components/StatsSummary';
 import VisitsSection from './components/VisitsSection';
+import { AttentionFocusContext, type AttentionFocusRequest } from './context/attentionFocusContext';
 import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import LitterLogSection from './components/LitterLogSection';
@@ -35,6 +37,7 @@ function NineLives() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(
     null,
   );
+  const [focusRequest, setFocusRequest] = useState<AttentionFocusRequest | null>(null);
 
   const households = useAppSelector((state) => {
     if (!user?.uid) {
@@ -172,26 +175,18 @@ function NineLives() {
         />
 
         {selectedHousehold && (
-          <StatsSummary householdId={selectedHousehold.id} />
-        )}
-
-        {selectedHousehold && (
-          <CatsSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <VisitsSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <ExpensesSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <LitterLogSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <ClinicsSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <HealthRecordsSection householdId={selectedHousehold.id} />
+          <AttentionFocusContext.Provider
+            value={{ focusRequest, requestFocus: setFocusRequest }}
+          >
+            <AttentionSection householdId={selectedHousehold.id} />
+            <StatsSummary householdId={selectedHousehold.id} />
+            <CatsSection householdId={selectedHousehold.id} />
+            <VisitsSection householdId={selectedHousehold.id} />
+            <ExpensesSection householdId={selectedHousehold.id} />
+            <LitterLogSection householdId={selectedHousehold.id} />
+            <ClinicsSection householdId={selectedHousehold.id} />
+            <HealthRecordsSection householdId={selectedHousehold.id} />
+          </AttentionFocusContext.Provider>
         )}
       </div>
     </div>

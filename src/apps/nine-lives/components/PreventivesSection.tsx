@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -67,26 +67,21 @@ function PreventivesSection({ householdId, catId, catName, cats }: PreventivesSe
   const [editingPreventive, setEditingPreventive] = useState<Preventive | null>(null);
   const [loggingDoseFor, setLoggingDoseFor] = useState<Preventive | null>(null);
   const [historyRecordId, setHistoryRecordId] = useState<string | null>(null);
+  const [handledFocusRequestedAt, setHandledFocusRequestedAt] = useState<number | undefined>(undefined);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
 
-  useEffect(() => {
-    if (focusRequest?.kind !== 'preventive-log-dose') {
-      return;
-    }
+  if (focusRequest?.kind === 'preventive-log-dose' && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
 
     const target = preventives.find((preventive) => preventive.id === focusRequest.preventiveId);
 
-    if (!target) {
-      return;
+    if (target) {
+      setEditingPreventive(null);
+      setLoggingDoseFor(target);
+      setIsModalOpen(true);
     }
-
-    setEditingPreventive(null);
-    setLoggingDoseFor(target);
-    setIsModalOpen(true);
-    // Only re-run when a new request comes in, not on every `preventives` change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusRequest]);
+  }
 
   const closeModal = () => {
     setIsModalOpen(false);

@@ -4,6 +4,8 @@ import type { VaccinationFormSubmission } from '@apps/nine-lives/store/actions/v
 
 import VaccinationFormFields, { type VaccinationFormInitialValues } from './VaccinationFormFields';
 
+export type { VaccinationFormInitialValues };
+
 interface VaccinationFormModalProps {
   isOpen: boolean;
   householdId?: string;
