@@ -1,4 +1,5 @@
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { X } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
 
@@ -15,7 +16,7 @@ interface ExpenseLineItemsFieldProps {
   disabled?: boolean;
 }
 
-/** Free-entry line-item rows (text + amount), each with its own Remove link and a running total. */
+/** Free-entry line-item rows (text + amount), each with its own remove (X) button and a running total. */
 function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineItemsFieldProps) {
   const updateItem = (id: string, changes: Partial<LineItemValue>) => {
     onValueChange(value.map((item) => (item.id === id ? { ...item, ...changes } : item)));
@@ -51,16 +52,15 @@ function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineIt
             />
           </div>
           {value.length > 1 && (
-            <Button
+            <button
               type='button'
-              variant='link'
-              size='sm'
-              className={`${mutedLinkClassName} shrink-0`}
               onClick={() => removeItem(item.id)}
               disabled={disabled}
+              aria-label='Remove line item'
+              className='text-muted-foreground hover:text-destructive shrink-0 disabled:pointer-events-none disabled:opacity-50'
             >
-              Remove
-            </Button>
+              <X className='h-4 w-4' />
+            </button>
           )}
         </div>
       ))}

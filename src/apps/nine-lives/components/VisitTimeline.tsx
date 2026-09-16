@@ -274,16 +274,6 @@ function VisitTimeline({
                       Reopen
                     </Button>
                   )}
-                  {onEdit && (
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      onClick={() => onEdit(visit)}
-                    >
-                      Edit
-                    </Button>
-                  )}
                   {onViewExpense && linkedExpense && (
                     <Button
                       type='button'
@@ -292,6 +282,16 @@ function VisitTimeline({
                       onClick={() => onViewExpense(linkedExpense)}
                     >
                       View expense
+                    </Button>
+                  )}
+                  {onEdit && (
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      onClick={() => onEdit(visit)}
+                    >
+                      Edit
                     </Button>
                   )}
                 </div>

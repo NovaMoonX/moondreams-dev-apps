@@ -18,6 +18,10 @@ function getExpenseTitle(expense: Expense): string {
     return expense.label;
   }
 
+  if (expense.items.length > 1) {
+    return 'Itemized expense';
+  }
+
   const categories = getExpenseCategories(expense);
 
   if (categories.length === 1) {
@@ -25,6 +29,18 @@ function getExpenseTitle(expense: Expense): string {
   }
 
   return `${categories.length} categories`;
+}
+
+function getItemLabelsSummary(expense: Expense): string | null {
+  if (expense.items.length <= 1) {
+    return null;
+  }
+
+  const labels = expense.items
+    .map((item) => item.label?.trim())
+    .filter((label): label is string => Boolean(label));
+
+  return labels.length > 0 ? labels.join(', ') : null;
 }
 
 interface ExpenseTimelineProps {
@@ -252,6 +268,7 @@ function ExpenseTimeline({
               .map((catId) => cats.find((cat) => cat.id === catId)?.name)
               .filter(Boolean)
               .join(', ');
+            const itemLabelsSummary = getItemLabelsSummary(expense);
 
             return (
               <button
@@ -272,6 +289,7 @@ function ExpenseTimeline({
                       year: 'numeric',
                     })}
                     {catNames ? ` · ${catNames}` : ''}
+                    {itemLabelsSummary ? ` · ${itemLabelsSummary}` : ''}
                     {expense.isRecurring
                       ? ` · ${expense.recurrenceInterval ?? 'monthly'}${
                           expense.recurrenceEndedAt != null ? ' (stopped)' : ''
