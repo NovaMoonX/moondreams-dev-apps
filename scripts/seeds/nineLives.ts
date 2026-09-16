@@ -513,6 +513,82 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const litterBoxes = [
+    {
+      id: 'seed-litter-box-main',
+      name: 'Main litter box',
+      location: 'Upstairs bathroom',
+      isActive: true,
+    },
+    {
+      id: 'seed-litter-box-office',
+      name: 'Office litter box',
+      location: 'Home office',
+      isActive: true,
+    },
+  ] as const;
+
+  const customLitterTypes = [
+    {
+      id: 'seed-custom-litter-type-recycled-paper',
+      label: 'Recycled paper pellets',
+    },
+  ] as const;
+
+  const litters = [
+    {
+      id: 'seed-litter-tidy-cats',
+      brand: 'Tidy Cats',
+      litterType: 'clumping_clay' as const,
+      customLitterTypeId: null,
+      weight: 20,
+      weightUnit: 'lb' as const,
+      cost: 22.99,
+    },
+    {
+      id: 'seed-litter-yesterdays-news',
+      brand: "Yesterday's News",
+      litterType: 'custom' as const,
+      customLitterTypeId: 'seed-custom-litter-type-recycled-paper',
+      weight: 13.5,
+      weightUnit: 'lb' as const,
+      cost: 12.5,
+    },
+  ] as const;
+
+  const litterEntries = [
+    {
+      id: 'seed-litter-main-1',
+      litterBoxId: 'seed-litter-box-main',
+      litterId: 'seed-litter-tidy-cats',
+      weight: 18.5,
+      weightUnit: 'lb',
+      loggedAt: context.now - 14 * 86_400_000,
+      changedAt: context.now - 16 * 86_400_000,
+      notes: 'Fresh litter after a full box change.',
+    },
+    {
+      id: 'seed-litter-main-2',
+      litterBoxId: 'seed-litter-box-main',
+      litterId: 'seed-litter-tidy-cats',
+      weight: 13.25,
+      weightUnit: 'lb',
+      loggedAt: context.now - 7 * 86_400_000,
+      changedAt: context.now - 16 * 86_400_000,
+      notes: 'Weekly weigh-in.',
+    },
+    {
+      id: 'seed-litter-office-1',
+      litterBoxId: 'seed-litter-box-office',
+      litterId: 'seed-litter-yesterdays-news',
+      weight: 8,
+      weightUnit: 'lb',
+      loggedAt: context.now - 3 * 86_400_000,
+      changedAt: context.now - 4 * 86_400_000,
+      notes: null,
+    },
+  ] as const;
+
   const customHealthRecordTypes = [
     {
       id: 'seed-custom-record-type-allergy-test',
@@ -650,6 +726,10 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   let preventiveCount = 0;
   let weightEntryCount = 0;
   let expenseCount = 0;
+  let litterEntryCount = 0;
+  let litterBoxCount = 0;
+  let litterCount = 0;
+  let customLitterTypeCount = 0;
   let healthRecordCount = 0;
   let conditionLibraryCount = 0;
   let symptomCount = 0;
@@ -870,6 +950,73 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     expenseCount += 1;
   });
 
+  litterBoxes.forEach((litterBox) => {
+    const litterBoxRef = householdRef.collection('litterBoxes').doc(litterBox.id);
+
+    batch.set(
+      litterBoxRef,
+      {
+        ...litterBox,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    litterBoxCount += 1;
+  });
+
+  customLitterTypes.forEach((customType) => {
+    const customTypeRef = householdRef.collection('customLitterTypes').doc(customType.id);
+
+    batch.set(
+      customTypeRef,
+      {
+        ...customType,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+    customLitterTypeCount += 1;
+  });
+
+  litters.forEach((litter) => {
+    const litterRef = householdRef.collection('litters').doc(litter.id);
+
+    batch.set(
+      litterRef,
+      {
+        ...litter,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    litterCount += 1;
+  });
+
+  litterEntries.forEach((entry) => {
+    const entryRef = householdRef.collection('litterEntries').doc(entry.id);
+
+    batch.set(
+      entryRef,
+      {
+        ...entry,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    litterEntryCount += 1;
+  });
+
   customHealthRecordTypes.forEach((customType) => {
     const customTypeRef = householdRef
       .collection('customHealthRecordTypes')
@@ -967,6 +1114,10 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       preventiveCount +
       weightEntryCount +
       expenseCount +
+      litterEntryCount +
+      litterBoxCount +
+      litterCount +
+      customLitterTypeCount +
       customHealthRecordTypes.length +
       customPreventiveProducts.length +
       customPreventiveTypes.length +
