@@ -964,10 +964,26 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /apps/waypoint/inviteCodes/{inviteCode} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+    && request.resource.data.keys().hasOnly(['tripId'])
+    && request.resource.data.tripId is string
+    && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
+    && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
+    && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
+      allow update, delete: if false;
+    }
+
     match /apps/waypoint/trips/{tripId} {
       function isTripMember() {
-        return request.auth != null
-          && request.auth.uid in resource.data.members;
+    return request.auth != null
+      && request.auth.uid in resource.data.members;
+      }
+
+      function isTripAdmin() {
+    return isTripMember()
+      && resource.data.members[request.auth.uid].role == 'ADMIN';
       }
 
       function isTripFieldSetValid(data) {
@@ -1026,10 +1042,68 @@ service cloud.firestore {
           && request.resource.data.members == resource.data.members;
       }
 
+      function isTripMembershipApprovalValid() {
+        let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
+        return isTripAdmin()
+          && isTripFieldSetValid(request.resource.data)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.members.keys().hasAll(resource.data.members.keys())
+          && request.resource.data.members.size() == resource.data.members.size() + 1
+          && addedUids.size() == 1
+          && isTripMemberEntryValid(
+            request.resource.data.members[addedUids[0]],
+            addedUids[0]
+          )
+          && exists(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId))
+          && get(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId)).data.uid == addedUids[0]
+          && get(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId)).data.tripId == tripId
+          && !existsAfter(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId));
+      }
+
       allow read: if isTripMember();
       allow create: if isTripCreateValid();
-      allow update: if isTripMember() && isTripUpdateValid();
+      allow update: if isTripMember()
+        && (isTripUpdateValid() || isTripMembershipApprovalValid());
       allow delete: if false;
+    }
+
+    match /apps/waypoint/pendingRequests/{requestId} {
+      function requestUid() {
+        return requestId.split('_')[0];
+      }
+
+      function tripIdFromRequest() {
+        return requestId.split('_')[1];
+      }
+
+      function isMemberOfTrip(tripId) {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId))
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      allow read: if request.auth != null && (
+        request.auth.uid == requestUid()
+        || (resource != null && resource.data.uid == request.auth.uid)
+        || (resource != null && isMemberOfTrip(resource.data.tripId))
+      );
+      allow create: if request.auth != null
+        && requestId == request.resource.data.uid + '_' + request.resource.data.tripId
+        && request.resource.data.keys().hasOnly(['uid', 'tripId', 'requestedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.uid is string
+        && request.resource.data.tripId is string
+        && isTimestampNumber(request.resource.data.requestedAt)
+        && exists(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
+        && !isMemberOfTrip(request.resource.data.tripId);
+      allow delete: if request.auth != null
+        && (
+          request.auth.uid == requestUid()
+          || (resource != null && isMemberOfTrip(resource.data.tripId))
+        );
+      allow update: if false;
     }
 
     // Fallback for any app doc that doesn't have an explicit /apps/{appId}
