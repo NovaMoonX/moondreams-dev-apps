@@ -64,6 +64,18 @@ import {
   type LitterEntriesState,
 } from './slices/litterEntriesSlice';
 import {
+  litterBoxesReducer,
+  type LitterBoxesState,
+} from './slices/litterBoxesSlice';
+import {
+  littersReducer,
+  type LittersState,
+} from './slices/littersSlice';
+import {
+  customLitterTypesReducer,
+  type CustomLitterTypesState,
+} from './slices/customLitterTypesSlice';
+import {
   customPreventiveProductsReducer,
   type CustomPreventiveProductsState,
 } from './slices/customPreventiveProductsSlice';
@@ -89,6 +101,9 @@ export interface NineLivesState {
   healthRecords: HealthRecordsState;
   customHealthRecordTypes: CustomHealthRecordTypesState;
   litterEntries: LitterEntriesState;
+  litterBoxes: LitterBoxesState;
+  litters: LittersState;
+  customLitterTypes: CustomLitterTypesState;
   customPreventiveProducts: CustomPreventiveProductsState;
   customPreventiveTypes: CustomPreventiveTypesState;
 }
@@ -110,6 +125,9 @@ export const nineLivesReducer = combineReducers({
   healthRecords: healthRecordsReducer,
   customHealthRecordTypes: customHealthRecordTypesReducer,
   litterEntries: litterEntriesReducer,
+  litterBoxes: litterBoxesReducer,
+  litters: littersReducer,
+  customLitterTypes: customLitterTypesReducer,
   customPreventiveProducts: customPreventiveProductsReducer,
   customPreventiveTypes: customPreventiveTypesReducer,
 });

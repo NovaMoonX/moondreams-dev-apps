@@ -18,6 +18,9 @@ import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startLitterEntriesListener } from '../store/listeners/litterEntriesListener';
+import { startLitterBoxesListener } from '../store/listeners/litterBoxesListener';
+import { startLittersListener } from '../store/listeners/littersListener';
+import { startCustomLitterTypesListener } from '../store/listeners/customLitterTypesListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
 import { startPreventivesListener } from '../store/listeners/preventivesListener';
 import { startVaccinationsListener } from '../store/listeners/vaccinationsListener';
@@ -35,6 +38,9 @@ import { setExpenses } from '../store/slices/expensesSlice';
 import { setHealthRecords } from '../store/slices/healthRecordsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setLitterEntries } from '../store/slices/litterEntriesSlice';
+import { setLitterBoxes } from '../store/slices/litterBoxesSlice';
+import { setLitters } from '../store/slices/littersSlice';
+import { setCustomLitterTypes } from '../store/slices/customLitterTypesSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
 import { setPreventives } from '../store/slices/preventivesSlice';
 import { setSymptoms } from '../store/slices/symptomsSlice';
@@ -82,6 +88,9 @@ export function useNineLivesSync(
       dispatch(setHealthRecords([]));
       dispatch(setExpenses([]));
       dispatch(setLitterEntries([]));
+      dispatch(setLitterBoxes([]));
+      dispatch(setLitters([]));
+      dispatch(setCustomLitterTypes([]));
       dispatch(setPreventives([]));
       dispatch(setCustomPreventiveProducts([]));
       dispatch(setCustomPreventiveTypes([]));
@@ -125,6 +134,18 @@ export function useNineLivesSync(
     const unsubscribeLitterEntries = startLitterEntriesListener(householdId, (entries) => {
       dispatch(setLitterEntries(entries));
     });
+    const unsubscribeLitterBoxes = startLitterBoxesListener(householdId, (litterBoxes) => {
+      dispatch(setLitterBoxes(litterBoxes));
+    });
+    const unsubscribeLitters = startLittersListener(householdId, (litters) => {
+      dispatch(setLitters(litters));
+    });
+    const unsubscribeCustomLitterTypes = startCustomLitterTypesListener(
+      householdId,
+      (types) => {
+        dispatch(setCustomLitterTypes(types));
+      },
+    );
     const unsubscribePreventives = startPreventivesListener(householdId, (preventives) => {
       dispatch(setPreventives(preventives));
     });
@@ -163,6 +184,9 @@ export function useNineLivesSync(
       unsubscribeExpenses();
       unsubscribeHealthRecords();
       unsubscribeLitterEntries();
+      unsubscribeLitterBoxes();
+      unsubscribeLitters();
+      unsubscribeCustomLitterTypes();
       unsubscribePreventives();
       unsubscribeCustomPreventiveProducts();
       unsubscribeCustomPreventiveTypes();

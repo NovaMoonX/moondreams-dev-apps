@@ -14,14 +14,6 @@ import {
 function normalizeLitterEntryInput(value: Partial<LitterEntry>): Partial<LitterEntry> {
   const next = { ...value };
 
-  if (next.customLitterType === undefined) {
-    next.customLitterType = null;
-  }
-
-  if (next.cost === undefined) {
-    next.cost = null;
-  }
-
   if (next.changedAt === undefined) {
     next.changedAt = null;
   }
@@ -50,7 +42,7 @@ export const createLitterEntry = createAsyncThunk<
     householdId: string;
     uid: string;
     litterEntry: Partial<LitterEntry> &
-      Pick<LitterEntry, 'litterBoxName' | 'litterType' | 'weight' | 'weightUnit' | 'loggedAt'>;
+      Pick<LitterEntry, 'litterBoxId' | 'litterId' | 'weight' | 'weightUnit' | 'loggedAt'>;
   },
   { rejectValue: string }
 >(
@@ -74,12 +66,10 @@ export const createLitterEntry = createAsyncThunk<
     const nextEntry: LitterEntry = {
       id: entryId,
       householdId,
-      litterBoxName: litterEntry.litterBoxName.trim(),
-      litterType: litterEntry.litterType,
-      customLitterType: normalizedEntry.customLitterType ?? null,
+      litterBoxId: litterEntry.litterBoxId,
+      litterId: litterEntry.litterId,
       weight: Number(litterEntry.weight),
       weightUnit: litterEntry.weightUnit,
-      cost: normalizedEntry.cost == null ? null : Number(normalizedEntry.cost),
       loggedAt: litterEntry.loggedAt,
       changedAt: normalizedEntry.changedAt ?? null,
       notes: normalizedEntry.notes ?? null,
@@ -119,20 +109,9 @@ export const updateLitterEntry = createAsyncThunk<
       ...sanitizedChanges,
       id: entryId,
       householdId,
-      litterBoxName: sanitizedChanges.litterBoxName?.trim() || current.litterBoxName,
       weight: Number(sanitizedChanges.weight ?? current.weight),
-      cost:
-        'cost' in changes
-          ? sanitizedChanges.cost === null
-            ? null
-            : Number(sanitizedChanges.cost)
-          : current.cost,
       changedAt:
         'changedAt' in changes ? sanitizedChanges.changedAt ?? null : current.changedAt,
-      customLitterType:
-        'customLitterType' in changes
-          ? sanitizedChanges.customLitterType ?? null
-          : current.customLitterType,
       notes: 'notes' in changes ? sanitizedChanges.notes ?? null : current.notes,
       lastEditedAt: Date.now(),
     };
@@ -142,10 +121,8 @@ export const updateLitterEntry = createAsyncThunk<
     try {
       await updateDoc(getLitterEntryDocRef(householdId, entryId), {
         ...sanitizedChanges,
-        litterBoxName: nextEntry.litterBoxName,
-        cost: nextEntry.cost,
+        weight: nextEntry.weight,
         changedAt: nextEntry.changedAt,
-        customLitterType: nextEntry.customLitterType,
         notes: nextEntry.notes,
         lastEditedAt: nextEntry.lastEditedAt,
       });

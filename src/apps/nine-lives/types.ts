@@ -243,15 +243,46 @@ export type LitterType =
   | 'walnut'
   | 'custom';
 
-export interface LitterEntry {
+export interface LitterBox {
   id: string;
   householdId: string;
-  litterBoxName: string;
+  name: string;
+  location: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface CustomLitterType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+/** A specific litter product (brand + type + bag size + price), used to derive per-entry usage cost. */
+export interface Litter {
+  id: string;
+  householdId: string;
+  brand: string;
   litterType: LitterType;
-  customLitterType: string | null;
+  customLitterTypeId: string | null;
   weight: number;
   weightUnit: 'lb' | 'kg';
   cost: number | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface LitterEntry {
+  id: string;
+  householdId: string;
+  litterBoxId: string;
+  litterId: string;
+  weight: number;
+  weightUnit: 'lb' | 'kg';
   loggedAt: number;
   changedAt: number | null;
   notes: string | null;

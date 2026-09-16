@@ -290,13 +290,35 @@ interface WeightEntry {
 }
 ```
 
-### 8. Litter Entry
+### 8. Litter Box, Litter, and Litter Entry
 
-Path: `apps/nine-lives/households/{householdId}/litterEntries/{entryId}`
+Paths:
+- `apps/nine-lives/households/{householdId}/litterBoxes/{litterBoxId}`
+- `apps/nine-lives/households/{householdId}/customLitterTypes/{typeId}`
+- `apps/nine-lives/households/{householdId}/litters/{litterId}`
+- `apps/nine-lives/households/{householdId}/litterEntries/{entryId}`
 
-Litter entries are household-scoped because litter boxes and their contents are shared equipment, not cat-specific records. Each weigh-in can identify a box and record the last date its litter was changed, allowing the household dashboard to show usage between chronological entries and days since the latest change for each box.
+All four are household-scoped because litter boxes and their contents are shared equipment, not cat-specific records. A litter box is its own renameable object (so users can rename or relocate it without losing history) and a litter is its own purchasable product (brand, type, bag size, and price), so the cost of using it can be derived per weigh-in rather than entered by hand each time. Each weigh-in references a box and the litter product currently in use, and can record the date its litter was changed, allowing the household dashboard to show usage and cost between chronological entries and days since the latest change for each box.
 
 ```typescript
+interface LitterBox {
+  id: string;
+  householdId: string;
+  name: string;
+  location: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+interface CustomLitterType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
 type LitterType =
   | 'clumping_clay'
   | 'non_clumping_clay'
@@ -308,15 +330,27 @@ type LitterType =
   | 'walnut'
   | 'custom';
 
+interface Litter {
+  id: string;
+  householdId: string;
+  brand: string;
+  litterType: LitterType;
+  customLitterTypeId: string | null;
+  weight: number; // bag size as purchased
+  weightUnit: 'lb' | 'kg';
+  cost: number | null; // price paid for the bag
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 interface LitterEntry {
   id: string;
   householdId: string;
-  litterBoxName: string;
-  litterType: LitterType;
-  customLitterType: string | null;
-  weight: number;
+  litterBoxId: string;
+  litterId: string;
+  weight: number; // weigh-in reading
   weightUnit: 'lb' | 'kg';
-  cost: number | null;
   loggedAt: number;
   changedAt: number | null;
   notes: string | null;
@@ -326,7 +360,7 @@ interface LitterEntry {
 }
 ```
 
-`usage` is derived from consecutive entries for the same box after converting units when necessary: the previous weight minus the current weight. A negative result is shown as litter added, which keeps refills visible instead of presenting them as usage. The latest non-null `changedAt` for each `litterBoxName` is used for the household-level “days since changed” summary.
+Usage is derived from consecutive entries for the same `litterBoxId` after converting units when necessary: the previous weight minus the current weight. A negative result is shown as litter added, which keeps refills visible instead of presenting them as usage. That usage amount is then priced against the entry's `litterId` (`litter.cost / litter.weight`, unit-converted) to derive a per-entry cost instead of storing cost directly on the entry. The latest non-null `changedAt` for each `litterBoxId` is used for the household-level “days since changed” summary.
 
 ### 9. Visit
 
