@@ -1631,6 +1631,42 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     });
   });
 
+  // Given to both cats together, so the "needs attention" section has an example of the cat
+  // avatars stacking for an item with more than one cat.
+  const householdFleaTickRef = householdRef.collection('preventives').doc('seed-preventive-household-flea-tick');
+  const householdFleaTickDose = {
+    id: 'seed-preventive-household-flea-tick-dose-1',
+    administeredAt: context.now - 5_184_000_000,
+    expiresAt: context.now + 5 * 86_400_000,
+    dosage: '0.5 mL each',
+    clinicId: 'seed-vet-clinic-blue-bark',
+    doctorId: 'seed-doctor-maya',
+    linkedVisitId: null,
+    createdBy: caretaker.uid,
+    createdAt,
+  };
+  batch.set(
+    householdFleaTickRef,
+    {
+      id: 'seed-preventive-household-flea-tick',
+      householdId: HOUSEHOLD_ID,
+      catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
+      name: 'Frontline Plus',
+      customProductId: null,
+      type: 'flea-tick',
+      customTypeId: null,
+      history: [householdFleaTickDose],
+      firstAdministeredAt: householdFleaTickDose.administeredAt,
+      lastAdministeredAt: householdFleaTickDose.administeredAt,
+      expiresAt: householdFleaTickDose.expiresAt,
+      createdBy: caretaker.uid,
+      createdAt,
+      lastEditedAt: context.now,
+    },
+    { merge: true },
+  );
+  preventiveCount += 1;
+
   const secondCatRef = secondHouseholdRef.collection('cats').doc('seed-cat-other-household');
   batch.set(
     secondCatRef,

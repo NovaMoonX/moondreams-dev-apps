@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
-import { Pill, Stethoscope, Syringe, Trash2 } from 'lucide-react';
+import { Avatar, Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Trash2 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
+import { getInitials } from '@/utils/accountUtils';
 
 import { useAttentionFocus } from '../context/attentionFocusContext';
 import {
@@ -15,6 +17,7 @@ import {
   selectVaccinationsByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
+import type { Cat } from '../types';
 import { buildAttentionItems, type AttentionItem, type AttentionSeverity } from '../utils/attentionItems';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
 
@@ -26,13 +29,26 @@ interface AttentionRow {
   key: string;
   kind: AttentionItem['kind'];
   severity: AttentionSeverity;
-  icon: typeof Stethoscope;
+  /** Empty for kinds with no associated cat (litter). */
+  catIds: string[];
   title: string;
   subtitle: string;
   dueLabel: string;
   actionLabel: string;
   onAction: () => void;
 }
+
+type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+
+/** Matches dreamer-ui's Avatar size scale, so the litter-box icon circle lines up with cat avatars next to it. */
+const AVATAR_SIZE_CLASSES: Record<AvatarSize, string> = {
+  xs: 'h-6 w-6',
+  sm: 'h-8 w-8',
+  md: 'h-10 w-10',
+  lg: 'h-12 w-12',
+  xl: 'h-14 w-14',
+  '2xl': 'h-16 w-16',
+};
 
 /** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
 function currentTime(): number {
@@ -54,13 +70,62 @@ function formatDueLabel(timestamp: number, now: number): string {
   return `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`;
 }
 
-/** Severity maps onto the design system's existing warning/destructive tokens (light + dark mode already handled by those). */
+/** Severity maps onto the design system's existing warning/destructive tokens (light + dark mode already handled by those). Outline keeps it low-contrast rather than a loud solid fill. */
 function getSeverityBadge(severity: AttentionSeverity, dueLabel: string): { variant: 'destructive' | 'warning'; label: string } {
   if (severity === 'now') {
     return { variant: 'destructive', label: dueLabel === 'Today' ? 'Today' : 'Overdue' };
   }
 
   return { variant: 'warning', label: 'This week' };
+}
+
+/** One avatar for a single cat, or a small overlapping stack (capped, with a "+N" overflow) for several. */
+function CatAvatarGroup({ catIds, cats, size = 'sm' }: { catIds: string[]; cats: Cat[]; size?: AvatarSize }) {
+  const matchedCats = catIds
+    .map((catId) => cats.find((cat) => cat.id === catId))
+    .filter((cat): cat is Cat => Boolean(cat));
+
+  if (matchedCats.length === 0) {
+    return null;
+  }
+
+  if (matchedCats.length === 1) {
+    const cat = matchedCats[0];
+    return (
+      <Avatar
+        src={cat.photoURL ?? undefined}
+        alt={cat.name}
+        initials={cat.photoURL ? undefined : getInitials(cat.name)}
+        size={size}
+        shape='circle'
+      />
+    );
+  }
+
+  const stackedSize: AvatarSize = size === 'lg' || size === 'xl' || size === '2xl' ? 'sm' : 'xs';
+  const visibleCats = matchedCats.slice(0, 3);
+  const overflowCount = matchedCats.length - visibleCats.length;
+
+  return (
+    <div className='flex shrink-0 items-center'>
+      {visibleCats.map((cat, index) => (
+        <Avatar
+          key={cat.id}
+          src={cat.photoURL ?? undefined}
+          alt={cat.name}
+          initials={cat.photoURL ? undefined : getInitials(cat.name)}
+          size={stackedSize}
+          shape='circle'
+          className={join('ring-2 ring-card', index > 0 && '-ml-2')}
+        />
+      ))}
+      {overflowCount > 0 && (
+        <span className='text-muted-foreground bg-muted border-border ring-card -ml-2 flex h-6 w-6 items-center justify-center rounded-full border text-xs ring-2'>
+          +{overflowCount}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function AttentionSection({ householdId }: AttentionSectionProps) {
@@ -98,7 +163,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           key: `visit-${item.visitId}`,
           kind: 'visit',
           severity: item.severity,
-          icon: Stethoscope,
+          catIds: item.catIds,
           title: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
           subtitle: catNames(item.catIds),
           dueLabel: formatDueLabel(item.scheduledAt, now),
@@ -115,7 +180,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           key: `litter-${item.litterBoxId}`,
           kind: 'litter',
           severity: item.severity,
-          icon: Trash2,
+          catIds: [],
           title: box.name,
           subtitle:
             item.daysSinceChange === null
@@ -135,7 +200,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           key: `vaccination-${item.vaccinationId}`,
           kind: 'vaccination',
           severity: item.severity,
-          icon: Syringe,
+          catIds: [item.catId],
           title: vaccination.name,
           subtitle: catName(item.catId),
           dueLabel: formatDueLabel(item.expiresAt, now),
@@ -157,7 +222,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           key: `preventive-${item.preventiveId}`,
           kind: 'preventive',
           severity: item.severity,
-          icon: Pill,
+          catIds: item.catIds,
           title: preventive.name,
           subtitle: catNames(item.catIds),
           dueLabel: formatDueLabel(item.expiresAt, now),
@@ -183,18 +248,31 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     return null;
   }
 
-  const renderMeta = (row: AttentionRow) => {
+  const renderBadge = (row: AttentionRow) => {
     const badge = getSeverityBadge(row.severity, row.dueLabel);
 
     return (
-      <div className='flex items-center gap-2'>
-        <p className='text-sm font-medium'>{row.title}</p>
-        <Badge variant={badge.variant} size='xs' use={row.severity === 'now' ? 'alert' : 'status'}>
-          {badge.label}
-        </Badge>
-      </div>
+      <Badge variant={badge.variant} outline size='xs' use={row.severity === 'now' ? 'alert' : 'status'}>
+        {badge.label}
+      </Badge>
     );
   };
+
+  const renderRowAvatar = (row: AttentionRow, size: AvatarSize) =>
+    row.kind === 'litter' ? (
+      <div
+        className={join(
+          'border-border text-muted-foreground flex shrink-0 items-center justify-center rounded-full border',
+          AVATAR_SIZE_CLASSES[size],
+        )}
+      >
+        <Trash2 className='h-4 w-4' />
+      </div>
+    ) : (
+      <CatAvatarGroup catIds={row.catIds} cats={cats} size={size} />
+    );
+
+  const isSingleVisit = visitRows.length === 1;
 
   return (
     <section className='rounded-lg border border-border bg-card p-4'>
@@ -203,27 +281,53 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           <div>
             <h2 className='text-lg font-semibold'>Upcoming visits</h2>
             <div className='mt-3 space-y-3'>
-              {visitRows.map((row) => (
-                <div key={row.key} className='rounded-lg border border-border p-3'>
-                  <div className='flex items-start justify-between gap-3'>
-                    <div className='min-w-0'>
-                      {renderMeta(row)}
-                      <p className='text-muted-foreground text-sm'>
-                        {row.subtitle} · {row.dueLabel}
-                      </p>
+              {visitRows.map((row) =>
+                isSingleVisit ? (
+                  <div key={row.key} className='rounded-lg border border-border p-4'>
+                    <div className='flex items-center gap-3'>
+                      {renderRowAvatar(row, 'lg')}
+                      <div className='min-w-0'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <p className='text-base font-semibold'>{row.title}</p>
+                          {renderBadge(row)}
+                        </div>
+                        <p className='text-muted-foreground text-sm'>
+                          {row.subtitle} · {row.dueLabel}
+                        </p>
+                      </div>
                     </div>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      onClick={row.onAction}
-                      className='shrink-0'
-                    >
+                    <Button type='button' size='sm' onClick={row.onAction} className='mt-3 w-full sm:w-auto'>
                       {row.actionLabel}
                     </Button>
                   </div>
-                </div>
-              ))}
+                ) : (
+                  <div key={row.key} className='rounded-lg border border-border p-3'>
+                    <div className='flex items-center justify-between gap-3'>
+                      <div className='flex min-w-0 items-center gap-3'>
+                        {renderRowAvatar(row, 'sm')}
+                        <div className='min-w-0'>
+                          <div className='flex flex-wrap items-center gap-2'>
+                            <p className='text-sm font-medium'>{row.title}</p>
+                            {renderBadge(row)}
+                          </div>
+                          <p className='text-muted-foreground text-sm'>
+                            {row.subtitle} · {row.dueLabel}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        onClick={row.onAction}
+                        className='shrink-0'
+                      >
+                        {row.actionLabel}
+                      </Button>
+                    </div>
+                  </div>
+                ),
+              )}
             </div>
           </div>
         )}
@@ -232,33 +336,32 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           <div>
             <h2 className='text-lg font-semibold'>Keep an eye on</h2>
             <div className='divide-border divide-y'>
-              {otherRows.map((row) => {
-                const Icon = row.icon;
-
-                return (
-                  <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
-                    <div className='flex min-w-0 items-start gap-3'>
-                      <Icon className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />
-                      <div className='min-w-0'>
-                        {renderMeta(row)}
-                        <p className='text-muted-foreground text-sm'>
-                          {row.subtitle}
-                          {row.dueLabel ? ` · ${row.dueLabel}` : ''}
-                        </p>
+              {otherRows.map((row) => (
+                <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
+                  <div className='flex min-w-0 items-center gap-3'>
+                    {renderRowAvatar(row, 'sm')}
+                    <div className='min-w-0'>
+                      <div className='flex flex-wrap items-center gap-2'>
+                        <p className='text-sm font-medium'>{row.title}</p>
+                        {renderBadge(row)}
                       </div>
+                      <p className='text-muted-foreground text-sm'>
+                        {row.subtitle}
+                        {row.dueLabel ? ` · ${row.dueLabel}` : ''}
+                      </p>
                     </div>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      onClick={row.onAction}
-                      className='shrink-0'
-                    >
-                      {row.actionLabel}
-                    </Button>
                   </div>
-                );
-              })}
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    onClick={row.onAction}
+                    className='shrink-0'
+                  >
+                    {row.actionLabel}
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
         )}
