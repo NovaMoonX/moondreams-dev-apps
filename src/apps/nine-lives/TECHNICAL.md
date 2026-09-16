@@ -306,6 +306,7 @@ interface LitterBox {
   householdId: string;
   name: string;
   location: string | null;
+  isActive: boolean; // false once retired (e.g. after switching litter); history is kept, but it's hidden from new weigh-ins
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -361,6 +362,8 @@ interface LitterEntry {
 ```
 
 Usage is derived from consecutive entries for the same `litterBoxId` after converting units when necessary: the previous weight minus the current weight. A negative result is shown as litter added, which keeps refills visible instead of presenting them as usage. That usage amount is then priced against the entry's `litterId` (`litter.cost / litter.weight`, unit-converted) to derive a per-entry cost instead of storing cost directly on the entry. The latest non-null `changedAt` for each `litterBoxId` is used for the household-level “days since changed” summary.
+
+Switching the litter used in a physical box isn't modeled as an in-place change: since usage is derived from consecutive weigh-ins, mixing two different litters' weigh-ins under one `litterBoxId` would produce a meaningless trend and cost. Instead, the owner retires the old `LitterBox` (`isActive: false`) and creates a new one for the same physical box — the old box keeps its full history and stays selectable in the weigh-in history filter, but is hidden from the box picker when logging a new weigh-in.
 
 ### 9. Visit
 

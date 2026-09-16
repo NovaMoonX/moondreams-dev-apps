@@ -248,6 +248,8 @@ export interface LitterBox {
   householdId: string;
   name: string;
   location: string | null;
+  /** When false, the box is retired (e.g. after switching litter) and hidden from new weigh-ins, but its history is kept. */
+  isActive: boolean;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

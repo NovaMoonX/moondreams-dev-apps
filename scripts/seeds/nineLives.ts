@@ -518,11 +518,13 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-litter-box-main',
       name: 'Main litter box',
       location: 'Upstairs bathroom',
+      isActive: true,
     },
     {
       id: 'seed-litter-box-office',
       name: 'Office litter box',
       location: 'Home office',
+      isActive: true,
     },
   ] as const;
 

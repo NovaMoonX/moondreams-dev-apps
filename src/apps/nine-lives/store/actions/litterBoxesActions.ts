@@ -41,6 +41,7 @@ export const createLitterBox = createAsyncThunk<
       householdId,
       name: trimmedName,
       location: litterBox.location?.trim() || null,
+      isActive: litterBox.isActive ?? true,
       createdBy: uid,
       createdAt: litterBox.createdAt ?? now,
       lastEditedAt: now,

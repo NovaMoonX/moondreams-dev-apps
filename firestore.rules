@@ -811,6 +811,7 @@ service cloud.firestore {
       function isLitterBoxBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
           && (request.resource.data.location == null || request.resource.data.location is string)
+          && request.resource.data.isActive is bool
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);

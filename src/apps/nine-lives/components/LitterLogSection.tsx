@@ -382,63 +382,78 @@ function LitterBoxesManager({ householdId }: LitterBoxesManagerProps) {
     }
   };
 
+  const handleToggleActive = async (box: LitterBox) => {
+    await dispatch(
+      updateLitterBox({ householdId, litterBoxId: box.id, changes: { isActive: !box.isActive } }),
+    ).unwrap();
+  };
+
   return (
-    <div className='space-y-3'>
-      <div className='flex items-center justify-between gap-2'>
-        <strong className='text-sm'>Litter boxes</strong>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className={mutedLinkClassName}
-          onClick={() => {
-            setEditingBox(null);
-            setIsFormOpen(true);
-          }}
-        >
-          + Add litter box
-        </Button>
-      </div>
-
-      {litterBoxes.length === 0 && (
-        <p className='text-muted-foreground text-sm'>No litter boxes added yet.</p>
-      )}
-
-      {litterBoxes.length > 0 && (
-        <div className='divide-border divide-y'>
-          {litterBoxes.map((box) => (
-            <div key={box.id} className='flex items-center justify-between gap-3 py-2 first:pt-0'>
-              <div className='min-w-0'>
-                <div className='text-sm'>{box.name}</div>
-                {box.location && <div className='text-muted-foreground text-sm'>{box.location}</div>}
-              </div>
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                onClick={() => {
-                  setEditingBox(box);
-                  setIsFormOpen(true);
-                }}
-              >
-                Edit
-              </Button>
-            </div>
-          ))}
+    <DetailsDisclosure label={`Litter boxes (${litterBoxes.length})`}>
+      <div className='space-y-3'>
+        <div className='flex justify-end'>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className={mutedLinkClassName}
+            onClick={() => {
+              setEditingBox(null);
+              setIsFormOpen(true);
+            }}
+          >
+            + Add litter box
+          </Button>
         </div>
-      )}
 
-      <LitterBoxFormModal
-        key={editingBox?.id ?? 'new'}
-        isOpen={isFormOpen}
-        initialBox={editingBox}
-        existingLocations={existingLocations}
-        isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-        onDelete={editingBox ? handleDelete : undefined}
-        onCancel={closeForm}
-      />
-    </div>
+        {litterBoxes.length === 0 && (
+          <p className='text-muted-foreground text-sm'>No litter boxes added yet.</p>
+        )}
+
+        {litterBoxes.length > 0 && (
+          <div className='divide-border divide-y'>
+            {litterBoxes.map((box) => (
+              <div key={box.id} className='flex items-center justify-between gap-3 py-2 first:pt-0'>
+                <div className='min-w-0'>
+                  <div className='text-sm'>
+                    {box.name}
+                    {!box.isActive && <span className='text-muted-foreground'> (inactive)</span>}
+                  </div>
+                  {box.location && <div className='text-muted-foreground text-sm'>{box.location}</div>}
+                </div>
+                <div className='flex shrink-0 items-center gap-2'>
+                  <Button type='button' variant='link' size='sm' onClick={() => void handleToggleActive(box)}>
+                    {box.isActive ? 'Archive' : 'Reactivate'}
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    onClick={() => {
+                      setEditingBox(box);
+                      setIsFormOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <LitterBoxFormModal
+          key={editingBox?.id ?? 'new'}
+          isOpen={isFormOpen}
+          initialBox={editingBox}
+          existingLocations={existingLocations}
+          isSubmitting={isSubmitting}
+          onSubmit={handleSubmit}
+          onDelete={editingBox ? handleDelete : undefined}
+          onCancel={closeForm}
+        />
+      </div>
+    </DetailsDisclosure>
   );
 }
 
@@ -726,69 +741,70 @@ function LittersManager({ householdId }: LittersManagerProps) {
   };
 
   return (
-    <div className='space-y-3'>
-      <div className='flex items-center justify-between gap-2'>
-        <strong className='text-sm'>Litter products</strong>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className={mutedLinkClassName}
-          onClick={() => {
-            setEditingLitter(null);
-            setIsFormOpen(true);
-          }}
-        >
-          + Add litter
-        </Button>
-      </div>
-
-      {litters.length === 0 && (
-        <p className='text-muted-foreground text-sm'>No litter products added yet.</p>
-      )}
-
-      {litters.length > 0 && (
-        <div className='divide-border divide-y'>
-          {litters.map((litter) => (
-            <div key={litter.id} className='flex items-center justify-between gap-3 py-2 first:pt-0'>
-              <div className='min-w-0'>
-                <div className='text-sm'>{litter.brand}</div>
-                <div className='text-muted-foreground text-sm'>
-                  {getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)}
-                  {' · '}
-                  {formatWeight(litter.weight, litter.weightUnit)}
-                  {litter.cost !== null && ` · $${litter.cost.toFixed(2)}`}
-                </div>
-              </div>
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                onClick={() => {
-                  setEditingLitter(litter);
-                  setIsFormOpen(true);
-                }}
-              >
-                Edit
-              </Button>
-            </div>
-          ))}
+    <DetailsDisclosure label={`Litter products (${litters.length})`}>
+      <div className='space-y-3'>
+        <div className='flex justify-end'>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className={mutedLinkClassName}
+            onClick={() => {
+              setEditingLitter(null);
+              setIsFormOpen(true);
+            }}
+          >
+            + Add litter
+          </Button>
         </div>
-      )}
 
-      <LitterFormModal
-        key={editingLitter?.id ?? 'new'}
-        isOpen={isFormOpen}
-        householdId={householdId}
-        uid={user?.uid ?? ''}
-        initialLitter={editingLitter}
-        customTypes={customTypes}
-        isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-        onDelete={editingLitter ? handleDelete : undefined}
-        onCancel={closeForm}
-      />
-    </div>
+        {litters.length === 0 && (
+          <p className='text-muted-foreground text-sm'>No litter products added yet.</p>
+        )}
+
+        {litters.length > 0 && (
+          <div className='divide-border divide-y'>
+            {litters.map((litter) => (
+              <div key={litter.id} className='flex items-center justify-between gap-3 py-2 first:pt-0'>
+                <div className='min-w-0'>
+                  <div className='text-sm'>{litter.brand}</div>
+                  <div className='text-muted-foreground text-sm'>
+                    {getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)}
+                    {' · '}
+                    {formatWeight(litter.weight, litter.weightUnit)}
+                    {litter.cost !== null && ` · $${litter.cost.toFixed(2)}`}
+                  </div>
+                </div>
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  onClick={() => {
+                    setEditingLitter(litter);
+                    setIsFormOpen(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <LitterFormModal
+          key={editingLitter?.id ?? 'new'}
+          isOpen={isFormOpen}
+          householdId={householdId}
+          uid={user?.uid ?? ''}
+          initialLitter={editingLitter}
+          customTypes={customTypes}
+          isSubmitting={isSubmitting}
+          onSubmit={handleSubmit}
+          onDelete={editingLitter ? handleDelete : undefined}
+          onCancel={closeForm}
+        />
+      </div>
+    </DetailsDisclosure>
   );
 }
 
@@ -842,8 +858,11 @@ function LitterEntryFormModal({
   );
 
   const litterBoxOptions = useMemo(
-    () => litterBoxes.map((box) => ({ label: box.name, value: box.id })),
-    [litterBoxes],
+    () =>
+      litterBoxes
+        .filter((box) => box.isActive || box.id === initialEntry?.litterBoxId)
+        .map((box) => ({ label: box.name, value: box.id })),
+    [litterBoxes, initialEntry?.litterBoxId],
   );
   const litterOptions = useMemo(
     () =>
@@ -1049,6 +1068,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
   const [boxFilter, setBoxFilter] = useState('all');
+  const [sortOption, setSortOption] = useState<'newest' | 'oldest'>('newest');
 
   const boxFilterOptions = useMemo(
     () => [
@@ -1057,6 +1077,11 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
     ],
     [litterBoxes],
   );
+
+  const sortOptions = [
+    { text: 'Newest first', value: 'newest' },
+    { text: 'Oldest first', value: 'oldest' },
+  ];
 
   const litterBoxesById = useMemo(
     () => new Map(litterBoxes.map((box) => [box.id, box])),
@@ -1129,7 +1154,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
     }
   };
 
-  const canLogEntry = litterBoxes.length > 0 && litters.length > 0;
+  const canLogEntry = litterBoxes.some((box) => box.isActive) && litters.length > 0;
 
   return (
     <section>
@@ -1164,11 +1189,26 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
               </p>
             )}
 
-            {sortedEntries.length > 0 && litterBoxes.length > 1 && (
-              <div className='flex items-center gap-2'>
-                <span className='text-muted-foreground text-sm'>Filter by box:</span>
-                <div className='max-w-48 flex-1'>
-                  <Select options={boxFilterOptions} value={boxFilter} onChange={setBoxFilter} size='sm' />
+            {sortedEntries.length > 0 && (
+              <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+                {litterBoxes.length > 1 && (
+                  <div className='flex items-center gap-2'>
+                    <span className='text-muted-foreground text-sm'>Filter by box:</span>
+                    <div className='max-w-48 flex-1'>
+                      <Select options={boxFilterOptions} value={boxFilter} onChange={setBoxFilter} size='sm' />
+                    </div>
+                  </div>
+                )}
+                <div className='flex items-center gap-2'>
+                  <span className='text-muted-foreground text-sm'>Sort by:</span>
+                  <div className='max-w-40 flex-1'>
+                    <Select
+                      options={sortOptions}
+                      value={sortOption}
+                      onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
+                      size='sm'
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -1197,6 +1237,9 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
                 {sortedEntries
                   .map((entry, index) => ({ entry, index }))
                   .filter(({ entry }) => boxFilter === 'all' || entry.litterBoxId === boxFilter)
+                  .sort((left, right) =>
+                    sortOption === 'newest' ? right.index - left.index : left.index - right.index,
+                  )
                   .map(({ entry, index }) => {
                   const previous = [...sortedEntries]
                     .slice(0, index)
