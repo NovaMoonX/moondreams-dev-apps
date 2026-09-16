@@ -44,7 +44,7 @@ export const router = createBrowserRouter([
         },
       },
       {
-        path: 'apps/waypoint',
+        path: 'waypoint',
         lazy: async () => {
           const { default: Waypoint } =
             await import('@apps/waypoint/Waypoint');
