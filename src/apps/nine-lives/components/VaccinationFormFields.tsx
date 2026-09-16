@@ -6,12 +6,12 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
+import type { VaccinationFormSubmission } from '@apps/nine-lives/store/actions/vaccinationsActions';
 import {
   selectClinicsByHousehold,
   selectDoctorsByHousehold,
   selectVisitsByHousehold,
 } from '@apps/nine-lives/store/selectors';
-import type { Vaccination } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 import DetailsDisclosure from './DetailsDisclosure';
@@ -108,15 +108,21 @@ function AdditionalDetailsFields({
   );
 }
 
+/**
+ * `id` here is purely a UI signal for this form ("is a record's latest dose being edited in
+ * place?") — it does not have to be the record actually being submitted to. Callers logging a
+ * new dose against an existing record track that record's id themselves and omit `id` here so
+ * the form renders as a fresh "Add" (no Delete button, submit reads "Add vaccination").
+ */
+export type VaccinationFormInitialValues = Partial<VaccinationFormSubmission>;
+
 interface VaccinationFormFieldsProps {
   householdId?: string;
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
-  initialVaccination?: Partial<Vaccination> | null;
+  initialVaccination?: VaccinationFormInitialValues | null;
   isSubmitting?: boolean;
-  onSubmit: (
-    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
-  ) => Promise<void> | void;
+  onSubmit: (vaccination: VaccinationFormSubmission) => Promise<void> | void;
   onDelete?: (vaccinationId: string) => Promise<void> | void;
   /** When provided, renders a Cancel button (for inline/non-modal usage). */
   onCancel?: () => void;

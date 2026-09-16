@@ -13,6 +13,7 @@ import type {
   CatCondition,
   Symptom,
   Vaccination,
+  VaccinationDose,
   Visit,
   WeightEntry,
 } from '@apps/nine-lives/types';
@@ -63,22 +64,8 @@ const getSymptomDocRef = (
     symptomId,
   );
 
-const getVaccinationDocRef = (
-  householdId: string,
-  catId: string,
-  vaccinationId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'vaccinations',
-    vaccinationId,
-  );
+const getVaccinationDocRef = (householdId: string, vaccinationId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'vaccinations', vaccinationId);
 
 const getWeightEntryDocRef = (
   householdId: string,
@@ -100,8 +87,9 @@ const getWeightEntryDocRef = (
 export interface VisitOutcome {
   summary?: string | null;
   vaccinations?: Array<
-    Partial<Vaccination> &
-      Pick<Vaccination, 'catId' | 'name' | 'administeredAt'>
+    Partial<VaccinationDose> &
+      Pick<VaccinationDose, 'administeredAt'> &
+      Pick<Vaccination, 'catId' | 'name'>
   >;
   conditions?: Array<
     Partial<CatCondition> &
@@ -335,25 +323,17 @@ export const completeVisit = createAsyncThunk<
     const batch = writeBatch(db);
 
     for (const input of outcome.vaccinations ?? []) {
-      const id =
-        input.id ??
-        doc(
-          collection(
-            db,
-            'apps',
-            'nine-lives',
-            'households',
-            householdId,
-            'cats',
-            input.catId,
-            'vaccinations',
-          ),
-        ).id;
-      const vaccination: Vaccination = {
-        id,
+      const vaccinationsCollectionRef = collection(
+        db,
+        'apps',
+        'nine-lives',
+        'households',
         householdId,
-        catId: input.catId,
-        name: input.name.trim(),
+        'vaccinations',
+      );
+      const id = input.id ?? doc(vaccinationsCollectionRef).id;
+      const dose: VaccinationDose = {
+        id: doc(vaccinationsCollectionRef).id,
         administeredAt: input.administeredAt,
         expiresAt: input.expiresAt ?? null,
         clinicId: input.clinicId ?? current.clinicId,
@@ -362,12 +342,21 @@ export const completeVisit = createAsyncThunk<
         linkedVisitId: visitId,
         createdBy: uid,
         createdAt: input.createdAt ?? now,
+      };
+      const vaccination: Vaccination = {
+        id,
+        householdId,
+        catId: input.catId,
+        name: input.name.trim(),
+        history: [dose],
+        firstAdministeredAt: dose.administeredAt,
+        lastAdministeredAt: dose.administeredAt,
+        expiresAt: dose.expiresAt,
+        createdBy: uid,
+        createdAt: input.createdAt ?? now,
         lastEditedAt: now,
       };
-      batch.set(
-        getVaccinationDocRef(householdId, input.catId, id),
-        vaccination,
-      );
+      batch.set(getVaccinationDocRef(householdId, id), vaccination);
       linkedVaccinationIds.push(id);
       createdVaccinations.push(vaccination);
     }

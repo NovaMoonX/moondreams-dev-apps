@@ -1,8 +1,10 @@
 import { Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import type { Vaccination } from '@apps/nine-lives/types';
+import type { VaccinationFormSubmission } from '@apps/nine-lives/store/actions/vaccinationsActions';
 
-import VaccinationFormFields from './VaccinationFormFields';
+import VaccinationFormFields, { type VaccinationFormInitialValues } from './VaccinationFormFields';
+
+export type { VaccinationFormInitialValues };
 
 interface VaccinationFormModalProps {
   isOpen: boolean;
@@ -10,11 +12,11 @@ interface VaccinationFormModalProps {
   catName?: string;
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
-  initialVaccination?: Partial<Vaccination> | null;
+  initialVaccination?: VaccinationFormInitialValues | null;
+  /** Title override — used for "Mark administered today", which prefills like an edit but isn't one. */
+  title?: string;
   isSubmitting?: boolean;
-  onSubmit: (
-    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
-  ) => Promise<void> | void;
+  onSubmit: (vaccination: VaccinationFormSubmission) => Promise<void> | void;
   onDelete?: (vaccinationId: string) => Promise<void> | void;
   onClose: () => void;
 }
@@ -25,6 +27,7 @@ function VaccinationFormModal({
   catName,
   catOptions,
   initialVaccination,
+  title,
   isSubmitting = false,
   onSubmit,
   onDelete,
@@ -36,7 +39,7 @@ function VaccinationFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? `Edit vaccination` : `Add vaccination${catName ? ` for ${catName}` : ''}`}
+      title={title ?? (isEditing ? `Edit vaccination` : `Add vaccination${catName ? ` for ${catName}` : ''}`)}
     >
       <VaccinationFormFields
         householdId={householdId}

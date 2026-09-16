@@ -12,7 +12,26 @@ import {
   selectLitterEntriesByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
+import { getDaysSince, getLatestFullChangeByBox, LITTER_OVERDUE_DAYS } from '../utils/attentionItems';
 import StatTile from './StatTile';
+
+/** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
+function daysSinceNow(timestamp: number) {
+  return getDaysSince(timestamp, Date.now());
+}
+
+/** Same thresholds as the "needs attention" section, so this stat visually agrees with that section. */
+function getLitterStatusClassName(daysSinceChange: number | null): string {
+  if (daysSinceChange === null || daysSinceChange >= LITTER_OVERDUE_DAYS) {
+    return 'text-destructive';
+  }
+
+  if (daysSinceChange >= LITTER_OVERDUE_DAYS - 7) {
+    return 'text-warning';
+  }
+
+  return '';
+}
 
 interface StatsSummaryProps {
   householdId: string;
@@ -24,10 +43,6 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
 });
-
-function getDaysSince(timestamp: number) {
-  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
-}
 
 function StatsSummary({ householdId }: StatsSummaryProps) {
   const [recurringView, setRecurringView] = useState<RecurringView>('monthly');
@@ -50,21 +65,7 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
 
   const activeLitterBoxes = useMemo(() => litterBoxes.filter((box) => box.isActive), [litterBoxes]);
 
-  const latestChangedAtByBox = useMemo(() => {
-    const latest = new Map<string, number>();
-
-    litterEntries.forEach((entry) => {
-      if (!entry.isFullChange) {
-        return;
-      }
-
-      if ((latest.get(entry.litterBoxId) ?? 0) < entry.loggedAt) {
-        latest.set(entry.litterBoxId, entry.loggedAt);
-      }
-    });
-
-    return latest;
-  }, [litterEntries]);
+  const latestChangedAtByBox = useMemo(() => getLatestFullChangeByBox(litterEntries), [litterEntries]);
 
   // The box that's gone longest without a change is the one that most needs attention, so it's the default.
   const mostOverdueBoxId = useMemo(() => {
@@ -137,12 +138,20 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
               </div>
             )}
           </div>
-          <p className='mt-2 text-2xl font-semibold'>
+          <p
+            className={join(
+              'mt-2 text-2xl font-semibold',
+              getLitterStatusClassName(
+                selectedLitterBoxChangedAt === null ? null : daysSinceNow(selectedLitterBoxChangedAt),
+              ),
+            )}
+          >
             {selectedLitterBoxChangedAt === null
               ? 'No changes logged'
-              : getDaysSince(selectedLitterBoxChangedAt) === 0
-                ? 'Today'
-                : `${getDaysSince(selectedLitterBoxChangedAt)} day${getDaysSince(selectedLitterBoxChangedAt) === 1 ? '' : 's'}`}
+              : (() => {
+                  const days = daysSinceNow(selectedLitterBoxChangedAt);
+                  return days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'}`;
+                })()}
           </p>
           {activeLitterBoxes.length === 1 && (
             <p className='mt-1 text-sm text-muted-foreground'>{selectedLitterBox.name}</p>

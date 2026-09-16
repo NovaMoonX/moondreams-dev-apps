@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
@@ -8,6 +8,7 @@ import { shallowEqual } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 
+import { useAttentionFocus } from '../context/attentionFocusContext';
 import AddCatModal from './AddCatModal';
 import CatAvatarItem from './CatAvatarItem';
 import CatDetailsModal from './CatDetailsModal';
@@ -31,6 +32,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
+  const { focusRequest } = useAttentionFocus();
+  const sectionRef = useRef<HTMLElement>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddCatModal, setShowAddCatModal] = useState(false);
@@ -42,7 +45,24 @@ function CatsSection({ householdId }: CatsSectionProps) {
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
+  const [handledFocusRequestedAt, setHandledFocusRequestedAt] = useState<number | undefined>(undefined);
   const selectedCat = selectedCatId ? cats.find((cat) => cat.id === selectedCatId) ?? null : null;
+
+  const isCatFocusRequest =
+    focusRequest?.kind === 'vaccination-log-dose' || focusRequest?.kind === 'preventive-log-dose';
+
+  if (isCatFocusRequest && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
+    setSelectedCatId(focusRequest.catId);
+  }
+
+  useEffect(() => {
+    if (!isCatFocusRequest) {
+      return;
+    }
+
+    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [isCatFocusRequest, focusRequest]);
 
   const handleCreateCat = async (values: CatQuickAddValues) => {
     if (!user?.uid) {
@@ -120,7 +140,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
   ];
 
   return (
-    <section className='rounded-lg border border-border bg-card p-4'>
+    <section ref={sectionRef} className='rounded-lg border border-border bg-card p-4'>
       <div className='mb-4 flex items-center justify-between gap-2'>
         <h2 className='text-xl font-semibold'>Cats</h2>
         <div className='flex items-center gap-2'>

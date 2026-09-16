@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Badge,
@@ -24,6 +24,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 import { formatDateTime } from '@/utils/formatUtils';
 import { LITTER_TYPE_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
+import { useAttentionFocus } from '@apps/nine-lives/context/attentionFocusContext';
 import { createCustomLitterType } from '@apps/nine-lives/store/actions/customLitterTypesActions';
 import {
   createLitterBox,
@@ -348,10 +349,12 @@ function LitterBoxFormModal({
 interface LitterBoxItemProps {
   box: LitterBox;
   selected?: boolean;
+  /** True while this box's log-entry modal is open — from any trigger, not just this button. */
+  hasOpenModal?: boolean;
   onClick?: (box: LitterBox) => void;
 }
 
-function LitterBoxItem({ box, selected = false, onClick }: LitterBoxItemProps) {
+function LitterBoxItem({ box, selected = false, hasOpenModal = false, onClick }: LitterBoxItemProps) {
   return (
     <button
       type='button'
@@ -359,6 +362,7 @@ function LitterBoxItem({ box, selected = false, onClick }: LitterBoxItemProps) {
       className={join(
         'min-w-32 rounded-lg border-2 border-border p-3 text-left transition hover:bg-muted/40',
         selected && 'bg-muted/60 ring-2 ring-primary',
+        hasOpenModal && 'bg-primary/10',
         !box.isActive && 'opacity-60',
       )}
     >
@@ -973,9 +977,18 @@ interface SelectedLitterBoxPanelProps {
   householdId: string;
   box: LitterBox;
   onEditDetails: () => void;
+  /** Set to open the log-entry modal directly, in "new entry" mode, without the user hunting for the button. */
+  autoOpenEntry?: { requestedAt: number };
+  onModalOpenChange?: (isOpen: boolean) => void;
 }
 
-function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLitterBoxPanelProps) {
+function SelectedLitterBoxPanel({
+  householdId,
+  box,
+  onEditDetails,
+  autoOpenEntry,
+  onModalOpenChange,
+}: SelectedLitterBoxPanelProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const entries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
@@ -984,6 +997,19 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
+  const [handledAutoOpenAt, setHandledAutoOpenAt] = useState(autoOpenEntry?.requestedAt);
+
+  useEffect(() => {
+    onModalOpenChange?.(isFormOpen);
+    // Only report state changes, not on every re-render from an identity change of the callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFormOpen]);
+
+  if (autoOpenEntry && autoOpenEntry.requestedAt !== handledAutoOpenAt) {
+    setHandledAutoOpenAt(autoOpenEntry.requestedAt);
+    setEditingEntry(null);
+    setIsFormOpen(true);
+  }
   const [sortOption, setSortOption] = useState<'newest' | 'oldest'>('newest');
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
   const [activeView, setActiveView] = useState<ViewToggleValue>('list');
@@ -1321,6 +1347,7 @@ interface LitterLogSectionProps {
 function LitterLogSection({ householdId }: LitterLogSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
+  const { focusRequest } = useAttentionFocus();
   const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
   const litters = useAppSelector(selectLittersByHousehold(householdId), shallowEqual);
   const [isBoxSubmitting, setIsBoxSubmitting] = useState(false);
@@ -1328,7 +1355,33 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
   const [editingBox, setEditingBox] = useState<LitterBox | null>(null);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('boxes');
+  const [modalOpenBoxId, setModalOpenBoxId] = useState<string | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const selectedBox = selectedBoxId ? litterBoxes.find((box) => box.id === selectedBoxId) ?? null : null;
+
+  const litterLogFocusRequest = focusRequest?.kind === 'litter-log' ? focusRequest : null;
+  const [handledLitterLogRequestedAt, setHandledLitterLogRequestedAt] = useState<number | undefined>(
+    undefined,
+  );
+
+  if (litterLogFocusRequest && litterLogFocusRequest.requestedAt !== handledLitterLogRequestedAt) {
+    setHandledLitterLogRequestedAt(litterLogFocusRequest.requestedAt);
+    setActiveTab('boxes');
+    setSelectedBoxId(litterLogFocusRequest.litterBoxId);
+  }
+
+  useEffect(() => {
+    if (!litterLogFocusRequest) {
+      return;
+    }
+
+    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [litterLogFocusRequest]);
+
+  const autoOpenEntry =
+    litterLogFocusRequest && litterLogFocusRequest.litterBoxId === selectedBoxId
+      ? { requestedAt: litterLogFocusRequest.requestedAt }
+      : undefined;
 
   const existingLocations = useMemo(
     () =>
@@ -1380,8 +1433,8 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
   };
 
   return (
-    <section>
-      <DetailsDisclosure label='Litter usage'>
+    <section ref={sectionRef}>
+      <DetailsDisclosure label='Litter usage' forceOpenAt={litterLogFocusRequest?.requestedAt}>
         <div className='space-y-6'>
           <Tabs value={activeTab} onValueChange={setActiveTab} tabsWidth='full' variant='pills'>
             <TabsList>
@@ -1422,6 +1475,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
                           key={box.id}
                           box={box}
                           selected={box.id === selectedBoxId}
+                          hasOpenModal={box.id === modalOpenBoxId}
                           onClick={(clickedBox) =>
                             setSelectedBoxId((current) => (current === clickedBox.id ? null : clickedBox.id))
                           }
@@ -1463,6 +1517,8 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
                 setEditingBox(selectedBox);
                 setIsBoxFormOpen(true);
               }}
+              autoOpenEntry={autoOpenEntry}
+              onModalOpenChange={(isOpen) => setModalOpenBoxId(isOpen ? selectedBox.id : null)}
             />
           )}
         </div>

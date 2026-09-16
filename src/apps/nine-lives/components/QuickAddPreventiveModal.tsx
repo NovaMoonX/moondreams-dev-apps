@@ -3,8 +3,8 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch } from '@/store';
 
-import { createPreventive } from '../store/actions/preventivesActions';
-import type { Cat, Preventive } from '../types';
+import { createPreventive, type PreventiveFormSubmission } from '../store/actions/preventivesActions';
+import type { Cat } from '../types';
 import PreventiveFormModal from './PreventiveFormModal';
 
 interface QuickAddPreventiveModalProps {
@@ -21,10 +21,7 @@ function QuickAddPreventiveModal({ isOpen, householdId, cats, onClose }: QuickAd
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
 
-  const handleSubmit = async (
-    preventive: Partial<Preventive> &
-      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt' | 'catIds'>,
-  ) => {
+  const handleSubmit = async (preventive: PreventiveFormSubmission) => {
     if (!user?.uid) {
       return;
     }
