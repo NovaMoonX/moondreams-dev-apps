@@ -177,6 +177,25 @@ export interface Vaccination {
   lastEditedAt: number;
 }
 
+export type PreventiveType = 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other';
+
+export interface Preventive {
+  id: string;
+  householdId: string;
+  catId: string;
+  name: string;
+  type: PreventiveType;
+  administeredAt: number;
+  expiresAt: number | null;
+  dosage: string | null;
+  clinicId: string | null;
+  doctorId: string | null;
+  linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export interface WeightEntry {
   id: string;
   catId: string;

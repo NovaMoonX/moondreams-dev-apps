@@ -42,6 +42,9 @@ export const selectCustomHealthRecordTypesByHousehold =
 export const selectVaccinationsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.vaccinations.items.filter((vaccination) => vaccination.catId === catId) : [];
 
+export const selectPreventivesByCat = (catId: string | null | undefined) => (state: RootState) =>
+  catId ? state.nineLives.preventives.items.filter((preventive) => preventive.catId === catId) : [];
+
 export const selectSymptomsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.symptoms.items.filter((symptom) => symptom.catId === catId) : [];
 

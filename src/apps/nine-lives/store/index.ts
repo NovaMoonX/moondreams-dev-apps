@@ -36,6 +36,10 @@ import {
   type VaccinationsState,
 } from './slices/vaccinationsSlice';
 import {
+  preventivesReducer,
+  type PreventivesState,
+} from './slices/preventivesSlice';
+import {
   vetClinicsReducer,
   type VetClinicsState,
 } from './slices/vetClinicsSlice';
@@ -67,6 +71,7 @@ export interface NineLivesState {
   catConditions: CatConditionsState;
   expenses: ExpensesState;
   vaccinations: VaccinationsState;
+  preventives: PreventivesState;
   weightEntries: WeightEntriesState;
   visits: VisitsState;
   healthRecords: HealthRecordsState;
@@ -84,6 +89,7 @@ export const nineLivesReducer = combineReducers({
   catConditions: catConditionsReducer,
   expenses: expensesReducer,
   vaccinations: vaccinationsReducer,
+  preventives: preventivesReducer,
   weightEntries: weightEntriesReducer,
   visits: visitsReducer,
   healthRecords: healthRecordsReducer,
