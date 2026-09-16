@@ -6,8 +6,13 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
-import { selectClinicsByHousehold, selectDoctorsByHousehold } from '@apps/nine-lives/store/selectors';
+import {
+  selectClinicsByHousehold,
+  selectDoctorsByHousehold,
+  selectVisitsByHousehold,
+} from '@apps/nine-lives/store/selectors';
 import type { Vaccination } from '@apps/nine-lives/types';
+import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 const NONE_OPTION_VALUE = '';
 
@@ -50,6 +55,7 @@ function VaccinationFormFields({
   const { confirm } = useActionModal();
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const isEditing = Boolean(initialVaccination?.id);
   const formId = initialVaccination?.id ?? 'new-nine-lives-vaccination';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
@@ -68,6 +74,11 @@ function VaccinationFormFields({
       ...doctors.map((doctor) => ({ label: doctor.name, value: doctor.id })),
     ],
     [doctors],
+  );
+
+  const visitOptions = useMemo(
+    () => [{ label: 'None', value: NONE_OPTION_VALUE }, ...getVisitOptions(visits)],
+    [visits],
   );
 
   const fields = useMemo(
@@ -115,15 +126,13 @@ function VaccinationFormFields({
         placeholder: initialVaccination?.lotNumber || 'L-1024',
         variant: 'outline',
       }),
-      // TODO: replace with a select populated from this cat's visits once visit records exist.
-      input({
+      select({
         name: 'linkedVisitId',
-        label: 'Linked visit ID (optional)',
-        placeholder: initialVaccination?.linkedVisitId || 'visit-id',
-        variant: 'outline',
+        label: 'Linked visit (optional)',
+        options: visitOptions,
       }),
     ],
-    [showCatField, catOptions, clinicOptions, doctorOptions, initialVaccination],
+    [showCatField, catOptions, clinicOptions, doctorOptions, visitOptions, initialVaccination],
   );
 
   const handleSubmit = async (data: VaccinationFormValues) => {

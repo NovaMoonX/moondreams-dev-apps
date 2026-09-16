@@ -95,6 +95,7 @@ function SymptomsSection({ householdId, catId, catName }: SymptomsSectionProps) 
       <SymptomFormModal
         key={editingSymptom?.id ?? 'new'}
         isOpen={isModalOpen}
+        householdId={householdId}
         catName={catName}
         conditions={conditions}
         initialSymptom={editingSymptom}

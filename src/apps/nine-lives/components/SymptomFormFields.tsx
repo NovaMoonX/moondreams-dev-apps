@@ -2,10 +2,14 @@ import { useMemo } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
+import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
+import { selectVisitsByHousehold } from '../store/selectors';
 import type { CatCondition, Symptom, SymptomQuickTag, SymptomSeverity } from '../types';
+import { getVisitOptions } from '../utils/visitOptions';
 
 interface SymptomFormValues {
   catId?: string;
@@ -14,9 +18,11 @@ interface SymptomFormValues {
   firstNoticedAt: string;
   severity: string;
   linkedConditionId: string;
+  linkedVisitIds: string[];
 }
 
 interface SymptomFormFieldsProps {
+  householdId?: string;
   conditions: CatCondition[];
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
@@ -47,6 +53,7 @@ const SEVERITY_OPTIONS: Array<{ value: SymptomSeverity; label: string }> = [
 const { textarea, checkboxGroup, select } = FormFactories;
 
 function SymptomFormFields({
+  householdId,
   conditions,
   catOptions,
   initialSymptom,
@@ -56,9 +63,12 @@ function SymptomFormFields({
   onCancel,
 }: SymptomFormFieldsProps) {
   const { confirm } = useActionModal();
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const isEditing = Boolean(initialSymptom?.id);
   const formId = initialSymptom?.id ?? 'new-nine-lives-symptom';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
+
+  const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
 
   const fields = useMemo(
     () => [
@@ -107,8 +117,17 @@ function SymptomFormFields({
             }),
           ]
         : []),
+      ...(visitOptions.length > 0
+        ? [
+            checkboxGroup({
+              name: 'linkedVisitIds',
+              label: 'Linked visits',
+              options: visitOptions,
+            }),
+          ]
+        : []),
     ],
-    [showCatField, catOptions, conditions],
+    [showCatField, catOptions, conditions, visitOptions],
   );
 
   const handleSubmit = async (data: SymptomFormValues) => {
@@ -126,6 +145,7 @@ function SymptomFormFields({
       firstNoticedAt,
       severity: (data.severity || null) as SymptomSeverity | null,
       linkedConditionId: data.linkedConditionId || null,
+      linkedVisitIds: data.linkedVisitIds ?? [],
     });
   };
 
@@ -156,6 +176,7 @@ function SymptomFormFields({
         firstNoticedAt: toDateInputValue(initialSymptom?.firstNoticedAt ?? undefined),
         severity: initialSymptom?.severity ?? '',
         linkedConditionId: initialSymptom?.linkedConditionId ?? '',
+        linkedVisitIds: initialSymptom?.linkedVisitIds ?? [],
       }}
       columns={1}
       onSubmit={(data) => {

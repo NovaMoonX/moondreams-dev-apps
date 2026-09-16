@@ -39,7 +39,7 @@ import type {
   VisitReason,
 } from '../types';
 import type { VisitOutcome } from '../store/actions/visitsActions';
-import { getDefaultVisitTitle } from '../utils/dateHelpers';
+import { getVisitOptions } from '../utils/visitOptions';
 import DetailsDisclosure from './DetailsDisclosure';
 
 interface VisitFormModalProps {
@@ -1005,13 +1005,7 @@ function VisitFormModal({
   const showOutcome = Boolean(isCompleting && initialVisit && onComplete);
   const formId = initialVisit?.id ?? 'new-nine-lives-visit';
   const originalVisitOptions = useMemo(
-    () =>
-      visits
-        .filter((visit) => visit.id !== initialVisit?.id)
-        .map((visit) => ({
-          label: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
-          value: visit.id,
-        })),
+    () => getVisitOptions(visits, { excludeVisitId: initialVisit?.id }),
     [visits, initialVisit?.id],
   );
   const defaultClinicAndDoctor = useMemo(() => {

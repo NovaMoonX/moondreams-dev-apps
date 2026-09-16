@@ -102,6 +102,7 @@ function CatConditionsSection({ householdId, catId, catName }: CatConditionsSect
       <CatConditionFormModal
         key={editingCondition?.id ?? 'new'}
         isOpen={isModalOpen}
+        householdId={householdId}
         libraryConditions={libraryConditions}
         initialCondition={editingCondition}
         isSubmitting={isSubmitting}

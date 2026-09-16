@@ -3,11 +3,15 @@ import { useMemo, useState } from 'react';
 import { Badge, Button, Form, FormFactories, HelpIcon, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { shallowEqual } from 'react-redux';
 
+import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
+import { selectVisitsByHousehold } from '../store/selectors';
 import type { CatCondition, ConditionCategory, LibraryCondition } from '../types';
 import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
+import { getVisitOptions } from '../utils/visitOptions';
 import ConditionLibraryBrowser from './ConditionLibraryBrowser';
 
 interface CatConditionFormValues {
@@ -17,9 +21,11 @@ interface CatConditionFormValues {
   isResolved: boolean;
   occurredAt: string;
   resolvedAt: string;
+  linkedVisitIds: string[];
 }
 
 interface CatConditionFormFieldsProps {
+  householdId?: string;
   libraryConditions: LibraryCondition[];
   /** When provided, renders a required "Cat" selector so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
@@ -40,9 +46,10 @@ const STATUS_OPTIONS = [
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
-const { input, select, textarea, checkbox, custom } = FormFactories;
+const { input, select, textarea, checkbox, checkboxGroup, custom } = FormFactories;
 
 function CatConditionFormFields({
+  householdId,
   libraryConditions,
   catOptions,
   initialCondition,
@@ -52,6 +59,8 @@ function CatConditionFormFields({
   onCancel,
 }: CatConditionFormFieldsProps) {
   const { confirm } = useActionModal();
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
+  const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
   const isEditing = Boolean(initialCondition?.id);
   const formId = initialCondition?.id ?? 'new-nine-lives-cat-condition';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
@@ -149,8 +158,17 @@ function CatConditionFormFields({
             }),
           ]
         : []),
+      ...(visitOptions.length > 0
+        ? [
+            checkboxGroup({
+              name: 'linkedVisitIds',
+              label: 'Linked visits',
+              options: visitOptions,
+            }),
+          ]
+        : []),
     ],
-    [mode, notesOpen, isResolved],
+    [mode, notesOpen, isResolved, visitOptions],
   );
 
   const handleSubmit = async (data: CatConditionFormValues) => {
@@ -180,6 +198,7 @@ function CatConditionFormFields({
         status,
         occurredAt,
         resolvedAt,
+        linkedVisitIds: data.linkedVisitIds ?? [],
       });
 
       return;
@@ -200,6 +219,7 @@ function CatConditionFormFields({
       status,
       occurredAt,
       resolvedAt,
+      linkedVisitIds: data.linkedVisitIds ?? [],
     });
   };
 
@@ -305,6 +325,7 @@ function CatConditionFormFields({
             isResolved,
             occurredAt: toDateInputValue(initialCondition?.occurredAt ?? undefined),
             resolvedAt: toDateInputValue(initialCondition?.resolvedAt ?? undefined),
+            linkedVisitIds: initialCondition?.linkedVisitIds ?? [],
           }}
           columns={1}
           spacing='normal'

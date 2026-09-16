@@ -22,14 +22,15 @@ import {
   getHealthRecordFileType,
   updateHealthRecord,
 } from '../store/actions/healthRecordsActions';
-import { selectCustomHealthRecordTypesByHousehold } from '../store/selectors';
+import { selectCustomHealthRecordTypesByHousehold, selectVisitsByHousehold } from '../store/selectors';
 import type {
   CustomHealthRecordType,
   HealthRecord,
   HealthRecordType,
 } from '../types';
+import { getVisitOptions } from '../utils/visitOptions';
 
-const { checkboxGroup, custom, input } = FormFactories;
+const { checkboxGroup, custom, input, select } = FormFactories;
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
@@ -57,6 +58,7 @@ interface HealthRecordFormValues {
   label?: string | null;
   recordType: RecordTypeChoice;
   recordDate: string;
+  linkedVisitId?: string | null;
 }
 
 interface HealthRecordUploadModalProps {
@@ -227,11 +229,17 @@ function HealthRecordUploadModal({
     selectCustomHealthRecordTypesByHousehold(householdId),
     shallowEqual,
   );
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [labelOpen, setLabelOpen] = useState(Boolean(initialRecord?.label));
   const isEditing = Boolean(initialRecord?.id);
   const formId = initialRecord?.id ?? 'new-nine-lives-health-record';
+
+  const visitOptions = useMemo(
+    () => [{ label: 'None', value: '' }, ...getVisitOptions(visits)],
+    [visits],
+  );
 
   const fields = useMemo(
     () => [
@@ -297,8 +305,13 @@ function HealthRecordUploadModal({
         label: 'Record date (optional)',
         variant: 'outline',
       }),
+      select({
+        name: 'linkedVisitId',
+        label: 'Linked visit (optional)',
+        options: visitOptions,
+      }),
     ],
-    [catOptions, customTypes, initialRecord?.fileName, isEditing, labelOpen],
+    [catOptions, customTypes, initialRecord?.fileName, isEditing, labelOpen, visitOptions],
   );
 
   const handleSubmit = async (data: HealthRecordFormValues) => {
@@ -339,6 +352,7 @@ function HealthRecordUploadModal({
         : null;
 
       const label = data.label?.trim() || null;
+      const linkedVisitId = data.linkedVisitId?.trim() || null;
 
       if (isEditing && initialRecord) {
         await dispatch(
@@ -351,6 +365,7 @@ function HealthRecordUploadModal({
               recordType,
               customRecordTypeId,
               recordDate,
+              linkedVisitId,
             },
           }),
         ).unwrap();
@@ -365,6 +380,7 @@ function HealthRecordUploadModal({
             recordType,
             customRecordTypeId,
             recordDate,
+            linkedVisitId,
           }),
         ).unwrap();
       } else {
@@ -423,6 +439,7 @@ function HealthRecordUploadModal({
           label: initialRecord?.label ?? '',
           recordType: getInitialRecordTypeChoice(initialRecord),
           recordDate: toDateInputValue(initialRecord?.recordDate ?? undefined),
+          linkedVisitId: initialRecord?.linkedVisitId ?? '',
         }}
         columns={1}
         spacing='normal'

@@ -101,6 +101,7 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
       <WeightEntryFormModal
         key={editingEntry?.id ?? 'new'}
         isOpen={isModalOpen}
+        householdId={householdId}
         catName={catName}
         initialWeightEntry={editingEntry}
         isSubmitting={isSubmitting}
