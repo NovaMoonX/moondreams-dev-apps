@@ -811,10 +811,10 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         customTypeId: null,
         doses: [
           {
-            // Due soon, so it shows up in the dashboard's "needs attention" section.
+            // Overdue, so it shows up as urgent in the dashboard's "needs attention" section.
             id: 'seed-preventive-juniper-dewormer-dose-1',
-            administeredAt: context.now - 7_776_000_000,
-            expiresAt: context.now + 6 * 86_400_000,
+            administeredAt: context.now - 9_072_000_000,
+            expiresAt: context.now - 2 * 86_400_000,
             dosage: '1 tablet',
             clinicId: 'seed-vet-clinic-harbor',
             doctorId: 'seed-doctor-daniela',

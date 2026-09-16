@@ -12,12 +12,25 @@ import {
   selectLitterEntriesByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
-import { getDaysSince, getLatestFullChangeByBox } from '../utils/attentionItems';
+import { getDaysSince, getLatestFullChangeByBox, LITTER_OVERDUE_DAYS } from '../utils/attentionItems';
 import StatTile from './StatTile';
 
 /** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
 function daysSinceNow(timestamp: number) {
   return getDaysSince(timestamp, Date.now());
+}
+
+/** Same thresholds as the "needs attention" section, so this stat visually agrees with that section. */
+function getLitterStatusClassName(daysSinceChange: number | null): string {
+  if (daysSinceChange === null || daysSinceChange >= LITTER_OVERDUE_DAYS) {
+    return 'text-destructive';
+  }
+
+  if (daysSinceChange >= LITTER_OVERDUE_DAYS - 7) {
+    return 'text-warning';
+  }
+
+  return '';
 }
 
 interface StatsSummaryProps {
@@ -125,7 +138,14 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
               </div>
             )}
           </div>
-          <p className='mt-2 text-2xl font-semibold'>
+          <p
+            className={join(
+              'mt-2 text-2xl font-semibold',
+              getLitterStatusClassName(
+                selectedLitterBoxChangedAt === null ? null : daysSinceNow(selectedLitterBoxChangedAt),
+              ),
+            )}
+          >
             {selectedLitterBoxChangedAt === null
               ? 'No changes logged'
               : (() => {

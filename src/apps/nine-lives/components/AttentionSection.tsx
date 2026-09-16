@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { Pill, Stethoscope, Syringe, Trash2 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
@@ -24,6 +24,7 @@ interface AttentionSectionProps {
 
 interface AttentionRow {
   key: string;
+  kind: AttentionItem['kind'];
   severity: AttentionSeverity;
   icon: typeof Stethoscope;
   title: string;
@@ -51,6 +52,15 @@ function formatDueLabel(timestamp: number, now: number): string {
 
   const overdueDays = Math.abs(diffDays);
   return `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`;
+}
+
+/** Severity maps onto the design system's existing warning/destructive tokens (light + dark mode already handled by those). */
+function getSeverityBadge(severity: AttentionSeverity, dueLabel: string): { variant: 'destructive' | 'warning'; label: string } {
+  if (severity === 'now') {
+    return { variant: 'destructive', label: dueLabel === 'Today' ? 'Today' : 'Overdue' };
+  }
+
+  return { variant: 'warning', label: 'This week' };
 }
 
 function AttentionSection({ householdId }: AttentionSectionProps) {
@@ -86,6 +96,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
         return {
           key: `visit-${item.visitId}`,
+          kind: 'visit',
           severity: item.severity,
           icon: Stethoscope,
           title: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
@@ -102,6 +113,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
         return {
           key: `litter-${item.litterBoxId}`,
+          kind: 'litter',
           severity: item.severity,
           icon: Trash2,
           title: box.name,
@@ -109,7 +121,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
             item.daysSinceChange === null
               ? 'No full change logged yet'
               : `${item.daysSinceChange} day${item.daysSinceChange === 1 ? '' : 's'} since last full change`,
-          dueLabel: item.severity === 'now' ? 'Needs attention' : 'Coming up',
+          dueLabel: '',
           actionLabel: 'Log change',
           onAction: () =>
             requestFocus({ kind: 'litter-log', requestedAt: Date.now(), litterBoxId: item.litterBoxId }),
@@ -121,6 +133,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
         return {
           key: `vaccination-${item.vaccinationId}`,
+          kind: 'vaccination',
           severity: item.severity,
           icon: Syringe,
           title: vaccination.name,
@@ -142,6 +155,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
         return {
           key: `preventive-${item.preventiveId}`,
+          kind: 'preventive',
           severity: item.severity,
           icon: Pill,
           title: preventive.name,
@@ -162,51 +176,93 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
   const now = currentTime();
   const rows = items.map((item) => toRow(item, now)).filter((row): row is AttentionRow => row !== null);
-  const nowRows = rows.filter((row) => row.severity === 'now');
-  const soonRows = rows.filter((row) => row.severity === 'soon');
+  const visitRows = rows.filter((row) => row.kind === 'visit');
+  const otherRows = rows.filter((row) => row.kind !== 'visit');
 
   if (rows.length === 0) {
     return null;
   }
 
-  const renderRow = (row: AttentionRow) => {
-    const Icon = row.icon;
+  const renderMeta = (row: AttentionRow) => {
+    const badge = getSeverityBadge(row.severity, row.dueLabel);
 
     return (
-      <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
-        <div className='flex min-w-0 items-start gap-3'>
-          <Icon className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />
-          <div className='min-w-0'>
-            <p className='text-sm font-medium'>{row.title}</p>
-            <p className='text-muted-foreground text-sm'>
-              {row.subtitle} · {row.dueLabel}
-            </p>
-          </div>
-        </div>
-        <Button type='button' variant='secondary' size='sm' onClick={row.onAction} className='shrink-0'>
-          {row.actionLabel}
-        </Button>
+      <div className='flex items-center gap-2'>
+        <p className='text-sm font-medium'>{row.title}</p>
+        <Badge variant={badge.variant} size='xs' use={row.severity === 'now' ? 'alert' : 'status'}>
+          {badge.label}
+        </Badge>
       </div>
     );
   };
 
   return (
-    <section className='rounded-lg border-2 border-primary/30 bg-primary/5 p-4'>
-      <h2 className='text-xl font-semibold'>Needs attention</h2>
+    <section className='rounded-lg border border-border bg-card p-4'>
+      <div className='grid gap-6 md:grid-cols-2'>
+        {visitRows.length > 0 && (
+          <div>
+            <h2 className='text-lg font-semibold'>Upcoming visits</h2>
+            <div className='mt-3 space-y-3'>
+              {visitRows.map((row) => (
+                <div key={row.key} className='rounded-lg border border-border p-3'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                      {renderMeta(row)}
+                      <p className='text-muted-foreground text-sm'>
+                        {row.subtitle} · {row.dueLabel}
+                      </p>
+                    </div>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={row.onAction}
+                      className='shrink-0'
+                    >
+                      {row.actionLabel}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {nowRows.length > 0 && (
-        <div className='mt-3'>
-          <h3 className='text-muted-foreground text-sm font-medium'>Needs attention now</h3>
-          <div className='divide-border divide-y'>{nowRows.map(renderRow)}</div>
-        </div>
-      )}
+        {otherRows.length > 0 && (
+          <div>
+            <h2 className='text-lg font-semibold'>Keep an eye on</h2>
+            <div className='divide-border divide-y'>
+              {otherRows.map((row) => {
+                const Icon = row.icon;
 
-      {soonRows.length > 0 && (
-        <div className='mt-4'>
-          <h3 className='text-muted-foreground text-sm font-medium'>Coming up this week</h3>
-          <div className='divide-border divide-y'>{soonRows.map(renderRow)}</div>
-        </div>
-      )}
+                return (
+                  <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
+                    <div className='flex min-w-0 items-start gap-3'>
+                      <Icon className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />
+                      <div className='min-w-0'>
+                        {renderMeta(row)}
+                        <p className='text-muted-foreground text-sm'>
+                          {row.subtitle}
+                          {row.dueLabel ? ` · ${row.dueLabel}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={row.onAction}
+                      className='shrink-0'
+                    >
+                      {row.actionLabel}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
