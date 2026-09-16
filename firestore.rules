@@ -239,10 +239,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/conditions/{conditionId} {
+    match /apps/nine-lives/households/{householdId}/conditions/{conditionId} {
       function isConditionIdentityValid() {
         return request.resource.data.id == conditionId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isConditionBaseShapeValid() {
@@ -274,12 +274,11 @@ service cloud.firestore {
       function isConditionImmutableFieldsValid() {
         return request.resource.data.id == resource.data.id
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isConditionIdentityValid()
@@ -292,11 +291,11 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/vaccinations/{vaccinationId} {
+    match /apps/nine-lives/households/{householdId}/vaccinations/{vaccinationId} {
       function isVaccinationIdentityValid() {
         return request.resource.data.id == vaccinationId
           && request.resource.data.householdId == householdId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isVaccinationBaseShapeValid() {
@@ -317,12 +316,11 @@ service cloud.firestore {
           && request.resource.data.householdId == resource.data.householdId
           && request.resource.data.householdId == householdId
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isVaccinationIdentityValid()
@@ -335,10 +333,64 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/weightEntries/{weightEntryId} {
+    match /apps/nine-lives/households/{householdId}/preventives/{preventiveId} {
+      function isPreventiveIdentityValid() {
+        return request.resource.data.id == preventiveId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.catIds is list
+          && request.resource.data.catIds.size() > 0;
+      }
+
+      function isPreventiveBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.customProductId == null || request.resource.data.customProductId is string)
+          && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'medication', 'other', 'custom']
+          && (request.resource.data.customTypeId == null || request.resource.data.customTypeId is string)
+          && isTimestampNumber(request.resource.data.administeredAt)
+          && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
+          && (request.resource.data.dosage == null || request.resource.data.dosage is string)
+          && (request.resource.data.clinicId == null || request.resource.data.clinicId is string)
+          && (request.resource.data.doctorId == null || request.resource.data.doctorId is string)
+          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (
+            request.resource.data.customProductId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveProducts/$(request.resource.data.customProductId))
+          )
+          && (
+            request.resource.data.customTypeId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveTypes/$(request.resource.data.customTypeId))
+          )
+          && (request.resource.data.type != 'custom' || request.resource.data.customTypeId is string);
+      }
+
+      function isPreventiveImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isPreventiveIdentityValid()
+        && isPreventiveBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isPreventiveImmutableFieldsValid()
+        && isPreventiveBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/weightEntries/{weightEntryId} {
       function isWeightEntryIdentityValid() {
         return request.resource.data.id == weightEntryId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isWeightEntryBaseShapeValid() {
@@ -358,7 +410,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isWeightEntryIdentityValid()
@@ -371,10 +423,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/symptoms/{symptomId} {
+    match /apps/nine-lives/households/{householdId}/symptoms/{symptomId} {
       function isSymptomIdentityValid() {
         return request.resource.data.id == symptomId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isSymptomBaseShapeValid() {
@@ -397,7 +449,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isSymptomIdentityValid()
@@ -525,6 +577,72 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomHealthRecordTypeImmutableFieldsValid()
         && isCustomHealthRecordTypeShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customPreventiveProducts/{productId} {
+      function isCustomPreventiveProductIdentityValid() {
+        return request.resource.data.id == productId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomPreventiveProductShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomPreventiveProductImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveProductIdentityValid()
+        && isCustomPreventiveProductShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveProductImmutableFieldsValid()
+        && isCustomPreventiveProductShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customPreventiveTypes/{typeId} {
+      function isCustomPreventiveTypeIdentityValid() {
+        return request.resource.data.id == typeId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomPreventiveTypeShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomPreventiveTypeImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveTypeIdentityValid()
+        && isCustomPreventiveTypeShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveTypeImmutableFieldsValid()
+        && isCustomPreventiveTypeShapeValid();
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 

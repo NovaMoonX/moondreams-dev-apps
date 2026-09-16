@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -43,7 +44,7 @@ function NineLives() {
     return state.nineLives.households.items.filter((household) =>
       household.members.includes(user.uid),
     );
-  });
+  }, shallowEqual);
 
   const selectedHousehold = useMemo(() => {
     if (households.length === 0) {

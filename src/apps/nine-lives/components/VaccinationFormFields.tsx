@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
@@ -47,8 +48,8 @@ function VaccinationFormFields({
   onCancel,
 }: VaccinationFormFieldsProps) {
   const { confirm } = useActionModal();
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
   const isEditing = Boolean(initialVaccination?.id);
   const formId = initialVaccination?.id ?? 'new-nine-lives-vaccination';
   const showCatField = Boolean(catOptions && catOptions.length > 0);

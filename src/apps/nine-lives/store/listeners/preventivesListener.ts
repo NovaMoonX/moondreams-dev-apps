@@ -2,26 +2,26 @@ import { collection, query, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
-import type { Vaccination } from '@apps/nine-lives/types';
+import type { Preventive } from '@apps/nine-lives/types';
 
-export function startVaccinationsListener(
+export function startPreventivesListener(
   householdId: string,
-  onChange: (vaccinations: Vaccination[]) => void,
+  onChange: (preventives: Preventive[]) => void,
 ): Unsubscribe {
   if (!householdId) {
     onChange([]);
     return () => undefined;
   }
 
-  const vaccinationsQuery = query(
-    collection(db, 'apps', 'nine-lives', 'households', householdId, 'vaccinations'),
+  const preventivesQuery = query(
+    collection(db, 'apps', 'nine-lives', 'households', householdId, 'preventives'),
   );
 
-  return createFirestoreCollectionListener<Vaccination>({
-    query: vaccinationsQuery,
+  return createFirestoreCollectionListener<Preventive>({
+    query: preventivesQuery,
     normalize: (id, data) => ({
       id,
-      ...(data as Omit<Vaccination, 'id'>),
+      ...(data as Omit<Preventive, 'id'>),
     }),
     onData: onChange,
   });

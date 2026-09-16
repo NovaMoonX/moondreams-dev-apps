@@ -55,6 +55,22 @@ export const INSURANCE_PROVIDER_OPTIONS = [
   'Other',
 ] as const;
 
+export const PREVENTIVE_NAME_OPTIONS = [
+  'Revolution Plus',
+  'Revolution',
+  'Advantage Multi',
+  'Drontal',
+] as const;
+
+export const PREVENTIVE_TYPE_OPTIONS = [
+  { value: 'flea-tick', label: 'Flea / tick' },
+  { value: 'heartworm', label: 'Heartworm' },
+  { value: 'mite', label: 'Mite' },
+  { value: 'dewormer', label: 'Dewormer' },
+  { value: 'medication', label: 'Medication' },
+  { value: 'other', label: 'Other' },
+] as const;
+
 export const PERSONALITY_TRAIT_OPTIONS = [
   'Affectionate',
   'Independent',
