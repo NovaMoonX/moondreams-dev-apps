@@ -14,6 +14,8 @@ import {
 function normalizePreventiveInput(value: Partial<Preventive>): Partial<Preventive> {
   const next = { ...value };
 
+  if (next.customProductId === undefined) next.customProductId = null;
+  if (next.customTypeId === undefined) next.customTypeId = null;
   if (next.expiresAt === undefined) next.expiresAt = null;
   if (next.dosage === undefined) next.dosage = null;
   if (next.clinicId === undefined) next.clinicId = null;
@@ -46,7 +48,8 @@ export const createPreventive = createAsyncThunk<
     householdId: string;
     catId: string;
     uid: string;
-    preventive: Partial<Preventive> & Pick<Preventive, 'name' | 'type' | 'administeredAt'>;
+    preventive: Partial<Preventive> &
+      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt'>;
   },
   { rejectValue: string }
 >(
@@ -79,7 +82,9 @@ export const createPreventive = createAsyncThunk<
       householdId,
       catId,
       name: trimmedName,
+      customProductId: preventive.customProductId,
       type: preventive.type,
+      customTypeId: preventive.customTypeId,
       administeredAt: preventive.administeredAt,
       expiresAt: preventive.expiresAt ?? null,
       dosage: preventive.dosage ?? null,

@@ -261,12 +261,28 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     ],
   };
 
+  const customPreventiveProducts = [
+    {
+      id: 'seed-custom-preventive-product-bravecto',
+      label: 'Bravecto',
+    },
+  ] as const;
+
+  const customPreventiveTypes = [
+    {
+      id: 'seed-custom-preventive-type-ear-mite-treatment',
+      label: 'Ear mite treatment',
+    },
+  ] as const;
+
   const preventivesByCat: Record<
     string,
     Array<{
       id: string;
       name: string;
-      type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other';
+      customProductId: string | null;
+      type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other' | 'custom';
+      customTypeId: string | null;
       administeredAt: number;
       expiresAt: number | null;
       dosage: string | null;
@@ -279,7 +295,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       {
         id: 'seed-preventive-mochi-revolution',
         name: 'Revolution Plus',
+        customProductId: null,
         type: 'flea-tick',
+        customTypeId: null,
         administeredAt: context.now - 2_592_000_000,
         expiresAt: context.now + 2_592_000_000,
         dosage: '0.5 mL',
@@ -287,12 +305,27 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         doctorId: 'seed-doctor-maya',
         linkedVisitId: null,
       },
+      {
+        id: 'seed-preventive-mochi-bravecto',
+        name: customPreventiveProducts[0].label,
+        customProductId: customPreventiveProducts[0].id,
+        type: 'custom',
+        customTypeId: customPreventiveTypes[0].id,
+        administeredAt: context.now - 1_296_000_000,
+        expiresAt: context.now + 6_480_000_000,
+        dosage: null,
+        clinicId: null,
+        doctorId: null,
+        linkedVisitId: null,
+      },
     ],
     'seed-cat-juniper': [
       {
         id: 'seed-preventive-juniper-heartworm',
         name: 'Revolution Plus',
+        customProductId: null,
         type: 'heartworm',
+        customTypeId: null,
         administeredAt: context.now - 5_184_000_000,
         expiresAt: context.now + 25_920_000_000,
         dosage: '0.5 mL',
@@ -771,7 +804,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       householdId: SECOND_HOUSEHOLD_ID,
       catId: 'seed-cat-other-household',
       name: 'Advantage Multi',
+      customProductId: null,
       type: 'flea-tick',
+      customTypeId: null,
       administeredAt: context.now - 2_592_000_000,
       expiresAt: context.now + 2_592_000_000,
       dosage: '0.4 mL',
@@ -852,6 +887,40 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  customPreventiveProducts.forEach((customProduct) => {
+    const customProductRef = householdRef
+      .collection('customPreventiveProducts')
+      .doc(customProduct.id);
+
+    batch.set(
+      customProductRef,
+      {
+        ...customProduct,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
+  customPreventiveTypes.forEach((customType) => {
+    const customTypeRef = householdRef
+      .collection('customPreventiveTypes')
+      .doc(customType.id);
+
+    batch.set(
+      customTypeRef,
+      {
+        ...customType,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
   healthRecords.forEach((record) => {
     const recordRef = householdRef.collection('healthRecords').doc(record.id);
 
@@ -899,6 +968,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       weightEntryCount +
       expenseCount +
       customHealthRecordTypes.length +
+      customPreventiveProducts.length +
+      customPreventiveTypes.length +
       healthRecordCount +
       symptomCount +
       visitCount,

@@ -230,15 +230,19 @@ Path: `apps/nine-lives/households/{householdId}/cats/{catId}/preventives/{preven
 
 Preventives use the same append-only, one-document-per-dose model as vaccinations, but represent recurring parasite treatments that are often administered at home. `householdId` is denormalized so the household-wide due-dates view can run a `collectionGroup('preventives')` query without fetching every cat individually. Each dose can be edited or deleted, while the remaining history stays intact.
 
+Product and type both follow the same "custom add" pattern as health record types (see Entity 6's `CustomHealthRecordType`): a preset dropdown plus an "Add a custom product…"/"Add a custom type…" option that persists a reusable, household-scoped entry (`CustomPreventiveProduct` / `CustomPreventiveType`) rather than a one-off string, so the same custom product or type is offered again on future doses.
+
 ```typescript
-type PreventiveType = 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other';
+type PreventiveType = 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other' | 'custom';
 
 interface Preventive {
   id: string;
   householdId: string;
   catId: string;
   name: string;
+  customProductId: string | null; // set when `name` came from a CustomPreventiveProduct
   type: PreventiveType;
+  customTypeId: string | null; // required when type === 'custom'
   administeredAt: number;
   expiresAt: number | null; // next dose due date
   dosage: string | null;
@@ -248,6 +252,22 @@ interface Preventive {
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
+}
+
+interface CustomPreventiveProduct {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+interface CustomPreventiveType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
 }
 ```
 

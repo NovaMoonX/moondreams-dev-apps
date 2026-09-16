@@ -1,14 +1,15 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
-import type { Preventive } from '@apps/nine-lives/types';
+import type { CustomPreventiveType, Preventive } from '@apps/nine-lives/types';
 
 interface PreventiveTimelineProps {
   preventives: Preventive[];
+  customTypes: CustomPreventiveType[];
   onEdit?: (preventive: Preventive) => void;
 }
 
-const TYPE_LABELS: Record<Preventive['type'], string> = {
+const TYPE_LABELS: Record<Exclude<Preventive['type'], 'custom'>, string> = {
   'flea-tick': 'Flea / tick',
   heartworm: 'Heartworm',
   mite: 'Mite',
@@ -16,7 +17,16 @@ const TYPE_LABELS: Record<Preventive['type'], string> = {
   other: 'Other',
 };
 
-function PreventiveTimeline({ preventives, onEdit }: PreventiveTimelineProps) {
+function getPreventiveTypeLabel(preventive: Preventive, customTypes: CustomPreventiveType[]): string {
+  if (preventive.type === 'custom') {
+    const customType = customTypes.find((type) => type.id === preventive.customTypeId);
+    return customType?.label ?? 'Custom';
+  }
+
+  return TYPE_LABELS[preventive.type];
+}
+
+function PreventiveTimeline({ preventives, customTypes, onEdit }: PreventiveTimelineProps) {
   const sortedPreventives = [...preventives].sort(
     (left, right) => right.administeredAt - left.administeredAt,
   );
@@ -31,7 +41,9 @@ function PreventiveTimeline({ preventives, onEdit }: PreventiveTimelineProps) {
         <div key={preventive.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
           <div className='min-w-0'>
             <strong className='text-sm'>{preventive.name}</strong>
-            <div className='text-muted-foreground text-sm'>{TYPE_LABELS[preventive.type]}</div>
+            <div className='text-muted-foreground text-sm'>
+              {getPreventiveTypeLabel(preventive, customTypes)}
+            </div>
             <div className='text-muted-foreground text-sm'>
               Last administered: {formatDateTime(preventive.administeredAt)}
             </div>

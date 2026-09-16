@@ -60,7 +60,6 @@ export const PREVENTIVE_NAME_OPTIONS = [
   'Revolution',
   'Advantage Multi',
   'Drontal',
-  'Other',
 ] as const;
 
 export const PREVENTIVE_TYPE_OPTIONS = [

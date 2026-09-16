@@ -7,6 +7,8 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startCustomHealthRecordTypesListener } from '../store/listeners/customHealthRecordTypesListener';
+import { startCustomPreventiveProductsListener } from '../store/listeners/customPreventiveProductsListener';
+import { startCustomPreventiveTypesListener } from '../store/listeners/customPreventiveTypesListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
@@ -17,6 +19,8 @@ import { startVisitsListener } from '../store/listeners/visitsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
 import { setCustomHealthRecordTypes } from '../store/slices/customHealthRecordTypesSlice';
+import { setCustomPreventiveProducts } from '../store/slices/customPreventiveProductsSlice';
+import { setCustomPreventiveTypes } from '../store/slices/customPreventiveTypesSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setExpenses } from '../store/slices/expensesSlice';
@@ -66,6 +70,8 @@ export function useNineLivesSync(
       dispatch(setHealthRecords([]));
       dispatch(setExpenses([]));
       dispatch(setPreventives([]));
+      dispatch(setCustomPreventiveProducts([]));
+      dispatch(setCustomPreventiveTypes([]));
       return;
     }
 
@@ -102,6 +108,18 @@ export function useNineLivesSync(
     const unsubscribePreventives = startPreventivesListener(householdId, (preventives) => {
       dispatch(setPreventives(preventives));
     });
+    const unsubscribeCustomPreventiveProducts = startCustomPreventiveProductsListener(
+      householdId,
+      (products) => {
+        dispatch(setCustomPreventiveProducts(products));
+      },
+    );
+    const unsubscribeCustomPreventiveTypes = startCustomPreventiveTypesListener(
+      householdId,
+      (types) => {
+        dispatch(setCustomPreventiveTypes(types));
+      },
+    );
 
     return () => {
       unsubscribeCats();
@@ -113,6 +131,8 @@ export function useNineLivesSync(
       unsubscribeExpenses();
       unsubscribeHealthRecords();
       unsubscribePreventives();
+      unsubscribeCustomPreventiveProducts();
+      unsubscribeCustomPreventiveTypes();
     };
   }, [dispatch, householdId]);
 

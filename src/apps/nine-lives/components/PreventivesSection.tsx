@@ -10,7 +10,7 @@ import {
   deletePreventive,
   updatePreventive,
 } from '../store/actions/preventivesActions';
-import { selectPreventivesByCat } from '../store/selectors';
+import { selectCustomPreventiveTypesByHousehold, selectPreventivesByCat } from '../store/selectors';
 import type { Preventive } from '../types';
 import PreventiveFormModal from './PreventiveFormModal';
 import PreventiveTimeline from './PreventiveTimeline';
@@ -25,12 +25,14 @@ function PreventivesSection({ householdId, catId, catName }: PreventivesSectionP
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const preventives = useAppSelector(selectPreventivesByCat(catId));
+  const customTypes = useAppSelector(selectCustomPreventiveTypesByHousehold(householdId));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingPreventive, setEditingPreventive] = useState<Preventive | null>(null);
 
   const handleSubmit = async (
-    preventive: Partial<Preventive> & Pick<Preventive, 'name' | 'type' | 'administeredAt'>,
+    preventive: Partial<Preventive> &
+      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt'>,
   ) => {
     if (!user?.uid) {
       return;
@@ -92,20 +94,24 @@ function PreventivesSection({ householdId, catId, catName }: PreventivesSectionP
           Add preventive
         </Button>
       </div>
-      <PreventiveTimeline preventives={preventives} onEdit={openEdit} />
-      <PreventiveFormModal
-        isOpen={isModalOpen}
-        householdId={householdId}
-        catName={catName}
-        initialPreventive={editingPreventive}
-        isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-        onDelete={handleDelete}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingPreventive(null);
-        }}
-      />
+      <PreventiveTimeline preventives={preventives} customTypes={customTypes} onEdit={openEdit} />
+      {user?.uid && (
+        <PreventiveFormModal
+          key={editingPreventive?.id ?? 'new'}
+          isOpen={isModalOpen}
+          householdId={householdId}
+          uid={user.uid}
+          catName={catName}
+          initialPreventive={editingPreventive}
+          isSubmitting={isSubmitting}
+          onSubmit={handleSubmit}
+          onDelete={handleDelete}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingPreventive(null);
+          }}
+        />
+      )}
     </div>
   );
 }

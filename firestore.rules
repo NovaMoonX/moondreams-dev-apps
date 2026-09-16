@@ -346,7 +346,9 @@ service cloud.firestore {
 
       function isPreventiveBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
-          && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'other']
+          && (request.resource.data.customProductId == null || request.resource.data.customProductId is string)
+          && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'other', 'custom']
+          && (request.resource.data.customTypeId == null || request.resource.data.customTypeId is string)
           && isTimestampNumber(request.resource.data.administeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
           && (request.resource.data.dosage == null || request.resource.data.dosage is string)
@@ -355,7 +357,16 @@ service cloud.firestore {
           && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (
+            request.resource.data.customProductId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)/customPreventiveProducts/$(request.resource.data.customProductId))
+          )
+          && (
+            request.resource.data.customTypeId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)/customPreventiveTypes/$(request.resource.data.customTypeId))
+          )
+          && (request.resource.data.type != 'custom' || request.resource.data.customTypeId is string);
       }
 
       function isPreventiveImmutableFieldsValid() {
@@ -574,6 +585,72 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomHealthRecordTypeImmutableFieldsValid()
         && isCustomHealthRecordTypeShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customPreventiveProducts/{productId} {
+      function isCustomPreventiveProductIdentityValid() {
+        return request.resource.data.id == productId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomPreventiveProductShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomPreventiveProductImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveProductIdentityValid()
+        && isCustomPreventiveProductShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveProductImmutableFieldsValid()
+        && isCustomPreventiveProductShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customPreventiveTypes/{typeId} {
+      function isCustomPreventiveTypeIdentityValid() {
+        return request.resource.data.id == typeId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomPreventiveTypeShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomPreventiveTypeImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveTypeIdentityValid()
+        && isCustomPreventiveTypeShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveTypeImmutableFieldsValid()
+        && isCustomPreventiveTypeShapeValid();
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 

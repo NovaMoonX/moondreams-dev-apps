@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Button,
@@ -11,85 +11,241 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 import {
   PREVENTIVE_NAME_OPTIONS,
   PREVENTIVE_TYPE_OPTIONS,
 } from '@apps/nine-lives/constants/presetOptions';
+import { createCustomPreventiveProduct } from '@apps/nine-lives/store/actions/customPreventiveProductsActions';
+import { createCustomPreventiveType } from '@apps/nine-lives/store/actions/customPreventiveTypesActions';
 import {
   selectClinicsByHousehold,
+  selectCustomPreventiveProductsByHousehold,
+  selectCustomPreventiveTypesByHousehold,
   selectDoctorsByHousehold,
 } from '@apps/nine-lives/store/selectors';
 import type { Preventive, PreventiveType } from '@apps/nine-lives/types';
 
-const OTHER_NAME = 'Other';
+import DetailsDisclosure from './DetailsDisclosure';
 
-interface PreventiveNameValue {
+const NEW_PRODUCT_VALUE = '__new_preventive_product__';
+const NEW_TYPE_VALUE = '__new_preventive_type__';
+
+interface ProductChoice {
   preset: string;
-  customName: string;
+  customLabel: string;
+}
+
+interface TypeChoice {
+  preset: string;
+  customLabel: string;
+}
+
+interface AdditionalDetailsValue {
+  dosage: string;
+  clinicId: string;
+  doctorId: string;
+  linkedVisitId: string;
 }
 
 interface PreventiveFormValues {
-  nameChoice: PreventiveNameValue;
-  type: string;
+  product: ProductChoice;
+  type: TypeChoice;
   administeredAt: string;
   expiresAt?: string;
-  dosage?: string;
-  clinicId?: string;
-  doctorId?: string;
-  linkedVisitId?: string;
+  additionalDetails: AdditionalDetailsValue;
 }
 
 interface PreventiveFormModalProps {
   isOpen: boolean;
   householdId: string;
+  uid: string;
   catName: string;
   initialPreventive?: Preventive | null;
   isSubmitting?: boolean;
   onSubmit: (
-    preventive: Partial<Preventive> & Pick<Preventive, 'name' | 'type' | 'administeredAt'>,
+    preventive: Partial<Preventive> &
+      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt'>,
   ) => Promise<void> | void;
   onDelete?: (preventiveId: string) => Promise<void> | void;
   onClose: () => void;
 }
 
-function PreventiveNameField({
+function getInitialProductChoice(preventive: Preventive | null | undefined): ProductChoice {
+  if (!preventive) {
+    return { preset: PREVENTIVE_NAME_OPTIONS[0], customLabel: '' };
+  }
+
+  if (preventive.customProductId) {
+    return { preset: `custom:${preventive.customProductId}`, customLabel: '' };
+  }
+
+  if (PREVENTIVE_NAME_OPTIONS.includes(preventive.name as (typeof PREVENTIVE_NAME_OPTIONS)[number])) {
+    return { preset: preventive.name, customLabel: '' };
+  }
+
+  return { preset: NEW_PRODUCT_VALUE, customLabel: preventive.name };
+}
+
+function getInitialTypeChoice(preventive: Preventive | null | undefined): TypeChoice {
+  if (!preventive) {
+    return { preset: 'flea-tick', customLabel: '' };
+  }
+
+  if (preventive.type === 'custom' && preventive.customTypeId) {
+    return { preset: `custom:${preventive.customTypeId}`, customLabel: '' };
+  }
+
+  return { preset: preventive.type, customLabel: '' };
+}
+
+function ProductField({
   value,
   onValueChange,
   disabled,
+  customProducts,
 }: {
-  value: PreventiveNameValue;
-  onValueChange: (value: PreventiveNameValue) => void;
+  value: ProductChoice;
+  onValueChange: (value: ProductChoice) => void;
   disabled?: boolean;
+  customProducts: { id: string; label: string }[];
 }) {
+  const options = [
+    ...PREVENTIVE_NAME_OPTIONS.map((option) => ({ text: option, value: option })),
+    ...customProducts.map((product) => ({ text: product.label, value: `custom:${product.id}` })),
+    { text: 'Add a custom product…', value: NEW_PRODUCT_VALUE },
+  ];
+
   return (
-    <div className='space-y-3'>
+    <div className='space-y-2'>
       <Select
-        options={PREVENTIVE_NAME_OPTIONS.map((option) => ({ text: option, value: option }))}
+        options={options}
         value={value.preset}
-        onChange={(preset) => onValueChange({ ...value, preset })}
+        placeholder='Select a product'
         disabled={disabled}
+        searchable
+        onChange={(preset) => onValueChange({ preset, customLabel: value.customLabel })}
       />
-      {value.preset === OTHER_NAME && (
+      {value.preset === NEW_PRODUCT_VALUE && (
+        <Input
+          value={value.customLabel}
+          onChange={(event) => onValueChange({ ...value, customLabel: event.target.value })}
+          placeholder='Enter the product name'
+          variant='outline'
+          disabled={disabled}
+        />
+      )}
+    </div>
+  );
+}
+
+function TypeField({
+  value,
+  onValueChange,
+  disabled,
+  customTypes,
+}: {
+  value: TypeChoice;
+  onValueChange: (value: TypeChoice) => void;
+  disabled?: boolean;
+  customTypes: { id: string; label: string }[];
+}) {
+  const options = [
+    ...PREVENTIVE_TYPE_OPTIONS.map((option) => ({ text: option.label, value: option.value })),
+    ...customTypes.map((type) => ({ text: type.label, value: `custom:${type.id}` })),
+    { text: 'Add a custom type…', value: NEW_TYPE_VALUE },
+  ];
+
+  return (
+    <div className='space-y-2'>
+      <Select
+        options={options}
+        value={value.preset}
+        placeholder='Select a type'
+        disabled={disabled}
+        searchable
+        onChange={(preset) => onValueChange({ preset, customLabel: value.customLabel })}
+      />
+      {value.preset === NEW_TYPE_VALUE && (
+        <Input
+          value={value.customLabel}
+          onChange={(event) => onValueChange({ ...value, customLabel: event.target.value })}
+          placeholder='Enter the preventive type'
+          variant='outline'
+          disabled={disabled}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdditionalDetailsFields({
+  value,
+  onValueChange,
+  disabled,
+  clinicOptions,
+  doctorOptions,
+}: {
+  value: AdditionalDetailsValue;
+  onValueChange: (value: AdditionalDetailsValue) => void;
+  disabled?: boolean;
+  clinicOptions: { label: string; value: string }[];
+  doctorOptions: { label: string; value: string }[];
+}) {
+  const update = (changes: Partial<AdditionalDetailsValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <DetailsDisclosure label='Additional details'>
+      <div className='space-y-3'>
         <div className='space-y-1'>
-          <Label className='text-sm'>Custom product name</Label>
+          <Label className='text-sm'>Dosage</Label>
           <Input
-            value={value.customName}
-            onChange={(event) => onValueChange({ ...value, customName: event.target.value })}
-            placeholder='Enter the product name'
+            value={value.dosage}
+            onChange={(event) => update({ dosage: event.target.value })}
+            placeholder='e.g. 0.5 mL'
             variant='outline'
             disabled={disabled}
           />
         </div>
-      )}
-    </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Clinic</Label>
+          <Select
+            options={clinicOptions.map((option) => ({ text: option.label, value: option.value }))}
+            value={value.clinicId}
+            disabled={disabled}
+            onChange={(clinicId) => update({ clinicId })}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Doctor</Label>
+          <Select
+            options={doctorOptions.map((option) => ({ text: option.label, value: option.value }))}
+            value={value.doctorId}
+            disabled={disabled}
+            onChange={(doctorId) => update({ doctorId })}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Linked visit ID</Label>
+          <Input
+            value={value.linkedVisitId}
+            onChange={(event) => update({ linkedVisitId: event.target.value })}
+            placeholder='visit-id'
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+      </div>
+    </DetailsDisclosure>
   );
 }
 
 function PreventiveFormModal({
   isOpen,
   householdId,
+  uid,
   catName,
   initialPreventive,
   isSubmitting = false,
@@ -97,24 +253,15 @@ function PreventiveFormModal({
   onDelete,
   onClose,
 }: PreventiveFormModalProps) {
+  const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const clinics = useAppSelector(selectClinicsByHousehold(householdId));
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
+  const customProducts = useAppSelector(selectCustomPreventiveProductsByHousehold(householdId));
+  const customTypes = useAppSelector(selectCustomPreventiveTypesByHousehold(householdId));
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const isEditing = Boolean(initialPreventive?.id);
   const formId = initialPreventive?.id ?? 'new-nine-lives-preventive';
-  const savedName = initialPreventive?.name ?? '';
-  const nameChoice: PreventiveNameValue = {
-    preset: PREVENTIVE_NAME_OPTIONS.includes(
-      savedName as (typeof PREVENTIVE_NAME_OPTIONS)[number],
-    )
-      ? savedName
-      : OTHER_NAME,
-    customName: PREVENTIVE_NAME_OPTIONS.includes(
-      savedName as (typeof PREVENTIVE_NAME_OPTIONS)[number],
-    )
-      ? ''
-      : savedName,
-  };
 
   const clinicOptions = useMemo(
     () => [
@@ -133,23 +280,30 @@ function PreventiveFormModal({
   const fields = useMemo(
     () => [
       FormFactories.custom({
-        name: 'nameChoice',
-        label: 'Product name',
+        name: 'product',
+        label: 'Product',
+        required: true,
         renderComponent: (props) => (
-          <PreventiveNameField
-            value={props.value as PreventiveNameValue}
+          <ProductField
+            value={props.value as ProductChoice}
             onValueChange={props.onValueChange}
             disabled={props.disabled}
+            customProducts={customProducts}
           />
         ),
       }),
-      FormFactories.select({
+      FormFactories.custom({
         name: 'type',
         label: 'Preventive type',
-        options: PREVENTIVE_TYPE_OPTIONS.map((option) => ({
-          label: option.label,
-          value: option.value,
-        })),
+        required: true,
+        renderComponent: (props) => (
+          <TypeField
+            value={props.value as TypeChoice}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+            customTypes={customTypes}
+          />
+        ),
       }),
       createDateInputField({
         name: 'administeredAt',
@@ -162,52 +316,100 @@ function PreventiveFormModal({
         label: 'Next due date (optional)',
         variant: 'outline',
       }),
-      FormFactories.input({
-        name: 'dosage',
-        label: 'Dosage (optional)',
-        placeholder: 'e.g. 0.5 mL',
-        variant: 'outline',
-      }),
-      FormFactories.select({
-        name: 'clinicId',
-        label: 'Clinic (optional)',
-        options: clinicOptions,
-      }),
-      FormFactories.select({
-        name: 'doctorId',
-        label: 'Doctor (optional)',
-        options: doctorOptions,
-      }),
-      FormFactories.input({
-        name: 'linkedVisitId',
-        label: 'Linked visit ID (optional)',
-        placeholder: 'visit-id',
-        variant: 'outline',
+      FormFactories.custom({
+        name: 'additionalDetails',
+        label: '',
+        renderComponent: (props) => (
+          <AdditionalDetailsFields
+            value={props.value as AdditionalDetailsValue}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+            clinicOptions={clinicOptions}
+            doctorOptions={doctorOptions}
+          />
+        ),
+        colSpan: 'full',
       }),
     ],
-    [clinicOptions, doctorOptions],
+    [clinicOptions, customProducts, customTypes, doctorOptions],
   );
 
   const handleSubmit = async (data: PreventiveFormValues) => {
-    const name = data.nameChoice.preset === OTHER_NAME
-      ? data.nameChoice.customName.trim()
-      : data.nameChoice.preset.trim();
+    setSubmitError(null);
     const administeredAt = fromDateInputValue(data.administeredAt) ?? null;
 
-    if (!name || administeredAt === null) {
+    if (administeredAt === null) {
       return;
+    }
+
+    let name: string;
+    let customProductId: string | null;
+
+    if (data.product.preset === NEW_PRODUCT_VALUE) {
+      const trimmed = data.product.customLabel.trim();
+
+      if (!trimmed) {
+        setSubmitError('Enter a product name.');
+        return;
+      }
+
+      const product = await dispatch(
+        createCustomPreventiveProduct({ householdId, uid, label: trimmed }),
+      ).unwrap();
+      name = product.label;
+      customProductId = product.id;
+    } else if (data.product.preset.startsWith('custom:')) {
+      const productId = data.product.preset.slice('custom:'.length);
+      const product = customProducts.find((item) => item.id === productId);
+
+      if (!product) {
+        setSubmitError('Select a product.');
+        return;
+      }
+
+      name = product.label;
+      customProductId = product.id;
+    } else {
+      name = data.product.preset;
+      customProductId = null;
+    }
+
+    let type: PreventiveType;
+    let customTypeId: string | null;
+
+    if (data.type.preset === NEW_TYPE_VALUE) {
+      const trimmed = data.type.customLabel.trim();
+
+      if (!trimmed) {
+        setSubmitError('Enter a preventive type.');
+        return;
+      }
+
+      const customType = await dispatch(
+        createCustomPreventiveType({ householdId, uid, label: trimmed }),
+      ).unwrap();
+      type = 'custom';
+      customTypeId = customType.id;
+    } else if (data.type.preset.startsWith('custom:')) {
+      type = 'custom';
+      customTypeId = data.type.preset.slice('custom:'.length);
+    } else {
+      type = data.type.preset as PreventiveType;
+      customTypeId = null;
     }
 
     await onSubmit({
       id: initialPreventive?.id,
       name,
-      type: data.type as PreventiveType,
+      customProductId,
+      type,
+      customTypeId,
       administeredAt,
       expiresAt: data.expiresAt ? (fromDateInputValue(data.expiresAt) ?? null) : null,
-      dosage: data.dosage?.trim() || null,
-      clinicId: data.clinicId?.trim() || null,
-      doctorId: data.doctorId?.trim() || null,
-      linkedVisitId: data.linkedVisitId?.trim() || null,
+      dosage: data.additionalDetails.dosage.trim() || null,
+      clinicId: data.additionalDetails.clinicId.trim() || null,
+      doctorId: data.additionalDetails.doctorId.trim() || null,
+      linkedVisitId: data.additionalDetails.linkedVisitId.trim() || null,
     });
   };
 
@@ -238,14 +440,16 @@ function PreventiveFormModal({
         id={formId}
         form={fields}
         initialData={{
-          nameChoice,
-          type: initialPreventive?.type ?? 'flea-tick',
+          product: getInitialProductChoice(initialPreventive),
+          type: getInitialTypeChoice(initialPreventive),
           administeredAt: toDateInputValue(initialPreventive?.administeredAt ?? undefined),
           expiresAt: toDateInputValue(initialPreventive?.expiresAt ?? undefined),
-          dosage: initialPreventive?.dosage ?? '',
-          clinicId: initialPreventive?.clinicId ?? '',
-          doctorId: initialPreventive?.doctorId ?? '',
-          linkedVisitId: initialPreventive?.linkedVisitId ?? '',
+          additionalDetails: {
+            dosage: initialPreventive?.dosage ?? '',
+            clinicId: initialPreventive?.clinicId ?? '',
+            doctorId: initialPreventive?.doctorId ?? '',
+            linkedVisitId: initialPreventive?.linkedVisitId ?? '',
+          },
         }}
         columns={1}
         spacing='normal'
@@ -263,13 +467,16 @@ function PreventiveFormModal({
               >
                 Delete
               </Button>
-            ) : <span />}
+            ) : (
+              <span />
+            )}
             <Button type='submit' loading={isSubmitting}>
               {isSubmitting ? 'Saving…' : isEditing ? 'Save preventive' : 'Add preventive'}
             </Button>
           </div>
         }
       />
+      {submitError && <p className='mt-3 text-sm text-red-500'>{submitError}</p>}
     </Modal>
   );
 }
