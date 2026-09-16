@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -13,7 +13,7 @@ import {
 } from '../store/actions/catConditionsActions';
 import { selectConditionLibrary, selectConditionsByCat } from '../store/selectors';
 import type { CatCondition } from '../types';
-import CatConditionFormFields from './CatConditionFormFields';
+import CatConditionFormModal from './CatConditionFormModal';
 import CatConditionTimeline from './CatConditionTimeline';
 
 interface CatConditionsSectionProps {
@@ -25,14 +25,19 @@ interface CatConditionsSectionProps {
 function CatConditionsSection({ householdId, catId, catName }: CatConditionsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const conditions = useAppSelector(selectConditionsByCat(catId));
+  const conditions = useAppSelector(selectConditionsByCat(catId), shallowEqual);
   const libraryConditions = useAppSelector(selectConditionLibrary);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCondition, setEditingCondition] = useState<CatCondition | null>(null);
 
-  const handleCreate = async (
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingCondition(null);
+  };
+
+  const handleSubmit = async (
     condition: Partial<CatCondition> & Pick<CatCondition, 'name' | 'category' | 'status' | 'occurredAt'>,
   ) => {
     if (!user?.uid) {
@@ -42,27 +47,16 @@ function CatConditionsSection({ householdId, catId, catName }: CatConditionsSect
     setIsSubmitting(true);
 
     try {
-      await dispatch(createCatCondition({ householdId, catId, uid: user.uid, condition })).unwrap();
-      setShowAddForm(false);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdate = async (
-    condition: Partial<CatCondition> & Pick<CatCondition, 'name' | 'category' | 'status' | 'occurredAt'>,
-  ) => {
-    if (!editingCondition) {
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      await dispatch(
-        updateCatCondition({ householdId, catId, catConditionId: editingCondition.id, changes: condition }),
-      ).unwrap();
-      setEditingCondition(null);
+      if (editingCondition) {
+        await dispatch(
+          updateCatCondition({ householdId, catConditionId: editingCondition.id, changes: condition }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          createCatCondition({ householdId, catId, uid: user.uid, condition }),
+        ).unwrap();
+      }
+      closeModal();
     } finally {
       setIsSubmitting(false);
     }
@@ -72,75 +66,49 @@ function CatConditionsSection({ householdId, catId, catName }: CatConditionsSect
     setIsSubmitting(true);
 
     try {
-      await dispatch(deleteCatCondition({ householdId, catId, catConditionId })).unwrap();
-      setEditingCondition(null);
+      await dispatch(deleteCatCondition({ householdId, catConditionId })).unwrap();
+      closeModal();
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (editingCondition) {
-    return (
-      <div className='space-y-4'>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          onClick={() => setEditingCondition(null)}
-          disabled={isSubmitting}
-          className='gap-1 px-0'
-        >
-          <ChevronLeft className='h-4 w-4' />
-          Back to conditions
-        </Button>
-
-        <CatConditionFormFields
-          libraryConditions={libraryConditions}
-          initialCondition={editingCondition}
-          isSubmitting={isSubmitting}
-          onSubmit={handleUpdate}
-          onDelete={handleDelete}
-          onCancel={() => setEditingCondition(null)}
-        />
-      </div>
-    );
-  }
-
-  if (showAddForm) {
-    return (
-      <div className='space-y-4'>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          onClick={() => setShowAddForm(false)}
-          disabled={isSubmitting}
-          className='gap-1 px-0'
-        >
-          <ChevronLeft className='h-4 w-4' />
-          Back to conditions
-        </Button>
-
-        <CatConditionFormFields
-          libraryConditions={libraryConditions}
-          isSubmitting={isSubmitting}
-          onSubmit={handleCreate}
-          onCancel={() => setShowAddForm(false)}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className='space-y-4'>
       <div className='flex items-center justify-between gap-2'>
         <small className='text-muted-foreground text-sm'>Track {catName}&rsquo;s conditions here.</small>
-        <Button type='button' variant='primary' size='sm' onClick={() => setShowAddForm(true)}>
-          Add condition
+        <Button
+          type='button'
+          variant='primary'
+          size='sm'
+          onClick={() => {
+            setEditingCondition(null);
+            setIsModalOpen(true);
+          }}
+        >
+          <span className='hidden sm:inline'>Add condition</span>
+          <span className='sm:hidden'>Add</span>
         </Button>
       </div>
 
-      <CatConditionTimeline conditions={conditions} onEdit={setEditingCondition} />
+      <CatConditionTimeline
+        conditions={conditions}
+        onEdit={(condition) => {
+          setEditingCondition(condition);
+          setIsModalOpen(true);
+        }}
+      />
+
+      <CatConditionFormModal
+        key={editingCondition?.id ?? 'new'}
+        isOpen={isModalOpen}
+        libraryConditions={libraryConditions}
+        initialCondition={editingCondition}
+        isSubmitting={isSubmitting}
+        onSubmit={handleSubmit}
+        onDelete={editingCondition ? handleDelete : undefined}
+        onClose={closeModal}
+      />
     </div>
   );
 }

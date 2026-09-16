@@ -39,22 +39,8 @@ function normalizeVaccinationInput(
   return next;
 }
 
-const getVaccinationDocRef = (
-  householdId: string,
-  catId: string,
-  vaccinationId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'vaccinations',
-    vaccinationId,
-  );
+const getVaccinationDocRef = (householdId: string, vaccinationId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'vaccinations', vaccinationId);
 
 export const createVaccination = createAsyncThunk<
   Vaccination,
@@ -77,9 +63,7 @@ export const createVaccination = createAsyncThunk<
     const now = Date.now();
     const vaccinationId =
       vaccination.id ??
-      doc(
-        collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId, 'vaccinations'),
-      ).id;
+      doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'vaccinations')).id;
 
     const nextVaccination: Vaccination = {
       id: vaccinationId,
@@ -97,7 +81,7 @@ export const createVaccination = createAsyncThunk<
       lastEditedAt: now,
     };
 
-    await setDoc(getVaccinationDocRef(householdId, catId, vaccinationId), nextVaccination);
+    await setDoc(getVaccinationDocRef(householdId, vaccinationId), nextVaccination);
     dispatch(upsertVaccination(nextVaccination));
 
     return nextVaccination;
@@ -108,7 +92,6 @@ export const updateVaccination = createAsyncThunk<
   Vaccination,
   {
     householdId: string;
-    catId: string;
     vaccinationId: string;
     changes: Partial<Vaccination>;
   },
@@ -116,13 +99,11 @@ export const updateVaccination = createAsyncThunk<
 >(
   'nineLives/vaccinations/update',
   async (
-    { householdId, catId, vaccinationId, changes },
+    { householdId, vaccinationId, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
-    const current = state.nineLives.vaccinations.items.find(
-      (item) => item.id === vaccinationId && item.catId === catId,
-    );
+    const current = state.nineLives.vaccinations.items.find((item) => item.id === vaccinationId);
 
     if (!current) {
       return rejectWithValue('Vaccination not found.');
@@ -134,7 +115,6 @@ export const updateVaccination = createAsyncThunk<
       ...sanitizedChanges,
       id: vaccinationId,
       householdId,
-      catId,
       name: sanitizedChanges.name?.trim() || current.name,
       lastEditedAt: Date.now(),
     };
@@ -142,7 +122,7 @@ export const updateVaccination = createAsyncThunk<
     dispatch(upsertVaccination(nextVaccination));
 
     try {
-      await updateDoc(getVaccinationDocRef(householdId, catId, vaccinationId), {
+      await updateDoc(getVaccinationDocRef(householdId, vaccinationId), {
         ...sanitizedChanges,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
@@ -158,15 +138,13 @@ export const updateVaccination = createAsyncThunk<
 
 export const deleteVaccination = createAsyncThunk<
   { id: string },
-  { householdId: string; catId: string; vaccinationId: string },
+  { householdId: string; vaccinationId: string },
   { rejectValue: string }
 >(
   'nineLives/vaccinations/delete',
-  async ({ householdId, catId, vaccinationId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, vaccinationId }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
-    const current = state.nineLives.vaccinations.items.find(
-      (item) => item.id === vaccinationId && item.catId === catId,
-    );
+    const current = state.nineLives.vaccinations.items.find((item) => item.id === vaccinationId);
 
     if (!current) {
       return rejectWithValue('Vaccination not found.');
@@ -175,7 +153,7 @@ export const deleteVaccination = createAsyncThunk<
     dispatch(removeVaccination({ id: vaccinationId }));
 
     try {
-      await deleteDoc(getVaccinationDocRef(householdId, catId, vaccinationId));
+      await deleteDoc(getVaccinationDocRef(householdId, vaccinationId));
       return { id: vaccinationId };
     } catch (error) {
       dispatch(revertVaccination({ id: vaccinationId }));

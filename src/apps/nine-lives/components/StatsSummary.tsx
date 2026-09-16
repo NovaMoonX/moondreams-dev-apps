@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 
@@ -22,7 +23,7 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 function StatsSummary({ householdId }: StatsSummaryProps) {
   const [recurringView, setRecurringView] = useState<RecurringView>('monthly');
 
-  const visits = useAppSelector(selectVisitsByHousehold(householdId));
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const selectExpenseTotals = useMemo(
     () => makeSelectExpenseTotalsByHousehold(householdId),
     [householdId],

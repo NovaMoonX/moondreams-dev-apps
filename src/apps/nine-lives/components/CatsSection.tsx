@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -12,9 +13,11 @@ import CatDetailsModal from './CatDetailsModal';
 import CatDetailsPrompt from './CatDetailsPrompt';
 import type { CatQuickAddValues } from './CatQuickAddForm';
 import QuickAddConditionModal from './QuickAddConditionModal';
+import QuickAddPreventiveModal from './QuickAddPreventiveModal';
 import QuickAddSymptomModal from './QuickAddSymptomModal';
 import QuickAddVaccinationModal from './QuickAddVaccinationModal';
 import QuickAddWeightEntryModal from './QuickAddWeightEntryModal';
+import SelectedCatPanel from './SelectedCatPanel';
 import { createCat, deleteCat, updateCat } from '../store/actions/catsActions';
 import { selectCatsByHousehold } from '../store/selectors';
 import type { Cat } from '../types';
@@ -26,16 +29,19 @@ interface CatsSectionProps {
 function CatsSection({ householdId }: CatsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const cats = useAppSelector(selectCatsByHousehold(householdId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddCatModal, setShowAddCatModal] = useState(false);
   const [showQuickAddVaccination, setShowQuickAddVaccination] = useState(false);
+  const [showQuickAddPreventive, setShowQuickAddPreventive] = useState(false);
   const [showQuickAddWeightEntry, setShowQuickAddWeightEntry] = useState(false);
   const [showQuickAddCondition, setShowQuickAddCondition] = useState(false);
   const [showQuickAddSymptom, setShowQuickAddSymptom] = useState(false);
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
+  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
+  const selectedCat = selectedCatId ? cats.find((cat) => cat.id === selectedCatId) ?? null : null;
 
   const handleCreateCat = async (values: CatQuickAddValues) => {
     if (!user?.uid) {
@@ -90,6 +96,11 @@ function CatsSection({ householdId }: CatsSectionProps) {
       description: 'Add a vaccination record for a cat.',
     }),
     option({
+      label: 'Log preventive / med',
+      value: 'log-preventive',
+      description: 'Add a preventive or medication dose for one or more cats.',
+    }),
+    option({
       label: 'Log weight',
       value: 'log-weight',
       description: 'Add a weight entry for a cat.',
@@ -116,6 +127,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
             onItemSelect={(value) => {
               if (value === 'log-vaccination') {
                 setShowQuickAddVaccination(true);
+              } else if (value === 'log-preventive') {
+                setShowQuickAddPreventive(true);
               } else if (value === 'log-weight') {
                 setShowQuickAddWeightEntry(true);
               } else if (value === 'log-condition') {
@@ -135,7 +148,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
             }
           />
           <Button type='button' onClick={() => setShowAddCatModal(true)}>
-            Add cat
+            <span className='hidden sm:inline'>Add cat</span>
+            <span className='sm:hidden'>Add</span>
           </Button>
         </div>
       </div>
@@ -145,9 +159,26 @@ function CatsSection({ householdId }: CatsSectionProps) {
       {cats.length > 0 && (
         <div className='grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'>
           {cats.map((cat) => (
-            <CatAvatarItem key={cat.id} cat={cat} onClick={setEditingCat} />
+            <CatAvatarItem
+              key={cat.id}
+              cat={cat}
+              selected={cat.id === selectedCatId}
+              onClick={(clickedCat) =>
+                setSelectedCatId((current) => (current === clickedCat.id ? null : clickedCat.id))
+              }
+            />
           ))}
         </div>
+      )}
+
+      {selectedCat && (
+        <SelectedCatPanel
+          key={selectedCat.id}
+          householdId={householdId}
+          cats={cats}
+          selectedCat={selectedCat}
+          onEditDetails={() => setEditingCat(selectedCat)}
+        />
       )}
 
       <AddCatModal
@@ -182,6 +213,13 @@ function CatsSection({ householdId }: CatsSectionProps) {
         householdId={householdId}
         cats={cats}
         onClose={() => setShowQuickAddVaccination(false)}
+      />
+
+      <QuickAddPreventiveModal
+        isOpen={showQuickAddPreventive}
+        householdId={householdId}
+        cats={cats}
+        onClose={() => setShowQuickAddPreventive(false)}
       />
 
       <QuickAddWeightEntryModal

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Avatar,
@@ -15,6 +15,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft, ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import {
   fromLocalDateAndTimeInputValues,
@@ -23,18 +24,19 @@ import {
 } from '@/utils';
 import { getInitials } from '@/utils/accountUtils';
 
+import { useAppSelector } from '@/store';
+
 import {
-  startCatConditionsListener,
-  startSymptomsListener,
-} from '../store/listeners/catDetailListeners';
-import { startWeightEntriesListener } from '../store/listeners/weightEntriesListener';
+  selectConditionsByCat,
+  selectSymptomsByCat,
+  selectWeightEntriesByCat,
+} from '../store/selectors';
 import type {
   Cat,
   CatCondition,
   Symptom,
   Visit,
   VisitReason,
-  WeightEntry,
 } from '../types';
 import type { VisitOutcome } from '../store/actions/visitsActions';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
@@ -43,7 +45,6 @@ import DetailsDisclosure from './DetailsDisclosure';
 interface VisitFormModalProps {
   isOpen: boolean;
   cats: Cat[];
-  householdId?: string;
   clinics?: Array<{ id: string; name: string }>;
   doctors?: Array<{ id: string; name: string; clinicId: string }>;
   visits?: Visit[];
@@ -375,39 +376,11 @@ function RepeatableTextInputs({
   );
 }
 
-/** Fetches a cat's symptoms/conditions/weight independently of the shared "currently open cat" Redux slice (which `useCatDetailSync` overwrites per-cat), since a visit's outcome form may need this for several cats at once. */
-function useCatOutcomeContext(householdId: string | undefined, catId: string) {
-  const [symptoms, setSymptoms] = useState<Symptom[]>([]);
-  const [conditions, setConditions] = useState<CatCondition[]>([]);
-  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
-
-  useEffect(() => {
-    if (!householdId) {
-      return;
-    }
-
-    const unsubscribeSymptoms = startSymptomsListener(
-      householdId,
-      catId,
-      setSymptoms,
-    );
-    const unsubscribeConditions = startCatConditionsListener(
-      householdId,
-      catId,
-      setConditions,
-    );
-    const unsubscribeWeightEntries = startWeightEntriesListener(
-      householdId,
-      catId,
-      setWeightEntries,
-    );
-
-    return () => {
-      unsubscribeSymptoms();
-      unsubscribeConditions();
-      unsubscribeWeightEntries();
-    };
-  }, [householdId, catId]);
+/** Reads a cat's symptoms/conditions/weight from the household-wide sync, since a visit's outcome form may need this for several cats at once. */
+function useCatOutcomeContext(catId: string) {
+  const symptoms = useAppSelector(selectSymptomsByCat(catId), shallowEqual);
+  const conditions = useAppSelector(selectConditionsByCat(catId), shallowEqual);
+  const weightEntries = useAppSelector(selectWeightEntriesByCat(catId), shallowEqual);
 
   return { symptoms, conditions, weightEntries };
 }
@@ -460,7 +433,6 @@ function VisitOutcomeCatCard({
 
 interface VisitOutcomeCatDetailProps {
   cat: Cat;
-  householdId: string | undefined;
   value: VisitOutcomeCatValue;
   onValueChange: (value: VisitOutcomeCatValue) => void;
   onDone: () => void;
@@ -470,16 +442,12 @@ interface VisitOutcomeCatDetailProps {
 /** The drill-down screen for one cat's outcome details, reached from `VisitOutcomeCatCard`. */
 function VisitOutcomeCatDetail({
   cat,
-  householdId,
   value,
   onValueChange,
   onDone,
   disabled,
 }: VisitOutcomeCatDetailProps) {
-  const { symptoms, conditions, weightEntries } = useCatOutcomeContext(
-    householdId,
-    cat.id,
-  );
+  const { symptoms, conditions, weightEntries } = useCatOutcomeContext(cat.id);
   const openSymptoms = symptoms.filter(
     (symptom) => symptom.resolvedAt === null,
   );
@@ -905,12 +873,10 @@ function VisitOutcomeReview({
 
 function VisitOutcomeForm({
   cats,
-  householdId,
   isSubmitting,
   onComplete,
 }: {
   cats: Cat[];
-  householdId: string | undefined;
   isSubmitting: boolean;
   onComplete: (outcome: VisitOutcome) => Promise<void> | void;
 }) {
@@ -955,7 +921,6 @@ function VisitOutcomeForm({
     return (
       <VisitOutcomeCatDetail
         cat={activeCat}
-        householdId={householdId}
         value={catValues[activeCat.id] ?? buildEmptyOutcomeCatValue()}
         onValueChange={(value) => updateCatValue(activeCat.id, value)}
         onDone={() => setActiveCatId(null)}
@@ -1022,7 +987,6 @@ function VisitOutcomeForm({
 function VisitFormModal({
   isOpen,
   cats,
-  householdId,
   clinics = [],
   doctors = [],
   visits = [],
@@ -1175,7 +1139,6 @@ function VisitFormModal({
       {showOutcome ? (
         <VisitOutcomeForm
           cats={cats.filter((cat) => initialVisit?.catIds.includes(cat.id))}
-          householdId={householdId}
           isSubmitting={isSubmitting}
           onComplete={onComplete!}
         />

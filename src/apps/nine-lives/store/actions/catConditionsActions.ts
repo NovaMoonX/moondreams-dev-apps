@@ -35,22 +35,8 @@ function normalizeCatConditionInput(
   return next;
 }
 
-const getCatConditionDocRef = (
-  householdId: string,
-  catId: string,
-  catConditionId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'conditions',
-    catConditionId,
-  );
+const getCatConditionDocRef = (householdId: string, catConditionId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'conditions', catConditionId);
 
 export const createCatCondition = createAsyncThunk<
   CatCondition,
@@ -74,9 +60,7 @@ export const createCatCondition = createAsyncThunk<
     const now = Date.now();
     const catConditionId =
       condition.id ??
-      doc(
-        collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId, 'conditions'),
-      ).id;
+      doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'conditions')).id;
 
     const nextCondition: CatCondition = {
       id: catConditionId,
@@ -95,7 +79,7 @@ export const createCatCondition = createAsyncThunk<
       lastEditedAt: now,
     };
 
-    await setDoc(getCatConditionDocRef(householdId, catId, catConditionId), nextCondition);
+    await setDoc(getCatConditionDocRef(householdId, catConditionId), nextCondition);
     dispatch(upsertCatCondition(nextCondition));
 
     return nextCondition;
@@ -106,7 +90,6 @@ export const updateCatCondition = createAsyncThunk<
   CatCondition,
   {
     householdId: string;
-    catId: string;
     catConditionId: string;
     changes: Partial<CatCondition>;
   },
@@ -114,13 +97,11 @@ export const updateCatCondition = createAsyncThunk<
 >(
   'nineLives/catConditions/update',
   async (
-    { householdId, catId, catConditionId, changes },
+    { householdId, catConditionId, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
-    const current = state.nineLives.catConditions.items.find(
-      (item) => item.id === catConditionId && item.catId === catId,
-    );
+    const current = state.nineLives.catConditions.items.find((item) => item.id === catConditionId);
 
     if (!current) {
       return rejectWithValue('Condition not found.');
@@ -131,7 +112,6 @@ export const updateCatCondition = createAsyncThunk<
       ...current,
       ...sanitizedChanges,
       id: catConditionId,
-      catId,
       name: sanitizedChanges.name?.trim() || current.name,
       lastEditedAt: Date.now(),
     };
@@ -139,7 +119,7 @@ export const updateCatCondition = createAsyncThunk<
     dispatch(upsertCatCondition(nextCondition));
 
     try {
-      await updateDoc(getCatConditionDocRef(householdId, catId, catConditionId), {
+      await updateDoc(getCatConditionDocRef(householdId, catConditionId), {
         ...sanitizedChanges,
         lastEditedAt: nextCondition.lastEditedAt,
       });
@@ -155,15 +135,13 @@ export const updateCatCondition = createAsyncThunk<
 
 export const deleteCatCondition = createAsyncThunk<
   { id: string },
-  { householdId: string; catId: string; catConditionId: string },
+  { householdId: string; catConditionId: string },
   { rejectValue: string }
 >(
   'nineLives/catConditions/delete',
-  async ({ householdId, catId, catConditionId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, catConditionId }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
-    const current = state.nineLives.catConditions.items.find(
-      (item) => item.id === catConditionId && item.catId === catId,
-    );
+    const current = state.nineLives.catConditions.items.find((item) => item.id === catConditionId);
 
     if (!current) {
       return rejectWithValue('Condition not found.');
@@ -172,7 +150,7 @@ export const deleteCatCondition = createAsyncThunk<
     dispatch(removeCatCondition({ id: catConditionId }));
 
     try {
-      await deleteDoc(getCatConditionDocRef(householdId, catId, catConditionId));
+      await deleteDoc(getCatConditionDocRef(householdId, catConditionId));
       return { id: catConditionId };
     } catch (error) {
       dispatch(revertCatCondition({ id: catConditionId }));

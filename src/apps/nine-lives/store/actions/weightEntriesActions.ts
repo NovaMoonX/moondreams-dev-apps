@@ -21,22 +21,8 @@ function normalizeWeightEntryInput(value: Partial<WeightEntry>): Partial<WeightE
   return next;
 }
 
-const getWeightEntryDocRef = (
-  householdId: string,
-  catId: string,
-  weightEntryId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'weightEntries',
-    weightEntryId,
-  );
+const getWeightEntryDocRef = (householdId: string, weightEntryId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'weightEntries', weightEntryId);
 
 export const createWeightEntry = createAsyncThunk<
   WeightEntry,
@@ -53,18 +39,7 @@ export const createWeightEntry = createAsyncThunk<
     const now = Date.now();
     const weightEntryId =
       weightEntry.id ??
-      doc(
-        collection(
-          db,
-          'apps',
-          'nine-lives',
-          'households',
-          householdId,
-          'cats',
-          catId,
-          'weightEntries',
-        ),
-      ).id;
+      doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'weightEntries')).id;
 
     const nextWeightEntry: WeightEntry = {
       id: weightEntryId,
@@ -77,10 +52,7 @@ export const createWeightEntry = createAsyncThunk<
       createdAt: now,
     };
 
-    await setDoc(
-      getWeightEntryDocRef(householdId, catId, weightEntryId),
-      nextWeightEntry,
-    );
+    await setDoc(getWeightEntryDocRef(householdId, weightEntryId), nextWeightEntry);
     dispatch(upsertWeightEntry(nextWeightEntry));
 
     return nextWeightEntry;
@@ -91,7 +63,6 @@ export const updateWeightEntry = createAsyncThunk<
   WeightEntry,
   {
     householdId: string;
-    catId: string;
     weightEntryId: string;
     changes: Partial<WeightEntry>;
   },
@@ -99,13 +70,11 @@ export const updateWeightEntry = createAsyncThunk<
 >(
   'nineLives/weightEntries/update',
   async (
-    { householdId, catId, weightEntryId, changes },
+    { householdId, weightEntryId, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
-    const current = state.nineLives.weightEntries.items.find(
-      (item) => item.id === weightEntryId && item.catId === catId,
-    );
+    const current = state.nineLives.weightEntries.items.find((item) => item.id === weightEntryId);
 
     if (!current) {
       return rejectWithValue('Weight entry not found.');
@@ -116,13 +85,12 @@ export const updateWeightEntry = createAsyncThunk<
       ...current,
       ...sanitizedChanges,
       id: weightEntryId,
-      catId,
     };
 
     dispatch(upsertWeightEntry(nextWeightEntry));
 
     try {
-      await updateDoc(getWeightEntryDocRef(householdId, catId, weightEntryId), sanitizedChanges);
+      await updateDoc(getWeightEntryDocRef(householdId, weightEntryId), sanitizedChanges);
       return nextWeightEntry;
     } catch (error) {
       dispatch(revertWeightEntry({ id: weightEntryId }));
@@ -135,15 +103,13 @@ export const updateWeightEntry = createAsyncThunk<
 
 export const deleteWeightEntry = createAsyncThunk<
   { id: string },
-  { householdId: string; catId: string; weightEntryId: string },
+  { householdId: string; weightEntryId: string },
   { rejectValue: string }
 >(
   'nineLives/weightEntries/delete',
-  async ({ householdId, catId, weightEntryId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, weightEntryId }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
-    const current = state.nineLives.weightEntries.items.find(
-      (item) => item.id === weightEntryId && item.catId === catId,
-    );
+    const current = state.nineLives.weightEntries.items.find((item) => item.id === weightEntryId);
 
     if (!current) {
       return rejectWithValue('Weight entry not found.');
@@ -152,7 +118,7 @@ export const deleteWeightEntry = createAsyncThunk<
     dispatch(removeWeightEntry({ id: weightEntryId }));
 
     try {
-      await deleteDoc(getWeightEntryDocRef(householdId, catId, weightEntryId));
+      await deleteDoc(getWeightEntryDocRef(householdId, weightEntryId));
       return { id: weightEntryId };
     } catch (error) {
       dispatch(revertWeightEntry({ id: weightEntryId }));

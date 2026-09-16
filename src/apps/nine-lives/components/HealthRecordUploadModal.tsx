@@ -9,6 +9,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
@@ -224,6 +225,7 @@ function HealthRecordUploadModal({
   const { confirm } = useActionModal();
   const customTypes = useAppSelector(
     selectCustomHealthRecordTypesByHousehold(householdId),
+    shallowEqual,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);

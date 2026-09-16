@@ -281,7 +281,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: string;
       name: string;
       customProductId: string | null;
-      type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other' | 'custom';
+      type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'medication' | 'other' | 'custom';
       customTypeId: string | null;
       administeredAt: number;
       expiresAt: number | null;
@@ -689,7 +689,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
 
     (vaccinationsByCat[cat.id] ?? []).forEach((vaccination) => {
-      const vaccinationRef = catRef
+      const vaccinationRef = householdRef
         .collection('vaccinations')
         .doc(vaccination.id);
 
@@ -710,7 +710,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     });
 
     (preventivesByCat[cat.id] ?? []).forEach((preventive) => {
-      const preventiveRef = catRef
+      const preventiveRef = householdRef
         .collection('preventives')
         .doc(preventive.id);
 
@@ -719,7 +719,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         {
           ...preventive,
           householdId: HOUSEHOLD_ID,
-          catId: cat.id,
+          catIds: [cat.id],
           createdBy: caretaker.uid,
           createdAt,
           lastEditedAt: context.now,
@@ -730,7 +730,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     });
 
     (weightEntriesByCat[cat.id] ?? []).forEach((weightEntry) => {
-      const weightEntryRef = catRef
+      const weightEntryRef = householdRef
         .collection('weightEntries')
         .doc(weightEntry.id);
 
@@ -749,7 +749,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     });
 
     (symptomsByCat[cat.id] ?? []).forEach((symptom) => {
-      const symptomRef = catRef.collection('symptoms').doc(symptom.id);
+      const symptomRef = householdRef.collection('symptoms').doc(symptom.id);
 
       batch.set(
         symptomRef,
@@ -787,14 +787,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       currentClinicId: null,
       insurance: null,
       personalityTraits: null,
-      notes: 'Separate-household fixture cat for collection-group scoping checks.',
+      notes: 'Separate-household fixture cat for household-isolation scoping checks.',
       createdBy: coCaretaker.uid,
       createdAt,
       lastEditedAt: context.now,
     },
     { merge: true },
   );
-  const secondPreventiveRef = secondCatRef
+  const secondPreventiveRef = secondHouseholdRef
     .collection('preventives')
     .doc('seed-preventive-other-household');
   batch.set(
@@ -802,7 +802,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-preventive-other-household',
       householdId: SECOND_HOUSEHOLD_ID,
-      catId: 'seed-cat-other-household',
+      catIds: ['seed-cat-other-household'],
       name: 'Advantage Multi',
       customProductId: null,
       type: 'flea-tick',

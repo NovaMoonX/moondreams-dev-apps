@@ -6,16 +6,15 @@ import type { WeightEntry } from '@apps/nine-lives/types';
 
 export function startWeightEntriesListener(
   householdId: string,
-  catId: string,
   onChange: (weightEntries: WeightEntry[]) => void,
 ): Unsubscribe {
-  if (!householdId || !catId) {
+  if (!householdId) {
     onChange([]);
     return () => undefined;
   }
 
   const weightEntriesQuery = query(
-    collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId, 'weightEntries'),
+    collection(db, 'apps', 'nine-lives', 'households', householdId, 'weightEntries'),
   );
 
   return createFirestoreCollectionListener<WeightEntry>({

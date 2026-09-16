@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -23,10 +24,11 @@ interface HealthRecordsSectionProps {
 function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const cats = useAppSelector(selectCatsByHousehold(householdId));
-  const records = useAppSelector(selectHealthRecordsByHousehold(householdId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
+  const records = useAppSelector(selectHealthRecordsByHousehold(householdId), shallowEqual);
   const customTypes = useAppSelector(
     selectCustomHealthRecordTypesByHousehold(householdId),
+    shallowEqual,
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord | null>(null);
@@ -71,7 +73,8 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
               onClick={openCreate}
               disabled={!user?.uid || cats.length === 0}
             >
-              Add record
+              <span className='hidden sm:inline'>Add record</span>
+              <span className='sm:hidden'>Add</span>
             </Button>
           </div>
 

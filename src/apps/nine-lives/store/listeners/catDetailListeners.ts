@@ -6,25 +6,15 @@ import type { CatCondition, Symptom } from '@apps/nine-lives/types';
 
 export function startCatConditionsListener(
   householdId: string,
-  catId: string,
   onChange: (conditions: CatCondition[]) => void,
 ): Unsubscribe {
-  if (!householdId || !catId) {
+  if (!householdId) {
     onChange([]);
     return () => undefined;
   }
 
   const catConditionsQuery = query(
-    collection(
-      db,
-      'apps',
-      'nine-lives',
-      'households',
-      householdId,
-      'cats',
-      catId,
-      'conditions',
-    ),
+    collection(db, 'apps', 'nine-lives', 'households', householdId, 'conditions'),
   );
 
   return createFirestoreCollectionListener<CatCondition>({
@@ -39,16 +29,15 @@ export function startCatConditionsListener(
 
 export function startSymptomsListener(
   householdId: string,
-  catId: string,
   onChange: (symptoms: Symptom[]) => void,
 ): Unsubscribe {
-  if (!householdId || !catId) {
+  if (!householdId) {
     onChange([]);
     return () => undefined;
   }
 
   const symptomsQuery = query(
-    collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId, 'symptoms'),
+    collection(db, 'apps', 'nine-lives', 'households', householdId, 'symptoms'),
   );
 
   return createFirestoreCollectionListener<Symptom>({

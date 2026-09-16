@@ -1,5 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -18,10 +19,12 @@ interface HouseholdPendingRequestsProps {
 function HouseholdPendingRequests({ householdId }: HouseholdPendingRequestsProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
-  const requests = useAppSelector((state) =>
-    state.nineLives.pendingRequests.items.filter(
-      (request) => request.householdId === householdId,
-    ),
+  const requests = useAppSelector(
+    (state) =>
+      state.nineLives.pendingRequests.items.filter(
+        (request) => request.householdId === householdId,
+      ),
+    shallowEqual,
   );
   const userInfo = useUserInfo(requests.map((request) => request.uid));
   const members = userInfo?.users ?? [];

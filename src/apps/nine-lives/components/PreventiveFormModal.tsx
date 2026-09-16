@@ -10,6 +10,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
@@ -50,6 +51,7 @@ interface AdditionalDetailsValue {
 }
 
 interface PreventiveFormValues {
+  catIds: string[];
   product: ProductChoice;
   type: TypeChoice;
   administeredAt: string;
@@ -61,12 +63,14 @@ interface PreventiveFormModalProps {
   isOpen: boolean;
   householdId: string;
   uid: string;
-  catName: string;
+  catOptions: { label: string; value: string }[];
+  /** Cats to pre-check when adding a new dose (ignored when editing an existing one). */
+  defaultCatIds?: string[];
   initialPreventive?: Preventive | null;
   isSubmitting?: boolean;
   onSubmit: (
     preventive: Partial<Preventive> &
-      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt'>,
+      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt' | 'catIds'>,
   ) => Promise<void> | void;
   onDelete?: (preventiveId: string) => Promise<void> | void;
   onClose: () => void;
@@ -246,7 +250,8 @@ function PreventiveFormModal({
   isOpen,
   householdId,
   uid,
-  catName,
+  catOptions,
+  defaultCatIds = [],
   initialPreventive,
   isSubmitting = false,
   onSubmit,
@@ -255,10 +260,16 @@ function PreventiveFormModal({
 }: PreventiveFormModalProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
-  const customProducts = useAppSelector(selectCustomPreventiveProductsByHousehold(householdId));
-  const customTypes = useAppSelector(selectCustomPreventiveTypesByHousehold(householdId));
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const customProducts = useAppSelector(
+    selectCustomPreventiveProductsByHousehold(householdId),
+    shallowEqual,
+  );
+  const customTypes = useAppSelector(
+    selectCustomPreventiveTypesByHousehold(householdId),
+    shallowEqual,
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isEditing = Boolean(initialPreventive?.id);
   const formId = initialPreventive?.id ?? 'new-nine-lives-preventive';
@@ -279,6 +290,11 @@ function PreventiveFormModal({
   );
   const fields = useMemo(
     () => [
+      FormFactories.checkboxGroup({
+        name: 'catIds',
+        label: 'Cats',
+        options: catOptions,
+      }),
       FormFactories.custom({
         name: 'product',
         label: 'Product',
@@ -331,7 +347,7 @@ function PreventiveFormModal({
         colSpan: 'full',
       }),
     ],
-    [clinicOptions, customProducts, customTypes, doctorOptions],
+    [catOptions, clinicOptions, customProducts, customTypes, doctorOptions],
   );
 
   const handleSubmit = async (data: PreventiveFormValues) => {
@@ -339,6 +355,11 @@ function PreventiveFormModal({
     const administeredAt = fromDateInputValue(data.administeredAt) ?? null;
 
     if (administeredAt === null) {
+      return;
+    }
+
+    if (data.catIds.length === 0) {
+      setSubmitError('Select at least one cat.');
       return;
     }
 
@@ -400,6 +421,7 @@ function PreventiveFormModal({
 
     await onSubmit({
       id: initialPreventive?.id,
+      catIds: data.catIds,
       name,
       customProductId,
       type,
@@ -420,7 +442,7 @@ function PreventiveFormModal({
 
     const confirmed = await confirm({
       title: 'Delete preventive dose',
-      message: `Are you sure you want to delete ${initialPreventive.name} for ${catName}?`,
+      message: `Are you sure you want to delete ${initialPreventive.name}?`,
       destructive: true,
     });
 
@@ -433,13 +455,14 @@ function PreventiveFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Edit preventive dose' : `Add preventive for ${catName}`}
+      title={isEditing ? 'Edit preventive dose' : 'Add preventive / medication'}
     >
       <Form
         key={formId}
         id={formId}
         form={fields}
         initialData={{
+          catIds: initialPreventive?.catIds ?? defaultCatIds,
           product: getInitialProductChoice(initialPreventive),
           type: getInitialTypeChoice(initialPreventive),
           administeredAt: toDateInputValue(initialPreventive?.administeredAt ?? undefined),

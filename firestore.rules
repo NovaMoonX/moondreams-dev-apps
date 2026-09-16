@@ -239,10 +239,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/conditions/{conditionId} {
+    match /apps/nine-lives/households/{householdId}/conditions/{conditionId} {
       function isConditionIdentityValid() {
         return request.resource.data.id == conditionId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isConditionBaseShapeValid() {
@@ -274,12 +274,11 @@ service cloud.firestore {
       function isConditionImmutableFieldsValid() {
         return request.resource.data.id == resource.data.id
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isConditionIdentityValid()
@@ -292,11 +291,11 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/vaccinations/{vaccinationId} {
+    match /apps/nine-lives/households/{householdId}/vaccinations/{vaccinationId} {
       function isVaccinationIdentityValid() {
         return request.resource.data.id == vaccinationId
           && request.resource.data.householdId == householdId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isVaccinationBaseShapeValid() {
@@ -317,12 +316,11 @@ service cloud.firestore {
           && request.resource.data.householdId == resource.data.householdId
           && request.resource.data.householdId == householdId
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isVaccinationIdentityValid()
@@ -335,19 +333,18 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    // Read via a collection-group query, so the wildcard must anchor the match path
-    // (not a literal prefix) and ownership uses the denormalized field, not a path variable.
-    match /{path=**}/preventives/{preventiveId} {
+    match /apps/nine-lives/households/{householdId}/preventives/{preventiveId} {
       function isPreventiveIdentityValid() {
         return request.resource.data.id == preventiveId
-          && request.resource.data.householdId is string
-          && request.resource.data.catId is string;
+          && request.resource.data.householdId == householdId
+          && request.resource.data.catIds is list
+          && request.resource.data.catIds.size() > 0;
       }
 
       function isPreventiveBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
           && (request.resource.data.customProductId == null || request.resource.data.customProductId is string)
-          && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'other', 'custom']
+          && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'medication', 'other', 'custom']
           && (request.resource.data.customTypeId == null || request.resource.data.customTypeId is string)
           && isTimestampNumber(request.resource.data.administeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
@@ -360,11 +357,11 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.lastEditedAt)
           && (
             request.resource.data.customProductId == null
-              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)/customPreventiveProducts/$(request.resource.data.customProductId))
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveProducts/$(request.resource.data.customProductId))
           )
           && (
             request.resource.data.customTypeId == null
-              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)/customPreventiveTypes/$(request.resource.data.customTypeId))
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveTypes/$(request.resource.data.customTypeId))
           )
           && (request.resource.data.type != 'custom' || request.resource.data.customTypeId is string);
       }
@@ -372,33 +369,28 @@ service cloud.firestore {
       function isPreventiveImmutableFieldsValid() {
         return request.resource.data.id == resource.data.id
           && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.catId == resource.data.catId
+          && request.resource.data.householdId == householdId
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null
-        && resource.data.householdId is string
-        && isHouseholdMember(resource.data.householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
+        && isHouseholdMember(householdId)
         && isPreventiveIdentityValid()
-        && isHouseholdMember(request.resource.data.householdId)
         && isPreventiveBaseShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if request.auth != null
-        && resource.data.householdId is string
-        && isHouseholdMember(resource.data.householdId)
+        && isHouseholdMember(householdId)
         && isPreventiveImmutableFieldsValid()
         && isPreventiveBaseShapeValid();
-      allow delete: if request.auth != null
-        && resource.data.householdId is string
-        && isHouseholdMember(resource.data.householdId);
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/weightEntries/{weightEntryId} {
+    match /apps/nine-lives/households/{householdId}/weightEntries/{weightEntryId} {
       function isWeightEntryIdentityValid() {
         return request.resource.data.id == weightEntryId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isWeightEntryBaseShapeValid() {
@@ -418,7 +410,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isWeightEntryIdentityValid()
@@ -431,10 +423,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/symptoms/{symptomId} {
+    match /apps/nine-lives/households/{householdId}/symptoms/{symptomId} {
       function isSymptomIdentityValid() {
         return request.resource.data.id == symptomId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isSymptomBaseShapeValid() {
@@ -457,7 +449,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isSymptomIdentityValid()
