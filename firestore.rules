@@ -299,12 +299,11 @@ service cloud.firestore {
 
       function isVaccinationBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
-          && isTimestampNumber(request.resource.data.administeredAt)
+          && request.resource.data.history is list
+          && request.resource.data.history.size() > 0
+          && isTimestampNumber(request.resource.data.firstAdministeredAt)
+          && isTimestampNumber(request.resource.data.lastAdministeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
-          && (request.resource.data.clinicId == null || request.resource.data.clinicId is string)
-          && (request.resource.data.doctorId == null || request.resource.data.doctorId is string)
-          && (request.resource.data.lotNumber == null || request.resource.data.lotNumber is string)
-          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);
@@ -315,6 +314,7 @@ service cloud.firestore {
           && request.resource.data.householdId == resource.data.householdId
           && request.resource.data.householdId == householdId
           && request.resource.data.catId == resource.data.catId
+          && request.resource.data.firstAdministeredAt == resource.data.firstAdministeredAt
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
@@ -345,12 +345,11 @@ service cloud.firestore {
           && (request.resource.data.customProductId == null || request.resource.data.customProductId is string)
           && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'medication', 'other', 'custom']
           && (request.resource.data.customTypeId == null || request.resource.data.customTypeId is string)
-          && isTimestampNumber(request.resource.data.administeredAt)
+          && request.resource.data.history is list
+          && request.resource.data.history.size() > 0
+          && isTimestampNumber(request.resource.data.firstAdministeredAt)
+          && isTimestampNumber(request.resource.data.lastAdministeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
-          && (request.resource.data.dosage == null || request.resource.data.dosage is string)
-          && (request.resource.data.clinicId == null || request.resource.data.clinicId is string)
-          && (request.resource.data.doctorId == null || request.resource.data.doctorId is string)
-          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt)
@@ -369,6 +368,7 @@ service cloud.firestore {
         return request.resource.data.id == resource.data.id
           && request.resource.data.householdId == resource.data.householdId
           && request.resource.data.householdId == householdId
+          && request.resource.data.firstAdministeredAt == resource.data.firstAdministeredAt
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }

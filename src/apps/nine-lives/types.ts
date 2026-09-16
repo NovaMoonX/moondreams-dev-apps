@@ -161,17 +161,31 @@ export interface Visit {
   lastEditedAt: number;
 }
 
-export interface Vaccination {
+export interface VaccinationDose {
   id: string;
-  householdId: string;
-  catId: string;
-  name: string;
   administeredAt: number;
   expiresAt: number | null;
   clinicId: string | null;
   doctorId: string | null;
   lotNumber: string | null;
   linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface Vaccination {
+  id: string;
+  householdId: string;
+  catId: string;
+  name: string;
+  /** Full dose history, newest first. Always at least one entry. */
+  history: VaccinationDose[];
+  /** Set once, from history's first entry, and never changed afterward. */
+  firstAdministeredAt: number;
+  /** Denormalized from history[0] (the most recent dose), kept in sync on every write. */
+  lastAdministeredAt: number;
+  /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
+  expiresAt: number | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -186,6 +200,18 @@ export type PreventiveType =
   | 'other'
   | 'custom';
 
+export interface PreventiveDose {
+  id: string;
+  administeredAt: number;
+  expiresAt: number | null;
+  dosage: string | null;
+  clinicId: string | null;
+  doctorId: string | null;
+  linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+}
+
 export interface Preventive {
   id: string;
   householdId: string;
@@ -194,12 +220,14 @@ export interface Preventive {
   customProductId: string | null;
   type: PreventiveType;
   customTypeId: string | null;
-  administeredAt: number;
+  /** Full dose history, newest first. Always at least one entry. */
+  history: PreventiveDose[];
+  /** Set once, from history's first entry, and never changed afterward. */
+  firstAdministeredAt: number;
+  /** Denormalized from history[0] (the most recent dose), kept in sync on every write. */
+  lastAdministeredAt: number;
+  /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
   expiresAt: number | null;
-  dosage: string | null;
-  clinicId: string | null;
-  doctorId: string | null;
-  linkedVisitId: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
