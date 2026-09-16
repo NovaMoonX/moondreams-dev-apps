@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Input, Tabs } from '@moondreamsdev/dreamer-ui/components';
 
 import type { ConditionCategory, LibraryCondition } from '../types';
 import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
@@ -44,19 +44,16 @@ function ConditionLibraryBrowser({
         variant='outline'
       />
 
-      <div className='flex flex-wrap gap-2'>
-        {CATEGORY_FILTERS.map((category) => (
-          <Button
-            key={category}
-            type='button'
-            size='sm'
-            variant={activeCategory === category ? 'primary' : 'outline'}
-            onClick={() => setActiveCategory(category)}
-          >
-            {category === 'all' ? 'All' : getConditionCategoryLabel(category)}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        value={activeCategory}
+        onValueChange={(value) => setActiveCategory(value as ConditionCategory | 'all')}
+        tabsWidth='fit'
+        variant='pills'
+        tabsList={CATEGORY_FILTERS.map((category) => ({
+          value: category,
+          label: category === 'all' ? 'All' : getConditionCategoryLabel(category),
+        }))}
+      />
 
       <div className='max-h-64 space-y-2 overflow-y-auto'>
         {filteredConditions.length === 0 ? (
