@@ -36,6 +36,10 @@ import {
   type VaccinationsState,
 } from './slices/vaccinationsSlice';
 import {
+  preventivesReducer,
+  type PreventivesState,
+} from './slices/preventivesSlice';
+import {
   vetClinicsReducer,
   type VetClinicsState,
 } from './slices/vetClinicsSlice';
@@ -55,6 +59,14 @@ import {
   customHealthRecordTypesReducer,
   type CustomHealthRecordTypesState,
 } from './slices/customHealthRecordTypesSlice';
+import {
+  customPreventiveProductsReducer,
+  type CustomPreventiveProductsState,
+} from './slices/customPreventiveProductsSlice';
+import {
+  customPreventiveTypesReducer,
+  type CustomPreventiveTypesState,
+} from './slices/customPreventiveTypesSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -67,10 +79,13 @@ export interface NineLivesState {
   catConditions: CatConditionsState;
   expenses: ExpensesState;
   vaccinations: VaccinationsState;
+  preventives: PreventivesState;
   weightEntries: WeightEntriesState;
   visits: VisitsState;
   healthRecords: HealthRecordsState;
   customHealthRecordTypes: CustomHealthRecordTypesState;
+  customPreventiveProducts: CustomPreventiveProductsState;
+  customPreventiveTypes: CustomPreventiveTypesState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -84,10 +99,13 @@ export const nineLivesReducer = combineReducers({
   catConditions: catConditionsReducer,
   expenses: expensesReducer,
   vaccinations: vaccinationsReducer,
+  preventives: preventivesReducer,
   weightEntries: weightEntriesReducer,
   visits: visitsReducer,
   healthRecords: healthRecordsReducer,
   customHealthRecordTypes: customHealthRecordTypesReducer,
+  customPreventiveProducts: customPreventiveProductsReducer,
+  customPreventiveTypes: customPreventiveTypesReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

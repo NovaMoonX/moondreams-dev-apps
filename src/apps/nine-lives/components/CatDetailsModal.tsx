@@ -19,6 +19,7 @@ import CatConditionsSection from './CatConditionsSection';
 import CatProfileForm from './CatProfileForm';
 import SymptomsSection from './SymptomsSection';
 import VaccinationsSection from './VaccinationsSection';
+import PreventivesSection from './PreventivesSection';
 import WeightEntriesSection from './WeightEntriesSection';
 
 interface CatDetailsModalProps {
@@ -142,6 +143,9 @@ function CatDetailsModalContent({
           <TabsTrigger value='vaccinations' disabled={!householdId}>
             Vaccinations
           </TabsTrigger>
+          <TabsTrigger value='preventives' disabled={!householdId}>
+            Preventives
+          </TabsTrigger>
           <TabsTrigger value='weight' disabled={!householdId}>
             Weight history
           </TabsTrigger>
@@ -168,6 +172,14 @@ function CatDetailsModalContent({
           <>
             <TabsContent value='vaccinations' className='pt-4'>
               <VaccinationsSection
+                householdId={householdId}
+                catId={cat.id}
+                catName={cat.name}
+              />
+            </TabsContent>
+
+            <TabsContent value='preventives' className='pt-4'>
+              <PreventivesSection
                 householdId={householdId}
                 catId={cat.id}
                 catName={cat.name}

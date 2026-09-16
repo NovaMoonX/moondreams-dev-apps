@@ -7,21 +7,27 @@ import { clearCurrentHouseholdData } from '@/store/utils/createOptimisticCollect
 import { startConditionLibraryListener } from '../store/listeners/conditionLibraryListener';
 import { startCatsListener } from '../store/listeners/catsListener';
 import { startCustomHealthRecordTypesListener } from '../store/listeners/customHealthRecordTypesListener';
+import { startCustomPreventiveProductsListener } from '../store/listeners/customPreventiveProductsListener';
+import { startCustomPreventiveTypesListener } from '../store/listeners/customPreventiveTypesListener';
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
+import { startPreventivesListener } from '../store/listeners/preventivesListener';
 import { startVisitsListener } from '../store/listeners/visitsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
 import { setCats } from '../store/slices/catsSlice';
 import { setCustomHealthRecordTypes } from '../store/slices/customHealthRecordTypesSlice';
+import { setCustomPreventiveProducts } from '../store/slices/customPreventiveProductsSlice';
+import { setCustomPreventiveTypes } from '../store/slices/customPreventiveTypesSlice';
 import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setExpenses } from '../store/slices/expensesSlice';
 import { setHealthRecords } from '../store/slices/healthRecordsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
+import { setPreventives } from '../store/slices/preventivesSlice';
 import { setVisits } from '../store/slices/visitsSlice';
 import { setVetClinics } from '../store/slices/vetClinicsSlice';
 
@@ -63,6 +69,9 @@ export function useNineLivesSync(
       dispatch(setCustomHealthRecordTypes([]));
       dispatch(setHealthRecords([]));
       dispatch(setExpenses([]));
+      dispatch(setPreventives([]));
+      dispatch(setCustomPreventiveProducts([]));
+      dispatch(setCustomPreventiveTypes([]));
       return;
     }
 
@@ -96,6 +105,21 @@ export function useNineLivesSync(
     const unsubscribeHealthRecords = startHealthRecordsListener(householdId, (records) => {
       dispatch(setHealthRecords(records));
     });
+    const unsubscribePreventives = startPreventivesListener(householdId, (preventives) => {
+      dispatch(setPreventives(preventives));
+    });
+    const unsubscribeCustomPreventiveProducts = startCustomPreventiveProductsListener(
+      householdId,
+      (products) => {
+        dispatch(setCustomPreventiveProducts(products));
+      },
+    );
+    const unsubscribeCustomPreventiveTypes = startCustomPreventiveTypesListener(
+      householdId,
+      (types) => {
+        dispatch(setCustomPreventiveTypes(types));
+      },
+    );
 
     return () => {
       unsubscribeCats();
@@ -106,6 +130,9 @@ export function useNineLivesSync(
       unsubscribeVisits();
       unsubscribeExpenses();
       unsubscribeHealthRecords();
+      unsubscribePreventives();
+      unsubscribeCustomPreventiveProducts();
+      unsubscribeCustomPreventiveTypes();
     };
   }, [dispatch, householdId]);
 

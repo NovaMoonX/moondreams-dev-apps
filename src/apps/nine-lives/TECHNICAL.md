@@ -224,7 +224,54 @@ interface Vaccination {
 }
 ```
 
-### 7. Weight Entry
+### 7. Preventive
+
+Path: `apps/nine-lives/households/{householdId}/cats/{catId}/preventives/{preventiveId}`
+
+Preventives use the same append-only, one-document-per-dose model as vaccinations, but represent recurring parasite treatments that are often administered at home. `householdId` is denormalized so the household-wide due-dates view can run a `collectionGroup('preventives')` query without fetching every cat individually. Each dose can be edited or deleted, while the remaining history stays intact.
+
+Product and type both follow the same "custom add" pattern as health record types (see Entity 6's `CustomHealthRecordType`): a preset dropdown plus an "Add a custom product…"/"Add a custom type…" option that persists a reusable, household-scoped entry (`CustomPreventiveProduct` / `CustomPreventiveType`) rather than a one-off string, so the same custom product or type is offered again on future doses.
+
+```typescript
+type PreventiveType = 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other' | 'custom';
+
+interface Preventive {
+  id: string;
+  householdId: string;
+  catId: string;
+  name: string;
+  customProductId: string | null; // set when `name` came from a CustomPreventiveProduct
+  type: PreventiveType;
+  customTypeId: string | null; // required when type === 'custom'
+  administeredAt: number;
+  expiresAt: number | null; // next dose due date
+  dosage: string | null;
+  clinicId: string | null;
+  doctorId: string | null;
+  linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+interface CustomPreventiveProduct {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+interface CustomPreventiveType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+```
+
+### 8. Weight Entry
 
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}/weightEntries/{weightEntryId}`
 
@@ -599,7 +646,7 @@ export const selectHouseholdDueDatesTimeline = (
 ): HouseholdDueDateItem[] => { /* merges upcoming/past visits + vaccination expiresAt, sorted */ };
 ```
 
-The UI groups this into buckets like "This month," "Next 3 months," "Beyond," and "Past" (shown grayed out) — similar to a printed vet visit summary that shows both what's already happened and what's scheduled months out, not just what's imminent. This only reads existing `visits`/`vaccinations` slice data and ships without any dependency on the push notification work below — it's a Core MVP–tier feature, not a Beyond-tier one.
+The UI groups this into buckets like "This month," "Next 3 months," "Beyond," and "Past" (shown grayed out) — similar to a printed vet visit summary that shows both what's already happened and what's scheduled months out, not just what's imminent. This only reads existing `visits`/`vaccinations`/`preventives` slice data and ships without any dependency on the push notification work below — it's a Core MVP–tier feature, not a Beyond-tier one.
 
 ### Reminder lifecycle (push notifications specifically — Beyond MVP)
 
@@ -610,7 +657,7 @@ The UI groups this into buckets like "This month," "Next 3 months," "Beyond," an
 [PENDING] ---> creator cancels (e.g. visit was rescheduled)        ---> [CANCELLED]
 ```
 
-Nine Lives would create a `Reminder` when a `Visit` is scheduled (a day before `scheduledAt`) and when a `Vaccination.expiresAt` approaches. This is explicitly sequenced after the rest of Nine Lives' UI is working, not early — see the Issue Roadmap's tiering.
+Nine Lives would create a `Reminder` when a `Visit` is scheduled (a day before `scheduledAt`) and when a `Vaccination.expiresAt` or `Preventive.expiresAt` approaches. This is explicitly sequenced after the rest of Nine Lives' UI is working, not early — see the Issue Roadmap's tiering.
 
 ## Client State Management (Redux Toolkit)
 
@@ -633,6 +680,7 @@ export interface NineLivesState {
   resources: ResourcesState;
   visits: VisitsState;               // household-keyed, eager
   vaccinations: VaccinationsState;   // household-keyed, eager — see tiering below
+  preventives: PreventivesState;     // household-keyed, eager — see tiering below
   healthRecords: HealthRecordsState; // cat-keyed, lazy
   customHealthRecordTypes: CustomHealthRecordTypesState; // household-keyed
   weightEntries: WeightEntriesState; // cat-keyed, lazy
@@ -768,11 +816,11 @@ export function createFirestoreCollectionListener<TDoc>({
 
 Subscription tiers:
 
-- **On mount** (`useNineLivesSync`): the household doc, `cats`, `vetClinics`, `doctors`, `visits` (household-level), and the four global reference collections. **`vaccinations` also loads here**, via a `collectionGroup('vaccinations')` query filtered `where('householdId', '==', householdId)` — promoted from a per-cat listener specifically so `selectHouseholdDueDatesTimeline` and full vaccination history are available without opening any single cat. Vaccination volume per cat is small enough that this doesn't carry the same cost as eagerly loading, say, every symptom or health record.
+- **On mount** (`useNineLivesSync`): the household doc, `cats`, `vetClinics`, `doctors`, `visits` (household-level), and the four global reference collections. **`vaccinations` and `preventives` also load here**, via collection-group queries filtered by `where('householdId', '==', householdId)` — promoted to household-level listeners specifically so `selectHouseholdDueDatesTimeline` and full treatment histories are available without opening any single cat. Preventive and vaccination volume per cat is small enough that this doesn't carry the same cost as eagerly loading, say, every symptom or health record.
 - **Lazily, per open cat** (`useCatDetailSync(catId)`): `healthRecords`, `weightEntries`, `catConditions`, `symptoms`, `expenses`, `growthPhotos`, `careInstructions`.
 - **Central, app-wide** (`useReminderSync`, in the app shell): `reminders` where `targetUids array-contains uid`.
 
-This is also what answers "can a cat's full vaccination history be viewed" — yes, trivially, since the eager `vaccinations` slice already holds every vaccination for every cat in the household; a detail view just filters it client-side by `catId`.
+This is also what answers "can a cat's full vaccination or preventive history be viewed" — yes, trivially, since the eager `vaccinations` and `preventives` slices already hold every record for every cat in the household; a detail view just filters them client-side by `catId`.
 
 ### Cross-slice selectors
 
@@ -808,8 +856,9 @@ Rules need to be secure and comprehensive without becoming so field-specific tha
 
 ## Security & Privacy Requirements
 
-* **Household-scoped ownership**: only a UID present in `Household.members` can read or write that household's cats, vet clinics, doctors, custom health record types, visits, emergency info, and care instructions, and any of those cats' health records, vaccinations, weight entries, conditions, symptoms, and expenses.
+* **Household-scoped ownership**: only a UID present in `Household.members` can read or write that household's cats, vet clinics, doctors, custom health record types, visits, emergency info, care instructions, and any of those cats' health records, vaccinations, preventives, weight entries, conditions, symptoms, and expenses.
 * **Vaccination collection-group query**: the `collectionGroup('vaccinations')` read is constrained to documents whose `householdId` matches a household the requesting user belongs to — the denormalized `householdId` field exists specifically to make this rule expressible.
+* **Preventive collection-group query**: the `collectionGroup('preventives')` read is constrained to documents whose denormalized `householdId` matches a household the requesting user belongs to.
 * **Invite lookup privacy**: `apps/nine-lives/inviteCodes/{code}` exposes only a `householdId` mapping, mirroring Worth the Wait's `inviteCodes` collection; readable by any authenticated user, writable only as part of a valid household-creation/join transaction once that flow ships.
 * **Reference library read access**: any authenticated user can read `conditionLibrary`, `vaccineLibrary`, `glossary`, and `resources`; no client-side create, update, or delete — writes happen only through the seed process.
 * **Custom conditions stay private**: `CatCondition` documents with `source: 'custom'` are never written back into the shared `conditionLibrary`.
@@ -859,6 +908,9 @@ src/apps/nine-lives/
 │   ├── HealthRecordTimeline.tsx  # search, cat/type filters, date/name sort — mirrors ExpenseTimeline
 │   ├── VaccinationFormModal.tsx
 │   ├── VaccinationTimeline.tsx
+│   ├── PreventiveFormModal.tsx
+│   ├── PreventiveTimeline.tsx
+│   ├── PreventivesSection.tsx
 │   ├── WeightEntryFormModal.tsx
 │   ├── WeightHistoryList.tsx
 │   ├── CatDietForm.tsx
@@ -876,7 +928,7 @@ src/apps/nine-lives/
 │   ├── ResourceBrowser.tsx
 │   ├── GrowthPhotoTimeline.tsx
 │   ├── DashboardQuickActions.tsx   # multi-cat CTAs: add visit/reminder without opening a cat
-│   ├── DashboardDueDatesTimeline.tsx # past + upcoming visits & vaccinations, up to a year out
+│   ├── DashboardDueDatesTimeline.tsx # past + upcoming visits, vaccinations & preventives, up to a year out
 │   └── NineLivesLayout.tsx
 ├── constants/
 │   └── presetOptions.ts            # CAT_BREEDS, PERSONALITY_TRAIT_OPTIONS, INSURANCE_PROVIDER_OPTIONS
@@ -892,6 +944,7 @@ src/apps/nine-lives/
 │   │   ├── resourcesSlice.ts
 │   │   ├── visitsSlice.ts
 │   │   ├── vaccinationsSlice.ts
+│   │   ├── preventivesSlice.ts
 │   │   ├── weightEntriesSlice.ts
 │   │   ├── healthRecordsSlice.ts
 │   │   ├── customHealthRecordTypesSlice.ts
@@ -908,6 +961,7 @@ src/apps/nine-lives/
 │   │   ├── doctorsActions.ts
 │   │   ├── visitsActions.ts        # includes the outcome-flow writes
 │   │   ├── vaccinationsActions.ts
+│   │   ├── preventivesActions.ts
 │   │   ├── weightEntriesActions.ts
 │   │   ├── healthRecordsActions.ts
 │   │   ├── customHealthRecordTypesActions.ts
@@ -927,6 +981,7 @@ src/apps/nine-lives/
 │   │   ├── resourcesListener.ts
 │   │   ├── visitsListener.ts
 │   │   ├── vaccinationsListener.ts  # collectionGroup query, household-scoped
+│   │   ├── preventivesListener.ts   # collectionGroup query, household-scoped
 │   │   ├── catDetailListeners.ts    # healthRecords, weightEntries, catConditions, symptoms, expenses, growthPhotos, careInstructions
 │   │   └── customHealthRecordTypesListener.ts
 │   ├── selectors.ts

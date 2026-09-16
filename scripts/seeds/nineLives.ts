@@ -6,6 +6,7 @@ import {
 } from './types.ts';
 
 const HOUSEHOLD_ID = 'seed-nine-lives-household';
+const SECOND_HOUSEHOLD_ID = 'seed-nine-lives-other-household';
 
 export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const caretaker = FIXTURE_USERS.nineLivesCaretaker;
@@ -16,6 +17,11 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     .doc('nine-lives')
     .collection('households')
     .doc(HOUSEHOLD_ID);
+  const secondHouseholdRef = context.firestore
+    .collection('apps')
+    .doc('nine-lives')
+    .collection('households')
+    .doc(SECOND_HOUSEHOLD_ID);
   const createdAt = context.now - 1_209_600_000;
 
   batch.set(
@@ -39,6 +45,27 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     .doc('LUNA7Q');
 
   batch.set(inviteCodeRef, { householdId: HOUSEHOLD_ID }, { merge: true });
+
+  batch.set(
+    secondHouseholdRef,
+    {
+      id: SECOND_HOUSEHOLD_ID,
+      name: 'Alex’s household',
+      members: [coCaretaker.uid],
+      inviteCode: 'NOVA9P',
+      createdBy: coCaretaker.uid,
+      createdAt,
+      lastEditedAt: context.now,
+    },
+    { merge: true },
+  );
+
+  const secondInviteCodeRef = context.firestore
+    .collection('apps')
+    .doc('nine-lives')
+    .collection('inviteCodes')
+    .doc('NOVA9P');
+  batch.set(secondInviteCodeRef, { householdId: SECOND_HOUSEHOLD_ID }, { merge: true });
 
   const cats = [
     {
@@ -230,6 +257,81 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         clinicId: 'seed-vet-clinic-harbor',
         doctorId: 'seed-doctor-daniela',
         lotNumber: 'L-2201',
+      },
+    ],
+  };
+
+  const customPreventiveProducts = [
+    {
+      id: 'seed-custom-preventive-product-bravecto',
+      label: 'Bravecto',
+    },
+  ] as const;
+
+  const customPreventiveTypes = [
+    {
+      id: 'seed-custom-preventive-type-ear-mite-treatment',
+      label: 'Ear mite treatment',
+    },
+  ] as const;
+
+  const preventivesByCat: Record<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      customProductId: string | null;
+      type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'other' | 'custom';
+      customTypeId: string | null;
+      administeredAt: number;
+      expiresAt: number | null;
+      dosage: string | null;
+      clinicId: string | null;
+      doctorId: string | null;
+      linkedVisitId: string | null;
+    }>
+  > = {
+    'seed-cat-mochi': [
+      {
+        id: 'seed-preventive-mochi-revolution',
+        name: 'Revolution Plus',
+        customProductId: null,
+        type: 'flea-tick',
+        customTypeId: null,
+        administeredAt: context.now - 2_592_000_000,
+        expiresAt: context.now + 2_592_000_000,
+        dosage: '0.5 mL',
+        clinicId: 'seed-vet-clinic-blue-bark',
+        doctorId: 'seed-doctor-maya',
+        linkedVisitId: null,
+      },
+      {
+        id: 'seed-preventive-mochi-bravecto',
+        name: customPreventiveProducts[0].label,
+        customProductId: customPreventiveProducts[0].id,
+        type: 'custom',
+        customTypeId: customPreventiveTypes[0].id,
+        administeredAt: context.now - 1_296_000_000,
+        expiresAt: context.now + 6_480_000_000,
+        dosage: null,
+        clinicId: null,
+        doctorId: null,
+        linkedVisitId: null,
+      },
+    ],
+    'seed-cat-juniper': [
+      {
+        id: 'seed-preventive-juniper-heartworm',
+        name: 'Revolution Plus',
+        customProductId: null,
+        type: 'heartworm',
+        customTypeId: null,
+        administeredAt: context.now - 5_184_000_000,
+        expiresAt: context.now + 25_920_000_000,
+        dosage: '0.5 mL',
+        clinicId: null,
+        doctorId: null,
+        linkedVisitId: null,
       },
     ],
   };
@@ -545,6 +647,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   };
 
   let vaccinationCount = 0;
+  let preventiveCount = 0;
   let weightEntryCount = 0;
   let expenseCount = 0;
   let healthRecordCount = 0;
@@ -606,6 +709,26 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       vaccinationCount += 1;
     });
 
+    (preventivesByCat[cat.id] ?? []).forEach((preventive) => {
+      const preventiveRef = catRef
+        .collection('preventives')
+        .doc(preventive.id);
+
+      batch.set(
+        preventiveRef,
+        {
+          ...preventive,
+          householdId: HOUSEHOLD_ID,
+          catId: cat.id,
+          createdBy: caretaker.uid,
+          createdAt,
+          lastEditedAt: context.now,
+        },
+        { merge: true },
+      );
+      preventiveCount += 1;
+    });
+
     (weightEntriesByCat[cat.id] ?? []).forEach((weightEntry) => {
       const weightEntryRef = catRef
         .collection('weightEntries')
@@ -643,6 +766,60 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       symptomCount += 1;
     });
   });
+
+  const secondCatRef = secondHouseholdRef.collection('cats').doc('seed-cat-other-household');
+  batch.set(
+    secondCatRef,
+    {
+      id: 'seed-cat-other-household',
+      householdId: SECOND_HOUSEHOLD_ID,
+      name: 'Pixel',
+      photoURL: null,
+      dateOfBirth: context.now - 31_536_000_000,
+      isDateOfBirthEstimated: false,
+      breed: 'Domestic Shorthair',
+      lifestyle: 'indoor',
+      microchipNumber: null,
+      shelterOrigin: null,
+      adoptedAt: context.now - 25_920_000_000,
+      customKeyDates: null,
+      diet: null,
+      currentClinicId: null,
+      insurance: null,
+      personalityTraits: null,
+      notes: 'Separate-household fixture cat for collection-group scoping checks.',
+      createdBy: coCaretaker.uid,
+      createdAt,
+      lastEditedAt: context.now,
+    },
+    { merge: true },
+  );
+  const secondPreventiveRef = secondCatRef
+    .collection('preventives')
+    .doc('seed-preventive-other-household');
+  batch.set(
+    secondPreventiveRef,
+    {
+      id: 'seed-preventive-other-household',
+      householdId: SECOND_HOUSEHOLD_ID,
+      catId: 'seed-cat-other-household',
+      name: 'Advantage Multi',
+      customProductId: null,
+      type: 'flea-tick',
+      customTypeId: null,
+      administeredAt: context.now - 2_592_000_000,
+      expiresAt: context.now + 2_592_000_000,
+      dosage: '0.4 mL',
+      clinicId: null,
+      doctorId: null,
+      linkedVisitId: null,
+      createdBy: coCaretaker.uid,
+      createdAt,
+      lastEditedAt: context.now,
+    },
+    { merge: true },
+  );
+  preventiveCount += 1;
 
   clinics.forEach((clinic) => {
     const clinicRef = householdRef.collection('vetClinics').doc(clinic.id);
@@ -710,6 +887,40 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  customPreventiveProducts.forEach((customProduct) => {
+    const customProductRef = householdRef
+      .collection('customPreventiveProducts')
+      .doc(customProduct.id);
+
+    batch.set(
+      customProductRef,
+      {
+        ...customProduct,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
+  customPreventiveTypes.forEach((customType) => {
+    const customTypeRef = householdRef
+      .collection('customPreventiveTypes')
+      .doc(customType.id);
+
+    batch.set(
+      customTypeRef,
+      {
+        ...customType,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+      },
+      { merge: true },
+    );
+  });
+
   healthRecords.forEach((record) => {
     const recordRef = householdRef.collection('healthRecords').doc(record.id);
 
@@ -746,15 +957,19 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      2 +
+      4 +
       conditionLibraryCount +
       cats.length +
+      1 +
       clinics.length +
       doctors.length +
       vaccinationCount +
+      preventiveCount +
       weightEntryCount +
       expenseCount +
       customHealthRecordTypes.length +
+      customPreventiveProducts.length +
+      customPreventiveTypes.length +
       healthRecordCount +
       symptomCount +
       visitCount,
