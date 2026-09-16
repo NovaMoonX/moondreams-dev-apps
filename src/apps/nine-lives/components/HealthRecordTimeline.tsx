@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Pagination, Select } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatDateTime } from '@/utils/formatUtils';
 
 import type { Cat, CustomHealthRecordType, HealthRecord, HealthRecordType } from '../types';
+import { usePagination } from '../utils/usePagination';
+
+const PAGE_SIZE = 5;
 
 interface HealthRecordTimelineProps {
   records: HealthRecord[];
@@ -124,6 +127,7 @@ function HealthRecordTimeline({
   }, [records, cats, customTypes, searchQuery, catFilter, typeFilter, sortOption]);
 
   const hasRecords = records.length > 0;
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(visibleRecords, PAGE_SIZE);
 
   return (
     <div>
@@ -182,7 +186,7 @@ function HealthRecordTimeline({
         </p>
       ) : (
         <div className={join('divide-border divide-y', hasRecords && 'mt-0')}>
-          {visibleRecords.map((record) => {
+          {pagedItems.map((record) => {
             const catNames = record.catIds
               .map((catId) => cats.find((cat) => cat.id === catId)?.name)
               .filter((name): name is string => Boolean(name));
@@ -224,6 +228,12 @@ function HealthRecordTimeline({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {shouldPaginate && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' />
         </div>
       )}
     </div>

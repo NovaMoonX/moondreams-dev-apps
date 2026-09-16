@@ -7,6 +7,7 @@ import {
   FormFactories,
   Input,
   Modal,
+  Pagination,
   Select,
   Tabs,
   TabsContent,
@@ -47,6 +48,7 @@ import {
   convertWeight,
   getLitterEntryEndingWeight,
 } from '@apps/nine-lives/utils/litterCalculators';
+import { usePagination } from '@apps/nine-lives/utils/usePagination';
 
 import DetailsDisclosure from './DetailsDisclosure';
 import TrendLineChart from './TrendLineChart';
@@ -1022,6 +1024,21 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
     [boxEntriesAscending, littersById],
   );
 
+  const visibleListEntries = useMemo(
+    () =>
+      entriesWithUsage
+        .filter(({ entry }) => !showOnlyChanges || entry.isFullChange)
+        .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index)),
+    [entriesWithUsage, showOnlyChanges, sortOption],
+  );
+  const {
+    page: entriesPage,
+    pageCount: entriesPageCount,
+    setPage: setEntriesPage,
+    pagedItems: pagedListEntries,
+    shouldPaginate: shouldPaginateEntries,
+  } = usePagination(visibleListEntries, 5);
+
   const chartUnit = boxEntriesAscending[boxEntriesAscending.length - 1]?.weightUnit ?? 'lb';
   const usageChartData = useMemo(
     () =>
@@ -1171,10 +1188,9 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
           </div>
 
           {activeView === 'list' ? (
+            <div>
             <div className='divide-border divide-y'>
-              {entriesWithUsage
-                .filter(({ entry }) => !showOnlyChanges || entry.isFullChange)
-                .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index))
+              {pagedListEntries
                 .map(({ entry, usage, usageCost, litter }) => {
                   const refillAmount = entry.refillWeight !== null ? entry.refillWeight - entry.weightBefore : null;
                   const litterLabel = litter
@@ -1225,6 +1241,12 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
                     </div>
                   );
                 })}
+            </div>
+            {shouldPaginateEntries && (
+              <div className='mt-3 flex justify-center'>
+                <Pagination page={entriesPage} pageCount={entriesPageCount} onPageChange={setEntriesPage} size='sm' />
+              </div>
+            )}
             </div>
           ) : (
             <TrendLineChart

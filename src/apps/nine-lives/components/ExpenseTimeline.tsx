@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Input, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
+import { Input, Pagination, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { Cat, Expense } from '../types';
@@ -9,6 +9,9 @@ import {
   getExpenseCategories,
   getExpenseCategoryLabel,
 } from '../utils/budgetCalculators';
+import { usePagination } from '../utils/usePagination';
+
+const PAGE_SIZE = 5;
 
 function getExpenseTitle(expense: Expense): string {
   if (expense.label) {
@@ -162,6 +165,7 @@ function ExpenseTimeline({
 
   const hasExpenses = expenses.length > 0;
   const visibleTotal = visibleExpenses.reduce((total, expense) => total + expense.amount, 0);
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(visibleExpenses, PAGE_SIZE);
 
   return (
     <div>
@@ -243,7 +247,7 @@ function ExpenseTimeline({
         </p>
       ) : (
         <div className={join('divide-border divide-y', hasExpenses && 'mt-0')}>
-          {visibleExpenses.map((expense) => {
+          {pagedItems.map((expense) => {
             const catNames = expense.catIds
               .map((catId) => cats.find((cat) => cat.id === catId)?.name)
               .filter(Boolean)
@@ -281,6 +285,12 @@ function ExpenseTimeline({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {shouldPaginate && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' />
         </div>
       )}
     </div>

@@ -1,7 +1,10 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Pagination } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
 import type { Vaccination } from '@apps/nine-lives/types';
+import { usePagination } from '@apps/nine-lives/utils/usePagination';
+
+const PAGE_SIZE = 5;
 
 interface VaccinationTimelineProps {
   vaccinations: Vaccination[];
@@ -19,6 +22,7 @@ function VaccinationTimeline({
   const sortedVaccinations = [...vaccinations].sort(
     (left, right) => right.administeredAt - left.administeredAt,
   );
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(sortedVaccinations, PAGE_SIZE);
 
   if (sortedVaccinations.length === 0) {
     return (
@@ -33,7 +37,7 @@ function VaccinationTimeline({
     <div>
       <h3 className='text-sm font-medium'>{title}</h3>
       <div className='divide-border divide-y'>
-        {sortedVaccinations.map((vaccination) => (
+        {pagedItems.map((vaccination) => (
           <div key={vaccination.id} className='flex items-start justify-between gap-3 py-2 first:pt-0'>
             <div className='min-w-0'>
               <strong className='text-sm'>{vaccination.name}</strong>
@@ -57,6 +61,12 @@ function VaccinationTimeline({
           </div>
         ))}
       </div>
+
+      {shouldPaginate && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' />
+        </div>
+      )}
     </div>
   );
 }

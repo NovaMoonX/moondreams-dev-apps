@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Pagination } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -18,10 +18,13 @@ import {
   selectClinicsByHousehold,
   selectDoctorsByHousehold,
 } from '../store/selectors';
+import { usePagination } from '../utils/usePagination';
 import DetailsDisclosure from './DetailsDisclosure';
 import DoctorFormModal from './DoctorFormModal';
 import VetClinicRow from './VetClinicRow';
 import VetClinicFormModal from './VetClinicFormModal';
+
+const PAGE_SIZE = 3;
 
 interface ClinicsSectionProps {
   householdId: string;
@@ -49,6 +52,8 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
   const doctorFormClinic = editingDoctor
     ? (clinics.find((clinic) => clinic.id === editingDoctor.clinicId) ?? null)
     : doctorModalClinic;
+
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(clinics, PAGE_SIZE);
 
   const handleCreateClinic = async (clinic: {
     name: string;
@@ -204,7 +209,7 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
 
           {clinics.length > 0 && (
             <div className='divide-border divide-y'>
-              {clinics.map((clinic) => {
+              {pagedItems.map((clinic) => {
                 const clinicDoctors = doctors.filter(
                   (doctor) => doctor.clinicId === clinic.id,
                 );
@@ -223,6 +228,12 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
                   />
                 );
               })}
+            </div>
+          )}
+
+          {shouldPaginate && (
+            <div className='flex justify-center'>
+              <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' />
             </div>
           )}
         </div>
