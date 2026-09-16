@@ -16,6 +16,7 @@ import { copyToClipboard } from '@/utils/clipboardUtils';
 import AvatarStack from '@/ui/AvatarStack';
 
 import { useAttentionFocus } from '../context/attentionFocusContext';
+import { MARK_VISIT_DONE_LABEL } from '../constants/visitCopy';
 import {
   selectCatsByHousehold,
   selectClinicsByHousehold,
@@ -36,6 +37,7 @@ import { getDefaultVisitTitle } from '../utils/dateHelpers';
 import { usePagination } from '../utils/usePagination';
 
 const OTHER_ROWS_PAGE_SIZE = 5;
+const VISIT_ROWS_PAGE_SIZE = 3;
 
 interface AttentionSectionProps {
   householdId: string;
@@ -197,7 +199,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           title: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
           subtitle: catNames(item.catIds),
           dueLabel: formatDueLabel(item.scheduledAt, now),
-          actionLabel: 'Mark as done',
+          actionLabel: MARK_VISIT_DONE_LABEL,
           onAction: () =>
             requestFocus({
               kind: 'visit-complete',
@@ -294,6 +296,13 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     .filter((row): row is AttentionRow => row !== null);
   const visitRows = rows.filter((row) => row.kind === 'visit');
   const otherRows = rows.filter((row) => row.kind !== 'visit');
+  const {
+    page: visitRowsPage,
+    pageCount: visitRowsPageCount,
+    setPage: setVisitRowsPage,
+    pagedItems: pagedVisitRows,
+    shouldPaginate: shouldPaginateVisitRows,
+  } = usePagination(visitRows, VISIT_ROWS_PAGE_SIZE);
   const {
     page: otherRowsPage,
     pageCount: otherRowsPageCount,
@@ -508,7 +517,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
               <h2 className='text-lg font-semibold'>Upcoming visits</h2>
             </div>
             <div className='mt-3 space-y-3'>
-              {visitRows.map((row, index) =>
+              {pagedVisitRows.map((row, index) =>
                 isSingleVisit ? (
                   <div
                     key={row.key}
@@ -577,6 +586,17 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                 ),
               )}
             </div>
+            {shouldPaginateVisitRows && (
+              <div className='mt-4 flex justify-center'>
+                <Pagination
+                  page={visitRowsPage}
+                  pageCount={visitRowsPageCount}
+                  onPageChange={setVisitRowsPage}
+                  size='sm'
+                  showFirstLast={false}
+                />
+              </div>
+            )}
           </div>
         )}
 
