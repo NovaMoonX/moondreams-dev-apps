@@ -360,13 +360,7 @@ export interface Symptom {
   lastEditedAt: number;
 }
 
-export type ConditionCategory =
-  | 'illness'
-  | 'injury'
-  | 'chronic'
-  | 'parasite'
-  | 'allergy'
-  | 'other';
+export type ConditionCategory = 'illness' | 'injury' | 'chronic' | 'parasite' | 'allergy';
 
 export interface LibraryCondition {
   id: string;

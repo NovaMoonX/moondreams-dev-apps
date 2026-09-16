@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import type { ConditionCategory, LibraryCondition } from '../types';
+import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
 
 interface ConditionLibraryBrowserProps {
   conditions: LibraryCondition[];
@@ -10,15 +11,7 @@ interface ConditionLibraryBrowserProps {
   onSelect: (condition: LibraryCondition) => void;
 }
 
-const CATEGORY_FILTERS: Array<ConditionCategory | 'all'> = [
-  'all',
-  'illness',
-  'injury',
-  'chronic',
-  'parasite',
-  'allergy',
-  'other',
-];
+const CATEGORY_FILTERS: Array<ConditionCategory | 'all'> = ['all', ...CONDITION_CATEGORIES];
 
 function ConditionLibraryBrowser({
   conditions,
@@ -60,7 +53,7 @@ function ConditionLibraryBrowser({
             variant={activeCategory === category ? 'primary' : 'outline'}
             onClick={() => setActiveCategory(category)}
           >
-            {category === 'all' ? 'All' : category}
+            {category === 'all' ? 'All' : getConditionCategoryLabel(category)}
           </Button>
         ))}
       </div>
@@ -80,7 +73,7 @@ function ConditionLibraryBrowser({
               <span className='flex w-full items-center justify-between gap-2'>
                 <span className='font-medium'>{condition.name}</span>
                 <Badge variant='muted' outline>
-                  {condition.category}
+                  {getConditionCategoryLabel(condition.category)}
                 </Badge>
               </span>
               <span className='text-sm opacity-80'>{condition.description}</span>

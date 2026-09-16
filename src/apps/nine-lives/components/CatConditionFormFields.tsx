@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
 import type { CatCondition, ConditionCategory, LibraryCondition } from '../types';
+import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
 import ConditionLibraryBrowser from './ConditionLibraryBrowser';
 
 interface CatConditionFormValues {
@@ -30,15 +31,6 @@ interface CatConditionFormFieldsProps {
   onDelete?: (conditionId: string) => Promise<void> | void;
   onCancel?: () => void;
 }
-
-const CONDITION_CATEGORIES: ConditionCategory[] = [
-  'illness',
-  'injury',
-  'chronic',
-  'parasite',
-  'allergy',
-  'other',
-];
 
 const STATUS_OPTIONS = [
   { text: 'Active', value: 'active' },
@@ -107,7 +99,10 @@ function CatConditionFormFields({
             select({
               name: 'category',
               label: 'Category',
-              options: CONDITION_CATEGORIES.map((category) => ({ label: category, value: category })),
+              options: CONDITION_CATEGORIES.map((category) => ({
+                label: getConditionCategoryLabel(category),
+                value: category,
+              })),
             }),
           ]
         : []),
@@ -281,7 +276,7 @@ function CatConditionFormFields({
             <div className='flex items-center gap-2'>
               <strong className='text-sm'>{selectedLibraryCondition.name}</strong>
               <Badge variant='muted' outline>
-                {selectedLibraryCondition.category}
+                {getConditionCategoryLabel(selectedLibraryCondition.category)}
               </Badge>
             </div>
             <p className='text-muted-foreground text-sm'>{selectedLibraryCondition.description}</p>

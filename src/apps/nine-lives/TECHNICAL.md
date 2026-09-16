@@ -415,7 +415,7 @@ The shipped client keeps visits in the household Redux sync and exposes scheduli
 Path: `apps/nine-lives/conditionLibrary/{conditionId}`
 
 ```typescript
-type ConditionCategory = 'illness' | 'injury' | 'chronic' | 'parasite' | 'allergy' | 'other';
+type ConditionCategory = 'illness' | 'injury' | 'chronic' | 'parasite' | 'allergy';
 
 interface LibraryCondition {
   id: string;
