@@ -108,23 +108,25 @@ function LineItemsField({
     <div className='space-y-2'>
       {value.map((item) => (
         <div key={item.id} className='flex items-center gap-2'>
-          <Input
-            value={item.label}
-            onChange={(event) => updateItem(item.id, { label: event.target.value })}
-            placeholder='e.g. Exam fee'
-            variant='outline'
-            className='flex-1'
-            disabled={disabled}
-          />
-          <Input
-            value={item.amount}
-            onChange={(event) => updateItem(item.id, { amount: event.target.value })}
-            placeholder='72.00'
-            type='number'
-            variant='outline'
-            className='w-28'
-            disabled={disabled}
-          />
+          <div className='flex-1'>
+            <Input
+              value={item.label}
+              onChange={(event) => updateItem(item.id, { label: event.target.value })}
+              placeholder='e.g. Exam fee'
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
+          <div className='w-28 shrink-0'>
+            <Input
+              value={item.amount}
+              onChange={(event) => updateItem(item.id, { amount: event.target.value })}
+              placeholder='72.00'
+              type='number'
+              variant='outline'
+              disabled={disabled}
+            />
+          </div>
           {value.length > 1 && (
             <Button
               type='button'
