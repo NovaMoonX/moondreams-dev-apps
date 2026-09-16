@@ -411,6 +411,45 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const litterEntries = [
+    {
+      id: 'seed-litter-main-1',
+      litterBoxName: 'Main litter box',
+      litterType: 'clumping_clay',
+      customLitterType: null,
+      weight: 18.5,
+      weightUnit: 'lb',
+      cost: 22.99,
+      loggedAt: context.now - 14 * 86_400_000,
+      changedAt: context.now - 16 * 86_400_000,
+      notes: 'Fresh litter after a full box change.',
+    },
+    {
+      id: 'seed-litter-main-2',
+      litterBoxName: 'Main litter box',
+      litterType: 'clumping_clay',
+      customLitterType: null,
+      weight: 13.25,
+      weightUnit: 'lb',
+      cost: null,
+      loggedAt: context.now - 7 * 86_400_000,
+      changedAt: context.now - 16 * 86_400_000,
+      notes: 'Weekly weigh-in.',
+    },
+    {
+      id: 'seed-litter-office-1',
+      litterBoxName: 'Office litter box',
+      litterType: 'pine_wood_pellet',
+      customLitterType: null,
+      weight: 8,
+      weightUnit: 'lb',
+      cost: 12.5,
+      loggedAt: context.now - 3 * 86_400_000,
+      changedAt: context.now - 4 * 86_400_000,
+      notes: null,
+    },
+  ] as const;
+
   const customHealthRecordTypes = [
     {
       id: 'seed-custom-record-type-allergy-test',
@@ -547,6 +586,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   let vaccinationCount = 0;
   let weightEntryCount = 0;
   let expenseCount = 0;
+  let litterEntryCount = 0;
   let healthRecordCount = 0;
   let conditionLibraryCount = 0;
   let symptomCount = 0;
@@ -693,6 +733,23 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     expenseCount += 1;
   });
 
+  litterEntries.forEach((entry) => {
+    const entryRef = householdRef.collection('litterEntries').doc(entry.id);
+
+    batch.set(
+      entryRef,
+      {
+        ...entry,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    litterEntryCount += 1;
+  });
+
   customHealthRecordTypes.forEach((customType) => {
     const customTypeRef = householdRef
       .collection('customHealthRecordTypes')
@@ -754,6 +811,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       vaccinationCount +
       weightEntryCount +
       expenseCount +
+      litterEntryCount +
       customHealthRecordTypes.length +
       healthRecordCount +
       symptomCount +

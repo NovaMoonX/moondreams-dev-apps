@@ -398,7 +398,10 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
           ) : (
             <div className='divide-border divide-y'>
               {sortedEntries.map((entry, index) => {
-                const previous = sortedEntries[index - 1];
+                const previous = [...sortedEntries]
+                  .slice(0, index)
+                  .reverse()
+                  .find((item) => item.litterBoxName === entry.litterBoxName);
                 const usage = previous
                   ? convertWeight(previous.weight, previous.weightUnit, entry.weightUnit) - entry.weight
                   : null;

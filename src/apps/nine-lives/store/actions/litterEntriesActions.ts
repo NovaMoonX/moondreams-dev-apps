@@ -122,9 +122,11 @@ export const updateLitterEntry = createAsyncThunk<
       litterBoxName: sanitizedChanges.litterBoxName?.trim() || current.litterBoxName,
       weight: Number(sanitizedChanges.weight ?? current.weight),
       cost:
-        sanitizedChanges.cost === null
-          ? null
-          : Number(sanitizedChanges.cost ?? current.cost ?? 0) || null,
+        'cost' in changes
+          ? sanitizedChanges.cost === null
+            ? null
+            : Number(sanitizedChanges.cost)
+          : current.cost,
       changedAt:
         'changedAt' in changes ? sanitizedChanges.changedAt ?? null : current.changedAt,
       customLitterType:

@@ -684,6 +684,54 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/litterEntries/{entryId} {
+      function isLitterEntryIdentityValid() {
+        return request.resource.data.id == entryId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterEntryBaseShapeValid() {
+        return request.resource.data.litterBoxName is string
+          && request.resource.data.litterBoxName.size() > 0
+          && request.resource.data.litterType in [
+            'clumping_clay', 'non_clumping_clay', 'pine_wood_pellet', 'paper',
+            'crystal_silica', 'corn', 'wheat', 'walnut', 'custom'
+          ]
+          && (request.resource.data.customLitterType == null || request.resource.data.customLitterType is string)
+          && request.resource.data.weight is number
+          && request.resource.data.weight > 0
+          && request.resource.data.weightUnit in ['lb', 'kg']
+          && (request.resource.data.cost == null || (request.resource.data.cost is number && request.resource.data.cost >= 0))
+          && isTimestampNumber(request.resource.data.loggedAt)
+          && (request.resource.data.changedAt == null || isTimestampNumber(request.resource.data.changedAt))
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (request.resource.data.litterType != 'custom' || isNonEmptyString(request.resource.data.customLitterType));
+      }
+
+      function isLitterEntryImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterEntryIdentityValid()
+        && isLitterEntryBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterEntryImmutableFieldsValid()
+        && isLitterEntryBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {

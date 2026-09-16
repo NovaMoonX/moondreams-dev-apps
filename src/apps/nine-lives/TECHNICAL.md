@@ -243,7 +243,45 @@ interface WeightEntry {
 }
 ```
 
-### 8. Visit
+### 8. Litter Entry
+
+Path: `apps/nine-lives/households/{householdId}/litterEntries/{entryId}`
+
+Litter entries are household-scoped because litter boxes and their contents are shared equipment, not cat-specific records. Each weigh-in can identify a box and record the last date its litter was changed, allowing the household dashboard to show usage between chronological entries and days since the latest change for each box.
+
+```typescript
+type LitterType =
+  | 'clumping_clay'
+  | 'non_clumping_clay'
+  | 'pine_wood_pellet'
+  | 'paper'
+  | 'crystal_silica'
+  | 'corn'
+  | 'wheat'
+  | 'walnut'
+  | 'custom';
+
+interface LitterEntry {
+  id: string;
+  householdId: string;
+  litterBoxName: string;
+  litterType: LitterType;
+  customLitterType: string | null;
+  weight: number;
+  weightUnit: 'lb' | 'kg';
+  cost: number | null;
+  loggedAt: number;
+  changedAt: number | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+```
+
+`usage` is derived from consecutive entries for the same box after converting units when necessary: the previous weight minus the current weight. A negative result is shown as litter added, which keeps refills visible instead of presenting them as usage. The latest non-null `changedAt` for each `litterBoxName` is used for the household-level “days since changed” summary.
+
+### 9. Visit
 
 Path: `apps/nine-lives/households/{householdId}/visits/{visitId}`
 
@@ -285,7 +323,7 @@ See **Visit Outcome Flow** below for how vaccinations, conditions, weight entrie
 
 The shipped client keeps visits in the household Redux sync and exposes scheduling and editing from the household dashboard only — the per-cat details modal does not repeat a visits tab. `VisitTimeline` supports free-text search, a status filter, a cat filter (household view only), and toggling the date sort direction. Cancelling keeps the record for historical context and can be undone (a cancelled visit can be reopened back to upcoming); deleting an original visit clears its follow-up references in the same batch.
 
-### 9. Condition Library (shared, global reference)
+### 10. Condition Library (shared, global reference)
 
 Path: `apps/nine-lives/conditionLibrary/{conditionId}`
 
@@ -303,7 +341,7 @@ interface LibraryCondition {
 }
 ```
 
-### 10. Cat Condition
+### 11. Cat Condition
 
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}/conditions/{catConditionId}`
 
@@ -333,7 +371,7 @@ interface CatCondition {
 
 Unlike vaccinations and weight entries, a condition is genuinely ongoing — "diagnosed with CKD in 2024" might get discussed, monitored, or treated across a dozen visits over the following years. A single `linkedVisitId` would silently lose that history, so this is an array, updated (via a batched write) alongside `Visit.linkedConditionIds` each time the condition comes up at a visit. Clicking through from the condition's detail view to any of those visits is just reading each ID.
 
-### 11. Symptom
+### 12. Symptom
 
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}/symptoms/{symptomId}`
 
@@ -367,7 +405,7 @@ interface Symptom {
 
 Symptoms can be logged with quick tags only, free text only, or both. The quick-tag set stays cat-focused (litter box changes, appetite, hiding, playfulness, grooming, plus common red flags like vomiting/lethargy) because cats often hide illness via subtle behavior shifts rather than loud, obvious signs. Same reasoning as conditions: a persistent or recurring symptom (say, intermittent vomiting tracked across three visits while a cause gets narrowed down) can reasonably span more than one visit, so this is an array too, kept in sync with `Visit.linkedSymptomIds`.
 
-### 12. Vaccine Library (shared, global reference)
+### 13. Vaccine Library (shared, global reference)
 
 Path: `apps/nine-lives/vaccineLibrary/{vaccineId}`
 
@@ -381,7 +419,7 @@ interface LibraryVaccine {
 }
 ```
 
-### 13. Expense
+### 14. Expense
 
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}/expenses/{expenseId}`
 
@@ -417,7 +455,7 @@ interface Expense {
 
 `ExpenseCategory` doubles as the default preset list on the expense form — no separate template collection needed.
 
-### 14. Emergency Info
+### 15. Emergency Info
 
 Path: `apps/nine-lives/households/{householdId}/emergencyInfo/default` (singleton per household)
 
@@ -431,7 +469,7 @@ interface EmergencyInfo {
 }
 ```
 
-### 15. Care Instructions (stretch)
+### 16. Care Instructions (stretch)
 
 Path: `apps/nine-lives/households/{householdId}/careInstructions/joint`
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}/careInstructions/default`
@@ -446,7 +484,7 @@ interface CareInstructions {
 }
 ```
 
-### 16. Growth Photo (stretch)
+### 17. Growth Photo (stretch)
 
 Path: `apps/nine-lives/households/{householdId}/cats/{catId}/growthPhotos/{photoId}`
 
@@ -462,7 +500,7 @@ interface GrowthPhoto {
 }
 ```
 
-### 17. Glossary Term (shared, global reference)
+### 18. Glossary Term (shared, global reference)
 
 Path: `apps/nine-lives/glossary/{termId}`
 
@@ -476,7 +514,7 @@ interface GlossaryTerm {
 }
 ```
 
-### 18. Resource (shared, global reference)
+### 19. Resource (shared, global reference)
 
 Path: `apps/nine-lives/resources/{resourceId}`
 
@@ -492,7 +530,7 @@ interface Resource {
 }
 ```
 
-### 19. Reminder (central, cross-app infrastructure)
+### 20. Reminder (central, cross-app infrastructure)
 
 Path: `reminders/{reminderId}` — deliberately **not** under `apps/nine-lives`.
 
@@ -515,7 +553,7 @@ interface Reminder {
 }
 ```
 
-### 20. User doc addition (central, existing collection)
+### 21. User doc addition (central, existing collection)
 
 ```typescript
 interface UserProfile {

@@ -25,10 +25,11 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 5. **Track conditions and incidents**: browse the shared condition library, log accidents/injuries, or add a fully custom entry specific to your cat.
 6. **Track symptoms**: quick-tag cat behavior changes like litter box changes, appetite shifts, hiding, playfulness, and grooming, or write your own note; log either quick tags, free text, or both, and link them to a visit or condition so the timeline connects.
 7. **Budget**: log expenses with sensible presets (adoption fee, insurance, food, vet, litter, grooming...) and see both monthly and lifetime totals.
-8. **Stay emergency-ready**: the app nudges you to record an emergency/after-hours vet and confirm insurance is on file until both are done.
-9. **Browse resources and the glossary**: look up unfamiliar terms (what's FVRCP?) with definitions linked to relevant resource articles.
-10. **See what's coming up, at a glance**: a household-wide timeline of visits and vaccination due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
-11. **Get reminders**: push notifications for upcoming visits and vaccination due dates, once that infrastructure is built (see Stretch Goals — the visibility in #10 doesn't depend on it).
+8. **Track litter usage**: log household litter weigh-ins by box and type, see usage between weigh-ins, and track how long each box has been since its last change.
+9. **Stay emergency-ready**: the app nudges you to record an emergency/after-hours vet and confirm insurance is on file until both are done.
+10. **Browse resources and the glossary**: look up unfamiliar terms (what's FVRCP?) with definitions linked to relevant resource articles.
+11. **See what's coming up, at a glance**: a household-wide timeline of visits and vaccination due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
+12. **Get reminders**: push notifications for upcoming visits and vaccination due dates, once that infrastructure is built (see Stretch Goals — the visibility in #11 doesn't depend on it).
 
 ## How it Feels
 
@@ -62,6 +63,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Structured glossary (e.g., "what's FVRCP?") with entries linked to relevant resource articles
 - [ ] Cat personality traits/notes per cat
 - [ ] Cat diet: food type (dry/wet/mixed), brand, feedings per day, automatic feeder, snacks/treats
+- [x] Litter usage: household weigh-ins by litter box and type, usage deltas, and time since box changes
 
 ### Stretch Goals
 
