@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -13,6 +13,8 @@ import {
 } from '../store/actions/weightEntriesActions';
 import { selectWeightEntriesByCat } from '../store/selectors';
 import type { WeightEntry } from '../types';
+import { convertWeight } from '../utils/litterCalculators';
+import TrendLineChart from './TrendLineChart';
 import WeightEntryFormModal from './WeightEntryFormModal';
 import WeightHistoryList from './WeightHistoryList';
 
@@ -30,6 +32,17 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WeightEntry | null>(null);
+  const [activeView, setActiveView] = useState('list');
+
+  const chartUnit = weightEntries[0]?.unit ?? 'lb';
+  const chartData = useMemo(
+    () =>
+      weightEntries.map((entry) => ({
+        x: entry.measuredAt,
+        y: convertWeight(entry.weight, entry.unit, chartUnit),
+      })),
+    [weightEntries, chartUnit],
+  );
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -90,13 +103,31 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
         </Button>
       </div>
 
-      <WeightHistoryList
-        entries={weightEntries}
-        onEdit={(entry) => {
-          setEditingEntry(entry);
-          setIsModalOpen(true);
-        }}
-      />
+      <Tabs value={activeView} onValueChange={setActiveView} tabsWidth='full' variant='pills'>
+        <TabsList>
+          <TabsTrigger value='list'>List</TabsTrigger>
+          <TabsTrigger value='chart'>Chart</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value='list' className='pt-2'>
+          <WeightHistoryList
+            entries={weightEntries}
+            onEdit={(entry) => {
+              setEditingEntry(entry);
+              setIsModalOpen(true);
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value='chart' className='pt-2'>
+          <TrendLineChart
+            data={chartData}
+            yLabel={`Weight (${chartUnit})`}
+            formatY={(value) => `${value.toFixed(1)} ${chartUnit}`}
+            emptyLabel='Log at least two weight entries to see a trend chart.'
+          />
+        </TabsContent>
+      </Tabs>
 
       <WeightEntryFormModal
         key={editingEntry?.id ?? 'new'}
