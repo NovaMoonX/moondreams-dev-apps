@@ -362,17 +362,13 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
       />
     );
 
-  /** The vet name shown next to the "more details" trigger — the assigned doctor if there is one, otherwise the clinic. */
-  const getVetLabel = (clinic: VetClinic, doctorName?: string | null) =>
-    doctorName ? `Dr. ${doctorName}` : clinic.name;
-
   const renderClinicDetailsContent = (
     clinic: VetClinic,
     doctorName?: string | null,
   ) => (
     <div className='w-64 space-y-2 p-3 text-sm'>
       <p className='font-medium'>{clinic.name}</p>
-      {doctorName && <p className='text-muted-foreground'>Dr. {doctorName}</p>}
+      {doctorName && <p className='text-muted-foreground'>{doctorName}</p>}
       {clinic.phone && (
         <div className='flex items-center justify-between gap-2'>
           <span className='text-muted-foreground'>{clinic.phone}</span>
@@ -429,7 +425,8 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     }
 
     const clinic = row.clinic;
-    const vetLabel = getVetLabel(clinic, row.doctorName);
+    // The clinic, not the specific doctor, is what most people care about at a glance.
+    const vetLabel = clinic.name;
 
     if (pattern === 'popover') {
       return (
