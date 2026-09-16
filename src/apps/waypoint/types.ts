@@ -19,3 +19,9 @@ export interface TripSpace {
   createdAt: number;
   lastEditedAt: number;
 }
+
+export interface TripJoinRequest {
+  uid: string;
+  tripId: string;
+  requestedAt: number;
+}
