@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { shallowEqual } from 'react-redux';
 
@@ -200,7 +200,8 @@ interface LitterBoxFormValues {
   location: LocationChoice;
 }
 
-interface LitterBoxFormProps {
+interface LitterBoxFormModalProps {
+  isOpen: boolean;
   initialBox?: LitterBox | null;
   existingLocations: string[];
   isSubmitting: boolean;
@@ -209,14 +210,15 @@ interface LitterBoxFormProps {
   onCancel: () => void;
 }
 
-function LitterBoxForm({
+function LitterBoxFormModal({
+  isOpen,
   initialBox,
   existingLocations,
   isSubmitting,
   onSubmit,
   onDelete,
   onCancel,
-}: LitterBoxFormProps) {
+}: LitterBoxFormModalProps) {
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialBox?.id);
   const formId = initialBox?.id ?? 'new-nine-lives-litter-box';
@@ -279,43 +281,45 @@ function LitterBoxForm({
   };
 
   return (
-    <Form
-      key={formId}
-      id={formId}
-      form={fields}
-      initialData={{
-        name: initialBox?.name ?? '',
-        location: { value: initialBox?.location ?? '', custom: '' },
-      }}
-      columns={1}
-      spacing='normal'
-      onDataChange={(data) => {
-        const values = data as LitterBoxFormValues;
-        setIsValid(Boolean(values.name?.trim()));
-      }}
-      onSubmit={(data) => {
-        void handleSubmit(data as LitterBoxFormValues);
-      }}
-      submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div>
-            {isEditing && onDelete && (
-              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                Delete
+    <Modal isOpen={isOpen} onClose={onCancel} title={isEditing ? 'Edit litter box' : 'Add litter box'}>
+      <Form
+        key={formId}
+        id={formId}
+        form={fields}
+        initialData={{
+          name: initialBox?.name ?? '',
+          location: { value: initialBox?.location ?? '', custom: '' },
+        }}
+        columns={1}
+        spacing='normal'
+        onDataChange={(data) => {
+          const values = data as LitterBoxFormValues;
+          setIsValid(Boolean(values.name?.trim()));
+        }}
+        onSubmit={(data) => {
+          void handleSubmit(data as LitterBoxFormValues);
+        }}
+        submitButton={
+          <div className='flex items-center justify-between gap-2'>
+            <div>
+              {isEditing && onDelete && (
+                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className='flex items-center gap-2'>
+              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                Cancel
               </Button>
-            )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save litter box' : 'Add litter box'}
+              </Button>
+            </div>
           </div>
-          <div className='flex items-center gap-2'>
-            <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save litter box' : 'Add litter box'}
-            </Button>
-          </div>
-        </div>
-      }
-    />
+        }
+      />
+    </Modal>
   );
 }
 
@@ -382,23 +386,21 @@ function LitterBoxesManager({ householdId }: LitterBoxesManagerProps) {
     <div className='space-y-3'>
       <div className='flex items-center justify-between gap-2'>
         <strong className='text-sm'>Litter boxes</strong>
-        {!isFormOpen && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className={mutedLinkClassName}
-            onClick={() => {
-              setEditingBox(null);
-              setIsFormOpen(true);
-            }}
-          >
-            + Add litter box
-          </Button>
-        )}
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className={mutedLinkClassName}
+          onClick={() => {
+            setEditingBox(null);
+            setIsFormOpen(true);
+          }}
+        >
+          + Add litter box
+        </Button>
       </div>
 
-      {litterBoxes.length === 0 && !isFormOpen && (
+      {litterBoxes.length === 0 && (
         <p className='text-muted-foreground text-sm'>No litter boxes added yet.</p>
       )}
 
@@ -426,17 +428,16 @@ function LitterBoxesManager({ householdId }: LitterBoxesManagerProps) {
         </div>
       )}
 
-      {isFormOpen && (
-        <LitterBoxForm
-          key={editingBox?.id ?? 'new'}
-          initialBox={editingBox}
-          existingLocations={existingLocations}
-          isSubmitting={isSubmitting}
-          onSubmit={handleSubmit}
-          onDelete={editingBox ? handleDelete : undefined}
-          onCancel={closeForm}
-        />
-      )}
+      <LitterBoxFormModal
+        key={editingBox?.id ?? 'new'}
+        isOpen={isFormOpen}
+        initialBox={editingBox}
+        existingLocations={existingLocations}
+        isSubmitting={isSubmitting}
+        onSubmit={handleSubmit}
+        onDelete={editingBox ? handleDelete : undefined}
+        onCancel={closeForm}
+      />
     </div>
   );
 }
@@ -450,7 +451,8 @@ interface LitterFormValues {
   cost?: string;
 }
 
-interface LitterFormProps {
+interface LitterFormModalProps {
+  isOpen: boolean;
   householdId: string;
   uid: string;
   initialLitter?: Litter | null;
@@ -468,7 +470,8 @@ interface LitterFormProps {
   onCancel: () => void;
 }
 
-function LitterForm({
+function LitterFormModal({
+  isOpen,
   householdId,
   uid,
   initialLitter,
@@ -477,7 +480,7 @@ function LitterForm({
   onSubmit,
   onDelete,
   onCancel,
-}: LitterFormProps) {
+}: LitterFormModalProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialLitter?.id);
@@ -614,52 +617,54 @@ function LitterForm({
   };
 
   return (
-    <Form
-      key={formId}
-      id={formId}
-      form={fields}
-      initialData={{
-        brand: initialLitter?.brand ?? '',
-        litterType: initialLitterType,
-        weight: initialLitter?.weight?.toString() ?? '',
-        weightUnit: initialLitter?.weightUnit ?? 'lb',
-        cost: initialLitter?.cost?.toString() ?? '',
-      }}
-      columns={1}
-      spacing='normal'
-      onDataChange={(data) => {
-        const values = data as LitterFormValues;
-        setIsValid(
-          Boolean(
-            values.brand?.trim() &&
-              Number.isFinite(Number(values.weight)) &&
-              Number(values.weight) > 0,
-          ),
-        );
-      }}
-      onSubmit={(data) => {
-        void handleSubmit(data as LitterFormValues);
-      }}
-      submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div>
-            {isEditing && onDelete && (
-              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                Delete
+    <Modal isOpen={isOpen} onClose={onCancel} title={isEditing ? 'Edit litter' : 'Add litter'}>
+      <Form
+        key={formId}
+        id={formId}
+        form={fields}
+        initialData={{
+          brand: initialLitter?.brand ?? '',
+          litterType: initialLitterType,
+          weight: initialLitter?.weight?.toString() ?? '',
+          weightUnit: initialLitter?.weightUnit ?? 'lb',
+          cost: initialLitter?.cost?.toString() ?? '',
+        }}
+        columns={1}
+        spacing='normal'
+        onDataChange={(data) => {
+          const values = data as LitterFormValues;
+          setIsValid(
+            Boolean(
+              values.brand?.trim() &&
+                Number.isFinite(Number(values.weight)) &&
+                Number(values.weight) > 0,
+            ),
+          );
+        }}
+        onSubmit={(data) => {
+          void handleSubmit(data as LitterFormValues);
+        }}
+        submitButton={
+          <div className='flex items-center justify-between gap-2'>
+            <div>
+              {isEditing && onDelete && (
+                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className='flex items-center gap-2'>
+              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                Cancel
               </Button>
-            )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save litter' : 'Add litter'}
+              </Button>
+            </div>
           </div>
-          <div className='flex items-center gap-2'>
-            <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save litter' : 'Add litter'}
-            </Button>
-          </div>
-        </div>
-      }
-    />
+        }
+      />
+    </Modal>
   );
 }
 
@@ -724,23 +729,21 @@ function LittersManager({ householdId }: LittersManagerProps) {
     <div className='space-y-3'>
       <div className='flex items-center justify-between gap-2'>
         <strong className='text-sm'>Litter products</strong>
-        {!isFormOpen && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className={mutedLinkClassName}
-            onClick={() => {
-              setEditingLitter(null);
-              setIsFormOpen(true);
-            }}
-          >
-            + Add litter
-          </Button>
-        )}
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className={mutedLinkClassName}
+          onClick={() => {
+            setEditingLitter(null);
+            setIsFormOpen(true);
+          }}
+        >
+          + Add litter
+        </Button>
       </div>
 
-      {litters.length === 0 && !isFormOpen && (
+      {litters.length === 0 && (
         <p className='text-muted-foreground text-sm'>No litter products added yet.</p>
       )}
 
@@ -773,19 +776,18 @@ function LittersManager({ householdId }: LittersManagerProps) {
         </div>
       )}
 
-      {isFormOpen && (
-        <LitterForm
-          key={editingLitter?.id ?? 'new'}
-          householdId={householdId}
-          uid={user?.uid ?? ''}
-          initialLitter={editingLitter}
-          customTypes={customTypes}
-          isSubmitting={isSubmitting}
-          onSubmit={handleSubmit}
-          onDelete={editingLitter ? handleDelete : undefined}
-          onCancel={closeForm}
-        />
-      )}
+      <LitterFormModal
+        key={editingLitter?.id ?? 'new'}
+        isOpen={isFormOpen}
+        householdId={householdId}
+        uid={user?.uid ?? ''}
+        initialLitter={editingLitter}
+        customTypes={customTypes}
+        isSubmitting={isSubmitting}
+        onSubmit={handleSubmit}
+        onDelete={editingLitter ? handleDelete : undefined}
+        onCancel={closeForm}
+      />
     </div>
   );
 }
@@ -802,7 +804,8 @@ interface LitterEntryFormValues {
   notes?: string;
 }
 
-interface LitterEntryFormProps {
+interface LitterEntryFormModalProps {
+  isOpen: boolean;
   initialEntry?: LitterEntry | null;
   litterBoxes: LitterBox[];
   litters: Litter[];
@@ -813,7 +816,8 @@ interface LitterEntryFormProps {
   onCancel: () => void;
 }
 
-function LitterEntryForm({
+function LitterEntryFormModal({
+  isOpen,
   initialEntry,
   litterBoxes,
   litters,
@@ -822,7 +826,7 @@ function LitterEntryForm({
   onSubmit,
   onDelete,
   onCancel,
-}: LitterEntryFormProps) {
+}: LitterEntryFormModalProps) {
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialEntry?.id);
   const formId = initialEntry?.id ?? 'new-nine-lives-litter-entry';
@@ -975,56 +979,58 @@ function LitterEntryForm({
   };
 
   return (
-    <Form
-      key={formId}
-      id={formId}
-      form={fields}
-      initialData={{
-        litterBoxId: initialEntry?.litterBoxId ?? litterBoxes[0]?.id ?? '',
-        litterId: initialEntry?.litterId ?? litters[0]?.id ?? '',
-        weight: initialEntry?.weight?.toString() ?? '',
-        weightUnit: initialEntry?.weightUnit ?? 'lb',
-        loggedAt: toDateInputValue(initialEntry?.loggedAt),
-        changedAt: toDateInputValue(initialEntry?.changedAt ?? undefined),
-        notes: initialEntry?.notes ?? '',
-      }}
-      columns={1}
-      spacing='normal'
-      onDataChange={(data) => {
-        const values = data as LitterEntryFormValues;
-        setIsValid(
-          Boolean(
-            values.litterBoxId &&
-              values.litterId &&
-              Number.isFinite(Number(values.weight)) &&
-              Number(values.weight) > 0 &&
-              values.loggedAt,
-          ),
-        );
-      }}
-      onSubmit={(data) => {
-        void handleSubmit(data as LitterEntryFormValues);
-      }}
-      submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div>
-            {isEditing && onDelete && (
-              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                Delete
+    <Modal isOpen={isOpen} onClose={onCancel} title={isEditing ? 'Edit litter entry' : 'Log litter weigh-in'}>
+      <Form
+        key={formId}
+        id={formId}
+        form={fields}
+        initialData={{
+          litterBoxId: initialEntry?.litterBoxId ?? litterBoxes[0]?.id ?? '',
+          litterId: initialEntry?.litterId ?? litters[0]?.id ?? '',
+          weight: initialEntry?.weight?.toString() ?? '',
+          weightUnit: initialEntry?.weightUnit ?? 'lb',
+          loggedAt: toDateInputValue(initialEntry?.loggedAt),
+          changedAt: toDateInputValue(initialEntry?.changedAt ?? undefined),
+          notes: initialEntry?.notes ?? '',
+        }}
+        columns={1}
+        spacing='normal'
+        onDataChange={(data) => {
+          const values = data as LitterEntryFormValues;
+          setIsValid(
+            Boolean(
+              values.litterBoxId &&
+                values.litterId &&
+                Number.isFinite(Number(values.weight)) &&
+                Number(values.weight) > 0 &&
+                values.loggedAt,
+            ),
+          );
+        }}
+        onSubmit={(data) => {
+          void handleSubmit(data as LitterEntryFormValues);
+        }}
+        submitButton={
+          <div className='flex items-center justify-between gap-2'>
+            <div>
+              {isEditing && onDelete && (
+                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className='flex items-center gap-2'>
+              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                Cancel
               </Button>
-            )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save litter entry' : 'Log litter weigh-in'}
+              </Button>
+            </div>
           </div>
-          <div className='flex items-center gap-2'>
-            <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save litter entry' : 'Log litter weigh-in'}
-            </Button>
-          </div>
-        </div>
-      }
-    />
+        }
+      />
+    </Modal>
   );
 }
 
@@ -1042,6 +1048,15 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
+  const [boxFilter, setBoxFilter] = useState('all');
+
+  const boxFilterOptions = useMemo(
+    () => [
+      { text: 'All boxes', value: 'all' },
+      ...litterBoxes.map((box) => ({ text: box.name, value: box.id })),
+    ],
+    [litterBoxes],
+  );
 
   const litterBoxesById = useMemo(
     () => new Map(litterBoxes.map((box) => [box.id, box])),
@@ -1149,18 +1164,29 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
               </p>
             )}
 
+            {sortedEntries.length > 0 && litterBoxes.length > 1 && (
+              <div className='flex items-center gap-2'>
+                <span className='text-muted-foreground text-sm'>Filter by box:</span>
+                <div className='max-w-48 flex-1'>
+                  <Select options={boxFilterOptions} value={boxFilter} onChange={setBoxFilter} size='sm' />
+                </div>
+              </div>
+            )}
+
             {latestChangeByBox.length > 0 && (
               <div className='text-muted-foreground space-y-1 text-sm'>
                 <strong className='text-foreground'>Litter box changes</strong>
-                {latestChangeByBox.map(([boxId, changedAt]) => {
-                  const days = getDaysSince(changedAt);
-                  const boxName = litterBoxesById.get(boxId)?.name ?? 'Deleted box';
-                  return (
-                    <div key={boxId}>
-                      {boxName}: {days === 0 ? 'changed today' : `${days} day${days === 1 ? '' : 's'} since changed`}
-                    </div>
-                  );
-                })}
+                {latestChangeByBox
+                  .filter(([boxId]) => boxFilter === 'all' || boxId === boxFilter)
+                  .map(([boxId, changedAt]) => {
+                    const days = getDaysSince(changedAt);
+                    const boxName = litterBoxesById.get(boxId)?.name ?? 'Deleted box';
+                    return (
+                      <div key={boxId}>
+                        {boxName}: {days === 0 ? 'changed today' : `${days} day${days === 1 ? '' : 's'} since changed`}
+                      </div>
+                    );
+                  })}
               </div>
             )}
 
@@ -1168,7 +1194,10 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
               <p className='text-muted-foreground text-sm'>No litter weigh-ins logged yet.</p>
             ) : (
               <div className='divide-border divide-y'>
-                {sortedEntries.map((entry, index) => {
+                {sortedEntries
+                  .map((entry, index) => ({ entry, index }))
+                  .filter(({ entry }) => boxFilter === 'all' || entry.litterBoxId === boxFilter)
+                  .map(({ entry, index }) => {
                   const previous = [...sortedEntries]
                     .slice(0, index)
                     .reverse()
@@ -1228,21 +1257,18 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
         </div>
       </DetailsDisclosure>
 
-      {isFormOpen && (
-        <div className='mt-4'>
-          <LitterEntryForm
-            key={editingEntry?.id ?? 'new'}
-            initialEntry={editingEntry}
-            litterBoxes={litterBoxes}
-            litters={litters}
-            customTypes={customTypes}
-            isSubmitting={isSubmitting}
-            onSubmit={handleSubmit}
-            onDelete={editingEntry ? handleDelete : undefined}
-            onCancel={closeForm}
-          />
-        </div>
-      )}
+      <LitterEntryFormModal
+        key={editingEntry?.id ?? 'new'}
+        isOpen={isFormOpen}
+        initialEntry={editingEntry}
+        litterBoxes={litterBoxes}
+        litters={litters}
+        customTypes={customTypes}
+        isSubmitting={isSubmitting}
+        onSubmit={handleSubmit}
+        onDelete={editingEntry ? handleDelete : undefined}
+        onCancel={closeForm}
+      />
     </section>
   );
 }
