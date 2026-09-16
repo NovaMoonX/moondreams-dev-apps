@@ -787,7 +787,7 @@ function LitterEntryFormModal({
       input({
         name: 'weightBefore',
         label: 'Weight before',
-        description: 'The box’s weight as you found it, before adding anything.',
+        description: 'The box’s weight after sifting, before adding anything.',
         type: 'number',
         placeholder: '10',
         required: true,
@@ -1302,9 +1302,9 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
             <TabsContent value='boxes' className='pt-2'>
               <div className='space-y-3'>
                 <p className='text-muted-foreground text-sm'>
-                  Weigh a box each time you check or sift it to track how much litter gets used between checks.
-                  Only mark a refill as a "full change" when you've emptied and completely refilled the box —
-                  that resets the "time since changed" count without affecting your usage history.
+                  Weigh a box after sifting it to track how much litter gets used between checks. Only mark a
+                  refill as a "full change" when you've emptied and completely refilled the box — that resets
+                  the "time since changed" count without affecting your usage history.
                 </p>
 
                 <div className='flex justify-end'>

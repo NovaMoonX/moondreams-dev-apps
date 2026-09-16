@@ -350,7 +350,7 @@ interface LitterEntry {
   householdId: string;
   litterBoxId: string;
   litterId: string;
-  weightBefore: number; // the box's weight as found, before adding anything this check
+  weightBefore: number; // the box's weight after sifting, before adding anything this check
   weightUnit: 'lb' | 'kg';
   refillWeight: number | null; // weight after adding litter this check; null if nothing was added
   isFullChange: boolean; // only meaningful when refillWeight is set: true if the box was fully emptied first

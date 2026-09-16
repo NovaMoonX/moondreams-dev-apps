@@ -283,7 +283,7 @@ export interface LitterEntry {
   householdId: string;
   litterBoxId: string;
   litterId: string;
-  /** The box's weight as found — before any litter is added during this check. */
+  /** The box's weight after sifting — before any litter is added during this check. */
   weightBefore: number;
   weightUnit: 'lb' | 'kg';
   /**
