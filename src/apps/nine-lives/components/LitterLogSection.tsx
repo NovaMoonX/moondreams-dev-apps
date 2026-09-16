@@ -1184,6 +1184,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
   const [isBoxFormOpen, setIsBoxFormOpen] = useState(false);
   const [editingBox, setEditingBox] = useState<LitterBox | null>(null);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('boxes');
   const selectedBox = selectedBoxId ? litterBoxes.find((box) => box.id === selectedBoxId) ?? null : null;
 
   const existingLocations = useMemo(
@@ -1239,7 +1240,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
     <section>
       <DetailsDisclosure label='Litter usage'>
         <div className='space-y-6'>
-          <Tabs defaultValue='boxes' tabsWidth='full' variant='pills'>
+          <Tabs value={activeTab} onValueChange={setActiveTab} tabsWidth='full' variant='pills'>
             <TabsList>
               <TabsTrigger value='boxes'>Litter boxes ({litterBoxes.length})</TabsTrigger>
               <TabsTrigger value='products'>Litter products ({litters.length})</TabsTrigger>
@@ -1304,7 +1305,7 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
             </TabsContent>
           </Tabs>
 
-          {selectedBox && (
+          {activeTab === 'boxes' && selectedBox && (
             <SelectedLitterBoxPanel
               key={selectedBox.id}
               householdId={householdId}
