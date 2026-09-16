@@ -16,7 +16,7 @@ import { copyToClipboard } from '@/utils/clipboardUtils';
 import AvatarStack from '@/ui/AvatarStack';
 
 import { useAttentionFocus } from '../context/attentionFocusContext';
-import { MARK_VISIT_DONE_LABEL } from '../constants/visitCopy';
+import { MARK_VISIT_DONE_LABEL } from '../constants/copy';
 import {
   selectCatsByHousehold,
   selectClinicsByHousehold,

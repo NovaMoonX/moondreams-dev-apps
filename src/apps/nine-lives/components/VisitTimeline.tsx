@@ -12,7 +12,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatDateTime } from '@/utils/formatUtils';
 
-import { MARK_VISIT_DONE_LABEL } from '../constants/visitCopy';
+import { MARK_VISIT_DONE_LABEL } from '../constants/copy';
 import type { Cat, Expense, Visit } from '../types';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
 
