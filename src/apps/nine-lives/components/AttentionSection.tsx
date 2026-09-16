@@ -197,7 +197,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           title: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
           subtitle: catNames(item.catIds),
           dueLabel: formatDueLabel(item.scheduledAt, now),
-          actionLabel: 'Complete',
+          actionLabel: 'Mark as done',
           onAction: () =>
             requestFocus({
               kind: 'visit-complete',
@@ -527,15 +527,17 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                         {renderClinicInfo(row, 'popover')}
                       </div>
                     </div>
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      onClick={row.onAction}
-                      className='mt-3 px-0'
-                    >
-                      {row.actionLabel}
-                    </Button>
+                    {row.dueLabel === 'Today' && (
+                      <Button
+                        type='button'
+                        variant='link'
+                        size='sm'
+                        onClick={row.onAction}
+                        className='mt-3 px-0'
+                      >
+                        {row.actionLabel}
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div
@@ -559,15 +561,17 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                           )}
                         </div>
                       </div>
-                      <Button
-                        type='button'
-                        variant='link'
-                        size='sm'
-                        onClick={row.onAction}
-                        className='shrink-0'
-                      >
-                        {row.actionLabel}
-                      </Button>
+                      {row.dueLabel === 'Today' && (
+                        <Button
+                          type='button'
+                          variant='link'
+                          size='sm'
+                          onClick={row.onAction}
+                          className='shrink-0'
+                        >
+                          {row.actionLabel}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ),
