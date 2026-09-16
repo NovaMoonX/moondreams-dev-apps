@@ -15,6 +15,18 @@ export function getDaysSince(timestamp: number, now: number): number {
   return Math.max(0, Math.floor((now - timestamp) / 86_400_000));
 }
 
+/** True for anything due today (even later today) or already overdue — the "now" severity boundary, not just "already passed". */
+function isDueTodayOrEarlier(timestamp: number, now: number): boolean {
+  if (timestamp <= now) {
+    return true;
+  }
+
+  const startOfTomorrow = new Date(now);
+  startOfTomorrow.setHours(24, 0, 0, 0);
+
+  return timestamp < startOfTomorrow.getTime();
+}
+
 /** Latest full-change `loggedAt` per litter box id, or `undefined` when a box has never had a full change logged. */
 export function getLatestFullChangeByBox(litterEntries: LitterEntry[]): Map<string, number> {
   const latest = new Map<string, number>();
@@ -60,7 +72,7 @@ export function buildAttentionItems({
     items.push({
       kind: 'visit',
       id: visit.id,
-      severity: visit.scheduledAt <= now ? 'now' : 'soon',
+      severity: isDueTodayOrEarlier(visit.scheduledAt, now) ? 'now' : 'soon',
       visitId: visit.id,
       catIds: visit.catIds,
       scheduledAt: visit.scheduledAt,
@@ -94,7 +106,7 @@ export function buildAttentionItems({
     items.push({
       kind: 'vaccination',
       id: vaccination.id,
-      severity: vaccination.expiresAt <= now ? 'now' : 'soon',
+      severity: isDueTodayOrEarlier(vaccination.expiresAt, now) ? 'now' : 'soon',
       vaccinationId: vaccination.id,
       catId: vaccination.catId,
       expiresAt: vaccination.expiresAt,
@@ -109,25 +121,27 @@ export function buildAttentionItems({
     items.push({
       kind: 'preventive',
       id: preventive.id,
-      severity: preventive.expiresAt <= now ? 'now' : 'soon',
+      severity: isDueTodayOrEarlier(preventive.expiresAt, now) ? 'now' : 'soon',
       preventiveId: preventive.id,
       catIds: preventive.catIds,
       expiresAt: preventive.expiresAt,
     });
   });
 
-  // Smaller = more urgent, on a comparable scale across kinds: a due timestamp sorts sooner-first,
-  // while litter (measured in days overdue, not a timestamp) sorts more-overdue-first — a box
-  // that's never been logged is the most urgent case, so it sorts ahead of everything else.
+  // Smaller = more urgent, all expressed in "days until due" so the four kinds share one scale
+  // (negative = overdue). Litter has no explicit due date, so its 30-day mark stands in for one;
+  // a box that's never been logged is the most urgent case, so it sorts ahead of everything else.
   const urgencyRank = (item: AttentionItem): number => {
     switch (item.kind) {
       case 'visit':
-        return item.scheduledAt;
+        return (item.scheduledAt - now) / 86_400_000;
       case 'litter':
-        return item.daysSinceChange === null ? Number.NEGATIVE_INFINITY : -item.daysSinceChange;
+        return item.daysSinceChange === null
+          ? Number.NEGATIVE_INFINITY
+          : LITTER_OVERDUE_DAYS - item.daysSinceChange;
       case 'vaccination':
       case 'preventive':
-        return item.expiresAt;
+        return (item.expiresAt - now) / 86_400_000;
     }
   };
 
