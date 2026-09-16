@@ -4,7 +4,25 @@ import { Input, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { Cat, Expense } from '../types';
-import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
+import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  getExpenseCategories,
+  getExpenseCategoryLabel,
+} from '../utils/budgetCalculators';
+
+function getExpenseTitle(expense: Expense): string {
+  if (expense.label) {
+    return expense.label;
+  }
+
+  const categories = getExpenseCategories(expense);
+
+  if (categories.length === 1) {
+    return getExpenseCategoryLabel(categories[0]);
+  }
+
+  return `${categories.length} categories`;
+}
 
 interface ExpenseTimelineProps {
   expenses: Expense[];
@@ -94,7 +112,7 @@ function ExpenseTimeline({
         return false;
       }
 
-      if (categoryFilter !== 'all' && expense.category !== categoryFilter) {
+      if (categoryFilter !== 'all' && !getExpenseCategories(expense).includes(categoryFilter as Expense['items'][number]['category'])) {
         return false;
       }
 
@@ -120,8 +138,9 @@ function ExpenseTimeline({
         .map((catId) => cats.find((cat) => cat.id === catId)?.name ?? '')
         .join(' ');
       const searchableText = [
-        getExpenseCategoryLabel(expense.category),
+        ...getExpenseCategories(expense).map(getExpenseCategoryLabel),
         expense.label ?? '',
+        expense.items.map((item) => item.label ?? '').join(' '),
         catNames,
         expense.notes ?? '',
       ]
@@ -241,11 +260,7 @@ function ExpenseTimeline({
                 )}
               >
                 <div className='min-w-0'>
-                  <strong className='text-sm'>
-                    {expense.label
-                      ? `${expense.label} (${getExpenseCategoryLabel(expense.category)})`
-                      : getExpenseCategoryLabel(expense.category)}
-                  </strong>
+                  <strong className='text-sm'>{getExpenseTitle(expense)}</strong>
                   <div className='text-muted-foreground text-sm'>
                     {new Date(expense.incurredAt).toLocaleDateString('en-US', {
                       month: 'short',

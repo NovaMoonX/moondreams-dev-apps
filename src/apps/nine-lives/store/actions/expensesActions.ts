@@ -3,9 +3,18 @@ import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestor
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
-import type { Expense } from '@apps/nine-lives/types';
+import type { Expense, ExpenseLineItem } from '@apps/nine-lives/types';
 
+import { calculateExpenseItemsTotal } from '../../utils/budgetCalculators';
 import { removeExpense, revertExpense, upsertExpense } from '../slices/expensesSlice';
+
+function normalizeExpenseItems(items: ExpenseLineItem[]): ExpenseLineItem[] {
+  return items.map((item) => ({
+    ...item,
+    label: item.label ?? null,
+    amount: Number(item.amount),
+  }));
+}
 
 function normalizeExpenseInput(value: Partial<Expense>): Partial<Expense> {
   const next = { ...value };
@@ -14,8 +23,17 @@ function normalizeExpenseInput(value: Partial<Expense>): Partial<Expense> {
     next.catIds = [...new Set(next.catIds)];
   }
 
+  if (next.items) {
+    next.items = normalizeExpenseItems(next.items);
+    next.amount = calculateExpenseItemsTotal(next.items);
+  }
+
   if (next.label === undefined) {
     next.label = null;
+  }
+
+  if (next.visitId === undefined) {
+    next.visitId = null;
   }
 
   if (next.notes === undefined) {
@@ -47,7 +65,7 @@ export const createExpense = createAsyncThunk<
     householdId: string;
     uid: string;
     expense: Partial<Expense> &
-      Pick<Expense, 'catIds' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>;
+      Pick<Expense, 'catIds' | 'items' | 'isRecurring' | 'incurredAt'>;
   },
   { rejectValue: string }
 >(
@@ -59,6 +77,10 @@ export const createExpense = createAsyncThunk<
       return rejectWithValue('Select at least one cat.');
     }
 
+    if (!normalizedExpense.items || normalizedExpense.items.length === 0) {
+      return rejectWithValue('Add at least one expense line item.');
+    }
+
     const now = Date.now();
     const expenseId =
       normalizedExpense.id ??
@@ -68,15 +90,16 @@ export const createExpense = createAsyncThunk<
       id: expenseId,
       householdId,
       catIds: normalizedExpense.catIds,
-      category: expense.category,
+      items: normalizedExpense.items,
+      amount: normalizedExpense.amount ?? calculateExpenseItemsTotal(normalizedExpense.items),
       label: normalizedExpense.label ?? null,
-      amount: Number(expense.amount),
       isRecurring: Boolean(normalizedExpense.isRecurring),
       recurrenceInterval: normalizedExpense.isRecurring
         ? normalizedExpense.recurrenceInterval ?? 'monthly'
         : null,
       recurrenceEndedAt: normalizedExpense.isRecurring ? normalizedExpense.recurrenceEndedAt ?? null : null,
       incurredAt: expense.incurredAt,
+      visitId: normalizedExpense.visitId ?? null,
       notes: normalizedExpense.notes ?? null,
       createdBy: uid,
       createdAt: now,
@@ -119,7 +142,10 @@ export const updateExpense = createAsyncThunk<
       ...sanitizedChanges,
       id: expenseId,
       householdId,
-      amount: Number(sanitizedChanges.amount ?? current.amount),
+      items: sanitizedChanges.items ?? current.items,
+      amount: sanitizedChanges.items
+        ? (sanitizedChanges.amount ?? calculateExpenseItemsTotal(sanitizedChanges.items))
+        : Number(sanitizedChanges.amount ?? current.amount),
       isRecurring: sanitizedChanges.isRecurring ?? current.isRecurring,
       recurrenceInterval:
         sanitizedChanges.isRecurring === false
@@ -133,6 +159,7 @@ export const updateExpense = createAsyncThunk<
             : current.recurrenceEndedAt ?? null,
       incurredAt: sanitizedChanges.incurredAt ?? current.incurredAt,
       label: sanitizedChanges.label ?? current.label ?? null,
+      visitId: 'visitId' in changes ? sanitizedChanges.visitId ?? null : current.visitId ?? null,
       notes: sanitizedChanges.notes ?? current.notes ?? null,
       lastEditedAt: Date.now(),
     };

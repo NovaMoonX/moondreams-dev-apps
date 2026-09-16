@@ -39,8 +39,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   };
 
   const handleSubmit = async (
-    expense: Partial<Expense> &
-      Pick<Expense, 'catIds' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
+    expense: Partial<Expense> & Pick<Expense, 'catIds' | 'items' | 'isRecurring' | 'incurredAt'>,
   ) => {
     if (!user?.uid) {
       return;
@@ -115,6 +114,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
       <ExpenseFormModal
         key={editingExpense?.id ?? 'new'}
         isOpen={isFormOpen}
+        householdId={householdId}
         catOptions={catOptions}
         initialExpense={editingExpense}
         isSubmitting={isSubmitting}

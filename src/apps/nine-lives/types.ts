@@ -315,18 +315,29 @@ export type ExpenseCategory =
 
 export type RecurrenceInterval = 'monthly' | 'yearly';
 
+export interface ExpenseLineItem {
+  id: string;
+  category: ExpenseCategory;
+  label: string | null;
+  amount: number;
+}
+
 export interface Expense {
   id: string;
   householdId: string;
   catIds: string[];
-  category: ExpenseCategory;
-  label: string | null;
+  /** Line items making up this expense (e.g. exam + bloodwork for one vet visit). Always at least one. */
+  items: ExpenseLineItem[];
+  /** Denormalized sum of `items[].amount`, kept in sync on every write so totals don't need to re-derive it. */
   amount: number;
+  label: string | null;
   isRecurring: boolean;
   recurrenceInterval: RecurrenceInterval | null;
   /** When set, this recurring expense has stopped billing as of this date. Always null when `isRecurring` is false. */
   recurrenceEndedAt: number | null;
   incurredAt: number;
+  /** The visit this expense was incurred for, if any. */
+  visitId: string | null;
   notes: string | null;
   createdBy: string;
   createdAt: number;

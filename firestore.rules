@@ -256,7 +256,6 @@ service cloud.firestore {
               || request.resource.data.category == 'chronic'
               || request.resource.data.category == 'parasite'
               || request.resource.data.category == 'allergy'
-              || request.resource.data.category == 'other'
           )
           && isTimestampNumber(request.resource.data.occurredAt)
           && (request.resource.data.resolvedAt == null || isTimestampNumber(request.resource.data.resolvedAt))
@@ -758,10 +757,8 @@ service cloud.firestore {
       function isExpenseBaseShapeValid() {
         return request.resource.data.catIds is list
           && request.resource.data.catIds.size() > 0
-          && request.resource.data.category in [
-            'adoption_fee', 'insurance', 'food', 'litter', 'vet',
-            'grooming', 'supplies', 'medication', 'microchipping', 'spay_neuter', 'other'
-          ]
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0
           && (request.resource.data.label == null || request.resource.data.label is string)
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -775,6 +772,7 @@ service cloud.firestore {
               || (request.resource.data.isRecurring == true && isTimestampNumber(request.resource.data.recurrenceEndedAt))
           )
           && isTimestampNumber(request.resource.data.incurredAt)
+          && (request.resource.data.visitId == null || request.resource.data.visitId is string)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)

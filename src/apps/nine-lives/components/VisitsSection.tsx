@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -7,6 +7,7 @@ import { shallowEqual } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 
+import { createExpense } from '../store/actions/expensesActions';
 import {
   cancelVisit,
   completeVisit,
@@ -22,7 +23,8 @@ import {
   selectDoctorsByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
-import type { Visit } from '../types';
+import type { Expense, Visit } from '../types';
+import ExpenseFormModal from './ExpenseFormModal';
 import VisitFormModal from './VisitFormModal';
 import VisitTimeline from './VisitTimeline';
 
@@ -43,6 +45,10 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const [modalMode, setModalMode] = useState<VisitModalMode>(null);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [completedVisitForExpense, setCompletedVisitForExpense] = useState<Visit | null>(null);
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+
+  const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
 
   const closeModal = () => {
     setModalMode(null);
@@ -84,7 +90,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
 
     setIsSubmitting(true);
     try {
-      await dispatch(
+      const completedVisit = await dispatch(
         completeVisit({
           householdId,
           uid: user.uid,
@@ -93,8 +99,25 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
         }),
       ).unwrap();
       closeModal();
+      setCompletedVisitForExpense(completedVisit);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAddExpenseForVisit = async (
+    expense: Partial<Expense> & Pick<Expense, 'catIds' | 'items' | 'isRecurring' | 'incurredAt'>,
+  ) => {
+    if (!user?.uid) {
+      return;
+    }
+
+    setIsSubmittingExpense(true);
+    try {
+      await dispatch(createExpense({ householdId, uid: user.uid, expense })).unwrap();
+      setCompletedVisitForExpense(null);
+    } finally {
+      setIsSubmittingExpense(false);
     }
   };
 
@@ -209,6 +232,22 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
         onDelete={selectedVisit ? handleDelete : undefined}
         onClose={closeModal}
       />
+
+      {completedVisitForExpense && (
+        <ExpenseFormModal
+          isOpen
+          householdId={householdId}
+          catOptions={catOptions}
+          initialExpense={{
+            catIds: completedVisitForExpense.catIds,
+            incurredAt: completedVisitForExpense.completedAt ?? completedVisitForExpense.scheduledAt,
+            visitId: completedVisitForExpense.id,
+          }}
+          isSubmitting={isSubmittingExpense}
+          onSubmit={handleAddExpenseForVisit}
+          onClose={() => setCompletedVisitForExpense(null)}
+        />
+      )}
     </section>
   );
 }
