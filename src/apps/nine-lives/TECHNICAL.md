@@ -298,7 +298,7 @@ Paths:
 - `apps/nine-lives/households/{householdId}/litters/{litterId}`
 - `apps/nine-lives/households/{householdId}/litterEntries/{entryId}`
 
-All four are household-scoped because litter boxes and their contents are shared equipment, not cat-specific records. A litter box is its own renameable object (so users can rename or relocate it without losing history) and a litter is its own purchasable product (brand, type, bag size, and price), so the cost of using it can be derived per weigh-in rather than entered by hand each time. Each weigh-in references a box and the litter product currently in use, and can record the date its litter was changed, allowing the household dashboard to show usage and cost between chronological entries and days since the latest change for each box.
+All four are household-scoped because litter boxes and their contents are shared equipment, not cat-specific records. A litter box is its own renameable object (so users can rename or relocate it without losing history) and a litter is its own purchasable product (brand, type, bag size, and price), so the cost of using it can be derived per weigh-in rather than entered by hand each time. Each weigh-in references a box and the litter product currently in use, allowing the household dashboard to show usage and cost between chronological entries and days since the latest full change for each box.
 
 ```typescript
 interface LitterBox {
@@ -350,10 +350,11 @@ interface LitterEntry {
   householdId: string;
   litterBoxId: string;
   litterId: string;
-  weight: number; // weigh-in reading
+  weightBefore: number; // the box's weight as found, before adding anything this check
   weightUnit: 'lb' | 'kg';
+  refillWeight: number | null; // weight after adding litter this check; null if nothing was added
+  isFullChange: boolean; // only meaningful when refillWeight is set: true if the box was fully emptied first
   loggedAt: number;
-  changedAt: number | null;
   notes: string | null;
   createdBy: string;
   createdAt: number;
@@ -361,7 +362,9 @@ interface LitterEntry {
 }
 ```
 
-Usage is derived from consecutive entries for the same `litterBoxId` after converting units when necessary: the previous weight minus the current weight. A negative result is shown as litter added, which keeps refills visible instead of presenting them as usage. That usage amount is then priced against the entry's `litterId` (`litter.cost / litter.weight`, unit-converted) to derive a per-entry cost instead of storing cost directly on the entry. The latest non-null `changedAt` for each `litterBoxId` is used for the household-level “days since changed” summary.
+This shape covers three real workflows without any of them needing a different entity: a routine check (`refillWeight: null`, e.g. weighing after sifting), topping off without fully emptying the box (`refillWeight` set, `isFullChange: false`), and a full change (`refillWeight` set, `isFullChange: true`).
+
+An entry's "ending weight" — what the box weighed after this check, and so what the *next* entry's usage is measured against — is `refillWeight ?? weightBefore` (see `getLitterEntryEndingWeight` in `litterCalculators.ts`). Usage for a given entry is the previous entry's ending weight minus this entry's `weightBefore`, converting units as needed; a negative result means the box was heavier than expected (e.g. a top-off that wasn't logged), which is surfaced rather than hidden. That usage amount is then priced against the entry's `litterId` (`litter.cost / litter.weight`, unit-converted) to derive a per-entry cost instead of storing cost directly on the entry. The latest entry with `isFullChange: true` for each `litterBoxId` (by `loggedAt`) is used for the household-level “days since changed” summary.
 
 Switching the litter used in a physical box isn't modeled as an in-place change: since usage is derived from consecutive weigh-ins, mixing two different litters' weigh-ins under one `litterBoxId` would produce a meaningless trend and cost. Instead, the owner retires the old `LitterBox` (`isActive: false`) and creates a new one for the same physical box — the old box keeps its full history and stays selectable in the weigh-in history filter, but is hidden from the box picker when logging a new weigh-in.
 

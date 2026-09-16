@@ -14,8 +14,16 @@ import {
 function normalizeLitterEntryInput(value: Partial<LitterEntry>): Partial<LitterEntry> {
   const next = { ...value };
 
-  if (next.changedAt === undefined) {
-    next.changedAt = null;
+  if (next.refillWeight === undefined) {
+    next.refillWeight = null;
+  }
+
+  if (next.isFullChange === undefined) {
+    next.isFullChange = false;
+  }
+
+  if (next.refillWeight === null) {
+    next.isFullChange = false;
   }
 
   if (next.notes === undefined) {
@@ -42,7 +50,7 @@ export const createLitterEntry = createAsyncThunk<
     householdId: string;
     uid: string;
     litterEntry: Partial<LitterEntry> &
-      Pick<LitterEntry, 'litterBoxId' | 'litterId' | 'weight' | 'weightUnit' | 'loggedAt'>;
+      Pick<LitterEntry, 'litterBoxId' | 'litterId' | 'weightBefore' | 'weightUnit' | 'loggedAt'>;
   },
   { rejectValue: string }
 >(
@@ -68,10 +76,11 @@ export const createLitterEntry = createAsyncThunk<
       householdId,
       litterBoxId: litterEntry.litterBoxId,
       litterId: litterEntry.litterId,
-      weight: Number(litterEntry.weight),
+      weightBefore: Number(litterEntry.weightBefore),
       weightUnit: litterEntry.weightUnit,
+      refillWeight: normalizedEntry.refillWeight == null ? null : Number(normalizedEntry.refillWeight),
+      isFullChange: normalizedEntry.isFullChange ?? false,
       loggedAt: litterEntry.loggedAt,
-      changedAt: normalizedEntry.changedAt ?? null,
       notes: normalizedEntry.notes ?? null,
       createdBy: uid,
       createdAt: now,
@@ -109,20 +118,30 @@ export const updateLitterEntry = createAsyncThunk<
       ...sanitizedChanges,
       id: entryId,
       householdId,
-      weight: Number(sanitizedChanges.weight ?? current.weight),
-      changedAt:
-        'changedAt' in changes ? sanitizedChanges.changedAt ?? null : current.changedAt,
+      weightBefore: Number(sanitizedChanges.weightBefore ?? current.weightBefore),
+      refillWeight:
+        'refillWeight' in changes
+          ? sanitizedChanges.refillWeight == null
+            ? null
+            : Number(sanitizedChanges.refillWeight)
+          : current.refillWeight,
+      isFullChange: 'isFullChange' in changes ? Boolean(sanitizedChanges.isFullChange) : current.isFullChange,
       notes: 'notes' in changes ? sanitizedChanges.notes ?? null : current.notes,
       lastEditedAt: Date.now(),
     };
+
+    if (nextEntry.refillWeight === null) {
+      nextEntry.isFullChange = false;
+    }
 
     dispatch(upsertLitterEntry(nextEntry));
 
     try {
       await updateDoc(getLitterEntryDocRef(householdId, entryId), {
         ...sanitizedChanges,
-        weight: nextEntry.weight,
-        changedAt: nextEntry.changedAt,
+        weightBefore: nextEntry.weightBefore,
+        refillWeight: nextEntry.refillWeight,
+        isFullChange: nextEntry.isFullChange,
         notes: nextEntry.notes,
         lastEditedAt: nextEntry.lastEditedAt,
       });

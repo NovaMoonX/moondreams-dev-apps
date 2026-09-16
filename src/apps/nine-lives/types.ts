@@ -283,10 +283,17 @@ export interface LitterEntry {
   householdId: string;
   litterBoxId: string;
   litterId: string;
-  weight: number;
+  /** The box's weight as found — before any litter is added during this check. */
+  weightBefore: number;
   weightUnit: 'lb' | 'kg';
+  /**
+   * The box's weight after adding litter during this check, if any was added.
+   * Null means this was just a reading, with nothing topped off or changed.
+   */
+  refillWeight: number | null;
+  /** Only meaningful when `refillWeight` is set: true if the box was fully emptied before refilling, false if it was just topped off. */
+  isFullChange: boolean;
   loggedAt: number;
-  changedAt: number | null;
   notes: string | null;
   createdBy: string;
   createdAt: number;

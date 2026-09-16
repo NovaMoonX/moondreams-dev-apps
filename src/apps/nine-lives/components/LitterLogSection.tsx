@@ -42,11 +42,15 @@ import {
   selectLittersByHousehold,
 } from '@apps/nine-lives/store/selectors';
 import type { CustomLitterType, Litter, LitterBox, LitterEntry, LitterType } from '@apps/nine-lives/types';
-import { calculateLitterUsageCost, convertWeight } from '@apps/nine-lives/utils/litterCalculators';
+import {
+  calculateLitterUsageCost,
+  convertWeight,
+  getLitterEntryEndingWeight,
+} from '@apps/nine-lives/utils/litterCalculators';
 
 import DetailsDisclosure from './DetailsDisclosure';
 
-const { input, select, textarea, checkbox, custom } = FormFactories;
+const { input, select, textarea, custom } = FormFactories;
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 const NEW_LITTER_TYPE_VALUE = 'new-custom-litter-type';
@@ -710,12 +714,21 @@ function LittersManager({ householdId }: LittersManagerProps) {
   );
 }
 
+type RefillType = 'none' | 'topped_off' | 'full_change';
+
+const refillTypeOptions = [
+  { label: 'No — just weighing it', value: 'none' },
+  { label: 'Yes — topped off (box not emptied)', value: 'topped_off' },
+  { label: 'Yes — fully emptied and refilled', value: 'full_change' },
+];
+
 interface LitterEntryFormValues {
   litterId: string;
-  weight: string;
+  weightBefore: string;
   weightUnit: string;
   loggedAt: string;
-  wasChanged: boolean;
+  refillType: RefillType;
+  refillWeight?: string;
   notesOpen?: boolean;
   notes?: string;
 }
@@ -747,8 +760,11 @@ function LitterEntryFormModal({
   const isEditing = Boolean(initialEntry?.id);
   const formId = initialEntry?.id ?? 'new-nine-lives-litter-entry';
   const [isNotesOpen, setIsNotesOpen] = useState(Boolean(initialEntry?.notes));
+  const [refillType, setRefillType] = useState<RefillType>(
+    initialEntry?.refillWeight == null ? 'none' : initialEntry.isFullChange ? 'full_change' : 'topped_off',
+  );
   const [isValid, setIsValid] = useState(
-    Boolean(initialEntry?.litterId && initialEntry.weight > 0 && initialEntry.loggedAt),
+    Boolean(initialEntry?.litterId && initialEntry.weightBefore > 0 && initialEntry.loggedAt),
   );
 
   const litterOptions = useMemo(
@@ -769,8 +785,9 @@ function LitterEntryFormModal({
         required: true,
       }),
       input({
-        name: 'weight',
-        label: 'Litter weight',
+        name: 'weightBefore',
+        label: 'Weight before',
+        description: 'The box’s weight as you found it, before adding anything.',
         type: 'number',
         placeholder: '10',
         required: true,
@@ -784,15 +801,27 @@ function LitterEntryFormModal({
       createDateInputField({
         name: 'loggedAt',
         label: 'Weigh-in date',
-        description: 'The day you weighed this box — used to track usage between weigh-ins.',
         required: true,
         variant: 'outline',
       }),
-      checkbox({
-        name: 'wasChanged',
-        label: 'Litter change',
-        text: 'The litter was also emptied and refilled on this date.',
+      select({
+        name: 'refillType',
+        label: 'Litter added?',
+        options: refillTypeOptions,
       }),
+      ...(refillType !== 'none'
+        ? [
+            input({
+              name: 'refillWeight',
+              label: 'Weight after refill',
+              description: 'The box’s weight after adding litter.',
+              type: 'number',
+              placeholder: '20',
+              required: true,
+              variant: 'outline',
+            }),
+          ]
+        : []),
       isNotesOpen
         ? textarea({
             name: 'notes',
@@ -817,15 +846,23 @@ function LitterEntryFormModal({
             ),
           }),
     ],
-    [litterOptions, isNotesOpen],
+    [litterOptions, refillType, isNotesOpen],
   );
 
   const handleSubmit = async (data: LitterEntryFormValues) => {
-    const weight = Number(data.weight);
+    const weightBefore = Number(data.weightBefore);
     const loggedAt = fromDateInputValue(data.loggedAt);
     const now = Date.now();
+    const refillWeight = data.refillType !== 'none' ? Number(data.refillWeight) : null;
 
-    if (!data.litterId || !Number.isFinite(weight) || weight <= 0 || loggedAt === undefined || loggedAt > now) {
+    if (
+      !data.litterId ||
+      !Number.isFinite(weightBefore) ||
+      weightBefore <= 0 ||
+      loggedAt === undefined ||
+      loggedAt > now ||
+      (refillWeight !== null && (!Number.isFinite(refillWeight) || refillWeight <= 0))
+    ) {
       return;
     }
 
@@ -833,10 +870,11 @@ function LitterEntryFormModal({
       id: initialEntry?.id,
       litterBoxId,
       litterId: data.litterId,
-      weight,
+      weightBefore,
       weightUnit: data.weightUnit === 'kg' ? 'kg' : 'lb',
+      refillWeight,
+      isFullChange: data.refillType === 'full_change',
       loggedAt,
-      changedAt: data.wasChanged ? loggedAt : null,
       notes: isNotesOpen ? data.notes?.trim() || null : null,
     });
   };
@@ -865,10 +903,11 @@ function LitterEntryFormModal({
         form={fields}
         initialData={{
           litterId: initialEntry?.litterId ?? litters[0]?.id ?? '',
-          weight: initialEntry?.weight?.toString() ?? '',
+          weightBefore: initialEntry?.weightBefore?.toString() ?? '',
           weightUnit: initialEntry?.weightUnit ?? 'lb',
           loggedAt: toDateInputValue(initialEntry?.loggedAt),
-          wasChanged: Boolean(initialEntry?.changedAt),
+          refillType,
+          refillWeight: initialEntry?.refillWeight?.toString() ?? '',
           notes: initialEntry?.notes ?? '',
         }}
         columns={1}
@@ -878,13 +917,19 @@ function LitterEntryFormModal({
           const now = Date.now();
           const loggedAt = values.loggedAt ? fromDateInputValue(values.loggedAt) : undefined;
 
+          if (values.refillType !== refillType) {
+            setRefillType(values.refillType);
+          }
+
           setIsValid(
             Boolean(
               values.litterId &&
-                Number.isFinite(Number(values.weight)) &&
-                Number(values.weight) > 0 &&
+                Number.isFinite(Number(values.weightBefore)) &&
+                Number(values.weightBefore) > 0 &&
                 loggedAt !== undefined &&
-                loggedAt <= now,
+                loggedAt <= now &&
+                (values.refillType === 'none' ||
+                  (Number.isFinite(Number(values.refillWeight)) && Number(values.refillWeight) > 0)),
             ),
           );
         }}
@@ -951,7 +996,7 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
   const latestChangedAt = useMemo(
     () =>
       boxEntriesAscending.reduce<number | null>(
-        (latest, entry) => (entry.changedAt !== null && entry.changedAt > (latest ?? 0) ? entry.changedAt : latest),
+        (latest, entry) => (entry.isFullChange && entry.loggedAt > (latest ?? 0) ? entry.loggedAt : latest),
         null,
       ),
     [boxEntriesAscending],
@@ -984,7 +1029,7 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
             householdId,
             uid: user.uid,
             litterEntry: entry as Partial<LitterEntry> &
-              Pick<LitterEntry, 'litterBoxId' | 'litterId' | 'weight' | 'weightUnit' | 'loggedAt'>,
+              Pick<LitterEntry, 'litterBoxId' | 'litterId' | 'weightBefore' | 'weightUnit' | 'loggedAt'>,
           }),
         ).unwrap();
       }
@@ -1081,7 +1126,7 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
               />
             </div>
           </div>
-          {boxEntriesAscending.some((entry) => entry.changedAt !== null) && (
+          {boxEntriesAscending.some((entry) => entry.isFullChange) && (
             <label className='flex items-center gap-2 text-sm'>
               <Toggle checked={showOnlyChanges} onCheckedChange={setShowOnlyChanges} size='sm' />
               Full changes only
@@ -1097,19 +1142,20 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
           <div className='divide-border divide-y'>
             {boxEntriesAscending
               .map((entry, index) => ({ entry, index }))
-              .filter(({ entry }) => !showOnlyChanges || entry.changedAt !== null)
+              .filter(({ entry }) => !showOnlyChanges || entry.isFullChange)
               .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index))
               .map(({ entry, index }) => {
                 const previous = index > 0 ? boxEntriesAscending[index - 1] : null;
-                const isFullChange = entry.changedAt !== null;
                 const usage = previous
-                  ? convertWeight(previous.weight, previous.weightUnit, entry.weightUnit) - entry.weight
+                  ? convertWeight(getLitterEntryEndingWeight(previous), previous.weightUnit, entry.weightUnit) -
+                    entry.weightBefore
                   : null;
                 const litter = littersById.get(entry.litterId) ?? null;
                 const usageCost =
                   usage !== null && usage > 0 && litter
                     ? calculateLitterUsageCost(usage, entry.weightUnit, litter)
                     : null;
+                const refillAmount = entry.refillWeight !== null ? entry.refillWeight - entry.weightBefore : null;
                 const litterLabel = litter
                   ? `${litter.brand} (${getLitterTypeLabel(litter.litterType, litter.customLitterTypeId, customTypes)})`
                   : 'Deleted litter';
@@ -1118,30 +1164,29 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
                   <div key={entry.id} className='flex items-start justify-between gap-3 py-3 first:pt-0'>
                     <div className='min-w-0'>
                       <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
-                        <strong className='text-sm'>{formatWeight(entry.weight, entry.weightUnit)}</strong>
+                        <strong className='text-sm'>{formatWeight(entry.weightBefore, entry.weightUnit)}</strong>
                         <span className='text-muted-foreground text-sm'>{formatDateTime(entry.loggedAt)}</span>
-                        {isFullChange && (
-                          <Badge variant='success' size='xs'>
-                            Full change
+                        {entry.refillWeight !== null && (
+                          <Badge variant={entry.isFullChange ? 'success' : 'muted'} size='xs'>
+                            {entry.isFullChange ? 'Full change' : 'Topped off'}
                           </Badge>
                         )}
                       </div>
                       <div className='text-muted-foreground text-sm'>{litterLabel}</div>
-                      {entry.changedAt !== null ? (
-                        entry.changedAt !== entry.loggedAt && (
-                          <div className='text-muted-foreground text-sm'>
-                            Changed {formatDateTime(entry.changedAt)}
-                          </div>
-                        )
-                      ) : (
-                        usage !== null && (
-                          <div className='text-sm'>
-                            {usage >= 0
-                              ? `${formatWeight(usage, entry.weightUnit)} used since previous weigh-in`
-                              : `${formatWeight(Math.abs(usage), entry.weightUnit)} added since previous weigh-in`}
-                            {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
-                          </div>
-                        )
+                      {usage !== null && (
+                        <div className='text-sm'>
+                          {usage >= 0
+                            ? `${formatWeight(usage, entry.weightUnit)} used since previous check`
+                            : `${formatWeight(Math.abs(usage), entry.weightUnit)} more than expected since previous check`}
+                          {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
+                        </div>
+                      )}
+                      {entry.refillWeight !== null && (
+                        <div className='text-muted-foreground text-sm'>
+                          {entry.isFullChange ? 'Refilled' : 'Topped off'} to{' '}
+                          {formatWeight(entry.refillWeight, entry.weightUnit)}
+                          {refillAmount !== null && refillAmount > 0 && ` (+${formatWeight(refillAmount, entry.weightUnit)})`}
+                        </div>
                       )}
                       {entry.notes && <div className='text-muted-foreground text-sm'>{entry.notes}</div>}
                     </div>
@@ -1248,12 +1293,6 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
     <section>
       <DetailsDisclosure label='Litter usage'>
         <div className='space-y-6'>
-          <p className='text-muted-foreground text-sm'>
-            Weigh a box each time you check or sift it to track how much litter gets used between weigh-ins.
-            Check "full change" only when you've emptied and completely refilled the box — that resets the
-            "time since changed" count without affecting your usage history.
-          </p>
-
           <Tabs value={activeTab} onValueChange={setActiveTab} tabsWidth='full' variant='pills'>
             <TabsList>
               <TabsTrigger value='boxes'>Litter boxes ({litterBoxes.length})</TabsTrigger>
@@ -1262,6 +1301,12 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
 
             <TabsContent value='boxes' className='pt-2'>
               <div className='space-y-3'>
+                <p className='text-muted-foreground text-sm'>
+                  Weigh a box each time you check or sift it to track how much litter gets used between checks.
+                  Only mark a refill as a "full change" when you've emptied and completely refilled the box —
+                  that resets the "time since changed" count without affecting your usage history.
+                </p>
+
                 <div className='flex justify-end'>
                   <Button
                     type='button'

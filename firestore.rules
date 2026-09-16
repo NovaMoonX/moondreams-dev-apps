@@ -928,11 +928,13 @@ service cloud.firestore {
       function isLitterEntryBaseShapeValid() {
         return isNonEmptyString(request.resource.data.litterBoxId)
           && isNonEmptyString(request.resource.data.litterId)
-          && request.resource.data.weight is number
-          && request.resource.data.weight > 0
+          && request.resource.data.weightBefore is number
+          && request.resource.data.weightBefore > 0
           && request.resource.data.weightUnit in ['lb', 'kg']
+          && (request.resource.data.refillWeight == null || (request.resource.data.refillWeight is number && request.resource.data.refillWeight > 0))
+          && request.resource.data.isFullChange is bool
+          && (request.resource.data.isFullChange == false || request.resource.data.refillWeight != null)
           && isTimestampNumber(request.resource.data.loggedAt)
-          && (request.resource.data.changedAt == null || isTimestampNumber(request.resource.data.changedAt))
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)

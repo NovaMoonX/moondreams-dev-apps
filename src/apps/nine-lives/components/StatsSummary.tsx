@@ -54,12 +54,12 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
     const latest = new Map<string, number>();
 
     litterEntries.forEach((entry) => {
-      if (entry.changedAt === null) {
+      if (!entry.isFullChange) {
         return;
       }
 
-      if ((latest.get(entry.litterBoxId) ?? 0) < entry.changedAt) {
-        latest.set(entry.litterBoxId, entry.changedAt);
+      if ((latest.get(entry.litterBoxId) ?? 0) < entry.loggedAt) {
+        latest.set(entry.litterBoxId, entry.loggedAt);
       }
     });
 

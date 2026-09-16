@@ -1,6 +1,13 @@
-import type { Litter } from '@apps/nine-lives/types';
+import type { Litter, LitterEntry } from '@apps/nine-lives/types';
 
 const LB_PER_KG = 2.20462;
+
+/** The box's weight left standing after this check — what the next check's usage is measured against. */
+export function getLitterEntryEndingWeight(
+  entry: Pick<LitterEntry, 'weightBefore' | 'refillWeight'>,
+): number {
+  return entry.refillWeight ?? entry.weightBefore;
+}
 
 export function convertWeight(
   weight: number,
