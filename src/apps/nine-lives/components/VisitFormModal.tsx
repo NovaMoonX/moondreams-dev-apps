@@ -34,17 +34,17 @@ import {
 import type {
   Cat,
   CatCondition,
-  ExpenseCategory,
   ExpenseLineItem,
   Symptom,
   Visit,
   VisitReason,
 } from '../types';
 import type { VisitOutcome } from '../store/actions/visitsActions';
-import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
+import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
 import { getVisitOptions } from '../utils/visitOptions';
 import CatPillSelector from './CatPillSelector';
 import DetailsDisclosure from './DetailsDisclosure';
+import ExpenseLineItemsField from './ExpenseLineItemsField';
 
 export interface VisitExpenseDraft {
   catIds: string[];
@@ -893,17 +893,13 @@ function VisitOutcomeExpenseStep({
   onSkip: () => void;
   onConfirm: (expenseDraft: VisitExpenseDraft) => void;
 }) {
-  const [category, setCategory] = useState<ExpenseCategory>('vet');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
+  const [items, setItems] = useState<LineItemValue[]>(() => [createEmptyLineItem()]);
 
-  const categoryOptions = DEFAULT_EXPENSE_CATEGORIES.map((value) => ({
-    text: getExpenseCategoryLabel(value),
-    value,
-  }));
-
-  const amountNumber = Number(amount);
-  const isValid = Number.isFinite(amountNumber) && amountNumber > 0;
+  const validItems = items.filter((item) => {
+    const amount = Number(item.amount);
+    return Number.isFinite(amount) && amount > 0;
+  });
+  const isValid = validItems.length > 0;
 
   const handleAdd = () => {
     if (!isValid) {
@@ -912,14 +908,12 @@ function VisitOutcomeExpenseStep({
 
     onConfirm({
       catIds: visit.catIds,
-      items: [
-        {
-          id: crypto.randomUUID(),
-          category,
-          label: description.trim() || null,
-          amount: amountNumber,
-        },
-      ],
+      items: validItems.map((item) => ({
+        id: item.id,
+        category: 'other',
+        label: item.label.trim() || null,
+        amount: Number(item.amount),
+      })),
       incurredAt: visit.completedAt ?? visit.scheduledAt,
       label: null,
     });
@@ -931,29 +925,7 @@ function VisitOutcomeExpenseStep({
         Want to log an expense for this visit? You can always add one later.
       </p>
 
-      <div className='grid grid-cols-2 gap-2'>
-        <Select
-          options={categoryOptions}
-          value={category}
-          onChange={(value) => setCategory(value as ExpenseCategory)}
-          disabled={isSubmitting}
-        />
-        <Input
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-          placeholder='72.00'
-          type='number'
-          variant='outline'
-          disabled={isSubmitting}
-        />
-      </div>
-      <Input
-        value={description}
-        onChange={(event) => setDescription(event.target.value)}
-        placeholder='Description (optional)'
-        variant='outline'
-        disabled={isSubmitting}
-      />
+      <ExpenseLineItemsField value={items} onValueChange={setItems} disabled={isSubmitting} />
 
       <div className='flex items-center justify-between gap-2'>
         <Button

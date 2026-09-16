@@ -1,4 +1,4 @@
-import { Button, Form, FormFactories, Input, Modal, Tabs } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Modal, Tabs } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { useMemo, useState } from 'react';
 import { shallowEqual } from 'react-redux';
@@ -14,16 +14,12 @@ import {
   getExpenseCategoryLabel,
   getRecurringCycleCount,
 } from '../utils/budgetCalculators';
+import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
 import { getVisitOptions } from '../utils/visitOptions';
 import CatPillSelector from './CatPillSelector';
+import ExpenseLineItemsField from './ExpenseLineItemsField';
 
 type ExpenseMode = 'simple' | 'itemized';
-
-interface LineItemValue {
-  id: string;
-  label: string;
-  amount: string;
-}
 
 interface ExpenseFormValues {
   catIds: string[];
@@ -58,16 +54,7 @@ interface ExpenseFormModalProps {
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-});
-
 const { checkbox, custom, input, select, textarea } = FormFactories;
-
-function createEmptyLineItem(): LineItemValue {
-  return { id: crypto.randomUUID(), label: '', amount: '' };
-}
 
 function getInitialMode(expense: Partial<Expense> | null | undefined): ExpenseMode {
   return expense?.items && expense.items.length > 1 ? 'itemized' : 'simple';
@@ -83,79 +70,6 @@ function getInitialLineItems(expense: Partial<Expense> | null | undefined): Line
     label: item.label ?? '',
     amount: String(item.amount),
   }));
-}
-
-function LineItemsField({
-  value,
-  onValueChange,
-  disabled,
-}: {
-  value: LineItemValue[];
-  onValueChange: (value: LineItemValue[]) => void;
-  disabled?: boolean;
-}) {
-  const updateItem = (id: string, changes: Partial<LineItemValue>) => {
-    onValueChange(value.map((item) => (item.id === id ? { ...item, ...changes } : item)));
-  };
-
-  const removeItem = (id: string) => {
-    onValueChange(value.filter((item) => item.id !== id));
-  };
-
-  const total = value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
-  return (
-    <div className='space-y-2'>
-      {value.map((item) => (
-        <div key={item.id} className='flex items-center gap-2'>
-          <div className='flex-1'>
-            <Input
-              value={item.label}
-              onChange={(event) => updateItem(item.id, { label: event.target.value })}
-              placeholder='e.g. Exam fee'
-              variant='outline'
-              disabled={disabled}
-            />
-          </div>
-          <div className='w-28 shrink-0'>
-            <Input
-              value={item.amount}
-              onChange={(event) => updateItem(item.id, { amount: event.target.value })}
-              placeholder='72.00'
-              type='number'
-              variant='outline'
-              disabled={disabled}
-            />
-          </div>
-          {value.length > 1 && (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className={`${mutedLinkClassName} shrink-0`}
-              onClick={() => removeItem(item.id)}
-              disabled={disabled}
-            >
-              Remove
-            </Button>
-          )}
-        </div>
-      ))}
-      <div className='flex items-center justify-between gap-2'>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className={mutedLinkClassName}
-          onClick={() => onValueChange([...value, createEmptyLineItem()])}
-          disabled={disabled}
-        >
-          + Add line item
-        </Button>
-        <span className='text-sm font-semibold'>Total: {currencyFormatter.format(total)}</span>
-      </div>
-    </div>
-  );
 }
 
 function ExpenseFormModal({
@@ -272,7 +186,7 @@ function ExpenseFormModal({
               name: 'items',
               label: 'Line items',
               renderComponent: (props) => (
-                <LineItemsField
+                <ExpenseLineItemsField
                   value={props.value as LineItemValue[]}
                   onValueChange={props.onValueChange}
                   disabled={props.disabled}
