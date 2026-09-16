@@ -514,7 +514,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                     key={row.key}
                     className='border-border rounded-lg border p-4'
                   >
-                    <div className='flex items-center gap-3'>
+                    <div className='flex items-start gap-3'>
                       {renderRowAvatar(row, 'md')}
                       <div className='min-w-0'>
                         <div className='flex flex-wrap items-center gap-2'>
@@ -542,8 +542,8 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                     key={row.key}
                     className='border-border rounded-lg border p-3'
                   >
-                    <div className='flex items-center justify-between gap-3'>
-                      <div className='flex min-w-0 items-center gap-3'>
+                    <div className='flex items-start justify-between gap-3'>
+                      <div className='flex min-w-0 items-start gap-3'>
                         {renderRowAvatar(row, 'xs')}
                         <div className='min-w-0'>
                           <div className='flex flex-wrap items-center gap-2'>
@@ -588,9 +588,9 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
               {pagedOtherRows.map((row) => (
                 <div
                   key={row.key}
-                  className='flex items-center justify-between gap-3 py-2.5 first:pt-0'
+                  className='flex items-start justify-between gap-3 py-2.5 first:pt-0'
                 >
-                  <div className='flex min-w-0 items-center gap-3'>
+                  <div className='flex min-w-0 items-start gap-3'>
                     <div className='flex min-w-8 shrink-0 justify-start'>
                       {renderRowAvatar(row, 'xs')}
                     </div>
