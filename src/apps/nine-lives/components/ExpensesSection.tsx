@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -23,8 +24,8 @@ interface ExpensesSectionProps {
 function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const cats = useAppSelector(selectCatsByHousehold(householdId));
-  const expenses = useAppSelector(selectExpensesByHousehold(householdId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
+  const expenses = useAppSelector(selectExpensesByHousehold(householdId), shallowEqual);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);

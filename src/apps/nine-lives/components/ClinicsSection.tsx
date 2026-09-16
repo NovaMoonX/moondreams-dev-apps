@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
@@ -28,8 +29,8 @@ interface ClinicsSectionProps {
 
 function ClinicsSection({ householdId }: ClinicsSectionProps) {
   const dispatch = useAppDispatch();
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showClinicForm, setShowClinicForm] = useState(false);

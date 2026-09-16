@@ -15,6 +15,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft, ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import {
   fromLocalDateAndTimeInputValues,
@@ -377,9 +378,9 @@ function RepeatableTextInputs({
 
 /** Reads a cat's symptoms/conditions/weight from the household-wide sync, since a visit's outcome form may need this for several cats at once. */
 function useCatOutcomeContext(catId: string) {
-  const symptoms = useAppSelector(selectSymptomsByCat(catId));
-  const conditions = useAppSelector(selectConditionsByCat(catId));
-  const weightEntries = useAppSelector(selectWeightEntriesByCat(catId));
+  const symptoms = useAppSelector(selectSymptomsByCat(catId), shallowEqual);
+  const conditions = useAppSelector(selectConditionsByCat(catId), shallowEqual);
+  const weightEntries = useAppSelector(selectWeightEntriesByCat(catId), shallowEqual);
 
   return { symptoms, conditions, weightEntries };
 }

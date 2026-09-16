@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -35,10 +36,10 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const cats = useAppSelector(selectCatsByHousehold(householdId));
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
-  const visits = useAppSelector(selectVisitsByHousehold(householdId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const [modalMode, setModalMode] = useState<VisitModalMode>(null);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -28,7 +29,7 @@ interface CatsSectionProps {
 function CatsSection({ householdId }: CatsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const cats = useAppSelector(selectCatsByHousehold(householdId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddCatModal, setShowAddCatModal] = useState(false);
