@@ -603,47 +603,91 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  interface SeedVaccinationDose {
+    id: string;
+    administeredAt: number;
+    expiresAt: number | null;
+    clinicId: string | null;
+    doctorId: string | null;
+    lotNumber: string | null;
+  }
+
+  /** `doses` is newest-first, matching the app's `history` invariant. */
   const vaccinationsByCat: Record<
     string,
     Array<{
       id: string;
       name: string;
-      administeredAt: number;
-      expiresAt: number | null;
-      clinicId: string | null;
-      doctorId: string | null;
-      lotNumber: string | null;
+      doses: SeedVaccinationDose[];
     }>
   > = {
     'seed-cat-mochi': [
       {
         id: 'seed-vaccination-mochi-rabies',
         name: 'Rabies',
-        administeredAt: context.now - 15_552_000_000,
-        expiresAt: context.now + 47_520_000_000,
-        clinicId: 'seed-vet-clinic-blue-bark',
-        doctorId: 'seed-doctor-maya',
-        lotNumber: 'L-1024',
+        doses: [
+          {
+            id: 'seed-vaccination-mochi-rabies-dose-2',
+            administeredAt: context.now - 15_552_000_000,
+            expiresAt: context.now + 47_520_000_000,
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            lotNumber: 'L-1024',
+          },
+          {
+            id: 'seed-vaccination-mochi-rabies-dose-1',
+            administeredAt: context.now - 47_088_000_000,
+            expiresAt: context.now - 15_552_000_000,
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            lotNumber: 'L-0512',
+          },
+        ],
       },
       {
         id: 'seed-vaccination-mochi-fvrcp',
         name: 'FVRCP',
-        administeredAt: context.now - 31_536_000_000,
-        expiresAt: context.now + 31_536_000_000,
-        clinicId: 'seed-vet-clinic-blue-bark',
-        doctorId: 'seed-doctor-maya',
-        lotNumber: 'L-0876',
+        doses: [
+          {
+            id: 'seed-vaccination-mochi-fvrcp-dose-1',
+            administeredAt: context.now - 31_536_000_000,
+            expiresAt: context.now + 31_536_000_000,
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            lotNumber: 'L-0876',
+          },
+        ],
       },
     ],
     'seed-cat-juniper': [
       {
         id: 'seed-vaccination-juniper-rabies',
         name: 'Rabies',
-        administeredAt: context.now - 23_328_000_000,
-        expiresAt: context.now + 39_744_000_000,
-        clinicId: 'seed-vet-clinic-harbor',
-        doctorId: 'seed-doctor-daniela',
-        lotNumber: 'L-2201',
+        doses: [
+          {
+            id: 'seed-vaccination-juniper-rabies-dose-1',
+            administeredAt: context.now - 23_328_000_000,
+            expiresAt: context.now + 39_744_000_000,
+            clinicId: 'seed-vet-clinic-harbor',
+            doctorId: 'seed-doctor-daniela',
+            lotNumber: 'L-2201',
+          },
+        ],
+      },
+      {
+        id: 'seed-vaccination-juniper-bordetella',
+        name: 'Bordetella',
+        doses: [
+          {
+            // Due soon, so it shows up in the dashboard's "needs attention" section.
+            id: 'seed-vaccination-juniper-bordetella-dose-1',
+            administeredAt: context.now - 31_104_000_000,
+            expiresAt: context.now + 4 * 86_400_000,
+            clinicId: 'seed-vet-clinic-harbor',
+            doctorId: 'seed-doctor-daniela',
+            lotNumber: 'L-3390',
+          },
+        ],
       },
     ],
   };
@@ -662,6 +706,17 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  interface SeedPreventiveDose {
+    id: string;
+    administeredAt: number;
+    expiresAt: number | null;
+    dosage: string | null;
+    clinicId: string | null;
+    doctorId: string | null;
+    linkedVisitId: string | null;
+  }
+
+  /** `doses` is newest-first, matching the app's `history` invariant. */
   const preventivesByCat: Record<
     string,
     Array<{
@@ -670,12 +725,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       customProductId: string | null;
       type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'medication' | 'other' | 'custom';
       customTypeId: string | null;
-      administeredAt: number;
-      expiresAt: number | null;
-      dosage: string | null;
-      clinicId: string | null;
-      doctorId: string | null;
-      linkedVisitId: string | null;
+      doses: SeedPreventiveDose[];
     }>
   > = {
     'seed-cat-mochi': [
@@ -685,12 +735,35 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         customProductId: null,
         type: 'flea-tick',
         customTypeId: null,
-        administeredAt: context.now - 2_592_000_000,
-        expiresAt: context.now + 2_592_000_000,
-        dosage: '0.5 mL',
-        clinicId: 'seed-vet-clinic-blue-bark',
-        doctorId: 'seed-doctor-maya',
-        linkedVisitId: null,
+        doses: [
+          {
+            id: 'seed-preventive-mochi-revolution-dose-3',
+            administeredAt: context.now - 2_592_000_000,
+            expiresAt: context.now + 2_592_000_000,
+            dosage: '0.5 mL',
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            linkedVisitId: null,
+          },
+          {
+            id: 'seed-preventive-mochi-revolution-dose-2',
+            administeredAt: context.now - 5_184_000_000,
+            expiresAt: context.now - 2_592_000_000,
+            dosage: '0.5 mL',
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            linkedVisitId: null,
+          },
+          {
+            id: 'seed-preventive-mochi-revolution-dose-1',
+            administeredAt: context.now - 7_776_000_000,
+            expiresAt: context.now - 5_184_000_000,
+            dosage: '0.5 mL',
+            clinicId: 'seed-vet-clinic-blue-bark',
+            doctorId: 'seed-doctor-maya',
+            linkedVisitId: null,
+          },
+        ],
       },
       {
         id: 'seed-preventive-mochi-bravecto',
@@ -698,12 +771,17 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         customProductId: customPreventiveProducts[0].id,
         type: 'custom',
         customTypeId: customPreventiveTypes[0].id,
-        administeredAt: context.now - 1_296_000_000,
-        expiresAt: context.now + 6_480_000_000,
-        dosage: null,
-        clinicId: null,
-        doctorId: null,
-        linkedVisitId: null,
+        doses: [
+          {
+            id: 'seed-preventive-mochi-bravecto-dose-1',
+            administeredAt: context.now - 1_296_000_000,
+            expiresAt: context.now + 6_480_000_000,
+            dosage: null,
+            clinicId: null,
+            doctorId: null,
+            linkedVisitId: null,
+          },
+        ],
       },
     ],
     'seed-cat-juniper': [
@@ -713,12 +791,36 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         customProductId: null,
         type: 'heartworm',
         customTypeId: null,
-        administeredAt: context.now - 5_184_000_000,
-        expiresAt: context.now + 25_920_000_000,
-        dosage: '0.5 mL',
-        clinicId: null,
-        doctorId: null,
-        linkedVisitId: null,
+        doses: [
+          {
+            id: 'seed-preventive-juniper-heartworm-dose-1',
+            administeredAt: context.now - 5_184_000_000,
+            expiresAt: context.now + 25_920_000_000,
+            dosage: '0.5 mL',
+            clinicId: null,
+            doctorId: null,
+            linkedVisitId: null,
+          },
+        ],
+      },
+      {
+        id: 'seed-preventive-juniper-dewormer',
+        name: 'Panacur',
+        customProductId: null,
+        type: 'dewormer',
+        customTypeId: null,
+        doses: [
+          {
+            // Due soon, so it shows up in the dashboard's "needs attention" section.
+            id: 'seed-preventive-juniper-dewormer-dose-1',
+            administeredAt: context.now - 7_776_000_000,
+            expiresAt: context.now + 6 * 86_400_000,
+            dosage: '1 tablet',
+            clinicId: 'seed-vet-clinic-harbor',
+            doctorId: 'seed-doctor-daniela',
+            linkedVisitId: null,
+          },
+        ],
       },
     ],
   };
@@ -1031,7 +1133,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       weightUnit: 'lb',
       refillWeight: 13.5,
       isFullChange: true,
-      loggedAt: context.now - 4 * 86_400_000,
+      // Overdue for a change, so it shows up in the dashboard's "needs attention" section.
+      loggedAt: context.now - 32 * 86_400_000,
       notes: null,
     },
   ] as const;
@@ -1196,7 +1299,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       followUpOfVisitId: 'seed-visit-mochi-checkup',
       followUpNote: 'Recheck weight and appetite in two weeks.',
       title: null,
-      scheduledAt: context.now + 1_209_600_000,
+      // Scheduled for today, so it shows up in the dashboard's "needs attention" section.
+      scheduledAt: context.now + 3 * 3_600_000,
       completedAt: null,
       summary: null,
       linkedSymptomIds: [],
@@ -1424,14 +1528,27 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       const vaccinationRef = householdRef
         .collection('vaccinations')
         .doc(vaccination.id);
+      const history = vaccination.doses.map((dose, index) => ({
+        ...dose,
+        // Only the latest dose can be tied back to a seeded visit.
+        linkedVisitId: index === 0 ? (linkedVaccinationVisits[vaccination.id] ?? null) : null,
+        createdBy: caretaker.uid,
+        createdAt,
+      }));
+      const [latestDose] = history;
+      const oldestDose = history[history.length - 1];
 
       batch.set(
         vaccinationRef,
         {
-          ...vaccination,
+          id: vaccination.id,
           householdId: HOUSEHOLD_ID,
           catId: cat.id,
-          linkedVisitId: linkedVaccinationVisits[vaccination.id] ?? null,
+          name: vaccination.name,
+          history,
+          firstAdministeredAt: oldestDose.administeredAt,
+          lastAdministeredAt: latestDose.administeredAt,
+          expiresAt: latestDose.expiresAt,
           createdBy: caretaker.uid,
           createdAt,
           lastEditedAt: context.now,
@@ -1445,13 +1562,28 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       const preventiveRef = householdRef
         .collection('preventives')
         .doc(preventive.id);
+      const history = preventive.doses.map((dose) => ({
+        ...dose,
+        createdBy: caretaker.uid,
+        createdAt,
+      }));
+      const [latestDose] = history;
+      const oldestDose = history[history.length - 1];
 
       batch.set(
         preventiveRef,
         {
-          ...preventive,
+          id: preventive.id,
           householdId: HOUSEHOLD_ID,
           catIds: [cat.id],
+          name: preventive.name,
+          customProductId: preventive.customProductId,
+          type: preventive.type,
+          customTypeId: preventive.customTypeId,
+          history,
+          firstAdministeredAt: oldestDose.administeredAt,
+          lastAdministeredAt: latestDose.administeredAt,
+          expiresAt: latestDose.expiresAt,
           createdBy: caretaker.uid,
           createdAt,
           lastEditedAt: context.now,
@@ -1529,6 +1661,17 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const secondPreventiveRef = secondHouseholdRef
     .collection('preventives')
     .doc('seed-preventive-other-household');
+  const secondPreventiveDose = {
+    id: 'seed-preventive-other-household-dose-1',
+    administeredAt: context.now - 2_592_000_000,
+    expiresAt: context.now + 2_592_000_000,
+    dosage: '0.4 mL',
+    clinicId: null,
+    doctorId: null,
+    linkedVisitId: null,
+    createdBy: coCaretaker.uid,
+    createdAt,
+  };
   batch.set(
     secondPreventiveRef,
     {
@@ -1539,12 +1682,10 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       customProductId: null,
       type: 'flea-tick',
       customTypeId: null,
-      administeredAt: context.now - 2_592_000_000,
-      expiresAt: context.now + 2_592_000_000,
-      dosage: '0.4 mL',
-      clinicId: null,
-      doctorId: null,
-      linkedVisitId: null,
+      history: [secondPreventiveDose],
+      firstAdministeredAt: secondPreventiveDose.administeredAt,
+      lastAdministeredAt: secondPreventiveDose.administeredAt,
+      expiresAt: secondPreventiveDose.expiresAt,
       createdBy: coCaretaker.uid,
       createdAt,
       lastEditedAt: context.now,
