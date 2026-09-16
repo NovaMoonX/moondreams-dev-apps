@@ -21,6 +21,7 @@ import StatsSummary from './components/StatsSummary';
 import VisitsSection from './components/VisitsSection';
 import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
+import LitterLogSection from './components/LitterLogSection';
 import { createHousehold } from './store/actions/householdsActions';
 import { requestToJoinHousehold } from './store/actions/pendingRequestsActions';
 
@@ -181,6 +182,9 @@ function NineLives() {
         )}
         {selectedHousehold && (
           <ExpensesSection householdId={selectedHousehold.id} />
+        )}
+        {selectedHousehold && (
+          <LitterLogSection householdId={selectedHousehold.id} />
         )}
         {selectedHousehold && (
           <ClinicsSection householdId={selectedHousehold.id} />

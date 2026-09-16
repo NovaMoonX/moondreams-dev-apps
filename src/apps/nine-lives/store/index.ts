@@ -55,6 +55,10 @@ import {
   customHealthRecordTypesReducer,
   type CustomHealthRecordTypesState,
 } from './slices/customHealthRecordTypesSlice';
+import {
+  litterEntriesReducer,
+  type LitterEntriesState,
+} from './slices/litterEntriesSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -71,6 +75,7 @@ export interface NineLivesState {
   visits: VisitsState;
   healthRecords: HealthRecordsState;
   customHealthRecordTypes: CustomHealthRecordTypesState;
+  litterEntries: LitterEntriesState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -88,6 +93,7 @@ export const nineLivesReducer = combineReducers({
   visits: visitsReducer,
   healthRecords: healthRecordsReducer,
   customHealthRecordTypes: customHealthRecordTypesReducer,
+  litterEntries: litterEntriesReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

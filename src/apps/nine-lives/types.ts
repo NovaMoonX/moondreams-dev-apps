@@ -188,6 +188,34 @@ export interface WeightEntry {
   createdAt: number;
 }
 
+export type LitterType =
+  | 'clumping_clay'
+  | 'non_clumping_clay'
+  | 'pine_wood_pellet'
+  | 'paper'
+  | 'crystal_silica'
+  | 'corn'
+  | 'wheat'
+  | 'walnut'
+  | 'custom';
+
+export interface LitterEntry {
+  id: string;
+  householdId: string;
+  litterBoxName: string;
+  litterType: LitterType;
+  customLitterType: string | null;
+  weight: number;
+  weightUnit: 'lb' | 'kg';
+  cost: number | null;
+  loggedAt: number;
+  changedAt: number | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export type ExpenseCategory =
   | 'adoption_fee'
   | 'insurance'

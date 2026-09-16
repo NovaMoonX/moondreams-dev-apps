@@ -62,6 +62,12 @@ export const selectExpensesByHousehold =
       ? state.nineLives.expenses.items.filter((expense) => expense.householdId === householdId)
       : [];
 
+export const selectLitterEntriesByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.litterEntries.items.filter((entry) => entry.householdId === householdId)
+      : [];
+
 export interface ExpenseTotals {
   recurringMonthly: number;
   recurringYearly: number;

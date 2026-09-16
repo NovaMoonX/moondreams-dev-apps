@@ -69,3 +69,15 @@ export const PERSONALITY_TRAIT_OPTIONS = [
   'Feisty',
   'Cuddly',
 ] as const;
+
+export const LITTER_TYPE_OPTIONS = [
+  'clumping_clay',
+  'non_clumping_clay',
+  'pine_wood_pellet',
+  'paper',
+  'crystal_silica',
+  'corn',
+  'wheat',
+  'walnut',
+  'custom',
+] as const;

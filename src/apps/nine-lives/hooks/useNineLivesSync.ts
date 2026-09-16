@@ -11,6 +11,7 @@ import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
+import { startLitterEntriesListener } from '../store/listeners/litterEntriesListener';
 import { startPendingRequestsListener } from '../store/listeners/pendingRequestsListener';
 import { startVisitsListener } from '../store/listeners/visitsListener';
 import { startVetClinicsListener } from '../store/listeners/vetClinicsListener';
@@ -21,6 +22,7 @@ import { setDoctors } from '../store/slices/doctorsSlice';
 import { setExpenses } from '../store/slices/expensesSlice';
 import { setHealthRecords } from '../store/slices/healthRecordsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
+import { setLitterEntries } from '../store/slices/litterEntriesSlice';
 import { setPendingRequests } from '../store/slices/pendingRequestsSlice';
 import { setVisits } from '../store/slices/visitsSlice';
 import { setVetClinics } from '../store/slices/vetClinicsSlice';
@@ -63,6 +65,7 @@ export function useNineLivesSync(
       dispatch(setCustomHealthRecordTypes([]));
       dispatch(setHealthRecords([]));
       dispatch(setExpenses([]));
+      dispatch(setLitterEntries([]));
       return;
     }
 
@@ -96,6 +99,9 @@ export function useNineLivesSync(
     const unsubscribeHealthRecords = startHealthRecordsListener(householdId, (records) => {
       dispatch(setHealthRecords(records));
     });
+    const unsubscribeLitterEntries = startLitterEntriesListener(householdId, (entries) => {
+      dispatch(setLitterEntries(entries));
+    });
 
     return () => {
       unsubscribeCats();
@@ -106,6 +112,7 @@ export function useNineLivesSync(
       unsubscribeVisits();
       unsubscribeExpenses();
       unsubscribeHealthRecords();
+      unsubscribeLitterEntries();
     };
   }, [dispatch, householdId]);
 
