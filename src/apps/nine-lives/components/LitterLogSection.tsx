@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import {
+  Badge,
   Button,
   Form,
   FormFactories,
@@ -11,6 +12,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -934,6 +936,7 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<LitterEntry | null>(null);
   const [sortOption, setSortOption] = useState<'newest' | 'oldest'>('newest');
+  const [showOnlyChanges, setShowOnlyChanges] = useState(false);
 
   const littersById = useMemo(() => new Map(litters.map((litter) => [litter.id, litter])), [litters]);
 
@@ -1066,16 +1069,24 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
       )}
 
       {boxEntriesAscending.length > 1 && (
-        <div className='mt-3 flex items-center gap-2'>
-          <span className='text-muted-foreground text-sm'>Sort by:</span>
-          <div className='max-w-40 flex-1'>
-            <Select
-              options={sortOptions}
-              value={sortOption}
-              onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
-              size='sm'
-            />
+        <div className='mt-3 flex flex-wrap items-center gap-x-4 gap-y-2'>
+          <div className='flex items-center gap-2'>
+            <span className='text-muted-foreground text-sm'>Sort by:</span>
+            <div className='max-w-40 flex-1'>
+              <Select
+                options={sortOptions}
+                value={sortOption}
+                onChange={(value) => setSortOption(value as 'newest' | 'oldest')}
+                size='sm'
+              />
+            </div>
           </div>
+          {boxEntriesAscending.some((entry) => entry.changedAt !== null) && (
+            <label className='flex items-center gap-2 text-sm'>
+              <Toggle checked={showOnlyChanges} onCheckedChange={setShowOnlyChanges} size='sm' />
+              Full changes only
+            </label>
+          )}
         </div>
       )}
 
@@ -1086,9 +1097,11 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
           <div className='divide-border divide-y'>
             {boxEntriesAscending
               .map((entry, index) => ({ entry, index }))
+              .filter(({ entry }) => !showOnlyChanges || entry.changedAt !== null)
               .sort((left, right) => (sortOption === 'newest' ? right.index - left.index : left.index - right.index))
               .map(({ entry, index }) => {
                 const previous = index > 0 ? boxEntriesAscending[index - 1] : null;
+                const isFullChange = entry.changedAt !== null;
                 const usage = previous
                   ? convertWeight(previous.weight, previous.weightUnit, entry.weightUnit) - entry.weight
                   : null;
@@ -1107,20 +1120,28 @@ function SelectedLitterBoxPanel({ householdId, box, onEditDetails }: SelectedLit
                       <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
                         <strong className='text-sm'>{formatWeight(entry.weight, entry.weightUnit)}</strong>
                         <span className='text-muted-foreground text-sm'>{formatDateTime(entry.loggedAt)}</span>
+                        {isFullChange && (
+                          <Badge variant='success' size='xs'>
+                            Full change
+                          </Badge>
+                        )}
                       </div>
                       <div className='text-muted-foreground text-sm'>{litterLabel}</div>
-                      {usage !== null && (
-                        <div className='text-sm'>
-                          {usage >= 0
-                            ? `${formatWeight(usage, entry.weightUnit)} used since previous weigh-in`
-                            : `${formatWeight(Math.abs(usage), entry.weightUnit)} added since previous weigh-in`}
-                          {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
-                        </div>
-                      )}
-                      {entry.changedAt !== null && (
-                        <div className='text-muted-foreground text-sm'>
-                          Box changed: {formatDateTime(entry.changedAt)} ({getDaysSince(entry.changedAt)} days ago)
-                        </div>
+                      {entry.changedAt !== null ? (
+                        entry.changedAt !== entry.loggedAt && (
+                          <div className='text-muted-foreground text-sm'>
+                            Changed {formatDateTime(entry.changedAt)}
+                          </div>
+                        )
+                      ) : (
+                        usage !== null && (
+                          <div className='text-sm'>
+                            {usage >= 0
+                              ? `${formatWeight(usage, entry.weightUnit)} used since previous weigh-in`
+                              : `${formatWeight(Math.abs(usage), entry.weightUnit)} added since previous weigh-in`}
+                            {usageCost !== null && ` (~$${usageCost.toFixed(2)})`}
+                          </div>
+                        )
                       )}
                       {entry.notes && <div className='text-muted-foreground text-sm'>{entry.notes}</div>}
                     </div>
@@ -1227,6 +1248,12 @@ function LitterLogSection({ householdId }: LitterLogSectionProps) {
     <section>
       <DetailsDisclosure label='Litter usage'>
         <div className='space-y-6'>
+          <p className='text-muted-foreground text-sm'>
+            Weigh a box each time you check or sift it to track how much litter gets used between weigh-ins.
+            Check "full change" only when you've emptied and completely refilled the box — that resets the
+            "time since changed" count without affecting your usage history.
+          </p>
+
           <Tabs value={activeTab} onValueChange={setActiveTab} tabsWidth='full' variant='pills'>
             <TabsList>
               <TabsTrigger value='boxes'>Litter boxes ({litterBoxes.length})</TabsTrigger>
