@@ -3,14 +3,15 @@ import type { Database } from 'firebase-admin/database';
 import type { Firestore } from 'firebase-admin/firestore';
 
 import {
- FIXTURE_PASSWORD,
- FIXTURE_USERS,
+  FIXTURE_PASSWORD,
+  FIXTURE_USERS,
 } from '../../src/lib/dev/fixtureAccounts.ts';
 
 export const SEED_PROJECT_ID = 'moondreams-dev-apps';
 export { FIXTURE_PASSWORD, FIXTURE_USERS };
 
-export type SeedScope = 'all' | 'core' | 'worth-the-wait' | 'nine-lives';
+export type SeedScope =
+  'all' | 'core' | 'worth-the-wait' | 'nine-lives' | 'waypoint';
 
 export interface SeedContext {
   auth: Auth;

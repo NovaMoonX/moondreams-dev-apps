@@ -957,6 +957,81 @@ service cloud.firestore {
       }
     }
 
+        // --- App: waypoint ---
+
+    match /apps/waypoint {
+      allow read: if canReadAppDoc(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /apps/waypoint/trips/{tripId} {
+      function isTripMember() {
+        return request.auth != null
+          && request.auth.uid in resource.data.members;
+      }
+
+      function isTripFieldSetValid(data) {
+        return data.keys().hasOnly([
+            'id',
+            'title',
+            'coverImageUrl',
+            'startDate',
+            'endDate',
+            'defaultCurrency',
+            'members',
+            'inviteCode',
+            'createdBy',
+            'createdAt',
+            'lastEditedAt'
+          ])
+          && data.id == tripId
+          && isNonEmptyString(data.title)
+          && (data.coverImageUrl == null || data.coverImageUrl is string)
+          && isTimestampNumber(data.startDate)
+          && isTimestampNumber(data.endDate)
+          && data.endDate >= data.startDate
+          && (data.defaultCurrency == null || data.defaultCurrency is string)
+          && data.members is map
+          && (data.inviteCode == null || data.inviteCode is string)
+          && data.createdBy is string
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      function isTripMemberEntryValid(member, uid) {
+        return member is map
+          && member.keys().hasOnly(['uid', 'role', 'joinedAt'])
+          && member.uid == uid
+          && member.role in ['ADMIN', 'EDITOR', 'COMMENTER', 'VIEWER']
+          && isTimestampNumber(member.joinedAt);
+      }
+
+      function isTripCreateValid() {
+        return request.auth != null
+          && isTripFieldSetValid(request.resource.data)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.members.keys().hasOnly([request.auth.uid])
+          && isTripMemberEntryValid(
+            request.resource.data.members[request.auth.uid],
+            request.auth.uid
+          )
+          && request.resource.data.members[request.auth.uid].role == 'ADMIN';
+      }
+
+      function isTripUpdateValid() {
+        return isTripFieldSetValid(request.resource.data)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.members == resource.data.members;
+      }
+
+      allow read: if isTripMember();
+      allow create: if isTripCreateValid();
+      allow update: if isTripMember() && isTripUpdateValid();
+      allow delete: if false;
+    }
+
     // Fallback for any app doc that doesn't have an explicit /apps/{appId}
     // block above — same rule as every explicit app block, so a new app
     // works correctly even before it's given its own block.
