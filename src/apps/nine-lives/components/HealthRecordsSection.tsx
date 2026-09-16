@@ -71,7 +71,8 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
               onClick={openCreate}
               disabled={!user?.uid || cats.length === 0}
             >
-              Add record
+              <span className='hidden sm:inline'>Add record</span>
+              <span className='sm:hidden'>Add</span>
             </Button>
           </div>
 

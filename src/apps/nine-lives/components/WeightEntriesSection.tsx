@@ -84,7 +84,8 @@ function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSect
             setIsModalOpen(true);
           }}
         >
-          Add weight entry
+          <span className='hidden sm:inline'>Add weight entry</span>
+          <span className='sm:hidden'>Add</span>
         </Button>
       </div>
 

@@ -85,7 +85,8 @@ function CatConditionsSection({ householdId, catId, catName }: CatConditionsSect
             setIsModalOpen(true);
           }}
         >
-          Add condition
+          <span className='hidden sm:inline'>Add condition</span>
+          <span className='sm:hidden'>Add</span>
         </Button>
       </div>
 

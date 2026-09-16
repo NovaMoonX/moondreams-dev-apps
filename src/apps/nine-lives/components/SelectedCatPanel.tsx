@@ -38,7 +38,8 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
           <h3 className='text-lg font-semibold'>{selectedCat.name}</h3>
         </div>
         <Button type='button' variant='secondary' size='sm' onClick={onEditDetails}>
-          Edit details
+          <span className='hidden sm:inline'>Edit details</span>
+          <span className='sm:hidden'>Edit</span>
         </Button>
       </div>
 

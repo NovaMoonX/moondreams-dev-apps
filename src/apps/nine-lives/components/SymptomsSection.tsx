@@ -77,7 +77,8 @@ function SymptomsSection({ householdId, catId, catName }: SymptomsSectionProps) 
             setIsModalOpen(true);
           }}
         >
-          Add symptom
+          <span className='hidden sm:inline'>Add symptom</span>
+          <span className='sm:hidden'>Add</span>
         </Button>
       </div>
 

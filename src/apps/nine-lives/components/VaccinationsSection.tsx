@@ -84,7 +84,8 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
             setIsModalOpen(true);
           }}
         >
-          Add vaccination
+          <span className='hidden sm:inline'>Add vaccination</span>
+          <span className='sm:hidden'>Add</span>
         </Button>
       </div>
 

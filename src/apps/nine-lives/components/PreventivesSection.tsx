@@ -96,7 +96,8 @@ function PreventivesSection({ householdId, catId, catName, cats }: PreventivesSe
           Track {catName}&rsquo;s preventives and medications here.
         </small>
         <Button type='button' variant='primary' size='sm' onClick={openCreate}>
-          Add preventive / med
+          <span className='hidden sm:inline'>Add preventive / med</span>
+          <span className='sm:hidden'>Add</span>
         </Button>
       </div>
       <PreventiveTimeline

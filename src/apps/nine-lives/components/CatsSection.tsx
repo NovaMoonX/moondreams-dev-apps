@@ -147,7 +147,8 @@ function CatsSection({ householdId }: CatsSectionProps) {
             }
           />
           <Button type='button' onClick={() => setShowAddCatModal(true)}>
-            Add cat
+            <span className='hidden sm:inline'>Add cat</span>
+            <span className='sm:hidden'>Add</span>
           </Button>
         </div>
       </div>

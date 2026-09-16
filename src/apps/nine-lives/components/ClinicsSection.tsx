@@ -190,7 +190,8 @@ function ClinicsSection({ householdId }: ClinicsSectionProps) {
               size='sm'
               onClick={() => setShowClinicForm(true)}
             >
-              Add clinic
+              <span className='hidden sm:inline'>Add clinic</span>
+              <span className='sm:hidden'>Add</span>
             </Button>
           </div>
 

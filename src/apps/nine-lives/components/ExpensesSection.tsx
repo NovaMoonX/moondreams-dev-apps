@@ -95,7 +95,8 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
                 setIsFormOpen(true);
               }}
             >
-              Log expense
+              <span className='hidden sm:inline'>Log expense</span>
+              <span className='sm:hidden'>Log</span>
             </Button>
           </div>
 

@@ -171,7 +171,8 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
             setModalMode('create');
           }}
         >
-          Log visit
+          <span className='hidden sm:inline'>Log visit</span>
+          <span className='sm:hidden'>Log</span>
         </Button>
       </div>
 
