@@ -1,4 +1,4 @@
-import { Button, Form, FormFactories, Input, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Modal, Tabs } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { useMemo, useState } from 'react';
 import { shallowEqual } from 'react-redux';
@@ -7,7 +7,7 @@ import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
 import { selectVisitsByHousehold } from '../store/selectors';
-import type { Expense, ExpenseLineItem } from '../types';
+import type { Expense, ExpenseCategory, ExpenseLineItem } from '../types';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
   calculateExpenseItemsTotal,
@@ -16,15 +16,20 @@ import {
 } from '../utils/budgetCalculators';
 import { getVisitOptions } from '../utils/visitOptions';
 
+type ExpenseMode = 'simple' | 'itemized';
+
 interface LineItemValue {
   id: string;
-  category: string;
   label: string;
   amount: string;
 }
 
 interface ExpenseFormValues {
   catIds: string[];
+  mode: ExpenseMode;
+  simpleCategory: string;
+  simpleLabel: string;
+  simpleAmount: string;
   items: LineItemValue[];
   label?: string | null;
   incurredAt: string;
@@ -60,17 +65,20 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 const { checkbox, checkboxGroup, custom, input, select, textarea } = FormFactories;
 
 function createEmptyLineItem(): LineItemValue {
-  return { id: crypto.randomUUID(), category: DEFAULT_EXPENSE_CATEGORIES[0], label: '', amount: '' };
+  return { id: crypto.randomUUID(), label: '', amount: '' };
+}
+
+function getInitialMode(expense: Partial<Expense> | null | undefined): ExpenseMode {
+  return expense?.items && expense.items.length > 1 ? 'itemized' : 'simple';
 }
 
 function getInitialLineItems(expense: Partial<Expense> | null | undefined): LineItemValue[] {
-  if (!expense?.items || expense.items.length === 0) {
+  if (!expense?.items || expense.items.length <= 1) {
     return [createEmptyLineItem()];
   }
 
   return expense.items.map((item) => ({
     id: item.id,
-    category: item.category,
     label: item.label ?? '',
     amount: String(item.amount),
   }));
@@ -80,12 +88,10 @@ function LineItemsField({
   value,
   onValueChange,
   disabled,
-  categoryOptions,
 }: {
   value: LineItemValue[];
   onValueChange: (value: LineItemValue[]) => void;
   disabled?: boolean;
-  categoryOptions: { text: string; value: string }[];
 }) {
   const updateItem = (id: string, changes: Partial<LineItemValue>) => {
     onValueChange(value.map((item) => (item.id === id ? { ...item, ...changes } : item)));
@@ -98,49 +104,38 @@ function LineItemsField({
   const total = value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
   return (
-    <div className='space-y-3'>
-      {value.map((item, index) => (
-        <div key={item.id} className='border-border space-y-2 rounded-md border p-3'>
-          <div className='flex items-center justify-between gap-2'>
-            <span className='text-muted-foreground text-xs font-medium uppercase tracking-wide'>
-              Item {index + 1}
-            </span>
-            {value.length > 1 && (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className={mutedLinkClassName}
-                onClick={() => removeItem(item.id)}
-                disabled={disabled}
-              >
-                Remove
-              </Button>
-            )}
-          </div>
-          <div className='grid grid-cols-2 gap-2'>
-            <Select
-              options={categoryOptions}
-              value={item.category}
-              disabled={disabled}
-              onChange={(category) => updateItem(item.id, { category })}
-            />
-            <Input
-              value={item.amount}
-              onChange={(event) => updateItem(item.id, { amount: event.target.value })}
-              placeholder='72.00'
-              type='number'
-              variant='outline'
-              disabled={disabled}
-            />
-          </div>
+    <div className='space-y-2'>
+      {value.map((item) => (
+        <div key={item.id} className='flex items-center gap-2'>
           <Input
             value={item.label}
             onChange={(event) => updateItem(item.id, { label: event.target.value })}
-            placeholder='e.g. Exam fee (optional)'
+            placeholder='e.g. Exam fee'
             variant='outline'
+            className='flex-1'
             disabled={disabled}
           />
+          <Input
+            value={item.amount}
+            onChange={(event) => updateItem(item.id, { amount: event.target.value })}
+            placeholder='72.00'
+            type='number'
+            variant='outline'
+            className='w-28'
+            disabled={disabled}
+          />
+          {value.length > 1 && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className={`${mutedLinkClassName} shrink-0`}
+              onClick={() => removeItem(item.id)}
+              disabled={disabled}
+            >
+              Remove
+            </Button>
+          )}
         </div>
       ))}
       <div className='flex items-center justify-between gap-2'>
@@ -189,6 +184,7 @@ function ExpenseFormModal({
   );
   const [labelOpen, setLabelOpen] = useState(Boolean(initialExpense?.label));
   const [notesOpen, setNotesOpen] = useState(Boolean(initialExpense?.notes));
+  const [mode, setMode] = useState<ExpenseMode>(() => getInitialMode(initialExpense));
   const [isValid, setIsValid] = useState(
     Boolean(initialExpense?.catIds?.length && initialExpense?.items?.length && initialExpense?.incurredAt),
   );
@@ -223,18 +219,57 @@ function ExpenseFormModal({
         options: catOptions,
       }),
       custom({
-        name: 'items',
-        label: 'Line items',
+        name: 'mode',
+        label: '',
         renderComponent: (props) => (
-          <LineItemsField
-            value={props.value as LineItemValue[]}
-            onValueChange={props.onValueChange}
-            disabled={props.disabled}
-            categoryOptions={categoryOptions}
+          <Tabs
+            value={props.value as ExpenseMode}
+            onValueChange={(value) => props.onValueChange(value as ExpenseMode)}
+            tabsList={[
+              { value: 'simple', label: 'Simple' },
+              { value: 'itemized', label: 'Itemized' },
+            ]}
+            variant='pills'
+            tabsWidth='full'
           />
         ),
         colSpan: 'full',
       }),
+      ...(mode === 'simple'
+        ? [
+            select({
+              name: 'simpleCategory',
+              label: 'Category',
+              options: categoryOptions.map((option) => ({ label: option.text, value: option.value })),
+            }),
+            input({
+              name: 'simpleLabel',
+              label: 'Description (optional)',
+              placeholder: 'e.g. Annual wellness exam',
+              variant: 'outline',
+            }),
+            input({
+              name: 'simpleAmount',
+              label: 'Amount',
+              placeholder: '72.00',
+              type: 'number',
+              variant: 'outline',
+            }),
+          ]
+        : [
+            custom({
+              name: 'items',
+              label: 'Line items',
+              renderComponent: (props) => (
+                <LineItemsField
+                  value={props.value as LineItemValue[]}
+                  onValueChange={props.onValueChange}
+                  disabled={props.disabled}
+                />
+              ),
+              colSpan: 'full',
+            }),
+          ]),
       labelOpen
         ? input({
             name: 'label',
@@ -343,12 +378,18 @@ function ExpenseFormModal({
       cycleCount,
       labelOpen,
       notesOpen,
+      mode,
     ],
   );
 
   const initialData = useMemo(
     () => ({
       catIds: initialExpense?.catIds ?? [],
+      mode: getInitialMode(initialExpense),
+      simpleCategory: initialExpense?.items?.[0]?.category ?? DEFAULT_EXPENSE_CATEGORIES[0],
+      simpleLabel: initialExpense?.items?.[0]?.label ?? '',
+      simpleAmount:
+        initialExpense?.items?.length === 1 ? String(initialExpense.items[0].amount) : '',
       items: getInitialLineItems(initialExpense),
       label: initialExpense?.label ?? '',
       incurredAt: toDateInputValue(initialExpense?.incurredAt ?? undefined),
@@ -366,14 +407,24 @@ function ExpenseFormModal({
     const incurredAt = fromDateInputValue(data.incurredAt);
     const catIds = data.catIds.length > 0 ? data.catIds : initialExpense?.catIds ?? [];
 
-    const items: ExpenseLineItem[] = data.items
-      .map((item) => ({
-        id: item.id,
-        category: item.category as Expense['items'][number]['category'],
-        label: item.label.trim() || null,
-        amount: Number(item.amount),
-      }))
-      .filter((item) => Number.isFinite(item.amount) && item.amount > 0);
+    const items: ExpenseLineItem[] =
+      data.mode === 'simple'
+        ? [
+            {
+              id: initialExpense?.items?.[0]?.id ?? crypto.randomUUID(),
+              category: (data.simpleCategory || DEFAULT_EXPENSE_CATEGORIES[0]) as ExpenseCategory,
+              label: data.simpleLabel.trim() || null,
+              amount: Number(data.simpleAmount),
+            },
+          ].filter((item) => Number.isFinite(item.amount) && item.amount > 0)
+        : data.items
+            .map((item) => ({
+              id: item.id,
+              category: 'other' as ExpenseCategory,
+              label: item.label.trim() || null,
+              amount: Number(item.amount),
+            }))
+            .filter((item) => Number.isFinite(item.amount) && item.amount > 0);
 
     if (catIds.length === 0 || items.length === 0 || incurredAt === undefined) {
       return;
@@ -436,6 +487,12 @@ function ExpenseFormModal({
         spacing='normal'
         onDataChange={(data) => {
           const values = data as ExpenseFormValues;
+          const nextMode = values.mode === 'itemized' ? 'itemized' : 'simple';
+
+          if (nextMode !== mode) {
+            setMode(nextMode);
+          }
+
           const nextIsRecurring = Boolean(values.isRecurring);
 
           if (nextIsRecurring !== isRecurring) {
@@ -465,10 +522,13 @@ function ExpenseFormModal({
           }
 
           const hasCat = values.catIds.length > 0 || Boolean(initialExpense?.catIds?.length);
-          const hasValidItem = values.items.some((item) => {
-            const amount = Number(item.amount);
-            return Number.isFinite(amount) && amount > 0;
-          });
+          const hasValidItem =
+            nextMode === 'simple'
+              ? Number.isFinite(Number(values.simpleAmount)) && Number(values.simpleAmount) > 0
+              : values.items.some((item) => {
+                  const amount = Number(item.amount);
+                  return Number.isFinite(amount) && amount > 0;
+                });
           const nextIsValid = Boolean(hasCat && hasValidItem && values.incurredAt);
 
           setIsValid(nextIsValid);
