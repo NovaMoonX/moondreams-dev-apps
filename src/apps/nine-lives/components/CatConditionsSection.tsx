@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -24,7 +25,7 @@ interface CatConditionsSectionProps {
 function CatConditionsSection({ householdId, catId, catName }: CatConditionsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const conditions = useAppSelector(selectConditionsByCat(catId));
+  const conditions = useAppSelector(selectConditionsByCat(catId), shallowEqual);
   const libraryConditions = useAppSelector(selectConditionLibrary);
 
   const [isSubmitting, setIsSubmitting] = useState(false);

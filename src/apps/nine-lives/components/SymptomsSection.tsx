@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -20,8 +21,8 @@ interface SymptomsSectionProps {
 function SymptomsSection({ householdId, catId, catName }: SymptomsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const symptoms = useAppSelector(selectSymptomsByCat(catId));
-  const conditions = useAppSelector(selectConditionsByCat(catId));
+  const symptoms = useAppSelector(selectSymptomsByCat(catId), shallowEqual);
+  const conditions = useAppSelector(selectConditionsByCat(catId), shallowEqual);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);

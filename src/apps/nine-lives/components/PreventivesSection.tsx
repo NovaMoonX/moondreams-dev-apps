@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -28,8 +29,11 @@ interface PreventivesSectionProps {
 function PreventivesSection({ householdId, catId, catName, cats }: PreventivesSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const preventives = useAppSelector(selectPreventivesByCat(catId));
-  const customTypes = useAppSelector(selectCustomPreventiveTypesByHousehold(householdId));
+  const preventives = useAppSelector(selectPreventivesByCat(catId), shallowEqual);
+  const customTypes = useAppSelector(
+    selectCustomPreventiveTypesByHousehold(householdId),
+    shallowEqual,
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingPreventive, setEditingPreventive] = useState<Preventive | null>(null);

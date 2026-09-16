@@ -10,6 +10,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
@@ -259,10 +260,16 @@ function PreventiveFormModal({
 }: PreventiveFormModalProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
-  const customProducts = useAppSelector(selectCustomPreventiveProductsByHousehold(householdId));
-  const customTypes = useAppSelector(selectCustomPreventiveTypesByHousehold(householdId));
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const customProducts = useAppSelector(
+    selectCustomPreventiveProductsByHousehold(householdId),
+    shallowEqual,
+  );
+  const customTypes = useAppSelector(
+    selectCustomPreventiveTypesByHousehold(householdId),
+    shallowEqual,
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isEditing = Boolean(initialPreventive?.id);
   const formId = initialPreventive?.id ?? 'new-nine-lives-preventive';

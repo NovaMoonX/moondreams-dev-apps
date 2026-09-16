@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -24,7 +25,7 @@ interface WeightEntriesSectionProps {
 function WeightEntriesSection({ householdId, catId, catName }: WeightEntriesSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const weightEntries = useAppSelector(selectWeightEntriesByCat(catId));
+  const weightEntries = useAppSelector(selectWeightEntriesByCat(catId), shallowEqual);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
