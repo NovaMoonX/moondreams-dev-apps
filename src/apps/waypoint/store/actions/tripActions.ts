@@ -93,7 +93,8 @@ export const editTrip = createAsyncThunk<
   async ({ uid, trip, values }, { dispatch, rejectWithValue }) => {
     const title = values.title.trim();
     const coverImageUrl = values.coverImageUrl?.trim() || null;
-    const defaultCurrency = values.defaultCurrency?.trim().toUpperCase() || null;
+    const defaultCurrency =
+      values.defaultCurrency?.trim().toUpperCase() || null;
 
     if (!title) {
       return rejectWithValue('Trip title is required.');
@@ -104,56 +105,62 @@ export const editTrip = createAsyncThunk<
       return rejectWithValue(dateError);
     }
 
-    if (!trip.members[uid] || !['ADMIN', 'EDITOR'].includes(trip.members[uid].role)) {
+    if (
+      !trip.members[uid] ||
+      !['ADMIN', 'EDITOR'].includes(trip.members[uid].role)
+    ) {
       return rejectWithValue('You do not have permission to edit this trip.');
     }
 
     const dateDelta = values.startDate - trip.startDate;
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, trip.id);
-    const [eventsSnapshot, staysSnapshot] = await Promise.all([
-      getDocs(collection(tripRef, 'events')),
-      getDocs(collection(tripRef, 'stays')),
-    ]);
     const batch = writeBatch(db);
     const lastEditedAt = Date.now();
 
-    eventsSnapshot.docs.forEach((eventSnapshot) => {
-      const data = eventSnapshot.data();
-      const updates: Record<string, number> = {};
-      const shiftedStartAt = getShiftedTimestamp(data.startAt, dateDelta);
-      const shiftedEndAt = getShiftedTimestamp(data.endAt, dateDelta);
+    if (dateDelta !== 0) {
+      const [eventsSnapshot, staysSnapshot] = await Promise.all([
+        getDocs(collection(tripRef, 'events')),
+        getDocs(collection(tripRef, 'stays')),
+      ]);
 
-      if (shiftedStartAt !== null) {
-        updates.startAt = shiftedStartAt;
-      }
-      if (shiftedEndAt !== null) {
-        updates.endAt = shiftedEndAt;
-      }
-      if (Object.keys(updates).length > 0 && dateDelta !== 0) {
-        batch.update(eventSnapshot.ref, updates);
-      }
-    });
+      eventsSnapshot.docs.forEach((eventSnapshot) => {
+        const data = eventSnapshot.data();
+        const updates: Record<string, number> = {};
+        const shiftedStartAt = getShiftedTimestamp(data.startAt, dateDelta);
+        const shiftedEndAt = getShiftedTimestamp(data.endAt, dateDelta);
 
-    staysSnapshot.docs.forEach((staySnapshot) => {
-      const data = staySnapshot.data();
-      const updates: Record<string, number> = {};
-
-      for (const field of [
-        'checkInAt',
-        'checkOutAt',
-        'plannedArrivalAt',
-        'plannedDepartureAt',
-      ]) {
-        const shiftedValue = getShiftedTimestamp(data[field], dateDelta);
-        if (shiftedValue !== null) {
-          updates[field] = shiftedValue;
+        if (shiftedStartAt !== null) {
+          updates.startAt = shiftedStartAt;
         }
-      }
+        if (shiftedEndAt !== null) {
+          updates.endAt = shiftedEndAt;
+        }
+        if (Object.keys(updates).length > 0) {
+          batch.update(eventSnapshot.ref, updates);
+        }
+      });
 
-      if (Object.keys(updates).length > 0 && dateDelta !== 0) {
-        batch.update(staySnapshot.ref, updates);
-      }
-    });
+      staysSnapshot.docs.forEach((staySnapshot) => {
+        const data = staySnapshot.data();
+        const updates: Record<string, number> = {};
+
+        for (const field of [
+          'checkInAt',
+          'checkOutAt',
+          'plannedArrivalAt',
+          'plannedDepartureAt',
+        ]) {
+          const shiftedValue = getShiftedTimestamp(data[field], dateDelta);
+          if (shiftedValue !== null) {
+            updates[field] = shiftedValue;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          batch.update(staySnapshot.ref, updates);
+        }
+      });
+    }
 
     batch.update(tripRef, {
       title,
