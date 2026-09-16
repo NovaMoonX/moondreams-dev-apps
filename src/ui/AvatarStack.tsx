@@ -21,6 +21,8 @@ interface AvatarStackProps {
   size?: AvatarStackSize;
   /** Max avatars shown before the rest collapse into a "+N" badge. */
   max?: number;
+  /** Which way multiple avatars overlap. Defaults to vertical. */
+  direction?: 'vertical' | 'horizontal';
   className?: string;
 }
 
@@ -29,7 +31,13 @@ interface AvatarStackProps {
  * overflow badge beyond that) for several. Not tied to any one app's data model — pass whatever
  * people/avatars are relevant (cat photos, user profiles, etc).
  */
-function AvatarStack({ people, size = 'sm', max = 3, className }: AvatarStackProps) {
+function AvatarStack({
+  people,
+  size = 'sm',
+  max = 3,
+  direction = 'vertical',
+  className,
+}: AvatarStackProps) {
   if (people.length === 0) {
     return null;
   }
@@ -49,12 +57,20 @@ function AvatarStack({ people, size = 'sm', max = 3, className }: AvatarStackPro
     );
   }
 
-  const stackedSize: 'xs' | 'sm' = size === 'lg' || size === 'xl' || size === '2xl' ? 'sm' : 'xs';
+  const stackedSize: 'xs' | 'sm' =
+    size === 'lg' || size === 'xl' || size === '2xl' ? 'sm' : 'xs';
   const visiblePeople = people.slice(0, max);
   const overflowCount = people.length - visiblePeople.length;
+  const overlapClassName = direction === 'vertical' ? '-mt-2' : '-ml-2';
 
   return (
-    <div className={join('flex shrink-0 items-center', className)}>
+    <div
+      className={join(
+        'flex shrink-0',
+        direction === 'vertical' ? 'flex-col items-center' : 'items-center',
+        className,
+      )}
+    >
       {visiblePeople.map((person, index) => (
         <Avatar
           key={person.id}
@@ -63,13 +79,14 @@ function AvatarStack({ people, size = 'sm', max = 3, className }: AvatarStackPro
           initials={person.photoURL ? undefined : getInitials(person.name)}
           size={stackedSize}
           shape='circle'
-          className={join('ring-card ring-1', index > 0 && '-ml-2')}
+          className={join('ring-card ring-1', index > 0 && overlapClassName)}
         />
       ))}
       {overflowCount > 0 && (
         <span
           className={join(
-            'text-muted-foreground bg-muted border-border ring-card -ml-2 flex items-center justify-center rounded-full border ring-1',
+            'text-muted-foreground bg-muted border-border ring-card flex items-center justify-center rounded-full border ring-1',
+            overlapClassName,
             OVERFLOW_BADGE_SIZE_CLASSES[stackedSize],
           )}
         >

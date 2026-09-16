@@ -1,9 +1,14 @@
 import { useMemo } from 'react';
 
-import { Badge, Button, Disclosure, Pagination, Popover } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Badge,
+  Button,
+  Pagination,
+  Popover,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Trash2 } from 'lucide-react';
+import { Copy, MapPin, Phone, Trash2 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
@@ -22,7 +27,11 @@ import {
   selectVisitsByHousehold,
 } from '../store/selectors';
 import type { VetClinic } from '../types';
-import { buildAttentionItems, type AttentionItem, type AttentionSeverity } from '../utils/attentionItems';
+import {
+  buildAttentionItems,
+  type AttentionItem,
+  type AttentionSeverity,
+} from '../utils/attentionItems';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
 import { usePagination } from '../utils/usePagination';
 
@@ -65,6 +74,26 @@ function currentTime(): number {
   return Date.now();
 }
 
+/** Kept as a plain top-level helper (rather than inline in the component) so this event-handler side effect isn't lexically inside the component body. */
+function callClinic(phone: string) {
+  window.location.href = `tel:${phone.replace(/[^+\d]/g, '')}`;
+}
+
+/** Same reasoning as `callClinic` above. */
+async function copyClinicField(
+  addToast: (toast: { title: string; description: string }) => void,
+  label: string,
+  value: string,
+) {
+  const copied = await copyToClipboard(value);
+  if (copied) {
+    addToast({
+      title: `${label} copied`,
+      description: `Clinic ${label.toLowerCase()} copied to your clipboard.`,
+    });
+  }
+}
+
 function formatDueLabel(timestamp: number, now: number): string {
   const diffDays = Math.round((timestamp - now) / 86_400_000);
 
@@ -90,7 +119,10 @@ function getReminderBadgeLabel(severity: AttentionSeverity): string | null {
  * warning — you're just going, nothing's wrong), red for genuinely missed/overdue. Nothing for
  * later-this-week, same as reminders.
  */
-function getVisitStatusText(severity: AttentionSeverity, dueLabel: string): { text: string; className: string } | null {
+function getVisitStatusText(
+  severity: AttentionSeverity,
+  dueLabel: string,
+): { text: string; className: string } | null {
   if (severity !== 'now') {
     return null;
   }
@@ -103,14 +135,35 @@ function getVisitStatusText(severity: AttentionSeverity, dueLabel: string): { te
 function AttentionSection({ householdId }: AttentionSectionProps) {
   const { requestFocus } = useAttentionFocus();
   const { addToast } = useToast();
-  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
-  const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
-  const litterEntries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
-  const vaccinations = useAppSelector(selectVaccinationsByHousehold(householdId), shallowEqual);
-  const preventives = useAppSelector(selectPreventivesByHousehold(householdId), shallowEqual);
+  const visits = useAppSelector(
+    selectVisitsByHousehold(householdId),
+    shallowEqual,
+  );
+  const litterBoxes = useAppSelector(
+    selectLitterBoxesByHousehold(householdId),
+    shallowEqual,
+  );
+  const litterEntries = useAppSelector(
+    selectLitterEntriesByHousehold(householdId),
+    shallowEqual,
+  );
+  const vaccinations = useAppSelector(
+    selectVaccinationsByHousehold(householdId),
+    shallowEqual,
+  );
+  const preventives = useAppSelector(
+    selectPreventivesByHousehold(householdId),
+    shallowEqual,
+  );
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const clinics = useAppSelector(
+    selectClinicsByHousehold(householdId),
+    shallowEqual,
+  );
+  const doctors = useAppSelector(
+    selectDoctorsByHousehold(householdId),
+    shallowEqual,
+  );
 
   const items = useMemo(
     () =>
@@ -125,8 +178,10 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     [visits, vaccinations, preventives, litterBoxes, litterEntries],
   );
 
-  const catName = (catId: string) => cats.find((cat) => cat.id === catId)?.name ?? 'a cat';
-  const catNames = (catIds: string[]) => catIds.map(catName).join(', ') || 'a cat';
+  const catName = (catId: string) =>
+    cats.find((cat) => cat.id === catId)?.name ?? 'a cat';
+  const catNames = (catIds: string[]) =>
+    catIds.map(catName).join(', ') || 'a cat';
 
   const toRow = (item: AttentionItem, now: number): AttentionRow | null => {
     switch (item.kind) {
@@ -144,9 +199,18 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           dueLabel: formatDueLabel(item.scheduledAt, now),
           actionLabel: 'Complete',
           onAction: () =>
-            requestFocus({ kind: 'visit-complete', requestedAt: Date.now(), visitId: item.visitId }),
-          clinic: visit.clinicId ? (clinics.find((entry) => entry.id === visit.clinicId) ?? null) : null,
-          doctorName: visit.doctorId ? (doctors.find((entry) => entry.id === visit.doctorId)?.name ?? null) : null,
+            requestFocus({
+              kind: 'visit-complete',
+              requestedAt: Date.now(),
+              visitId: item.visitId,
+            }),
+          clinic: visit.clinicId
+            ? (clinics.find((entry) => entry.id === visit.clinicId) ?? null)
+            : null,
+          doctorName: visit.doctorId
+            ? (doctors.find((entry) => entry.id === visit.doctorId)?.name ??
+              null)
+            : null,
         };
       }
       case 'litter': {
@@ -166,11 +230,17 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           dueLabel: '',
           actionLabel: 'Log change',
           onAction: () =>
-            requestFocus({ kind: 'litter-log', requestedAt: Date.now(), litterBoxId: item.litterBoxId }),
+            requestFocus({
+              kind: 'litter-log',
+              requestedAt: Date.now(),
+              litterBoxId: item.litterBoxId,
+            }),
         };
       }
       case 'vaccination': {
-        const vaccination = vaccinations.find((entry) => entry.id === item.vaccinationId);
+        const vaccination = vaccinations.find(
+          (entry) => entry.id === item.vaccinationId,
+        );
         if (!vaccination) return null;
 
         return {
@@ -192,7 +262,9 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
         };
       }
       case 'preventive': {
-        const preventive = preventives.find((entry) => entry.id === item.preventiveId);
+        const preventive = preventives.find(
+          (entry) => entry.id === item.preventiveId,
+        );
         if (!preventive) return null;
 
         return {
@@ -217,7 +289,9 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
   };
 
   const now = currentTime();
-  const rows = items.map((item) => toRow(item, now)).filter((row): row is AttentionRow => row !== null);
+  const rows = items
+    .map((item) => toRow(item, now))
+    .filter((row): row is AttentionRow => row !== null);
   const visitRows = rows.filter((row) => row.kind === 'visit');
   const otherRows = rows.filter((row) => row.kind !== 'visit');
   const {
@@ -240,7 +314,13 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     }
 
     return (
-      <Badge variant='destructive' outline size='xs' use='alert' className='bg-destructive/10 border-transparent'>
+      <Badge
+        variant='destructive'
+        outline
+        size='xs'
+        use='alert'
+        className='bg-destructive/10 border-transparent'
+      >
         {label}
       </Badge>
     );
@@ -253,7 +333,9 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
       return null;
     }
 
-    return <span className={join('text-sm', status.className)}>{status.text}</span>;
+    return (
+      <span className={join('text-sm', status.className)}>{status.text}</span>
+    );
   };
 
   const renderRowAvatar = (row: AttentionRow, size: AvatarSize) =>
@@ -270,62 +352,99 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
       <AvatarStack
         people={row.catIds.map((catId) => {
           const cat = cats.find((entry) => entry.id === catId);
-          return { id: catId, name: cat?.name ?? 'Cat', photoURL: cat?.photoURL };
+          return {
+            id: catId,
+            name: cat?.name ?? 'Cat',
+            photoURL: cat?.photoURL,
+          };
         })}
         size={size}
       />
     );
 
-  const renderClinicDetailsContent = (clinic: VetClinic, doctorName?: string | null) => {
-    const copyField = async (label: string, value: string) => {
-      const copied = await copyToClipboard(value);
-      if (copied) {
-        addToast({ title: `${label} copied`, description: `Clinic ${label.toLowerCase()} copied to your clipboard.` });
-      }
-    };
+  /** The vet name shown next to the "more details" trigger — the assigned doctor if there is one, otherwise the clinic. */
+  const getVetLabel = (clinic: VetClinic, doctorName?: string | null) =>
+    doctorName ? `Dr. ${doctorName}` : clinic.name;
 
-    return (
-      <div className='w-64 space-y-2 p-3 text-sm'>
-        <p className='font-medium'>{clinic.name}</p>
-        {doctorName && <p className='text-muted-foreground'>Dr. {doctorName}</p>}
-        {clinic.phone && (
-          <div className='flex items-center justify-between gap-2'>
-            <span className='text-muted-foreground'>{clinic.phone}</span>
-            <Button type='button' variant='link' size='sm' onClick={() => void copyField('Phone', clinic.phone!)}>
+  const renderClinicDetailsContent = (
+    clinic: VetClinic,
+    doctorName?: string | null,
+  ) => (
+    <div className='w-64 space-y-2 p-3 text-sm'>
+      <p className='font-medium'>{clinic.name}</p>
+      {doctorName && <p className='text-muted-foreground'>Dr. {doctorName}</p>}
+      {clinic.phone && (
+        <div className='flex items-center justify-between gap-2'>
+          <span className='text-muted-foreground'>{clinic.phone}</span>
+          <div className='flex items-center gap-1'>
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              onClick={() => callClinic(clinic.phone!)}
+            >
+              Call
+            </Button>
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              onClick={() =>
+                void copyClinicField(addToast, 'Phone', clinic.phone!)
+              }
+            >
               Copy
             </Button>
           </div>
-        )}
-        {clinic.address && (
-          <div className='flex items-center justify-between gap-2'>
-            <span className='text-muted-foreground'>{clinic.address}</span>
-            <Button type='button' variant='link' size='sm' onClick={() => void copyField('Address', clinic.address!)}>
-              Copy
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
+        </div>
+      )}
+      {clinic.address && (
+        <div className='flex items-center justify-between gap-2'>
+          <span className='text-muted-foreground'>{clinic.address}</span>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            onClick={() =>
+              void copyClinicField(addToast, 'Address', clinic.address!)
+            }
+          >
+            Copy
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 
   /**
    * Two different interaction patterns for the vet details, alternated across rows on purpose so
    * both are visible side by side — pending a decision on which one to keep everywhere.
    */
-  const renderClinicInfo = (row: AttentionRow, pattern: 'popover' | 'disclosure') => {
+  const renderClinicInfo = (
+    row: AttentionRow,
+    pattern: 'popover' | 'icons',
+  ) => {
     if (!row.clinic) {
       return null;
     }
 
     const clinic = row.clinic;
+    const vetLabel = getVetLabel(clinic, row.doctorName);
 
     if (pattern === 'popover') {
       return (
-        <div className='mt-1'>
+        <div className='mt-1 flex items-center gap-1 text-sm'>
+          <span className='text-muted-foreground truncate'>{vetLabel}</span>
+          <span className='text-muted-foreground'>—</span>
           <Popover
             trigger={
-              <Button type='button' variant='link' size='sm' className='h-auto p-0'>
-                Details
+              <Button
+                type='button'
+                variant='link'
+                size='fitted'
+                className='h-auto p-0 text-sm'
+              >
+                More details
               </Button>
             }
             placement='bottom'
@@ -338,16 +457,53 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
     }
 
     return (
-      <Disclosure label='Details' buttonClassName='text-primary text-sm p-0 hover:underline' className='mt-1'>
-        {renderClinicDetailsContent(clinic, row.doctorName)}
-      </Disclosure>
+      <div className='mt-1 flex items-center gap-2 text-sm'>
+        <span className='text-muted-foreground truncate'>{vetLabel}</span>
+        {clinic.phone && (
+          <>
+            <button
+              type='button'
+              onClick={() => callClinic(clinic.phone!)}
+              aria-label={`Call ${clinic.name}`}
+              title='Call'
+              className='text-muted-foreground hover:text-foreground'
+            >
+              <Phone className='h-3.5 w-3.5' />
+            </button>
+            <button
+              type='button'
+              onClick={() =>
+                void copyClinicField(addToast, 'Phone', clinic.phone!)
+              }
+              aria-label={`Copy ${clinic.name}'s phone number`}
+              title='Copy phone'
+              className='text-muted-foreground hover:text-foreground'
+            >
+              <Copy className='h-3.5 w-3.5' />
+            </button>
+          </>
+        )}
+        {clinic.address && (
+          <button
+            type='button'
+            onClick={() =>
+              void copyClinicField(addToast, 'Address', clinic.address!)
+            }
+            aria-label={`Copy ${clinic.name}'s address`}
+            title='Copy address'
+            className='text-muted-foreground hover:text-foreground'
+          >
+            <MapPin className='h-3.5 w-3.5' />
+          </button>
+        )}
+      </div>
     );
   };
 
   const isSingleVisit = visitRows.length === 1;
 
   return (
-    <section className='rounded-lg border border-border bg-card p-4'>
+    <section className='border-border bg-card rounded-lg border p-4'>
       <div className='grid gap-6 md:grid-cols-2'>
         {visitRows.length > 0 && (
           <div>
@@ -357,7 +513,10 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
             <div className='mt-3 space-y-3'>
               {visitRows.map((row, index) =>
                 isSingleVisit ? (
-                  <div key={row.key} className='rounded-lg border border-border p-4'>
+                  <div
+                    key={row.key}
+                    className='border-border rounded-lg border p-4'
+                  >
                     <div className='flex items-center gap-3'>
                       {renderRowAvatar(row, 'md')}
                       <div className='min-w-0'>
@@ -371,12 +530,21 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                         {renderClinicInfo(row, 'popover')}
                       </div>
                     </div>
-                    <Button type='button' variant='link' size='sm' onClick={row.onAction} className='mt-3 px-0'>
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      onClick={row.onAction}
+                      className='mt-3 px-0'
+                    >
                       {row.actionLabel}
                     </Button>
                   </div>
                 ) : (
-                  <div key={row.key} className='rounded-lg border border-border p-3'>
+                  <div
+                    key={row.key}
+                    className='border-border rounded-lg border p-3'
+                  >
                     <div className='flex items-center justify-between gap-3'>
                       <div className='flex min-w-0 items-center gap-3'>
                         {renderRowAvatar(row, 'xs')}
@@ -388,7 +556,10 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                           <p className='text-muted-foreground text-sm'>
                             {row.subtitle} · {row.dueLabel}
                           </p>
-                          {renderClinicInfo(row, index % 2 === 0 ? 'popover' : 'disclosure')}
+                          {renderClinicInfo(
+                            row,
+                            index % 2 === 0 ? 'popover' : 'icons',
+                          )}
                         </div>
                       </div>
                       <Button
@@ -416,11 +587,16 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                 Take action
               </span>
             </div>
-            <div className='divide-border divide-y'>
+            <div className='divide-border mt-3 divide-y'>
               {pagedOtherRows.map((row) => (
-                <div key={row.key} className='flex items-center justify-between gap-3 py-2.5 first:pt-0'>
+                <div
+                  key={row.key}
+                  className='flex items-center justify-between gap-3 py-2.5 first:pt-0'
+                >
                   <div className='flex min-w-0 items-center gap-3'>
-                    <div className='flex min-w-8 shrink-0 justify-start'>{renderRowAvatar(row, 'xs')}</div>
+                    <div className='flex min-w-8 shrink-0 justify-start'>
+                      {renderRowAvatar(row, 'xs')}
+                    </div>
                     <div className='min-w-0'>
                       <div className='flex flex-wrap items-center gap-2'>
                         <p className='text-sm font-medium'>{row.title}</p>
@@ -432,7 +608,13 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                       </p>
                     </div>
                   </div>
-                  <Button type='button' variant='link' size='sm' onClick={row.onAction} className='shrink-0'>
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    onClick={row.onAction}
+                    className='shrink-0'
+                  >
                     {row.actionLabel}
                   </Button>
                 </div>
