@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -7,6 +7,7 @@ import { shallowEqual } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 
+import { useAttentionFocus } from '../context/attentionFocusContext';
 import { createExpense, deleteExpense, updateExpense } from '../store/actions/expensesActions';
 import {
   cancelVisit,
@@ -39,6 +40,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
+  const { focusRequest } = useAttentionFocus();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
   const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
@@ -51,6 +53,23 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
   const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
+
+  useEffect(() => {
+    if (focusRequest?.kind !== 'visit-complete') {
+      return;
+    }
+
+    const target = visits.find((visit) => visit.id === focusRequest.visitId);
+
+    if (!target) {
+      return;
+    }
+
+    setSelectedVisit(target);
+    setModalMode('complete');
+    // Only re-run when a new request comes in, not on every `visits` change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest]);
 
   const closeModal = () => {
     setModalMode(null);
@@ -235,6 +254,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
         visits={visits}
         cats={cats}
         expenses={expenses}
+        activeVisitId={modalMode ? (selectedVisit?.id ?? null) : null}
         onEdit={(visit) => {
           setSelectedVisit(visit);
           setModalMode('edit');

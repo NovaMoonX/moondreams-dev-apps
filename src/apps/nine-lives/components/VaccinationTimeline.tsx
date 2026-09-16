@@ -1,26 +1,39 @@
-import { Button, Pagination } from '@moondreamsdev/dreamer-ui/components';
+import { Button, DropdownMenu, DropdownMenuFactories, Pagination } from '@moondreamsdev/dreamer-ui/components';
+import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatDateTime } from '@/utils/formatUtils';
 import type { Vaccination } from '@apps/nine-lives/types';
 import { usePagination } from '@apps/nine-lives/utils/usePagination';
 
 const PAGE_SIZE = 5;
+const { option } = DropdownMenuFactories;
 
 interface VaccinationTimelineProps {
   vaccinations: Vaccination[];
   title?: string;
   emptyLabel?: string;
+  /** The id of the record whose modal is currently open (from any trigger) — highlights that row. */
+  activeRecordId?: string | null;
+  /** Hides the action menu, for read-only contexts like a dose-history view. */
+  readOnly?: boolean;
   onEdit?: (vaccination: Vaccination) => void;
+  onLogDose?: (vaccination: Vaccination) => void;
+  onViewHistory?: (vaccination: Vaccination) => void;
 }
 
 function VaccinationTimeline({
   vaccinations,
   title = 'Vaccinations',
   emptyLabel = 'No vaccinations logged yet.',
+  activeRecordId = null,
+  readOnly = false,
   onEdit,
+  onLogDose,
+  onViewHistory,
 }: VaccinationTimelineProps) {
   const sortedVaccinations = [...vaccinations].sort(
-    (left, right) => right.administeredAt - left.administeredAt,
+    (left, right) => right.lastAdministeredAt - left.lastAdministeredAt,
   );
   const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(sortedVaccinations, PAGE_SIZE);
 
@@ -33,33 +46,75 @@ function VaccinationTimeline({
     );
   }
 
+  const menuItems = [
+    ...(onEdit ? [option({ label: 'Edit', value: 'edit' })] : []),
+    ...(onLogDose ? [option({ label: 'Mark administered today', value: 'log-dose' })] : []),
+    ...(onViewHistory ? [option({ label: 'View history', value: 'view-history' })] : []),
+  ];
+
   return (
     <div>
       <h3 className='text-sm font-medium'>{title}</h3>
       <div className='divide-border divide-y'>
-        {pagedItems.map((vaccination) => (
-          <div key={vaccination.id} className='flex items-start justify-between gap-3 py-2 first:pt-0'>
-            <div className='min-w-0'>
-              <strong className='text-sm'>{vaccination.name}</strong>
-              <div className='text-muted-foreground text-sm'>
-                Administered: {formatDateTime(vaccination.administeredAt)}
-              </div>
-              {vaccination.expiresAt ? (
+        {pagedItems.map((vaccination) => {
+          const latestDose = vaccination.history[0];
+
+          return (
+            <div
+              key={vaccination.id}
+              className={join(
+                'flex items-start justify-between gap-3 py-2 pl-3 first:pt-0 -ml-3',
+                vaccination.id === activeRecordId && 'border-l-2 border-l-primary bg-primary/5',
+              )}
+            >
+              <div className='min-w-0'>
+                <strong className='text-sm'>{vaccination.name}</strong>
                 <div className='text-muted-foreground text-sm'>
-                  Next due: {formatDateTime(vaccination.expiresAt)}
+                  Last administered: {formatDateTime(vaccination.lastAdministeredAt)}
                 </div>
-              ) : null}
-              {vaccination.lotNumber ? (
-                <div className='text-muted-foreground text-sm'>Lot: {vaccination.lotNumber}</div>
-              ) : null}
+                {vaccination.expiresAt ? (
+                  <div className='text-primary text-sm font-medium'>
+                    Next due: {formatDateTime(vaccination.expiresAt)}
+                  </div>
+                ) : null}
+                {latestDose?.lotNumber ? (
+                  <div className='text-muted-foreground text-sm'>Lot: {latestDose.lotNumber}</div>
+                ) : null}
+              </div>
+              {!readOnly && menuItems.length > 0 && (
+                <DropdownMenu
+                  items={menuItems}
+                  onItemSelect={(value) => {
+                    if (value === 'edit') {
+                      onEdit?.(vaccination);
+                    } else if (value === 'log-dose') {
+                      onLogDose?.(vaccination);
+                    } else if (value === 'view-history') {
+                      onViewHistory?.(vaccination);
+                    }
+                  }}
+                  placement='bottom'
+                  alignment='end'
+                  offset={8}
+                  trigger={
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className='h-8 w-8 p-0'
+                      aria-label={`Open actions for ${vaccination.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      <DotsVertical className='h-4 w-4' />
+                    </Button>
+                  }
+                />
+              )}
             </div>
-            {onEdit && (
-              <Button type='button' variant='link' size='sm' onClick={() => onEdit(vaccination)}>
-                Edit
-              </Button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {shouldPaginate && (

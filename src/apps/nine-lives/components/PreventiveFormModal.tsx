@@ -20,6 +20,7 @@ import {
 } from '@apps/nine-lives/constants/presetOptions';
 import { createCustomPreventiveProduct } from '@apps/nine-lives/store/actions/customPreventiveProductsActions';
 import { createCustomPreventiveType } from '@apps/nine-lives/store/actions/customPreventiveTypesActions';
+import type { PreventiveFormSubmission } from '@apps/nine-lives/store/actions/preventivesActions';
 import {
   selectClinicsByHousehold,
   selectCustomPreventiveProductsByHousehold,
@@ -27,7 +28,7 @@ import {
   selectDoctorsByHousehold,
   selectVisitsByHousehold,
 } from '@apps/nine-lives/store/selectors';
-import type { Preventive, PreventiveType } from '@apps/nine-lives/types';
+import type { PreventiveType } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 import CatPillSelector from './CatPillSelector';
@@ -62,6 +63,14 @@ interface PreventiveFormValues {
   additionalDetails: AdditionalDetailsValue;
 }
 
+/**
+ * `id` here is purely a UI signal for this form ("is a record's latest dose being edited in
+ * place?") — it does not have to be the record actually being submitted to. Callers logging a
+ * new dose against an existing record track that record's id themselves and omit `id` here so
+ * the form renders as a fresh "Add" (no Delete button, submit reads "Add preventive").
+ */
+export type PreventiveFormInitialValues = Partial<PreventiveFormSubmission>;
+
 interface PreventiveFormModalProps {
   isOpen: boolean;
   householdId: string;
@@ -69,17 +78,16 @@ interface PreventiveFormModalProps {
   catOptions: { label: string; value: string }[];
   /** Cats to pre-check when adding a new dose (ignored when editing an existing one). */
   defaultCatIds?: string[];
-  initialPreventive?: Preventive | null;
+  initialPreventive?: PreventiveFormInitialValues | null;
+  /** Title override — used for "Mark administered today", which prefills like an edit but isn't one. */
+  title?: string;
   isSubmitting?: boolean;
-  onSubmit: (
-    preventive: Partial<Preventive> &
-      Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'administeredAt' | 'catIds'>,
-  ) => Promise<void> | void;
+  onSubmit: (preventive: PreventiveFormSubmission) => Promise<void> | void;
   onDelete?: (preventiveId: string) => Promise<void> | void;
   onClose: () => void;
 }
 
-function getInitialProductChoice(preventive: Preventive | null | undefined): ProductChoice {
+function getInitialProductChoice(preventive: PreventiveFormInitialValues | null | undefined): ProductChoice {
   if (!preventive) {
     return { preset: PREVENTIVE_NAME_OPTIONS[0], customLabel: '' };
   }
@@ -95,7 +103,7 @@ function getInitialProductChoice(preventive: Preventive | null | undefined): Pro
   return { preset: NEW_PRODUCT_VALUE, customLabel: preventive.name };
 }
 
-function getInitialTypeChoice(preventive: Preventive | null | undefined): TypeChoice {
+function getInitialTypeChoice(preventive: PreventiveFormInitialValues | null | undefined): TypeChoice {
   if (!preventive) {
     return { preset: 'flea-tick', customLabel: '' };
   }
@@ -258,6 +266,7 @@ function PreventiveFormModal({
   catOptions,
   defaultCatIds = [],
   initialPreventive,
+  title,
   isSubmitting = false,
   onSubmit,
   onDelete,
@@ -471,7 +480,7 @@ function PreventiveFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Edit preventive dose' : 'Add preventive / medication'}
+      title={title ?? (isEditing ? 'Edit preventive dose' : 'Add preventive / medication')}
     >
       <Form
         key={formId}

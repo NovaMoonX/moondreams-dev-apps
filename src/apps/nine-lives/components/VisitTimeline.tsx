@@ -23,6 +23,8 @@ interface VisitTimelineProps {
   expenses?: Expense[];
   title?: string;
   emptyLabel?: string;
+  /** The id of the visit whose modal is currently open (from any trigger) — highlights that row. */
+  activeVisitId?: string | null;
   onEdit?: (visit: Visit) => void;
   onComplete?: (visit: Visit) => void;
   onReopen?: (visit: Visit) => void;
@@ -68,6 +70,7 @@ function VisitTimeline({
   expenses = [],
   title = 'Visits',
   emptyLabel = 'No visits scheduled yet.',
+  activeVisitId = null,
   onEdit,
   onComplete,
   onReopen,
@@ -227,7 +230,10 @@ function VisitTimeline({
             return (
               <div
                 key={visit.id}
-                className='flex items-start justify-between gap-3 py-3 first:pt-0'
+                className={join(
+                  'flex items-start justify-between gap-3 py-3 pl-3 first:pt-0 -ml-3',
+                  visit.id === activeVisitId && 'border-l-2 border-l-primary bg-primary/5',
+                )}
               >
                 <div className='min-w-0'>
                   <div className='flex flex-wrap items-center gap-2'>
