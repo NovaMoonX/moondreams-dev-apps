@@ -41,6 +41,7 @@ export function useMyPendingRequests(uid: string | null) {
         setLoadedUid(uid);
       },
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- uidKey is the uid content signal
   }, [uidKey]);
 
   return {

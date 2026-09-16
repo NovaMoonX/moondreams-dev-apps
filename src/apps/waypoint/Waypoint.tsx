@@ -44,8 +44,7 @@ function Waypoint() {
   const { requests: pendingRequests, loading: pendingRequestsLoading } =
     useMyPendingRequests(user?.uid ?? null);
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
-  const selectedTrip =
-    trips.find((trip) => trip.id === selectedTripId) ?? null;
+  const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
 
   useEffect(() => {
     if (!user?.uid) {
@@ -86,12 +85,12 @@ function Waypoint() {
     setInviteError(null);
 
     try {
-      await dispatch(
-        requestToJoinTrip({ uid: user.uid, inviteCode }),
-      ).unwrap();
+      await dispatch(requestToJoinTrip({ uid: user.uid, inviteCode })).unwrap();
       setInviteRequestSent(true);
     } catch (error) {
-      setInviteError(error instanceof Error ? error.message : 'Unable to request access.');
+      setInviteError(
+        error instanceof Error ? error.message : 'Unable to request access.',
+      );
     } finally {
       setIsInviteSubmitting(false);
     }
@@ -189,7 +188,8 @@ function Waypoint() {
             </p>
             {inviteRequestSent ? (
               <p className='text-muted-foreground mt-4 text-sm'>
-                Your request has been sent. You&apos;ll see it below while you wait.
+                Your request has been sent. You&apos;ll see it below while you
+                wait.
               </p>
             ) : (
               <Button

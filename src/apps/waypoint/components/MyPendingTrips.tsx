@@ -1,7 +1,5 @@
-import { getDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { db } from '@/lib/firebase/config';
 import { formatDateTime } from '@/utils';
@@ -25,15 +23,17 @@ function MyPendingTrips({ requests, loading }: MyPendingTripsProps) {
 
     Promise.all(
       requests.map(async (request) => {
-        const snapshot = await getDoc(
-          doc(db, 'apps', 'waypoint', 'trips', request.tripId),
+        const snapshot = await getDocs(
+          query(
+            collection(db, 'apps', 'waypoint', 'inviteCodes'),
+            where('tripId', '==', request.tripId),
+          ),
         );
+        const title = snapshot.docs[0]?.data().title;
 
         return [
           request.tripId,
-          snapshot.exists() && typeof snapshot.data().title === 'string'
-            ? snapshot.data().title
-            : `Trip ${request.tripId}`,
+          typeof title === 'string' ? title : `Trip ${request.tripId}`,
         ] as const;
       }),
     )
@@ -47,6 +47,7 @@ function MyPendingTrips({ requests, loading }: MyPendingTripsProps) {
     return () => {
       isActive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- requestKey is the request content signal
   }, [requestKey]);
 
   if (!loading && requests.length === 0) {
@@ -56,14 +57,20 @@ function MyPendingTrips({ requests, loading }: MyPendingTripsProps) {
   return (
     <section className='border-border bg-card rounded-lg border p-4'>
       <div className='mb-3 flex items-center justify-between gap-3'>
-        <h2 className='text-lg font-semibold'>Pending requests you&apos;ve sent</h2>
+        <h2 className='text-lg font-semibold'>
+          Pending requests you&apos;ve sent
+        </h2>
         {!loading && (
-          <span className='text-muted-foreground text-sm'>{requests.length}</span>
+          <span className='text-muted-foreground text-sm'>
+            {requests.length}
+          </span>
         )}
       </div>
 
       {loading ? (
-        <p className='text-muted-foreground text-sm'>Loading pending requests…</p>
+        <p className='text-muted-foreground text-sm'>
+          Loading pending requests…
+        </p>
       ) : (
         <ul className='space-y-3'>
           {requests.map((request) => (
@@ -79,9 +86,7 @@ function MyPendingTrips({ requests, loading }: MyPendingTripsProps) {
                   Requested {formatDateTime(request.requestedAt)}
                 </p>
               </div>
-              <Button type='button' variant='secondary' size='sm' disabled>
-                Pending
-              </Button>
+              <span className='text-muted-foreground text-sm'>Pending</span>
             </li>
           ))}
         </ul>

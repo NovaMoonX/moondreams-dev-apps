@@ -26,7 +26,10 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
               member?.displayName?.trim() || member?.email || 'Trip member';
 
             return (
-              <li key={memberId} className='flex items-center justify-between gap-3 py-3'>
+              <li
+                key={memberId}
+                className='flex items-center justify-between gap-3 py-3'
+              >
                 <div className='flex items-center gap-3'>
                   <UserAvatar user={member ?? null} size='md' />
                   <span className='font-medium'>{displayName}</span>

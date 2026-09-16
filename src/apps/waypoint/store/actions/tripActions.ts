@@ -12,7 +12,12 @@ import {
 import { upsertTrip } from '@apps/waypoint/store/slices/tripSlice';
 
 export const WAYPOINT_CODE_LENGTH = 6;
-const INVITE_CODE_COLLECTION = collection(db, 'apps', 'waypoint', 'inviteCodes');
+const INVITE_CODE_COLLECTION = collection(
+  db,
+  'apps',
+  'waypoint',
+  'inviteCodes',
+);
 
 interface CreateTripInput {
   uid: string;
@@ -55,7 +60,10 @@ export const createTrip = createAsyncThunk<
 
     const batch = writeBatch(db);
     batch.set(doc(db, ...TRIP_COLLECTION_PATH, tripId), trip);
-    batch.set(doc(INVITE_CODE_COLLECTION, inviteCode), { tripId });
+    batch.set(doc(INVITE_CODE_COLLECTION, inviteCode), {
+      tripId,
+      title: trip.title,
+    });
     await batch.commit();
     dispatch(upsertTrip(trip));
 

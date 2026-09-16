@@ -10,8 +10,12 @@ import {
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
-import type { TripJoinRequest, TripSpace, UserRole } from '@apps/waypoint/types';
-import { TRIP_COLLECTION_PATH } from '@apps/waypoint/store/actions/tripActions';
+import type {
+  TripJoinRequest,
+  TripSpace,
+  UserRole,
+} from '@apps/waypoint/types';
+import { TRIP_COLLECTION_PATH } from '@apps/waypoint/security';
 import {
   removePendingRequest,
   upsertPendingRequest,
@@ -66,7 +70,9 @@ export const requestToJoinTrip = createAsyncThunk<
     const requestRef = pendingRequestRef(uid, tripId);
     const existingRequest = await getDoc(requestRef);
     if (existingRequest.exists()) {
-      return rejectWithValue('You already have a pending request for this trip.');
+      return rejectWithValue(
+        'You already have a pending request for this trip.',
+      );
     }
 
     const request: TripJoinRequest = {

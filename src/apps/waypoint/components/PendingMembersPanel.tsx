@@ -7,6 +7,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { db } from '@/lib/firebase/config';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch } from '@/store';
+import UserAvatar from '@/ui/UserAvatar';
 import { formatDateTime, getErrorMessage } from '@/utils';
 import type { TripJoinRequest, UserRole } from '@apps/waypoint/types';
 import {
@@ -19,16 +20,18 @@ interface PendingMembersPanelProps {
 }
 
 const ROLE_OPTIONS = [
-  { label: 'Editor', value: 'EDITOR' },
-  { label: 'Commenter', value: 'COMMENTER' },
-  { label: 'Viewer', value: 'VIEWER' },
+  { text: 'Editor', value: 'EDITOR' },
+  { text: 'Commenter', value: 'COMMENTER' },
+  { text: 'Viewer', value: 'VIEWER' },
 ];
 
 function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [requests, setRequests] = useState<TripJoinRequest[]>([]);
-  const [selectedRoles, setSelectedRoles] = useState<Record<string, UserRole>>({});
+  const [selectedRoles, setSelectedRoles] = useState<Record<string, UserRole>>(
+    {},
+  );
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const userInfo = useUserInfo(requests.map((request) => request.uid));
@@ -104,12 +107,16 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
       <div className='flex items-center justify-between gap-3'>
         <h3 className='text-lg font-semibold'>Pending requests</h3>
         {!loading && (
-          <span className='text-muted-foreground text-sm'>{requests.length}</span>
+          <span className='text-muted-foreground text-sm'>
+            {requests.length}
+          </span>
         )}
       </div>
 
       {loading ? (
-        <p className='text-muted-foreground text-sm'>Loading pending requests…</p>
+        <p className='text-muted-foreground text-sm'>
+          Loading pending requests…
+        </p>
       ) : requests.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
           No one is waiting to join this trip.
@@ -127,11 +134,14 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                 key={requestId}
                 className='border-border flex flex-wrap items-center justify-between gap-3 rounded-md border p-3'
               >
-                <div>
-                  <p className='font-medium'>{displayName}</p>
-                  <p className='text-muted-foreground text-sm'>
-                    Requested {formatDateTime(request.requestedAt)}
-                  </p>
+                <div className='flex items-center gap-3'>
+                  <UserAvatar user={member ?? null} size='md' />
+                  <div>
+                    <p className='font-medium'>{displayName}</p>
+                    <p className='text-muted-foreground text-sm'>
+                      Requested {formatDateTime(request.requestedAt)}
+                    </p>
+                  </div>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
                   <Select

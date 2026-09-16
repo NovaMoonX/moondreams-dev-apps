@@ -967,23 +967,25 @@ service cloud.firestore {
     match /apps/waypoint/inviteCodes/{inviteCode} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-    && request.resource.data.keys().hasOnly(['tripId'])
-    && request.resource.data.tripId is string
-    && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
-    && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
-    && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
+        && request.resource.data.keys().hasOnly(['tripId', 'title'])
+        && request.resource.data.tripId is string
+        && isNonEmptyString(request.resource.data.title)
+        && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.title == request.resource.data.title
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
       allow update, delete: if false;
     }
 
     match /apps/waypoint/trips/{tripId} {
       function isTripMember() {
-    return request.auth != null
-      && request.auth.uid in resource.data.members;
+        return request.auth != null
+          && request.auth.uid in resource.data.members;
       }
 
       function isTripAdmin() {
-    return isTripMember()
-      && resource.data.members[request.auth.uid].role == 'ADMIN';
+        return isTripMember()
+          && resource.data.members[request.auth.uid].role == 'ADMIN';
       }
 
       function isTripFieldSetValid(data) {
