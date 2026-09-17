@@ -18,15 +18,13 @@ interface CatPillSelectorProps {
   singleSelect?: boolean;
   /** Smaller pills/avatars, for compact inline filters (e.g. under a stat card). */
   size?: 'md' | 'sm';
-  /** When provided, renders a leading pill that clears the selection back to "all". */
-  allLabel?: string;
 }
 
 /**
  * Replaces the long checkbox-list cat picker with a wrapping row of small
  * avatar + name pills that toggle selection on click.
  */
-function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSelect, size = 'md', allLabel }: CatPillSelectorProps) {
+function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSelect, size = 'md' }: CatPillSelectorProps) {
   const isCompact = size === 'sm';
 
   const toggleCat = (catId: string) => {
@@ -49,17 +47,6 @@ function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSel
 
   return (
     <div role='group' aria-label='Cats' className='flex flex-wrap justify-center gap-2'>
-      {allLabel && (
-        <button
-          type='button'
-          aria-pressed={value.length === 0}
-          disabled={disabled}
-          onClick={() => onValueChange([])}
-          className={pillClassName(value.length === 0)}
-        >
-          {allLabel}
-        </button>
-      )}
       {catOptions.map((cat) => {
         const isSelected = value.includes(cat.value);
 

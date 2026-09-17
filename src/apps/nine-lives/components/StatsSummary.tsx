@@ -51,7 +51,8 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   const [selectedLitterBoxId, setSelectedLitterBoxId] = useState<string | null>(null);
   const [recurringCatId, setRecurringCatId] = useState<string | null>(null);
   const [isViewingRecurringByPet, setIsViewingRecurringByPet] = useState(false);
-  const [lifetimeCatId, setLifetimeCatId] = useState<string>('all');
+  const [lifetimeCatId, setLifetimeCatId] = useState<string | null>(null);
+  const [isViewingLifetimeByPet, setIsViewingLifetimeByPet] = useState(false);
 
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
@@ -62,7 +63,7 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
     [householdId, recurringCatId],
   );
   const selectLifetimeExpenseTotals = useMemo(
-    () => makeSelectExpenseTotalsByHousehold(householdId, lifetimeCatId === 'all' ? null : lifetimeCatId),
+    () => makeSelectExpenseTotalsByHousehold(householdId, lifetimeCatId),
     [householdId, lifetimeCatId],
   );
   const recurringExpenseTotals = useAppSelector(selectRecurringExpenseTotals);
@@ -70,10 +71,6 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   const catOptions = useMemo(
     () => cats.map((cat) => ({ label: cat.name, value: cat.id, photoURL: cat.photoURL })),
     [cats],
-  );
-  const lifetimeCatOptions = useMemo(
-    () => [{ text: 'All cats', value: 'all' }, ...catOptions.map((cat) => ({ text: cat.label, value: cat.value }))],
-    [catOptions],
   );
   const completedVisitCount = visits.filter(
     (visit) => visit.status === 'completed',
@@ -141,14 +138,26 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
         {catOptions.length > 0 && (
           <div className='mt-3'>
             {isViewingRecurringByPet ? (
-              <CatPillSelector
-                catOptions={catOptions}
-                value={recurringCatId ? [recurringCatId] : []}
-                onValueChange={(value) => setRecurringCatId(value[0] ?? null)}
-                singleSelect
-                size='sm'
-                allLabel='All pets'
-              />
+              <div className='space-y-1'>
+                <CatPillSelector
+                  catOptions={catOptions}
+                  value={recurringCatId ? [recurringCatId] : []}
+                  onValueChange={(value) => setRecurringCatId(value[0] ?? null)}
+                  singleSelect
+                  size='sm'
+                />
+                {recurringCatId && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='text-muted-foreground hover:text-foreground'
+                    onClick={() => setRecurringCatId(null)}
+                  >
+                    All pets
+                  </Button>
+                )}
+              </div>
             ) : (
               <Button
                 type='button'
@@ -170,8 +179,39 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
         </div>
         <p className='mt-2 text-2xl font-semibold'>{currencyFormatter.format(lifetimeExpenseTotals.lifetime)}</p>
         {catOptions.length > 0 && (
-          <div className='mt-3 max-w-40'>
-            <Select options={lifetimeCatOptions} value={lifetimeCatId} onChange={setLifetimeCatId} size='sm' />
+          <div className='mt-3'>
+            {isViewingLifetimeByPet ? (
+              <div className='space-y-1'>
+                <CatPillSelector
+                  catOptions={catOptions}
+                  value={lifetimeCatId ? [lifetimeCatId] : []}
+                  onValueChange={(value) => setLifetimeCatId(value[0] ?? null)}
+                  singleSelect
+                  size='sm'
+                />
+                {lifetimeCatId && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='text-muted-foreground hover:text-foreground'
+                    onClick={() => setLifetimeCatId(null)}
+                  >
+                    All pets
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='text-muted-foreground hover:text-foreground'
+                onClick={() => setIsViewingLifetimeByPet(true)}
+              >
+                View by pet
+              </Button>
+            )}
           </div>
         )}
       </div>
