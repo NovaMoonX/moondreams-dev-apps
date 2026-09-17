@@ -1278,12 +1278,24 @@ function VisitFormModal({
                 <>
                   {isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />}
                   {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
-                    <Button type='button' variant='secondary' onClick={() => void onCancelVisit()} disabled={isSubmitting}>
+                    <Button
+                      type='button'
+                      variant='link'
+                      className='text-muted-foreground hover:text-foreground'
+                      onClick={() => void onCancelVisit()}
+                      disabled={isSubmitting}
+                    >
                       Cancel visit
                     </Button>
                   )}
                   {isEditing && onReopenVisit && initialVisit?.status === 'cancelled' && (
-                    <Button type='button' variant='secondary' onClick={() => void onReopenVisit()} disabled={isSubmitting}>
+                    <Button
+                      type='button'
+                      variant='link'
+                      className='text-muted-foreground hover:text-foreground'
+                      onClick={() => void onReopenVisit()}
+                      disabled={isSubmitting}
+                    >
                       Reopen visit
                     </Button>
                   )}
