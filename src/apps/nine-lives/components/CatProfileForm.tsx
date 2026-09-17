@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories, Input, Label, Select, Tabs, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox, Form, FormFactories, Input, Label, Select, Tabs, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
 import { fromDateInputValue, toDateInputValue } from '@/utils';
 import {
@@ -205,10 +205,9 @@ function DateOfBirthGroupField({
         />
       </div>
       <label className='flex items-center gap-2 text-sm'>
-        <input
-          type='checkbox'
+        <Checkbox
           checked={value.isDateOfBirthEstimated}
-          onChange={(event) => onValueChange({ ...value, isDateOfBirthEstimated: event.target.checked })}
+          onCheckedChange={(checked) => onValueChange({ ...value, isDateOfBirthEstimated: checked })}
           disabled={disabled}
         />
         Date of birth is estimated
@@ -229,10 +228,9 @@ function SpayNeuterGroupField({
   return (
     <div className='space-y-2'>
       <label className='flex items-center gap-2 text-sm'>
-        <input
-          type='checkbox'
+        <Checkbox
           checked={value.isSpayedNeutered}
-          onChange={(event) => onValueChange({ ...value, isSpayedNeutered: event.target.checked })}
+          onCheckedChange={(checked) => onValueChange({ ...value, isSpayedNeutered: checked })}
           disabled={disabled}
         />
         Spayed / neutered
