@@ -10,6 +10,7 @@ import { selectVisitsByHousehold } from '@apps/nine-lives/store/selectors';
 import type { WeightEntry } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
+import DeleteIconButton from './DeleteIconButton';
 import ModalFooterActions from './ModalFooterActions';
 
 interface WeightEntryFormValues {
@@ -167,12 +168,7 @@ function WeightEntryFormFields({
       submitButton={
         <ModalFooterActions
           leftActions={
-            isEditing &&
-            onDelete && (
-              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                Delete
-              </Button>
-            )
+            isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
           }
           rightActions={
             <>

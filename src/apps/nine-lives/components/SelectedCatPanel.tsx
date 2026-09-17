@@ -80,6 +80,11 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
                 </a>
               ))}
             </div>
+            {(selectedCat.coatColors?.length || selectedCat.personalityTraits?.length) && (
+              <p className='text-muted-foreground mt-1 text-sm'>
+                {[...(selectedCat.coatColors ?? []), ...(selectedCat.personalityTraits ?? [])].join(' · ')}
+              </p>
+            )}
           </div>
         </div>
         <Button type='button' variant='secondary' size='sm' onClick={onEditDetails}>

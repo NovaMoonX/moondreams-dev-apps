@@ -13,6 +13,7 @@ import type { CatCondition, ConditionCategory, LibraryCondition } from '../types
 import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
 import { getVisitOptions } from '../utils/visitOptions';
 import ConditionLibraryBrowser from './ConditionLibraryBrowser';
+import DeleteIconButton from './DeleteIconButton';
 import LinkedVisitsField from './LinkedVisitsField';
 import ModalFooterActions from './ModalFooterActions';
 
@@ -360,12 +361,7 @@ function CatConditionFormFields({
           submitButton={
             <ModalFooterActions
               leftActions={
-                isEditing &&
-                onDelete && (
-                  <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                    Delete
-                  </Button>
-                )
+                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
               }
               rightActions={
                 <>

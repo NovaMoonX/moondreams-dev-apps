@@ -31,6 +31,7 @@ import type {
 } from '../types';
 import { getVisitOptions } from '../utils/visitOptions';
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import ModalFooterActions from './ModalFooterActions';
 
 const { custom, input, select } = FormFactories;
@@ -462,12 +463,7 @@ function HealthRecordUploadModal({
         submitButton={
           <ModalFooterActions
             leftActions={
-              isEditing &&
-              onDelete && (
-                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                  Delete
-                </Button>
-              )
+              isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>

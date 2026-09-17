@@ -13,6 +13,7 @@ import { createCustomSymptomQuickTag } from '../store/actions/customSymptomQuick
 import { selectCustomSymptomQuickTagsByHousehold, selectVisitsByHousehold } from '../store/selectors';
 import type { CatCondition, Symptom, SymptomQuickTag, SymptomSeverity } from '../types';
 import { getVisitOptions } from '../utils/visitOptions';
+import DeleteIconButton from './DeleteIconButton';
 import LinkedVisitsField from './LinkedVisitsField';
 import ModalFooterActions from './ModalFooterActions';
 
@@ -342,12 +343,7 @@ function SymptomFormFields({
       submitButton={
         <ModalFooterActions
           leftActions={
-            isEditing &&
-            onDelete && (
-              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                Delete
-              </Button>
-            )
+            isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
           }
           rightActions={
             <>

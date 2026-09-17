@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 
 import type { VetClinic } from '@apps/nine-lives/types';
 
+import DeleteIconButton from './DeleteIconButton';
 import ModalFooterActions from './ModalFooterActions';
 
 interface VetClinicFormValues {
@@ -156,11 +157,7 @@ function VetClinicFormModal({
           <ModalFooterActions
             leftActions={
               isEditing &&
-              onDelete && (
-                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                  Delete clinic
-                </Button>
-              )
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} label='Delete clinic' />
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>

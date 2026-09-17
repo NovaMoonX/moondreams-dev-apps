@@ -5,6 +5,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import type { Doctor } from '@apps/nine-lives/types';
 
+import DeleteIconButton from './DeleteIconButton';
 import ModalFooterActions from './ModalFooterActions';
 
 interface DoctorFormValues {
@@ -110,11 +111,7 @@ function DoctorFormModal({
           <ModalFooterActions
             leftActions={
               isEditing &&
-              onDelete && (
-                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                  Delete doctor
-                </Button>
-              )
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} label='Delete doctor' />
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>

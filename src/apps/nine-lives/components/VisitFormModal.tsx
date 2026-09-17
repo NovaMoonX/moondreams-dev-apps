@@ -43,6 +43,7 @@ import type { VisitOutcome } from '../store/actions/visitsActions';
 import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
 import { getVisitOptions } from '../utils/visitOptions';
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseLineItemsField from './ExpenseLineItemsField';
 import ModalFooterActions from './ModalFooterActions';
@@ -1275,11 +1276,7 @@ function VisitFormModal({
             <ModalFooterActions
               leftActions={
                 <>
-                  {isEditing && onDelete && (
-                    <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                      Delete
-                    </Button>
-                  )}
+                  {isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />}
                   {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
                     <Button type='button' variant='secondary' onClick={() => void onCancelVisit()} disabled={isSubmitting}>
                       Cancel visit

@@ -32,6 +32,7 @@ import type { PreventiveType } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
 import ModalFooterActions from './ModalFooterActions';
 
@@ -515,12 +516,7 @@ function PreventiveFormModal({
         submitButton={
           <ModalFooterActions
             leftActions={
-              isEditing &&
-              onDelete && (
-                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                  Delete
-                </Button>
-              )
+              isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>

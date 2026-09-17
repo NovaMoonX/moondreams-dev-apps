@@ -14,6 +14,7 @@ import {
 } from '@apps/nine-lives/store/selectors';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
+import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
 import LinkedVisitsField from './LinkedVisitsField';
 import ModalFooterActions from './ModalFooterActions';
@@ -280,12 +281,7 @@ function VaccinationFormFields({
       submitButton={
         <ModalFooterActions
           leftActions={
-            isEditing &&
-            onDelete && (
-              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
-                Delete
-              </Button>
-            )
+            isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
           }
           rightActions={
             <>
