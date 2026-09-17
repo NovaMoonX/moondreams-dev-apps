@@ -656,9 +656,9 @@ Build the reminder system as shared infrastructure any mini-app can call — del
 
 #### Success Criteria
 
-- [ ] A manually-created `Reminder` with `scheduledFor` in the past triggers a push notification within one scheduled run.
-- [ ] The `reminders` slice reflects only reminders where the signed-in user is in `targetUids`.
-- [ ] `scheduleReminder()` is callable without any Nine Lives–specific imports.
+- [x] A manually-created `Reminder` with `scheduledFor` in the past triggers a push notification within one scheduled run.
+- [x] The `reminders` slice reflects only reminders where the signed-in user is in `targetUids`.
+- [x] `scheduleReminder()` is callable without any Nine Lives–specific imports.
 
 ### Issue 18: Wire Nine Lives to the Reminder System
 
