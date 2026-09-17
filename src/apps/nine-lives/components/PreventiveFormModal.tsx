@@ -32,7 +32,9 @@ import type { PreventiveType } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
+import ModalFooterActions from './ModalFooterActions';
 
 const NEW_PRODUCT_VALUE = '__new_preventive_product__';
 const NEW_TYPE_VALUE = '__new_preventive_type__';
@@ -288,6 +290,9 @@ function PreventiveFormModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isEditing = Boolean(initialPreventive?.id);
   const formId = initialPreventive?.id ?? 'new-nine-lives-preventive';
+  const [isValid, setIsValid] = useState(
+    Boolean((initialPreventive?.catIds?.length ?? defaultCatIds.length) > 0 && initialPreventive?.administeredAt),
+  );
 
   const clinicOptions = useMemo(
     () => [
@@ -480,7 +485,7 @@ function PreventiveFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title ?? (isEditing ? 'Edit preventive dose' : 'Add preventive / medication')}
+      title={title ?? 'Preventive / medication'}
     >
       <Form
         key={formId}
@@ -501,27 +506,24 @@ function PreventiveFormModal({
         }}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => {
+          const values = data as PreventiveFormValues;
+          setIsValid(Boolean(values.catIds.length > 0 && values.administeredAt));
+        }}
         onSubmit={(data) => {
           void handleSubmit(data as PreventiveFormValues);
         }}
         submitButton={
-          <div className='flex items-center justify-between gap-2'>
-            {isEditing && onDelete ? (
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => void handleDelete()}
-                disabled={isSubmitting}
-              >
-                Delete
+          <ModalFooterActions
+            leftActions={
+              isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
+            rightActions={
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
-            ) : (
-              <span />
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save preventive' : 'Add preventive'}
-            </Button>
-          </div>
+            }
+          />
         }
       />
       {submitError && <p className='mt-3 text-sm text-red-500'>{submitError}</p>}

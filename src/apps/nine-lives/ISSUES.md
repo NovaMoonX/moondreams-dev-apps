@@ -591,7 +591,7 @@ Read-only browsing UI for the glossary and resource library seeded in Issue 13, 
 
 #### Success Criteria
 
-- [ ] Personality traits can be selected from presets or entered as custom tags, and persist correctly.
+- [x] Personality traits can be selected from presets or entered as custom tags, and persist correctly.
 
 ### Issue 16: Cat Diet Tracking
 

@@ -13,7 +13,9 @@ import type { CatCondition, ConditionCategory, LibraryCondition } from '../types
 import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
 import { getVisitOptions } from '../utils/visitOptions';
 import ConditionLibraryBrowser from './ConditionLibraryBrowser';
+import DeleteIconButton from './DeleteIconButton';
 import LinkedVisitsField from './LinkedVisitsField';
+import ModalFooterActions from './ModalFooterActions';
 
 interface CatConditionFormValues {
   name: string;
@@ -76,6 +78,9 @@ function CatConditionFormFields({
   );
   const [notesOpen, setNotesOpen] = useState(Boolean(initialCondition?.description));
   const [isResolved, setIsResolved] = useState(Boolean(initialCondition?.resolvedAt));
+  const [isValid, setIsValid] = useState(
+    Boolean((!showCatField || catId) && initialCondition?.occurredAt),
+  );
 
   const hasChosenCondition = mode === 'custom' || Boolean(selectedLibraryCondition);
 
@@ -339,41 +344,38 @@ function CatConditionFormFields({
           columns={1}
           spacing='normal'
           onDataChange={(data) => {
-            const nextIsResolved = Boolean((data as CatConditionFormValues).isResolved);
+            const values = data as CatConditionFormValues;
+            const nextIsResolved = Boolean(values.isResolved);
 
             if (nextIsResolved !== isResolved) {
               setIsResolved(nextIsResolved);
               setStatus(nextIsResolved ? 'resolved' : 'active');
             }
+
+            const hasName = mode === 'custom' ? Boolean(values.name?.trim()) : Boolean(selectedLibraryCondition);
+            setIsValid(Boolean(hasName && (!showCatField || catId) && values.occurredAt));
           }}
           onSubmit={(data) => {
             void handleSubmit(data as CatConditionFormValues);
           }}
           submitButton={
-            <div className='flex items-center justify-between gap-2'>
-              <div className='flex items-center gap-2'>
-                {isEditing && onDelete && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={() => void handleDelete()}
-                    disabled={isSubmitting}
-                  >
-                    Delete
+            <ModalFooterActions
+              leftActions={
+                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+              }
+              rightActions={
+                <>
+                  {onCancel && (
+                    <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                  )}
+                  <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                    {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
                   </Button>
-                )}
-              </div>
-              <div className='flex items-center gap-2'>
-                {onCancel && (
-                  <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                    Cancel
-                  </Button>
-                )}
-                <Button type='submit' loading={isSubmitting}>
-                  {isSubmitting ? 'Saving…' : isEditing ? 'Save condition' : 'Add condition'}
-                </Button>
-              </div>
-            </div>
+                </>
+              }
+            />
           }
         />
       )}

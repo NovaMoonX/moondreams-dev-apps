@@ -85,6 +85,16 @@ function VetClinicRow({
           {clinic.address && (
             <p className='text-muted-foreground text-sm'>{clinic.address}</p>
           )}
+          {clinic.website && (
+            <a
+              href={clinic.website}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-primary text-sm hover:underline'
+            >
+              {clinic.website}
+            </a>
+          )}
         </div>
 
         <DropdownMenu

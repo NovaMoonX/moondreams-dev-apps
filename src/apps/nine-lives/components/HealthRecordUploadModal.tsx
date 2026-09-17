@@ -13,6 +13,7 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 
 import {
   createCustomHealthRecordType,
@@ -30,6 +31,8 @@ import type {
 } from '../types';
 import { getVisitOptions } from '../utils/visitOptions';
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
+import ModalFooterActions from './ModalFooterActions';
 
 const { custom, input, select } = FormFactories;
 
@@ -235,6 +238,9 @@ function HealthRecordUploadModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [labelOpen, setLabelOpen] = useState(Boolean(initialRecord?.label));
   const isEditing = Boolean(initialRecord?.id);
+  const [isValid, setIsValid] = useState(
+    Boolean((initialRecord?.catIds?.length ?? 0) > 0 && (isEditing || initialRecord?.fileName)),
+  );
   const formId = initialRecord?.id ?? 'new-nine-lives-health-record';
 
   const visitOptions = useMemo(
@@ -399,13 +405,7 @@ function HealthRecordUploadModal({
 
       onClose();
     } catch (error) {
-      setSubmitError(
-        typeof error === 'string'
-          ? error
-          : error instanceof Error
-            ? error.message
-            : 'Unable to save health record.',
-      );
+      setSubmitError(getStorageErrorMessage(error, getErrorMessage(error, 'Unable to save health record.')));
     } finally {
       setIsSubmitting(false);
     }
@@ -436,7 +436,7 @@ function HealthRecordUploadModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Edit health record' : 'Add health record'}
+      title='Health record'
     >
       <Form
         key={formId}
@@ -452,27 +452,25 @@ function HealthRecordUploadModal({
         }}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => {
+          const values = data as HealthRecordFormValues;
+          const catIds = values.catIds.length > 0 ? values.catIds : (initialRecord?.catIds ?? []);
+          setIsValid(Boolean(catIds.length > 0 && (isEditing || values.file instanceof File)));
+        }}
         onSubmit={(data) => {
           void handleSubmit(data as HealthRecordFormValues);
         }}
         submitButton={
-          <div className='flex items-center justify-between gap-2'>
-            {isEditing && onDelete ? (
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => void handleDelete()}
-                disabled={isSubmitting}
-              >
-                Delete
+          <ModalFooterActions
+            leftActions={
+              isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
+            rightActions={
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Upload'}
               </Button>
-            ) : (
-              <span />
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save record' : 'Upload record'}
-            </Button>
-          </div>
+            }
+          />
         }
       />
       {submitError && <p className='mt-3 text-sm text-red-500'>{submitError}</p>}

@@ -24,6 +24,9 @@ export function getClinicContactMenuItems(clinic: VetClinic) {
     ...(clinic.address
       ? [option({ label: 'Copy address', value: 'copy-address', description: 'Copy the clinic address.' })]
       : []),
+    ...(clinic.website
+      ? [option({ label: 'Visit website', value: 'visit-website', description: clinic.website })]
+      : []),
   ];
 }
 
@@ -64,6 +67,11 @@ export async function handleClinicContactAction(
     if (copied) {
       addToast({ title: 'Address copied', description: 'Clinic address copied to your clipboard.' });
     }
+    return true;
+  }
+
+  if (value === 'visit-website' && clinic.website) {
+    window.open(clinic.website, '_blank', 'noopener,noreferrer');
     return true;
   }
 

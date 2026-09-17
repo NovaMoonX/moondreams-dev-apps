@@ -19,6 +19,7 @@ import HealthRecordsSection from './components/HealthRecordsSection';
 import HouseholdSetupModal from './components/HouseholdSetupModal';
 import HouseholdSwitcher from './components/HouseholdSwitcher';
 import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
+import CatAnniversaryBanners from './components/CatAnniversaryBanners';
 import StatsSummary from './components/StatsSummary';
 import VisitsSection from './components/VisitsSection';
 import { AttentionFocusContext, type AttentionFocusRequest } from './context/attentionFocusContext';
@@ -179,6 +180,7 @@ function NineLives() {
             value={{ focusRequest, requestFocus: setFocusRequest }}
           >
             <AttentionSection householdId={selectedHousehold.id} />
+            <CatAnniversaryBanners householdId={selectedHousehold.id} />
             <StatsSummary householdId={selectedHousehold.id} />
             <CatsSection householdId={selectedHousehold.id} />
             <VisitsSection householdId={selectedHousehold.id} />

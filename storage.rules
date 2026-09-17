@@ -11,9 +11,10 @@ service firebase.storage {
       }
 
       allow read: if isHouseholdMember();
-      allow write: if isHouseholdMember()
+      allow create, update: if isHouseholdMember()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if isHouseholdMember();
     }
 
     match /nine-lives/households/{householdId}/health-records/{recordId} {

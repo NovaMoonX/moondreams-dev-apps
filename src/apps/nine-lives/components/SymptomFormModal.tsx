@@ -29,14 +29,8 @@ function SymptomFormModal({
   onDelete,
   onClose,
 }: SymptomFormModalProps) {
-  const isEditing = Boolean(initialSymptom?.id);
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEditing ? 'Edit symptom' : `Add symptom${catName ? ` for ${catName}` : ''}`}
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={`Symptom${catName ? ` for ${catName}` : ''}`}>
       <SymptomFormFields
         householdId={householdId}
         conditions={conditions}

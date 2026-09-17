@@ -1,6 +1,10 @@
+import { useState } from 'react';
+
 import {
   Avatar,
+  Badge,
   Button,
+  Select,
   Tabs,
   TabsContent,
   TabsList,
@@ -23,7 +27,32 @@ interface SelectedCatPanelProps {
   onEditDetails: () => void;
 }
 
+const SEX_LABELS: Record<Cat['sex'], string> = {
+  male: 'Male',
+  female: 'Female',
+  unknown: 'Sex unknown',
+};
+
+/** Sentence-cases a group of tags: first item capitalized, the rest lowercase, joined with commas. */
+function formatIdentityGroup(items: string[]): string {
+  return items
+    .map((item, index) =>
+      index === 0 ? item.charAt(0).toUpperCase() + item.slice(1).toLowerCase() : item.toLowerCase(),
+    )
+    .join(', ');
+}
+
+const sectionOptions = [
+  { text: 'Vaccinations', value: 'vaccinations' },
+  { text: 'Preventives & Meds', value: 'preventives' },
+  { text: 'Weight history', value: 'weight' },
+  { text: 'Conditions', value: 'conditions' },
+  { text: 'Symptoms', value: 'symptoms' },
+];
+
 function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: SelectedCatPanelProps) {
+  const [activeSection, setActiveSection] = useState('vaccinations');
+
   return (
     <div className='mt-6 rounded-lg border border-border bg-background p-4'>
       <div className='mb-4 flex items-center justify-between gap-2'>
@@ -35,7 +64,42 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
             size='lg'
             shape='circle'
           />
-          <h3 className='text-lg font-semibold'>{selectedCat.name}</h3>
+          <div>
+            <h3 className='text-lg font-semibold'>{selectedCat.name}</h3>
+            <div className='flex flex-wrap items-center gap-1.5'>
+              <Badge variant='muted' outline>
+                {SEX_LABELS[selectedCat.sex]}
+              </Badge>
+              <Badge variant='muted' outline>
+                {selectedCat.isSpayedNeutered ? 'Spayed / neutered' : 'Not spayed / neutered'}
+              </Badge>
+              {selectedCat.adoptionProfileURL && (
+                <a href={selectedCat.adoptionProfileURL} target='_blank' rel='noopener noreferrer' className='text-primary text-xs hover:underline'>
+                  Adoption profile
+                </a>
+              )}
+              {selectedCat.microchipServiceURL && (
+                <a href={selectedCat.microchipServiceURL} target='_blank' rel='noopener noreferrer' className='text-primary text-xs hover:underline'>
+                  Microchip service
+                </a>
+              )}
+              {selectedCat.otherLinks?.map((link) => (
+                <a key={link.id} href={link.url} target='_blank' rel='noopener noreferrer' className='text-primary text-xs hover:underline'>
+                  {link.label}
+                </a>
+              ))}
+            </div>
+            {(selectedCat.coatColors?.length || selectedCat.personalityTraits?.length) && (
+              <p className='text-muted-foreground mt-1 text-sm'>
+                {[
+                  selectedCat.coatColors?.length ? formatIdentityGroup(selectedCat.coatColors) : null,
+                  selectedCat.personalityTraits?.length ? formatIdentityGroup(selectedCat.personalityTraits) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
+          </div>
         </div>
         <Button type='button' variant='secondary' size='sm' onClick={onEditDetails}>
           <span className='hidden sm:inline'>Edit details</span>
@@ -43,8 +107,12 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
         </Button>
       </div>
 
-      <Tabs defaultValue='vaccinations' tabsWidth='full' variant='pills'>
-        <TabsList>
+      <div className='md:hidden'>
+        <Select options={sectionOptions} value={activeSection} onChange={setActiveSection} />
+      </div>
+
+      <Tabs value={activeSection} onValueChange={setActiveSection} tabsWidth='full' variant='pills'>
+        <TabsList className='hidden md:flex'>
           <TabsTrigger value='vaccinations'>Vaccinations</TabsTrigger>
           <TabsTrigger value='preventives'>Preventives &amp; Meds</TabsTrigger>
           <TabsTrigger value='weight'>Weight history</TabsTrigger>

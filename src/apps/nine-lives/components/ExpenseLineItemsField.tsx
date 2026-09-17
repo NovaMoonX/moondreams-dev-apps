@@ -2,6 +2,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
+import CategoryField from './CategoryField';
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
@@ -14,10 +15,12 @@ interface ExpenseLineItemsFieldProps {
   value: LineItemValue[];
   onValueChange: (value: LineItemValue[]) => void;
   disabled?: boolean;
+  /** When false, items share one category (set elsewhere) and the per-item category picker is hidden. */
+  showCategoryPerItem?: boolean;
 }
 
 /** Free-entry line-item rows (text + amount), each with its own remove (X) button and a running total. */
-function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineItemsFieldProps) {
+function ExpenseLineItemsField({ value, onValueChange, disabled, showCategoryPerItem = true }: ExpenseLineItemsFieldProps) {
   const updateItem = (id: string, changes: Partial<LineItemValue>) => {
     onValueChange(value.map((item) => (item.id === id ? { ...item, ...changes } : item)));
   };
@@ -31,36 +34,45 @@ function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineIt
   return (
     <div className='space-y-2'>
       {value.map((item) => (
-        <div key={item.id} className='flex items-center gap-2'>
-          <div className='flex-1'>
-            <Input
-              value={item.label}
-              onChange={(event) => updateItem(item.id, { label: event.target.value })}
-              placeholder='e.g. Exam fee'
-              variant='outline'
+        <div key={item.id} className={showCategoryPerItem ? 'space-y-2 rounded-md border border-border p-2' : ''}>
+          <div className='flex items-center gap-2'>
+            <div className='flex-1'>
+              <Input
+                value={item.label}
+                onChange={(event) => updateItem(item.id, { label: event.target.value })}
+                placeholder='e.g. Exam fee'
+                variant='outline'
+                disabled={disabled}
+              />
+            </div>
+            <div className='w-28 shrink-0'>
+              <Input
+                value={item.amount}
+                onChange={(event) => updateItem(item.id, { amount: event.target.value })}
+                placeholder='72.00'
+                type='number'
+                variant='outline'
+                disabled={disabled}
+              />
+            </div>
+            {value.length > 1 && (
+              <button
+                type='button'
+                onClick={() => removeItem(item.id)}
+                disabled={disabled}
+                aria-label='Remove line item'
+                className='text-muted-foreground hover:text-destructive shrink-0 disabled:pointer-events-none disabled:opacity-50'
+              >
+                <X className='h-4 w-4' />
+              </button>
+            )}
+          </div>
+          {showCategoryPerItem && (
+            <CategoryField
+              value={item.category}
+              onValueChange={(category) => updateItem(item.id, { category })}
               disabled={disabled}
             />
-          </div>
-          <div className='w-28 shrink-0'>
-            <Input
-              value={item.amount}
-              onChange={(event) => updateItem(item.id, { amount: event.target.value })}
-              placeholder='72.00'
-              type='number'
-              variant='outline'
-              disabled={disabled}
-            />
-          </div>
-          {value.length > 1 && (
-            <button
-              type='button'
-              onClick={() => removeItem(item.id)}
-              disabled={disabled}
-              aria-label='Remove line item'
-              className='text-muted-foreground hover:text-destructive shrink-0 disabled:pointer-events-none disabled:opacity-50'
-            >
-              <X className='h-4 w-4' />
-            </button>
           )}
         </div>
       ))}

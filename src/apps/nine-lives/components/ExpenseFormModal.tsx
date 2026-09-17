@@ -7,17 +7,19 @@ import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
 import { selectVisitsByHousehold } from '../store/selectors';
-import type { Expense, ExpenseCategory, ExpenseLineItem } from '../types';
+import type { Expense, ExpenseLineItem } from '../types';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
   calculateExpenseItemsTotal,
-  getExpenseCategoryLabel,
   getRecurringCycleCount,
 } from '../utils/budgetCalculators';
 import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
 import { getVisitOptions } from '../utils/visitOptions';
+import CategoryField from './CategoryField';
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import ExpenseLineItemsField from './ExpenseLineItemsField';
+import ModalFooterActions from './ModalFooterActions';
 
 type ExpenseMode = 'simple' | 'itemized';
 
@@ -67,9 +69,16 @@ function getInitialLineItems(expense: Partial<Expense> | null | undefined): Line
 
   return expense.items.map((item) => ({
     id: item.id,
+    category: item.category,
     label: item.label ?? '',
     amount: String(item.amount),
   }));
+}
+
+/** Editing an expense whose items already carry different categories defaults to the per-item view; otherwise items share one category by default. */
+function getInitialUseDifferentCategories(expense: Partial<Expense> | null | undefined): boolean {
+  const categories = new Set((expense?.items ?? []).map((item) => item.category));
+  return categories.size > 1;
 }
 
 function ExpenseFormModal({
@@ -102,17 +111,11 @@ function ExpenseFormModal({
   const [labelOpen, setLabelOpen] = useState(Boolean(initialExpense?.label));
   const [notesOpen, setNotesOpen] = useState(Boolean(initialExpense?.notes));
   const [mode, setMode] = useState<ExpenseMode>(() => getInitialMode(initialExpense));
+  const [useDifferentCategories, setUseDifferentCategories] = useState(() =>
+    getInitialUseDifferentCategories(initialExpense),
+  );
   const [isValid, setIsValid] = useState(
     Boolean(initialExpense?.catIds?.length && initialExpense?.items?.length && initialExpense?.incurredAt),
-  );
-
-  const categoryOptions = useMemo(
-    () =>
-      DEFAULT_EXPENSE_CATEGORIES.map((category) => ({
-        text: getExpenseCategoryLabel(category),
-        value: category,
-      })),
-    [],
   );
 
   const visitOptions = useMemo(
@@ -162,10 +165,16 @@ function ExpenseFormModal({
       }),
       ...(mode === 'simple'
         ? [
-            select({
+            custom({
               name: 'simpleCategory',
               label: 'Category',
-              options: categoryOptions.map((option) => ({ label: option.text, value: option.value })),
+              renderComponent: (props) => (
+                <CategoryField
+                  value={props.value as string}
+                  onValueChange={props.onValueChange}
+                  disabled={props.disabled}
+                />
+              ),
             }),
             input({
               name: 'simpleLabel',
@@ -182,6 +191,38 @@ function ExpenseFormModal({
             }),
           ]
         : [
+            ...(!useDifferentCategories
+              ? [
+                  custom({
+                    name: 'simpleCategory',
+                    label: 'Category',
+                    renderComponent: (props) => (
+                      <CategoryField
+                        value={props.value as string}
+                        onValueChange={props.onValueChange}
+                        disabled={props.disabled}
+                      />
+                    ),
+                  }),
+                ]
+              : []),
+            custom({
+              name: '_toggleItemCategories',
+              label: '',
+              renderComponent: () => (
+                <div className={useDifferentCategories ? '' : '-mt-3 flex justify-end'}>
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className={mutedLinkClassName}
+                    onClick={() => setUseDifferentCategories((current) => !current)}
+                  >
+                    {useDifferentCategories ? 'Use one category for all items' : 'Use different categories per item'}
+                  </Button>
+                </div>
+              ),
+            }),
             custom({
               name: 'items',
               label: 'Line items',
@@ -190,6 +231,7 @@ function ExpenseFormModal({
                   value={props.value as LineItemValue[]}
                   onValueChange={props.onValueChange}
                   disabled={props.disabled}
+                  showCategoryPerItem={useDifferentCategories}
                 />
               ),
               colSpan: 'full',
@@ -294,7 +336,6 @@ function ExpenseFormModal({
     ],
     [
       catOptions,
-      categoryOptions,
       visitOptions,
       recurrenceOptions,
       isRecurring,
@@ -304,6 +345,7 @@ function ExpenseFormModal({
       labelOpen,
       notesOpen,
       mode,
+      useDifferentCategories,
     ],
   );
 
@@ -337,7 +379,7 @@ function ExpenseFormModal({
         ? [
             {
               id: initialExpense?.items?.[0]?.id ?? crypto.randomUUID(),
-              category: (data.simpleCategory || DEFAULT_EXPENSE_CATEGORIES[0]) as ExpenseCategory,
+              category: data.simpleCategory.trim() || DEFAULT_EXPENSE_CATEGORIES[0],
               label: data.simpleLabel.trim() || null,
               amount: Number(data.simpleAmount),
             },
@@ -345,7 +387,7 @@ function ExpenseFormModal({
         : data.items
             .map((item) => ({
               id: item.id,
-              category: 'other' as ExpenseCategory,
+              category: (useDifferentCategories ? item.category : data.simpleCategory).trim() || 'other',
               label: item.label.trim() || null,
               amount: Number(item.amount),
             }))
@@ -395,13 +437,7 @@ function ExpenseFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose ?? (() => undefined)}
-      title={
-        initialExpense?.id
-          ? 'Edit expense'
-          : initialExpense?.visitId
-            ? 'Log an expense for this visit?'
-            : 'Add expense'
-      }
+      title={initialExpense?.visitId && !initialExpense.id ? 'Log an expense for this visit' : 'Expense'}
     >
       <Form
         key={formId}
@@ -462,25 +498,16 @@ function ExpenseFormModal({
           void handleSubmit(data as ExpenseFormValues);
         }}
         submitButton={
-          <div className='flex items-center justify-between gap-2'>
-            <div className='flex items-center gap-2'>
-              {isEditing && onDelete && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={() => void handleDelete()}
-                  disabled={isSubmitting}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
-            <div className='flex justify-end'>
+          <ModalFooterActions
+            leftActions={
+              isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
+            rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : initialExpense?.id ? 'Save expense' : 'Add expense'}
+                {isSubmitting ? 'Saving…' : initialExpense?.id ? 'Save' : 'Add'}
               </Button>
-            </div>
-          </div>
+            }
+          />
         }
       />
     </Modal>

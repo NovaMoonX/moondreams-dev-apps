@@ -149,10 +149,13 @@ const selectExpenseItems = (state: RootState) => state.nineLives.expenses.items;
  */
 export const makeSelectExpenseTotalsByHousehold = (
   householdId: string | null | undefined,
+  catId?: string | null,
 ) =>
   createSelector([selectExpenseItems], (items): ExpenseTotals => {
     const expenses = householdId
-      ? items.filter((expense) => expense.householdId === householdId)
+      ? items.filter(
+          (expense) => expense.householdId === householdId && (!catId || expense.catIds.includes(catId)),
+        )
       : [];
 
     return {

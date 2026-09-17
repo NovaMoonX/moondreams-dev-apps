@@ -112,16 +112,24 @@ function ExpenseTimeline({
     [cats],
   );
 
-  const categoryFilterOptions = useMemo(
-    () => [
+  const categoryFilterOptions = useMemo(() => {
+    const customCategories = Array.from(
+      new Set(
+        expenses
+          .flatMap((expense) => getExpenseCategories(expense))
+          .filter((category) => !(DEFAULT_EXPENSE_CATEGORIES as readonly string[]).includes(category)),
+      ),
+    );
+
+    return [
       { text: 'All categories', value: 'all' },
       ...DEFAULT_EXPENSE_CATEGORIES.map((category) => ({
         text: getExpenseCategoryLabel(category),
         value: category,
       })),
-    ],
-    [],
-  );
+      ...customCategories.map((category) => ({ text: category, value: category })),
+    ];
+  }, [expenses]);
 
   const visibleExpenses = useMemo(() => {
     const searchTerm = searchQuery.trim().toLowerCase();
@@ -131,7 +139,7 @@ function ExpenseTimeline({
         return false;
       }
 
-      if (categoryFilter !== 'all' && !getExpenseCategories(expense).includes(categoryFilter as Expense['items'][number]['category'])) {
+      if (categoryFilter !== 'all' && !getExpenseCategories(expense).includes(categoryFilter)) {
         return false;
       }
 

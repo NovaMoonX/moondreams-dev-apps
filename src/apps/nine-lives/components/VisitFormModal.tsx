@@ -43,8 +43,10 @@ import type { VisitOutcome } from '../store/actions/visitsActions';
 import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
 import { getVisitOptions } from '../utils/visitOptions';
 import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseLineItemsField from './ExpenseLineItemsField';
+import ModalFooterActions from './ModalFooterActions';
 
 export interface VisitExpenseDraft {
   catIds: string[];
@@ -1099,6 +1101,9 @@ function VisitFormModal({
   const isEditing = Boolean(initialVisit?.id);
   const showOutcome = Boolean(isCompleting && initialVisit && onComplete);
   const formId = initialVisit?.id ?? 'new-nine-lives-visit';
+  const [isValid, setIsValid] = useState(
+    Boolean((initialVisit?.catIds?.length ?? 0) > 0),
+  );
   const originalVisitOptions = useMemo(
     () => getVisitOptions(visits, { excludeVisitId: initialVisit?.id }),
     [visits, initialVisit?.id],
@@ -1225,13 +1230,7 @@ function VisitFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={
-        showOutcome
-          ? 'Complete visit'
-          : isEditing
-            ? 'Edit visit'
-            : 'Schedule visit'
-      }
+      title={showOutcome ? 'Complete visit' : 'Visit'}
     >
       {showOutcome ? (
         <VisitOutcomeForm
@@ -1267,65 +1266,35 @@ function VisitFormModal({
           }}
           columns={1}
           spacing='normal'
+          onDataChange={(data) => {
+            setIsValid(Boolean((data as VisitFormValues).catIds.length > 0));
+          }}
           onSubmit={(data) => {
             void handleSubmit(data as VisitFormValues);
           }}
           submitButton={
-            <div className='flex items-center justify-between gap-2'>
-              <div className='flex items-center gap-2'>
-                {isEditing && onDelete && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={() => void handleDelete()}
-                    disabled={isSubmitting}
-                  >
-                    Delete
+            <ModalFooterActions
+              leftActions={
+                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+              }
+              rightActions={
+                <>
+                  {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
+                    <Button type='button' variant='secondary' onClick={() => void onCancelVisit()} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                  )}
+                  {isEditing && onReopenVisit && initialVisit?.status === 'cancelled' && (
+                    <Button type='button' variant='secondary' onClick={() => void onReopenVisit()} disabled={isSubmitting}>
+                      Reopen
+                    </Button>
+                  )}
+                  <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                    {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Schedule'}
                   </Button>
-                )}
-                {isEditing &&
-                  onCancelVisit &&
-                  initialVisit?.status === 'upcoming' && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={() => void onCancelVisit()}
-                      disabled={isSubmitting}
-                    >
-                      Cancel visit
-                    </Button>
-                  )}
-                {isEditing &&
-                  onReopenVisit &&
-                  initialVisit?.status === 'cancelled' && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={() => void onReopenVisit()}
-                      disabled={isSubmitting}
-                    >
-                      Reopen visit
-                    </Button>
-                  )}
-              </div>
-              <div className='flex items-center gap-2'>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                >
-                  Close
-                </Button>
-                <Button type='submit' loading={isSubmitting}>
-                  {isSubmitting
-                    ? 'Saving…'
-                    : isEditing
-                      ? 'Save visit'
-                      : 'Schedule visit'}
-                </Button>
-              </div>
-            </div>
+                </>
+              }
+            />
           }
         />
       )}
