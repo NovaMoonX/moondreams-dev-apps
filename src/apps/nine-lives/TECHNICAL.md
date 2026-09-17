@@ -218,6 +218,7 @@ interface Vaccination {
   doctorId?: string;
   lotNumber?: string;
   linkedVisitId?: string;
+  reminderId: string | null; // Issue 18 — pending push reminder scheduled near expiresAt, cancelled/rescheduled when it changes
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -398,6 +399,7 @@ interface Visit {
   linkedHealthRecordIds: string[];
   linkedVaccinationIds: string[];
   linkedWeightEntryIds: string[];
+  reminderId: string | null; // Issue 18 — pending push reminder scheduled a day before scheduledAt, cancelled/rescheduled when it changes
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

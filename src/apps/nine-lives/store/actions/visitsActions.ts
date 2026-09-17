@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
 import type { RootState } from '@/store';
 import type {
   CatCondition,
@@ -19,10 +20,13 @@ import type {
 } from '@apps/nine-lives/types';
 
 import { removeVisit, revertVisit, upsertVisit } from '../slices/visitsSlice';
+import { scheduleVaccinationReminder } from './vaccinationsActions';
 import { upsertCatCondition } from '../slices/catConditionsSlice';
 import { upsertSymptom } from '../slices/symptomsSlice';
 import { upsertVaccination } from '../slices/vaccinationsSlice';
 import { upsertWeightEntry } from '../slices/weightEntriesSlice';
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const getVisitsCollectionRef = (householdId: string) =>
   collection(db, 'apps', 'nine-lives', 'households', householdId, 'visits');
@@ -83,6 +87,51 @@ const getWeightEntryDocRef = (
     'weightEntries',
     weightEntryId,
   );
+
+/** Best-effort: reminders are a stretch feature, so a failure here shouldn't block the visit write. */
+async function scheduleVisitReminder(
+  state: RootState,
+  householdId: string,
+  uid: string,
+  visit: Pick<Visit, 'id' | 'title' | 'scheduledAt'>,
+): Promise<string | null> {
+  const targetUids =
+    state.nineLives.households.items.find((household) => household.id === householdId)
+      ?.members ?? [];
+
+  if (targetUids.length === 0) {
+    return null;
+  }
+
+  try {
+    const reminder = await scheduleReminder({
+      appId: 'nine-lives',
+      targetUids,
+      title: 'Upcoming vet visit',
+      body: visit.title ? `${visit.title} is coming up.` : 'A vet visit is coming up.',
+      scheduledFor: visit.scheduledAt - ONE_DAY_MS,
+      createdBy: uid,
+      relatedEntityPath: `apps/nine-lives/households/${householdId}/visits/${visit.id}`,
+    });
+
+    return reminder.id;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort: same rationale as `scheduleVisitReminder`. */
+async function cancelVisitReminder(reminderId: string | null): Promise<void> {
+  if (!reminderId) {
+    return;
+  }
+
+  try {
+    await cancelReminder(reminderId);
+  } catch {
+    // Reminders are a stretch feature — a stale one is a lesser problem than blocking the visit write.
+  }
+}
 
 export interface VisitOutcome {
   summary?: string | null;
@@ -210,10 +259,18 @@ export const createVisit = createAsyncThunk<
       linkedHealthRecordIds: normalized.linkedHealthRecordIds ?? [],
       linkedVaccinationIds: normalized.linkedVaccinationIds ?? [],
       linkedWeightEntryIds: normalized.linkedWeightEntryIds ?? [],
+      reminderId: null,
       createdBy: uid,
       createdAt: visit.createdAt ?? now,
       lastEditedAt: now,
     };
+
+    nextVisit.reminderId = await scheduleVisitReminder(
+      getState() as RootState,
+      householdId,
+      uid,
+      nextVisit,
+    );
 
     await setDoc(getVisitDocRef(householdId, visitId), nextVisit);
     dispatch(upsertVisit(nextVisit));
@@ -227,13 +284,15 @@ export const updateVisit = createAsyncThunk<
   {
     householdId: string;
     visitId: string;
+    /** Only needed to schedule a fresh reminder when `scheduledAt` changes — omit it and a reschedule still cancels the stale reminder, it just won't be replaced. */
+    uid?: string;
     changes: Partial<Visit>;
   },
   { rejectValue: string }
 >(
   'nineLives/visits/update',
   async (
-    { householdId, visitId, changes },
+    { householdId, visitId, uid, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -270,11 +329,24 @@ export const updateVisit = createAsyncThunk<
       return rejectWithValue('Original visit not found.');
     }
 
+    const isRescheduled = nextVisit.scheduledAt !== current.scheduledAt;
+    const isNowCancelled = nextVisit.status === 'cancelled' && current.status !== 'cancelled';
+
+    if (isRescheduled || isNowCancelled) {
+      await cancelVisitReminder(current.reminderId);
+      nextVisit.reminderId = null;
+    }
+
+    if (isRescheduled && !isNowCancelled && uid) {
+      nextVisit.reminderId = await scheduleVisitReminder(state, householdId, uid, nextVisit);
+    }
+
     dispatch(upsertVisit(nextVisit));
 
     try {
       await updateDoc(getVisitDocRef(householdId, visitId), {
         ...normalized,
+        reminderId: nextVisit.reminderId,
         lastEditedAt: nextVisit.lastEditedAt,
       });
       return nextVisit;
@@ -352,10 +424,17 @@ export const completeVisit = createAsyncThunk<
         firstAdministeredAt: dose.administeredAt,
         lastAdministeredAt: dose.administeredAt,
         expiresAt: dose.expiresAt,
+        reminderId: null,
         createdBy: uid,
         createdAt: input.createdAt ?? now,
         lastEditedAt: now,
       };
+      vaccination.reminderId = await scheduleVaccinationReminder(
+        state,
+        householdId,
+        uid,
+        vaccination,
+      );
       batch.set(getVaccinationDocRef(householdId, id), vaccination);
       linkedVaccinationIds.push(id);
       createdVaccinations.push(vaccination);
@@ -500,6 +579,7 @@ export const completeVisit = createAsyncThunk<
       linkedWeightEntryIds: [...new Set(linkedWeightEntryIds)],
       linkedConditionIds: [...new Set(linkedConditionIds)],
       linkedSymptomIds: [...new Set(linkedSymptomIds)],
+      reminderId: null,
       lastEditedAt: now,
     };
     batch.update(getVisitDocRef(householdId, visitId), {
@@ -510,11 +590,13 @@ export const completeVisit = createAsyncThunk<
       linkedWeightEntryIds: nextVisit.linkedWeightEntryIds,
       linkedConditionIds: nextVisit.linkedConditionIds,
       linkedSymptomIds: nextVisit.linkedSymptomIds,
+      reminderId: nextVisit.reminderId,
       lastEditedAt: nextVisit.lastEditedAt,
     });
 
     try {
       await batch.commit();
+      await cancelVisitReminder(current.reminderId);
       dispatch(upsertVisit(nextVisit));
       createdVaccinations.forEach((vaccination) =>
         dispatch(upsertVaccination(vaccination)),
@@ -609,6 +691,7 @@ export const deleteVisit = createAsyncThunk<
 
     try {
       await batch.commit();
+      await cancelVisitReminder(current.reminderId);
       updatedFollowUps.forEach((visit) => dispatch(upsertVisit(visit)));
       return { id: visitId };
     } catch (error) {

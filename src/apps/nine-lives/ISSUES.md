@@ -685,9 +685,9 @@ Connects Nine Lives to the central reminder infrastructure built in Issue 17: sc
 
 #### Success Criteria
 
-- [ ] Scheduling a visit creates a corresponding `Reminder` targeting all household members.
-- [ ] Rescheduling or cancelling a visit cancels the stale reminder rather than leaving it pending.
-- [ ] A vaccination with an `expiresAt` date produces a reminder near that date.
+- [x] Scheduling a visit creates a corresponding `Reminder` targeting all household members.
+- [x] Rescheduling or cancelling a visit cancels the stale reminder rather than leaving it pending.
+- [x] A vaccination with an `expiresAt` date produces a reminder near that date.
 
 ## Tier: Cross-App Alignment (final)
 

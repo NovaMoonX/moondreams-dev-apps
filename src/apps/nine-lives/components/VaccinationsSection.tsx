@@ -99,7 +99,12 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
         ).unwrap();
       } else if (editingVaccination) {
         await dispatch(
-          updateVaccination({ householdId, vaccinationId: editingVaccination.id, changes: vaccination }),
+          updateVaccination({
+            householdId,
+            vaccinationId: editingVaccination.id,
+            uid: user.uid,
+            changes: vaccination,
+          }),
         ).unwrap();
       } else {
         await dispatch(
@@ -135,7 +140,7 @@ function VaccinationsSection({ householdId, catId, catName }: VaccinationsSectio
     }
 
     const result = await dispatch(
-      deleteVaccinationDose({ householdId, vaccinationId, doseId }),
+      deleteVaccinationDose({ householdId, vaccinationId, doseId, uid: user?.uid }),
     ).unwrap();
 
     if (result.deletedRecord) {

@@ -175,6 +175,8 @@ export interface Visit {
   linkedHealthRecordIds: string[];
   linkedVaccinationIds: string[];
   linkedWeightEntryIds: string[];
+  /** The pending push reminder scheduled a day before `scheduledAt`, if any — cancelled and rescheduled when `scheduledAt` changes. */
+  reminderId: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -205,6 +207,8 @@ export interface Vaccination {
   lastAdministeredAt: number;
   /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
   expiresAt: number | null;
+  /** The pending push reminder scheduled near `expiresAt`, if any — cancelled and rescheduled when `expiresAt` changes. */
+  reminderId: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
