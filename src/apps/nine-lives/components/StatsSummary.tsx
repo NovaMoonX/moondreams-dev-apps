@@ -8,11 +8,13 @@ import { useAppSelector } from '@/store';
 
 import {
   makeSelectExpenseTotalsByHousehold,
+  selectCatsByHousehold,
   selectLitterBoxesByHousehold,
   selectLitterEntriesByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
 import { getDaysSince, getLatestFullChangeByBox, LITTER_OVERDUE_DAYS } from '../utils/attentionItems';
+import CatPillSelector from './CatPillSelector';
 import StatTile from './StatTile';
 
 /** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
@@ -47,21 +49,37 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 function StatsSummary({ householdId }: StatsSummaryProps) {
   const [recurringView, setRecurringView] = useState<RecurringView>('monthly');
   const [selectedLitterBoxId, setSelectedLitterBoxId] = useState<string | null>(null);
+  const [recurringCatId, setRecurringCatId] = useState<string | null>(null);
+  const [lifetimeCatId, setLifetimeCatId] = useState<string>('all');
 
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
   const litterEntries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
-  const selectExpenseTotals = useMemo(
-    () => makeSelectExpenseTotalsByHousehold(householdId),
-    [householdId],
+  const selectRecurringExpenseTotals = useMemo(
+    () => makeSelectExpenseTotalsByHousehold(householdId, recurringCatId),
+    [householdId, recurringCatId],
   );
-  const expenseTotals = useAppSelector(selectExpenseTotals);
+  const selectLifetimeExpenseTotals = useMemo(
+    () => makeSelectExpenseTotalsByHousehold(householdId, lifetimeCatId === 'all' ? null : lifetimeCatId),
+    [householdId, lifetimeCatId],
+  );
+  const recurringExpenseTotals = useAppSelector(selectRecurringExpenseTotals);
+  const lifetimeExpenseTotals = useAppSelector(selectLifetimeExpenseTotals);
+  const catOptions = useMemo(
+    () => cats.map((cat) => ({ label: cat.name, value: cat.id, photoURL: cat.photoURL })),
+    [cats],
+  );
+  const lifetimeCatOptions = useMemo(
+    () => [{ text: 'All cats', value: 'all' }, ...catOptions.map((cat) => ({ text: cat.label, value: cat.value }))],
+    [catOptions],
+  );
   const completedVisitCount = visits.filter(
     (visit) => visit.status === 'completed',
   ).length;
 
   const recurringTotal =
-    recurringView === 'monthly' ? expenseTotals.recurringMonthly : expenseTotals.recurringYearly;
+    recurringView === 'monthly' ? recurringExpenseTotals.recurringMonthly : recurringExpenseTotals.recurringYearly;
 
   const activeLitterBoxes = useMemo(() => litterBoxes.filter((box) => box.isActive), [litterBoxes]);
 
@@ -119,9 +137,24 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
           </div>
         </div>
         <p className='mt-2 text-2xl font-semibold'>{currencyFormatter.format(recurringTotal)}</p>
+        {catOptions.length > 0 && (
+          <div className='mt-3'>
+            <CatPillSelector catOptions={catOptions} value={recurringCatId ? [recurringCatId] : []} onValueChange={(value) => setRecurringCatId(value[0] ?? null)} singleSelect />
+          </div>
+        )}
       </div>
 
-      <StatTile label='Lifetime expenses' value={currencyFormatter.format(expenseTotals.lifetime)} />
+      <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>
+        <div className='flex items-center justify-center gap-2 sm:justify-between'>
+          <p className='text-sm text-muted-foreground'>Lifetime expenses</p>
+        </div>
+        <p className='mt-2 text-2xl font-semibold'>{currencyFormatter.format(lifetimeExpenseTotals.lifetime)}</p>
+        {catOptions.length > 0 && (
+          <div className='mt-3 max-w-40'>
+            <Select options={lifetimeCatOptions} value={lifetimeCatId} onChange={setLifetimeCatId} size='sm' />
+          </div>
+        )}
+      </div>
 
       {selectedLitterBox && (
         <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>

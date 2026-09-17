@@ -14,6 +14,7 @@ import { selectCustomSymptomQuickTagsByHousehold, selectVisitsByHousehold } from
 import type { CatCondition, Symptom, SymptomQuickTag, SymptomSeverity } from '../types';
 import { getVisitOptions } from '../utils/visitOptions';
 import LinkedVisitsField from './LinkedVisitsField';
+import ModalFooterActions from './ModalFooterActions';
 
 interface SymptomFormValues {
   catId?: string;
@@ -170,6 +171,9 @@ function SymptomFormFields({
   const isEditing = Boolean(initialSymptom?.id);
   const formId = initialSymptom?.id ?? 'new-nine-lives-symptom';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
+  const [isValid, setIsValid] = useState(
+    Boolean(initialSymptom?.firstNoticedAt && (!showCatField || initialSymptom?.catId)),
+  );
 
   const [pendingNewTagLabels, setPendingNewTagLabels] = useState<string[]>([]);
 
@@ -328,29 +332,36 @@ function SymptomFormFields({
         linkedVisitIds: initialSymptom?.linkedVisitIds ?? [],
       }}
       columns={1}
+      onDataChange={(data) => {
+        const values = data as SymptomFormValues;
+        setIsValid(Boolean(values.firstNoticedAt && (!showCatField || values.catId)));
+      }}
       onSubmit={(data) => {
         void handleSubmit(data as SymptomFormValues);
       }}
       submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div className='flex items-center gap-2'>
-            {isEditing && onDelete && (
+        <ModalFooterActions
+          leftActions={
+            isEditing &&
+            onDelete && (
               <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
                 Delete
               </Button>
-            )}
-          </div>
-          <div className='flex items-center gap-2'>
-            {onCancel && (
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
+            )
+          }
+          rightActions={
+            <>
+              {onCancel && (
+                <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save symptom' : 'Add symptom'}
               </Button>
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save symptom' : 'Add symptom'}
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
       }
     />
   );

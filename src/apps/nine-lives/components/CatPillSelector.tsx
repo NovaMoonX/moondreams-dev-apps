@@ -14,14 +14,21 @@ interface CatPillSelectorProps {
   value: string[];
   onValueChange: (value: string[]) => void;
   disabled?: boolean;
+  /** When true, selecting a pill replaces the selection instead of toggling it in/out (for "view by one cat" filters). */
+  singleSelect?: boolean;
 }
 
 /**
  * Replaces the long checkbox-list cat picker with a wrapping row of small
  * avatar + name pills that toggle selection on click.
  */
-function CatPillSelector({ catOptions, value, onValueChange, disabled }: CatPillSelectorProps) {
+function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSelect }: CatPillSelectorProps) {
   const toggleCat = (catId: string) => {
+    if (singleSelect) {
+      onValueChange(value.includes(catId) ? [] : [catId]);
+      return;
+    }
+
     onValueChange(
       value.includes(catId) ? value.filter((id) => id !== catId) : [...value, catId],
     );

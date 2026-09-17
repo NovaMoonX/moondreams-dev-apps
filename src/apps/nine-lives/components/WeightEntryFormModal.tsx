@@ -30,14 +30,8 @@ function WeightEntryFormModal({
   onDelete,
   onClose,
 }: WeightEntryFormModalProps) {
-  const isEditing = Boolean(initialWeightEntry?.id);
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEditing ? 'Edit weight entry' : `Add weight entry${catName ? ` for ${catName}` : ''}`}
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={`Weight entry${catName ? ` for ${catName}` : ''}`}>
       <WeightEntryFormFields
         householdId={householdId}
         catName={catName}

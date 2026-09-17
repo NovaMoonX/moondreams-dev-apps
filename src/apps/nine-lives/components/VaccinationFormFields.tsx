@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Form, FormFactories, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -16,6 +16,7 @@ import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
 
 import DetailsDisclosure from './DetailsDisclosure';
 import LinkedVisitsField from './LinkedVisitsField';
+import ModalFooterActions from './ModalFooterActions';
 
 const NONE_OPTION_VALUE = '';
 
@@ -146,6 +147,9 @@ function VaccinationFormFields({
   const isEditing = Boolean(initialVaccination?.id);
   const formId = initialVaccination?.id ?? 'new-nine-lives-vaccination';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
+  const [isValid, setIsValid] = useState(
+    Boolean(initialVaccination?.name?.trim() && initialVaccination?.administeredAt && (!showCatField || initialVaccination?.catId)),
+  );
 
   const clinicOptions = useMemo(
     () => [
@@ -266,34 +270,36 @@ function VaccinationFormFields({
       }}
       columns={1}
       spacing='normal'
+      onDataChange={(data) => {
+        const values = data as VaccinationFormValues;
+        setIsValid(Boolean(values.name.trim() && values.administeredAt && (!showCatField || values.catId)));
+      }}
       onSubmit={(data) => {
         void handleSubmit(data as VaccinationFormValues);
       }}
       submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div className='flex items-center gap-2'>
-            {isEditing && onDelete && (
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => void handleDelete()}
-                disabled={isSubmitting}
-              >
+        <ModalFooterActions
+          leftActions={
+            isEditing &&
+            onDelete && (
+              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
                 Delete
               </Button>
-            )}
-          </div>
-          <div className='flex items-center gap-2'>
-            {onCancel && (
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
+            )
+          }
+          rightActions={
+            <>
+              {onCancel && (
+                <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save vaccination' : 'Add vaccination'}
               </Button>
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save vaccination' : 'Add vaccination'}
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
       }
     />
   );

@@ -18,9 +18,18 @@ export interface PendingHouseholdRequest {
 export type CatLifestyle = 'indoor' | 'outdoor' | 'indoor_outdoor';
 
 export interface CatKeyDate {
+  id: string;
   label: string;
   date: number;
 }
+
+export interface CatLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export type CatSex = 'male' | 'female' | 'unknown';
 
 export type CatFoodType = 'dry' | 'wet' | 'mixed';
 
@@ -50,14 +59,23 @@ export interface Cat {
   id: string;
   householdId: string;
   name: string;
+  originalName: string | null;
   photoURL: string | null;
   dateOfBirth: number;
   isDateOfBirthEstimated: boolean;
+  sex: CatSex;
   breed: string;
+  coatColors: string[] | null;
   lifestyle: CatLifestyle | null;
   microchipNumber: string | null;
+  microchipServiceURL: string | null;
+  rabiesTagNumber: string | null;
+  isSpayedNeutered: boolean;
+  spayedNeuteredAt: number | null;
   shelterOrigin: CatShelterOrigin | null;
   adoptedAt: number | null;
+  adoptionProfileURL: string | null;
+  otherLinks: CatLink[] | null;
   customKeyDates: CatKeyDate[] | null;
   diet: CatDiet | null;
   currentClinicId: string | null;
@@ -75,6 +93,7 @@ export interface VetClinic {
   name: string;
   phone: string | null;
   email: string | null;
+  website: string | null;
   address: string | null;
   isEmergency24Hour: boolean | null;
   notes: string | null;
@@ -345,7 +364,8 @@ export type RecurrenceInterval = 'monthly' | 'yearly';
 
 export interface ExpenseLineItem {
   id: string;
-  category: ExpenseCategory;
+  /** A preset `ExpenseCategory` value or a household's custom category label. */
+  category: string;
   label: string | null;
   amount: number;
 }

@@ -40,7 +40,10 @@ export const CAT_BREEDS = [
   'Unknown',
 ] as const;
 
+export const NONE_INSURANCE_PROVIDER = 'None';
+
 export const INSURANCE_PROVIDER_OPTIONS = [
+  'None',
   'ASPCA Pet Health Insurance',
   'Nationwide',
   'Trupanion',
@@ -85,6 +88,25 @@ export const PERSONALITY_TRAIT_OPTIONS = [
   'Feisty',
   'Cuddly',
 ] as const;
+
+export const CUSTOM_COAT_COLOR_OPTION = 'custom';
+
+export const COAT_COLOR_OPTIONS = [
+  'Black',
+  'White',
+  'Gray',
+  'Orange / Ginger',
+  'Brown',
+  'Cream',
+  'Calico',
+  'Tabby',
+  'Tortoiseshell',
+  'Tuxedo',
+  'Bicolor',
+  'Siamese Point',
+] as const;
+
+export const CUSTOM_EXPENSE_CATEGORY_OPTION = 'custom';
 
 export const LITTER_TYPE_OPTIONS = [
   'clumping_clay',

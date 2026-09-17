@@ -1,13 +1,16 @@
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import type { VetClinic } from '@apps/nine-lives/types';
+
+import ModalFooterActions from './ModalFooterActions';
 
 interface VetClinicFormValues {
   name: string;
   phone?: string | null;
   email?: string | null;
+  website?: string | null;
   address?: string | null;
   isEmergency24Hour: boolean;
   notes?: string | null;
@@ -35,6 +38,7 @@ function VetClinicFormModal({
   const { confirm } = useActionModal();
   const formId = initialClinic?.id ?? 'new-vet-clinic';
   const isEditing = Boolean(initialClinic?.id);
+  const [isValid, setIsValid] = useState(Boolean(initialClinic?.name?.trim()));
 
   const fields = useMemo(
     () => [
@@ -56,6 +60,12 @@ function VetClinicFormModal({
         label: 'Email address',
         placeholder: 'Email address',
         type: 'email',
+        variant: 'outline',
+      }),
+      input({
+        name: 'website',
+        label: 'Website',
+        placeholder: 'https://...',
         variant: 'outline',
       }),
       input({
@@ -85,6 +95,7 @@ function VetClinicFormModal({
       name: initialClinic?.name ?? '',
       phone: initialClinic?.phone ?? '',
       email: initialClinic?.email ?? '',
+      website: initialClinic?.website ?? '',
       address: initialClinic?.address ?? '',
       isEmergency24Hour: Boolean(initialClinic?.isEmergency24Hour),
       notes: initialClinic?.notes ?? '',
@@ -103,6 +114,7 @@ function VetClinicFormModal({
       name: trimmedName,
       phone: data.phone?.trim() || null,
       email: data.email?.trim() || null,
+      website: data.website?.trim() || null,
       address: data.address?.trim() || null,
       isEmergency24Hour: data.isEmergency24Hour,
       notes: data.notes?.trim() || null,
@@ -126,11 +138,7 @@ function VetClinicFormModal({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose ?? (() => undefined)}
-      title={initialClinic?.id ? 'Edit clinic' : 'Add clinic'}
-    >
+    <Modal isOpen={isOpen} onClose={onClose ?? (() => undefined)} title='Clinic'>
       <Form
         key={formId}
         id={formId}
@@ -138,29 +146,28 @@ function VetClinicFormModal({
         initialData={initialData}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => {
+          setIsValid(Boolean((data as VetClinicFormValues).name.trim()));
+        }}
         onSubmit={(data) => {
           void handleSubmit(data as VetClinicFormValues);
         }}
         submitButton={
-          <div className='flex items-center justify-between gap-2'>
-            <div className='flex items-center gap-2'>
-              {isEditing && onDelete && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={() => void handleDelete()}
-                  disabled={isSubmitting}
-                >
+          <ModalFooterActions
+            leftActions={
+              isEditing &&
+              onDelete && (
+                <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
                   Delete clinic
                 </Button>
-              )}
-            </div>
-            <div className='flex justify-end'>
-              <Button type='submit' loading={isSubmitting}>
-                {isSubmitting ? 'Saving…' : initialClinic?.id ? 'Save clinic' : 'Add clinic'}
+              )
+            }
+            rightActions={
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save clinic' : 'Add clinic'}
               </Button>
-            </div>
-          </div>
+            }
+          />
         }
       />
     </Modal>

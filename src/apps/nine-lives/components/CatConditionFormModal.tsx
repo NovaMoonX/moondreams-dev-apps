@@ -29,10 +29,8 @@ function CatConditionFormModal({
   onDelete,
   onClose,
 }: CatConditionFormModalProps) {
-  const isEditing = Boolean(initialCondition?.id);
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit condition' : 'Add condition'}>
+    <Modal isOpen={isOpen} onClose={onClose} title='Condition'>
       <CatConditionFormFields
         householdId={householdId}
         libraryConditions={libraryConditions}

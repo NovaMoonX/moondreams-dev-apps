@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -9,6 +9,8 @@ import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/ut
 import { selectVisitsByHousehold } from '@apps/nine-lives/store/selectors';
 import type { WeightEntry } from '@apps/nine-lives/types';
 import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
+
+import ModalFooterActions from './ModalFooterActions';
 
 interface WeightEntryFormValues {
   catId?: string;
@@ -50,6 +52,13 @@ function WeightEntryFormFields({
   const isEditing = Boolean(initialWeightEntry?.id);
   const formId = initialWeightEntry?.id ?? 'new-nine-lives-weight-entry';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
+  const [isValid, setIsValid] = useState(
+    Boolean(
+      Number(initialWeightEntry?.weight) > 0 &&
+        initialWeightEntry?.measuredAt &&
+        (!showCatField || initialWeightEntry?.catId),
+    ),
+  );
 
   const visitOptions = useMemo(
     () => [{ label: 'None', value: '' }, ...getVisitOptions(visits)],
@@ -145,34 +154,39 @@ function WeightEntryFormFields({
       }}
       columns={1}
       spacing='normal'
+      onDataChange={(data) => {
+        const values = data as WeightEntryFormValues;
+        const weight = Number(values.weight);
+        setIsValid(
+          Boolean(Number.isFinite(weight) && weight > 0 && values.measuredAt && (!showCatField || values.catId)),
+        );
+      }}
       onSubmit={(data) => {
         void handleSubmit(data as WeightEntryFormValues);
       }}
       submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div className='flex items-center gap-2'>
-            {isEditing && onDelete && (
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => void handleDelete()}
-                disabled={isSubmitting}
-              >
+        <ModalFooterActions
+          leftActions={
+            isEditing &&
+            onDelete && (
+              <Button type='button' variant='secondary' onClick={() => void handleDelete()} disabled={isSubmitting}>
                 Delete
               </Button>
-            )}
-          </div>
-          <div className='flex items-center gap-2'>
-            {onCancel && (
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
+            )
+          }
+          rightActions={
+            <>
+              {onCancel && (
+                <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save weight entry' : 'Add weight entry'}
               </Button>
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save weight entry' : 'Add weight entry'}
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
       }
     />
   );

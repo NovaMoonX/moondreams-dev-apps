@@ -64,7 +64,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 
 - [x] Preventive treatment tracking with recurring dose history and next-due dates
 - [ ] Structured glossary (e.g., "what's FVRCP?") with entries linked to relevant resource articles
-- [ ] Cat personality traits/notes per cat
+- [x] Cat personality traits/notes per cat
 - [ ] Cat diet: food type (dry/wet/mixed), brand, feedings per day, automatic feeder, snacks/treats
 - [x] Litter usage: household weigh-ins by litter box and type, usage deltas, and time since box changes
 

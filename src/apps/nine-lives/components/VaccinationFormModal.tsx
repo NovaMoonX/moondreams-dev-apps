@@ -33,14 +33,8 @@ function VaccinationFormModal({
   onDelete,
   onClose,
 }: VaccinationFormModalProps) {
-  const isEditing = Boolean(initialVaccination?.id);
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title ?? (isEditing ? `Edit vaccination` : `Add vaccination${catName ? ` for ${catName}` : ''}`)}
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={title ?? `Vaccination${catName ? ` for ${catName}` : ''}`}>
       <VaccinationFormFields
         householdId={householdId}
         catOptions={catOptions}

@@ -11,7 +11,7 @@ interface AddCatModalProps {
 
 function AddCatModal({ isOpen, isSubmitting, onSubmit, onClose }: AddCatModalProps) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Add a cat'>
+    <Modal isOpen={isOpen} onClose={onClose} title='New cat'>
       <p className='mb-4 text-sm text-muted-foreground'>
         Just the basics for now — you can fill in the rest later.
       </p>

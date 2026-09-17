@@ -14,22 +14,23 @@ export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'other',
 ];
 
-export function getExpenseCategoryLabel(category: ExpenseCategory): string {
-  const labels: Record<ExpenseCategory, string> = {
-    adoption_fee: 'Adoption fee',
-    insurance: 'Insurance',
-    food: 'Food',
-    litter: 'Litter',
-    vet: 'Vet',
-    grooming: 'Grooming',
-    supplies: 'Supplies',
-    medication: 'Medication',
-    microchipping: 'Microchipping',
-    spay_neuter: 'Spay / neuter',
-    other: 'Other',
-  };
+const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  adoption_fee: 'Adoption',
+  insurance: 'Insurance',
+  food: 'Food',
+  litter: 'Litter',
+  vet: 'Vet',
+  grooming: 'Grooming',
+  supplies: 'Supplies',
+  medication: 'Medication',
+  microchipping: 'Microchipping',
+  spay_neuter: 'Spay / neuter',
+  other: 'Other',
+};
 
-  return labels[category] ?? 'Other';
+/** `category` may be a preset `ExpenseCategory` or a household's custom category label — customs are returned as-is. */
+export function getExpenseCategoryLabel(category: string): string {
+  return EXPENSE_CATEGORY_LABELS[category as ExpenseCategory] ?? category;
 }
 
 export function calculateExpenseItemsTotal(items: Pick<ExpenseLineItem, 'amount'>[]): number {
@@ -37,7 +38,7 @@ export function calculateExpenseItemsTotal(items: Pick<ExpenseLineItem, 'amount'
 }
 
 /** The distinct categories across an expense's line items, in the order they first appear. */
-export function getExpenseCategories(expense: Pick<Expense, 'items'>): ExpenseCategory[] {
+export function getExpenseCategories(expense: Pick<Expense, 'items'>): string[] {
   return Array.from(new Set(expense.items.map((item) => item.category)));
 }
 
