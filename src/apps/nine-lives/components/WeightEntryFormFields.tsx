@@ -178,7 +178,7 @@ function WeightEntryFormFields({
                 </Button>
               )}
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save weight entry' : 'Add weight entry'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             </>
           }

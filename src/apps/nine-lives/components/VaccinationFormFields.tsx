@@ -291,7 +291,7 @@ function VaccinationFormFields({
                 </Button>
               )}
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save vaccination' : 'Add vaccination'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             </>
           }

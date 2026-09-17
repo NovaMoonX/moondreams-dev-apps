@@ -161,7 +161,7 @@ function VetClinicFormModal({
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save clinic' : 'Add clinic'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             }
           />

@@ -353,7 +353,7 @@ function SymptomFormFields({
                 </Button>
               )}
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save symptom' : 'Add symptom'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             </>
           }

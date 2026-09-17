@@ -371,7 +371,7 @@ function CatConditionFormFields({
                     </Button>
                   )}
                   <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                    {isSubmitting ? 'Saving…' : isEditing ? 'Save condition' : 'Add condition'}
+                    {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
                   </Button>
                 </>
               }

@@ -22,7 +22,6 @@ interface CatProfileFormProps {
   cat?: Cat | null;
   isSubmitting?: boolean;
   onSubmit: (nextCat: Cat) => Promise<void> | void;
-  onCancel?: () => void;
   onDelete?: () => Promise<void> | void;
 }
 
@@ -620,7 +619,7 @@ function buildPreparedCat(data: CatProfileFormData, householdId: string | undefi
   return result;
 }
 
-function CatProfileForm({ cat, householdId, isSubmitting = false, onSubmit, onCancel, onDelete }: CatProfileFormProps) {
+function CatProfileForm({ cat, householdId, isSubmitting = false, onSubmit, onDelete }: CatProfileFormProps) {
   const initialData = useMemo(() => buildInitialData(cat), [cat]);
   const formId = cat?.id ?? `${householdId ?? 'new-household'}-cat-profile`;
   const [isValid, setIsValid] = useState(
@@ -789,7 +788,7 @@ function CatProfileForm({ cat, householdId, isSubmitting = false, onSubmit, onCa
     ];
   }, [activeTab]);
 
-  const submitLabel = isSubmitting ? 'Saving…' : cat ? 'Save changes' : 'Create cat';
+  const submitLabel = isSubmitting ? 'Saving…' : cat ? 'Save' : 'Create';
 
   const handleSubmit = async (data: CatProfileFormData) => {
     const nextCatValue = buildPreparedCat(data, householdId, cat);
@@ -823,16 +822,9 @@ function CatProfileForm({ cat, householdId, isSubmitting = false, onSubmit, onCa
             onDelete && <DeleteIconButton onClick={() => void onDelete()} disabled={isSubmitting} label='Delete cat' />
           }
           rightActions={
-            <>
-              {onCancel && (
-                <Button type='button' variant='secondary' onClick={onCancel}>
-                  Cancel
-                </Button>
-              )}
-              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {submitLabel}
-              </Button>
-            </>
+            <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+              {submitLabel}
+            </Button>
           }
         />
       }

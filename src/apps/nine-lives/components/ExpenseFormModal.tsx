@@ -504,7 +504,7 @@ function ExpenseFormModal({
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : initialExpense?.id ? 'Save expense' : 'Add expense'}
+                {isSubmitting ? 'Saving…' : initialExpense?.id ? 'Save' : 'Add'}
               </Button>
             }
           />

@@ -332,11 +332,8 @@ function LitterBoxFormModal({
               )}
             </div>
             <div className='flex items-center gap-2'>
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
-              </Button>
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save litter box' : 'Add litter box'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             </div>
           </div>
@@ -585,11 +582,8 @@ function LitterFormModal({
               )}
             </div>
             <div className='flex items-center gap-2'>
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
-              </Button>
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save litter' : 'Add litter'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             </div>
           </div>
@@ -954,11 +948,8 @@ function LitterEntryFormModal({
               )}
             </div>
             <div className='flex items-center gap-2'>
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
-              </Button>
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save litter entry' : 'Log litter weigh-in'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Log'}
               </Button>
             </div>
           </div>

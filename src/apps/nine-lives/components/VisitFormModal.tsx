@@ -1275,39 +1275,22 @@ function VisitFormModal({
           submitButton={
             <ModalFooterActions
               leftActions={
-                <>
-                  {isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />}
-                  {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
-                    <Button
-                      type='button'
-                      variant='link'
-                      className='text-muted-foreground hover:text-foreground'
-                      onClick={() => void onCancelVisit()}
-                      disabled={isSubmitting}
-                    >
-                      Cancel visit
-                    </Button>
-                  )}
-                  {isEditing && onReopenVisit && initialVisit?.status === 'cancelled' && (
-                    <Button
-                      type='button'
-                      variant='link'
-                      className='text-muted-foreground hover:text-foreground'
-                      onClick={() => void onReopenVisit()}
-                      disabled={isSubmitting}
-                    >
-                      Reopen visit
-                    </Button>
-                  )}
-                </>
+                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
               }
               rightActions={
                 <>
-                  <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
-                    Close
-                  </Button>
+                  {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
+                    <Button type='button' variant='secondary' onClick={() => void onCancelVisit()} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                  )}
+                  {isEditing && onReopenVisit && initialVisit?.status === 'cancelled' && (
+                    <Button type='button' variant='secondary' onClick={() => void onReopenVisit()} disabled={isSubmitting}>
+                      Reopen
+                    </Button>
+                  )}
                   <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                    {isSubmitting ? 'Saving…' : isEditing ? 'Save visit' : 'Schedule visit'}
+                    {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Schedule'}
                   </Button>
                 </>
               }

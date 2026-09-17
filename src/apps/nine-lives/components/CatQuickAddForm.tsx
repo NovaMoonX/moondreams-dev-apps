@@ -18,7 +18,6 @@ export interface CatQuickAddValues {
 interface CatQuickAddFormProps {
   isSubmitting?: boolean;
   onSubmit: (values: CatQuickAddValues) => Promise<void> | void;
-  onCancel?: () => void;
 }
 
 interface CatQuickAddFormData {
@@ -37,7 +36,7 @@ const initialData: CatQuickAddFormData = {
   isDateOfBirthEstimated: false,
 };
 
-function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickAddFormProps) {
+function CatQuickAddForm({ isSubmitting = false, onSubmit }: CatQuickAddFormProps) {
   const [isValid, setIsValid] = useState(false);
 
   const fields = useMemo(
@@ -105,16 +104,9 @@ function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickA
       submitButton={
         <ModalFooterActions
           rightActions={
-            <>
-              {onCancel && (
-                <Button type='button' variant='secondary' onClick={onCancel}>
-                  Cancel
-                </Button>
-              )}
-              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : 'Add cat'}
-              </Button>
-            </>
+            <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+              {isSubmitting ? 'Saving…' : 'Add'}
+            </Button>
           }
         />
       }

@@ -15,7 +15,7 @@ function AddCatModal({ isOpen, isSubmitting, onSubmit, onClose }: AddCatModalPro
       <p className='mb-4 text-sm text-muted-foreground'>
         Just the basics for now — you can fill in the rest later.
       </p>
-      <CatQuickAddForm isSubmitting={isSubmitting} onSubmit={onSubmit} onCancel={onClose} />
+      <CatQuickAddForm isSubmitting={isSubmitting} onSubmit={onSubmit} />
     </Modal>
   );
 }

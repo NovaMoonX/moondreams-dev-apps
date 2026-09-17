@@ -57,7 +57,6 @@ function CatDetailsModal({
           isSubmitting={isSubmitting}
           onSubmit={onSubmit}
           onDelete={onDelete ? handleDelete : undefined}
-          onClose={onClose}
         />
       )}
     </Modal>
@@ -70,7 +69,6 @@ interface CatDetailsModalContentProps {
   isSubmitting?: boolean;
   onSubmit: (nextCat: Cat) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
-  onClose: () => void;
 }
 
 /** Keyed by `cat.id` in the parent so photo-picker state resets when switching cats without remounting the modal itself. */
@@ -80,7 +78,6 @@ function CatDetailsModalContent({
   isSubmitting,
   onSubmit,
   onDelete,
-  onClose,
 }: CatDetailsModalContentProps) {
   const photoUpload = useImageUpload(cat.photoURL ?? null);
   const photoRemoved = photoUpload.previewUrl === null && Boolean(cat.photoURL);
@@ -137,7 +134,6 @@ function CatDetailsModalContent({
         householdId={householdId}
         isSubmitting={isSubmitting}
         onSubmit={handleFormSubmit}
-        onCancel={onClose}
         onDelete={onDelete}
       />
     </>

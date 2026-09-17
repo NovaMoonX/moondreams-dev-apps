@@ -467,7 +467,7 @@ function HealthRecordUploadModal({
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save record' : 'Upload record'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Upload'}
               </Button>
             }
           />

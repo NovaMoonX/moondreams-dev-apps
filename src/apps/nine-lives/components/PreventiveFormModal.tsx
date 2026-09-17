@@ -520,7 +520,7 @@ function PreventiveFormModal({
             }
             rightActions={
               <Button type='submit' loading={isSubmitting} disabled={!isValid}>
-                {isSubmitting ? 'Saving…' : isEditing ? 'Save preventive' : 'Add preventive'}
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
             }
           />
