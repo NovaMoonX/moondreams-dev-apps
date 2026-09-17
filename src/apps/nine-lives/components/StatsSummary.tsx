@@ -50,6 +50,7 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   const [recurringView, setRecurringView] = useState<RecurringView>('monthly');
   const [selectedLitterBoxId, setSelectedLitterBoxId] = useState<string | null>(null);
   const [recurringCatId, setRecurringCatId] = useState<string | null>(null);
+  const [isViewingRecurringByPet, setIsViewingRecurringByPet] = useState(false);
   const [lifetimeCatId, setLifetimeCatId] = useState<string>('all');
 
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
@@ -139,7 +140,26 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
         <p className='mt-2 text-2xl font-semibold'>{currencyFormatter.format(recurringTotal)}</p>
         {catOptions.length > 0 && (
           <div className='mt-3'>
-            <CatPillSelector catOptions={catOptions} value={recurringCatId ? [recurringCatId] : []} onValueChange={(value) => setRecurringCatId(value[0] ?? null)} singleSelect />
+            {isViewingRecurringByPet ? (
+              <CatPillSelector
+                catOptions={catOptions}
+                value={recurringCatId ? [recurringCatId] : []}
+                onValueChange={(value) => setRecurringCatId(value[0] ?? null)}
+                singleSelect
+                size='sm'
+                allLabel='All pets'
+              />
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='text-muted-foreground hover:text-foreground'
+                onClick={() => setIsViewingRecurringByPet(true)}
+              >
+                View by pet
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -15,10 +15,12 @@ interface ExpenseLineItemsFieldProps {
   value: LineItemValue[];
   onValueChange: (value: LineItemValue[]) => void;
   disabled?: boolean;
+  /** When false, items share one category (set elsewhere) and the per-item category picker is hidden. */
+  showCategoryPerItem?: boolean;
 }
 
 /** Free-entry line-item rows (text + amount), each with its own remove (X) button and a running total. */
-function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineItemsFieldProps) {
+function ExpenseLineItemsField({ value, onValueChange, disabled, showCategoryPerItem = true }: ExpenseLineItemsFieldProps) {
   const updateItem = (id: string, changes: Partial<LineItemValue>) => {
     onValueChange(value.map((item) => (item.id === id ? { ...item, ...changes } : item)));
   };
@@ -32,7 +34,7 @@ function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineIt
   return (
     <div className='space-y-2'>
       {value.map((item) => (
-        <div key={item.id} className='space-y-2 rounded-md border border-border p-2'>
+        <div key={item.id} className={showCategoryPerItem ? 'space-y-2 rounded-md border border-border p-2' : ''}>
           <div className='flex items-center gap-2'>
             <div className='flex-1'>
               <Input
@@ -65,11 +67,13 @@ function ExpenseLineItemsField({ value, onValueChange, disabled }: ExpenseLineIt
               </button>
             )}
           </div>
-          <CategoryField
-            value={item.category}
-            onValueChange={(category) => updateItem(item.id, { category })}
-            disabled={disabled}
-          />
+          {showCategoryPerItem && (
+            <CategoryField
+              value={item.category}
+              onValueChange={(category) => updateItem(item.id, { category })}
+              disabled={disabled}
+            />
+          )}
         </div>
       ))}
       <div className='flex items-center justify-between gap-2'>

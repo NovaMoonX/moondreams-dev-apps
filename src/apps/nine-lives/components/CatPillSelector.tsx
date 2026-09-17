@@ -16,13 +16,19 @@ interface CatPillSelectorProps {
   disabled?: boolean;
   /** When true, selecting a pill replaces the selection instead of toggling it in/out (for "view by one cat" filters). */
   singleSelect?: boolean;
+  /** Smaller pills/avatars, for compact inline filters (e.g. under a stat card). */
+  size?: 'md' | 'sm';
+  /** When provided, renders a leading pill that clears the selection back to "all". */
+  allLabel?: string;
 }
 
 /**
  * Replaces the long checkbox-list cat picker with a wrapping row of small
  * avatar + name pills that toggle selection on click.
  */
-function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSelect }: CatPillSelectorProps) {
+function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSelect, size = 'md', allLabel }: CatPillSelectorProps) {
+  const isCompact = size === 'sm';
+
   const toggleCat = (catId: string) => {
     if (singleSelect) {
       onValueChange(value.includes(catId) ? [] : [catId]);
@@ -34,8 +40,26 @@ function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSel
     );
   };
 
+  const pillClassName = (isSelected: boolean) =>
+    join(
+      'flex items-center rounded-full border transition-colors',
+      isCompact ? 'gap-1 py-0.5 pr-2 pl-0.5 text-xs' : 'gap-1.5 py-1 pr-3 pl-1 text-sm',
+      isSelected ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/40',
+    );
+
   return (
     <div role='group' aria-label='Cats' className='flex flex-wrap justify-center gap-2'>
+      {allLabel && (
+        <button
+          type='button'
+          aria-pressed={value.length === 0}
+          disabled={disabled}
+          onClick={() => onValueChange([])}
+          className={pillClassName(value.length === 0)}
+        >
+          {allLabel}
+        </button>
+      )}
       {catOptions.map((cat) => {
         const isSelected = value.includes(cat.value);
 
@@ -46,14 +70,9 @@ function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSel
             aria-pressed={isSelected}
             disabled={disabled}
             onClick={() => toggleCat(cat.value)}
-            className={join(
-              'flex items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm transition-colors',
-              isSelected
-                ? 'border-primary bg-primary/10 text-foreground'
-                : 'border-border text-muted-foreground hover:bg-muted/40',
-            )}
+            className={pillClassName(isSelected)}
           >
-            <Avatar src={cat.photoURL ?? undefined} initials={getInitials(cat.label)} size='sm' />
+            <Avatar src={cat.photoURL ?? undefined} initials={getInitials(cat.label)} size={isCompact ? 'xs' : 'sm'} />
             {cat.label}
           </button>
         );
