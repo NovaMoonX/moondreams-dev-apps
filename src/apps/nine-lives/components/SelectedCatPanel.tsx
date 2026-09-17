@@ -33,6 +33,15 @@ const SEX_LABELS: Record<Cat['sex'], string> = {
   unknown: 'Sex unknown',
 };
 
+/** Sentence-cases a group of tags: first item capitalized, the rest lowercase, joined with commas. */
+function formatIdentityGroup(items: string[]): string {
+  return items
+    .map((item, index) =>
+      index === 0 ? item.charAt(0).toUpperCase() + item.slice(1).toLowerCase() : item.toLowerCase(),
+    )
+    .join(', ');
+}
+
 const sectionOptions = [
   { text: 'Vaccinations', value: 'vaccinations' },
   { text: 'Preventives & Meds', value: 'preventives' },
@@ -82,7 +91,12 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
             </div>
             {(selectedCat.coatColors?.length || selectedCat.personalityTraits?.length) && (
               <p className='text-muted-foreground mt-1 text-sm'>
-                {[...(selectedCat.coatColors ?? []), ...(selectedCat.personalityTraits ?? [])].join(' · ')}
+                {[
+                  selectedCat.coatColors?.length ? formatIdentityGroup(selectedCat.coatColors) : null,
+                  selectedCat.personalityTraits?.length ? formatIdentityGroup(selectedCat.personalityTraits) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             )}
           </div>
