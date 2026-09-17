@@ -13,8 +13,12 @@ import {
   selectLitterEntriesByHousehold,
   selectVisitsByHousehold,
 } from '../store/selectors';
-import { getDaysSince, getLatestFullChangeByBox, LITTER_OVERDUE_DAYS } from '../utils/attentionItems';
-import CatPillSelector from './CatPillSelector';
+import {
+  getDaysSince,
+  getLatestFullChangeByBox,
+  LITTER_OVERDUE_DAYS,
+} from '../utils/attentionItems';
+import ExpenseCatFilterByPet from './ExpenseCatFilterByPet';
 import StatTile from './StatTile';
 
 /** Kept as a plain top-level helper (rather than inline in the component) so `Date.now()` isn't called directly in render. */
@@ -48,16 +52,25 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 
 function StatsSummary({ householdId }: StatsSummaryProps) {
   const [recurringView, setRecurringView] = useState<RecurringView>('monthly');
-  const [selectedLitterBoxId, setSelectedLitterBoxId] = useState<string | null>(null);
+  const [selectedLitterBoxId, setSelectedLitterBoxId] = useState<string | null>(
+    null,
+  );
   const [recurringCatId, setRecurringCatId] = useState<string | null>(null);
-  const [isViewingRecurringByPet, setIsViewingRecurringByPet] = useState(false);
   const [lifetimeCatId, setLifetimeCatId] = useState<string | null>(null);
-  const [isViewingLifetimeByPet, setIsViewingLifetimeByPet] = useState(false);
 
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
-  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
-  const litterBoxes = useAppSelector(selectLitterBoxesByHousehold(householdId), shallowEqual);
-  const litterEntries = useAppSelector(selectLitterEntriesByHousehold(householdId), shallowEqual);
+  const visits = useAppSelector(
+    selectVisitsByHousehold(householdId),
+    shallowEqual,
+  );
+  const litterBoxes = useAppSelector(
+    selectLitterBoxesByHousehold(householdId),
+    shallowEqual,
+  );
+  const litterEntries = useAppSelector(
+    selectLitterEntriesByHousehold(householdId),
+    shallowEqual,
+  );
   const selectRecurringExpenseTotals = useMemo(
     () => makeSelectExpenseTotalsByHousehold(householdId, recurringCatId),
     [householdId, recurringCatId],
@@ -69,7 +82,12 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   const recurringExpenseTotals = useAppSelector(selectRecurringExpenseTotals);
   const lifetimeExpenseTotals = useAppSelector(selectLifetimeExpenseTotals);
   const catOptions = useMemo(
-    () => cats.map((cat) => ({ label: cat.name, value: cat.id, photoURL: cat.photoURL })),
+    () =>
+      cats.map((cat) => ({
+        label: cat.name,
+        value: cat.id,
+        photoURL: cat.photoURL,
+      })),
     [cats],
   );
   const completedVisitCount = visits.filter(
@@ -77,11 +95,19 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   ).length;
 
   const recurringTotal =
-    recurringView === 'monthly' ? recurringExpenseTotals.recurringMonthly : recurringExpenseTotals.recurringYearly;
+    recurringView === 'monthly'
+      ? recurringExpenseTotals.recurringMonthly
+      : recurringExpenseTotals.recurringYearly;
 
-  const activeLitterBoxes = useMemo(() => litterBoxes.filter((box) => box.isActive), [litterBoxes]);
+  const activeLitterBoxes = useMemo(
+    () => litterBoxes.filter((box) => box.isActive),
+    [litterBoxes],
+  );
 
-  const latestChangedAtByBox = useMemo(() => getLatestFullChangeByBox(litterEntries), [litterEntries]);
+  const latestChangedAtByBox = useMemo(
+    () => getLatestFullChangeByBox(litterEntries),
+    [litterEntries],
+  );
 
   // The box that's gone longest without a change is the one that most needs attention, so it's the default.
   const mostOverdueBoxId = useMemo(() => {
@@ -101,24 +127,29 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
   }, [activeLitterBoxes, latestChangedAtByBox]);
 
   const selectedLitterBox =
-    activeLitterBoxes.find((box) => box.id === (selectedLitterBoxId ?? mostOverdueBoxId)) ?? null;
+    activeLitterBoxes.find(
+      (box) => box.id === (selectedLitterBoxId ?? mostOverdueBoxId),
+    ) ?? null;
   const selectedLitterBoxChangedAt = selectedLitterBox
-    ? latestChangedAtByBox.get(selectedLitterBox.id) ?? null
+    ? (latestChangedAtByBox.get(selectedLitterBox.id) ?? null)
     : null;
 
   return (
     <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
       <StatTile label='Visits so far' value={completedVisitCount} />
 
-      <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>
+      <div className='border-border bg-card rounded-lg border p-4 text-center sm:text-left'>
         <div className='flex items-center justify-center gap-2 sm:justify-between'>
-          <p className='text-sm text-muted-foreground'>Recurring expenses</p>
-          <div className='flex items-center gap-1 rounded-md border border-border p-0.5'>
+          <p className='text-muted-foreground text-sm'>Recurring expenses</p>
+          <div className='border-border flex items-center gap-1 rounded-md border p-0.5'>
             <Button
               type='button'
               variant={recurringView === 'monthly' ? 'primary' : 'secondary'}
               size='sm'
-              className={join('h-6 px-2 text-xs', recurringView !== 'monthly' && 'bg-transparent')}
+              className={join(
+                'h-6 px-2 text-xs',
+                recurringView !== 'monthly' && 'bg-transparent',
+              )}
               onClick={() => setRecurringView('monthly')}
             >
               Monthly
@@ -127,103 +158,49 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
               type='button'
               variant={recurringView === 'yearly' ? 'primary' : 'secondary'}
               size='sm'
-              className={join('h-6 px-2 text-xs', recurringView !== 'yearly' && 'bg-transparent')}
+              className={join(
+                'h-6 px-2 text-xs',
+                recurringView !== 'yearly' && 'bg-transparent',
+              )}
               onClick={() => setRecurringView('yearly')}
             >
               Yearly
             </Button>
           </div>
         </div>
-        <p className='mt-2 text-2xl font-semibold'>{currencyFormatter.format(recurringTotal)}</p>
-        {catOptions.length > 0 && (
-          <div className='mt-3'>
-            {isViewingRecurringByPet ? (
-              <div className='space-y-1'>
-                <CatPillSelector
-                  catOptions={catOptions}
-                  value={recurringCatId ? [recurringCatId] : []}
-                  onValueChange={(value) => setRecurringCatId(value[0] ?? null)}
-                  singleSelect
-                  size='sm'
-                />
-                {recurringCatId && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className='text-muted-foreground hover:text-foreground'
-                    onClick={() => setRecurringCatId(null)}
-                  >
-                    All pets
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='text-muted-foreground hover:text-foreground'
-                onClick={() => setIsViewingRecurringByPet(true)}
-              >
-                View by pet
-              </Button>
-            )}
-          </div>
-        )}
+        <p className='mt-2 text-2xl font-semibold'>
+          {currencyFormatter.format(recurringTotal)}
+        </p>
+        <div className='mt-3'>
+          <ExpenseCatFilterByPet catOptions={catOptions} catId={recurringCatId} onCatIdChange={setRecurringCatId} />
+        </div>
       </div>
 
-      <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>
+      <div className='border-border bg-card rounded-lg border p-4 text-center sm:text-left'>
         <div className='flex items-center justify-center gap-2 sm:justify-between'>
-          <p className='text-sm text-muted-foreground'>Lifetime expenses</p>
+          <p className='text-muted-foreground text-sm'>Lifetime expenses</p>
         </div>
-        <p className='mt-2 text-2xl font-semibold'>{currencyFormatter.format(lifetimeExpenseTotals.lifetime)}</p>
-        {catOptions.length > 0 && (
-          <div className='mt-3'>
-            {isViewingLifetimeByPet ? (
-              <div className='space-y-1'>
-                <CatPillSelector
-                  catOptions={catOptions}
-                  value={lifetimeCatId ? [lifetimeCatId] : []}
-                  onValueChange={(value) => setLifetimeCatId(value[0] ?? null)}
-                  singleSelect
-                  size='sm'
-                />
-                {lifetimeCatId && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className='text-muted-foreground hover:text-foreground'
-                    onClick={() => setLifetimeCatId(null)}
-                  >
-                    All pets
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='text-muted-foreground hover:text-foreground'
-                onClick={() => setIsViewingLifetimeByPet(true)}
-              >
-                View by pet
-              </Button>
-            )}
-          </div>
-        )}
+        <p className='mt-2 text-2xl font-semibold'>
+          {currencyFormatter.format(lifetimeExpenseTotals.lifetime)}
+        </p>
+        <div className='mt-3'>
+          <ExpenseCatFilterByPet catOptions={catOptions} catId={lifetimeCatId} onCatIdChange={setLifetimeCatId} />
+        </div>
       </div>
 
       {selectedLitterBox && (
-        <div className='rounded-lg border border-border bg-card p-4 text-center sm:text-left'>
+        <div className='border-border bg-card rounded-lg border p-4 text-center sm:text-left'>
           <div className='flex items-center justify-center gap-2 sm:justify-between'>
-            <p className='text-sm text-muted-foreground'>Since litter changed</p>
+            <p className='text-muted-foreground text-sm'>
+              Since litter changed
+            </p>
             {activeLitterBoxes.length > 1 && (
               <div className='max-w-28'>
                 <Select
-                  options={activeLitterBoxes.map((box) => ({ text: box.name, value: box.id }))}
+                  options={activeLitterBoxes.map((box) => ({
+                    text: box.name,
+                    value: box.id,
+                  }))}
                   value={selectedLitterBox.id}
                   onChange={setSelectedLitterBoxId}
                   size='sm'
@@ -235,7 +212,9 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
             className={join(
               'mt-2 text-2xl font-semibold',
               getLitterStatusClassName(
-                selectedLitterBoxChangedAt === null ? null : daysSinceNow(selectedLitterBoxChangedAt),
+                selectedLitterBoxChangedAt === null
+                  ? null
+                  : daysSinceNow(selectedLitterBoxChangedAt),
               ),
             )}
           >
@@ -243,11 +222,15 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
               ? 'No changes logged'
               : (() => {
                   const days = daysSinceNow(selectedLitterBoxChangedAt);
-                  return days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'}`;
+                  return days === 0
+                    ? 'Today'
+                    : `${days} day${days === 1 ? '' : 's'}`;
                 })()}
           </p>
           {activeLitterBoxes.length === 1 && (
-            <p className='mt-1 text-sm text-muted-foreground'>{selectedLitterBox.name}</p>
+            <p className='text-muted-foreground mt-1 text-sm'>
+              {selectedLitterBox.name}
+            </p>
           )}
         </div>
       )}
