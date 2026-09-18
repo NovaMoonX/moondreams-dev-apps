@@ -6,6 +6,17 @@
 
 > **Timestamp convention**: every date and time field in this document is a millisecond Unix timestamp (`number`), never an ISO string — this matches the repo's existing convention (see `.github/copilot-instructions.md`). An earlier draft of this document used ISO date strings for a few fields (`Cat.dateOfBirth`, `CatKeyDate.date`, `Cat.adoptedAt`, `Cat.insurance.coverageStartDate`, `HealthRecord.recordDate`); that was an oversight, corrected below. Fields that represent a calendar date without a meaningful time-of-day (like a birthday) still store as `number` — midnight UTC of that date — rather than switching format just because there's no clock time involved.
 
+## Ingestion matching and deduplication
+
+Document ingestion stores every match as a draft-time default so the review modal can show and override it before confirmation:
+
+- Cat and clinic names use trimmed, whitespace-collapsed, case-insensitive Levenshtein similarity. A score of at least `0.82` is required, and an ambiguous tie is rejected rather than guessed.
+- Scheduled visits match only `upcoming` visits within three days (`72` hours) of the extracted date. When a clinic is named and confidently matched, the visit must use that clinic.
+- Vaccinations match the same cat and normalized vaccine name. Preventives match the same preventive type and all extracted cats. A kept match appends a newest-first dose to the existing history.
+- Weight duplicates use the same cat, a one-day window, and a converted weight difference of no more than `0.1 lb` or `1%` (whichever is larger). Symptoms use the same cat, normalized description, and a seven-day window.
+- Conditions use the same `0.82` name threshold against the shared `ConditionLibrary`. Separately, only `active` or `ongoing` conditions for the extracted cat can be matched for visit linking; confirmation appends the visit ID to `linkedVisitIds`.
+- Unmatched custom symptom descriptions and condition names are trimmed, whitespace-collapsed, and stored with an initial capital, matching the app's Title Case preset labels without changing already matched library labels.
+
 ## Data Schema
 
 ### 1. Household

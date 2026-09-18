@@ -432,6 +432,15 @@ export interface IngestionDraft {
   proposedRecordType: Exclude<HealthRecordType, 'custom'> | null;
   suggestKeepAsRecord: boolean;
   confidence: number | null;
+  matchedCatIds: (string | null)[];
+  matchedClinicIds: (string | null)[];
+  matchedVisitIds: (string | null)[];
+  matchedVaccinationIds: (string | null)[];
+  matchedPreventiveIds: (string | null)[];
+  likelyDuplicateWeightEntries: boolean[];
+  likelyDuplicateSymptoms: boolean[];
+  matchedLibraryConditionIds: (string | null)[];
+  matchedCatConditionIds: (string | null)[];
   createdBy: string;
   createdAt: number;
 }

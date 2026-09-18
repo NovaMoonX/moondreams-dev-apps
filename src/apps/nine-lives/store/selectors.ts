@@ -186,6 +186,16 @@ export const selectConditionLibrary = (state: RootState) => state.nineLives.cond
 export const selectConditionsByCat = (catId: string | null | undefined) => (state: RootState) =>
   catId ? state.nineLives.catConditions.items.filter((condition) => condition.catId === catId) : [];
 
+export const selectCatConditionsByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.catConditions.items.filter((condition) =>
+          state.nineLives.cats.items.some(
+            (cat) => cat.householdId === householdId && cat.id === condition.catId,
+          ),
+        )
+      : [];
+
 export const selectVisitsByHousehold =
   (householdId: string | null | undefined) => (state: RootState) =>
     householdId
