@@ -15,6 +15,11 @@ import {
 import { selectIngestionDraftsByHousehold } from '../store/selectors';
 import IngestionDraftReviewModal from './IngestionDraftReviewModal';
 
+/** Keeps the "reading" state visible for at least this long so it doesn't flash by unreadably on a fast response. */
+const MIN_EXTRACTION_LOADING_MS = 2000;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 interface DocumentIngestionModalProps {
   isOpen: boolean;
   householdId: string;
@@ -80,9 +85,10 @@ function DocumentIngestionModal({
     setIsSubmitting(true);
 
     try {
-      const created = await dispatch(
-        createDraftFromExtraction({ householdId, uid, file }),
-      ).unwrap();
+      const [created] = await Promise.all([
+        dispatch(createDraftFromExtraction({ householdId, uid, file })).unwrap(),
+        delay(MIN_EXTRACTION_LOADING_MS),
+      ]);
       setActiveDraftId(created.id);
     } catch (submissionError) {
       setError(
@@ -132,7 +138,7 @@ function DocumentIngestionModal({
             Cancel
           </Button>
           <Button type='button' loading={isSubmitting} disabled={!file} onClick={() => void handleSubmit()}>
-            {isSubmitting ? 'Reading…' : 'Review document'}
+            {isSubmitting ? 'Updating and parsing…' : 'Review document'}
           </Button>
         </div>
 

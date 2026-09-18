@@ -31,7 +31,11 @@ import {
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
-import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
+import {
+  fromLocalDateAndTimeInputValues,
+  toLocalDateInputValue,
+  toLocalTimeInputValue,
+} from '@/utils/dateInputUtils';
 import { formatDateTime } from '@/utils/formatUtils';
 
 import {
@@ -57,6 +61,16 @@ function getConfidenceClassName(confidence: number): string {
   }
 
   return 'text-destructive';
+}
+
+/** Changing just the date half of a timestamp, keeping its existing time-of-day. */
+function withUpdatedDate(current: number, dateValue: string): number | undefined {
+  return fromLocalDateAndTimeInputValues(dateValue, toLocalTimeInputValue(current));
+}
+
+/** Changing just the time half of a timestamp, keeping its existing date. */
+function withUpdatedTime(current: number, timeValue: string): number | undefined {
+  return fromLocalDateAndTimeInputValues(toLocalDateInputValue(current), timeValue);
 }
 
 const SEX_OPTIONS = [
@@ -275,6 +289,33 @@ function CatNamesEditor({
         )
       )}
     </div>
+  );
+}
+
+/** For proposals that attach to exactly one cat — keeps the current name selectable even if it's not (yet) a household cat. */
+function SingleCatSelect({
+  catName,
+  cats,
+  onChange,
+}: {
+  catName: string | null;
+  cats: Cat[];
+  onChange: (name: string | null) => void;
+}) {
+  const options = [
+    ...cats.map((cat) => ({ text: cat.name, value: cat.name })),
+    ...(catName && !cats.some((cat) => cat.name.toLowerCase() === catName.toLowerCase())
+      ? [{ text: catName, value: catName }]
+      : []),
+  ];
+
+  return (
+    <Select
+      options={options}
+      value={catName ?? ''}
+      placeholder='Select a cat'
+      onChange={(value) => onChange(value || null)}
+    />
   );
 }
 
@@ -808,9 +849,19 @@ function IngestionDraftReviewModal({
                     <div className='flex flex-col gap-2 sm:flex-row'>
                       <Input
                         type='date'
-                        value={toDateInputValue(visit.scheduledAt)}
+                        value={toLocalDateInputValue(visit.scheduledAt)}
                         onChange={(event) => {
-                          const scheduledAt = fromDateInputValue(event.target.value);
+                          const scheduledAt = withUpdatedDate(visit.scheduledAt, event.target.value);
+                          if (scheduledAt !== undefined) {
+                            updateVisitAt(index, { scheduledAt });
+                          }
+                        }}
+                      />
+                      <Input
+                        type='time'
+                        value={toLocalTimeInputValue(visit.scheduledAt)}
+                        onChange={(event) => {
+                          const scheduledAt = withUpdatedTime(visit.scheduledAt, event.target.value);
                           if (scheduledAt !== undefined) {
                             updateVisitAt(index, { scheduledAt });
                           }
@@ -884,21 +935,38 @@ function IngestionDraftReviewModal({
                   />
                 </div>
                 {isEditing('vaccination', index) ? (
-                  <div className='flex flex-col gap-2 sm:flex-row'>
-                    <Input
-                      value={item.name}
-                      aria-label='Vaccination name'
-                      onChange={(event) => updateVaccinationAt(index, { name: event.target.value })}
-                    />
-                    <Input
-                      type='date'
-                      value={toDateInputValue(item.administeredAt)}
-                      onChange={(event) => {
-                        const administeredAt = fromDateInputValue(event.target.value);
-                        if (administeredAt !== undefined) {
-                          updateVaccinationAt(index, { administeredAt });
-                        }
-                      }}
+                  <div className='space-y-2'>
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                      <Input
+                        value={item.name}
+                        aria-label='Vaccination name'
+                        onChange={(event) => updateVaccinationAt(index, { name: event.target.value })}
+                      />
+                      <Input
+                        type='date'
+                        value={toLocalDateInputValue(item.administeredAt)}
+                        onChange={(event) => {
+                          const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
+                          if (administeredAt !== undefined) {
+                            updateVaccinationAt(index, { administeredAt });
+                          }
+                        }}
+                      />
+                      <Input
+                        type='time'
+                        value={toLocalTimeInputValue(item.administeredAt)}
+                        onChange={(event) => {
+                          const administeredAt = withUpdatedTime(item.administeredAt, event.target.value);
+                          if (administeredAt !== undefined) {
+                            updateVaccinationAt(index, { administeredAt });
+                          }
+                        }}
+                      />
+                    </div>
+                    <SingleCatSelect
+                      catName={item.catName}
+                      cats={cats}
+                      onChange={(catName) => updateVaccinationAt(index, { catName })}
                     />
                   </div>
                 ) : (
@@ -933,9 +1001,19 @@ function IngestionDraftReviewModal({
                       />
                       <Input
                         type='date'
-                        value={toDateInputValue(item.administeredAt)}
+                        value={toLocalDateInputValue(item.administeredAt)}
                         onChange={(event) => {
-                          const administeredAt = fromDateInputValue(event.target.value);
+                          const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
+                          if (administeredAt !== undefined) {
+                            updatePreventiveAt(index, { administeredAt });
+                          }
+                        }}
+                      />
+                      <Input
+                        type='time'
+                        value={toLocalTimeInputValue(item.administeredAt)}
+                        onChange={(event) => {
+                          const administeredAt = withUpdatedTime(item.administeredAt, event.target.value);
                           if (administeredAt !== undefined) {
                             updatePreventiveAt(index, { administeredAt });
                           }
@@ -971,22 +1049,39 @@ function IngestionDraftReviewModal({
                   <EditPencilButton editing={isEditing('weight', index)} onClick={() => toggleEditing('weight', index)} />
                 </div>
                 {isEditing('weight', index) ? (
-                  <div className='flex flex-col gap-2 sm:flex-row'>
-                    <Input
-                      type='number'
-                      value={item.weight}
-                      aria-label='Weight'
-                      onChange={(event) => updateWeightAt(index, { weight: Number(event.target.value) })}
-                    />
-                    <Input
-                      type='date'
-                      value={toDateInputValue(item.measuredAt)}
-                      onChange={(event) => {
-                        const measuredAt = fromDateInputValue(event.target.value);
-                        if (measuredAt !== undefined) {
-                          updateWeightAt(index, { measuredAt });
-                        }
-                      }}
+                  <div className='space-y-2'>
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                      <Input
+                        type='number'
+                        value={item.weight}
+                        aria-label='Weight'
+                        onChange={(event) => updateWeightAt(index, { weight: Number(event.target.value) })}
+                      />
+                      <Input
+                        type='date'
+                        value={toLocalDateInputValue(item.measuredAt)}
+                        onChange={(event) => {
+                          const measuredAt = withUpdatedDate(item.measuredAt, event.target.value);
+                          if (measuredAt !== undefined) {
+                            updateWeightAt(index, { measuredAt });
+                          }
+                        }}
+                      />
+                      <Input
+                        type='time'
+                        value={toLocalTimeInputValue(item.measuredAt)}
+                        onChange={(event) => {
+                          const measuredAt = withUpdatedTime(item.measuredAt, event.target.value);
+                          if (measuredAt !== undefined) {
+                            updateWeightAt(index, { measuredAt });
+                          }
+                        }}
+                      />
+                    </div>
+                    <SingleCatSelect
+                      catName={item.catName}
+                      cats={cats}
+                      onChange={(catName) => updateWeightAt(index, { catName })}
                     />
                   </div>
                 ) : (

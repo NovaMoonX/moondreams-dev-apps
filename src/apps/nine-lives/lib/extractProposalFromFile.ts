@@ -66,7 +66,12 @@ const responseSchema = {
         properties: {
           name: { type: SchemaType.STRING },
           phone: nullableString,
-          email: nullableString,
+          email: {
+            type: SchemaType.STRING,
+            nullable: true,
+            description:
+              "Only the CLINIC's own email address — it should plausibly belong to the clinic (e.g. containing the clinic's name, an abbreviation of it, or 'vet'/'animal'/'pet' in the address or domain). Never the pet owner's, a household member's, or any other person's personal email that happens to appear in the document (a 'billed to' line, an account holder field, a signature, etc.) — leave this null rather than guess.",
+          },
           website: nullableString,
           address: nullableString,
         },
@@ -173,6 +178,8 @@ const responseSchema = {
     },
     proposedExpenses: {
       type: SchemaType.ARRAY,
+      description:
+        "One entry per distinct bill or charge. If a single bill has just one itemized breakdown that covers more than one cat jointly (a shared visit fee, a combined lab charge, etc.), propose ONE expense with every one of those cats listed in catNames — do NOT duplicate the same line items into a separate expense per cat. Only propose separate expenses per cat when the document itself itemizes separate charges for each cat.",
       items: {
         type: SchemaType.OBJECT,
         properties: {
