@@ -6,9 +6,42 @@ import type { RootState } from '@/store';
 import type { Cat } from '@apps/nine-lives/types';
 
 import { removeCat, revertCat, upsertCat } from '../slices/catsSlice';
+import { nextOccurrenceOnOrAfter } from '../../utils/catAnniversaries';
+import { cancelEntityReminders, scheduleEntityReminders } from '../../utils/reminders';
 
 const getCatDocRef = (householdId: string, catId: string) =>
   doc(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId);
+
+async function scheduleCatReminders(
+  state: RootState,
+  householdId: string,
+  uid: string,
+  cat: Pick<Cat, 'id' | 'name' | 'dateOfBirth' | 'adoptedAt'>,
+): Promise<string[]> {
+  const now = Date.now();
+  const relatedEntityPath = `apps/nine-lives/households/${householdId}/cats/${cat.id}`;
+
+  return scheduleEntityReminders(state, householdId, uid, [
+    {
+      title: 'Birthday today!',
+      body: `It's ${cat.name}'s birthday today. 🎂`,
+      scheduledFor: nextOccurrenceOnOrAfter(cat.dateOfBirth, now),
+      relatedEntityPath,
+      recurrence: 'yearly',
+    },
+    ...(cat.adoptedAt
+      ? [
+          {
+            title: 'Adoption anniversary today!',
+            body: `Today marks ${cat.name}'s adoption anniversary. 🏡`,
+            scheduledFor: nextOccurrenceOnOrAfter(cat.adoptedAt, now),
+            relatedEntityPath,
+            recurrence: 'yearly' as const,
+          },
+        ]
+      : []),
+  ]);
+}
 
 export const createCat = createAsyncThunk<
   Cat,
@@ -20,7 +53,7 @@ export const createCat = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/cats/create',
-  async ({ householdId, uid, cat }, { dispatch, rejectWithValue }) => {
+  async ({ householdId, uid, cat }, { dispatch, getState, rejectWithValue }) => {
     const trimmedName = cat.name.trim();
 
     if (!trimmedName) {
@@ -56,6 +89,7 @@ export const createCat = createAsyncThunk<
       breed: cat.breed,
       dateOfBirth: cat.dateOfBirth,
       isDateOfBirthEstimated: cat.isDateOfBirthEstimated,
+      reminderIds: [],
       id: catId,
       householdId,
       name: trimmedName,
@@ -63,6 +97,13 @@ export const createCat = createAsyncThunk<
       createdAt: now,
       lastEditedAt: now,
     };
+
+    nextCat.reminderIds = await scheduleCatReminders(
+      getState() as RootState,
+      householdId,
+      uid,
+      nextCat,
+    );
 
     await setDoc(getCatDocRef(householdId, catId), nextCat);
     dispatch(upsertCat(nextCat));
@@ -73,11 +114,16 @@ export const createCat = createAsyncThunk<
 
 export const updateCat = createAsyncThunk<
   Cat,
-  { householdId: string; catId: string; changes: Partial<Cat> },
+  {
+    householdId: string;
+    catId: string;
+    reminderUid?: string;
+    changes: Partial<Cat>;
+  },
   { rejectValue: string }
 >(
   'nineLives/cats/update',
-  async ({ householdId, catId, changes }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, catId, reminderUid, changes }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.cats.items.find((cat) => cat.id === catId);
 
@@ -93,10 +139,24 @@ export const updateCat = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    const datesChanged =
+      optimisticCat.dateOfBirth !== current.dateOfBirth ||
+      optimisticCat.adoptedAt !== current.adoptedAt;
+
+    if (datesChanged) {
+      await cancelEntityReminders(current.reminderIds);
+      optimisticCat.reminderIds = reminderUid
+        ? await scheduleCatReminders(state, householdId, reminderUid, optimisticCat)
+        : [];
+    }
+
     dispatch(upsertCat(optimisticCat));
 
     try {
-      await updateDoc(getCatDocRef(householdId, catId), changes);
+      await updateDoc(getCatDocRef(householdId, catId), {
+        ...changes,
+        ...(datesChanged ? { reminderIds: optimisticCat.reminderIds } : {}),
+      });
       return optimisticCat;
     } catch (error) {
       dispatch(revertCat({ id: catId }));
@@ -125,6 +185,7 @@ export const deleteCat = createAsyncThunk<
 
     try {
       await deleteDoc(getCatDocRef(householdId, catId));
+      await cancelEntityReminders(current.reminderIds);
       return { id: catId };
     } catch (error) {
       dispatch(revertCat({ id: catId }));

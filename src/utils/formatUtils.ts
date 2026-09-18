@@ -14,6 +14,14 @@ export function formatList(names: string[]) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
+export function formatTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 export function formatDateTime(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getFullYear() === new Date().getFullYear();

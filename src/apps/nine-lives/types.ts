@@ -82,6 +82,8 @@ export interface Cat {
   insurance: CatInsurance | null;
   personalityTraits: string[] | null;
   notes: string | null;
+  /** Pending yearly-recurring reminders (birthday, adoption anniversary) — rescheduled when `dateOfBirth`/`adoptedAt` change. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -175,6 +177,8 @@ export interface Visit {
   linkedHealthRecordIds: string[];
   linkedVaccinationIds: string[];
   linkedWeightEntryIds: string[];
+  /** Pending push reminders scheduled a day before `scheduledAt`, if any — cancelled and rescheduled when `scheduledAt` changes. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -205,6 +209,8 @@ export interface Vaccination {
   lastAdministeredAt: number;
   /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
   expiresAt: number | null;
+  /** Pending push reminders scheduled ahead of `expiresAt` (a week before, and the day of), if any — cancelled and rescheduled when `expiresAt` changes. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -247,6 +253,8 @@ export interface Preventive {
   lastAdministeredAt: number;
   /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
   expiresAt: number | null;
+  /** Pending push reminders scheduled ahead of `expiresAt` (a week before, and the day of), if any — cancelled and rescheduled when `expiresAt` changes. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -297,6 +305,8 @@ export interface LitterBox {
   location: string | null;
   /** When false, the box is retired (e.g. after switching litter) and hidden from new weigh-ins, but its history is kept. */
   isActive: boolean;
+  /** Pending push reminder scheduled a couple days before the box's litter is due for a full change, if any — cancelled and rescheduled whenever a new full change is logged. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

@@ -19,10 +19,12 @@ import type {
 } from '@apps/nine-lives/types';
 
 import { removeVisit, revertVisit, upsertVisit } from '../slices/visitsSlice';
+import { scheduleVaccinationReminders } from './vaccinationsActions';
 import { upsertCatCondition } from '../slices/catConditionsSlice';
 import { upsertSymptom } from '../slices/symptomsSlice';
 import { upsertVaccination } from '../slices/vaccinationsSlice';
 import { upsertWeightEntry } from '../slices/weightEntriesSlice';
+import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
 
 const getVisitsCollectionRef = (householdId: string) =>
   collection(db, 'apps', 'nine-lives', 'households', householdId, 'visits');
@@ -83,6 +85,22 @@ const getWeightEntryDocRef = (
     'weightEntries',
     weightEntryId,
   );
+
+async function scheduleVisitReminders(
+  state: RootState,
+  householdId: string,
+  uid: string,
+  visit: Pick<Visit, 'id' | 'title' | 'scheduledAt'>,
+): Promise<string[]> {
+  return scheduleEntityReminders(state, householdId, uid, [
+    {
+      title: 'Upcoming vet visit',
+      body: visit.title ? `${visit.title} is coming up.` : 'A vet visit is coming up.',
+      scheduledFor: visit.scheduledAt - ONE_DAY_MS,
+      relatedEntityPath: `apps/nine-lives/households/${householdId}/visits/${visit.id}`,
+    },
+  ]);
+}
 
 export interface VisitOutcome {
   summary?: string | null;
@@ -210,10 +228,18 @@ export const createVisit = createAsyncThunk<
       linkedHealthRecordIds: normalized.linkedHealthRecordIds ?? [],
       linkedVaccinationIds: normalized.linkedVaccinationIds ?? [],
       linkedWeightEntryIds: normalized.linkedWeightEntryIds ?? [],
+      reminderIds: [],
       createdBy: uid,
       createdAt: visit.createdAt ?? now,
       lastEditedAt: now,
     };
+
+    nextVisit.reminderIds = await scheduleVisitReminders(
+      getState() as RootState,
+      householdId,
+      uid,
+      nextVisit,
+    );
 
     await setDoc(getVisitDocRef(householdId, visitId), nextVisit);
     dispatch(upsertVisit(nextVisit));
@@ -227,13 +253,14 @@ export const updateVisit = createAsyncThunk<
   {
     householdId: string;
     visitId: string;
+    reminderUid?: string;
     changes: Partial<Visit>;
   },
   { rejectValue: string }
 >(
   'nineLives/visits/update',
   async (
-    { householdId, visitId, changes },
+    { householdId, visitId, reminderUid, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -270,11 +297,24 @@ export const updateVisit = createAsyncThunk<
       return rejectWithValue('Original visit not found.');
     }
 
+    const isRescheduled = nextVisit.scheduledAt !== current.scheduledAt;
+    const isNowCancelled = nextVisit.status === 'cancelled' && current.status !== 'cancelled';
+
+    if (isRescheduled || isNowCancelled) {
+      await cancelEntityReminders(current.reminderIds);
+      nextVisit.reminderIds = [];
+    }
+
+    if (isRescheduled && !isNowCancelled && reminderUid) {
+      nextVisit.reminderIds = await scheduleVisitReminders(state, householdId, reminderUid, nextVisit);
+    }
+
     dispatch(upsertVisit(nextVisit));
 
     try {
       await updateDoc(getVisitDocRef(householdId, visitId), {
         ...normalized,
+        reminderIds: nextVisit.reminderIds,
         lastEditedAt: nextVisit.lastEditedAt,
       });
       return nextVisit;
@@ -352,10 +392,17 @@ export const completeVisit = createAsyncThunk<
         firstAdministeredAt: dose.administeredAt,
         lastAdministeredAt: dose.administeredAt,
         expiresAt: dose.expiresAt,
+        reminderIds: [],
         createdBy: uid,
         createdAt: input.createdAt ?? now,
         lastEditedAt: now,
       };
+      vaccination.reminderIds = await scheduleVaccinationReminders(
+        state,
+        householdId,
+        uid,
+        vaccination,
+      );
       batch.set(getVaccinationDocRef(householdId, id), vaccination);
       linkedVaccinationIds.push(id);
       createdVaccinations.push(vaccination);
@@ -500,6 +547,7 @@ export const completeVisit = createAsyncThunk<
       linkedWeightEntryIds: [...new Set(linkedWeightEntryIds)],
       linkedConditionIds: [...new Set(linkedConditionIds)],
       linkedSymptomIds: [...new Set(linkedSymptomIds)],
+      reminderIds: [],
       lastEditedAt: now,
     };
     batch.update(getVisitDocRef(householdId, visitId), {
@@ -510,11 +558,13 @@ export const completeVisit = createAsyncThunk<
       linkedWeightEntryIds: nextVisit.linkedWeightEntryIds,
       linkedConditionIds: nextVisit.linkedConditionIds,
       linkedSymptomIds: nextVisit.linkedSymptomIds,
+      reminderIds: nextVisit.reminderIds,
       lastEditedAt: nextVisit.lastEditedAt,
     });
 
     try {
       await batch.commit();
+      await cancelEntityReminders(current.reminderIds);
       dispatch(upsertVisit(nextVisit));
       createdVaccinations.forEach((vaccination) =>
         dispatch(upsertVaccination(vaccination)),
@@ -609,6 +659,7 @@ export const deleteVisit = createAsyncThunk<
 
     try {
       await batch.commit();
+      await cancelEntityReminders(current.reminderIds);
       updatedFollowUps.forEach((visit) => dispatch(upsertVisit(visit)));
       return { id: visitId };
     } catch (error) {

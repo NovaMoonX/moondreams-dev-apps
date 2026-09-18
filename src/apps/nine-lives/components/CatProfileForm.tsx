@@ -611,6 +611,7 @@ function buildPreparedCat(data: CatProfileFormData, householdId: string | undefi
     insurance: nextInsurance,
     personalityTraits: data.personalityTraits.length > 0 ? data.personalityTraits : null,
     notes: data.keyDatesAndNotes.notes.trim() || null,
+    reminderIds: cat?.reminderIds ?? [],
     createdBy: cat?.createdBy ?? 'current-user',
     createdAt: cat?.createdAt ?? 0,
     lastEditedAt: cat?.lastEditedAt ?? 0,
