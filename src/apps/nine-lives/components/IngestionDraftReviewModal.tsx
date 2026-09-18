@@ -1,10 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
-import { Button, Input, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Disclosure, Input, Modal, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { Check, Pencil } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
+import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateTime } from '@/utils/formatUtils';
 
 import {
@@ -14,6 +16,7 @@ import {
   type IngestionDraftSelections,
 } from '../store/actions/ingestionDraftsActions';
 import { selectCatsByHousehold, selectClinicsByHousehold } from '../store/selectors';
+import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
 import type { IngestionDraft } from '../types';
 
 interface IngestionDraftReviewModalProps {
@@ -38,17 +41,100 @@ type ReviewSection =
   | 'expense'
   | 'record';
 
-function ToggleProposal({
+const SECTION_LABELS: Record<ReviewSection, string> = {
+  cat: 'Cats',
+  clinic: 'Clinics',
+  visit: 'Visits',
+  vaccinations: 'Vaccinations',
+  preventives: 'Preventives',
+  weight: 'Weight',
+  symptoms: 'Symptoms',
+  conditions: 'Conditions',
+  expense: 'Expenses',
+  record: 'Record',
+};
+
+type ArrayIncludeKey =
+  | 'includeCats'
+  | 'includeClinics'
+  | 'includeVisits'
+  | 'includeVaccinations'
+  | 'includePreventives'
+  | 'includeSymptoms'
+  | 'includeConditions'
+  | 'includeExpenses';
+
+interface EditingKey {
+  section: 'cat' | 'clinic' | 'visit' | 'vaccination' | 'preventive' | 'weight' | 'expense';
+  index: number;
+}
+
+function IncludeToggle({
   included,
   onToggle,
+  label = 'Include',
 }: {
   included: boolean;
   onToggle: () => void;
+  label?: string;
 }) {
   return (
-    <Button type='button' size='sm' variant={included ? 'primary' : 'secondary'} onClick={onToggle}>
-      {included ? 'Included' : 'Excluded'}
+    <label className='flex items-center gap-2 text-sm'>
+      <Toggle size='sm' checked={included} onCheckedChange={onToggle} />
+      {label}
+    </label>
+  );
+}
+
+function EditPencilButton({ editing, onClick }: { editing: boolean; onClick: () => void }) {
+  return (
+    <Button
+      type='button'
+      variant='secondary'
+      size='icon'
+      aria-label={editing ? 'Done editing' : 'Edit'}
+      onClick={onClick}
+      className='bg-transparent'
+    >
+      {editing ? <Check className='h-4 w-4' /> : <Pencil className='h-4 w-4' />}
     </Button>
+  );
+}
+
+function ReviewProgressPills({
+  sections,
+  reviewed,
+  expanded,
+  onSelect,
+}: {
+  sections: ReviewSection[];
+  reviewed: Set<ReviewSection>;
+  expanded: ReviewSection | null;
+  onSelect: (section: ReviewSection) => void;
+}) {
+  return (
+    <div className='flex flex-wrap gap-1.5'>
+      {sections.map((section) => {
+        const isActive = expanded === section;
+        const isReviewed = reviewed.has(section);
+        return (
+          <button
+            key={section}
+            type='button'
+            onClick={() => onSelect(section)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+              isActive
+                ? 'border-primary text-primary'
+                : isReviewed
+                  ? 'border-border bg-muted text-foreground'
+                  : 'border-border text-muted-foreground'
+            }`}
+          >
+            {SECTION_LABELS[section]}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -59,26 +145,22 @@ function Section({
   onToggle,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   section: ReviewSection;
-  expanded: ReviewSection;
+  expanded: ReviewSection | null;
   onToggle: (section: ReviewSection) => void;
   children: ReactNode;
 }) {
-  const isExpanded = expanded === section;
-
   return (
     <div className='border-b border-border pb-3'>
-      <Button
-        type='button'
-        variant='link'
-        className='w-full justify-between px-0 text-left'
-        onClick={() => onToggle(section)}
+      <Disclosure
+        label={<span className='font-medium'>{title}</span>}
+        isOpen={expanded === section}
+        onToggle={() => onToggle(section)}
+        buttonClassName='w-full'
       >
-        <span className='font-medium'>{title}</span>
-        <span className='text-muted-foreground text-xs'>{isExpanded ? 'Hide' : 'Show'}</span>
-      </Button>
-      {isExpanded && <div className='space-y-3 pt-2'>{children}</div>}
+        <div className='space-y-3 pt-2'>{children}</div>
+      </Disclosure>
     </div>
   );
 }
@@ -96,65 +178,143 @@ function IngestionDraftReviewModal({
   const { confirm } = useActionModal();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
-  const [expanded, setExpanded] = useState<ReviewSection>(intent === 'expense' ? 'expense' : intent === 'record' ? 'record' : 'visit');
+
+  const sectionsWithContent: ReviewSection[] = [
+    ...(draft.proposedCats.length ? (['cat'] as const) : []),
+    ...(draft.proposedClinics.length ? (['clinic'] as const) : []),
+    ...(draft.proposedVisits.length ? (['visit'] as const) : []),
+    ...(draft.proposedVaccinations.length ? (['vaccinations'] as const) : []),
+    ...(draft.proposedPreventives.length ? (['preventives'] as const) : []),
+    ...(draft.proposedWeightEntry ? (['weight'] as const) : []),
+    ...(draft.proposedSymptoms.length ? (['symptoms'] as const) : []),
+    ...(draft.proposedConditions.length ? (['conditions'] as const) : []),
+    ...(draft.proposedExpenses.length ? (['expense'] as const) : []),
+    'record',
+  ];
+  const initialSection: ReviewSection =
+    intent === 'expense' && draft.proposedExpenses.length
+      ? 'expense'
+      : intent === 'record'
+        ? 'record'
+        : (sectionsWithContent[0] ?? 'record');
+
+  const [expanded, setExpanded] = useState<ReviewSection | null>(initialSection);
+  const [reviewed, setReviewed] = useState<Set<ReviewSection>>(new Set([initialSection]));
+  const [editing, setEditing] = useState<EditingKey | null>(null);
   const [selections, setSelections] = useState<IngestionDraftSelections>({
-    includeCat: Boolean(draft.proposedCat),
-    includeClinic: Boolean(draft.proposedClinic),
-    includeVisit: Boolean(draft.proposedVisit),
-    includeWeightEntry: Boolean(draft.proposedWeightEntry),
-    includeExpense: Boolean(draft.proposedExpense),
     saveAsRecord: draft.suggestKeepAsRecord,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const proposedCat = draft.proposedCat;
-  const proposedClinic = draft.proposedClinic;
-  const proposedVisit = draft.proposedVisit;
 
-  const catOptions = useMemo(
-    () => [
-      { text: `Create new: ${draft.proposedCat?.name ?? 'cat'}`, value: '' },
-      ...cats.map((cat) => ({ text: cat.name, value: cat.id })),
-    ],
-    [cats, draft.proposedCat?.name],
-  );
-  const clinicOptions = useMemo(
-    () => [
-      { text: `Create new: ${draft.proposedClinic?.name ?? 'clinic'}`, value: '' },
-      ...clinics.map((clinic) => ({ text: clinic.name, value: clinic.id })),
-    ],
-    [clinics, draft.proposedClinic?.name],
-  );
+  const toggleSection = (section: ReviewSection) => {
+    setExpanded((current) => (current === section ? null : section));
+    setReviewed((current) => new Set(current).add(section));
+  };
 
-  const toggleItem = (
-    key: 'includeVaccinations' | 'includePreventives' | 'includeSymptoms' | 'includeConditions',
-    index: number,
-  ) => {
+  const isEditing = (section: EditingKey['section'], index: number) =>
+    editing?.section === section && editing.index === index;
+  const toggleEditing = (section: EditingKey['section'], index: number) => {
+    setEditing((current) =>
+      current && current.section === section && current.index === index ? null : { section, index },
+    );
+  };
+
+  const toggleArrayInclude = (key: ArrayIncludeKey, index: number) => {
     setSelections((current) => {
       const values = [...(current[key] ?? [])];
       values[index] = values[index] !== false ? false : true;
       return { ...current, [key]: values };
     });
   };
+  const isIncluded = (key: ArrayIncludeKey, index: number) => selections[key]?.[index] !== false;
+
+  const updateDraft = (changes: Parameters<typeof updateIngestionDraft>[0]['changes']) =>
+    void dispatch(updateIngestionDraft({ householdId, draftId: draft.id, changes }));
+
+  const updateCatAt = (index: number, patch: Partial<IngestionDraft['proposedCats'][number]>) =>
+    updateDraft({
+      proposedCats: draft.proposedCats.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    });
+  const updateClinicAt = (index: number, patch: Partial<IngestionDraft['proposedClinics'][number]>) =>
+    updateDraft({
+      proposedClinics: draft.proposedClinics.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    });
+  const updateVisitAt = (index: number, patch: Partial<IngestionDraft['proposedVisits'][number]>) =>
+    updateDraft({
+      proposedVisits: draft.proposedVisits.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    });
+  const updateVaccinationAt = (
+    index: number,
+    patch: Partial<IngestionDraft['proposedVaccinations'][number]>,
+  ) =>
+    updateDraft({
+      proposedVaccinations: draft.proposedVaccinations.map((item, i) =>
+        i === index ? { ...item, ...patch } : item,
+      ),
+    });
+  const updatePreventiveAt = (
+    index: number,
+    patch: Partial<IngestionDraft['proposedPreventives'][number]>,
+  ) =>
+    updateDraft({
+      proposedPreventives: draft.proposedPreventives.map((item, i) =>
+        i === index ? { ...item, ...patch } : item,
+      ),
+    });
+  const updateWeight = (patch: Partial<NonNullable<IngestionDraft['proposedWeightEntry']>>) =>
+    draft.proposedWeightEntry &&
+    updateDraft({ proposedWeightEntry: { ...draft.proposedWeightEntry, ...patch } });
+  const updateExpenseAt = (index: number, patch: Partial<IngestionDraft['proposedExpenses'][number]>) =>
+    updateDraft({
+      proposedExpenses: draft.proposedExpenses.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    });
+  const updateExpenseItemAt = (
+    expenseIndex: number,
+    itemIndex: number,
+    patch: Partial<IngestionDraft['proposedExpenses'][number]['items'][number]>,
+  ) => {
+    const expense = draft.proposedExpenses[expenseIndex];
+    updateExpenseAt(expenseIndex, {
+      items: expense.items.map((item, i) => (i === itemIndex ? { ...item, ...patch } : item)),
+    });
+  };
+
+  const catOptionsFor = (name: string) => [
+    { text: `Create new: ${name || 'cat'}`, value: '' },
+    ...cats.map((cat) => ({ text: cat.name, value: cat.id })),
+  ];
+  const clinicOptionsFor = (name: string) => [
+    { text: `Create new: ${name || 'clinic'}`, value: '' },
+    ...clinics.map((clinic) => ({ text: clinic.name, value: clinic.id })),
+  ];
+
+  const totalCount =
+    draft.proposedCats.length +
+    draft.proposedClinics.length +
+    draft.proposedVisits.length +
+    draft.proposedVaccinations.length +
+    draft.proposedPreventives.length +
+    (draft.proposedWeightEntry ? 1 : 0) +
+    draft.proposedSymptoms.length +
+    draft.proposedConditions.length +
+    draft.proposedExpenses.length;
+  const includedCount =
+    draft.proposedCats.filter((_, i) => isIncluded('includeCats', i)).length +
+    draft.proposedClinics.filter((_, i) => isIncluded('includeClinics', i)).length +
+    draft.proposedVisits.filter((_, i) => isIncluded('includeVisits', i)).length +
+    draft.proposedVaccinations.filter((_, i) => isIncluded('includeVaccinations', i)).length +
+    draft.proposedPreventives.filter((_, i) => isIncluded('includePreventives', i)).length +
+    (draft.proposedWeightEntry && selections.includeWeightEntry !== false ? 1 : 0) +
+    draft.proposedSymptoms.filter((_, i) => isIncluded('includeSymptoms', i)).length +
+    draft.proposedConditions.filter((_, i) => isIncluded('includeConditions', i)).length +
+    draft.proposedExpenses.filter((_, i) => isIncluded('includeExpenses', i)).length;
 
   const handleConfirm = async () => {
     setError(null);
     setIsSubmitting(true);
 
     try {
-      await dispatch(
-        updateIngestionDraft({
-          householdId,
-          draftId: draft.id,
-          changes: {
-            proposedCat: draft.proposedCat,
-            proposedClinic: draft.proposedClinic,
-            proposedVisit: draft.proposedVisit,
-            proposedExpense: draft.proposedExpense,
-            suggestKeepAsRecord: selections.saveAsRecord ?? false,
-          },
-        }),
-      ).unwrap();
       await dispatch(
         confirmIngestionDraft({
           householdId,
@@ -194,129 +354,157 @@ function IngestionDraftReviewModal({
     }
   };
 
-  const toggleSection = (section: ReviewSection) => {
-    setExpanded((current) => (current === section ? 'record' : section));
-  };
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Review extracted records'>
-      <div className='max-h-[70vh] space-y-3 overflow-y-auto pr-1'>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title='Review extracted records'
+      className='w-full sm:min-w-[36rem] sm:max-w-2xl'
+    >
+      <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
           {draft.sourceFileName}
           {draft.confidence !== null && ` · ${Math.round(draft.confidence * 100)}% confidence`}
         </p>
+        <ReviewProgressPills
+          sections={sectionsWithContent}
+          reviewed={reviewed}
+          expanded={expanded}
+          onSelect={toggleSection}
+        />
+      </div>
 
-        {proposedCat && (
-          <Section title='Cat' section='cat' expanded={expanded} onToggle={toggleSection}>
-            <ToggleProposal
-              included={selections.includeCat !== false}
-              onToggle={() => setSelections((current) => ({ ...current, includeCat: current.includeCat === false }))}
-            />
-            <Input
-              value={proposedCat.name}
-              aria-label='Proposed cat name'
-              onChange={(event) =>
-                void dispatch(updateIngestionDraft({
-                  householdId,
-                  draftId: draft.id,
-                  changes: {
-                    proposedCat: {
-                      ...proposedCat,
-                      name: event.target.value,
-                      breed: proposedCat.breed ?? null,
-                      dateOfBirth: proposedCat.dateOfBirth ?? null,
-                      isDateOfBirthEstimated: proposedCat.isDateOfBirthEstimated ?? null,
-                      sex: proposedCat.sex ?? null,
-                    },
-                  },
-                }))
-              }
-            />
-            <Select
-              options={catOptions}
-              value={selections.catId ?? ''}
-              placeholder='Create new cat'
-              onChange={(value) => setSelections((current) => ({ ...current, catId: value || null }))}
-            />
+      <div className='mt-3 max-h-[65vh] min-h-[40vh] space-y-3 overflow-y-auto pr-1'>
+        {draft.proposedCats.length > 0 && (
+          <Section title='Cats' section='cat' expanded={expanded} onToggle={toggleSection}>
+            {draft.proposedCats.map((cat, index) => (
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includeCats', index)} onToggle={() => toggleArrayInclude('includeCats', index)} />
+                  <EditPencilButton editing={isEditing('cat', index)} onClick={() => toggleEditing('cat', index)} />
+                </div>
+                {isEditing('cat', index) ? (
+                  <Input
+                    value={cat.name}
+                    aria-label='Proposed cat name'
+                    onChange={(event) => updateCatAt(index, { name: event.target.value })}
+                  />
+                ) : (
+                  <p>{cat.name}</p>
+                )}
+                <Select
+                  options={catOptionsFor(cat.name)}
+                  value={selections.catIds?.[index] ?? ''}
+                  placeholder='Create new cat'
+                  onChange={(value) =>
+                    setSelections((current) => {
+                      const values = [...(current.catIds ?? [])];
+                      values[index] = value || null;
+                      return { ...current, catIds: values };
+                    })
+                  }
+                />
+              </div>
+            ))}
           </Section>
         )}
 
-        {proposedClinic && (
-          <Section title='Vet clinic' section='clinic' expanded={expanded} onToggle={toggleSection}>
-            <ToggleProposal
-              included={selections.includeClinic !== false}
-              onToggle={() => setSelections((current) => ({ ...current, includeClinic: current.includeClinic === false }))}
-            />
-            <Input
-              value={proposedClinic.name}
-              aria-label='Proposed clinic name'
-              onChange={(event) =>
-                void dispatch(updateIngestionDraft({
-                  householdId,
-                  draftId: draft.id,
-                  changes: {
-                    proposedClinic: {
-                      ...proposedClinic,
-                      name: event.target.value,
-                      phone: proposedClinic.phone ?? null,
-                      email: proposedClinic.email ?? null,
-                      website: proposedClinic.website ?? null,
-                      address: proposedClinic.address ?? null,
-                    },
-                  },
-                }))
-              }
-            />
-            <Select
-              options={clinicOptions}
-              value={selections.clinicId ?? ''}
-              placeholder='Create new clinic'
-              onChange={(value) => setSelections((current) => ({ ...current, clinicId: value || null }))}
-            />
+        {draft.proposedClinics.length > 0 && (
+          <Section title='Vet clinics' section='clinic' expanded={expanded} onToggle={toggleSection}>
+            {draft.proposedClinics.map((clinic, index) => (
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includeClinics', index)} onToggle={() => toggleArrayInclude('includeClinics', index)} />
+                  <EditPencilButton editing={isEditing('clinic', index)} onClick={() => toggleEditing('clinic', index)} />
+                </div>
+                {isEditing('clinic', index) ? (
+                  <Input
+                    value={clinic.name}
+                    aria-label='Proposed clinic name'
+                    onChange={(event) => updateClinicAt(index, { name: event.target.value })}
+                  />
+                ) : (
+                  <p>{clinic.name}</p>
+                )}
+                <Select
+                  options={clinicOptionsFor(clinic.name)}
+                  value={selections.clinicIds?.[index] ?? ''}
+                  placeholder='Create new clinic'
+                  onChange={(value) =>
+                    setSelections((current) => {
+                      const values = [...(current.clinicIds ?? [])];
+                      values[index] = value || null;
+                      return { ...current, clinicIds: values };
+                    })
+                  }
+                />
+              </div>
+            ))}
           </Section>
         )}
 
-        {proposedVisit && (
-          <Section title='Visit' section='visit' expanded={expanded} onToggle={toggleSection}>
-            <ToggleProposal
-              included={selections.includeVisit !== false}
-              onToggle={() => setSelections((current) => ({ ...current, includeVisit: current.includeVisit === false }))}
-            />
-            <p className='text-muted-foreground text-sm'>
-              {formatDateTime(proposedVisit.scheduledAt)} · {proposedVisit.reason}
-            </p>
-            <Input
-              value={proposedVisit.notes ?? ''}
-              placeholder='Visit notes'
-              onChange={(event) =>
-                void dispatch(updateIngestionDraft({
-                  householdId,
-                  draftId: draft.id,
-                  changes: {
-                    proposedVisit: {
-                      ...proposedVisit,
-                      notes: event.target.value,
-                      catName: proposedVisit.catName ?? null,
-                      scheduledAt: proposedVisit.scheduledAt,
-                      reason: proposedVisit.reason,
-                      customReasonLabel: proposedVisit.customReasonLabel ?? null,
-                    },
-                  },
-                }))
-              }
-            />
+        {draft.proposedVisits.length > 0 && (
+          <Section title='Visits' section='visit' expanded={expanded} onToggle={toggleSection}>
+            {draft.proposedVisits.map((visit, index) => (
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includeVisits', index)} onToggle={() => toggleArrayInclude('includeVisits', index)} />
+                  <EditPencilButton editing={isEditing('visit', index)} onClick={() => toggleEditing('visit', index)} />
+                </div>
+                <p className='text-muted-foreground text-sm'>
+                  {formatDateTime(visit.scheduledAt)} · {visit.reason}
+                  {visit.catName && ` · ${visit.catName}`}
+                  {visit.clinicName && ` · ${visit.clinicName}`}
+                </p>
+                {isEditing('visit', index) ? (
+                  <Input
+                    value={visit.notes ?? ''}
+                    placeholder='Visit notes'
+                    onChange={(event) => updateVisitAt(index, { notes: event.target.value })}
+                  />
+                ) : (
+                  visit.notes && <p className='text-sm'>{visit.notes}</p>
+                )}
+              </div>
+            ))}
           </Section>
         )}
 
         {draft.proposedVaccinations.length > 0 && (
           <Section title='Vaccinations' section='vaccinations' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedVaccinations.map((item, index) => (
-              <div className='flex items-center justify-between gap-2' key={`${item.name}-${index}`}>
-                <span>{item.name} · {formatDateTime(item.administeredAt)}</span>
-                <ToggleProposal
-                  included={selections.includeVaccinations?.[index] !== false}
-                  onToggle={() => toggleItem('includeVaccinations', index)}
-                />
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includeVaccinations', index)} onToggle={() => toggleArrayInclude('includeVaccinations', index)} />
+                  <EditPencilButton
+                    editing={isEditing('vaccination', index)}
+                    onClick={() => toggleEditing('vaccination', index)}
+                  />
+                </div>
+                {isEditing('vaccination', index) ? (
+                  <div className='flex flex-col gap-2 sm:flex-row'>
+                    <Input
+                      value={item.name}
+                      aria-label='Vaccination name'
+                      onChange={(event) => updateVaccinationAt(index, { name: event.target.value })}
+                    />
+                    <Input
+                      type='date'
+                      value={toDateInputValue(item.administeredAt)}
+                      onChange={(event) => {
+                        const administeredAt = fromDateInputValue(event.target.value);
+                        if (administeredAt !== undefined) {
+                          updateVaccinationAt(index, { administeredAt });
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <span>
+                    {item.name} · {formatDateTime(item.administeredAt)}
+                    {item.catName && ` · ${item.catName}`}
+                  </span>
+                )}
               </div>
             ))}
           </Section>
@@ -325,12 +513,38 @@ function IngestionDraftReviewModal({
         {draft.proposedPreventives.length > 0 && (
           <Section title='Preventives' section='preventives' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedPreventives.map((item, index) => (
-              <div className='flex items-center justify-between gap-2' key={`${item.name}-${index}`}>
-                <span>{item.name} · {formatDateTime(item.administeredAt)}</span>
-                <ToggleProposal
-                  included={selections.includePreventives?.[index] !== false}
-                  onToggle={() => toggleItem('includePreventives', index)}
-                />
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includePreventives', index)} onToggle={() => toggleArrayInclude('includePreventives', index)} />
+                  <EditPencilButton
+                    editing={isEditing('preventive', index)}
+                    onClick={() => toggleEditing('preventive', index)}
+                  />
+                </div>
+                {isEditing('preventive', index) ? (
+                  <div className='flex flex-col gap-2 sm:flex-row'>
+                    <Input
+                      value={item.name}
+                      aria-label='Preventive name'
+                      onChange={(event) => updatePreventiveAt(index, { name: event.target.value })}
+                    />
+                    <Input
+                      type='date'
+                      value={toDateInputValue(item.administeredAt)}
+                      onChange={(event) => {
+                        const administeredAt = fromDateInputValue(event.target.value);
+                        if (administeredAt !== undefined) {
+                          updatePreventiveAt(index, { administeredAt });
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <span>
+                    {item.name} · {formatDateTime(item.administeredAt)}
+                    {item.catNames.length > 0 && ` · ${item.catNames.join(', ')}`}
+                  </span>
+                )}
               </div>
             ))}
           </Section>
@@ -338,12 +552,41 @@ function IngestionDraftReviewModal({
 
         {draft.proposedWeightEntry && (
           <Section title='Weight' section='weight' expanded={expanded} onToggle={toggleSection}>
-            <div className='flex items-center justify-between gap-2'>
-              <span>{draft.proposedWeightEntry.weight} {draft.proposedWeightEntry.unit}</span>
-              <ToggleProposal
-                included={selections.includeWeightEntry !== false}
-                onToggle={() => setSelections((current) => ({ ...current, includeWeightEntry: current.includeWeightEntry === false }))}
-              />
+            <div className='space-y-2 rounded-md border border-border p-2'>
+              <div className='flex items-center justify-between gap-2'>
+                <IncludeToggle
+                  included={selections.includeWeightEntry !== false}
+                  onToggle={() =>
+                    setSelections((current) => ({ ...current, includeWeightEntry: current.includeWeightEntry === false }))
+                  }
+                />
+                <EditPencilButton editing={isEditing('weight', 0)} onClick={() => toggleEditing('weight', 0)} />
+              </div>
+              {isEditing('weight', 0) ? (
+                <div className='flex flex-col gap-2 sm:flex-row'>
+                  <Input
+                    type='number'
+                    value={draft.proposedWeightEntry.weight}
+                    aria-label='Weight'
+                    onChange={(event) => updateWeight({ weight: Number(event.target.value) })}
+                  />
+                  <Input
+                    type='date'
+                    value={toDateInputValue(draft.proposedWeightEntry.measuredAt)}
+                    onChange={(event) => {
+                      const measuredAt = fromDateInputValue(event.target.value);
+                      if (measuredAt !== undefined) {
+                        updateWeight({ measuredAt });
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <span>
+                  {draft.proposedWeightEntry.weight} {draft.proposedWeightEntry.unit}
+                  {draft.proposedWeightEntry.catName && ` · ${draft.proposedWeightEntry.catName}`}
+                </span>
+              )}
             </div>
           </Section>
         )}
@@ -351,12 +594,12 @@ function IngestionDraftReviewModal({
         {draft.proposedSymptoms.length > 0 && (
           <Section title='Symptoms' section='symptoms' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedSymptoms.map((item, index) => (
-              <div className='flex items-center justify-between gap-2' key={`${item.description}-${index}`}>
-                <span>{item.description}</span>
-                <ToggleProposal
-                  included={selections.includeSymptoms?.[index] !== false}
-                  onToggle={() => toggleItem('includeSymptoms', index)}
-                />
+              <div className='flex items-center justify-between gap-2' key={index}>
+                <span>
+                  {item.description}
+                  {item.catName && ` · ${item.catName}`}
+                </span>
+                <IncludeToggle included={isIncluded('includeSymptoms', index)} onToggle={() => toggleArrayInclude('includeSymptoms', index)} />
               </div>
             ))}
           </Section>
@@ -365,29 +608,87 @@ function IngestionDraftReviewModal({
         {draft.proposedConditions.length > 0 && (
           <Section title='Conditions' section='conditions' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedConditions.map((item, index) => (
-              <div className='flex items-center justify-between gap-2' key={`${item.name}-${index}`}>
-                <span>{item.name}</span>
-                <ToggleProposal
-                  included={selections.includeConditions?.[index] !== false}
-                  onToggle={() => toggleItem('includeConditions', index)}
-                />
+              <div className='flex items-center justify-between gap-2' key={index}>
+                <span>
+                  {item.name}
+                  {item.catName && ` · ${item.catName}`}
+                </span>
+                <IncludeToggle included={isIncluded('includeConditions', index)} onToggle={() => toggleArrayInclude('includeConditions', index)} />
               </div>
             ))}
           </Section>
         )}
 
-        {draft.proposedExpense && (
-          <Section title='Expense' section='expense' expanded={expanded} onToggle={toggleSection}>
-            <ToggleProposal
-              included={selections.includeExpense !== false}
-              onToggle={() => setSelections((current) => ({ ...current, includeExpense: current.includeExpense === false }))}
-            />
-            <p>{draft.proposedExpense.label ?? draft.proposedExpense.category} · ${draft.proposedExpense.amount.toFixed(2)}</p>
+        {draft.proposedExpenses.length > 0 && (
+          <Section title='Expenses' section='expense' expanded={expanded} onToggle={toggleSection}>
+            {draft.proposedExpenses.map((expense, expenseIndex) => {
+              const amount = expense.items.reduce((sum, item) => sum + item.amount, 0);
+              return (
+                <div key={expenseIndex} className='space-y-2 rounded-md border border-border p-2'>
+                  <div className='flex items-center justify-between gap-2'>
+                    <IncludeToggle
+                      included={isIncluded('includeExpenses', expenseIndex)}
+                      onToggle={() => toggleArrayInclude('includeExpenses', expenseIndex)}
+                    />
+                    <EditPencilButton
+                      editing={isEditing('expense', expenseIndex)}
+                      onClick={() => toggleEditing('expense', expenseIndex)}
+                    />
+                  </div>
+                  <p className='text-sm'>
+                    ${amount.toFixed(2)} · {formatDateTime(expense.incurredAt)}
+                    {expense.catNames.length > 0 && ` · ${expense.catNames.join(', ')}`}
+                  </p>
+                  {isEditing('expense', expenseIndex) ? (
+                    <div className='space-y-2'>
+                      {expense.items.map((item, itemIndex) => (
+                        <div key={itemIndex} className='flex flex-col gap-2 sm:flex-row'>
+                          <Select
+                            options={DEFAULT_EXPENSE_CATEGORIES.map((category) => ({
+                              text: getExpenseCategoryLabel(category),
+                              value: category,
+                            }))}
+                            value={item.category}
+                            onChange={(value) => updateExpenseItemAt(expenseIndex, itemIndex, { category: value })}
+                          />
+                          <Input
+                            value={item.label ?? ''}
+                            placeholder='Line item label'
+                            onChange={(event) =>
+                              updateExpenseItemAt(expenseIndex, itemIndex, { label: event.target.value })
+                            }
+                          />
+                          <Input
+                            type='number'
+                            value={item.amount}
+                            aria-label='Amount'
+                            onChange={(event) =>
+                              updateExpenseItemAt(expenseIndex, itemIndex, { amount: Number(event.target.value) })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    expense.items.length > 1 && (
+                      <ul className='space-y-1 text-sm text-muted-foreground'>
+                        {expense.items.map((item, itemIndex) => (
+                          <li key={itemIndex}>
+                            {item.label ?? getExpenseCategoryLabel(item.category)} · ${item.amount.toFixed(2)}
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  )}
+                </div>
+              );
+            })}
           </Section>
         )}
 
         <Section title='Permanent health record' section='record' expanded={expanded} onToggle={toggleSection}>
-          <ToggleProposal
+          <IncludeToggle
+            label='Save as record'
             included={selections.saveAsRecord !== false}
             onToggle={() => setSelections((current) => ({ ...current, saveAsRecord: current.saveAsRecord === false }))}
           />
@@ -395,8 +696,12 @@ function IngestionDraftReviewModal({
         </Section>
         {error && <p className='text-sm text-red-500'>{error}</p>}
       </div>
-      <div className='mt-4 flex flex-wrap justify-between gap-2'>
-        <Button type='button' variant='secondary' disabled={isSubmitting} onClick={() => void handleDiscard()}>
+
+      <p className='mt-3 text-sm text-muted-foreground'>
+        {includedCount} of {totalCount} proposals will be saved.
+      </p>
+      <div className='mt-2 flex flex-wrap justify-between gap-2'>
+        <Button type='button' variant='destructive' disabled={isSubmitting} onClick={() => void handleDiscard()}>
           Discard
         </Button>
         <div className='flex gap-2'>

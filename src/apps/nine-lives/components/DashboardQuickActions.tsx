@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { FileUp } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 
@@ -19,9 +20,9 @@ function DashboardQuickActions({ householdId }: DashboardQuickActionsProps) {
   }
 
   return (
-    <>
-      <Button type='button' variant='outline' size='sm' onClick={() => setIsOpen(true)}>
-        Upload document
+    <div className='flex justify-center'>
+      <Button type='button' variant='outline' size='sm' className='gap-1' onClick={() => setIsOpen(true)}>
+        <FileUp className='h-4 w-4' /> Upload document
       </Button>
       <DocumentIngestionModal
         isOpen={isOpen}
@@ -29,7 +30,7 @@ function DashboardQuickActions({ householdId }: DashboardQuickActionsProps) {
         uid={user.uid}
         onClose={() => setIsOpen(false)}
       />
-    </>
+    </div>
   );
 }
 

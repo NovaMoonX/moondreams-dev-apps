@@ -1,3 +1,15 @@
+import type {
+  IngestionCatProposal,
+  IngestionClinicProposal,
+  IngestionConditionProposal,
+  IngestionExpenseProposal,
+  IngestionPreventiveProposal,
+  IngestionSymptomProposal,
+  IngestionVaccinationProposal,
+  IngestionVisitProposal,
+  IngestionWeightProposal,
+} from './lib/extractProposalFromFile.types';
+
 export interface Household {
   id: string;
   name: string;
@@ -402,94 +414,20 @@ export interface Expense {
   lastEditedAt: number;
 }
 
-export interface IngestionCatProposal {
-  name: string;
-  breed: string | null;
-  dateOfBirth: number | null;
-  isDateOfBirthEstimated: boolean | null;
-  sex: CatSex | null;
-}
-
-export interface IngestionClinicProposal {
-  name: string;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-  address: string | null;
-}
-
-export interface IngestionVisitProposal {
-  catName: string | null;
-  scheduledAt: number;
-  reason: VisitReason;
-  customReasonLabel: string | null;
-  notes: string | null;
-}
-
-export interface IngestionVaccinationProposal {
-  catName: string | null;
-  name: string;
-  administeredAt: number;
-  expiresAt: number | null;
-  lotNumber: string | null;
-}
-
-export interface IngestionPreventiveProposal {
-  catNames: string[];
-  name: string;
-  type: PreventiveType;
-  administeredAt: number;
-  expiresAt: number | null;
-  dosage: string | null;
-}
-
-export interface IngestionWeightProposal {
-  catName: string | null;
-  weight: number;
-  unit: 'lb' | 'kg';
-  measuredAt: number;
-}
-
-export interface IngestionSymptomProposal {
-  catName: string | null;
-  description: string;
-  quickTags: string[];
-  firstNoticedAt: number;
-  severity: SymptomSeverity | null;
-}
-
-export interface IngestionConditionProposal {
-  catName: string | null;
-  name: string;
-  category: ConditionCategory;
-  status: CatConditionStatus;
-  occurredAt: number;
-  description: string | null;
-}
-
-export interface IngestionExpenseProposal {
-  catNames: string[];
-  label: string | null;
-  amount: number;
-  category: string;
-  incurredAt: number;
-  notes: string | null;
-}
-
 export interface IngestionDraft {
   id: string;
   householdId: string;
   sourceType: 'pdf' | 'photo';
   sourceFileName: string;
-  proposedCat: IngestionCatProposal | null;
-  proposedClinic: IngestionClinicProposal | null;
-  proposedVisit: IngestionVisitProposal | null;
+  proposedCats: IngestionCatProposal[];
+  proposedClinics: IngestionClinicProposal[];
+  proposedVisits: IngestionVisitProposal[];
   proposedVaccinations: IngestionVaccinationProposal[];
   proposedPreventives: IngestionPreventiveProposal[];
   proposedWeightEntry: IngestionWeightProposal | null;
   proposedSymptoms: IngestionSymptomProposal[];
   proposedConditions: IngestionConditionProposal[];
-  proposedExpense: IngestionExpenseProposal | null;
+  proposedExpenses: IngestionExpenseProposal[];
   suggestKeepAsRecord: boolean;
   confidence: number | null;
   createdBy: string;

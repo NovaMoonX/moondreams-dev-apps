@@ -180,10 +180,10 @@ function NineLives() {
           <AttentionFocusContext.Provider
             value={{ focusRequest, requestFocus: setFocusRequest }}
           >
+            <DashboardQuickActions householdId={selectedHousehold.id} />
             <AttentionSection householdId={selectedHousehold.id} />
             <CatAnniversaryBanners householdId={selectedHousehold.id} />
             <StatsSummary householdId={selectedHousehold.id} />
-            <DashboardQuickActions householdId={selectedHousehold.id} />
             <CatsSection householdId={selectedHousehold.id} />
             <VisitsSection householdId={selectedHousehold.id} />
             <ExpensesSection householdId={selectedHousehold.id} />

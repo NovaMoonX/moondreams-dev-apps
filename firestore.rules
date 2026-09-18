@@ -740,15 +740,15 @@ service cloud.firestore {
       function isIngestionDraftShapeValid() {
         return (request.resource.data.sourceType == 'pdf' || request.resource.data.sourceType == 'photo')
           && isNonEmptyString(request.resource.data.sourceFileName)
-          && (request.resource.data.proposedCat == null || request.resource.data.proposedCat is map)
-          && (request.resource.data.proposedClinic == null || request.resource.data.proposedClinic is map)
-          && (request.resource.data.proposedVisit == null || request.resource.data.proposedVisit is map)
+          && request.resource.data.proposedCats is list
+          && request.resource.data.proposedClinics is list
+          && request.resource.data.proposedVisits is list
           && request.resource.data.proposedVaccinations is list
           && request.resource.data.proposedPreventives is list
           && (request.resource.data.proposedWeightEntry == null || request.resource.data.proposedWeightEntry is map)
           && request.resource.data.proposedSymptoms is list
           && request.resource.data.proposedConditions is list
-          && (request.resource.data.proposedExpense == null || request.resource.data.proposedExpense is map)
+          && request.resource.data.proposedExpenses is list
           && request.resource.data.suggestKeepAsRecord is bool
           && (request.resource.data.confidence == null || request.resource.data.confidence is number)
           && isTimestampNumber(request.resource.data.createdAt);

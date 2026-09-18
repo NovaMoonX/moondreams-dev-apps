@@ -20,19 +20,22 @@ import type {
   ExpenseLineItem,
   HealthRecord,
   IngestionDraft,
-  IngestionExpenseProposal,
-  IngestionPreventiveProposal,
-  IngestionSymptomProposal,
-  IngestionVaccinationProposal,
-  IngestionWeightProposal,
   Preventive,
   PreventiveDose,
   Symptom,
   Vaccination,
   VaccinationDose,
   VetClinic,
+  Visit,
   WeightEntry,
 } from '../../types';
+import type {
+  IngestionExpenseProposal,
+  IngestionPreventiveProposal,
+  IngestionSymptomProposal,
+  IngestionVaccinationProposal,
+  IngestionWeightProposal,
+} from '../../lib/extractProposalFromFile.types';
 import { extractProposalFromFile } from '../../lib/extractProposalFromFile';
 import {
   removeIngestionDraft,
@@ -68,30 +71,32 @@ const getCatDetailDocRef = (
 ) => doc(getCollectionRef(householdId, collectionName), id);
 
 export interface IngestionDraftUpdate {
-  proposedCat?: IngestionDraft['proposedCat'];
-  proposedClinic?: IngestionDraft['proposedClinic'];
-  proposedVisit?: IngestionDraft['proposedVisit'];
+  proposedCats?: IngestionDraft['proposedCats'];
+  proposedClinics?: IngestionDraft['proposedClinics'];
+  proposedVisits?: IngestionDraft['proposedVisits'];
   proposedVaccinations?: IngestionDraft['proposedVaccinations'];
   proposedPreventives?: IngestionDraft['proposedPreventives'];
   proposedWeightEntry?: IngestionDraft['proposedWeightEntry'];
   proposedSymptoms?: IngestionDraft['proposedSymptoms'];
   proposedConditions?: IngestionDraft['proposedConditions'];
-  proposedExpense?: IngestionDraft['proposedExpense'];
+  proposedExpenses?: IngestionDraft['proposedExpenses'];
   suggestKeepAsRecord?: boolean;
 }
 
 export interface IngestionDraftSelections {
-  includeCat?: boolean;
-  catId?: string | null;
-  includeClinic?: boolean;
-  clinicId?: string | null;
-  includeVisit?: boolean;
+  /** Parallel to `proposedCats`; defaults to included when omitted. */
+  includeCats?: boolean[];
+  /** Parallel to `proposedCats`; a set entry picks an existing cat instead of creating a new one. */
+  catIds?: (string | null)[];
+  includeClinics?: boolean[];
+  clinicIds?: (string | null)[];
+  includeVisits?: boolean[];
   includeVaccinations?: boolean[];
   includePreventives?: boolean[];
   includeWeightEntry?: boolean;
   includeSymptoms?: boolean[];
   includeConditions?: boolean[];
-  includeExpense?: boolean;
+  includeExpenses?: boolean[];
   saveAsRecord?: boolean;
 }
 
@@ -106,15 +111,15 @@ export interface ConfirmIngestionDraftInput {
 function draftDefaults(draft: IngestionDraft): IngestionDraft {
   return {
     ...draft,
-    proposedCat: draft.proposedCat ?? null,
-    proposedClinic: draft.proposedClinic ?? null,
-    proposedVisit: draft.proposedVisit ?? null,
+    proposedCats: draft.proposedCats ?? [],
+    proposedClinics: draft.proposedClinics ?? [],
+    proposedVisits: draft.proposedVisits ?? [],
     proposedVaccinations: draft.proposedVaccinations ?? [],
     proposedPreventives: draft.proposedPreventives ?? [],
     proposedWeightEntry: draft.proposedWeightEntry ?? null,
     proposedSymptoms: draft.proposedSymptoms ?? [],
     proposedConditions: draft.proposedConditions ?? [],
-    proposedExpense: draft.proposedExpense ?? null,
+    proposedExpenses: draft.proposedExpenses ?? [],
     suggestKeepAsRecord: draft.suggestKeepAsRecord ?? true,
     confidence: draft.confidence ?? null,
   };
@@ -182,7 +187,7 @@ export const updateIngestionDraft = createAsyncThunk<
 function createCat(
   householdId: string,
   uid: string,
-  proposal: NonNullable<IngestionDraft['proposedCat']>,
+  proposal: IngestionDraft['proposedCats'][number],
   now: number,
 ): Cat {
   const id = doc(getCollectionRef(householdId, 'cats')).id;
@@ -222,7 +227,7 @@ function createCat(
 
 function createClinic(
   householdId: string,
-  proposal: NonNullable<IngestionDraft['proposedClinic']>,
+  proposal: IngestionDraft['proposedClinics'][number],
   now: number,
 ): VetClinic {
   const id = doc(getCollectionRef(householdId, 'vetClinics')).id;
@@ -241,11 +246,14 @@ function createClinic(
   };
 }
 
-function findCatId(
-  name: string | null | undefined,
-  cats: Cat[],
-  fallbackCatId: string | null,
-): string | null {
+/**
+ * Resolves a proposal's `catName` against the household's cats (including
+ * ones this confirm is about to create). Only falls back to a single
+ * candidate cat when there's exactly one in play — with multiple cats
+ * proposed or on file, an unnamed reference is left unresolved rather than
+ * guessing which cat it belongs to.
+ */
+function findCatId(name: string | null | undefined, cats: Cat[]): string | null {
   if (name) {
     const match = cats.find((cat) => cat.name.toLowerCase() === name.toLowerCase());
     if (match) {
@@ -253,18 +261,39 @@ function findCatId(
     }
   }
 
-  return fallbackCatId;
+  return cats.length === 1 ? cats[0].id : null;
 }
 
-function catIdsForNames(
-  names: string[],
-  cats: Cat[],
-  fallbackCatId: string | null,
-): string[] {
+function catIdsForNames(names: string[], cats: Cat[]): string[] {
   const ids = names
-    .map((name) => findCatId(name, cats, null))
+    .map((name) => findCatId(name, cats))
     .filter((id): id is string => Boolean(id));
-  return [...new Set(ids.length > 0 ? ids : fallbackCatId ? [fallbackCatId] : [])];
+  return [...new Set(ids.length > 0 ? ids : cats.length === 1 ? [cats[0].id] : [])];
+}
+
+function findClinicId(name: string | null | undefined, clinics: VetClinic[]): string | null {
+  if (name) {
+    const match = clinics.find((clinic) => clinic.name.toLowerCase() === name.toLowerCase());
+    if (match) {
+      return match.id;
+    }
+  }
+
+  return clinics.length === 1 ? clinics[0].id : null;
+}
+
+/** The visit whose `scheduledAt` is closest to `date`, for linking an item that doesn't name one explicitly. */
+function findNearestVisit<T extends { id: string; scheduledAt: number }>(
+  date: number,
+  visits: T[],
+): T | null {
+  if (visits.length === 0) {
+    return null;
+  }
+
+  return visits.reduce((closest, visit) =>
+    Math.abs(visit.scheduledAt - date) < Math.abs(closest.scheduledAt - date) ? visit : closest,
+  );
 }
 
 function createVaccination(
@@ -424,19 +453,20 @@ function createExpense(
   now: number,
 ): Expense {
   const id = doc(getCollectionRef(householdId, 'expenses')).id;
-  const item: ExpenseLineItem = {
+  const items: ExpenseLineItem[] = proposal.items.map((item) => ({
     id: doc(getCollectionRef(householdId, 'expenses')).id,
-    category: proposal.category,
-    label: proposal.label ?? null,
-    amount: proposal.amount,
-  };
+    category: item.category,
+    label: item.label ?? null,
+    amount: item.amount,
+  }));
+  const amount = items.reduce((sum, item) => sum + item.amount, 0);
   return {
     id,
     householdId,
     catIds,
-    items: [item],
-    amount: proposal.amount,
-    label: proposal.label ?? null,
+    items,
+    amount,
+    label: items.length === 1 ? items[0].label : null,
     isRecurring: false,
     recurrenceInterval: null,
     recurrenceEndedAt: null,
@@ -467,93 +497,128 @@ export const confirmIngestionDraft = createAsyncThunk<
     }
 
     const normalizedDraft = draftDefaults(draft);
-    const cats = state.nineLives.cats.items.filter((cat) => cat.householdId === householdId);
-    const clinics = state.nineLives.vetClinics.items.filter(
+    const existingCats = state.nineLives.cats.items.filter(
+      (cat) => cat.householdId === householdId,
+    );
+    const existingClinics = state.nineLives.vetClinics.items.filter(
       (clinic) => clinic.householdId === householdId,
     );
     const now = Date.now();
     const batch = writeBatch(db);
     const createdCats: Cat[] = [];
     const createdClinics: VetClinic[] = [];
-    const selectedCatId = selections.catId ?? null;
-    const selectedClinicId = selections.clinicId ?? null;
-    const shouldCreateCat =
-      selections.includeCat !== false && Boolean(normalizedDraft.proposedCat) && !selectedCatId;
-    const cat = shouldCreateCat
-      ? createCat(householdId, uid, normalizedDraft.proposedCat as NonNullable<IngestionDraft['proposedCat']>, now)
-      : null;
-    const availableCats = cat ? [...cats, cat] : cats;
-    const fallbackCatId = selectedCatId ?? cat?.id ?? availableCats[0]?.id ?? null;
-    const shouldCreateClinic =
-      selections.includeClinic !== false && Boolean(normalizedDraft.proposedClinic) && !selectedClinicId;
-    const clinic = shouldCreateClinic
-      ? createClinic(
-          householdId,
-          normalizedDraft.proposedClinic as NonNullable<IngestionDraft['proposedClinic']>,
-          now,
-        )
-      : null;
-    const availableClinics = clinic ? [...clinics, clinic] : clinics;
-    const clinicId = selectedClinicId ?? clinic?.id ?? null;
 
-    if (cat) {
+    normalizedDraft.proposedCats.forEach((proposal, index) => {
+      if (selections.includeCats?.[index] === false) {
+        return;
+      }
+      const selectedCatId = selections.catIds?.[index];
+      if (selectedCatId) {
+        return;
+      }
+      const cat = createCat(householdId, uid, proposal, now);
       batch.set(getDocRef(householdId, 'cats', cat.id), cat);
       createdCats.push(cat);
-    }
-    if (clinic) {
+    });
+
+    normalizedDraft.proposedClinics.forEach((proposal, index) => {
+      if (selections.includeClinics?.[index] === false) {
+        return;
+      }
+      const selectedClinicId = selections.clinicIds?.[index];
+      if (selectedClinicId) {
+        return;
+      }
+      const clinic = createClinic(householdId, proposal, now);
       batch.set(getDocRef(householdId, 'vetClinics', clinic.id), clinic);
       createdClinics.push(clinic);
-    }
+    });
 
-    const shouldCreateVisit =
-      selections.includeVisit !== false && Boolean(normalizedDraft.proposedVisit) && Boolean(fallbackCatId);
-    const visit = shouldCreateVisit
-      ? {
-          id: doc(getCollectionRef(householdId, 'visits')).id,
-          householdId,
-          catIds: [
-            findCatId(normalizedDraft.proposedVisit?.catName, availableCats, fallbackCatId),
-          ].filter((id): id is string => Boolean(id)),
-          clinicId: clinicId ?? availableClinics[0]?.id ?? null,
-          doctorId: null,
-          status: 'completed' as const,
-          reason: normalizedDraft.proposedVisit?.reason ?? 'checkup',
-          customReasonLabel: normalizedDraft.proposedVisit?.customReasonLabel ?? null,
-          followUpOfVisitId: null,
-          followUpNote: null,
-          title: null,
-          scheduledAt: normalizedDraft.proposedVisit?.scheduledAt ?? now,
-          completedAt: now,
-          summary: normalizedDraft.proposedVisit?.notes ?? null,
-          linkedSymptomIds: [] as string[],
-          linkedConditionIds: [] as string[],
-          linkedHealthRecordIds: [] as string[],
-          linkedVaccinationIds: [] as string[],
-          linkedWeightEntryIds: [] as string[],
-          reminderIds: [] as string[],
-          createdBy: uid,
-          createdAt: now,
-          lastEditedAt: now,
-        }
-      : null;
+    const selectedCats = (selections.catIds ?? [])
+      .filter((id): id is string => Boolean(id))
+      .map((id) => existingCats.find((cat) => cat.id === id))
+      .filter((cat): cat is Cat => Boolean(cat));
+    const selectedClinics = (selections.clinicIds ?? [])
+      .filter((id): id is string => Boolean(id))
+      .map((id) => existingClinics.find((clinic) => clinic.id === id))
+      .filter((clinic): clinic is VetClinic => Boolean(clinic));
+    const availableCats = [...createdCats, ...selectedCats];
+    const availableClinics = [...createdClinics, ...selectedClinics];
 
-    if (visit) {
+    const visits: Visit[] = [];
+    normalizedDraft.proposedVisits.forEach((proposal, index) => {
+      if (selections.includeVisits?.[index] === false) {
+        return;
+      }
+      const catId = findCatId(proposal.catName, availableCats);
+      if (!catId) {
+        return;
+      }
+      const visit: Visit = {
+        id: doc(getCollectionRef(householdId, 'visits')).id,
+        householdId,
+        catIds: [catId],
+        clinicId: findClinicId(proposal.clinicName, availableClinics),
+        doctorId: null,
+        status: 'completed',
+        reason: proposal.reason,
+        customReasonLabel: proposal.customReasonLabel ?? null,
+        followUpOfVisitId: null,
+        followUpNote: null,
+        title: null,
+        scheduledAt: proposal.scheduledAt,
+        completedAt: now,
+        summary: proposal.notes ?? null,
+        linkedSymptomIds: [],
+        linkedConditionIds: [],
+        linkedHealthRecordIds: [],
+        linkedVaccinationIds: [],
+        linkedWeightEntryIds: [],
+        reminderIds: [],
+        createdBy: uid,
+        createdAt: now,
+        lastEditedAt: now,
+      };
       batch.set(getDocRef(householdId, 'visits', visit.id), visit);
-    }
+      visits.push(visit);
+    });
 
-    const visitId = visit?.id ?? null;
+    interface VisitLinks {
+      vaccinationIds: string[];
+      weightEntryIds: string[];
+      symptomIds: string[];
+      conditionIds: string[];
+    }
+    const emptyLinks = (): VisitLinks => ({
+      vaccinationIds: [],
+      weightEntryIds: [],
+      symptomIds: [],
+      conditionIds: [],
+    });
+    const visitLinks = new Map<string, VisitLinks>();
+    const linkToVisit = (visitId: string | null, key: keyof VisitLinks, id: string) => {
+      if (!visitId) {
+        return;
+      }
+      const links = visitLinks.get(visitId) ?? emptyLinks();
+      links[key].push(id);
+      visitLinks.set(visitId, links);
+    };
+
     const vaccinations: Vaccination[] = [];
     normalizedDraft.proposedVaccinations.forEach((proposal, index) => {
       if (selections.includeVaccinations?.[index] === false) {
         return;
       }
-      const targetCatId = findCatId(proposal.catName, availableCats, fallbackCatId);
+      const targetCatId = findCatId(proposal.catName, availableCats);
       if (!targetCatId) {
         return;
       }
+      const visitId = findNearestVisit(proposal.administeredAt, visits)?.id ?? null;
       const vaccination = createVaccination(householdId, uid, proposal, targetCatId, visitId, now);
       batch.set(getDocRef(householdId, 'vaccinations', vaccination.id), vaccination);
       vaccinations.push(vaccination);
+      linkToVisit(visitId, 'vaccinationIds', vaccination.id);
     });
 
     const preventives: Preventive[] = [];
@@ -561,30 +626,21 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (selections.includePreventives?.[index] === false) {
         return;
       }
-      const targetCatIds = catIdsForNames(proposal.catNames, availableCats, fallbackCatId);
+      const targetCatIds = catIdsForNames(proposal.catNames, availableCats);
       if (targetCatIds.length === 0) {
         return;
       }
-      const preventive = createPreventive(
-        householdId,
-        uid,
-        proposal,
-        targetCatIds,
-        visitId,
-        now,
-      );
+      const visitId = findNearestVisit(proposal.administeredAt, visits)?.id ?? null;
+      const preventive = createPreventive(householdId, uid, proposal, targetCatIds, visitId, now);
       batch.set(getDocRef(householdId, 'preventives', preventive.id), preventive);
       preventives.push(preventive);
     });
 
     const weightEntries: WeightEntry[] = [];
     if (normalizedDraft.proposedWeightEntry && selections.includeWeightEntry !== false) {
-      const targetCatId = findCatId(
-        normalizedDraft.proposedWeightEntry.catName,
-        availableCats,
-        fallbackCatId,
-      );
+      const targetCatId = findCatId(normalizedDraft.proposedWeightEntry.catName, availableCats);
       if (targetCatId) {
+        const visitId = findNearestVisit(normalizedDraft.proposedWeightEntry.measuredAt, visits)?.id ?? null;
         const entry = createWeightEntry(
           householdId,
           uid,
@@ -595,6 +651,7 @@ export const confirmIngestionDraft = createAsyncThunk<
         );
         batch.set(getDocRef(householdId, 'weightEntries', entry.id), entry);
         weightEntries.push(entry);
+        linkToVisit(visitId, 'weightEntryIds', entry.id);
       }
     }
 
@@ -603,13 +660,15 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (selections.includeSymptoms?.[index] === false) {
         return;
       }
-      const targetCatId = findCatId(proposal.catName, availableCats, fallbackCatId);
+      const targetCatId = findCatId(proposal.catName, availableCats);
       if (!targetCatId) {
         return;
       }
+      const visitId = findNearestVisit(proposal.firstNoticedAt, visits)?.id ?? null;
       const symptom = createSymptom(householdId, uid, proposal, targetCatId, visitId, now);
       batch.set(getCatDetailDocRef(householdId, 'symptoms', symptom.id), symptom);
       symptoms.push(symptom);
+      linkToVisit(visitId, 'symptomIds', symptom.id);
     });
 
     const conditions: CatCondition[] = [];
@@ -617,87 +676,79 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (selections.includeConditions?.[index] === false) {
         return;
       }
-      const targetCatId = findCatId(proposal.catName, availableCats, fallbackCatId);
+      const targetCatId = findCatId(proposal.catName, availableCats);
       if (!targetCatId) {
         return;
       }
+      const visitId = findNearestVisit(proposal.occurredAt, visits)?.id ?? null;
       const condition = createCondition(householdId, uid, proposal, targetCatId, visitId, now);
       batch.set(getCatDetailDocRef(householdId, 'conditions', condition.id), condition);
       conditions.push(condition);
+      linkToVisit(visitId, 'conditionIds', condition.id);
     });
 
-    const expense =
-      normalizedDraft.proposedExpense &&
-      selections.includeExpense !== false &&
-      fallbackCatId
-        ? createExpense(
-            householdId,
-            uid,
-            normalizedDraft.proposedExpense,
-            catIdsForNames(normalizedDraft.proposedExpense.catNames, availableCats, fallbackCatId),
-            visitId,
-            now,
-          )
-        : null;
-    if (expense) {
+    const expenses: Expense[] = [];
+    normalizedDraft.proposedExpenses.forEach((proposal, index) => {
+      if (selections.includeExpenses?.[index] === false) {
+        return;
+      }
+      const targetCatIds = catIdsForNames(proposal.catNames, availableCats);
+      if (targetCatIds.length === 0) {
+        return;
+      }
+      const visitId = findNearestVisit(proposal.incurredAt, visits)?.id ?? null;
+      const expense = createExpense(householdId, uid, proposal, targetCatIds, visitId, now);
       batch.set(getDocRef(householdId, 'expenses', expense.id), expense);
-    }
+      expenses.push(expense);
+    });
 
-    if (visit) {
-      const linkedVisit = {
+    const linkedVisits = visits.map((visit) => {
+      const links = visitLinks.get(visit.id) ?? emptyLinks();
+      const linkedVisit: Visit = {
         ...visit,
-        linkedVaccinationIds: vaccinations.map((item) => item.id),
-        linkedWeightEntryIds: weightEntries.map((item) => item.id),
-        linkedSymptomIds: symptoms.map((item) => item.id),
-        linkedConditionIds: conditions.map((item) => item.id),
-        linkedHealthRecordIds: [],
+        linkedVaccinationIds: links.vaccinationIds,
+        linkedWeightEntryIds: links.weightEntryIds,
+        linkedSymptomIds: links.symptomIds,
+        linkedConditionIds: links.conditionIds,
       };
       batch.set(getDocRef(householdId, 'visits', visit.id), linkedVisit);
-    }
+      return linkedVisit;
+    });
 
     try {
       await batch.commit();
 
       createdCats.forEach((item) => dispatch(upsertCat(item)));
       createdClinics.forEach((item) => dispatch(upsertVetClinic(item)));
-      if (visit) {
-        dispatch(upsertVisit({
-          ...visit,
-          linkedVaccinationIds: vaccinations.map((item) => item.id),
-          linkedWeightEntryIds: weightEntries.map((item) => item.id),
-          linkedSymptomIds: symptoms.map((item) => item.id),
-          linkedConditionIds: conditions.map((item) => item.id),
-          linkedHealthRecordIds: [],
-        }));
-      }
+      linkedVisits.forEach((item) => dispatch(upsertVisit(item)));
       vaccinations.forEach((item) => dispatch(upsertVaccination(item)));
       preventives.forEach((item) => dispatch(upsertPreventive(item)));
       weightEntries.forEach((item) => dispatch(upsertWeightEntry(item)));
       symptoms.forEach((item) => dispatch(upsertSymptom(item)));
       conditions.forEach((item) => dispatch(upsertCatCondition(item)));
-      if (expense) {
-        dispatch(upsertExpense(expense));
-      }
+      expenses.forEach((item) => dispatch(upsertExpense(item)));
 
+      const recordCatId = availableCats[0]?.id ?? null;
       const shouldSaveRecord =
-        (selections.saveAsRecord ?? normalizedDraft.suggestKeepAsRecord) && Boolean(file) && fallbackCatId;
-      if (shouldSaveRecord && file) {
+        (selections.saveAsRecord ?? normalizedDraft.suggestKeepAsRecord) && Boolean(file) && recordCatId;
+      if (shouldSaveRecord && file && recordCatId) {
         const recordId = doc(getCollectionRef(householdId, 'healthRecords')).id;
         const storagePath = getHealthRecordStoragePath(householdId, recordId);
+        const primaryVisit = linkedVisits[0] ?? null;
         try {
           const fileURL = await uploadFile(storagePath, file);
           const record: HealthRecord = {
             id: recordId,
             householdId,
-            catIds: [fallbackCatId],
+            catIds: [recordCatId],
             fileURL,
             fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
             fileName: file.name,
             label: null,
             recordType: 'vet_paperwork',
             customRecordTypeId: null,
-            recordDate: normalizedDraft.proposedVisit?.scheduledAt ?? null,
-            linkedVisitId: visitId,
+            recordDate: primaryVisit?.scheduledAt ?? null,
+            linkedVisitId: primaryVisit?.id ?? null,
             notes: null,
             uploadedBy: uid,
             createdAt: now,
@@ -705,25 +756,16 @@ export const confirmIngestionDraft = createAsyncThunk<
           };
           await setDoc(getDocRef(householdId, 'healthRecords', record.id), record);
           dispatch(upsertHealthRecord(record));
-          if (visit) {
-            const visitWithRecord = {
-              ...visit,
-              linkedVaccinationIds: vaccinations.map((item) => item.id),
-              linkedWeightEntryIds: weightEntries.map((item) => item.id),
-              linkedSymptomIds: symptoms.map((item) => item.id),
-              linkedConditionIds: conditions.map((item) => item.id),
-              linkedHealthRecordIds: [record.id],
-            };
-            await setDoc(getDocRef(householdId, 'visits', visit.id), visitWithRecord);
+          if (primaryVisit) {
+            const visitWithRecord = { ...primaryVisit, linkedHealthRecordIds: [record.id] };
+            await setDoc(getDocRef(householdId, 'visits', primaryVisit.id), visitWithRecord);
             dispatch(upsertVisit(visitWithRecord));
           }
         } catch (error) {
-          if (file) {
-            try {
-              await deleteFile(storagePath);
-            } catch {
-              // Preserve the original upload error.
-            }
+          try {
+            await deleteFile(storagePath);
+          } catch {
+            // Preserve the original upload error.
           }
           return rejectWithValue(
             error instanceof Error ? error.message : 'Unable to save the health record.',

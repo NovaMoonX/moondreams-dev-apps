@@ -7,24 +7,25 @@ import type {
   IngestionCatProposal,
   IngestionClinicProposal,
   IngestionConditionProposal,
+  IngestionExpenseItemProposal,
   IngestionExpenseProposal,
   IngestionPreventiveProposal,
   IngestionSymptomProposal,
   IngestionVaccinationProposal,
   IngestionVisitProposal,
   IngestionWeightProposal,
-} from '../types';
+} from './extractProposalFromFile.types';
 
 export interface ExtractedIngestionProposal {
-  proposedCat: IngestionCatProposal | null;
-  proposedClinic: IngestionClinicProposal | null;
-  proposedVisit: IngestionVisitProposal | null;
+  proposedCats: IngestionCatProposal[];
+  proposedClinics: IngestionClinicProposal[];
+  proposedVisits: IngestionVisitProposal[];
   proposedVaccinations: IngestionVaccinationProposal[];
   proposedPreventives: IngestionPreventiveProposal[];
   proposedWeightEntry: IngestionWeightProposal | null;
   proposedSymptoms: IngestionSymptomProposal[];
   proposedConditions: IngestionConditionProposal[];
-  proposedExpense: IngestionExpenseProposal | null;
+  proposedExpenses: IngestionExpenseProposal[];
   suggestKeepAsRecord: boolean;
   confidence: number | null;
 }
@@ -35,40 +36,47 @@ const nullableNumber = { type: SchemaType.NUMBER, nullable: true };
 const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
-    proposedCat: {
-      type: SchemaType.OBJECT,
-      nullable: true,
-      properties: {
-        name: { type: SchemaType.STRING },
-        breed: nullableString,
-        dateOfBirth: nullableNumber,
-        isDateOfBirthEstimated: { type: SchemaType.BOOLEAN, nullable: true },
-        sex: nullableString,
-      },
-    },
-    proposedClinic: {
-      type: SchemaType.OBJECT,
-      nullable: true,
-      properties: {
-        name: { type: SchemaType.STRING },
-        phone: nullableString,
-        email: nullableString,
-        website: nullableString,
-        address: nullableString,
-      },
-    },
-    proposedVisit: {
-      type: SchemaType.OBJECT,
-      nullable: true,
-      properties: {
-        catName: nullableString,
-        scheduledAt: { type: SchemaType.NUMBER },
-        reason: {
-          type: SchemaType.STRING,
-          enum: ['checkup', 'illness', 'accident', 'vaccination', 'follow_up', 'custom'],
+    proposedCats: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name: { type: SchemaType.STRING },
+          breed: nullableString,
+          dateOfBirth: nullableNumber,
+          isDateOfBirthEstimated: { type: SchemaType.BOOLEAN, nullable: true },
+          sex: nullableString,
         },
-        customReasonLabel: nullableString,
-        notes: nullableString,
+      },
+    },
+    proposedClinics: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name: { type: SchemaType.STRING },
+          phone: nullableString,
+          email: nullableString,
+          website: nullableString,
+          address: nullableString,
+        },
+      },
+    },
+    proposedVisits: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          catName: nullableString,
+          clinicName: nullableString,
+          scheduledAt: { type: SchemaType.NUMBER },
+          reason: {
+            type: SchemaType.STRING,
+            enum: ['checkup', 'illness', 'accident', 'vaccination', 'follow_up', 'custom'],
+          },
+          customReasonLabel: nullableString,
+          notes: nullableString,
+        },
       },
     },
     proposedVaccinations: {
@@ -141,16 +149,26 @@ const responseSchema = {
         },
       },
     },
-    proposedExpense: {
-      type: SchemaType.OBJECT,
-      nullable: true,
-      properties: {
-        catNames: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-        label: nullableString,
-        amount: { type: SchemaType.NUMBER },
-        category: { type: SchemaType.STRING },
-        incurredAt: { type: SchemaType.NUMBER },
-        notes: nullableString,
+    proposedExpenses: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          catNames: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+          items: {
+            type: SchemaType.ARRAY,
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                category: { type: SchemaType.STRING },
+                label: nullableString,
+                amount: { type: SchemaType.NUMBER },
+              },
+            },
+          },
+          incurredAt: { type: SchemaType.NUMBER },
+          notes: nullableString,
+        },
       },
     },
     suggestKeepAsRecord: { type: SchemaType.BOOLEAN },
@@ -169,17 +187,124 @@ function asBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function normalizeCat(value: Partial<IngestionCatProposal>): IngestionCatProposal {
+  return {
+    name: value.name ?? '',
+    breed: value.breed ?? null,
+    dateOfBirth: value.dateOfBirth ?? null,
+    isDateOfBirthEstimated: value.isDateOfBirthEstimated ?? null,
+    sex: value.sex ?? null,
+  };
+}
+
+function normalizeClinic(value: Partial<IngestionClinicProposal>): IngestionClinicProposal {
+  return {
+    name: value.name ?? '',
+    phone: value.phone ?? null,
+    email: value.email ?? null,
+    website: value.website ?? null,
+    address: value.address ?? null,
+  };
+}
+
+function normalizeVisit(value: Partial<IngestionVisitProposal>): IngestionVisitProposal {
+  return {
+    catName: value.catName ?? null,
+    clinicName: value.clinicName ?? null,
+    scheduledAt: value.scheduledAt ?? Date.now(),
+    reason: value.reason ?? 'checkup',
+    customReasonLabel: value.customReasonLabel ?? null,
+    notes: value.notes ?? null,
+  };
+}
+
+function normalizeVaccination(
+  value: Partial<IngestionVaccinationProposal>,
+): IngestionVaccinationProposal {
+  return {
+    catName: value.catName ?? null,
+    name: value.name ?? '',
+    administeredAt: value.administeredAt ?? Date.now(),
+    expiresAt: value.expiresAt ?? null,
+    lotNumber: value.lotNumber ?? null,
+  };
+}
+
+function normalizePreventive(
+  value: Partial<IngestionPreventiveProposal>,
+): IngestionPreventiveProposal {
+  return {
+    catNames: value.catNames ?? [],
+    name: value.name ?? '',
+    type: value.type ?? 'other',
+    administeredAt: value.administeredAt ?? Date.now(),
+    expiresAt: value.expiresAt ?? null,
+    dosage: value.dosage ?? null,
+  };
+}
+
+function normalizeWeight(value: Partial<IngestionWeightProposal>): IngestionWeightProposal {
+  return {
+    catName: value.catName ?? null,
+    weight: value.weight ?? 0,
+    unit: value.unit ?? 'lb',
+    measuredAt: value.measuredAt ?? Date.now(),
+  };
+}
+
+function normalizeSymptom(value: Partial<IngestionSymptomProposal>): IngestionSymptomProposal {
+  return {
+    catName: value.catName ?? null,
+    description: value.description ?? '',
+    quickTags: value.quickTags ?? [],
+    firstNoticedAt: value.firstNoticedAt ?? Date.now(),
+    severity: value.severity ?? null,
+  };
+}
+
+function normalizeCondition(
+  value: Partial<IngestionConditionProposal>,
+): IngestionConditionProposal {
+  return {
+    catName: value.catName ?? null,
+    name: value.name ?? '',
+    category: value.category ?? 'illness',
+    status: value.status ?? 'active',
+    occurredAt: value.occurredAt ?? Date.now(),
+    description: value.description ?? null,
+  };
+}
+
+function normalizeExpenseItem(
+  value: Partial<IngestionExpenseItemProposal>,
+): IngestionExpenseItemProposal {
+  return {
+    category: value.category ?? 'other',
+    label: value.label ?? null,
+    amount: value.amount ?? 0,
+  };
+}
+
+function normalizeExpense(value: Partial<IngestionExpenseProposal>): IngestionExpenseProposal {
+  return {
+    catNames: value.catNames ?? [],
+    items: (value.items ?? []).map(normalizeExpenseItem),
+    incurredAt: value.incurredAt ?? Date.now(),
+    notes: value.notes ?? null,
+  };
+}
+
 function normalizeProposal(value: Partial<ExtractedIngestionProposal>): ExtractedIngestionProposal {
   return {
-    proposedCat: value.proposedCat ?? null,
-    proposedClinic: value.proposedClinic ?? null,
-    proposedVisit: value.proposedVisit ?? null,
-    proposedVaccinations: value.proposedVaccinations ?? [],
-    proposedPreventives: value.proposedPreventives ?? [],
-    proposedWeightEntry: value.proposedWeightEntry ?? null,
-    proposedSymptoms: value.proposedSymptoms ?? [],
-    proposedConditions: value.proposedConditions ?? [],
-    proposedExpense: value.proposedExpense ?? null,
+    proposedCats: (value.proposedCats ?? []).map(normalizeCat),
+    proposedClinics: (value.proposedClinics ?? []).map(normalizeClinic),
+    proposedVisits: (value.proposedVisits ?? []).map(normalizeVisit),
+    proposedVaccinations: (value.proposedVaccinations ?? []).map(normalizeVaccination),
+    proposedPreventives: (value.proposedPreventives ?? []).map(normalizePreventive),
+    proposedWeightEntry: value.proposedWeightEntry ? normalizeWeight(value.proposedWeightEntry) : null,
+    proposedSymptoms: (value.proposedSymptoms ?? []).map(normalizeSymptom),
+    proposedConditions: (value.proposedConditions ?? []).map(normalizeCondition),
+    proposedExpenses: (value.proposedExpenses ?? []).map(normalizeExpense),
     suggestKeepAsRecord: value.suggestKeepAsRecord ?? true,
     confidence: value.confidence ?? null,
   };
@@ -194,7 +319,7 @@ export async function extractProposalFromFile(file: File): Promise<ExtractedInge
         role: 'user',
         parts: [
           {
-            text: `Extract only facts explicitly present in this veterinary document. Return null or an empty array when an entity is not present. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates. The source filename is "${file.name}".`,
+            text: `Extract only facts explicitly present in this veterinary document. Return an empty array when an entity type is not present — a document can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates. The source filename is "${file.name}".`,
           },
           {
             inlineData: {

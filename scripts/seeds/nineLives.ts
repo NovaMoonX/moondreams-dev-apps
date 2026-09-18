@@ -2073,15 +2073,18 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       householdId: HOUSEHOLD_ID,
       sourceType: 'pdf',
       sourceFileName: 'blue-bark-visit-summary.pdf',
-      proposedCat: null,
-      proposedClinic: null,
-      proposedVisit: {
-        catName: 'Mochi',
-        scheduledAt: context.now - 86_400_000,
-        reason: 'checkup',
-        customReasonLabel: null,
-        notes: 'Annual wellness exam and vaccine review.',
-      },
+      proposedCats: [],
+      proposedClinics: [],
+      proposedVisits: [
+        {
+          catName: 'Mochi',
+          clinicName: null,
+          scheduledAt: context.now - 86_400_000,
+          reason: 'checkup',
+          customReasonLabel: null,
+          notes: 'Annual wellness exam and vaccine review.',
+        },
+      ],
       proposedVaccinations: [
         {
           catName: 'Mochi',
@@ -2095,14 +2098,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       proposedWeightEntry: null,
       proposedSymptoms: [],
       proposedConditions: [],
-      proposedExpense: {
-        catNames: ['Mochi'],
-        label: 'Annual wellness exam',
-        amount: 82,
-        category: 'vet',
-        incurredAt: context.now - 86_400_000,
-        notes: null,
-      },
+      proposedExpenses: [
+        {
+          catNames: ['Mochi'],
+          items: [{ category: 'vet', label: 'Annual wellness exam', amount: 82 }],
+          incurredAt: context.now - 86_400_000,
+          notes: null,
+        },
+      ],
       suggestKeepAsRecord: false,
       confidence: 0.96,
       createdBy: caretaker.uid,

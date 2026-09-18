@@ -204,13 +204,21 @@ in that household.
 Path: `apps/nine-lives/households/{householdId}/ingestionDrafts/{draftId}`.
 
 An upload is extracted by Firebase AI Logic into one temporary `IngestionDraft` containing
-nullable `proposedCat`, `proposedClinic`, `proposedVisit`, `proposedWeightEntry`, and
-`proposedExpense` values plus arrays of proposed vaccinations, preventives, symptoms, and
-conditions. It also stores `sourceType`, `sourceFileName`, `suggestKeepAsRecord`, `confidence`,
-`createdBy`, and `createdAt`; there is intentionally no status field. The review modal edits or
-excludes individual proposals, optionally selects an existing cat or clinic, and then confirms
-the dependency-ordered writes (cat, clinic, visit, linked health data, expense, and optional
-health-record upload) before deleting the draft. Discarding only deletes the draft.
+`proposedCats`, `proposedClinics`, `proposedVisits`, and `proposedExpenses` arrays (a single
+document can mention more than one cat, clinic, visit, or expense — each proposed expense is
+itself itemized, mirroring `Expense`/`ExpenseLineItem`), a nullable `proposedWeightEntry`, and
+arrays of proposed vaccinations, preventives, symptoms, and conditions. It also stores
+`sourceType`, `sourceFileName`, `suggestKeepAsRecord`, `confidence`, `createdBy`, and `createdAt`;
+there is intentionally no status field. The proposal types themselves
+(`IngestionCatProposal`, `IngestionVisitProposal`, etc.) live alongside the extraction code at
+`lib/extractProposalFromFile.types.ts`, not in `types.ts`, since they're shaped by what the model
+can be asked to return rather than by the underlying Firestore documents. The review modal edits
+or excludes individual proposals (each cat/clinic gets its own dropdown to pick an existing
+record instead of creating new), and confirming resolves cross-references by name — a
+vaccination/preventive/weight/symptom/condition/expense links to whichever proposed visit's
+`scheduledAt` is closest to its own date — then performs the dependency-ordered writes (cats,
+clinics, visits, linked health data, expenses, and an optional health-record upload) before
+deleting the draft. Discarding only deletes the draft.
 
 Firebase App Check protects AI Logic calls. Production uses `VITE_FIREBASE_APPCHECK_SITE_KEY`
 with reCAPTCHA v3. Local emulator builds enable the App Check debug token; register the generated
