@@ -674,6 +674,16 @@ function IngestionDraftReviewModal({
             </>
           )}
         </p>
+        <p className='text-muted-foreground text-xs'>
+          Extracted as of{' '}
+          {new Date(draft.createdAt).toLocaleDateString(undefined, {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })}
+          {' '}
+          — only events on or before this date were proposed.
+        </p>
         <div className='flex flex-wrap items-center justify-between gap-2'>
           <ReviewProgressPills
             sections={sectionsWithContent}

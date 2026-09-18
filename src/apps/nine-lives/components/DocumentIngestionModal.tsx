@@ -115,6 +115,17 @@ function DocumentIngestionModal({
     );
   }
 
+  if (isSubmitting) {
+    return (
+      <Modal isOpen={isOpen} onClose={() => undefined} title='Upload document' hideCloseButton>
+        <div className='flex flex-col items-center justify-center gap-4 py-10 text-center'>
+          <div className='h-16 w-16 animate-spin rounded-full border-4 border-foreground/20 border-t-accent' />
+          <p className='text-lg text-foreground/80'>Uploading and parsing your document…</p>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title='Upload document'>
       <div className='space-y-4'>
@@ -124,7 +135,6 @@ function DocumentIngestionModal({
         <Input
           type='file'
           accept='application/pdf,image/*'
-          disabled={isSubmitting}
           onChange={(event) => {
             setFile(event.target.files?.[0] ?? null);
             setError(null);
@@ -137,8 +147,8 @@ function DocumentIngestionModal({
           <Button type='button' variant='secondary' onClick={handleClose}>
             Cancel
           </Button>
-          <Button type='button' loading={isSubmitting} disabled={!file} onClick={() => void handleSubmit()}>
-            {isSubmitting ? 'Updating and parsing…' : 'Review document'}
+          <Button type='button' disabled={!file} onClick={() => void handleSubmit()}>
+            Review document
           </Button>
         </div>
 
