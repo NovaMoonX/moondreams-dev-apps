@@ -40,7 +40,7 @@ import {
   toLocalDateInputValue,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
-import { formatDateTime } from '@/utils/formatUtils';
+import { formatDate, formatDateTime } from '@/utils/formatUtils';
 
 import {
   confirmIngestionDraft,
@@ -840,26 +840,6 @@ function IngestionDraftReviewModal({
     setReviewed((current) => new Set(current).add(section));
   };
 
-  const totalCount =
-    draft.proposedCats.length +
-    draft.proposedClinics.length +
-    draft.proposedVisits.length +
-    draft.proposedVaccinations.length +
-    draft.proposedPreventives.length +
-    draft.proposedWeightEntries.length +
-    draft.proposedSymptoms.length +
-    draft.proposedConditions.length +
-    draft.proposedExpenses.length;
-  const includedCount =
-    draft.proposedCats.filter((_, i) => isIncluded('includeCats', i)).length +
-    draft.proposedClinics.filter((_, i) => isIncluded('includeClinics', i)).length +
-    draft.proposedVisits.filter((_, i) => isIncluded('includeVisits', i)).length +
-    draft.proposedVaccinations.filter((_, i) => isIncluded('includeVaccinations', i)).length +
-    draft.proposedPreventives.filter((_, i) => isIncluded('includePreventives', i)).length +
-    draft.proposedWeightEntries.filter((_, i) => isIncluded('includeWeightEntries', i)).length +
-    draft.proposedSymptoms.filter((_, i) => isIncluded('includeSymptoms', i)).length +
-    draft.proposedConditions.filter((_, i) => isIncluded('includeConditions', i)).length +
-    draft.proposedExpenses.filter((_, i) => isIncluded('includeExpenses', i)).length;
   const countNewItems = (
     length: number,
     key: ArrayIncludeKey,
@@ -981,7 +961,9 @@ function IngestionDraftReviewModal({
             expanded={expanded}
             onSelect={(section) => (section === 'all' ? expandAllSections() : toggleSection(section))}
           />
-          <p className='text-success text-sm'>{newCount} new records will be created.</p>
+          <p className='text-success text-sm'>
+            {newCount} new item{newCount === 1 ? '' : 's'}
+          </p>
           <DropdownMenu
             items={addItemMenuItems}
             onItemSelect={(value) => addBlankItem(value as ReviewSection)}
@@ -1377,16 +1359,6 @@ function IngestionDraftReviewModal({
                           }
                         }}
                       />
-                      <Input
-                        type='time'
-                        value={toLocalTimeInputValue(item.administeredAt)}
-                        onChange={(event) => {
-                          const administeredAt = withUpdatedTime(item.administeredAt, event.target.value);
-                          if (administeredAt !== undefined) {
-                            updateVaccinationAt(index, { administeredAt });
-                          }
-                        }}
-                      />
                     </div>
                     <SingleCatSelect
                       catName={item.catName}
@@ -1396,7 +1368,7 @@ function IngestionDraftReviewModal({
                   </div>
                 ) : (
                   <span>
-                    {item.name} · {formatDateTime(item.administeredAt)}
+                    {item.name} · {formatDate(item.administeredAt)}
                     {item.catName && ` · ${item.catName}`}
                   </span>
                 )}
@@ -1475,16 +1447,6 @@ function IngestionDraftReviewModal({
                           }
                         }}
                       />
-                      <Input
-                        type='time'
-                        value={toLocalTimeInputValue(item.administeredAt)}
-                        onChange={(event) => {
-                          const administeredAt = withUpdatedTime(item.administeredAt, event.target.value);
-                          if (administeredAt !== undefined) {
-                            updatePreventiveAt(index, { administeredAt });
-                          }
-                        }}
-                      />
                     </div>
                     <CatNamesEditor
                       catNames={item.catNames}
@@ -1494,7 +1456,7 @@ function IngestionDraftReviewModal({
                   </div>
                 ) : (
                   <span>
-                    {item.name} · {formatDateTime(item.administeredAt)}
+                    {item.name} · {formatDate(item.administeredAt)}
                     {item.catNames.length > 0 && ` · ${item.catNames.join(', ')}`}
                   </span>
                 )}
@@ -1585,16 +1547,6 @@ function IngestionDraftReviewModal({
                           }
                         }}
                       />
-                      <Input
-                        type='time'
-                        value={toLocalTimeInputValue(item.measuredAt)}
-                        onChange={(event) => {
-                          const measuredAt = withUpdatedTime(item.measuredAt, event.target.value);
-                          if (measuredAt !== undefined) {
-                            updateWeightAt(index, { measuredAt });
-                          }
-                        }}
-                      />
                     </div>
                     <SingleCatSelect
                       catName={item.catName}
@@ -1604,7 +1556,7 @@ function IngestionDraftReviewModal({
                   </div>
                 ) : (
                   <span>
-                    {item.weight} {item.unit}
+                    {item.weight} {item.unit} · {formatDate(item.measuredAt)}
                     {item.catName && ` · ${item.catName}`}
                   </span>
                 )}
@@ -1760,7 +1712,7 @@ function IngestionDraftReviewModal({
                     </div>
                   </div>
                   <p className='text-sm'>
-                    ${amount.toFixed(2)} · {formatDateTime(expense.incurredAt)}
+                    ${amount.toFixed(2)} · {formatDate(expense.incurredAt)}
                     {expense.catNames.length > 0 && ` · ${expense.catNames.join(', ')}`}
                   </p>
                   {isEditing('expense', expenseIndex) ? (
@@ -1840,7 +1792,7 @@ function IngestionDraftReviewModal({
       </div>
 
       <p className='mt-3 text-sm text-muted-foreground'>
-        {includedCount} of {totalCount} proposals will be saved.
+        {newCount} new item{newCount === 1 ? '' : 's'} will be created.
       </p>
       <div className='mt-2 flex flex-wrap justify-between gap-2'>
         <Button type='button' variant='destructive' disabled={isSubmitting} onClick={() => void handleDiscard()}>

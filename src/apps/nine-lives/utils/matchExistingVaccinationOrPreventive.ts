@@ -4,8 +4,13 @@ import type {
 } from '../lib/extractProposalFromFile.types';
 import type { Preventive, Vaccination } from '../types';
 import { normalizeString } from '@/utils/stringUtils';
+import { isSameCalendarDay } from '@/utils/dateInputUtils';
 
-export const ADMINISTRATION_DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
+/**
+ * Nothing in the app asks for a vaccination/preventive's time of day, so extraction doesn't
+ * either — a re-parse of the same document can land on a different arbitrary time for the
+ * same administration. Duplicate detection compares calendar day, not a tight time window.
+ */
 
 export function matchExistingVaccination(
   proposal: IngestionVaccinationProposal,
@@ -37,11 +42,7 @@ export function detectDuplicateVaccination(
     (vaccination) =>
       vaccination.catId === catId &&
       normalizeString(vaccination.name) === normalizeString(proposal.name) &&
-      vaccination.history.some(
-        (dose) =>
-          Math.abs(dose.administeredAt - proposal.administeredAt) <=
-          ADMINISTRATION_DUPLICATE_WINDOW_MS,
-      ),
+      vaccination.history.some((dose) => isSameCalendarDay(dose.administeredAt, proposal.administeredAt)),
   );
 }
 
@@ -80,10 +81,6 @@ export function detectDuplicatePreventive(
       preventive.type === proposal.type &&
       normalizeString(preventive.name) === normalizeString(proposal.name) &&
       [...requestedCatIds].every((catId) => preventive.catIds.includes(catId)) &&
-      preventive.history.some(
-        (dose) =>
-          Math.abs(dose.administeredAt - proposal.administeredAt) <=
-          ADMINISTRATION_DUPLICATE_WINDOW_MS,
-      ),
+      preventive.history.some((dose) => isSameCalendarDay(dose.administeredAt, proposal.administeredAt)),
   );
 }

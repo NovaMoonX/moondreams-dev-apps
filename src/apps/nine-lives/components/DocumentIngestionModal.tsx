@@ -11,6 +11,7 @@ import { formatDateTime } from '@/utils/formatUtils';
 import {
   createDraftFromExtraction,
   discardIngestionDraft,
+  refreshIngestionDraftMatches,
 } from '../store/actions/ingestionDraftsActions';
 import { selectIngestionDraftsByHousehold } from '../store/selectors';
 import IngestionDraftReviewModal from './IngestionDraftReviewModal';
@@ -59,6 +60,7 @@ function DocumentIngestionModal({
   const handleResume = (draftId: string) => {
     setFile(null);
     setActiveDraftId(draftId);
+    void dispatch(refreshIngestionDraftMatches({ householdId, draftId }));
   };
 
   const handleDiscardFromList = async (draftId: string, sourceFileName: string) => {

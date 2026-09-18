@@ -80,7 +80,7 @@ const responseSchema = {
     proposedVisits: {
       type: SchemaType.ARRAY,
       description:
-        'One entry per distinct visit event. If a single visit event (one appointment, one date, one summary) clearly covers more than one cat, list every one of their names in catNames rather than creating a separate visit per cat.',
+        'One entry per distinct visit event. If a single visit event (one appointment, one date, one summary — the same scheduledAt, reason, and clinic) clearly covers more than one cat, this MUST be exactly one entry with every one of those cats listed in catNames. NEVER produce two visit entries that share the same date, reason, and clinic just because they mention different cats — that is the same visit and belongs in one entry with all the cats combined. Before finishing, double-check: if any two entries in this array would have identical scheduledAt, reason, and clinicName, merge them into one with the union of their catNames instead of leaving them separate.',
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -415,7 +415,7 @@ export async function extractProposalFromFile(file: File): Promise<ExtractedInge
         role: 'user',
         parts: [
           {
-            text: `Extract every fact explicitly present in this veterinary document — don't stop at the first or most prominent item of a given type; scan the entire document for every vaccination, weight measurement, clinic detail, and expense line, including ones stated only in a table, invoice line, or vitals block rather than in prose. Return an empty array when an entity type is not present — a document can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates.
+            text: `Extract every fact explicitly present in this veterinary document — don't stop at the first or most prominent item of a given type; scan the entire document for every vaccination, weight measurement, clinic detail, and expense line, including ones stated only in a table, invoice line, or vitals block rather than in prose. Return an empty array when an entity type is not present — a document can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. When a document gives a date with no specific time of day (which is the normal case for a vaccination, preventive, weight, or expense date), encode it as noon UTC (12:00 UTC) on that calendar date, not midnight — midnight UTC shifts to the wrong calendar day once converted to a US time zone for display. Do not invent cat names, diagnoses, costs, or dates.
 
 Today's date is ${today}. Be strict about what counts as something that has actually happened: a visit's scheduledAt, a vaccination's or preventive's administeredAt, a weight's measuredAt, a symptom's firstNoticedAt, a condition's occurredAt, and an expense's incurredAt must all be on or before today. Many vet documents also list upcoming reminders — "next vaccination due", "revolution due in 3 weeks", a future recheck appointment, an upcoming refill — these describe something that has NOT happened yet and must NOT be proposed as a vaccination/preventive/visit/etc. The one exception is a vaccination or preventive's expiresAt (its next-due date) — that field is supposed to be in the future when known; only the administeredAt (when it was actually given) is constrained to today or earlier.
 

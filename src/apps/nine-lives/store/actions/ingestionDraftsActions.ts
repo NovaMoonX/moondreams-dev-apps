@@ -176,6 +176,138 @@ function selectionAt<T>(values: T[] | undefined, index: number, fallback: T): T 
   return values && index < values.length ? values[index] : fallback;
 }
 
+type IngestionMatchFields = Pick<
+  IngestionDraft,
+  | 'proposedSymptoms'
+  | 'proposedConditions'
+  | 'matchedCatIds'
+  | 'matchedClinicIds'
+  | 'matchedVisitIds'
+  | 'matchedVaccinationIds'
+  | 'matchedPreventiveIds'
+  | 'likelyDuplicateWeightEntries'
+  | 'likelyDuplicateSymptoms'
+  | 'likelyDuplicateVaccinations'
+  | 'likelyDuplicatePreventives'
+  | 'likelyDuplicateExpenses'
+  | 'matchedLibraryConditionIds'
+  | 'matchedCatConditionIds'
+>;
+
+/**
+ * Runs every existing-record match/duplicate check against the household's *current* data.
+ * Used both when a draft is first created and to refresh a resumed draft, since matches
+ * computed once at extraction time go stale the moment anything they'd match against changes.
+ */
+function computeIngestionMatches(
+  proposal: Pick<
+    IngestionDraft,
+    | 'proposedCats'
+    | 'proposedClinics'
+    | 'proposedVisits'
+    | 'proposedVaccinations'
+    | 'proposedPreventives'
+    | 'proposedWeightEntries'
+    | 'proposedSymptoms'
+    | 'proposedConditions'
+    | 'proposedExpenses'
+  >,
+  householdId: string,
+  state: RootState,
+): IngestionMatchFields {
+  const cats = state.nineLives.cats.items.filter((cat) => cat.householdId === householdId);
+  const clinics = state.nineLives.vetClinics.items.filter(
+    (clinic) => clinic.householdId === householdId,
+  );
+  const visits = state.nineLives.visits.items.filter((visit) => visit.householdId === householdId);
+  const vaccinations = state.nineLives.vaccinations.items.filter(
+    (vaccination) => vaccination.householdId === householdId,
+  );
+  const preventives = state.nineLives.preventives.items.filter(
+    (preventive) => preventive.householdId === householdId,
+  );
+  const weightEntries = state.nineLives.weightEntries.items.filter((entry) =>
+    cats.some((cat) => cat.id === entry.catId),
+  );
+  const symptoms = state.nineLives.symptoms.items.filter((symptom) =>
+    cats.some((cat) => cat.id === symptom.catId),
+  );
+  const expenses = state.nineLives.expenses.items.filter(
+    (expense) => expense.householdId === householdId,
+  );
+  const catConditions = state.nineLives.catConditions.items.filter((condition) =>
+    cats.some((cat) => cat.id === condition.catId),
+  );
+  const matchedCatIds = proposal.proposedCats.map((item) => matchExistingCat(item.name, cats));
+  const matchedClinicIds = proposal.proposedClinics.map((item) =>
+    matchExistingClinic(item.name, clinics),
+  );
+  const catIdForName = (name: string | null): string | null => matchExistingCat(name, cats);
+  const catIdsForNames = (names: string[]): string[] =>
+    names.map((name) => catIdForName(name)).filter((id): id is string => Boolean(id));
+  const matchedVisitIds = proposal.proposedVisits.map((item) =>
+    matchExistingVisit(item, visits, clinics, catIdsForNames(item.catNames)),
+  );
+  const matchedVaccinationIds = proposal.proposedVaccinations.map((item) =>
+    matchExistingVaccination(item, catIdForName(item.catName), vaccinations),
+  );
+  const matchedPreventiveIds = proposal.proposedPreventives.map((item) =>
+    matchExistingPreventive(item, catIdsForNames(item.catNames), preventives),
+  );
+  const likelyDuplicateVaccinations = proposal.proposedVaccinations.map((item) =>
+    detectDuplicateVaccination(item, catIdForName(item.catName), vaccinations),
+  );
+  const likelyDuplicatePreventives = proposal.proposedPreventives.map((item) =>
+    detectDuplicatePreventive(item, catIdsForNames(item.catNames), preventives),
+  );
+  const likelyDuplicateWeightEntries = proposal.proposedWeightEntries.map((item) =>
+    detectDuplicateWeightEntry(item, catIdForName(item.catName), weightEntries),
+  );
+  const likelyDuplicateSymptoms = proposal.proposedSymptoms.map((item) =>
+    detectDuplicateSymptom(item, catIdForName(item.catName), symptoms),
+  );
+  const likelyDuplicateExpenses = proposal.proposedExpenses.map((item) =>
+    detectDuplicateExpense(item, catIdsForNames(item.catNames), expenses),
+  );
+  const conditionMatches = proposal.proposedConditions.map((item) =>
+    matchExistingCondition(
+      item,
+      catIdForName(item.catName),
+      state.nineLives.conditionLibrary.items,
+      catConditions,
+    ),
+  );
+  const matchedLibraryConditionIds = conditionMatches.map((match) => match.matchedLibraryConditionId);
+  const matchedCatConditionIds = conditionMatches.map((match) => match.matchedCatConditionId);
+  const proposedSymptoms = proposal.proposedSymptoms.map((item, index) =>
+    likelyDuplicateSymptoms[index]
+      ? item
+      : { ...item, description: normalizeCustomLabelCasing(item.description) },
+  );
+  const proposedConditions = proposal.proposedConditions.map((item, index) =>
+    matchedLibraryConditionIds[index] || matchedCatConditionIds[index]
+      ? item
+      : { ...item, name: normalizeCustomLabelCasing(item.name) },
+  );
+
+  return {
+    proposedSymptoms,
+    proposedConditions,
+    matchedCatIds,
+    matchedClinicIds,
+    matchedVisitIds,
+    matchedVaccinationIds,
+    matchedPreventiveIds,
+    likelyDuplicateWeightEntries,
+    likelyDuplicateSymptoms,
+    likelyDuplicateVaccinations,
+    likelyDuplicatePreventives,
+    likelyDuplicateExpenses,
+    matchedLibraryConditionIds,
+    matchedCatConditionIds,
+  };
+}
+
 export const createDraftFromExtraction = createAsyncThunk<
   IngestionDraft,
   { householdId: string; uid: string; file: File },
@@ -186,80 +318,7 @@ export const createDraftFromExtraction = createAsyncThunk<
     try {
       const proposal = await extractProposalFromFile(file);
       const state = getState() as RootState;
-      const cats = state.nineLives.cats.items.filter((cat) => cat.householdId === householdId);
-      const clinics = state.nineLives.vetClinics.items.filter(
-        (clinic) => clinic.householdId === householdId,
-      );
-      const visits = state.nineLives.visits.items.filter((visit) => visit.householdId === householdId);
-      const vaccinations = state.nineLives.vaccinations.items.filter(
-        (vaccination) => vaccination.householdId === householdId,
-      );
-      const preventives = state.nineLives.preventives.items.filter(
-        (preventive) => preventive.householdId === householdId,
-      );
-      const weightEntries = state.nineLives.weightEntries.items.filter((entry) =>
-        cats.some((cat) => cat.id === entry.catId),
-      );
-      const symptoms = state.nineLives.symptoms.items.filter((symptom) =>
-        cats.some((cat) => cat.id === symptom.catId),
-      );
-      const expenses = state.nineLives.expenses.items.filter(
-        (expense) => expense.householdId === householdId,
-      );
-      const catConditions = state.nineLives.catConditions.items.filter((condition) =>
-        cats.some((cat) => cat.id === condition.catId),
-      );
-      const matchedCatIds = proposal.proposedCats.map((item) => matchExistingCat(item.name, cats));
-      const matchedClinicIds = proposal.proposedClinics.map((item) =>
-        matchExistingClinic(item.name, clinics),
-      );
-      const catIdForName = (name: string | null): string | null =>
-        matchExistingCat(name, cats);
-      const catIdsForNames = (names: string[]): string[] =>
-        names
-          .map((name) => catIdForName(name))
-          .filter((id): id is string => Boolean(id));
-      const matchedVisitIds = proposal.proposedVisits.map((item) =>
-        matchExistingVisit(item, visits, clinics, catIdsForNames(item.catNames)),
-      );
-      const matchedVaccinationIds = proposal.proposedVaccinations.map((item) =>
-        matchExistingVaccination(item, catIdForName(item.catName), vaccinations),
-      );
-      const matchedPreventiveIds = proposal.proposedPreventives.map((item) =>
-        matchExistingPreventive(item, catIdsForNames(item.catNames), preventives),
-      );
-      const likelyDuplicateVaccinations = proposal.proposedVaccinations.map((item) =>
-        detectDuplicateVaccination(item, catIdForName(item.catName), vaccinations),
-      );
-      const likelyDuplicatePreventives = proposal.proposedPreventives.map((item) =>
-        detectDuplicatePreventive(item, catIdsForNames(item.catNames), preventives),
-      );
-      const likelyDuplicateWeightEntries = proposal.proposedWeightEntries.map((item) =>
-        detectDuplicateWeightEntry(item, catIdForName(item.catName), weightEntries),
-      );
-      const likelyDuplicateSymptoms = proposal.proposedSymptoms.map((item) =>
-        detectDuplicateSymptom(item, catIdForName(item.catName), symptoms),
-      );
-      const likelyDuplicateExpenses = proposal.proposedExpenses.map((item) =>
-        detectDuplicateExpense(item, catIdsForNames(item.catNames), expenses),
-      );
-      const conditionMatches = proposal.proposedConditions.map((item) =>
-        matchExistingCondition(item, catIdForName(item.catName), state.nineLives.conditionLibrary.items, catConditions),
-      );
-      const matchedLibraryConditionIds = conditionMatches.map(
-        (match) => match.matchedLibraryConditionId,
-      );
-      const matchedCatConditionIds = conditionMatches.map((match) => match.matchedCatConditionId);
-      const proposedSymptoms = proposal.proposedSymptoms.map((item, index) =>
-        likelyDuplicateSymptoms[index]
-          ? item
-          : { ...item, description: normalizeCustomLabelCasing(item.description) },
-      );
-      const proposedConditions = proposal.proposedConditions.map((item, index) =>
-        matchedLibraryConditionIds[index] || matchedCatConditionIds[index]
-          ? item
-          : { ...item, name: normalizeCustomLabelCasing(item.name) },
-      );
+      const matches = computeIngestionMatches(proposal, householdId, state);
       const draftId = doc(getDraftCollectionRef(householdId)).id;
       const draft: IngestionDraft = {
         id: draftId,
@@ -267,20 +326,7 @@ export const createDraftFromExtraction = createAsyncThunk<
         sourceType: file.type === 'application/pdf' ? 'pdf' : 'photo',
         sourceFileName: file.name,
         ...proposal,
-        proposedSymptoms,
-        proposedConditions,
-        matchedCatIds,
-        matchedClinicIds,
-        matchedVisitIds,
-        matchedVaccinationIds,
-        matchedPreventiveIds,
-        likelyDuplicateWeightEntries,
-        likelyDuplicateSymptoms,
-        likelyDuplicateVaccinations,
-        likelyDuplicatePreventives,
-        likelyDuplicateExpenses,
-        matchedLibraryConditionIds,
-        matchedCatConditionIds,
+        ...matches,
         createdBy: uid,
         createdAt: Date.now(),
       };
@@ -291,6 +337,41 @@ export const createDraftFromExtraction = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         error instanceof Error ? error.message : 'Unable to read this document.',
+      );
+    }
+  },
+);
+
+/**
+ * Recomputes an existing draft's match/duplicate fields against current household data.
+ * Matches are only ever computed once, at extraction time, and stored on the draft — so
+ * resuming a draft later (after any relevant record has since changed) would otherwise keep
+ * showing stale results. Call this whenever a draft is reopened for review.
+ */
+export const refreshIngestionDraftMatches = createAsyncThunk<
+  IngestionDraft,
+  { householdId: string; draftId: string },
+  { rejectValue: string }
+>(
+  'nineLives/ingestionDrafts/refreshMatches',
+  async ({ householdId, draftId }, { dispatch, getState, rejectWithValue }) => {
+    const state = getState() as RootState;
+    const current = state.nineLives.ingestionDrafts.items.find((draft) => draft.id === draftId);
+
+    if (!current) {
+      return rejectWithValue('Ingestion draft not found.');
+    }
+
+    const matches = computeIngestionMatches(current, householdId, state);
+    const nextDraft: IngestionDraft = { ...current, ...matches };
+    dispatch(upsertIngestionDraft(nextDraft));
+
+    try {
+      await setDoc(getDraftDocRef(householdId, draftId), matches, { merge: true });
+      return nextDraft;
+    } catch (error) {
+      return rejectWithValue(
+        error instanceof Error ? error.message : 'Unable to refresh this draft.',
       );
     }
   },

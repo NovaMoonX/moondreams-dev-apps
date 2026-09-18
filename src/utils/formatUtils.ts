@@ -22,6 +22,18 @@ export function formatTime(timestamp: number) {
   });
 }
 
+/** Date only, no time-of-day — for things nothing in the app ever asks a time for (vaccinations, preventives, weight, expenses). */
+export function formatDate(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 export function formatDateTime(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getFullYear() === new Date().getFullYear();
