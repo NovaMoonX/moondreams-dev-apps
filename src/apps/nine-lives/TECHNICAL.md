@@ -221,8 +221,10 @@ clinics, visits, linked health data, expenses, and an optional health-record upl
 deleting the draft. Discarding only deletes the draft.
 
 Firebase App Check protects AI Logic calls. Production uses `VITE_FIREBASE_APPCHECK_SITE_KEY`
-with reCAPTCHA v3. Local emulator builds enable the App Check debug token; register the generated
-token in the Firebase Console when exercising Gemini locally.
+with reCAPTCHA v3. Local emulator builds enable the App Check debug token; setting
+`VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` in `.env.local` to a fixed UUID pins every local dev
+environment to that one token (registered once in Firebase Console > App Check > Manage debug
+tokens) instead of each browser generating, and needing separate registration of, its own.
 
 ### 6. Vaccination
 

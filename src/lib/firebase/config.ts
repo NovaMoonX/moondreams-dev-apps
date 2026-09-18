@@ -35,8 +35,11 @@ export const isUsingFirebaseEmulators =
   import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 
 if (isUsingFirebaseEmulators && typeof self !== 'undefined') {
-  (self as typeof self & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
-    true;
+  // A literal string pins every local dev environment to one shared, pre-registered debug
+  // token instead of each browser generating (and needing to separately register) its own.
+  const fixedDebugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined;
+  (self as typeof self & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+    fixedDebugToken || true;
 }
 
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY as
