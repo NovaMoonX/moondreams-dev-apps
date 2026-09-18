@@ -98,7 +98,10 @@ const REASON_OPTIONS = [
 ];
 
 function getOptionLabel(options: Array<{ text: string; value: string }>, value: string | null | undefined) {
-  return options.find((option) => option.value === value)?.text ?? value ?? '';
+  function matchesValue(option: { text: string; value: string }) {
+    return option.value === value;
+  }
+  return options.find(matchesValue)?.text ?? value ?? '';
 }
 
 interface IngestionDraftReviewModalProps {
@@ -307,49 +310,73 @@ function CatNamesEditor({
   onChange: (next: string[]) => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const availableToAdd = cats.filter(
-    (cat) => !catNames.some((name) => name.toLowerCase() === cat.name.toLowerCase()),
-  );
+
+  function isCatNotAttached(cat: Cat) {
+    function matchesCatName(name: string) {
+      return name.toLowerCase() === cat.name.toLowerCase();
+    }
+    return !catNames.some(matchesCatName);
+  }
+  const availableToAdd = cats.filter(isCatNotAttached);
+
+  function renderCatNameChip(name: string, index: number) {
+    function handleRemoveCatName() {
+      function isOtherIndex(_: string, i: number) {
+        return i !== index;
+      }
+      onChange(catNames.filter(isOtherIndex));
+    }
+
+    return (
+      <span
+        key={`${name}-${index}`}
+        className='inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs'
+      >
+        {name}
+        <Button
+          variant='base'
+          size='icon'
+          type='button'
+          aria-label={`Remove ${name}`}
+          onClick={handleRemoveCatName}
+          className='h-4 w-4 p-0'
+        >
+          <X className='h-3 w-3' />
+        </Button>
+      </span>
+    );
+  }
+
+  function toCatOption(cat: Cat) {
+    return { text: cat.name, value: cat.name };
+  }
+
+  function handleSelectCatToAdd(value: string) {
+    if (value) {
+      onChange([...catNames, value]);
+    }
+    setAdding(false);
+  }
+
+  function handleStartAdding() {
+    setAdding(true);
+  }
 
   return (
     <div className='space-y-1'>
       {catNames.length > 0 && (
-        <div className='flex flex-wrap gap-1'>
-          {catNames.map((name, index) => (
-            <span
-              key={`${name}-${index}`}
-              className='inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs'
-            >
-              {name}
-              <Button
-                variant='base'
-                size='icon'
-                type='button'
-                aria-label={`Remove ${name}`}
-                onClick={() => onChange(catNames.filter((_, i) => i !== index))}
-                className='h-4 w-4 p-0'
-              >
-                <X className='h-3 w-3' />
-              </Button>
-            </span>
-          ))}
-        </div>
+        <div className='flex flex-wrap gap-1'>{catNames.map(renderCatNameChip)}</div>
       )}
       {adding ? (
         <Select
-          options={availableToAdd.map((cat) => ({ text: cat.name, value: cat.name }))}
+          options={availableToAdd.map(toCatOption)}
           value=''
           placeholder='Select a cat to add'
-          onChange={(value) => {
-            if (value) {
-              onChange([...catNames, value]);
-            }
-            setAdding(false);
-          }}
+          onChange={handleSelectCatToAdd}
         />
       ) : (
         availableToAdd.length > 0 && (
-          <Button type='button' variant='link' size='sm' className={mutedLinkClassName} onClick={() => setAdding(true)}>
+          <Button type='button' variant='link' size='sm' className={mutedLinkClassName} onClick={handleStartAdding}>
             + Add cat
           </Button>
         )
@@ -368,21 +395,22 @@ function SingleCatSelect({
   cats: Cat[];
   onChange: (name: string | null) => void;
 }) {
+  function toCatOption(cat: Cat) {
+    return { text: cat.name, value: cat.name };
+  }
+  function matchesCatName(cat: Cat) {
+    return cat.name.toLowerCase() === catName?.toLowerCase();
+  }
+  function handleChange(value: string) {
+    onChange(value || null);
+  }
+
   const options = [
-    ...cats.map((cat) => ({ text: cat.name, value: cat.name })),
-    ...(catName && !cats.some((cat) => cat.name.toLowerCase() === catName.toLowerCase())
-      ? [{ text: catName, value: catName }]
-      : []),
+    ...cats.map(toCatOption),
+    ...(catName && !cats.some(matchesCatName) ? [{ text: catName, value: catName }] : []),
   ];
 
-  return (
-    <Select
-      options={options}
-      value={catName ?? ''}
-      placeholder='Select a cat'
-      onChange={(value) => onChange(value || null)}
-    />
-  );
+  return <Select options={options} value={catName ?? ''} placeholder='Select a cat' onChange={handleChange} />;
 }
 
 function ReviewProgressPills({
@@ -396,13 +424,47 @@ function ReviewProgressPills({
   expanded: ExpandedSection;
   onSelect: (section: ReviewSection | 'all') => void;
 }) {
+  function handleSelectAll() {
+    onSelect('all');
+  }
+
+  function renderSectionPill(section: ReviewSection) {
+    const isActive = expanded === section;
+    const isReviewed = reviewed.has(section);
+    const Icon = SECTION_ICONS[section];
+
+    function handleSelectSection() {
+      onSelect(section);
+    }
+
+    return (
+      <Button
+        key={section}
+        type='button'
+        variant='base'
+        size='sm'
+        onClick={handleSelectSection}
+        className={join(
+          'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+          isActive
+            ? 'border-primary text-primary'
+            : isReviewed
+              ? 'border-border bg-muted text-foreground'
+              : 'border-border text-muted-foreground',
+        )}
+      >
+        <Icon className='h-3 w-3' /> {SECTION_LABELS[section]}
+      </Button>
+    );
+  }
+
   return (
     <div className='flex flex-wrap gap-1.5'>
       <Button
         type='button'
         variant='base'
         size='sm'
-        onClick={() => onSelect('all')}
+        onClick={handleSelectAll}
         className={join(
           'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
           expanded === 'all' ? 'border-primary text-primary' : 'border-border text-muted-foreground',
@@ -410,30 +472,7 @@ function ReviewProgressPills({
       >
         All
       </Button>
-      {sections.map((section) => {
-        const isActive = expanded === section;
-        const isReviewed = reviewed.has(section);
-        const Icon = SECTION_ICONS[section];
-        return (
-          <Button
-            key={section}
-            type='button'
-            variant='base'
-            size='sm'
-            onClick={() => onSelect(section)}
-            className={join(
-              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
-              isActive
-                ? 'border-primary text-primary'
-                : isReviewed
-                  ? 'border-border bg-muted text-foreground'
-                  : 'border-border text-muted-foreground',
-            )}
-          >
-            <Icon className='h-3 w-3' /> {SECTION_LABELS[section]}
-          </Button>
-        );
-      })}
+      {sections.map(renderSectionPill)}
     </div>
   );
 }
@@ -453,6 +492,10 @@ function Section({
 }) {
   const Icon = SECTION_ICONS[section];
 
+  function handleToggle() {
+    onToggle(section);
+  }
+
   return (
     <div className='rounded-lg border-2 border-border'>
       <Disclosure
@@ -462,7 +505,7 @@ function Section({
           </span>
         }
         isOpen={expanded === section || expanded === 'all'}
-        onToggle={() => onToggle(section)}
+        onToggle={handleToggle}
         buttonClassName='w-full px-3 py-2.5 hover:bg-muted/40'
         className='overflow-visible'
       >
@@ -486,27 +529,38 @@ function IngestionDraftReviewModal({
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
   const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
-  const matchedCatIds = draft.matchedCatIds ?? draft.proposedCats.map(() => null);
-  const matchedClinicIds = draft.matchedClinicIds ?? draft.proposedClinics.map(() => null);
-  const matchedVisitIds = draft.matchedVisitIds ?? draft.proposedVisits.map(() => null);
+
+  function alwaysNull() {
+    return null;
+  }
+  function alwaysFalse() {
+    return false;
+  }
+  function invert(isDuplicate: boolean) {
+    return !isDuplicate;
+  }
+
+  const matchedCatIds = draft.matchedCatIds ?? draft.proposedCats.map(alwaysNull);
+  const matchedClinicIds = draft.matchedClinicIds ?? draft.proposedClinics.map(alwaysNull);
+  const matchedVisitIds = draft.matchedVisitIds ?? draft.proposedVisits.map(alwaysNull);
   const matchedVaccinationIds =
-    draft.matchedVaccinationIds ?? draft.proposedVaccinations.map(() => null);
+    draft.matchedVaccinationIds ?? draft.proposedVaccinations.map(alwaysNull);
   const matchedPreventiveIds =
-    draft.matchedPreventiveIds ?? draft.proposedPreventives.map(() => null);
+    draft.matchedPreventiveIds ?? draft.proposedPreventives.map(alwaysNull);
   const likelyDuplicateWeightEntries =
-    draft.likelyDuplicateWeightEntries ?? draft.proposedWeightEntries.map(() => false);
+    draft.likelyDuplicateWeightEntries ?? draft.proposedWeightEntries.map(alwaysFalse);
   const likelyDuplicateSymptoms =
-    draft.likelyDuplicateSymptoms ?? draft.proposedSymptoms.map(() => false);
+    draft.likelyDuplicateSymptoms ?? draft.proposedSymptoms.map(alwaysFalse);
   const likelyDuplicateVaccinations =
-    draft.likelyDuplicateVaccinations ?? draft.proposedVaccinations.map(() => false);
+    draft.likelyDuplicateVaccinations ?? draft.proposedVaccinations.map(alwaysFalse);
   const likelyDuplicatePreventives =
-    draft.likelyDuplicatePreventives ?? draft.proposedPreventives.map(() => false);
+    draft.likelyDuplicatePreventives ?? draft.proposedPreventives.map(alwaysFalse);
   const likelyDuplicateExpenses =
-    draft.likelyDuplicateExpenses ?? draft.proposedExpenses.map(() => false);
+    draft.likelyDuplicateExpenses ?? draft.proposedExpenses.map(alwaysFalse);
   const matchedLibraryConditionIds =
-    draft.matchedLibraryConditionIds ?? draft.proposedConditions.map(() => null);
+    draft.matchedLibraryConditionIds ?? draft.proposedConditions.map(alwaysNull);
   const matchedCatConditionIds =
-    draft.matchedCatConditionIds ?? draft.proposedConditions.map(() => null);
+    draft.matchedCatConditionIds ?? draft.proposedConditions.map(alwaysNull);
 
   const sectionsWithContent: ReviewSection[] = [
     ...(draft.proposedCats.length ? (['cat'] as const) : []),
@@ -537,11 +591,11 @@ function IngestionDraftReviewModal({
     visitIds: matchedVisitIds,
     vaccinationIds: matchedVaccinationIds,
     preventiveIds: matchedPreventiveIds,
-    includeVaccinations: likelyDuplicateVaccinations.map((isDuplicate) => !isDuplicate),
-    includePreventives: likelyDuplicatePreventives.map((isDuplicate) => !isDuplicate),
-    includeExpenses: likelyDuplicateExpenses.map((isDuplicate) => !isDuplicate),
-    includeWeightEntries: likelyDuplicateWeightEntries.map((isDuplicate) => !isDuplicate),
-    includeSymptoms: likelyDuplicateSymptoms.map((isDuplicate) => !isDuplicate),
+    includeVaccinations: likelyDuplicateVaccinations.map(invert),
+    includePreventives: likelyDuplicatePreventives.map(invert),
+    includeExpenses: likelyDuplicateExpenses.map(invert),
+    includeWeightEntries: likelyDuplicateWeightEntries.map(invert),
+    includeSymptoms: likelyDuplicateSymptoms.map(invert),
     conditionIds: matchedCatConditionIds,
     conditionLibraryIds: matchedLibraryConditionIds,
   });
@@ -555,170 +609,254 @@ function IngestionDraftReviewModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const toggleSection = (section: ReviewSection) => {
-    setExpanded((current) => (current === section ? null : section));
-    setReviewed((current) => new Set(current).add(section));
-  };
-  const expandAllSections = () => {
+  function toggleSection(section: ReviewSection) {
+    function collapseIfSame(current: ExpandedSection) {
+      return current === section ? null : section;
+    }
+    function addSectionToReviewed(current: Set<ReviewSection>) {
+      return new Set(current).add(section);
+    }
+    setExpanded(collapseIfSame);
+    setReviewed(addSectionToReviewed);
+  }
+  function expandAllSections() {
     setExpanded('all');
     setReviewed(new Set(sectionsWithContent));
-  };
+  }
 
-  const isEditing = (section: EditingKey['section'], index: number) =>
-    editing?.section === section && editing.index === index;
-  const toggleEditing = (section: EditingKey['section'], index: number) => {
-    setEditing((current) =>
-      current && current.section === section && current.index === index ? null : { section, index },
-    );
-  };
-  const toggleTargetEditing = (section: 'cat' | 'clinic', index: number) => {
+  function isEditing(section: EditingKey['section'], index: number) {
+    return editing?.section === section && editing.index === index;
+  }
+  function toggleEditing(section: EditingKey['section'], index: number) {
+    function resolveEditingState(current: EditingKey | null) {
+      return current && current.section === section && current.index === index ? null : { section, index };
+    }
+    setEditing(resolveEditingState);
+  }
+  function toggleTargetEditing(section: 'cat' | 'clinic', index: number) {
     const enteringEditing = !isEditing(section, index);
     toggleEditing(section, index);
     if (!enteringEditing) {
       return;
     }
-    setSelections((current) => {
+    function clearTargetSelection(current: IngestionDraftSelections) {
       const key = section === 'cat' ? 'catIds' : 'clinicIds';
       const values = [...(current[key] ?? [])];
       values[index] = null;
       return { ...current, [key]: values };
-    });
-  };
+    }
+    setSelections(clearTargetSelection);
+  }
 
-  const isEditingVisitNotes = (index: number) => editingVisitNotes.has(index);
-  const startEditingVisitNotes = (index: number) =>
-    setEditingVisitNotes((current) => new Set(current).add(index));
+  function isEditingVisitNotes(index: number) {
+    return editingVisitNotes.has(index);
+  }
+  function startEditingVisitNotes(index: number) {
+    function addIndexToEditingVisitNotes(current: Set<number>) {
+      return new Set(current).add(index);
+    }
+    setEditingVisitNotes(addIndexToEditingVisitNotes);
+  }
 
-  const isPickingExisting = (section: 'cat' | 'clinic', index: number) =>
-    pickingExisting.has(`${section}-${index}`);
-  const startPickingExisting = (section: 'cat' | 'clinic', index: number) =>
-    setPickingExisting((current) => new Set(current).add(`${section}-${index}`));
-  const stopPickingExisting = (section: 'cat' | 'clinic', index: number) => {
-    setPickingExisting((current) => {
+  function isPickingExisting(section: 'cat' | 'clinic', index: number) {
+    return pickingExisting.has(`${section}-${index}`);
+  }
+  function startPickingExisting(section: 'cat' | 'clinic', index: number) {
+    function addPickingKey(current: Set<string>) {
+      return new Set(current).add(`${section}-${index}`);
+    }
+    setPickingExisting(addPickingKey);
+  }
+  function stopPickingExisting(section: 'cat' | 'clinic', index: number) {
+    function removePickingKey(current: Set<string>) {
       const next = new Set(current);
       next.delete(`${section}-${index}`);
       return next;
-    });
-    const key = section === 'cat' ? 'catIds' : 'clinicIds';
-    setSelections((current) => {
+    }
+    setPickingExisting(removePickingKey);
+    function clearTargetSelection(current: IngestionDraftSelections) {
+      const key = section === 'cat' ? 'catIds' : 'clinicIds';
       const values = [...(current[key] ?? [])];
       values[index] = null;
       return { ...current, [key]: values };
-    });
-  };
+    }
+    setSelections(clearTargetSelection);
+  }
 
-  const toggleArrayInclude = (key: ArrayIncludeKey, index: number) => {
-    setSelections((current) => {
+  function toggleArrayInclude(key: ArrayIncludeKey, index: number) {
+    function flipIncludeAt(current: IngestionDraftSelections) {
       const values = [...(current[key] ?? [])];
       values[index] = values[index] !== false ? false : true;
       return { ...current, [key]: values };
-    });
-  };
-  const isIncluded = (key: ArrayIncludeKey, index: number) => selections[key]?.[index] !== false;
-  const getItemKey = (section: ReviewSection, index: number) => `${section}-${index}`;
-  const isAddedItem = (section: ReviewSection, index: number) =>
-    addedItemKeys.has(getItemKey(section, index));
-
-  const updateDraft = (changes: Parameters<typeof updateIngestionDraft>[0]['changes']) =>
-    void dispatch(updateIngestionDraft({ householdId, draftId: draft.id, changes }));
-
-  const updateCatAt = (index: number, patch: Partial<IngestionDraft['proposedCats'][number]>) => {
-    updateDraft({
-      proposedCats: draft.proposedCats.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
-  };
-  const updateClinicAt = (index: number, patch: Partial<IngestionDraft['proposedClinics'][number]>) => {
-    updateDraft({
-      proposedClinics: draft.proposedClinics.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
-  };
-  const updateVisitAt = (index: number, patch: Partial<IngestionDraft['proposedVisits'][number]>) => {
-    updateDraft({
-      proposedVisits: draft.proposedVisits.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
-    if ('scheduledAt' in patch || 'clinicName' in patch || 'catNames' in patch) {
-      setSelections((current) => {
-        const values = [...(current.visitIds ?? [])];
-        values[index] = null;
-        return { ...current, visitIds: values };
-      });
     }
-  };
-  const updateVaccinationAt = (
+    setSelections(flipIncludeAt);
+  }
+  function isIncluded(key: ArrayIncludeKey, index: number) {
+    return selections[key]?.[index] !== false;
+  }
+  function getItemKey(section: ReviewSection, index: number) {
+    return `${section}-${index}`;
+  }
+  function isAddedItem(section: ReviewSection, index: number) {
+    return addedItemKeys.has(getItemKey(section, index));
+  }
+
+  function updateDraft(changes: Parameters<typeof updateIngestionDraft>[0]['changes']) {
+    void dispatch(updateIngestionDraft({ householdId, draftId: draft.id, changes }));
+  }
+
+  function updateCatAt(index: number, patch: Partial<IngestionDraft['proposedCats'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedCats'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    updateDraft({ proposedCats: draft.proposedCats.map(applyPatchAtIndex) });
+  }
+  function updateClinicAt(index: number, patch: Partial<IngestionDraft['proposedClinics'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedClinics'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    updateDraft({ proposedClinics: draft.proposedClinics.map(applyPatchAtIndex) });
+  }
+  function updateVisitAt(index: number, patch: Partial<IngestionDraft['proposedVisits'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedVisits'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    function clearVisitSelection(current: IngestionDraftSelections) {
+      const values = [...(current.visitIds ?? [])];
+      values[index] = null;
+      return { ...current, visitIds: values };
+    }
+    updateDraft({ proposedVisits: draft.proposedVisits.map(applyPatchAtIndex) });
+    if ('scheduledAt' in patch || 'clinicName' in patch || 'catNames' in patch) {
+      setSelections(clearVisitSelection);
+    }
+  }
+  function updateVaccinationAt(
     index: number,
     patch: Partial<IngestionDraft['proposedVaccinations'][number]>,
-  ) => {
-    updateDraft({
-      proposedVaccinations: draft.proposedVaccinations.map((item, i) =>
-        i === index ? { ...item, ...patch } : item,
-      ),
-    });
-    if ('name' in patch || 'catName' in patch) {
-      setSelections((current) => {
-        const values = [...(current.vaccinationIds ?? [])];
-        values[index] = null;
-        return { ...current, vaccinationIds: values };
-      });
+  ) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedVaccinations'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
     }
-  };
-  const updatePreventiveAt = (
+    function clearVaccinationSelection(current: IngestionDraftSelections) {
+      const values = [...(current.vaccinationIds ?? [])];
+      values[index] = null;
+      return { ...current, vaccinationIds: values };
+    }
+    updateDraft({ proposedVaccinations: draft.proposedVaccinations.map(applyPatchAtIndex) });
+    if ('name' in patch || 'catName' in patch) {
+      setSelections(clearVaccinationSelection);
+    }
+  }
+  function updatePreventiveAt(
     index: number,
     patch: Partial<IngestionDraft['proposedPreventives'][number]>,
-  ) => {
-    updateDraft({
-      proposedPreventives: draft.proposedPreventives.map((item, i) =>
-        i === index ? { ...item, ...patch } : item,
-      ),
-    });
+  ) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedPreventives'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    function clearPreventiveSelection(current: IngestionDraftSelections) {
+      const values = [...(current.preventiveIds ?? [])];
+      values[index] = null;
+      return { ...current, preventiveIds: values };
+    }
+    updateDraft({ proposedPreventives: draft.proposedPreventives.map(applyPatchAtIndex) });
     if ('name' in patch || 'type' in patch || 'catNames' in patch) {
-      setSelections((current) => {
-        const values = [...(current.preventiveIds ?? [])];
-        values[index] = null;
-        return { ...current, preventiveIds: values };
-      });
+      setSelections(clearPreventiveSelection);
     }
-  };
-  const updateWeightAt = (index: number, patch: Partial<IngestionDraft['proposedWeightEntries'][number]>) =>
-    updateDraft({
-      proposedWeightEntries: draft.proposedWeightEntries.map((item, i) =>
-        i === index ? { ...item, ...patch } : item,
-      ),
-    });
-  const updateSymptomAt = (index: number, patch: Partial<IngestionDraft['proposedSymptoms'][number]>) =>
-    updateDraft({
-      proposedSymptoms: draft.proposedSymptoms.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
-  const updateConditionAt = (index: number, patch: Partial<IngestionDraft['proposedConditions'][number]>) => {
-    updateDraft({
-      proposedConditions: draft.proposedConditions.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
+  }
+  function updateWeightAt(index: number, patch: Partial<IngestionDraft['proposedWeightEntries'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedWeightEntries'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    updateDraft({ proposedWeightEntries: draft.proposedWeightEntries.map(applyPatchAtIndex) });
+  }
+  function updateSymptomAt(index: number, patch: Partial<IngestionDraft['proposedSymptoms'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedSymptoms'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    updateDraft({ proposedSymptoms: draft.proposedSymptoms.map(applyPatchAtIndex) });
+  }
+  function updateConditionAt(index: number, patch: Partial<IngestionDraft['proposedConditions'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedConditions'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    function clearConditionSelection(current: IngestionDraftSelections) {
+      const values = [...(current.conditionIds ?? [])];
+      const libraryValues = [...(current.conditionLibraryIds ?? [])];
+      values[index] = null;
+      libraryValues[index] = null;
+      return { ...current, conditionIds: values, conditionLibraryIds: libraryValues };
+    }
+    updateDraft({ proposedConditions: draft.proposedConditions.map(applyPatchAtIndex) });
     if ('name' in patch || 'catName' in patch) {
-      setSelections((current) => {
-        const values = [...(current.conditionIds ?? [])];
-        const libraryValues = [...(current.conditionLibraryIds ?? [])];
-        values[index] = null;
-        libraryValues[index] = null;
-        return { ...current, conditionIds: values, conditionLibraryIds: libraryValues };
-      });
+      setSelections(clearConditionSelection);
     }
-  };
-  const updateExpenseAt = (index: number, patch: Partial<IngestionDraft['proposedExpenses'][number]>) =>
-    updateDraft({
-      proposedExpenses: draft.proposedExpenses.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    });
-  const updateExpenseItemAt = (
+  }
+  function updateExpenseAt(index: number, patch: Partial<IngestionDraft['proposedExpenses'][number]>) {
+    function applyPatchAtIndex(item: IngestionDraft['proposedExpenses'][number], i: number) {
+      return i === index ? { ...item, ...patch } : item;
+    }
+    updateDraft({ proposedExpenses: draft.proposedExpenses.map(applyPatchAtIndex) });
+  }
+  function updateExpenseItemAt(
     expenseIndex: number,
     itemIndex: number,
     patch: Partial<IngestionDraft['proposedExpenses'][number]['items'][number]>,
-  ) => {
+  ) {
+    function applyPatchAtItemIndex(
+      item: IngestionDraft['proposedExpenses'][number]['items'][number],
+      i: number,
+    ) {
+      return i === itemIndex ? { ...item, ...patch } : item;
+    }
     const expense = draft.proposedExpenses[expenseIndex];
-    updateExpenseAt(expenseIndex, {
-      items: expense.items.map((item, i) => (i === itemIndex ? { ...item, ...patch } : item)),
-    });
-  };
+    updateExpenseAt(expenseIndex, { items: expense.items.map(applyPatchAtItemIndex) });
+  }
 
-  const removeItem = (section: ReviewSection, index: number) => {
-    const removeAt = <T,>(items: T[]) => items.filter((_, itemIndex) => itemIndex !== index);
+  function removeItem(section: ReviewSection, index: number) {
+    function isOtherIndex(_: unknown, itemIndex: number) {
+      return itemIndex !== index;
+    }
+    function removeAt<T>(items: T[]) {
+      return items.filter(isOtherIndex);
+    }
+    function removeSelectionKey(next: IngestionDraftSelections, key: keyof IngestionDraftSelections) {
+      const values = next[key];
+      if (Array.isArray(values)) {
+        next[key] = values.filter(isOtherIndex) as never;
+      }
+    }
+    function pruneSelections(current: IngestionDraftSelections) {
+      const next = { ...current };
+      if (section === 'cat') removeSelectionKey(next, 'catIds');
+      if (section === 'clinic') removeSelectionKey(next, 'clinicIds');
+      if (section === 'visit') removeSelectionKey(next, 'visitIds');
+      if (section === 'vaccinations') removeSelectionKey(next, 'vaccinationIds');
+      if (section === 'preventives') removeSelectionKey(next, 'preventiveIds');
+      if (section === 'conditions') {
+        removeSelectionKey(next, 'conditionIds');
+        removeSelectionKey(next, 'conditionLibraryIds');
+      }
+      return next;
+    }
+    function relocateAddedItemKey(next: Set<string>, key: string) {
+      const [keySection, keyIndex] = key.split('-');
+      const parsedIndex = Number(keyIndex);
+      if (keySection !== section || parsedIndex < index) {
+        next.add(key);
+      } else if (parsedIndex > index) {
+        next.add(getItemKey(section, parsedIndex - 1));
+      }
+    }
+    function pruneAddedItemKeys(current: Set<string>) {
+      const next = new Set<string>();
+      function relocateEachKey(key: string) {
+        relocateAddedItemKey(next, key);
+      }
+      current.forEach(relocateEachKey);
+      return next;
+    }
 
     switch (section) {
       case 'cat':
@@ -750,43 +888,12 @@ function IngestionDraftReviewModal({
         break;
     }
 
-    setSelections((current) => {
-      const next = { ...current };
-      const removeSelection = (key: keyof IngestionDraftSelections) => {
-        const values = next[key];
-        if (Array.isArray(values)) {
-          next[key] = values.filter((_, itemIndex) => itemIndex !== index) as never;
-        }
-      };
-
-      if (section === 'cat') removeSelection('catIds');
-      if (section === 'clinic') removeSelection('clinicIds');
-      if (section === 'visit') removeSelection('visitIds');
-      if (section === 'vaccinations') removeSelection('vaccinationIds');
-      if (section === 'preventives') removeSelection('preventiveIds');
-      if (section === 'conditions') {
-        removeSelection('conditionIds');
-        removeSelection('conditionLibraryIds');
-      }
-      return next;
-    });
-    setAddedItemKeys((current) => {
-      const next = new Set<string>();
-      current.forEach((key) => {
-        const [keySection, keyIndex] = key.split('-');
-        const parsedIndex = Number(keyIndex);
-        if (keySection !== section || parsedIndex < index) {
-          next.add(key);
-        } else if (parsedIndex > index) {
-          next.add(getItemKey(section, parsedIndex - 1));
-        }
-      });
-      return next;
-    });
+    setSelections(pruneSelections);
+    setAddedItemKeys(pruneAddedItemKeys);
     setEditing(null);
-  };
+  }
 
-  const addBlankItem = (section: ReviewSection) => {
+  function addBlankItem(section: ReviewSection) {
     const nextIndex =
       section === 'cat'
         ? draft.proposedCats.length
@@ -844,19 +951,35 @@ function IngestionDraftReviewModal({
         setEditing({ section: 'expense', index: draft.proposedExpenses.length });
         break;
     }
-    setAddedItemKeys((current) => new Set(current).add(getItemKey(section, nextIndex)));
+    function addNewItemKey(current: Set<string>) {
+      return new Set(current).add(getItemKey(section, nextIndex));
+    }
+    function addSectionToReviewed(current: Set<ReviewSection>) {
+      return new Set(current).add(section);
+    }
+    setAddedItemKeys(addNewItemKey);
     setExpanded(section);
-    setReviewed((current) => new Set(current).add(section));
-  };
+    setReviewed(addSectionToReviewed);
+  }
 
-  const countNewItems = (
-    length: number,
-    key: ArrayIncludeKey,
-    selectedIds?: (string | null)[],
-  ) =>
-    Array.from({ length }, (_, index) => index).filter(
-      (index) => isIncluded(key, index) && !selectedIds?.[index],
-    ).length;
+  function countNewItems(length: number, key: ArrayIncludeKey, selectedIds?: (string | null)[]) {
+    function toIndex(_: unknown, index: number) {
+      return index;
+    }
+    function isNewAndIncluded(index: number) {
+      return isIncluded(key, index) && !selectedIds?.[index];
+    }
+    return Array.from({ length }, toIndex).filter(isNewAndIncluded).length;
+  }
+  function isWeightEntryIncluded(_: unknown, index: number) {
+    return isIncluded('includeWeightEntries', index);
+  }
+  function isSymptomIncluded(_: unknown, index: number) {
+    return isIncluded('includeSymptoms', index);
+  }
+  function isExpenseIncluded(_: unknown, index: number) {
+    return isIncluded('includeExpenses', index);
+  }
   const newCount =
     countNewItems(draft.proposedCats.length, 'includeCats', selections.catIds) +
     countNewItems(draft.proposedClinics.length, 'includeClinics', selections.clinicIds) +
@@ -867,10 +990,10 @@ function IngestionDraftReviewModal({
       selections.vaccinationIds,
     ) +
     countNewItems(draft.proposedPreventives.length, 'includePreventives', selections.preventiveIds) +
-    draft.proposedWeightEntries.filter((_, index) => isIncluded('includeWeightEntries', index)).length +
-    draft.proposedSymptoms.filter((_, index) => isIncluded('includeSymptoms', index)).length +
+    draft.proposedWeightEntries.filter(isWeightEntryIncluded).length +
+    draft.proposedSymptoms.filter(isSymptomIncluded).length +
     countNewItems(draft.proposedConditions.length, 'includeConditions', selections.conditionIds) +
-    draft.proposedExpenses.filter((_, index) => isIncluded('includeExpenses', index)).length;
+    draft.proposedExpenses.filter(isExpenseIncluded).length;
   const duplicateCount =
     likelyDuplicateVaccinations.filter(Boolean).length +
     likelyDuplicatePreventives.filter(Boolean).length +
@@ -878,7 +1001,7 @@ function IngestionDraftReviewModal({
     likelyDuplicateSymptoms.filter(Boolean).length +
     likelyDuplicateExpenses.filter(Boolean).length;
 
-  const handleConfirm = async () => {
+  async function handleConfirm() {
     setError(null);
     setIsSubmitting(true);
 
@@ -912,9 +1035,9 @@ function IngestionDraftReviewModal({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
-  const handleDiscard = async () => {
+  async function handleDiscard() {
     const confirmed = await confirm({
       title: 'Discard document',
       message: 'Are you sure you want to discard this document? Nothing will be saved.',
@@ -934,12 +1057,901 @@ function IngestionDraftReviewModal({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
+
+  function handleDiscardClick() {
+    void handleDiscard();
+  }
+  function handleConfirmClick() {
+    void handleConfirm();
+  }
 
   const { option } = DropdownMenuFactories;
-  const addItemMenuItems = (Object.keys(SECTION_LABELS) as ReviewSection[]).map((section) =>
-    option({ label: SECTION_SINGULAR_LABELS[section], value: section }),
-  );
+  function toAddItemMenuOption(section: ReviewSection) {
+    return option({ label: SECTION_SINGULAR_LABELS[section], value: section });
+  }
+  const addItemMenuItems = (Object.keys(SECTION_LABELS) as ReviewSection[]).map(toAddItemMenuOption);
+
+  function handleSelectProgressPill(section: ReviewSection | 'all') {
+    if (section === 'all') {
+      expandAllSections();
+    } else {
+      toggleSection(section);
+    }
+  }
+  function handleSelectAddItemMenu(value: string) {
+    addBlankItem(value as ReviewSection);
+  }
+
+  function renderCatRow(cat: IngestionDraft['proposedCats'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeCats', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleTargetEditing('cat', index);
+    }
+    function handleDelete() {
+      removeItem('cat', index);
+    }
+    function toExistingCatOption(existingCat: Cat) {
+      return { text: existingCat.name, value: existingCat.id };
+    }
+    function handleSelectExistingCat(value: string) {
+      function applyCatSelection(current: IngestionDraftSelections) {
+        const values = [...(current.catIds ?? [])];
+        values[index] = value || null;
+        return { ...current, catIds: values };
+      }
+      setSelections(applyCatSelection);
+    }
+    function handleStopPickingExisting() {
+      stopPickingExisting('cat', index);
+    }
+    function handleNameChange(event: { target: { value: string } }) {
+      updateCatAt(index, { name: event.target.value });
+    }
+    function handleBreedChange(event: { target: { value: string } }) {
+      updateCatAt(index, { breed: event.target.value || null });
+    }
+    function handleSexChange(value: string) {
+      updateCatAt(index, { sex: value as CatSex });
+    }
+    function handleStartPickingExisting() {
+      startPickingExisting('cat', index);
+    }
+    function matchesSelectedCatId(candidate: Cat) {
+      return candidate.id === selections.catIds?.[index];
+    }
+    function renderReadOnlySummary() {
+      const existingCat = cats.find(matchesSelectedCatId);
+      const summary = existingCat
+        ? [existingCat.name, existingCat.breed, getOptionLabel(SEX_OPTIONS, existingCat.sex)]
+            .filter(Boolean)
+            .join(' · ')
+        : [cat.name || 'New cat', cat.breed, cat.sex ? getOptionLabel(SEX_OPTIONS, cat.sex) : null]
+            .filter(Boolean)
+            .join(' · ');
+      return <p className='text-sm'>{summary}</p>;
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includeCats', index)} onToggle={handleToggleInclude} />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={selections.catIds?.[index] ? 'Matched' : 'New'}
+              message={
+                selections.catIds?.[index]
+                  ? 'This proposal is linked to the existing cat. Edit it to create a new cat instead.'
+                  : 'This proposal will create a new cat.'
+              }
+              variant='success'
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('cat', index)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('cat', index) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        {isEditing('cat', index) && isPickingExisting('cat', index) ? (
+          <>
+            <Select
+              options={cats.map(toExistingCatOption)}
+              value={selections.catIds?.[index] ?? ''}
+              placeholder='Select an existing cat'
+              onChange={handleSelectExistingCat}
+            />
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className={mutedLinkClassName}
+              onClick={handleStopPickingExisting}
+            >
+              Enter a new name instead
+            </Button>
+          </>
+        ) : isEditing('cat', index) ? (
+          <>
+            <Input
+              value={cat.name}
+              aria-label='Proposed cat name'
+              placeholder='Cat name'
+              onChange={handleNameChange}
+            />
+            <div className='grid grid-cols-2 gap-2'>
+              <Input value={cat.breed ?? ''} placeholder='Breed' onChange={handleBreedChange} />
+              <Select options={SEX_OPTIONS} value={cat.sex ?? 'unknown'} onChange={handleSexChange} />
+            </div>
+            {cats.length > 0 && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={handleStartPickingExisting}
+              >
+                Choose from existing instead
+              </Button>
+            )}
+          </>
+        ) : (
+          renderReadOnlySummary()
+        )}
+      </div>
+    );
+  }
+
+  function renderClinicRow(clinic: IngestionDraft['proposedClinics'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeClinics', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleTargetEditing('clinic', index);
+    }
+    function handleDelete() {
+      removeItem('clinic', index);
+    }
+    function toExistingClinicOption(existingClinic: { name: string; id: string }) {
+      return { text: existingClinic.name, value: existingClinic.id };
+    }
+    function handleSelectExistingClinic(value: string) {
+      function applyClinicSelection(current: IngestionDraftSelections) {
+        const values = [...(current.clinicIds ?? [])];
+        values[index] = value || null;
+        return { ...current, clinicIds: values };
+      }
+      setSelections(applyClinicSelection);
+    }
+    function handleStopPickingExisting() {
+      stopPickingExisting('clinic', index);
+    }
+    function handleNameChange(event: { target: { value: string } }) {
+      updateClinicAt(index, { name: event.target.value });
+    }
+    function handlePhoneChange(event: { target: { value: string } }) {
+      updateClinicAt(index, { phone: event.target.value || null });
+    }
+    function handleEmailChange(event: { target: { value: string } }) {
+      updateClinicAt(index, { email: event.target.value || null });
+    }
+    function handleAddressChange(event: { target: { value: string } }) {
+      updateClinicAt(index, { address: event.target.value || null });
+    }
+    function handleStartPickingExisting() {
+      startPickingExisting('clinic', index);
+    }
+    function matchesSelectedClinicId(candidate: { id: string }) {
+      return candidate.id === selections.clinicIds?.[index];
+    }
+    function renderReadOnlySummary() {
+      const existingClinic = clinics.find(matchesSelectedClinicId);
+      const summary = existingClinic
+        ? [existingClinic.name, existingClinic.phone, existingClinic.address].filter(Boolean).join(' · ')
+        : [clinic.name || 'New clinic', clinic.phone, clinic.address].filter(Boolean).join(' · ');
+      return <p className='text-sm'>{summary}</p>;
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includeClinics', index)} onToggle={handleToggleInclude} />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={selections.clinicIds?.[index] ? 'Matched' : 'New'}
+              message={
+                selections.clinicIds?.[index]
+                  ? 'This proposal is linked to the existing clinic. Edit it to create a new clinic instead.'
+                  : 'This proposal will create a new clinic.'
+              }
+              variant='success'
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('clinic', index)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('clinic', index) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        {isEditing('clinic', index) && isPickingExisting('clinic', index) ? (
+          <>
+            <Select
+              options={clinics.map(toExistingClinicOption)}
+              value={selections.clinicIds?.[index] ?? ''}
+              placeholder='Select an existing clinic'
+              onChange={handleSelectExistingClinic}
+            />
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className={mutedLinkClassName}
+              onClick={handleStopPickingExisting}
+            >
+              Enter a new name instead
+            </Button>
+          </>
+        ) : isEditing('clinic', index) ? (
+          <>
+            <Input
+              value={clinic.name}
+              aria-label='Proposed clinic name'
+              placeholder='Clinic name'
+              onChange={handleNameChange}
+            />
+            <div className='grid grid-cols-2 gap-2'>
+              <Input value={clinic.phone ?? ''} placeholder='Phone' onChange={handlePhoneChange} />
+              <Input value={clinic.email ?? ''} placeholder='Email' onChange={handleEmailChange} />
+            </div>
+            <Input value={clinic.address ?? ''} placeholder='Address' onChange={handleAddressChange} />
+            {clinics.length > 0 && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={handleStartPickingExisting}
+              >
+                Choose from existing instead
+              </Button>
+            )}
+          </>
+        ) : (
+          renderReadOnlySummary()
+        )}
+      </div>
+    );
+  }
+
+  function renderVisitRow(visit: IngestionDraft['proposedVisits'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeVisits', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('visit', index);
+    }
+    function handleDelete() {
+      removeItem('visit', index);
+    }
+    function handleDateChange(event: { target: { value: string } }) {
+      const scheduledAt = withUpdatedDate(visit.scheduledAt, event.target.value);
+      if (scheduledAt !== undefined) {
+        updateVisitAt(index, { scheduledAt });
+      }
+    }
+    function handleTimeChange(event: { target: { value: string } }) {
+      const scheduledAt = withUpdatedTime(visit.scheduledAt, event.target.value);
+      if (scheduledAt !== undefined) {
+        updateVisitAt(index, { scheduledAt });
+      }
+    }
+    function handleReasonChange(value: string) {
+      updateVisitAt(index, { reason: value as VisitReason });
+    }
+    function handleCustomReasonChange(event: { target: { value: string } }) {
+      updateVisitAt(index, { customReasonLabel: event.target.value || null });
+    }
+    function handleClinicNameChange(event: { target: { value: string } }) {
+      updateVisitAt(index, { clinicName: event.target.value || null });
+    }
+    function handleCatNamesChange(catNames: string[]) {
+      updateVisitAt(index, { catNames });
+    }
+    function findMatchedVisit(existingVisit: { id: string }) {
+      return existingVisit.id === selections.visitIds?.[index];
+    }
+    function handleUnmatchVisit() {
+      function clearVisitSelection(current: IngestionDraftSelections) {
+        const values = [...(current.visitIds ?? [])];
+        values[index] = null;
+        return { ...current, visitIds: values };
+      }
+      setSelections(clearVisitSelection);
+    }
+    function handleStartEditingNotes() {
+      startEditingVisitNotes(index);
+    }
+    function handleNotesChange(event: { target: { value: string } }) {
+      updateVisitAt(index, { notes: event.target.value });
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includeVisits', index)} onToggle={handleToggleInclude} />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={selections.visitIds?.[index] ? 'Matched' : 'New'}
+              message={
+                selections.visitIds?.[index]
+                  ? 'This proposal will complete the matching scheduled visit.'
+                  : 'This proposal will create a new visit.'
+              }
+              variant='success'
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('visit', index)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('visit', index) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        {isEditing('visit', index) ? (
+          <div className='space-y-2'>
+            <div className='flex flex-col gap-2 sm:flex-row'>
+              <Input type='date' value={toLocalDateInputValue(visit.scheduledAt)} onChange={handleDateChange} />
+              <Input type='time' value={toLocalTimeInputValue(visit.scheduledAt)} onChange={handleTimeChange} />
+              <Select options={REASON_OPTIONS} value={visit.reason} onChange={handleReasonChange} />
+            </div>
+            {visit.reason === 'custom' && (
+              <Input
+                value={visit.customReasonLabel ?? ''}
+                placeholder='Custom reason'
+                onChange={handleCustomReasonChange}
+              />
+            )}
+            <Input value={visit.clinicName ?? ''} placeholder='Clinic name' onChange={handleClinicNameChange} />
+            <CatNamesEditor catNames={visit.catNames} cats={cats} onChange={handleCatNamesChange} />
+          </div>
+        ) : (
+          <p className='text-muted-foreground text-sm'>
+            {formatDateTime(visit.scheduledAt)} ·{' '}
+            {visit.reason === 'custom'
+              ? visit.customReasonLabel || getOptionLabel(REASON_OPTIONS, visit.reason)
+              : getOptionLabel(REASON_OPTIONS, visit.reason)}
+            {visit.catNames.length > 0 && ` · ${visit.catNames.join(', ')}`}
+            {visit.clinicName && ` · ${visit.clinicName}`}
+          </p>
+        )}
+        {selections.visitIds?.[index] && (
+          <ReviewStatusBadge
+            label='Matched visit'
+            message={`This will mark the visit on ${formatDateTime(
+              visits.find(findMatchedVisit)?.scheduledAt ?? visit.scheduledAt,
+            )} completed instead of creating another visit.`}
+            variant='success'
+            badgePlacement='left'
+          />
+        )}
+        {selections.visitIds?.[index] && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className={mutedLinkClassName}
+            onClick={handleUnmatchVisit}
+          >
+            Create a new visit instead
+          </Button>
+        )}
+        {isEditingVisitNotes(index) ? (
+          <Input value={visit.notes ?? ''} placeholder='Visit notes' onChange={handleNotesChange} />
+        ) : (
+          <div className='space-y-1'>
+            {visit.notes && <p className='text-sm'>{visit.notes}</p>}
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className={mutedLinkClassName}
+              onClick={handleStartEditingNotes}
+            >
+              {visit.notes ? 'Edit notes' : '+ Add notes'}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderVaccinationRow(item: IngestionDraft['proposedVaccinations'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeVaccinations', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('vaccination', index);
+    }
+    function handleDelete() {
+      removeItem('vaccinations', index);
+    }
+    function handleNameChange(event: { target: { value: string } }) {
+      updateVaccinationAt(index, { name: event.target.value });
+    }
+    function handleDateChange(event: { target: { value: string } }) {
+      const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
+      if (administeredAt !== undefined) {
+        updateVaccinationAt(index, { administeredAt });
+      }
+    }
+    function handleCatNameChange(catName: string | null) {
+      updateVaccinationAt(index, { catName });
+    }
+    function handleUnmatchVaccination() {
+      function clearVaccinationSelection(current: IngestionDraftSelections) {
+        const values = [...(current.vaccinationIds ?? [])];
+        values[index] = null;
+        return { ...current, vaccinationIds: values };
+      }
+      setSelections(clearVaccinationSelection);
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includeVaccinations', index)} onToggle={handleToggleInclude} />
+          <EditPencilButton
+            editing={isEditing('vaccination', index)}
+            onClick={handleToggleEditingTarget}
+            onDelete={isAddedItem('vaccinations', index) ? handleDelete : undefined}
+          />
+        </div>
+        {isEditing('vaccination', index) ? (
+          <div className='space-y-2'>
+            <div className='flex flex-col gap-2 sm:flex-row'>
+              <Input value={item.name} aria-label='Vaccination name' onChange={handleNameChange} />
+              <Input
+                type='date'
+                value={toLocalDateInputValue(item.administeredAt)}
+                onChange={handleDateChange}
+              />
+            </div>
+            <SingleCatSelect catName={item.catName} cats={cats} onChange={handleCatNameChange} />
+          </div>
+        ) : (
+          <span>
+            {item.name} · {formatDate(item.administeredAt)}
+            {item.catName && ` · ${item.catName}`}
+          </span>
+        )}
+        <ReviewStatusBadge
+          label={
+            likelyDuplicateVaccinations[index]
+              ? 'Potential duplicate'
+              : selections.vaccinationIds?.[index]
+                ? 'Adds dose'
+                : 'New'
+          }
+          message={
+            likelyDuplicateVaccinations[index]
+              ? 'This vaccination matches an existing dose for the same cat and administration time. Turn off Include to skip it, or leave it on to append it anyway.'
+              : selections.vaccinationIds?.[index]
+              ? 'This administration will be appended to the existing vaccination dose history.'
+              : 'This proposal will create a new vaccination record.'
+          }
+          variant={likelyDuplicateVaccinations[index] ? 'warning' : 'success'}
+          className='ml-2'
+          badgePlacement='left'
+        />
+        {selections.vaccinationIds?.[index] && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className={mutedLinkClassName}
+            onClick={handleUnmatchVaccination}
+          >
+            Create a new vaccination record instead
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  function renderPreventiveRow(item: IngestionDraft['proposedPreventives'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includePreventives', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('preventive', index);
+    }
+    function handleDelete() {
+      removeItem('preventives', index);
+    }
+    function handleNameChange(event: { target: { value: string } }) {
+      updatePreventiveAt(index, { name: event.target.value });
+    }
+    function handleDateChange(event: { target: { value: string } }) {
+      const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
+      if (administeredAt !== undefined) {
+        updatePreventiveAt(index, { administeredAt });
+      }
+    }
+    function handleCatNamesChange(catNames: string[]) {
+      updatePreventiveAt(index, { catNames });
+    }
+    function handleUnmatchPreventive() {
+      function clearPreventiveSelection(current: IngestionDraftSelections) {
+        const values = [...(current.preventiveIds ?? [])];
+        values[index] = null;
+        return { ...current, preventiveIds: values };
+      }
+      setSelections(clearPreventiveSelection);
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includePreventives', index)} onToggle={handleToggleInclude} />
+          <EditPencilButton
+            editing={isEditing('preventive', index)}
+            onClick={handleToggleEditingTarget}
+            onDelete={isAddedItem('preventives', index) ? handleDelete : undefined}
+          />
+        </div>
+        {isEditing('preventive', index) ? (
+          <div className='space-y-2'>
+            <div className='flex flex-col gap-2 sm:flex-row'>
+              <Input value={item.name} aria-label='Preventive name' onChange={handleNameChange} />
+              <Input
+                type='date'
+                value={toLocalDateInputValue(item.administeredAt)}
+                onChange={handleDateChange}
+              />
+            </div>
+            <CatNamesEditor catNames={item.catNames} cats={cats} onChange={handleCatNamesChange} />
+          </div>
+        ) : (
+          <span>
+            {item.name} · {formatDate(item.administeredAt)}
+            {item.catNames.length > 0 && ` · ${item.catNames.join(', ')}`}
+          </span>
+        )}
+        <ReviewStatusBadge
+          label={
+            likelyDuplicatePreventives[index]
+              ? 'Potential duplicate'
+              : selections.preventiveIds?.[index]
+                ? 'Adds dose'
+                : 'New'
+          }
+          message={
+            likelyDuplicatePreventives[index]
+              ? 'This preventive matches an existing dose for the same cat(s) and administration time. Turn off Include to skip it, or leave it on to append it anyway.'
+              : selections.preventiveIds?.[index]
+              ? 'This administration will be appended to the existing preventive dose history.'
+              : 'This proposal will create a new preventive record.'
+          }
+          variant={likelyDuplicatePreventives[index] ? 'warning' : 'success'}
+          className='ml-2'
+          badgePlacement='left'
+        />
+        {selections.preventiveIds?.[index] && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className={mutedLinkClassName}
+            onClick={handleUnmatchPreventive}
+          >
+            Create a new preventive record instead
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  function renderWeightRow(item: IngestionDraft['proposedWeightEntries'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeWeightEntries', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('weight', index);
+    }
+    function handleDelete() {
+      removeItem('weight', index);
+    }
+    function handleWeightChange(event: { target: { value: string } }) {
+      updateWeightAt(index, { weight: Number(event.target.value) });
+    }
+    function handleDateChange(event: { target: { value: string } }) {
+      const measuredAt = withUpdatedDate(item.measuredAt, event.target.value);
+      if (measuredAt !== undefined) {
+        updateWeightAt(index, { measuredAt });
+      }
+    }
+    function handleCatNameChange(catName: string | null) {
+      updateWeightAt(index, { catName });
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle
+            included={isIncluded('includeWeightEntries', index)}
+            onToggle={handleToggleInclude}
+          />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={likelyDuplicateWeightEntries[index] ? 'Potential duplicate' : 'New'}
+              message={
+                likelyDuplicateWeightEntries[index]
+                  ? 'This matches an existing measurement for this cat within one day. Turn off Include to skip it.'
+                  : 'This proposal will create a new weight entry.'
+              }
+              variant={likelyDuplicateWeightEntries[index] ? 'warning' : 'success'}
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('weight', index)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('weight', index) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        {isEditing('weight', index) ? (
+          <div className='space-y-2'>
+            <div className='flex flex-col gap-2 sm:flex-row'>
+              <Input type='number' value={item.weight} aria-label='Weight' onChange={handleWeightChange} />
+              <Input
+                type='date'
+                value={toLocalDateInputValue(item.measuredAt)}
+                onChange={handleDateChange}
+              />
+            </div>
+            <SingleCatSelect catName={item.catName} cats={cats} onChange={handleCatNameChange} />
+          </div>
+        ) : (
+          <span>
+            {item.weight} {item.unit} · {formatDate(item.measuredAt)}
+            {item.catName && ` · ${item.catName}`}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  function renderSymptomRow(item: IngestionDraft['proposedSymptoms'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeSymptoms', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('symptom', index);
+    }
+    function handleDelete() {
+      removeItem('symptoms', index);
+    }
+    function handleDescriptionChange(event: { target: { value: string } }) {
+      updateSymptomAt(index, { description: event.target.value });
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includeSymptoms', index)} onToggle={handleToggleInclude} />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={likelyDuplicateSymptoms[index] ? 'Potential duplicate' : 'New'}
+              message={
+                likelyDuplicateSymptoms[index]
+                  ? 'The same symptom was already logged for this cat recently. Turn off Include to skip it.'
+                  : 'This proposal will create a new symptom.'
+              }
+              variant={likelyDuplicateSymptoms[index] ? 'warning' : 'success'}
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('symptom', index)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('symptoms', index) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        {isEditing('symptom', index) ? (
+          <Input
+            value={item.description}
+            aria-label='Symptom description'
+            onChange={handleDescriptionChange}
+          />
+        ) : (
+          <span>
+            {item.description}
+            {item.catName && ` · ${item.catName}`}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  function renderConditionRow(item: IngestionDraft['proposedConditions'][number], index: number) {
+    function handleToggleInclude() {
+      toggleArrayInclude('includeConditions', index);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('condition', index);
+    }
+    function handleDelete() {
+      removeItem('conditions', index);
+    }
+    function handleNameChange(event: { target: { value: string } }) {
+      updateConditionAt(index, { name: event.target.value });
+    }
+    function handleUnmatchCondition() {
+      function clearConditionSelection(current: IngestionDraftSelections) {
+        const values = [...(current.conditionIds ?? [])];
+        const libraryValues = [...(current.conditionLibraryIds ?? [])];
+        values[index] = null;
+        libraryValues[index] = null;
+        return { ...current, conditionIds: values, conditionLibraryIds: libraryValues };
+      }
+      setSelections(clearConditionSelection);
+    }
+
+    return (
+      <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle included={isIncluded('includeConditions', index)} onToggle={handleToggleInclude} />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={
+                selections.conditionIds?.[index]
+                  ? 'Existing condition'
+                  : matchedLibraryConditionIds[index]
+                    ? 'Library match'
+                    : 'New'
+              }
+              message={
+                selections.conditionIds?.[index]
+                  ? 'The visit will be linked to the existing ongoing condition.'
+                  : matchedLibraryConditionIds[index]
+                    ? 'This proposal will use the matching shared condition-library entry.'
+                    : 'This proposal will create a new custom condition.'
+              }
+              variant='success'
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('condition', index)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('conditions', index) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        {isEditing('condition', index) ? (
+          <Input value={item.name} aria-label='Condition name' onChange={handleNameChange} />
+        ) : (
+          <span>
+            {item.name}
+            {item.catName && ` · ${item.catName}`}
+          </span>
+        )}
+        {(selections.conditionIds?.[index] || matchedLibraryConditionIds[index]) && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className={mutedLinkClassName}
+            onClick={handleUnmatchCondition}
+          >
+            Create a new custom condition instead
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  function renderExpenseRow(expense: IngestionDraft['proposedExpenses'][number], expenseIndex: number) {
+    function sumItemAmounts(sum: number, item: { amount: number }) {
+      return sum + item.amount;
+    }
+    const amount = expense.items.reduce(sumItemAmounts, 0);
+
+    function handleToggleInclude() {
+      toggleArrayInclude('includeExpenses', expenseIndex);
+    }
+    function handleToggleEditingTarget() {
+      toggleEditing('expense', expenseIndex);
+    }
+    function handleDelete() {
+      removeItem('expense', expenseIndex);
+    }
+    function toExpenseCategoryOption(category: (typeof DEFAULT_EXPENSE_CATEGORIES)[number]) {
+      return { text: getExpenseCategoryLabel(category), value: category };
+    }
+    function handleCatNamesChange(catNames: string[]) {
+      updateExpenseAt(expenseIndex, { catNames });
+    }
+
+    function renderExpenseItemRow(item: (typeof expense.items)[number], itemIndex: number) {
+      function handleCategoryChange(value: string) {
+        updateExpenseItemAt(expenseIndex, itemIndex, { category: value });
+      }
+      function handleLabelChange(event: { target: { value: string } }) {
+        updateExpenseItemAt(expenseIndex, itemIndex, { label: event.target.value });
+      }
+      function handleAmountChange(event: { target: { value: string } }) {
+        updateExpenseItemAt(expenseIndex, itemIndex, { amount: Number(event.target.value) });
+      }
+
+      return (
+        <div key={itemIndex} className='flex flex-col gap-2 sm:flex-row'>
+          <Select
+            options={DEFAULT_EXPENSE_CATEGORIES.map(toExpenseCategoryOption)}
+            value={item.category}
+            onChange={handleCategoryChange}
+          />
+          <Input value={item.label ?? ''} placeholder='Line item label' onChange={handleLabelChange} />
+          <Input type='number' value={item.amount} aria-label='Amount' onChange={handleAmountChange} />
+        </div>
+      );
+    }
+
+    function renderExpenseItemSummary(item: (typeof expense.items)[number], itemIndex: number) {
+      return (
+        <li key={itemIndex}>
+          {item.label ?? getExpenseCategoryLabel(item.category)} · ${item.amount.toFixed(2)}
+        </li>
+      );
+    }
+
+    return (
+      <div key={expenseIndex} className='space-y-2 rounded-md border border-border p-2'>
+        <div className='flex items-center justify-between gap-2'>
+          <IncludeToggle
+            included={isIncluded('includeExpenses', expenseIndex)}
+            onToggle={handleToggleInclude}
+          />
+          <div className='flex items-center gap-2'>
+            <ReviewStatusBadge
+              label={likelyDuplicateExpenses[expenseIndex] ? 'Potential duplicate' : 'New'}
+              message={
+                likelyDuplicateExpenses[expenseIndex]
+                  ? 'This expense matches an existing charge for the same cat(s), date, total, and line-item breakdown. Turn off Include to skip it.'
+                  : 'This proposal will create a new expense.'
+              }
+              variant={likelyDuplicateExpenses[expenseIndex] ? 'warning' : 'success'}
+              badgePlacement='right'
+            />
+            <EditPencilButton
+              editing={isEditing('expense', expenseIndex)}
+              onClick={handleToggleEditingTarget}
+              onDelete={isAddedItem('expense', expenseIndex) ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+        <p className='text-sm'>
+          ${amount.toFixed(2)} · {formatDate(expense.incurredAt)}
+          {expense.catNames.length > 0 && ` · ${expense.catNames.join(', ')}`}
+        </p>
+        {isEditing('expense', expenseIndex) ? (
+          <div className='space-y-2'>
+            {expense.items.map(renderExpenseItemRow)}
+            <CatNamesEditor catNames={expense.catNames} cats={cats} onChange={handleCatNamesChange} />
+          </div>
+        ) : (
+          expense.items.length > 1 && (
+            <ul className='space-y-1 text-sm text-muted-foreground'>
+              {expense.items.map(renderExpenseItemSummary)}
+            </ul>
+          )
+        )}
+      </div>
+    );
+  }
 
   return (
     <Modal
@@ -975,7 +1987,7 @@ function IngestionDraftReviewModal({
             sections={sectionsWithContent}
             reviewed={reviewed}
             expanded={expanded}
-            onSelect={(section) => (section === 'all' ? expandAllSections() : toggleSection(section))}
+            onSelect={handleSelectProgressPill}
           />
           <p className='text-sm'>
             <span className='text-success'>
@@ -990,7 +2002,7 @@ function IngestionDraftReviewModal({
           </p>
           <DropdownMenu
             items={addItemMenuItems}
-            onItemSelect={(value) => addBlankItem(value as ReviewSection)}
+            onItemSelect={handleSelectAddItemMenu}
             placement='bottom'
             alignment='end'
             offset={8}
@@ -1006,788 +2018,55 @@ function IngestionDraftReviewModal({
       <div className='mt-3 max-h-[65vh] min-h-[40vh] space-y-3 overflow-y-auto pr-1'>
         {draft.proposedCats.length > 0 && (
           <Section title='Cats' section='cat' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedCats.map((cat, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-              <div className='flex items-center justify-between gap-2'>
-                <IncludeToggle included={isIncluded('includeCats', index)} onToggle={() => toggleArrayInclude('includeCats', index)} />
-                <div className='flex items-center gap-2'>
-                  <ReviewStatusBadge
-                    label={selections.catIds?.[index] ? 'Matched' : 'New'}
-                    message={
-                      selections.catIds?.[index]
-                        ? 'This proposal is linked to the existing cat. Edit it to create a new cat instead.'
-                        : 'This proposal will create a new cat.'
-                    }
-                    variant='success'
-                    badgePlacement='right'
-                  />
-                  <EditPencilButton
-                    editing={isEditing('cat', index)}
-                    onClick={() => toggleTargetEditing('cat', index)}
-                    onDelete={isAddedItem('cat', index) ? () => removeItem('cat', index) : undefined}
-                  />
-                </div>
-              </div>
-              {isEditing('cat', index) && isPickingExisting('cat', index) ? (
-                <>
-                  <Select
-                      options={cats.map((existingCat) => ({ text: existingCat.name, value: existingCat.id }))}
-                      value={selections.catIds?.[index] ?? ''}
-                      placeholder='Select an existing cat'
-                      onChange={(value) =>
-                        setSelections((current) => {
-                          const values = [...(current.catIds ?? [])];
-                          values[index] = value || null;
-                          return { ...current, catIds: values };
-                        })
-                      }
-                    />
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className={mutedLinkClassName}
-                      onClick={() => stopPickingExisting('cat', index)}
-                    >
-                      Enter a new name instead
-                    </Button>
-                  </>
-                ) : isEditing('cat', index) ? (
-                  <>
-                    <Input
-                      value={cat.name}
-                      aria-label='Proposed cat name'
-                      placeholder='Cat name'
-                      onChange={(event) => updateCatAt(index, { name: event.target.value })}
-                    />
-                    <div className='grid grid-cols-2 gap-2'>
-                      <Input
-                        value={cat.breed ?? ''}
-                        placeholder='Breed'
-                        onChange={(event) => updateCatAt(index, { breed: event.target.value || null })}
-                      />
-                      <Select
-                        options={SEX_OPTIONS}
-                        value={cat.sex ?? 'unknown'}
-                        onChange={(value) => updateCatAt(index, { sex: value as CatSex })}
-                      />
-                    </div>
-                    {cats.length > 0 && (
-                      <Button
-                        type='button'
-                        variant='link'
-                        size='sm'
-                        className={mutedLinkClassName}
-                        onClick={() => startPickingExisting('cat', index)}
-                      >
-                        Choose from existing instead
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  (() => {
-                    const existingCat = cats.find((candidate) => candidate.id === selections.catIds?.[index]);
-                    const summary = existingCat
-                      ? [
-                          existingCat.name,
-                          existingCat.breed,
-                          getOptionLabel(SEX_OPTIONS, existingCat.sex),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')
-                      : [
-                          cat.name || 'New cat',
-                          cat.breed,
-                          cat.sex ? getOptionLabel(SEX_OPTIONS, cat.sex) : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ');
-                    return <p className='text-sm'>{summary}</p>;
-                  })()
-                )}
-              </div>
-            ))}
+            {draft.proposedCats.map(renderCatRow)}
           </Section>
         )}
 
         {draft.proposedClinics.length > 0 && (
           <Section title='Vet clinics' section='clinic' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedClinics.map((clinic, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-              <div className='flex items-center justify-between gap-2'>
-                <IncludeToggle included={isIncluded('includeClinics', index)} onToggle={() => toggleArrayInclude('includeClinics', index)} />
-                <div className='flex items-center gap-2'>
-                  <ReviewStatusBadge
-                    label={selections.clinicIds?.[index] ? 'Matched' : 'New'}
-                    message={
-                      selections.clinicIds?.[index]
-                        ? 'This proposal is linked to the existing clinic. Edit it to create a new clinic instead.'
-                        : 'This proposal will create a new clinic.'
-                    }
-                    variant='success'
-                    badgePlacement='right'
-                  />
-                  <EditPencilButton
-                    editing={isEditing('clinic', index)}
-                    onClick={() => toggleTargetEditing('clinic', index)}
-                    onDelete={isAddedItem('clinic', index) ? () => removeItem('clinic', index) : undefined}
-                  />
-                </div>
-              </div>
-              {isEditing('clinic', index) && isPickingExisting('clinic', index) ? (
-                <>
-                    <Select
-                      options={clinics.map((existingClinic) => ({ text: existingClinic.name, value: existingClinic.id }))}
-                      value={selections.clinicIds?.[index] ?? ''}
-                      placeholder='Select an existing clinic'
-                      onChange={(value) =>
-                        setSelections((current) => {
-                          const values = [...(current.clinicIds ?? [])];
-                          values[index] = value || null;
-                          return { ...current, clinicIds: values };
-                        })
-                      }
-                    />
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className={mutedLinkClassName}
-                      onClick={() => stopPickingExisting('clinic', index)}
-                    >
-                      Enter a new name instead
-                    </Button>
-                  </>
-                ) : isEditing('clinic', index) ? (
-                  <>
-                    <Input
-                      value={clinic.name}
-                      aria-label='Proposed clinic name'
-                      placeholder='Clinic name'
-                      onChange={(event) => updateClinicAt(index, { name: event.target.value })}
-                    />
-                    <div className='grid grid-cols-2 gap-2'>
-                      <Input
-                        value={clinic.phone ?? ''}
-                        placeholder='Phone'
-                        onChange={(event) => updateClinicAt(index, { phone: event.target.value || null })}
-                      />
-                      <Input
-                        value={clinic.email ?? ''}
-                        placeholder='Email'
-                        onChange={(event) => updateClinicAt(index, { email: event.target.value || null })}
-                      />
-                    </div>
-                    <Input
-                      value={clinic.address ?? ''}
-                      placeholder='Address'
-                      onChange={(event) => updateClinicAt(index, { address: event.target.value || null })}
-                    />
-                    {clinics.length > 0 && (
-                      <Button
-                        type='button'
-                        variant='link'
-                        size='sm'
-                        className={mutedLinkClassName}
-                        onClick={() => startPickingExisting('clinic', index)}
-                      >
-                        Choose from existing instead
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  (() => {
-                    const existingClinic = clinics.find(
-                      (candidate) => candidate.id === selections.clinicIds?.[index],
-                    );
-                    const summary = existingClinic
-                      ? [existingClinic.name, existingClinic.phone, existingClinic.address]
-                          .filter(Boolean)
-                          .join(' · ')
-                      : [clinic.name || 'New clinic', clinic.phone, clinic.address]
-                          .filter(Boolean)
-                          .join(' · ');
-                    return <p className='text-sm'>{summary}</p>;
-                  })()
-                )}
-              </div>
-            ))}
+            {draft.proposedClinics.map(renderClinicRow)}
           </Section>
         )}
 
         {draft.proposedVisits.length > 0 && (
           <Section title='Visits' section='visit' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedVisits.map((visit, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includeVisits', index)} onToggle={() => toggleArrayInclude('includeVisits', index)} />
-                  <div className='flex items-center gap-2'>
-                    <ReviewStatusBadge
-                      label={selections.visitIds?.[index] ? 'Matched' : 'New'}
-                      message={
-                        selections.visitIds?.[index]
-                          ? 'This proposal will complete the matching scheduled visit.'
-                          : 'This proposal will create a new visit.'
-                      }
-                      variant='success'
-                      badgePlacement='right'
-                    />
-                    <EditPencilButton
-                      editing={isEditing('visit', index)}
-                      onClick={() => toggleEditing('visit', index)}
-                      onDelete={isAddedItem('visit', index) ? () => removeItem('visit', index) : undefined}
-                    />
-                  </div>
-                </div>
-                {isEditing('visit', index) ? (
-                  <div className='space-y-2'>
-                    <div className='flex flex-col gap-2 sm:flex-row'>
-                      <Input
-                        type='date'
-                        value={toLocalDateInputValue(visit.scheduledAt)}
-                        onChange={(event) => {
-                          const scheduledAt = withUpdatedDate(visit.scheduledAt, event.target.value);
-                          if (scheduledAt !== undefined) {
-                            updateVisitAt(index, { scheduledAt });
-                          }
-                        }}
-                      />
-                      <Input
-                        type='time'
-                        value={toLocalTimeInputValue(visit.scheduledAt)}
-                        onChange={(event) => {
-                          const scheduledAt = withUpdatedTime(visit.scheduledAt, event.target.value);
-                          if (scheduledAt !== undefined) {
-                            updateVisitAt(index, { scheduledAt });
-                          }
-                        }}
-                      />
-                      <Select
-                        options={REASON_OPTIONS}
-                        value={visit.reason}
-                        onChange={(value) => updateVisitAt(index, { reason: value as VisitReason })}
-                      />
-                    </div>
-                    {visit.reason === 'custom' && (
-                      <Input
-                        value={visit.customReasonLabel ?? ''}
-                        placeholder='Custom reason'
-                        onChange={(event) => updateVisitAt(index, { customReasonLabel: event.target.value || null })}
-                      />
-                    )}
-                    <Input
-                      value={visit.clinicName ?? ''}
-                      placeholder='Clinic name'
-                      onChange={(event) => updateVisitAt(index, { clinicName: event.target.value || null })}
-                    />
-                    <CatNamesEditor
-                      catNames={visit.catNames}
-                      cats={cats}
-                      onChange={(catNames) => updateVisitAt(index, { catNames })}
-                    />
-                  </div>
-                ) : (
-                  <p className='text-muted-foreground text-sm'>
-                    {formatDateTime(visit.scheduledAt)} ·{' '}
-                    {visit.reason === 'custom'
-                      ? visit.customReasonLabel || getOptionLabel(REASON_OPTIONS, visit.reason)
-                      : getOptionLabel(REASON_OPTIONS, visit.reason)}
-                    {visit.catNames.length > 0 && ` · ${visit.catNames.join(', ')}`}
-                    {visit.clinicName && ` · ${visit.clinicName}`}
-                  </p>
-                )}
-                {selections.visitIds?.[index] && (
-                  <ReviewStatusBadge
-                    label='Matched visit'
-                    message={`This will mark the visit on ${formatDateTime(
-                      visits.find((existingVisit) => existingVisit.id === selections.visitIds?.[index])
-                        ?.scheduledAt ?? visit.scheduledAt,
-                    )} completed instead of creating another visit.`}
-                    variant='success'
-                    badgePlacement='left'
-                  />
-                )}
-                {selections.visitIds?.[index] && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className={mutedLinkClassName}
-                    onClick={() =>
-                      setSelections((current) => {
-                        const values = [...(current.visitIds ?? [])];
-                        values[index] = null;
-                        return { ...current, visitIds: values };
-                      })
-                    }
-                  >
-                    Create a new visit instead
-                  </Button>
-                )}
-                {isEditingVisitNotes(index) ? (
-                  <Input
-                    value={visit.notes ?? ''}
-                    placeholder='Visit notes'
-                    onChange={(event) => updateVisitAt(index, { notes: event.target.value })}
-                  />
-                ) : (
-                  <div className='space-y-1'>
-                    {visit.notes && <p className='text-sm'>{visit.notes}</p>}
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className={mutedLinkClassName}
-                      onClick={() => startEditingVisitNotes(index)}
-                    >
-                      {visit.notes ? 'Edit notes' : '+ Add notes'}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
+            {draft.proposedVisits.map(renderVisitRow)}
           </Section>
         )}
 
         {draft.proposedVaccinations.length > 0 && (
           <Section title='Vaccinations' section='vaccinations' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedVaccinations.map((item, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includeVaccinations', index)} onToggle={() => toggleArrayInclude('includeVaccinations', index)} />
-                  <EditPencilButton
-                    editing={isEditing('vaccination', index)}
-                    onClick={() => toggleEditing('vaccination', index)}
-                    onDelete={
-                      isAddedItem('vaccinations', index)
-                        ? () => removeItem('vaccinations', index)
-                        : undefined
-                    }
-                  />
-                </div>
-                {isEditing('vaccination', index) ? (
-                  <div className='space-y-2'>
-                    <div className='flex flex-col gap-2 sm:flex-row'>
-                      <Input
-                        value={item.name}
-                        aria-label='Vaccination name'
-                        onChange={(event) => updateVaccinationAt(index, { name: event.target.value })}
-                      />
-                      <Input
-                        type='date'
-                        value={toLocalDateInputValue(item.administeredAt)}
-                        onChange={(event) => {
-                          const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
-                          if (administeredAt !== undefined) {
-                            updateVaccinationAt(index, { administeredAt });
-                          }
-                        }}
-                      />
-                    </div>
-                    <SingleCatSelect
-                      catName={item.catName}
-                      cats={cats}
-                      onChange={(catName) => updateVaccinationAt(index, { catName })}
-                    />
-                  </div>
-                ) : (
-                  <span>
-                    {item.name} · {formatDate(item.administeredAt)}
-                    {item.catName && ` · ${item.catName}`}
-                  </span>
-                )}
-                <ReviewStatusBadge
-                  label={
-                    likelyDuplicateVaccinations[index]
-                      ? 'Potential duplicate'
-                      : selections.vaccinationIds?.[index]
-                        ? 'Adds dose'
-                        : 'New'
-                  }
-                  message={
-                    likelyDuplicateVaccinations[index]
-                      ? 'This vaccination matches an existing dose for the same cat and administration time. Turn off Include to skip it, or leave it on to append it anyway.'
-                      : selections.vaccinationIds?.[index]
-                      ? 'This administration will be appended to the existing vaccination dose history.'
-                      : 'This proposal will create a new vaccination record.'
-                  }
-                  variant={likelyDuplicateVaccinations[index] ? 'warning' : 'success'}
-                  className='ml-2'
-                  badgePlacement='left'
-                />
-                {selections.vaccinationIds?.[index] && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className={mutedLinkClassName}
-                    onClick={() =>
-                      setSelections((current) => {
-                        const values = [...(current.vaccinationIds ?? [])];
-                        values[index] = null;
-                        return { ...current, vaccinationIds: values };
-                      })
-                    }
-                  >
-                    Create a new vaccination record instead
-                  </Button>
-                )}
-              </div>
-            ))}
+            {draft.proposedVaccinations.map(renderVaccinationRow)}
           </Section>
         )}
 
         {draft.proposedPreventives.length > 0 && (
           <Section title='Preventives' section='preventives' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedPreventives.map((item, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includePreventives', index)} onToggle={() => toggleArrayInclude('includePreventives', index)} />
-                  <EditPencilButton
-                    editing={isEditing('preventive', index)}
-                    onClick={() => toggleEditing('preventive', index)}
-                    onDelete={
-                      isAddedItem('preventives', index)
-                        ? () => removeItem('preventives', index)
-                        : undefined
-                    }
-                  />
-                </div>
-                {isEditing('preventive', index) ? (
-                  <div className='space-y-2'>
-                    <div className='flex flex-col gap-2 sm:flex-row'>
-                      <Input
-                        value={item.name}
-                        aria-label='Preventive name'
-                        onChange={(event) => updatePreventiveAt(index, { name: event.target.value })}
-                      />
-                      <Input
-                        type='date'
-                        value={toLocalDateInputValue(item.administeredAt)}
-                        onChange={(event) => {
-                          const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
-                          if (administeredAt !== undefined) {
-                            updatePreventiveAt(index, { administeredAt });
-                          }
-                        }}
-                      />
-                    </div>
-                    <CatNamesEditor
-                      catNames={item.catNames}
-                      cats={cats}
-                      onChange={(catNames) => updatePreventiveAt(index, { catNames })}
-                    />
-                  </div>
-                ) : (
-                  <span>
-                    {item.name} · {formatDate(item.administeredAt)}
-                    {item.catNames.length > 0 && ` · ${item.catNames.join(', ')}`}
-                  </span>
-                )}
-                <ReviewStatusBadge
-                  label={
-                    likelyDuplicatePreventives[index]
-                      ? 'Potential duplicate'
-                      : selections.preventiveIds?.[index]
-                        ? 'Adds dose'
-                        : 'New'
-                  }
-                  message={
-                    likelyDuplicatePreventives[index]
-                      ? 'This preventive matches an existing dose for the same cat(s) and administration time. Turn off Include to skip it, or leave it on to append it anyway.'
-                      : selections.preventiveIds?.[index]
-                      ? 'This administration will be appended to the existing preventive dose history.'
-                      : 'This proposal will create a new preventive record.'
-                  }
-                  variant={likelyDuplicatePreventives[index] ? 'warning' : 'success'}
-                  className='ml-2'
-                  badgePlacement='left'
-                />
-                {selections.preventiveIds?.[index] && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className={mutedLinkClassName}
-                    onClick={() =>
-                      setSelections((current) => {
-                        const values = [...(current.preventiveIds ?? [])];
-                        values[index] = null;
-                        return { ...current, preventiveIds: values };
-                      })
-                    }
-                  >
-                    Create a new preventive record instead
-                  </Button>
-                )}
-              </div>
-            ))}
+            {draft.proposedPreventives.map(renderPreventiveRow)}
           </Section>
         )}
 
         {draft.proposedWeightEntries.length > 0 && (
           <Section title='Weight' section='weight' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedWeightEntries.map((item, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle
-                    included={isIncluded('includeWeightEntries', index)}
-                    onToggle={() => toggleArrayInclude('includeWeightEntries', index)}
-                  />
-                  <div className='flex items-center gap-2'>
-                    <ReviewStatusBadge
-                      label={likelyDuplicateWeightEntries[index] ? 'Potential duplicate' : 'New'}
-                      message={
-                        likelyDuplicateWeightEntries[index]
-                          ? 'This matches an existing measurement for this cat within one day. Turn off Include to skip it.'
-                          : 'This proposal will create a new weight entry.'
-                      }
-                      variant={likelyDuplicateWeightEntries[index] ? 'warning' : 'success'}
-                      badgePlacement='right'
-                    />
-                    <EditPencilButton
-                      editing={isEditing('weight', index)}
-                      onClick={() => toggleEditing('weight', index)}
-                      onDelete={isAddedItem('weight', index) ? () => removeItem('weight', index) : undefined}
-                    />
-                  </div>
-                </div>
-                {isEditing('weight', index) ? (
-                  <div className='space-y-2'>
-                    <div className='flex flex-col gap-2 sm:flex-row'>
-                      <Input
-                        type='number'
-                        value={item.weight}
-                        aria-label='Weight'
-                        onChange={(event) => updateWeightAt(index, { weight: Number(event.target.value) })}
-                      />
-                      <Input
-                        type='date'
-                        value={toLocalDateInputValue(item.measuredAt)}
-                        onChange={(event) => {
-                          const measuredAt = withUpdatedDate(item.measuredAt, event.target.value);
-                          if (measuredAt !== undefined) {
-                            updateWeightAt(index, { measuredAt });
-                          }
-                        }}
-                      />
-                    </div>
-                    <SingleCatSelect
-                      catName={item.catName}
-                      cats={cats}
-                      onChange={(catName) => updateWeightAt(index, { catName })}
-                    />
-                  </div>
-                ) : (
-                  <span>
-                    {item.weight} {item.unit} · {formatDate(item.measuredAt)}
-                    {item.catName && ` · ${item.catName}`}
-                  </span>
-                )}
-              </div>
-            ))}
+            {draft.proposedWeightEntries.map(renderWeightRow)}
           </Section>
         )}
 
         {draft.proposedSymptoms.length > 0 && (
           <Section title='Symptoms' section='symptoms' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedSymptoms.map((item, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includeSymptoms', index)} onToggle={() => toggleArrayInclude('includeSymptoms', index)} />
-                  <div className='flex items-center gap-2'>
-                    <ReviewStatusBadge
-                      label={likelyDuplicateSymptoms[index] ? 'Potential duplicate' : 'New'}
-                      message={
-                        likelyDuplicateSymptoms[index]
-                          ? 'The same symptom was already logged for this cat recently. Turn off Include to skip it.'
-                          : 'This proposal will create a new symptom.'
-                      }
-                      variant={likelyDuplicateSymptoms[index] ? 'warning' : 'success'}
-                      badgePlacement='right'
-                    />
-                    <EditPencilButton
-                      editing={isEditing('symptom', index)}
-                      onClick={() => toggleEditing('symptom', index)}
-                      onDelete={isAddedItem('symptoms', index) ? () => removeItem('symptoms', index) : undefined}
-                    />
-                  </div>
-                </div>
-                {isEditing('symptom', index) ? (
-                  <Input
-                    value={item.description}
-                    aria-label='Symptom description'
-                    onChange={(event) => updateSymptomAt(index, { description: event.target.value })}
-                  />
-                ) : (
-                  <span>
-                    {item.description}
-                    {item.catName && ` · ${item.catName}`}
-                  </span>
-                )}
-              </div>
-            ))}
+            {draft.proposedSymptoms.map(renderSymptomRow)}
           </Section>
         )}
 
         {draft.proposedConditions.length > 0 && (
           <Section title='Conditions' section='conditions' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedConditions.map((item, index) => (
-              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includeConditions', index)} onToggle={() => toggleArrayInclude('includeConditions', index)} />
-                  <div className='flex items-center gap-2'>
-                    <ReviewStatusBadge
-                      label={
-                        selections.conditionIds?.[index]
-                          ? 'Existing condition'
-                          : matchedLibraryConditionIds[index]
-                            ? 'Library match'
-                            : 'New'
-                      }
-                      message={
-                        selections.conditionIds?.[index]
-                          ? 'The visit will be linked to the existing ongoing condition.'
-                          : matchedLibraryConditionIds[index]
-                            ? 'This proposal will use the matching shared condition-library entry.'
-                            : 'This proposal will create a new custom condition.'
-                      }
-                      variant='success'
-                      badgePlacement='right'
-                    />
-                    <EditPencilButton
-                      editing={isEditing('condition', index)}
-                      onClick={() => toggleEditing('condition', index)}
-                      onDelete={
-                        isAddedItem('conditions', index)
-                          ? () => removeItem('conditions', index)
-                          : undefined
-                      }
-                    />
-                  </div>
-                </div>
-                {isEditing('condition', index) ? (
-                  <Input
-                    value={item.name}
-                    aria-label='Condition name'
-                    onChange={(event) => updateConditionAt(index, { name: event.target.value })}
-                  />
-                ) : (
-                  <span>
-                    {item.name}
-                    {item.catName && ` · ${item.catName}`}
-                  </span>
-                )}
-                {(selections.conditionIds?.[index] || matchedLibraryConditionIds[index]) && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className={mutedLinkClassName}
-                    onClick={() =>
-                      setSelections((current) => {
-                        const values = [...(current.conditionIds ?? [])];
-                        const libraryValues = [...(current.conditionLibraryIds ?? [])];
-                        values[index] = null;
-                        libraryValues[index] = null;
-                        return { ...current, conditionIds: values, conditionLibraryIds: libraryValues };
-                      })
-                    }
-                  >
-                    Create a new custom condition instead
-                  </Button>
-                )}
-              </div>
-            ))}
+            {draft.proposedConditions.map(renderConditionRow)}
           </Section>
         )}
 
         {draft.proposedExpenses.length > 0 && (
           <Section title='Expenses' section='expense' expanded={expanded} onToggle={toggleSection}>
-            {draft.proposedExpenses.map((expense, expenseIndex) => {
-              const amount = expense.items.reduce((sum, item) => sum + item.amount, 0);
-              return (
-                <div key={expenseIndex} className='space-y-2 rounded-md border border-border p-2'>
-                  <div className='flex items-center justify-between gap-2'>
-                    <IncludeToggle
-                      included={isIncluded('includeExpenses', expenseIndex)}
-                      onToggle={() => toggleArrayInclude('includeExpenses', expenseIndex)}
-                    />
-                    <div className='flex items-center gap-2'>
-                      <ReviewStatusBadge
-                        label={likelyDuplicateExpenses[expenseIndex] ? 'Potential duplicate' : 'New'}
-                        message={
-                          likelyDuplicateExpenses[expenseIndex]
-                            ? 'This expense matches an existing charge for the same cat(s), date, total, and line-item breakdown. Turn off Include to skip it.'
-                            : 'This proposal will create a new expense.'
-                        }
-                        variant={likelyDuplicateExpenses[expenseIndex] ? 'warning' : 'success'}
-                        badgePlacement='right'
-                      />
-                      <EditPencilButton
-                        editing={isEditing('expense', expenseIndex)}
-                        onClick={() => toggleEditing('expense', expenseIndex)}
-                        onDelete={
-                          isAddedItem('expense', expenseIndex)
-                            ? () => removeItem('expense', expenseIndex)
-                            : undefined
-                        }
-                      />
-                    </div>
-                  </div>
-                  <p className='text-sm'>
-                    ${amount.toFixed(2)} · {formatDate(expense.incurredAt)}
-                    {expense.catNames.length > 0 && ` · ${expense.catNames.join(', ')}`}
-                  </p>
-                  {isEditing('expense', expenseIndex) ? (
-                    <div className='space-y-2'>
-                      {expense.items.map((item, itemIndex) => (
-                        <div key={itemIndex} className='flex flex-col gap-2 sm:flex-row'>
-                          <Select
-                            options={DEFAULT_EXPENSE_CATEGORIES.map((category) => ({
-                              text: getExpenseCategoryLabel(category),
-                              value: category,
-                            }))}
-                            value={item.category}
-                            onChange={(value) => updateExpenseItemAt(expenseIndex, itemIndex, { category: value })}
-                          />
-                          <Input
-                            value={item.label ?? ''}
-                            placeholder='Line item label'
-                            onChange={(event) =>
-                              updateExpenseItemAt(expenseIndex, itemIndex, { label: event.target.value })
-                            }
-                          />
-                          <Input
-                            type='number'
-                            value={item.amount}
-                            aria-label='Amount'
-                            onChange={(event) =>
-                              updateExpenseItemAt(expenseIndex, itemIndex, { amount: Number(event.target.value) })
-                            }
-                          />
-                        </div>
-                      ))}
-                      <CatNamesEditor
-                        catNames={expense.catNames}
-                        cats={cats}
-                        onChange={(catNames) => updateExpenseAt(expenseIndex, { catNames })}
-                      />
-                    </div>
-                  ) : (
-                    expense.items.length > 1 && (
-                      <ul className='space-y-1 text-sm text-muted-foreground'>
-                        {expense.items.map((item, itemIndex) => (
-                          <li key={itemIndex}>
-                            {item.label ?? getExpenseCategoryLabel(item.category)} · ${item.amount.toFixed(2)}
-                          </li>
-                        ))}
-                      </ul>
-                    )
-                  )}
-                </div>
-              );
-            })}
+            {draft.proposedExpenses.map(renderExpenseRow)}
           </Section>
         )}
 
@@ -1798,7 +2077,12 @@ function IngestionDraftReviewModal({
         <IncludeToggle
           label='Save as a permanent health record'
           included={Boolean(file) && selections.saveAsRecord !== false}
-          onToggle={() => setSelections((current) => ({ ...current, saveAsRecord: current.saveAsRecord === false }))}
+          onToggle={function handleToggleSaveAsRecord() {
+            function flipSaveAsRecord(current: IngestionDraftSelections) {
+              return { ...current, saveAsRecord: current.saveAsRecord === false };
+            }
+            setSelections(flipSaveAsRecord);
+          }}
           disabled={!file}
         />
         <p className='text-muted-foreground text-sm'>
@@ -1813,7 +2097,9 @@ function IngestionDraftReviewModal({
                 value={recordLabel}
                 aria-label='Record label'
                 placeholder='e.g. Rabies certificate photo'
-                onChange={(event) => setRecordLabel(event.target.value)}
+                onChange={function handleRecordLabelChange(event) {
+                  setRecordLabel(event.target.value);
+                }}
               />
             ) : (
               <Button
@@ -1821,7 +2107,9 @@ function IngestionDraftReviewModal({
                 variant='link'
                 size='sm'
                 className={mutedLinkClassName}
-                onClick={() => setRecordLabelOpen(true)}
+                onClick={function handleOpenRecordLabel() {
+                  setRecordLabelOpen(true);
+                }}
               >
                 + Add label
               </Button>
@@ -1839,14 +2127,14 @@ function IngestionDraftReviewModal({
         {newCount} new item{newCount === 1 ? '' : 's'} will be created.
       </p>
       <div className='mt-2 flex flex-wrap justify-between gap-2'>
-        <Button type='button' variant='destructive' disabled={isSubmitting} onClick={() => void handleDiscard()}>
+        <Button type='button' variant='destructive' disabled={isSubmitting} onClick={handleDiscardClick}>
           Discard
         </Button>
         <div className='flex gap-2'>
           <Button type='button' variant='secondary' disabled={isSubmitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type='button' loading={isSubmitting} onClick={() => void handleConfirm()}>
+          <Button type='button' loading={isSubmitting} onClick={handleConfirmClick}>
             Confirm
           </Button>
         </div>

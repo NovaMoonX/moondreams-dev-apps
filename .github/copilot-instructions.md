@@ -4,6 +4,7 @@
 
 ### Quick reference
 - Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`).
+- **No anonymous functions: every function — including inline JSX callbacks (`onClick`, `onChange`, `.map()`, etc.) — must be a named `function` declaration or expression, never a bare arrow function used as a callback/handler.**
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check Dreamer UI first before building custom UI.
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
@@ -141,6 +142,7 @@ useEffect(() => {
 - Update, remove, or compress stale content instead of adding long commentary.
 
 ### Critical reminders
+- **No anonymous functions — every callback/handler (JSX props, array-method callbacks, `setState` updaters) must be a named `function`, never a bare arrow function used inline. See "No anonymous functions" under Coding Styles.**
 - **Template literals with `${` in `className` are FORBIDDEN.**
 - **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`.**
 - **Before writing any conditional className, ask: “Am I using `join()`?”**
@@ -181,6 +183,41 @@ interface ButtonProps {
 
 // ✅ Use type only when an interface cannot express the shape
 type Status = 'idle' | 'loading' | 'success';
+```
+
+### No anonymous functions
+- Every function value in the codebase must be named — a `function name(...) {}` declaration for component-scope handlers/helpers, or a named `function name(...) {}` expression wherever a callback is written inline (a JSX prop, `.map()`/`.filter()`/`.find()`/`.reduce()`, `setState` updaters, etc.). Never write a bare arrow function (`() => ...`) as a callback or handler.
+- This applies at every nesting level: a `.map()` callback that itself contains an `onClick` handler needs both the row-render function and the click handler named.
+- Naming these functions costs nothing at the type level — TypeScript's contextual typing infers parameter types for a named function expression exactly as it does for an arrow function, as long as it's written directly in the same expression position (inline in the prop/argument, not hoisted to a separate statement without annotations).
+- Plain arrow functions remain fine only in non-callback positions where TypeScript's own syntax requires them — type signatures (`onClose: () => void` in an interface) are not runtime functions and are unaffected by this rule.
+- See `src/apps/nine-lives/components/IngestionDraftReviewModal.tsx` for a fully-converted example.
+
+```tsx
+// ❌ Anonymous arrow functions as callbacks/handlers
+<Button onClick={() => toggleSection(section)}>Toggle</Button>
+{items.map((item, index) => (
+  <Row key={index} onDelete={() => removeItem(index)} />
+))}
+setSelections((current) => ({ ...current, saveAsRecord: !current.saveAsRecord }));
+
+// ✅ Named function declarations/expressions, same closures, same position
+function handleToggleSection() {
+  toggleSection(section);
+}
+<Button onClick={handleToggleSection}>Toggle</Button>
+
+function renderRow(item, index) {
+  function handleDelete() {
+    removeItem(index);
+  }
+  return <Row key={index} onDelete={handleDelete} />;
+}
+{items.map(renderRow)}
+
+function flipSaveAsRecord(current) {
+  return { ...current, saveAsRecord: !current.saveAsRecord };
+}
+setSelections(flipSaveAsRecord);
 ```
 
 ### Return-value debugging
