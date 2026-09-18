@@ -87,6 +87,10 @@ import {
   customSymptomQuickTagsReducer,
   type CustomSymptomQuickTagsState,
 } from './slices/customSymptomQuickTagsSlice';
+import {
+  ingestionDraftsReducer,
+  type IngestionDraftsState,
+} from './slices/ingestionDraftsSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -111,6 +115,7 @@ export interface NineLivesState {
   customPreventiveProducts: CustomPreventiveProductsState;
   customPreventiveTypes: CustomPreventiveTypesState;
   customSymptomQuickTags: CustomSymptomQuickTagsState;
+  ingestionDrafts: IngestionDraftsState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -136,6 +141,7 @@ export const nineLivesReducer = combineReducers({
   customPreventiveProducts: customPreventiveProductsReducer,
   customPreventiveTypes: customPreventiveTypesReducer,
   customSymptomQuickTags: customSymptomQuickTagsReducer,
+  ingestionDrafts: ingestionDraftsReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

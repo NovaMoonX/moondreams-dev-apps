@@ -16,6 +16,7 @@ import type { Expense } from '../types';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseFormModal from './ExpenseFormModal';
 import ExpenseTimeline from './ExpenseTimeline';
+import DocumentIngestionModal from './DocumentIngestionModal';
 
 interface ExpensesSectionProps {
   householdId: string;
@@ -30,6 +31,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [isIngestionOpen, setIsIngestionOpen] = useState(false);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
 
@@ -86,18 +88,29 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
             <small className='text-muted-foreground text-sm'>
               Track spending and recurring costs across every cat.
             </small>
-            <Button
-              type='button'
-              size='sm'
-              disabled={cats.length === 0}
-              onClick={() => {
-                setEditingExpense(null);
-                setIsFormOpen(true);
-              }}
-            >
-              <span className='hidden sm:inline'>Log expense</span>
-              <span className='sm:hidden'>Log</span>
-            </Button>
+            <div className='flex gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={!user?.uid}
+                onClick={() => setIsIngestionOpen(true)}
+              >
+                Upload
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                disabled={cats.length === 0}
+                onClick={() => {
+                  setEditingExpense(null);
+                  setIsFormOpen(true);
+                }}
+              >
+                <span className='hidden sm:inline'>Log expense</span>
+                <span className='sm:hidden'>Log</span>
+              </Button>
+            </div>
           </div>
 
           <ExpenseTimeline
@@ -122,6 +135,15 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
         onDelete={editingExpense ? handleDelete : undefined}
         onClose={closeModal}
       />
+      {user?.uid && (
+        <DocumentIngestionModal
+          isOpen={isIngestionOpen}
+          householdId={householdId}
+          uid={user.uid}
+          intent='expense'
+          onClose={() => setIsIngestionOpen(false)}
+        />
+      )}
     </section>
   );
 }

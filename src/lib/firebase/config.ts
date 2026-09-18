@@ -1,5 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import {
+  initializeAppCheck,
+  ReCaptchaV3Provider,
+  type AppCheck,
+} from 'firebase/app-check';
+import {
   connectAuthEmulator,
   getAuth,
   GoogleAuthProvider,
@@ -28,6 +33,21 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const isUsingFirebaseEmulators =
   import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+
+if (isUsingFirebaseEmulators && typeof self !== 'undefined') {
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY as
+  | string
+  | undefined;
+
+export const appCheck: AppCheck | null = appCheckSiteKey
+  ? initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  : null;
 
 export const auth = getAuth(app);
 auth.useDeviceLanguage();

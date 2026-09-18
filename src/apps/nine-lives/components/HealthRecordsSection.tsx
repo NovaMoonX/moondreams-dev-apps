@@ -16,6 +16,7 @@ import type { HealthRecord } from '../types';
 import DetailsDisclosure from './DetailsDisclosure';
 import HealthRecordTimeline from './HealthRecordTimeline';
 import HealthRecordUploadModal from './HealthRecordUploadModal';
+import DocumentIngestionModal from './DocumentIngestionModal';
 
 interface HealthRecordsSectionProps {
   householdId: string;
@@ -32,6 +33,7 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord | null>(null);
+  const [isIngestionOpen, setIsIngestionOpen] = useState(false);
 
   const catOptions = useMemo(
     () => cats.map((cat) => ({ label: cat.name, value: cat.id })),
@@ -66,16 +68,27 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
             <small className='text-muted-foreground text-sm'>
               Upload and manage lab results and vet paperwork for any cat.
             </small>
-            <Button
-              type='button'
-              variant='primary'
-              size='sm'
-              onClick={openCreate}
-              disabled={!user?.uid || cats.length === 0}
-            >
-              <span className='hidden sm:inline'>Add record</span>
-              <span className='sm:hidden'>Add</span>
-            </Button>
+            <div className='flex gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => setIsIngestionOpen(true)}
+                disabled={!user?.uid}
+              >
+                Upload
+              </Button>
+              <Button
+                type='button'
+                variant='primary'
+                size='sm'
+                onClick={openCreate}
+                disabled={!user?.uid || cats.length === 0}
+              >
+                <span className='hidden sm:inline'>Add record</span>
+                <span className='sm:hidden'>Add</span>
+              </Button>
+            </div>
           </div>
 
           <HealthRecordTimeline
@@ -97,6 +110,15 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
           initialRecord={editingRecord}
           onDelete={handleDelete}
           onClose={handleClose}
+        />
+      )}
+      {user?.uid && (
+        <DocumentIngestionModal
+          isOpen={isIngestionOpen}
+          householdId={householdId}
+          uid={user.uid}
+          intent='record'
+          onClose={() => setIsIngestionOpen(false)}
         />
       )}
     </section>

@@ -198,6 +198,23 @@ Storage object. New custom labels are upserted into the household's reference
 collection before the record is created, so they are available to every cat
 in that household.
 
+### Document ingestion drafts
+
+Path: `apps/nine-lives/households/{householdId}/ingestionDrafts/{draftId}`.
+
+An upload is extracted by Firebase AI Logic into one temporary `IngestionDraft` containing
+nullable `proposedCat`, `proposedClinic`, `proposedVisit`, `proposedWeightEntry`, and
+`proposedExpense` values plus arrays of proposed vaccinations, preventives, symptoms, and
+conditions. It also stores `sourceType`, `sourceFileName`, `suggestKeepAsRecord`, `confidence`,
+`createdBy`, and `createdAt`; there is intentionally no status field. The review modal edits or
+excludes individual proposals, optionally selects an existing cat or clinic, and then confirms
+the dependency-ordered writes (cat, clinic, visit, linked health data, expense, and optional
+health-record upload) before deleting the draft. Discarding only deletes the draft.
+
+Firebase App Check protects AI Logic calls. Production uses `VITE_FIREBASE_APPCHECK_SITE_KEY`
+with reCAPTCHA v3. Local emulator builds enable the App Check debug token; register the generated
+token in the Firebase Console when exercising Gemini locally.
+
 ### 6. Vaccination
 
 Path: `apps/nine-lives/households/{householdId}/vaccinations/{vaccinationId}`

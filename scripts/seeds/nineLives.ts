@@ -2066,6 +2066,51 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  batch.set(
+    householdRef.collection('ingestionDrafts').doc('seed-ingestion-draft'),
+    {
+      id: 'seed-ingestion-draft',
+      householdId: HOUSEHOLD_ID,
+      sourceType: 'pdf',
+      sourceFileName: 'blue-bark-visit-summary.pdf',
+      proposedCat: null,
+      proposedClinic: null,
+      proposedVisit: {
+        catName: 'Mochi',
+        scheduledAt: context.now - 86_400_000,
+        reason: 'checkup',
+        customReasonLabel: null,
+        notes: 'Annual wellness exam and vaccine review.',
+      },
+      proposedVaccinations: [
+        {
+          catName: 'Mochi',
+          name: 'FVRCP',
+          administeredAt: context.now - 86_400_000,
+          expiresAt: context.now + 31_536_000_000,
+          lotNumber: null,
+        },
+      ],
+      proposedPreventives: [],
+      proposedWeightEntry: null,
+      proposedSymptoms: [],
+      proposedConditions: [],
+      proposedExpense: {
+        catNames: ['Mochi'],
+        label: 'Annual wellness exam',
+        amount: 82,
+        category: 'vet',
+        incurredAt: context.now - 86_400_000,
+        notes: null,
+      },
+      suggestKeepAsRecord: false,
+      confidence: 0.96,
+      createdBy: caretaker.uid,
+      createdAt: context.now,
+    },
+    { merge: true },
+  );
+
   await batch.commit();
 
   const result: SeedResult = {
@@ -2074,6 +2119,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       4 +
       conditionLibraryCount +
       cats.length +
+      1 +
       1 +
       clinics.length +
       doctors.length +

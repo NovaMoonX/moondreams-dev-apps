@@ -26,6 +26,7 @@ import { AttentionFocusContext, type AttentionFocusRequest } from './context/att
 import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import LitterLogSection from './components/LitterLogSection';
+import DashboardQuickActions from './components/DashboardQuickActions';
 import { createHousehold } from './store/actions/householdsActions';
 import { requestToJoinHousehold } from './store/actions/pendingRequestsActions';
 
@@ -182,6 +183,7 @@ function NineLives() {
             <AttentionSection householdId={selectedHousehold.id} />
             <CatAnniversaryBanners householdId={selectedHousehold.id} />
             <StatsSummary householdId={selectedHousehold.id} />
+            <DashboardQuickActions householdId={selectedHousehold.id} />
             <CatsSection householdId={selectedHousehold.id} />
             <VisitsSection householdId={selectedHousehold.id} />
             <ExpensesSection householdId={selectedHousehold.id} />
