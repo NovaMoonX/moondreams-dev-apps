@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { enablePushNotifications } from '@/lib/notifications/enablePushNotifications';
 import { startRemindersListener } from '@/store/listeners/remindersListener';
 import { setReminders } from '@/store/slices/remindersSlice';
 import { useAppDispatch } from '@/store/index';
@@ -23,4 +24,10 @@ export function useReminderSync() {
 
     return unsubscribe;
   }, [uid, dispatch]);
+
+  useEffect(() => {
+    if (uid) {
+      void enablePushNotifications(uid);
+    }
+  }, [uid]);
 }
