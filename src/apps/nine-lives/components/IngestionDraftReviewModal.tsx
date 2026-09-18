@@ -267,14 +267,18 @@ function ReviewStatusBadge({
   label,
   message,
   variant,
+  badgePlacement,
+  className,
 }: {
   label: string;
   message: string;
   variant: 'success' | 'warning';
+  badgePlacement: 'corner' | 'inline';
+  className?: string;
 }) {
   return (
-    <Tooltip message={message} placement='top'>
-      <Badge variant={variant} size='xs' className='cursor-help'>
+    <Tooltip message={<div className={join('text-xs', badgePlacement === 'inline' && 'max-w-48')}>{message}</div>} placement={badgePlacement === 'corner' ? 'left' : 'top'}>
+      <Badge variant={variant} size='xs' className={join('cursor-help', className)}>
         {label}
       </Badge>
     </Tooltip>
@@ -955,6 +959,7 @@ function IngestionDraftReviewModal({
                         : 'This proposal will create a new cat.'
                     }
                     variant='success'
+                    badgePlacement='corner'
                   />
                   <EditPencilButton
                     editing={isEditing('cat', index)}
@@ -1050,6 +1055,7 @@ function IngestionDraftReviewModal({
                         : 'This proposal will create a new clinic.'
                     }
                     variant='success'
+                    badgePlacement='corner'
                   />
                   <EditPencilButton
                     editing={isEditing('clinic', index)}
@@ -1154,6 +1160,7 @@ function IngestionDraftReviewModal({
                           : 'This proposal will create a new visit.'
                       }
                       variant='success'
+                      badgePlacement='corner'
                     />
                     <EditPencilButton
                       editing={isEditing('visit', index)}
@@ -1224,6 +1231,7 @@ function IngestionDraftReviewModal({
                         ?.scheduledAt ?? visit.scheduledAt,
                     )} completed instead of creating another visit.`}
                     variant='success'
+                    badgePlacement='corner'
                   />
                 )}
                 {selections.visitIds?.[index] && (
@@ -1333,6 +1341,8 @@ function IngestionDraftReviewModal({
                       : 'This proposal will create a new vaccination record.'
                   }
                   variant='success'
+                  className='ml-2'
+                  badgePlacement='inline'
                 />
                 {selections.vaccinationIds?.[index] && (
                   <Button
@@ -1421,6 +1431,8 @@ function IngestionDraftReviewModal({
                       : 'This proposal will create a new preventive record.'
                   }
                   variant='success'
+                  className='ml-2'
+                  badgePlacement='inline'
                 />
                 {selections.preventiveIds?.[index] && (
                   <Button
@@ -1462,6 +1474,7 @@ function IngestionDraftReviewModal({
                           : 'This proposal will create a new weight entry.'
                       }
                       variant={likelyDuplicateWeightEntries[index] ? 'warning' : 'success'}
+                      badgePlacement='corner'
                     />
                     <EditPencilButton
                       editing={isEditing('weight', index)}
@@ -1532,6 +1545,7 @@ function IngestionDraftReviewModal({
                           : 'This proposal will create a new symptom.'
                       }
                       variant={likelyDuplicateSymptoms[index] ? 'warning' : 'success'}
+                      badgePlacement='corner'
                     />
                     <EditPencilButton
                       editing={isEditing('symptom', index)}
@@ -1580,6 +1594,7 @@ function IngestionDraftReviewModal({
                             : 'This proposal will create a new custom condition.'
                       }
                       variant='success'
+                      badgePlacement='corner'
                     />
                     <EditPencilButton
                       editing={isEditing('condition', index)}
@@ -1644,6 +1659,7 @@ function IngestionDraftReviewModal({
                         label='New'
                         message='This proposal will create a new expense.'
                         variant='success'
+                        badgePlacement='corner'
                       />
                       <EditPencilButton
                         editing={isEditing('expense', expenseIndex)}
