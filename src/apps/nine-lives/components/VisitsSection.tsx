@@ -85,7 +85,7 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
           updateVisit({
             householdId,
             visitId: selectedVisit.id,
-            uid: user.uid,
+            reminderUid: user.uid,
             changes: visit,
           }),
         ).unwrap();

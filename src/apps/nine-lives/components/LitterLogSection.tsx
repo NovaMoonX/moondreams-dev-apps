@@ -1086,7 +1086,7 @@ function SelectedLitterBoxPanel({
           updateLitterEntry({
             householdId,
             entryId: editingEntry.id,
-            uid: user.uid,
+            reminderUid: user.uid,
             changes: entry,
           }),
         ).unwrap();
@@ -1110,7 +1110,7 @@ function SelectedLitterBoxPanel({
     setIsSubmitting(true);
 
     try {
-      await dispatch(deleteLitterEntry({ householdId, entryId, uid: user?.uid })).unwrap();
+      await dispatch(deleteLitterEntry({ householdId, entryId, reminderUid: user?.uid })).unwrap();
       closeForm();
     } finally {
       setIsSubmitting(false);

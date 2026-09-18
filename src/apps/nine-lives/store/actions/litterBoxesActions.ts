@@ -13,24 +13,15 @@ import {
 import { getLatestFullChangeByBox, LITTER_OVERDUE_DAYS } from '../../utils/attentionItems';
 import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
 
-// The dashboard flags a box as overdue at LITTER_OVERDUE_DAYS (see utils/attentionItems.ts);
-// this fires a couple days ahead of that mark as a "get ahead of it" nudge.
 const LITTER_REMINDER_LEAD_DAYS = 2;
 
 const getLitterBoxDocRef = (householdId: string, litterBoxId: string) =>
   doc(db, 'apps', 'nine-lives', 'households', householdId, 'litterBoxes', litterBoxId);
 
-/**
- * Recomputes a box's "litter change coming up" reminder from its current full-change history
- * and reschedules it if the target date moved. Called after any litter entry create/update/delete
- * affecting this box — best-effort, like every other reminder here, and writes directly to the
- * box's Firestore doc rather than returning state for the caller to merge, since the box's own
- * live listener already keeps the store in sync.
- */
 export async function syncLitterBoxReminder(
   state: RootState,
   householdId: string,
-  uid: string | undefined,
+  reminderUid: string | undefined,
   litterBoxId: string,
   litterEntries: LitterEntry[],
 ): Promise<void> {
@@ -45,9 +36,9 @@ export async function syncLitterBoxReminder(
   const latestChangedAt = getLatestFullChangeByBox(litterEntries).get(litterBoxId);
   let reminderIds: string[] = [];
 
-  if (latestChangedAt !== undefined && uid) {
+  if (latestChangedAt !== undefined && reminderUid) {
     const dueAt = latestChangedAt + LITTER_OVERDUE_DAYS * ONE_DAY_MS;
-    reminderIds = await scheduleEntityReminders(state, householdId, uid, [
+    reminderIds = await scheduleEntityReminders(state, householdId, reminderUid, [
       {
         title: 'Litter change coming up',
         body: `${box.name}'s litter will need a full change soon.`,
@@ -63,7 +54,7 @@ export async function syncLitterBoxReminder(
       lastEditedAt: Date.now(),
     });
   } catch {
-    // Reminders are a stretch feature — a stale one is a lesser problem than blocking the write that triggered this sync.
+    return;
   }
 }
 

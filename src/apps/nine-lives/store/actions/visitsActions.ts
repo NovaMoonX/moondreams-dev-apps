@@ -253,15 +253,14 @@ export const updateVisit = createAsyncThunk<
   {
     householdId: string;
     visitId: string;
-    /** Only needed to schedule a fresh reminder when `scheduledAt` changes — omit it and a reschedule still cancels the stale reminder, it just won't be replaced. */
-    uid?: string;
+    reminderUid?: string;
     changes: Partial<Visit>;
   },
   { rejectValue: string }
 >(
   'nineLives/visits/update',
   async (
-    { householdId, visitId, uid, changes },
+    { householdId, visitId, reminderUid, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -306,8 +305,8 @@ export const updateVisit = createAsyncThunk<
       nextVisit.reminderIds = [];
     }
 
-    if (isRescheduled && !isNowCancelled && uid) {
-      nextVisit.reminderIds = await scheduleVisitReminders(state, householdId, uid, nextVisit);
+    if (isRescheduled && !isNowCancelled && reminderUid) {
+      nextVisit.reminderIds = await scheduleVisitReminders(state, householdId, reminderUid, nextVisit);
     }
 
     dispatch(upsertVisit(nextVisit));

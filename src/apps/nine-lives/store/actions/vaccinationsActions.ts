@@ -12,12 +12,8 @@ import {
 } from '../slices/vaccinationsSlice';
 import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
 
-// Matches the "due soon" window the dashboard already flags (see DUE_SOON_WINDOW_MS in
-// utils/attentionItems.ts) plus a same-day nudge — a booster running out warrants more
-// lead time than a same-week visit reminder.
 const VACCINATION_REMINDER_LEAD_MS = 7 * ONE_DAY_MS;
 
-/** Schedules a week-before and a day-of reminder for the vaccination's `expiresAt`, if it has one. */
 export async function scheduleVaccinationReminders(
   state: RootState,
   householdId: string,
@@ -157,15 +153,14 @@ export const updateVaccination = createAsyncThunk<
   {
     householdId: string;
     vaccinationId: string;
-    /** Only needed to schedule a fresh reminder when `expiresAt` changes — omit it and a change still cancels the stale reminder, it just won't be replaced. */
-    uid?: string;
+    reminderUid?: string;
     changes: Partial<VaccinationDose> & { name?: string };
   },
   { rejectValue: string }
 >(
   'nineLives/vaccinations/update',
   async (
-    { householdId, vaccinationId, uid, changes },
+    { householdId, vaccinationId, reminderUid, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -196,8 +191,8 @@ export const updateVaccination = createAsyncThunk<
 
     if (nextVaccination.expiresAt !== current.expiresAt) {
       await cancelEntityReminders(current.reminderIds);
-      nextVaccination.reminderIds = uid
-        ? await scheduleVaccinationReminders(state, householdId, uid, nextVaccination)
+      nextVaccination.reminderIds = reminderUid
+        ? await scheduleVaccinationReminders(state, householdId, reminderUid, nextVaccination)
         : [];
     }
 
@@ -329,11 +324,11 @@ export const deleteVaccination = createAsyncThunk<
  */
 export const deleteVaccinationDose = createAsyncThunk<
   { id: string; deletedRecord: boolean },
-  { householdId: string; vaccinationId: string; doseId: string; uid?: string },
+  { householdId: string; vaccinationId: string; doseId: string; reminderUid?: string },
   { rejectValue: string }
 >(
   'nineLives/vaccinations/deleteDose',
-  async ({ householdId, vaccinationId, doseId, uid }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, vaccinationId, doseId, reminderUid }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.vaccinations.items.find((item) => item.id === vaccinationId);
 
@@ -361,8 +356,8 @@ export const deleteVaccinationDose = createAsyncThunk<
 
     if (nextVaccination.expiresAt !== current.expiresAt) {
       await cancelEntityReminders(current.reminderIds);
-      nextVaccination.reminderIds = uid
-        ? await scheduleVaccinationReminders(state, householdId, uid, nextVaccination)
+      nextVaccination.reminderIds = reminderUid
+        ? await scheduleVaccinationReminders(state, householdId, reminderUid, nextVaccination)
         : [];
     }
 

@@ -111,14 +111,13 @@ export const updateLitterEntry = createAsyncThunk<
   {
     householdId: string;
     entryId: string;
-    /** Only needed to schedule a fresh litter reminder if this edit changes which entry is the box's latest full change. */
-    uid?: string;
+    reminderUid?: string;
     changes: Partial<LitterEntry>;
   },
   { rejectValue: string }
 >(
   'nineLives/litterEntries/update',
-  async ({ householdId, entryId, uid, changes }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, entryId, reminderUid, changes }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.litterEntries.items.find((entry) => entry.id === entryId);
 
@@ -164,7 +163,7 @@ export const updateLitterEntry = createAsyncThunk<
       await syncLitterBoxReminder(
         nextState,
         householdId,
-        uid,
+        reminderUid,
         nextEntry.litterBoxId,
         nextState.nineLives.litterEntries.items,
       );
@@ -173,7 +172,7 @@ export const updateLitterEntry = createAsyncThunk<
         await syncLitterBoxReminder(
           nextState,
           householdId,
-          uid,
+          reminderUid,
           current.litterBoxId,
           nextState.nineLives.litterEntries.items,
         );
@@ -191,11 +190,11 @@ export const updateLitterEntry = createAsyncThunk<
 
 export const deleteLitterEntry = createAsyncThunk<
   { id: string },
-  { householdId: string; entryId: string; uid?: string },
+  { householdId: string; entryId: string; reminderUid?: string },
   { rejectValue: string }
 >(
   'nineLives/litterEntries/delete',
-  async ({ householdId, entryId, uid }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, entryId, reminderUid }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.litterEntries.items.find((entry) => entry.id === entryId);
 
@@ -213,7 +212,7 @@ export const deleteLitterEntry = createAsyncThunk<
         await syncLitterBoxReminder(
           nextState,
           householdId,
-          uid,
+          reminderUid,
           current.litterBoxId,
           nextState.nineLives.litterEntries.items,
         );

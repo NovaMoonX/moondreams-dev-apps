@@ -12,12 +12,6 @@ import { cancelEntityReminders, scheduleEntityReminders } from '../../utils/remi
 const getCatDocRef = (householdId: string, catId: string) =>
   doc(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId);
 
-/**
- * Schedules yearly-recurring reminders for a cat's birthday and (if set) adoption anniversary —
- * each fires once on its next occurrence, then the reminder system itself rolls it forward a
- * year after every send (see Reminder.recurrence in src/lib/notifications/types.ts), so this
- * only needs to run again when the underlying date changes.
- */
 async function scheduleCatReminders(
   state: RootState,
   householdId: string,
@@ -123,14 +117,13 @@ export const updateCat = createAsyncThunk<
   {
     householdId: string;
     catId: string;
-    /** Only needed to schedule fresh reminders when `dateOfBirth`/`adoptedAt` change — omit it and a change still cancels the stale ones, they just won't be replaced. */
-    uid?: string;
+    reminderUid?: string;
     changes: Partial<Cat>;
   },
   { rejectValue: string }
 >(
   'nineLives/cats/update',
-  async ({ householdId, catId, uid, changes }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, catId, reminderUid, changes }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.cats.items.find((cat) => cat.id === catId);
 
@@ -152,8 +145,8 @@ export const updateCat = createAsyncThunk<
 
     if (datesChanged) {
       await cancelEntityReminders(current.reminderIds);
-      optimisticCat.reminderIds = uid
-        ? await scheduleCatReminders(state, householdId, uid, optimisticCat)
+      optimisticCat.reminderIds = reminderUid
+        ? await scheduleCatReminders(state, householdId, reminderUid, optimisticCat)
         : [];
     }
 
