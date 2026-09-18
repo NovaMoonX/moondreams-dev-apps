@@ -23,6 +23,18 @@ Run every step below. Don't skip validation because the diff "looks right."
   intent — but treat both as a starting point, not ground truth. The user's
   live instructions in this conversation always win over what the PR body
   says the feature should do.
+- **Fetch every review comment before touching code**: `gh api
+  repos/<owner>/<repo>/pulls/<n>/comments --paginate`. These are almost
+  always the repo owner's own line-level feedback on the coding agent's
+  work — not optional style nits, but requirements you haven't seen yet.
+  Read every one and its file/line context before planning the rest of the
+  pass; they routinely call for real design/UX changes (e.g. "allow
+  proposing more than one X", "use the existing Y component instead of
+  reinventing it", "this needs an edit-mode, not always-editable fields")
+  that are easy to miss just by reading the diff. Treat each comment as a
+  requirement to implement, not a suggestion to weigh — if a comment turns
+  out to be out of scope or superseded, say so explicitly in the wrap-up
+  rather than silently skipping it.
 
 ## 1. Resolve merge conflicts with main
 
@@ -131,3 +143,11 @@ regularly gets the shape right but the UX wrong:
   errors like a deprecated Projects-classic field; fall back to the REST API
   if it does) so it reflects what's actually in the branch now, not the
   agent's original plan.
+- Resolve every review comment thread you addressed. Comments from the repo
+  owner don't need a reply — just resolve the thread once the code change is
+  in. Resolving is a GraphQL mutation, not the REST comments endpoint:
+  first get each thread's node id (`gh api graphql -f query='query { repository(owner:"<owner>", name:"<repo>") { pullRequest(number: <n>) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { body path line } } } } } } }'`),
+  then `gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "<id>" }) { thread { isResolved } } }'`
+  for each thread whose comment you actually acted on. Never resolve a
+  thread you didn't address, and never resolve by replying and walking
+  away — the code has to actually change first.

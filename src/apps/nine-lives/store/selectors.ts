@@ -23,6 +23,22 @@ export const selectDoctorsByHousehold = (householdId: string | null | undefined)
     ? state.nineLives.doctors.items.filter((doctor) => doctor.householdId === householdId)
     : [];
 
+/** Sorted oldest-first, so the list reads as a queue and "resume" always means the longest-unfinished one first. */
+export const selectIngestionDraftsByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? [...state.nineLives.ingestionDrafts.items]
+          .filter((draft) => draft.householdId === householdId)
+          .sort((a, b) => a.createdAt - b.createdAt)
+      : [];
+
+/** A primitive, so callers that only need the count avoid re-rendering on unrelated draft-field edits. */
+export const selectIngestionDraftCountByHousehold =
+  (householdId: string | null | undefined) => (state: RootState) =>
+    householdId
+      ? state.nineLives.ingestionDrafts.items.filter((draft) => draft.householdId === householdId).length
+      : 0;
+
 export const selectDoctorsByClinic =
   (householdId: string | null | undefined, clinicId: string) => (state: RootState) =>
     householdId

@@ -31,6 +31,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 11. **Browse resources and the glossary**: look up unfamiliar terms (what's FVRCP?) with definitions linked to relevant resource articles.
 12. **See what's coming up, at a glance**: a household-wide timeline of visits, vaccination due dates, and preventive due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
 13. **Get reminders**: push notifications for upcoming visits, vaccination due dates, and preventive due dates, once that infrastructure is built (see Stretch Goals — the visibility in #11 doesn't depend on it).
+14. **Upload and review a document**: the dashboard, Expenses, and Records sections can send a PDF or photo to Firebase AI Logic. The resulting `IngestionDraft` is household-scoped and contains optional cat, clinic, visit, vaccination, preventive, weight, symptom, condition, and expense proposals. Reviewers can edit or exclude each proposal, choose an existing cat or clinic, keep the file as a health record, then confirm the linked writes or discard the draft.
 
 ## How it Feels
 
@@ -88,4 +89,5 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - **State**: Redux Toolkit (typed per-mini-app slice trees, optimistic thunks, cross-slice selectors) — see the Technical Design Document for the full architecture
 - **Data**: Firestore, namespaced under `apps/nine-lives/...`, household-scoped for owned data and globally shared for reference content (condition library, glossary, resources, vaccine reference list)
 - **Files**: Firebase Storage for health-record uploads and photos
+- **Document ingestion**: Firebase AI Logic uses App Check. Production builds require `VITE_FIREBASE_APPCHECK_SITE_KEY`. Local emulator builds enable the App Check debug token; set `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` to a fixed UUID in `.env.local` so the whole team shares one token registered once in Firebase Console > App Check > Manage debug tokens, instead of every browser generating (and needing to separately register) its own.
 - **Notifications**: Firebase Cloud Messaging, via shared cross-app infrastructure rather than a Nine Lives–specific implementation

@@ -2066,6 +2066,55 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  batch.set(
+    householdRef.collection('ingestionDrafts').doc('seed-ingestion-draft'),
+    {
+      id: 'seed-ingestion-draft',
+      householdId: HOUSEHOLD_ID,
+      sourceType: 'pdf',
+      sourceFileName: 'blue-bark-visit-summary.pdf',
+      proposedCats: [],
+      proposedClinics: [],
+      proposedVisits: [
+        {
+          catNames: ['Mochi'],
+          clinicName: null,
+          scheduledAt: context.now - 86_400_000,
+          reason: 'checkup',
+          customReasonLabel: null,
+          notes: 'Annual wellness exam and vaccine review.',
+        },
+      ],
+      proposedVaccinations: [
+        {
+          catName: 'Mochi',
+          name: 'FVRCP',
+          administeredAt: context.now - 86_400_000,
+          expiresAt: context.now + 31_536_000_000,
+          lotNumber: null,
+        },
+      ],
+      proposedPreventives: [],
+      proposedWeightEntries: [],
+      proposedSymptoms: [],
+      proposedConditions: [],
+      proposedExpenses: [
+        {
+          catNames: ['Mochi'],
+          items: [{ category: 'vet', label: 'Annual wellness exam', amount: 82 }],
+          incurredAt: context.now - 86_400_000,
+          notes: null,
+        },
+      ],
+      proposedRecordType: 'vet_paperwork',
+      suggestKeepAsRecord: false,
+      confidence: 0.96,
+      createdBy: caretaker.uid,
+      createdAt: context.now,
+    },
+    { merge: true },
+  );
+
   await batch.commit();
 
   const result: SeedResult = {
@@ -2074,6 +2123,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       4 +
       conditionLibraryCount +
       cats.length +
+      1 +
       1 +
       clinics.length +
       doctors.length +
@@ -2090,7 +2140,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       customPreventiveTypes.length +
       healthRecordCount +
       symptomCount +
-      visitCount,
+      visitCount +
+      1, // seed-ingestion-draft
   };
 
   return result;

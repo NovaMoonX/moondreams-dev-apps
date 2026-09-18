@@ -199,6 +199,38 @@ Storage object. New custom labels are upserted into the household's reference
 collection before the record is created, so they are available to every cat
 in that household.
 
+### Document ingestion drafts
+
+Path: `apps/nine-lives/households/{householdId}/ingestionDrafts/{draftId}`.
+
+An upload is extracted by Firebase AI Logic into one temporary `IngestionDraft` containing
+`proposedCats`, `proposedClinics`, `proposedVisits`, `proposedWeightEntries`, and
+`proposedExpenses` arrays (a single document can mention more than one cat, clinic, visit, weight
+measurement, or expense — each proposed expense is itself itemized, mirroring
+`Expense`/`ExpenseLineItem`, and a visit's `catNames` can list more than one cat when the document
+makes clear one visit event covers several), plus arrays of proposed vaccinations, preventives,
+symptoms, and conditions. It also stores `sourceType`, `sourceFileName`, `proposedRecordType` (the
+model's guess at what kind of document this is, for the optional health record), a
+`suggestKeepAsRecord` toggle, `confidence`, `createdBy`, and `createdAt`; there is intentionally
+no status field. The proposal types themselves (`IngestionCatProposal`, `IngestionVisitProposal`,
+etc.) live alongside the extraction code at `lib/extractProposalFromFile.types.ts`, not in
+`types.ts`, since they're shaped by what the model can be asked to return rather than by the
+underlying Firestore documents. The review modal edits or excludes individual proposals (each
+cat/clinic gets a reveal-link to switch from direct entry to picking an existing record, and
+`catNames`-bearing proposals get a chip editor to add/remove attached cats), supports adding a
+brand-new item to any section the model missed, and confirming resolves cross-references by name
+— a vaccination/preventive/weight/symptom/condition/expense links to whichever proposed visit's
+`scheduledAt` is closest to its own date — then performs the dependency-ordered writes (cats,
+clinics, visits, linked health data, expenses, and an optional health-record upload, tagged with
+`proposedRecordType` and linked to the first confirmed visit) before deleting the draft.
+Discarding only deletes the draft.
+
+Firebase App Check protects AI Logic calls. Production uses `VITE_FIREBASE_APPCHECK_SITE_KEY`
+with reCAPTCHA v3. Local emulator builds enable the App Check debug token; setting
+`VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` in `.env.local` to a fixed UUID pins every local dev
+environment to that one token (registered once in Firebase Console > App Check > Manage debug
+tokens) instead of each browser generating, and needing separate registration of, its own.
+
 ### 6. Vaccination
 
 Path: `apps/nine-lives/households/{householdId}/vaccinations/{vaccinationId}`

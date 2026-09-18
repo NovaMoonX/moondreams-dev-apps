@@ -730,6 +730,50 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/ingestionDrafts/{draftId} {
+      function isIngestionDraftIdentityValid() {
+        return request.resource.data.id == draftId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == request.auth.uid;
+      }
+
+      function isIngestionDraftShapeValid() {
+        return (request.resource.data.sourceType == 'pdf' || request.resource.data.sourceType == 'photo')
+          && isNonEmptyString(request.resource.data.sourceFileName)
+          && request.resource.data.proposedCats is list
+          && request.resource.data.proposedClinics is list
+          && request.resource.data.proposedVisits is list
+          && request.resource.data.proposedVaccinations is list
+          && request.resource.data.proposedPreventives is list
+          && request.resource.data.proposedWeightEntries is list
+          && request.resource.data.proposedSymptoms is list
+          && request.resource.data.proposedConditions is list
+          && request.resource.data.proposedExpenses is list
+          && (request.resource.data.proposedRecordType == null || request.resource.data.proposedRecordType is string)
+          && request.resource.data.suggestKeepAsRecord is bool
+          && (request.resource.data.confidence == null || request.resource.data.confidence is number)
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isIngestionDraftImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isIngestionDraftIdentityValid()
+        && isIngestionDraftShapeValid();
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isIngestionDraftImmutableFieldsValid()
+        && isIngestionDraftShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/nine-lives/households/{householdId}/visits/{visitId} {
       function isVisitIdentityValid() {
         return request.resource.data.id == visitId

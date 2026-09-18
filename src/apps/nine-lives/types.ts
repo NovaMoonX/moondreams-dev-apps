@@ -1,3 +1,15 @@
+import type {
+  IngestionCatProposal,
+  IngestionClinicProposal,
+  IngestionConditionProposal,
+  IngestionExpenseProposal,
+  IngestionPreventiveProposal,
+  IngestionSymptomProposal,
+  IngestionVaccinationProposal,
+  IngestionVisitProposal,
+  IngestionWeightProposal,
+} from './lib/extractProposalFromFile.types';
+
 export interface Household {
   id: string;
   name: string;
@@ -400,6 +412,28 @@ export interface Expense {
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
+}
+
+export interface IngestionDraft {
+  id: string;
+  householdId: string;
+  sourceType: 'pdf' | 'photo';
+  sourceFileName: string;
+  proposedCats: IngestionCatProposal[];
+  proposedClinics: IngestionClinicProposal[];
+  proposedVisits: IngestionVisitProposal[];
+  proposedVaccinations: IngestionVaccinationProposal[];
+  proposedPreventives: IngestionPreventiveProposal[];
+  proposedWeightEntries: IngestionWeightProposal[];
+  proposedSymptoms: IngestionSymptomProposal[];
+  proposedConditions: IngestionConditionProposal[];
+  proposedExpenses: IngestionExpenseProposal[];
+  /** What kind of document this is, for the health record created if `suggestKeepAsRecord`/`saveAsRecord` is kept. Never 'custom' — that requires a household's own `customRecordTypeId`, which extraction can't know. */
+  proposedRecordType: Exclude<HealthRecordType, 'custom'> | null;
+  suggestKeepAsRecord: boolean;
+  confidence: number | null;
+  createdBy: string;
+  createdAt: number;
 }
 
 export type SymptomSeverity = 'mild' | 'moderate' | 'severe';

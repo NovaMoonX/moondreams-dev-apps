@@ -17,6 +17,7 @@ import { startCustomSymptomQuickTagsListener } from '../store/listeners/customSy
 import { startDoctorsListener } from '../store/listeners/doctorsListener';
 import { startExpensesListener } from '../store/listeners/expensesListener';
 import { startHealthRecordsListener } from '../store/listeners/healthRecordsListener';
+import { startIngestionDraftsListener } from '../store/listeners/ingestionDraftsListener';
 import { startHouseholdListener } from '../store/listeners/householdListener';
 import { startLitterEntriesListener } from '../store/listeners/litterEntriesListener';
 import { startLitterBoxesListener } from '../store/listeners/litterBoxesListener';
@@ -38,6 +39,7 @@ import { setConditionLibrary } from '../store/slices/conditionLibrarySlice';
 import { setDoctors } from '../store/slices/doctorsSlice';
 import { setExpenses } from '../store/slices/expensesSlice';
 import { setHealthRecords } from '../store/slices/healthRecordsSlice';
+import { setIngestionDrafts } from '../store/slices/ingestionDraftsSlice';
 import { setHouseholds } from '../store/slices/householdsSlice';
 import { setLitterEntries } from '../store/slices/litterEntriesSlice';
 import { setLitterBoxes } from '../store/slices/litterBoxesSlice';
@@ -88,6 +90,7 @@ export function useNineLivesSync(
       dispatch(setVisits([]));
       dispatch(setCustomHealthRecordTypes([]));
       dispatch(setHealthRecords([]));
+      dispatch(setIngestionDrafts([]));
       dispatch(setExpenses([]));
       dispatch(setLitterEntries([]));
       dispatch(setLitterBoxes([]));
@@ -133,6 +136,9 @@ export function useNineLivesSync(
     });
     const unsubscribeHealthRecords = startHealthRecordsListener(householdId, (records) => {
       dispatch(setHealthRecords(records));
+    });
+    const unsubscribeIngestionDrafts = startIngestionDraftsListener(householdId, (drafts) => {
+      dispatch(setIngestionDrafts(drafts));
     });
     const unsubscribeLitterEntries = startLitterEntriesListener(householdId, (entries) => {
       dispatch(setLitterEntries(entries));
@@ -192,6 +198,7 @@ export function useNineLivesSync(
       unsubscribeVisits();
       unsubscribeExpenses();
       unsubscribeHealthRecords();
+      unsubscribeIngestionDrafts();
       unsubscribeLitterEntries();
       unsubscribeLitterBoxes();
       unsubscribeLitters();
