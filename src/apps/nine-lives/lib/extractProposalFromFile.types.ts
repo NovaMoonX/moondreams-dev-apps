@@ -24,7 +24,8 @@ export interface IngestionClinicProposal {
 }
 
 export interface IngestionVisitProposal {
-  catName: string | null;
+  /** More than one when the document makes clear a single visit event covers multiple cats. */
+  catNames: string[];
   clinicName: string | null;
   scheduledAt: number;
   reason: VisitReason;

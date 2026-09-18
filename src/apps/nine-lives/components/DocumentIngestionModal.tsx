@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Trash2 } from 'lucide-react';
+import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/formatUtils';
@@ -36,7 +37,7 @@ function DocumentIngestionModal({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const pendingDrafts = useAppSelector(selectIngestionDraftsByHousehold(householdId));
+  const pendingDrafts = useAppSelector(selectIngestionDraftsByHousehold(householdId), shallowEqual);
   const activeDraft = useAppSelector((state) =>
     activeDraftId
       ? (state.nineLives.ingestionDrafts.items.find((item) => item.id === activeDraftId) ?? null)

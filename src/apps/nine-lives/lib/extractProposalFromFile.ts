@@ -3,7 +3,9 @@ import { SchemaType } from 'firebase/ai';
 import { generativeModel } from '@/lib/firebase/ai';
 
 import { compressIngestionImage } from '../utils/imageCompression';
+import { CAT_BREEDS } from '../constants/presetOptions';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../utils/budgetCalculators';
+import type { HealthRecordType } from '../types';
 import type {
   IngestionCatProposal,
   IngestionClinicProposal,
@@ -23,10 +25,11 @@ export interface ExtractedIngestionProposal {
   proposedVisits: IngestionVisitProposal[];
   proposedVaccinations: IngestionVaccinationProposal[];
   proposedPreventives: IngestionPreventiveProposal[];
-  proposedWeightEntry: IngestionWeightProposal | null;
+  proposedWeightEntries: IngestionWeightProposal[];
   proposedSymptoms: IngestionSymptomProposal[];
   proposedConditions: IngestionConditionProposal[];
   proposedExpenses: IngestionExpenseProposal[];
+  proposedRecordType: Exclude<HealthRecordType, 'custom'> | null;
   suggestKeepAsRecord: boolean;
   confidence: number | null;
 }
@@ -43,7 +46,11 @@ const responseSchema = {
         type: SchemaType.OBJECT,
         properties: {
           name: { type: SchemaType.STRING },
-          breed: nullableString,
+          breed: {
+            type: SchemaType.STRING,
+            nullable: true,
+            description: `The breed if stated. Prefer an exact match (case-insensitive) to one of: ${CAT_BREEDS.join(', ')}. If the document uses different wording for a clear match (e.g. "DSH"), map it to the closest one of these. Otherwise use whatever breed name is actually stated, in Title Case.`,
+          },
           dateOfBirth: nullableNumber,
           isDateOfBirthEstimated: { type: SchemaType.BOOLEAN, nullable: true },
           sex: { type: SchemaType.STRING, nullable: true, enum: ['male', 'female', 'unknown'] },
@@ -67,10 +74,12 @@ const responseSchema = {
     },
     proposedVisits: {
       type: SchemaType.ARRAY,
+      description:
+        'One entry per distinct visit event. If a single visit event (one appointment, one date, one summary) clearly covers more than one cat, list every one of their names in catNames rather than creating a separate visit per cat.',
       items: {
         type: SchemaType.OBJECT,
         properties: {
-          catName: nullableString,
+          catNames: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
           clinicName: nullableString,
           scheduledAt: { type: SchemaType.NUMBER },
           reason: {
@@ -93,7 +102,7 @@ const responseSchema = {
           name: {
             type: SchemaType.STRING,
             description:
-              "The vaccine name only (e.g. 'FVRCP', 'Rabies', 'FeLV') — never include a duration, dosing interval, or next-due information; that belongs in expiresAt.",
+              "The vaccine name ONLY — e.g. 'FVRCP', 'Rabies', 'FeLV'. WRONG: 'FVRCP 3 weeks', 'FVRCP due in 3 years', 'Rabies (1-year)'. Strip any duration, dosing interval, or next-due phrase from the name; that information belongs in expiresAt instead, never appended to the name string.",
           },
           administeredAt: { type: SchemaType.NUMBER },
           expiresAt: nullableNumber,
@@ -118,16 +127,18 @@ const responseSchema = {
         },
       },
     },
-    proposedWeightEntry: {
-      type: SchemaType.OBJECT,
-      nullable: true,
+    proposedWeightEntries: {
+      type: SchemaType.ARRAY,
       description:
-        'A weight measurement stated anywhere in the document — exam vitals, a weigh-in log line, or a summary table — not only a dedicated "weight" section.',
-      properties: {
-        catName: nullableString,
-        weight: { type: SchemaType.NUMBER },
-        unit: { type: SchemaType.STRING, enum: ['lb', 'kg'] },
-        measuredAt: { type: SchemaType.NUMBER },
+        'One entry per weight measurement stated anywhere in the document — exam vitals, a weigh-in log line, or a summary table, not only a dedicated "weight" section. If more than one cat has a weight recorded, propose one entry per cat; do not stop after the first.',
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          catName: nullableString,
+          weight: { type: SchemaType.NUMBER },
+          unit: { type: SchemaType.STRING, enum: ['lb', 'kg'] },
+          measuredAt: { type: SchemaType.NUMBER },
+        },
       },
     },
     proposedSymptoms: {
@@ -187,6 +198,20 @@ const responseSchema = {
         },
       },
     },
+    proposedRecordType: {
+      type: SchemaType.STRING,
+      nullable: true,
+      enum: [
+        'lab_result',
+        'vet_paperwork',
+        'insurance',
+        'shelter_adoption',
+        'prescription',
+        'microchip_registration',
+        'miscellaneous',
+      ],
+      description: 'What kind of document this is, for filing it as a permanent health record.',
+    },
     suggestKeepAsRecord: { type: SchemaType.BOOLEAN },
     confidence: nullableNumber,
   },
@@ -203,10 +228,28 @@ function asBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function toTitleCase(value: string): string {
+  return value
+    .split(' ')
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word))
+    .join(' ');
+}
+
+/** Prefers the app's known breed list's exact casing when the model's answer matches case-insensitively. */
+function normalizeBreed(breed: string | null | undefined): string | null {
+  if (!breed) {
+    return null;
+  }
+
+  const trimmed = breed.trim();
+  const knownMatch = CAT_BREEDS.find((known) => known.toLowerCase() === trimmed.toLowerCase());
+  return knownMatch ?? toTitleCase(trimmed);
+}
+
 function normalizeCat(value: Partial<IngestionCatProposal>): IngestionCatProposal {
   return {
     name: value.name ?? '',
-    breed: value.breed ?? null,
+    breed: normalizeBreed(value.breed),
     dateOfBirth: value.dateOfBirth ?? null,
     isDateOfBirthEstimated: value.isDateOfBirthEstimated ?? null,
     sex: value.sex ?? null,
@@ -225,7 +268,7 @@ function normalizeClinic(value: Partial<IngestionClinicProposal>): IngestionClin
 
 function normalizeVisit(value: Partial<IngestionVisitProposal>): IngestionVisitProposal {
   return {
-    catName: value.catName ?? null,
+    catNames: value.catNames ?? [],
     clinicName: value.clinicName ?? null,
     scheduledAt: value.scheduledAt ?? Date.now(),
     reason: value.reason ?? 'checkup',
@@ -317,10 +360,11 @@ function normalizeProposal(value: Partial<ExtractedIngestionProposal>): Extracte
     proposedVisits: (value.proposedVisits ?? []).map(normalizeVisit),
     proposedVaccinations: (value.proposedVaccinations ?? []).map(normalizeVaccination),
     proposedPreventives: (value.proposedPreventives ?? []).map(normalizePreventive),
-    proposedWeightEntry: value.proposedWeightEntry ? normalizeWeight(value.proposedWeightEntry) : null,
+    proposedWeightEntries: (value.proposedWeightEntries ?? []).map(normalizeWeight),
     proposedSymptoms: (value.proposedSymptoms ?? []).map(normalizeSymptom),
     proposedConditions: (value.proposedConditions ?? []).map(normalizeCondition),
     proposedExpenses: (value.proposedExpenses ?? []).map(normalizeExpense),
+    proposedRecordType: value.proposedRecordType ?? null,
     suggestKeepAsRecord: value.suggestKeepAsRecord ?? true,
     confidence: value.confidence ?? null,
   };

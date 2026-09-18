@@ -1,19 +1,31 @@
 import { useState, type ReactNode } from 'react';
 
-import { Button, Disclosure, Input, Modal, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Disclosure,
+  DropdownMenu,
+  DropdownMenuFactories,
+  Input,
+  Modal,
+  Select,
+  Toggle,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Activity,
   Calendar,
-  Cat,
+  Cat as CatIcon,
   Check,
+  ChevronDown,
   Hospital,
   Pencil,
   Pill,
+  Plus,
   Receipt,
   Scale,
   Stethoscope,
   Syringe,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
@@ -30,14 +42,46 @@ import {
 } from '../store/actions/ingestionDraftsActions';
 import { selectCatsByHousehold, selectClinicsByHousehold } from '../store/selectors';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
-import type { CatSex, IngestionDraft } from '../types';
+import type { Cat, CatSex, HealthRecordType, IngestionDraft, VisitReason } from '../types';
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
+
+/** Same thresholds/tokens as other confidence-style indicators in this app (see StatsSummary). */
+function getConfidenceClassName(confidence: number): string {
+  if (confidence >= 0.8) {
+    return 'text-success';
+  }
+
+  if (confidence >= 0.5) {
+    return 'text-warning';
+  }
+
+  return 'text-destructive';
+}
 
 const SEX_OPTIONS = [
   { text: 'Unknown', value: 'unknown' },
   { text: 'Male', value: 'male' },
   { text: 'Female', value: 'female' },
+];
+
+const REASON_OPTIONS = [
+  { text: 'Checkup', value: 'checkup' },
+  { text: 'Illness', value: 'illness' },
+  { text: 'Accident', value: 'accident' },
+  { text: 'Vaccination', value: 'vaccination' },
+  { text: 'Follow-up', value: 'follow_up' },
+  { text: 'Custom', value: 'custom' },
+];
+
+const RECORD_TYPE_OPTIONS: { text: string; value: Exclude<HealthRecordType, 'custom'> }[] = [
+  { text: 'Vet paperwork', value: 'vet_paperwork' },
+  { text: 'Lab result', value: 'lab_result' },
+  { text: 'Insurance', value: 'insurance' },
+  { text: 'Shelter / adoption', value: 'shelter_adoption' },
+  { text: 'Prescription', value: 'prescription' },
+  { text: 'Microchip registration', value: 'microchip_registration' },
+  { text: 'Miscellaneous', value: 'miscellaneous' },
 ];
 
 interface IngestionDraftReviewModalProps {
@@ -73,8 +117,20 @@ const SECTION_LABELS: Record<ReviewSection, string> = {
   expense: 'Expenses',
 };
 
+const SECTION_SINGULAR_LABELS: Record<ReviewSection, string> = {
+  cat: 'Cat',
+  clinic: 'Vet clinic',
+  visit: 'Visit',
+  vaccinations: 'Vaccination',
+  preventives: 'Preventive',
+  weight: 'Weight entry',
+  symptoms: 'Symptom',
+  conditions: 'Condition',
+  expense: 'Expense',
+};
+
 const SECTION_ICONS: Record<ReviewSection, LucideIcon> = {
-  cat: Cat,
+  cat: CatIcon,
   clinic: Hospital,
   visit: Calendar,
   vaccinations: Syringe,
@@ -91,13 +147,42 @@ type ArrayIncludeKey =
   | 'includeVisits'
   | 'includeVaccinations'
   | 'includePreventives'
+  | 'includeWeightEntries'
   | 'includeSymptoms'
   | 'includeConditions'
   | 'includeExpenses';
 
 interface EditingKey {
-  section: 'visit' | 'vaccination' | 'preventive' | 'weight' | 'expense';
+  section: 'visit' | 'vaccination' | 'preventive' | 'weight' | 'symptom' | 'condition' | 'expense';
   index: number;
+}
+
+function blankCat(): IngestionDraft['proposedCats'][number] {
+  return { name: '', breed: null, dateOfBirth: null, isDateOfBirthEstimated: null, sex: null };
+}
+function blankClinic(): IngestionDraft['proposedClinics'][number] {
+  return { name: '', phone: null, email: null, website: null, address: null };
+}
+function blankVisit(): IngestionDraft['proposedVisits'][number] {
+  return { catNames: [], clinicName: null, scheduledAt: Date.now(), reason: 'checkup', customReasonLabel: null, notes: null };
+}
+function blankVaccination(): IngestionDraft['proposedVaccinations'][number] {
+  return { catName: null, name: '', administeredAt: Date.now(), expiresAt: null, lotNumber: null };
+}
+function blankPreventive(): IngestionDraft['proposedPreventives'][number] {
+  return { catNames: [], name: '', type: 'other', administeredAt: Date.now(), expiresAt: null, dosage: null };
+}
+function blankWeight(): IngestionDraft['proposedWeightEntries'][number] {
+  return { catName: null, weight: 0, unit: 'lb', measuredAt: Date.now() };
+}
+function blankSymptom(): IngestionDraft['proposedSymptoms'][number] {
+  return { catName: null, description: '', quickTags: [], firstNoticedAt: Date.now(), severity: null };
+}
+function blankCondition(): IngestionDraft['proposedConditions'][number] {
+  return { catName: null, name: '', category: 'illness', status: 'active', occurredAt: Date.now(), description: null };
+}
+function blankExpense(): IngestionDraft['proposedExpenses'][number] {
+  return { catNames: [], items: [{ category: 'other', label: null, amount: 0 }], incurredAt: Date.now(), notes: null };
 }
 
 function IncludeToggle({
@@ -131,6 +216,65 @@ function EditPencilButton({ editing, onClick }: { editing: boolean; onClick: () 
     >
       {editing ? <Check className='h-4 w-4' /> : <Pencil className='h-4 w-4' />}
     </Button>
+  );
+}
+
+/** Chip list of attached cat names with remove buttons, plus a reveal-link to append another existing cat. */
+function CatNamesEditor({
+  catNames,
+  cats,
+  onChange,
+}: {
+  catNames: string[];
+  cats: Cat[];
+  onChange: (next: string[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const availableToAdd = cats.filter(
+    (cat) => !catNames.some((name) => name.toLowerCase() === cat.name.toLowerCase()),
+  );
+
+  return (
+    <div className='space-y-1'>
+      {catNames.length > 0 && (
+        <div className='flex flex-wrap gap-1'>
+          {catNames.map((name, index) => (
+            <span
+              key={`${name}-${index}`}
+              className='inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs'
+            >
+              {name}
+              <button
+                type='button'
+                aria-label={`Remove ${name}`}
+                onClick={() => onChange(catNames.filter((_, i) => i !== index))}
+              >
+                <X className='h-3 w-3' />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {adding ? (
+        <Select
+          options={availableToAdd.map((cat) => ({ text: cat.name, value: cat.name }))}
+          value=''
+          placeholder='Select a cat to add'
+          onChange={(value) => {
+            if (value) {
+              onChange([...catNames, value]);
+            }
+            setAdding(false);
+          }}
+        />
+      ) : (
+        availableToAdd.length > 0 && (
+          <Button type='button' variant='link' size='sm' className={mutedLinkClassName} onClick={() => setAdding(true)}>
+            + Add cat
+          </Button>
+        )
+      )}
+    </div>
   );
 }
 
@@ -226,7 +370,7 @@ function IngestionDraftReviewModal({
     ...(draft.proposedVisits.length ? (['visit'] as const) : []),
     ...(draft.proposedVaccinations.length ? (['vaccinations'] as const) : []),
     ...(draft.proposedPreventives.length ? (['preventives'] as const) : []),
-    ...(draft.proposedWeightEntry ? (['weight'] as const) : []),
+    ...(draft.proposedWeightEntries.length ? (['weight'] as const) : []),
     ...(draft.proposedSymptoms.length ? (['symptoms'] as const) : []),
     ...(draft.proposedConditions.length ? (['conditions'] as const) : []),
     ...(draft.proposedExpenses.length ? (['expense'] as const) : []),
@@ -239,10 +383,14 @@ function IngestionDraftReviewModal({
     new Set(initialSection ? [initialSection] : []),
   );
   const [editing, setEditing] = useState<EditingKey | null>(null);
+  const [editingVisitNotes, setEditingVisitNotes] = useState<Set<number>>(new Set());
   const [pickingExisting, setPickingExisting] = useState<Set<string>>(new Set());
   const [selections, setSelections] = useState<IngestionDraftSelections>({
     saveAsRecord: draft.suggestKeepAsRecord,
   });
+  const [recordType, setRecordType] = useState<Exclude<HealthRecordType, 'custom'>>(
+    draft.proposedRecordType ?? 'vet_paperwork',
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -258,6 +406,10 @@ function IngestionDraftReviewModal({
       current && current.section === section && current.index === index ? null : { section, index },
     );
   };
+
+  const isEditingVisitNotes = (index: number) => editingVisitNotes.has(index);
+  const startEditingVisitNotes = (index: number) =>
+    setEditingVisitNotes((current) => new Set(current).add(index));
 
   const isPickingExisting = (section: 'cat' | 'clinic', index: number) =>
     pickingExisting.has(`${section}-${index}`);
@@ -319,9 +471,20 @@ function IngestionDraftReviewModal({
         i === index ? { ...item, ...patch } : item,
       ),
     });
-  const updateWeight = (patch: Partial<NonNullable<IngestionDraft['proposedWeightEntry']>>) =>
-    draft.proposedWeightEntry &&
-    updateDraft({ proposedWeightEntry: { ...draft.proposedWeightEntry, ...patch } });
+  const updateWeightAt = (index: number, patch: Partial<IngestionDraft['proposedWeightEntries'][number]>) =>
+    updateDraft({
+      proposedWeightEntries: draft.proposedWeightEntries.map((item, i) =>
+        i === index ? { ...item, ...patch } : item,
+      ),
+    });
+  const updateSymptomAt = (index: number, patch: Partial<IngestionDraft['proposedSymptoms'][number]>) =>
+    updateDraft({
+      proposedSymptoms: draft.proposedSymptoms.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    });
+  const updateConditionAt = (index: number, patch: Partial<IngestionDraft['proposedConditions'][number]>) =>
+    updateDraft({
+      proposedConditions: draft.proposedConditions.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    });
   const updateExpenseAt = (index: number, patch: Partial<IngestionDraft['proposedExpenses'][number]>) =>
     updateDraft({
       proposedExpenses: draft.proposedExpenses.map((item, i) => (i === index ? { ...item, ...patch } : item)),
@@ -337,13 +500,54 @@ function IngestionDraftReviewModal({
     });
   };
 
+  const addBlankItem = (section: ReviewSection) => {
+    switch (section) {
+      case 'cat':
+        updateDraft({ proposedCats: [...draft.proposedCats, blankCat()] });
+        break;
+      case 'clinic':
+        updateDraft({ proposedClinics: [...draft.proposedClinics, blankClinic()] });
+        break;
+      case 'visit':
+        updateDraft({ proposedVisits: [...draft.proposedVisits, blankVisit()] });
+        setEditing({ section: 'visit', index: draft.proposedVisits.length });
+        break;
+      case 'vaccinations':
+        updateDraft({ proposedVaccinations: [...draft.proposedVaccinations, blankVaccination()] });
+        setEditing({ section: 'vaccination', index: draft.proposedVaccinations.length });
+        break;
+      case 'preventives':
+        updateDraft({ proposedPreventives: [...draft.proposedPreventives, blankPreventive()] });
+        setEditing({ section: 'preventive', index: draft.proposedPreventives.length });
+        break;
+      case 'weight':
+        updateDraft({ proposedWeightEntries: [...draft.proposedWeightEntries, blankWeight()] });
+        setEditing({ section: 'weight', index: draft.proposedWeightEntries.length });
+        break;
+      case 'symptoms':
+        updateDraft({ proposedSymptoms: [...draft.proposedSymptoms, blankSymptom()] });
+        setEditing({ section: 'symptom', index: draft.proposedSymptoms.length });
+        break;
+      case 'conditions':
+        updateDraft({ proposedConditions: [...draft.proposedConditions, blankCondition()] });
+        setEditing({ section: 'condition', index: draft.proposedConditions.length });
+        break;
+      case 'expense':
+        updateDraft({ proposedExpenses: [...draft.proposedExpenses, blankExpense()] });
+        setEditing({ section: 'expense', index: draft.proposedExpenses.length });
+        break;
+    }
+    setExpanded(section);
+    setReviewed((current) => new Set(current).add(section));
+  };
+
   const totalCount =
     draft.proposedCats.length +
     draft.proposedClinics.length +
     draft.proposedVisits.length +
     draft.proposedVaccinations.length +
     draft.proposedPreventives.length +
-    (draft.proposedWeightEntry ? 1 : 0) +
+    draft.proposedWeightEntries.length +
     draft.proposedSymptoms.length +
     draft.proposedConditions.length +
     draft.proposedExpenses.length;
@@ -353,7 +557,7 @@ function IngestionDraftReviewModal({
     draft.proposedVisits.filter((_, i) => isIncluded('includeVisits', i)).length +
     draft.proposedVaccinations.filter((_, i) => isIncluded('includeVaccinations', i)).length +
     draft.proposedPreventives.filter((_, i) => isIncluded('includePreventives', i)).length +
-    (draft.proposedWeightEntry && selections.includeWeightEntry !== false ? 1 : 0) +
+    draft.proposedWeightEntries.filter((_, i) => isIncluded('includeWeightEntries', i)).length +
     draft.proposedSymptoms.filter((_, i) => isIncluded('includeSymptoms', i)).length +
     draft.proposedConditions.filter((_, i) => isIncluded('includeConditions', i)).length +
     draft.proposedExpenses.filter((_, i) => isIncluded('includeExpenses', i)).length;
@@ -363,6 +567,9 @@ function IngestionDraftReviewModal({
     setIsSubmitting(true);
 
     try {
+      await dispatch(
+        updateIngestionDraft({ householdId, draftId: draft.id, changes: { proposedRecordType: recordType } }),
+      ).unwrap();
       await dispatch(
         confirmIngestionDraft({
           householdId,
@@ -402,6 +609,11 @@ function IngestionDraftReviewModal({
     }
   };
 
+  const { option } = DropdownMenuFactories;
+  const addItemMenuItems = (Object.keys(SECTION_LABELS) as ReviewSection[]).map((section) =>
+    option({ label: SECTION_SINGULAR_LABELS[section], value: section }),
+  );
+
   return (
     <Modal
       isOpen={isOpen}
@@ -412,14 +624,35 @@ function IngestionDraftReviewModal({
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
           {draft.sourceFileName}
-          {draft.confidence !== null && ` · ${Math.round(draft.confidence * 100)}% confidence`}
+          {draft.confidence !== null && (
+            <>
+              {' · '}
+              <span className={getConfidenceClassName(draft.confidence)}>
+                {Math.round(draft.confidence * 100)}% confidence
+              </span>
+            </>
+          )}
         </p>
-        <ReviewProgressPills
-          sections={sectionsWithContent}
-          reviewed={reviewed}
-          expanded={expanded}
-          onSelect={toggleSection}
-        />
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <ReviewProgressPills
+            sections={sectionsWithContent}
+            reviewed={reviewed}
+            expanded={expanded}
+            onSelect={toggleSection}
+          />
+          <DropdownMenu
+            items={addItemMenuItems}
+            onItemSelect={(value) => addBlankItem(value as ReviewSection)}
+            placement='bottom'
+            alignment='end'
+            offset={8}
+            trigger={
+              <Button type='button' variant='link' size='sm' className={`${mutedLinkClassName} gap-1`}>
+                <Plus className='h-3.5 w-3.5' /> Add item <ChevronDown className='h-3.5 w-3.5' />
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       <div className='mt-3 max-h-[65vh] min-h-[40vh] space-y-3 overflow-y-auto pr-1'>
@@ -457,13 +690,21 @@ function IngestionDraftReviewModal({
                     <Input
                       value={cat.name}
                       aria-label='Proposed cat name'
+                      placeholder='Cat name'
                       onChange={(event) => updateCatAt(index, { name: event.target.value })}
                     />
-                    <Select
-                      options={SEX_OPTIONS}
-                      value={cat.sex ?? 'unknown'}
-                      onChange={(value) => updateCatAt(index, { sex: value as CatSex })}
-                    />
+                    <div className='grid grid-cols-2 gap-2'>
+                      <Input
+                        value={cat.breed ?? ''}
+                        placeholder='Breed'
+                        onChange={(event) => updateCatAt(index, { breed: event.target.value || null })}
+                      />
+                      <Select
+                        options={SEX_OPTIONS}
+                        value={cat.sex ?? 'unknown'}
+                        onChange={(value) => updateCatAt(index, { sex: value as CatSex })}
+                      />
+                    </div>
                     {cats.length > 0 && (
                       <Button
                         type='button'
@@ -516,6 +757,7 @@ function IngestionDraftReviewModal({
                     <Input
                       value={clinic.name}
                       aria-label='Proposed clinic name'
+                      placeholder='Clinic name'
                       onChange={(event) => updateClinicAt(index, { name: event.target.value })}
                     />
                     <div className='grid grid-cols-2 gap-2'>
@@ -561,19 +803,69 @@ function IngestionDraftReviewModal({
                   <IncludeToggle included={isIncluded('includeVisits', index)} onToggle={() => toggleArrayInclude('includeVisits', index)} />
                   <EditPencilButton editing={isEditing('visit', index)} onClick={() => toggleEditing('visit', index)} />
                 </div>
-                <p className='text-muted-foreground text-sm'>
-                  {formatDateTime(visit.scheduledAt)} · {visit.reason}
-                  {visit.catName && ` · ${visit.catName}`}
-                  {visit.clinicName && ` · ${visit.clinicName}`}
-                </p>
                 {isEditing('visit', index) ? (
+                  <div className='space-y-2'>
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                      <Input
+                        type='date'
+                        value={toDateInputValue(visit.scheduledAt)}
+                        onChange={(event) => {
+                          const scheduledAt = fromDateInputValue(event.target.value);
+                          if (scheduledAt !== undefined) {
+                            updateVisitAt(index, { scheduledAt });
+                          }
+                        }}
+                      />
+                      <Select
+                        options={REASON_OPTIONS}
+                        value={visit.reason}
+                        onChange={(value) => updateVisitAt(index, { reason: value as VisitReason })}
+                      />
+                    </div>
+                    {visit.reason === 'custom' && (
+                      <Input
+                        value={visit.customReasonLabel ?? ''}
+                        placeholder='Custom reason'
+                        onChange={(event) => updateVisitAt(index, { customReasonLabel: event.target.value || null })}
+                      />
+                    )}
+                    <Input
+                      value={visit.clinicName ?? ''}
+                      placeholder='Clinic name'
+                      onChange={(event) => updateVisitAt(index, { clinicName: event.target.value || null })}
+                    />
+                    <CatNamesEditor
+                      catNames={visit.catNames}
+                      cats={cats}
+                      onChange={(catNames) => updateVisitAt(index, { catNames })}
+                    />
+                  </div>
+                ) : (
+                  <p className='text-muted-foreground text-sm'>
+                    {formatDateTime(visit.scheduledAt)} · {visit.reason}
+                    {visit.catNames.length > 0 && ` · ${visit.catNames.join(', ')}`}
+                    {visit.clinicName && ` · ${visit.clinicName}`}
+                  </p>
+                )}
+                {isEditingVisitNotes(index) ? (
                   <Input
                     value={visit.notes ?? ''}
                     placeholder='Visit notes'
                     onChange={(event) => updateVisitAt(index, { notes: event.target.value })}
                   />
                 ) : (
-                  visit.notes && <p className='text-sm'>{visit.notes}</p>
+                  <div className='space-y-1'>
+                    {visit.notes && <p className='text-sm'>{visit.notes}</p>}
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      className={mutedLinkClassName}
+                      onClick={() => startEditingVisitNotes(index)}
+                    >
+                      {visit.notes ? 'Edit notes' : '+ Add notes'}
+                    </Button>
+                  </div>
                 )}
               </div>
             ))}
@@ -632,21 +924,28 @@ function IngestionDraftReviewModal({
                   />
                 </div>
                 {isEditing('preventive', index) ? (
-                  <div className='flex flex-col gap-2 sm:flex-row'>
-                    <Input
-                      value={item.name}
-                      aria-label='Preventive name'
-                      onChange={(event) => updatePreventiveAt(index, { name: event.target.value })}
-                    />
-                    <Input
-                      type='date'
-                      value={toDateInputValue(item.administeredAt)}
-                      onChange={(event) => {
-                        const administeredAt = fromDateInputValue(event.target.value);
-                        if (administeredAt !== undefined) {
-                          updatePreventiveAt(index, { administeredAt });
-                        }
-                      }}
+                  <div className='space-y-2'>
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                      <Input
+                        value={item.name}
+                        aria-label='Preventive name'
+                        onChange={(event) => updatePreventiveAt(index, { name: event.target.value })}
+                      />
+                      <Input
+                        type='date'
+                        value={toDateInputValue(item.administeredAt)}
+                        onChange={(event) => {
+                          const administeredAt = fromDateInputValue(event.target.value);
+                          if (administeredAt !== undefined) {
+                            updatePreventiveAt(index, { administeredAt });
+                          }
+                        }}
+                      />
+                    </div>
+                    <CatNamesEditor
+                      catNames={item.catNames}
+                      cats={cats}
+                      onChange={(catNames) => updatePreventiveAt(index, { catNames })}
                     />
                   </div>
                 ) : (
@@ -660,56 +959,67 @@ function IngestionDraftReviewModal({
           </Section>
         )}
 
-        {draft.proposedWeightEntry && (
+        {draft.proposedWeightEntries.length > 0 && (
           <Section title='Weight' section='weight' expanded={expanded} onToggle={toggleSection}>
-            <div className='space-y-2 rounded-md border border-border p-2'>
-              <div className='flex items-center justify-between gap-2'>
-                <IncludeToggle
-                  included={selections.includeWeightEntry !== false}
-                  onToggle={() =>
-                    setSelections((current) => ({ ...current, includeWeightEntry: current.includeWeightEntry === false }))
-                  }
-                />
-                <EditPencilButton editing={isEditing('weight', 0)} onClick={() => toggleEditing('weight', 0)} />
-              </div>
-              {isEditing('weight', 0) ? (
-                <div className='flex flex-col gap-2 sm:flex-row'>
-                  <Input
-                    type='number'
-                    value={draft.proposedWeightEntry.weight}
-                    aria-label='Weight'
-                    onChange={(event) => updateWeight({ weight: Number(event.target.value) })}
+            {draft.proposedWeightEntries.map((item, index) => (
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle
+                    included={isIncluded('includeWeightEntries', index)}
+                    onToggle={() => toggleArrayInclude('includeWeightEntries', index)}
                   />
-                  <Input
-                    type='date'
-                    value={toDateInputValue(draft.proposedWeightEntry.measuredAt)}
-                    onChange={(event) => {
-                      const measuredAt = fromDateInputValue(event.target.value);
-                      if (measuredAt !== undefined) {
-                        updateWeight({ measuredAt });
-                      }
-                    }}
-                  />
+                  <EditPencilButton editing={isEditing('weight', index)} onClick={() => toggleEditing('weight', index)} />
                 </div>
-              ) : (
-                <span>
-                  {draft.proposedWeightEntry.weight} {draft.proposedWeightEntry.unit}
-                  {draft.proposedWeightEntry.catName && ` · ${draft.proposedWeightEntry.catName}`}
-                </span>
-              )}
-            </div>
+                {isEditing('weight', index) ? (
+                  <div className='flex flex-col gap-2 sm:flex-row'>
+                    <Input
+                      type='number'
+                      value={item.weight}
+                      aria-label='Weight'
+                      onChange={(event) => updateWeightAt(index, { weight: Number(event.target.value) })}
+                    />
+                    <Input
+                      type='date'
+                      value={toDateInputValue(item.measuredAt)}
+                      onChange={(event) => {
+                        const measuredAt = fromDateInputValue(event.target.value);
+                        if (measuredAt !== undefined) {
+                          updateWeightAt(index, { measuredAt });
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <span>
+                    {item.weight} {item.unit}
+                    {item.catName && ` · ${item.catName}`}
+                  </span>
+                )}
+              </div>
+            ))}
           </Section>
         )}
 
         {draft.proposedSymptoms.length > 0 && (
           <Section title='Symptoms' section='symptoms' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedSymptoms.map((item, index) => (
-              <div className='flex items-center justify-between gap-2' key={index}>
-                <span>
-                  {item.description}
-                  {item.catName && ` · ${item.catName}`}
-                </span>
-                <IncludeToggle included={isIncluded('includeSymptoms', index)} onToggle={() => toggleArrayInclude('includeSymptoms', index)} />
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includeSymptoms', index)} onToggle={() => toggleArrayInclude('includeSymptoms', index)} />
+                  <EditPencilButton editing={isEditing('symptom', index)} onClick={() => toggleEditing('symptom', index)} />
+                </div>
+                {isEditing('symptom', index) ? (
+                  <Input
+                    value={item.description}
+                    aria-label='Symptom description'
+                    onChange={(event) => updateSymptomAt(index, { description: event.target.value })}
+                  />
+                ) : (
+                  <span>
+                    {item.description}
+                    {item.catName && ` · ${item.catName}`}
+                  </span>
+                )}
               </div>
             ))}
           </Section>
@@ -718,12 +1028,23 @@ function IngestionDraftReviewModal({
         {draft.proposedConditions.length > 0 && (
           <Section title='Conditions' section='conditions' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedConditions.map((item, index) => (
-              <div className='flex items-center justify-between gap-2' key={index}>
-                <span>
-                  {item.name}
-                  {item.catName && ` · ${item.catName}`}
-                </span>
-                <IncludeToggle included={isIncluded('includeConditions', index)} onToggle={() => toggleArrayInclude('includeConditions', index)} />
+              <div key={index} className='space-y-2 rounded-md border border-border p-2'>
+                <div className='flex items-center justify-between gap-2'>
+                  <IncludeToggle included={isIncluded('includeConditions', index)} onToggle={() => toggleArrayInclude('includeConditions', index)} />
+                  <EditPencilButton editing={isEditing('condition', index)} onClick={() => toggleEditing('condition', index)} />
+                </div>
+                {isEditing('condition', index) ? (
+                  <Input
+                    value={item.name}
+                    aria-label='Condition name'
+                    onChange={(event) => updateConditionAt(index, { name: event.target.value })}
+                  />
+                ) : (
+                  <span>
+                    {item.name}
+                    {item.catName && ` · ${item.catName}`}
+                  </span>
+                )}
               </div>
             ))}
           </Section>
@@ -778,6 +1099,11 @@ function IngestionDraftReviewModal({
                           />
                         </div>
                       ))}
+                      <CatNamesEditor
+                        catNames={expense.catNames}
+                        cats={cats}
+                        onChange={(catNames) => updateExpenseAt(expenseIndex, { catNames })}
+                      />
                     </div>
                   ) : (
                     expense.items.length > 1 && (
@@ -799,7 +1125,7 @@ function IngestionDraftReviewModal({
         {error && <p className='text-sm text-red-500'>{error}</p>}
       </div>
 
-      <div className='mt-3 space-y-1 border-t border-border pt-3'>
+      <div className='mt-3 space-y-2 border-t border-border pt-3'>
         <IncludeToggle
           label='Save as a permanent health record'
           included={Boolean(file) && selections.saveAsRecord !== false}
@@ -811,6 +1137,13 @@ function IngestionDraftReviewModal({
             ? 'Keep the uploaded file attached to the confirmed visit.'
             : "The original file isn't available to save — re-upload the document to keep it as a record."}
         </p>
+        {file && selections.saveAsRecord !== false && (
+          <Select
+            options={RECORD_TYPE_OPTIONS}
+            value={recordType}
+            onChange={(value) => setRecordType(value as Exclude<HealthRecordType, 'custom'>)}
+          />
+        )}
       </div>
 
       <p className='mt-3 text-sm text-muted-foreground'>

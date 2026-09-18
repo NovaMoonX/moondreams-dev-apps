@@ -2077,7 +2077,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       proposedClinics: [],
       proposedVisits: [
         {
-          catName: 'Mochi',
+          catNames: ['Mochi'],
           clinicName: null,
           scheduledAt: context.now - 86_400_000,
           reason: 'checkup',
@@ -2095,7 +2095,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         },
       ],
       proposedPreventives: [],
-      proposedWeightEntry: null,
+      proposedWeightEntries: [],
       proposedSymptoms: [],
       proposedConditions: [],
       proposedExpenses: [
@@ -2106,6 +2106,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
           notes: null,
         },
       ],
+      proposedRecordType: 'vet_paperwork',
       suggestKeepAsRecord: false,
       confidence: 0.96,
       createdBy: caretaker.uid,

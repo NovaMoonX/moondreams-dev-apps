@@ -1,12 +1,13 @@
 import { useState } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { FileUp } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 
-import { selectIngestionDraftsByHousehold } from '../store/selectors';
+import { selectIngestionDraftCountByHousehold } from '../store/selectors';
+import CountBadge from './CountBadge';
 import DocumentIngestionModal from './DocumentIngestionModal';
 
 interface DashboardQuickActionsProps {
@@ -16,7 +17,7 @@ interface DashboardQuickActionsProps {
 function DashboardQuickActions({ householdId }: DashboardQuickActionsProps) {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const pendingDraftCount = useAppSelector(selectIngestionDraftsByHousehold(householdId)).length;
+  const pendingDraftCount = useAppSelector(selectIngestionDraftCountByHousehold(householdId));
 
   if (!user?.uid) {
     return null;
@@ -26,11 +27,7 @@ function DashboardQuickActions({ householdId }: DashboardQuickActionsProps) {
     <div className='flex justify-center'>
       <Button type='button' variant='outline' size='sm' className='gap-1' onClick={() => setIsOpen(true)}>
         <FileUp className='h-4 w-4' /> Upload document
-        {pendingDraftCount > 0 && (
-          <Badge variant='primary' size='xs' aspect='square' use='status'>
-            {pendingDraftCount}
-          </Badge>
-        )}
+        {pendingDraftCount > 0 && <CountBadge count={pendingDraftCount} />}
       </Button>
       <DocumentIngestionModal
         isOpen={isOpen}

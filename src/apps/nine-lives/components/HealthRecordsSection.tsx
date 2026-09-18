@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -11,9 +11,10 @@ import {
   selectCatsByHousehold,
   selectCustomHealthRecordTypesByHousehold,
   selectHealthRecordsByHousehold,
-  selectIngestionDraftsByHousehold,
+  selectIngestionDraftCountByHousehold,
 } from '../store/selectors';
 import type { HealthRecord } from '../types';
+import CountBadge from './CountBadge';
 import DetailsDisclosure from './DetailsDisclosure';
 import HealthRecordTimeline from './HealthRecordTimeline';
 import HealthRecordUploadModal from './HealthRecordUploadModal';
@@ -32,7 +33,7 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
     selectCustomHealthRecordTypesByHousehold(householdId),
     shallowEqual,
   );
-  const pendingDraftCount = useAppSelector(selectIngestionDraftsByHousehold(householdId)).length;
+  const pendingDraftCount = useAppSelector(selectIngestionDraftCountByHousehold(householdId));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord | null>(null);
   const [isIngestionOpen, setIsIngestionOpen] = useState(false);
@@ -80,11 +81,7 @@ function HealthRecordsSection({ householdId }: HealthRecordsSectionProps) {
                 disabled={!user?.uid}
               >
                 Upload
-                {pendingDraftCount > 0 && (
-                  <Badge variant='primary' size='xs' aspect='square' use='status'>
-                    {pendingDraftCount}
-                  </Badge>
-                )}
+                {pendingDraftCount > 0 && <CountBadge count={pendingDraftCount} />}
               </Button>
               <Button
                 type='button'

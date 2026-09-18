@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -14,9 +14,10 @@ import {
 import {
   selectCatsByHousehold,
   selectExpensesByHousehold,
-  selectIngestionDraftsByHousehold,
+  selectIngestionDraftCountByHousehold,
 } from '../store/selectors';
 import type { Expense } from '../types';
+import CountBadge from './CountBadge';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseFormModal from './ExpenseFormModal';
 import ExpenseTimeline from './ExpenseTimeline';
@@ -31,7 +32,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const expenses = useAppSelector(selectExpensesByHousehold(householdId), shallowEqual);
-  const pendingDraftCount = useAppSelector(selectIngestionDraftsByHousehold(householdId)).length;
+  const pendingDraftCount = useAppSelector(selectIngestionDraftCountByHousehold(householdId));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -103,11 +104,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
                 onClick={() => setIsIngestionOpen(true)}
               >
                 Upload
-                {pendingDraftCount > 0 && (
-                  <Badge variant='primary' size='xs' aspect='square' use='status'>
-                    {pendingDraftCount}
-                  </Badge>
-                )}
+                {pendingDraftCount > 0 && <CountBadge count={pendingDraftCount} />}
               </Button>
               <Button
                 type='button'

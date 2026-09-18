@@ -745,10 +745,11 @@ service cloud.firestore {
           && request.resource.data.proposedVisits is list
           && request.resource.data.proposedVaccinations is list
           && request.resource.data.proposedPreventives is list
-          && (request.resource.data.proposedWeightEntry == null || request.resource.data.proposedWeightEntry is map)
+          && request.resource.data.proposedWeightEntries is list
           && request.resource.data.proposedSymptoms is list
           && request.resource.data.proposedConditions is list
           && request.resource.data.proposedExpenses is list
+          && (request.resource.data.proposedRecordType == null || request.resource.data.proposedRecordType is string)
           && request.resource.data.suggestKeepAsRecord is bool
           && (request.resource.data.confidence == null || request.resource.data.confidence is number)
           && isTimestampNumber(request.resource.data.createdAt);

@@ -424,10 +424,12 @@ export interface IngestionDraft {
   proposedVisits: IngestionVisitProposal[];
   proposedVaccinations: IngestionVaccinationProposal[];
   proposedPreventives: IngestionPreventiveProposal[];
-  proposedWeightEntry: IngestionWeightProposal | null;
+  proposedWeightEntries: IngestionWeightProposal[];
   proposedSymptoms: IngestionSymptomProposal[];
   proposedConditions: IngestionConditionProposal[];
   proposedExpenses: IngestionExpenseProposal[];
+  /** What kind of document this is, for the health record created if `suggestKeepAsRecord`/`saveAsRecord` is kept. Never 'custom' — that requires a household's own `customRecordTypeId`, which extraction can't know. */
+  proposedRecordType: Exclude<HealthRecordType, 'custom'> | null;
   suggestKeepAsRecord: boolean;
   confidence: number | null;
   createdBy: string;

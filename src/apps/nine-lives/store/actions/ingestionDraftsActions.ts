@@ -76,10 +76,11 @@ export interface IngestionDraftUpdate {
   proposedVisits?: IngestionDraft['proposedVisits'];
   proposedVaccinations?: IngestionDraft['proposedVaccinations'];
   proposedPreventives?: IngestionDraft['proposedPreventives'];
-  proposedWeightEntry?: IngestionDraft['proposedWeightEntry'];
+  proposedWeightEntries?: IngestionDraft['proposedWeightEntries'];
   proposedSymptoms?: IngestionDraft['proposedSymptoms'];
   proposedConditions?: IngestionDraft['proposedConditions'];
   proposedExpenses?: IngestionDraft['proposedExpenses'];
+  proposedRecordType?: IngestionDraft['proposedRecordType'];
   suggestKeepAsRecord?: boolean;
 }
 
@@ -93,7 +94,7 @@ export interface IngestionDraftSelections {
   includeVisits?: boolean[];
   includeVaccinations?: boolean[];
   includePreventives?: boolean[];
-  includeWeightEntry?: boolean;
+  includeWeightEntries?: boolean[];
   includeSymptoms?: boolean[];
   includeConditions?: boolean[];
   includeExpenses?: boolean[];
@@ -116,10 +117,11 @@ function draftDefaults(draft: IngestionDraft): IngestionDraft {
     proposedVisits: draft.proposedVisits ?? [],
     proposedVaccinations: draft.proposedVaccinations ?? [],
     proposedPreventives: draft.proposedPreventives ?? [],
-    proposedWeightEntry: draft.proposedWeightEntry ?? null,
+    proposedWeightEntries: draft.proposedWeightEntries ?? [],
     proposedSymptoms: draft.proposedSymptoms ?? [],
     proposedConditions: draft.proposedConditions ?? [],
     proposedExpenses: draft.proposedExpenses ?? [],
+    proposedRecordType: draft.proposedRecordType ?? null,
     suggestKeepAsRecord: draft.suggestKeepAsRecord ?? true,
     confidence: draft.confidence ?? null,
   };
@@ -550,14 +552,14 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (selections.includeVisits?.[index] === false) {
         return;
       }
-      const catId = findCatId(proposal.catName, availableCats);
-      if (!catId) {
+      const catIds = catIdsForNames(proposal.catNames, availableCats);
+      if (catIds.length === 0) {
         return;
       }
       const visit: Visit = {
         id: doc(getCollectionRef(householdId, 'visits')).id,
         householdId,
-        catIds: [catId],
+        catIds,
         clinicId: findClinicId(proposal.clinicName, availableClinics),
         doctorId: null,
         status: 'completed',
@@ -637,23 +639,20 @@ export const confirmIngestionDraft = createAsyncThunk<
     });
 
     const weightEntries: WeightEntry[] = [];
-    if (normalizedDraft.proposedWeightEntry && selections.includeWeightEntry !== false) {
-      const targetCatId = findCatId(normalizedDraft.proposedWeightEntry.catName, availableCats);
-      if (targetCatId) {
-        const visitId = findNearestVisit(normalizedDraft.proposedWeightEntry.measuredAt, visits)?.id ?? null;
-        const entry = createWeightEntry(
-          householdId,
-          uid,
-          normalizedDraft.proposedWeightEntry,
-          targetCatId,
-          visitId,
-          now,
-        );
-        batch.set(getDocRef(householdId, 'weightEntries', entry.id), entry);
-        weightEntries.push(entry);
-        linkToVisit(visitId, 'weightEntryIds', entry.id);
+    normalizedDraft.proposedWeightEntries.forEach((proposal, index) => {
+      if (selections.includeWeightEntries?.[index] === false) {
+        return;
       }
-    }
+      const targetCatId = findCatId(proposal.catName, availableCats);
+      if (!targetCatId) {
+        return;
+      }
+      const visitId = findNearestVisit(proposal.measuredAt, visits)?.id ?? null;
+      const entry = createWeightEntry(householdId, uid, proposal, targetCatId, visitId, now);
+      batch.set(getDocRef(householdId, 'weightEntries', entry.id), entry);
+      weightEntries.push(entry);
+      linkToVisit(visitId, 'weightEntryIds', entry.id);
+    });
 
     const symptoms: Symptom[] = [];
     normalizedDraft.proposedSymptoms.forEach((proposal, index) => {
@@ -745,7 +744,7 @@ export const confirmIngestionDraft = createAsyncThunk<
             fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
             fileName: file.name,
             label: null,
-            recordType: 'vet_paperwork',
+            recordType: normalizedDraft.proposedRecordType ?? 'vet_paperwork',
             customRecordTypeId: null,
             recordDate: primaryVisit?.scheduledAt ?? null,
             linkedVisitId: primaryVisit?.id ?? null,
