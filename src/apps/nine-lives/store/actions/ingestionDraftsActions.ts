@@ -734,10 +734,12 @@ export const confirmIngestionDraft = createAsyncThunk<
       conditions.forEach((item) => dispatch(upsertCatCondition(item)));
       expenses.forEach((item) => dispatch(upsertExpense(item)));
 
-      const recordCatId = availableCats[0]?.id ?? null;
+      const recordCatIds = availableCats.map((cat) => cat.id);
       const shouldSaveRecord =
-        (selections.saveAsRecord ?? normalizedDraft.suggestKeepAsRecord) && Boolean(file) && recordCatId;
-      if (shouldSaveRecord && file && recordCatId) {
+        (selections.saveAsRecord ?? normalizedDraft.suggestKeepAsRecord) &&
+        Boolean(file) &&
+        recordCatIds.length > 0;
+      if (shouldSaveRecord && file && recordCatIds.length > 0) {
         const recordId = doc(getCollectionRef(householdId, 'healthRecords')).id;
         const storagePath = getHealthRecordStoragePath(householdId, recordId);
         const primaryVisit = linkedVisits[0] ?? null;
@@ -781,7 +783,7 @@ export const confirmIngestionDraft = createAsyncThunk<
           const record: HealthRecord = {
             id: recordId,
             householdId,
-            catIds: [recordCatId],
+            catIds: recordCatIds,
             fileURL,
             fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
             fileName: file.name,
