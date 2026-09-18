@@ -2136,7 +2136,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       customPreventiveTypes.length +
       healthRecordCount +
       symptomCount +
-      visitCount,
+      visitCount +
+      1, // seed-ingestion-draft
   };
 
   return result;

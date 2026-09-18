@@ -63,7 +63,10 @@ const responseSchema = {
       properties: {
         catName: nullableString,
         scheduledAt: { type: SchemaType.NUMBER },
-        reason: { type: SchemaType.STRING },
+        reason: {
+          type: SchemaType.STRING,
+          enum: ['checkup', 'illness', 'accident', 'vaccination', 'follow_up', 'custom'],
+        },
         customReasonLabel: nullableString,
         notes: nullableString,
       },
@@ -88,7 +91,10 @@ const responseSchema = {
         properties: {
           catNames: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
           name: { type: SchemaType.STRING },
-          type: { type: SchemaType.STRING },
+          type: {
+            type: SchemaType.STRING,
+            enum: ['flea-tick', 'heartworm', 'mite', 'dewormer', 'medication', 'other'],
+          },
           administeredAt: { type: SchemaType.NUMBER },
           expiresAt: nullableNumber,
           dosage: nullableString,
@@ -101,7 +107,7 @@ const responseSchema = {
       properties: {
         catName: nullableString,
         weight: { type: SchemaType.NUMBER },
-        unit: { type: SchemaType.STRING },
+        unit: { type: SchemaType.STRING, enum: ['lb', 'kg'] },
         measuredAt: { type: SchemaType.NUMBER },
       },
     },
@@ -114,7 +120,7 @@ const responseSchema = {
           description: { type: SchemaType.STRING },
           quickTags: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
           firstNoticedAt: { type: SchemaType.NUMBER },
-          severity: nullableString,
+          severity: { type: SchemaType.STRING, nullable: true, enum: ['mild', 'moderate', 'severe'] },
         },
       },
     },
@@ -125,8 +131,11 @@ const responseSchema = {
         properties: {
           catName: nullableString,
           name: { type: SchemaType.STRING },
-          category: { type: SchemaType.STRING },
-          status: { type: SchemaType.STRING },
+          category: {
+            type: SchemaType.STRING,
+            enum: ['illness', 'injury', 'chronic', 'parasite', 'allergy'],
+          },
+          status: { type: SchemaType.STRING, enum: ['active', 'ongoing', 'resolved'] },
           occurredAt: { type: SchemaType.NUMBER },
           description: nullableString,
         },

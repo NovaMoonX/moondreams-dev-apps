@@ -43,12 +43,14 @@ const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY as
   | string
   | undefined;
 
-export const appCheck: AppCheck | null = appCheckSiteKey
-  ? initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(appCheckSiteKey),
-      isTokenAutoRefreshEnabled: true,
-    })
-  : null;
+export const appCheck: AppCheck | null =
+  appCheckSiteKey || isUsingFirebaseEmulators
+    ? initializeAppCheck(app, {
+        // The debug token set above makes the SDK bypass reCAPTCHA entirely, so any site key works in emulator mode.
+        provider: new ReCaptchaV3Provider(appCheckSiteKey || 'debug'),
+        isTokenAutoRefreshEnabled: true,
+      })
+    : null;
 
 export const auth = getAuth(app);
 auth.useDeviceLanguage();

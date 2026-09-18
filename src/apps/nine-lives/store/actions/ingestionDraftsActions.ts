@@ -11,6 +11,8 @@ import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 
+import { getHealthRecordStoragePath } from './healthRecordsActions';
+
 import type {
   Cat,
   CatCondition,
@@ -211,6 +213,7 @@ function createCat(
     insurance: null,
     personalityTraits: null,
     notes: null,
+    reminderIds: [],
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -293,6 +296,7 @@ function createVaccination(
     firstAdministeredAt: dose.administeredAt,
     lastAdministeredAt: dose.administeredAt,
     expiresAt: dose.expiresAt,
+    reminderIds: [],
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -331,6 +335,7 @@ function createPreventive(
     firstAdministeredAt: dose.administeredAt,
     lastAdministeredAt: dose.administeredAt,
     expiresAt: dose.expiresAt,
+    reminderIds: [],
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -525,6 +530,7 @@ export const confirmIngestionDraft = createAsyncThunk<
           linkedHealthRecordIds: [] as string[],
           linkedVaccinationIds: [] as string[],
           linkedWeightEntryIds: [] as string[],
+          reminderIds: [] as string[],
           createdBy: uid,
           createdAt: now,
           lastEditedAt: now,
@@ -677,7 +683,7 @@ export const confirmIngestionDraft = createAsyncThunk<
         (selections.saveAsRecord ?? normalizedDraft.suggestKeepAsRecord) && Boolean(file) && fallbackCatId;
       if (shouldSaveRecord && file) {
         const recordId = doc(getCollectionRef(householdId, 'healthRecords')).id;
-        const storagePath = `nine-lives/households/${householdId}/health-records/${recordId}`;
+        const storagePath = getHealthRecordStoragePath(householdId, recordId);
         try {
           const fileURL = await uploadFile(storagePath, file);
           const record: HealthRecord = {

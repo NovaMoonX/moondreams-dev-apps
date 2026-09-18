@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { Button, Input, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -92,6 +93,7 @@ function IngestionDraftReviewModal({
   onClose,
 }: IngestionDraftReviewModalProps) {
   const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
   const [expanded, setExpanded] = useState<ReviewSection>(intent === 'expense' ? 'expense' : intent === 'record' ? 'record' : 'visit');
@@ -171,6 +173,16 @@ function IngestionDraftReviewModal({
   };
 
   const handleDiscard = async () => {
+    const confirmed = await confirm({
+      title: 'Discard document',
+      message: 'Are you sure you want to discard this document? Nothing will be saved.',
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await dispatch(discardIngestionDraft({ householdId, draftId: draft.id })).unwrap();
