@@ -19,6 +19,7 @@ import type {
   Expense,
   ExpenseLineItem,
   HealthRecord,
+  HealthRecordType,
   IngestionDraft,
   Preventive,
   PreventiveDose,
@@ -51,6 +52,7 @@ import { upsertVaccination } from '../slices/vaccinationsSlice';
 import { upsertVetClinic } from '../slices/vetClinicsSlice';
 import { upsertVisit } from '../slices/visitsSlice';
 import { upsertWeightEntry } from '../slices/weightEntriesSlice';
+import { createCustomHealthRecordType } from './customHealthRecordTypesActions';
 
 const getDraftCollectionRef = (householdId: string) =>
   collection(db, 'apps', 'nine-lives', 'households', householdId, 'ingestionDrafts');
@@ -107,6 +109,11 @@ export interface ConfirmIngestionDraftInput {
   uid: string;
   selections?: IngestionDraftSelections;
   file?: File | null;
+  recordTypeChoice?: {
+    value: HealthRecordType | '__new__';
+    customRecordTypeId: string | null;
+    customLabel: string;
+  };
 }
 
 function draftDefaults(draft: IngestionDraft): IngestionDraft {
@@ -488,7 +495,7 @@ export const confirmIngestionDraft = createAsyncThunk<
 >(
   'nineLives/ingestionDrafts/confirm',
   async (
-    { householdId, draftId, uid, selections = {}, file = null },
+    { householdId, draftId, uid, selections = {}, file = null, recordTypeChoice },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -734,6 +741,41 @@ export const confirmIngestionDraft = createAsyncThunk<
         const recordId = doc(getCollectionRef(householdId, 'healthRecords')).id;
         const storagePath = getHealthRecordStoragePath(householdId, recordId);
         const primaryVisit = linkedVisits[0] ?? null;
+        const selectedRecordType =
+          recordTypeChoice ??
+          ({
+            value: normalizedDraft.proposedRecordType ?? 'vet_paperwork',
+            customRecordTypeId: null,
+            customLabel: '',
+          } satisfies {
+            value: HealthRecordType | '__new__';
+            customRecordTypeId: string | null;
+            customLabel: string;
+          });
+
+        let recordType: HealthRecordType =
+          selectedRecordType.value === 'custom' || selectedRecordType.value === '__new__'
+            ? 'custom'
+            : selectedRecordType.value;
+        let customRecordTypeId =
+          selectedRecordType.value === 'custom' ? selectedRecordType.customRecordTypeId ?? null : null;
+
+        if (selectedRecordType.value === '__new__') {
+          const customType = await dispatch(
+            createCustomHealthRecordType({
+              householdId,
+              uid,
+              label: selectedRecordType.customLabel,
+            }),
+          ).unwrap();
+          recordType = 'custom';
+          customRecordTypeId = customType.id;
+        }
+
+        if (recordType === 'custom' && !customRecordTypeId) {
+          return rejectWithValue('Select or enter a custom record type.');
+        }
+
         try {
           const fileURL = await uploadFile(storagePath, file);
           const record: HealthRecord = {
@@ -744,8 +786,8 @@ export const confirmIngestionDraft = createAsyncThunk<
             fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
             fileName: file.name,
             label: null,
-            recordType: normalizedDraft.proposedRecordType ?? 'vet_paperwork',
-            customRecordTypeId: null,
+            recordType,
+            customRecordTypeId,
             recordDate: primaryVisit?.scheduledAt ?? null,
             linkedVisitId: primaryVisit?.id ?? null,
             notes: null,

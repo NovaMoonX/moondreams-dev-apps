@@ -47,6 +47,7 @@ import {
 import { selectCatsByHousehold, selectClinicsByHousehold } from '../store/selectors';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
 import type { Cat, CatSex, HealthRecordType, IngestionDraft, VisitReason } from '../types';
+import RecordTypeField, { NEW_TYPE_VALUE, type RecordTypeChoice } from './RecordTypeField';
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
@@ -86,16 +87,6 @@ const REASON_OPTIONS = [
   { text: 'Vaccination', value: 'vaccination' },
   { text: 'Follow-up', value: 'follow_up' },
   { text: 'Custom', value: 'custom' },
-];
-
-const RECORD_TYPE_OPTIONS: { text: string; value: Exclude<HealthRecordType, 'custom'> }[] = [
-  { text: 'Vet paperwork', value: 'vet_paperwork' },
-  { text: 'Lab result', value: 'lab_result' },
-  { text: 'Insurance', value: 'insurance' },
-  { text: 'Shelter / adoption', value: 'shelter_adoption' },
-  { text: 'Prescription', value: 'prescription' },
-  { text: 'Microchip registration', value: 'microchip_registration' },
-  { text: 'Miscellaneous', value: 'miscellaneous' },
 ];
 
 interface IngestionDraftReviewModalProps {
@@ -429,9 +420,11 @@ function IngestionDraftReviewModal({
   const [selections, setSelections] = useState<IngestionDraftSelections>({
     saveAsRecord: draft.suggestKeepAsRecord,
   });
-  const [recordType, setRecordType] = useState<Exclude<HealthRecordType, 'custom'>>(
-    draft.proposedRecordType ?? 'vet_paperwork',
-  );
+  const [recordTypeChoice, setRecordTypeChoice] = useState<RecordTypeChoice>({
+    value: draft.proposedRecordType ?? 'vet_paperwork',
+    customRecordTypeId: null,
+    customLabel: '',
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -607,9 +600,18 @@ function IngestionDraftReviewModal({
     setError(null);
     setIsSubmitting(true);
 
+    const selectedRecordType: Exclude<HealthRecordType, 'custom'> =
+      recordTypeChoice.value === 'custom' || recordTypeChoice.value === NEW_TYPE_VALUE
+        ? draft.proposedRecordType ?? 'vet_paperwork'
+        : recordTypeChoice.value;
+
     try {
       await dispatch(
-        updateIngestionDraft({ householdId, draftId: draft.id, changes: { proposedRecordType: recordType } }),
+        updateIngestionDraft({
+          householdId,
+          draftId: draft.id,
+          changes: { proposedRecordType: selectedRecordType },
+        }),
       ).unwrap();
       await dispatch(
         confirmIngestionDraft({
@@ -618,6 +620,7 @@ function IngestionDraftReviewModal({
           uid,
           selections,
           file,
+          recordTypeChoice,
         }),
       ).unwrap();
       onClose();
@@ -1243,10 +1246,10 @@ function IngestionDraftReviewModal({
             : "The original file isn't available to save — re-upload the document to keep it as a record."}
         </p>
         {file && selections.saveAsRecord !== false && (
-          <Select
-            options={RECORD_TYPE_OPTIONS}
-            value={recordType}
-            onChange={(value) => setRecordType(value as Exclude<HealthRecordType, 'custom'>)}
+          <RecordTypeField
+            value={recordTypeChoice}
+            onValueChange={setRecordTypeChoice}
+            householdId={householdId}
           />
         )}
       </div>
