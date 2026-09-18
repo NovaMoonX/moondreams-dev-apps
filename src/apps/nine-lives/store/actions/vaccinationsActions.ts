@@ -10,6 +10,39 @@ import {
   revertVaccination,
   upsertVaccination,
 } from '../slices/vaccinationsSlice';
+import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
+
+const VACCINATION_REMINDER_LEAD_MS = 7 * ONE_DAY_MS;
+
+export async function scheduleVaccinationReminders(
+  state: RootState,
+  householdId: string,
+  uid: string,
+  vaccination: Pick<Vaccination, 'id' | 'catId' | 'name' | 'expiresAt'>,
+): Promise<string[]> {
+  if (!vaccination.expiresAt) {
+    return [];
+  }
+
+  const cat = state.nineLives.cats.items.find((item) => item.id === vaccination.catId);
+  const catName = cat?.name ? `${cat.name}'s ` : '';
+  const relatedEntityPath = `apps/nine-lives/households/${householdId}/vaccinations/${vaccination.id}`;
+
+  return scheduleEntityReminders(state, householdId, uid, [
+    {
+      title: 'Vaccination due soon',
+      body: `${catName}${vaccination.name} is due in a week.`,
+      scheduledFor: vaccination.expiresAt - VACCINATION_REMINDER_LEAD_MS,
+      relatedEntityPath,
+    },
+    {
+      title: 'Vaccination due today',
+      body: `${catName}${vaccination.name} is due today.`,
+      scheduledFor: vaccination.expiresAt,
+      relatedEntityPath,
+    },
+  ]);
+}
 
 export type VaccinationDoseInput = Partial<VaccinationDose> &
   Pick<VaccinationDose, 'administeredAt'>;
@@ -63,7 +96,7 @@ export const createVaccination = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/vaccinations/create',
-  async ({ householdId, catId, uid, vaccination }, { dispatch, rejectWithValue }) => {
+  async ({ householdId, catId, uid, vaccination }, { dispatch, getState, rejectWithValue }) => {
     const trimmedName = vaccination.name.trim();
 
     if (!trimmedName) {
@@ -94,10 +127,18 @@ export const createVaccination = createAsyncThunk<
       firstAdministeredAt: dose.administeredAt,
       lastAdministeredAt: dose.administeredAt,
       expiresAt: dose.expiresAt,
+      reminderIds: [],
       createdBy: uid,
       createdAt: now,
       lastEditedAt: now,
     };
+
+    nextVaccination.reminderIds = await scheduleVaccinationReminders(
+      getState() as RootState,
+      householdId,
+      uid,
+      nextVaccination,
+    );
 
     await setDoc(getVaccinationDocRef(householdId, vaccinationId), nextVaccination);
     dispatch(upsertVaccination(nextVaccination));
@@ -112,13 +153,14 @@ export const updateVaccination = createAsyncThunk<
   {
     householdId: string;
     vaccinationId: string;
+    reminderUid?: string;
     changes: Partial<VaccinationDose> & { name?: string };
   },
   { rejectValue: string }
 >(
   'nineLives/vaccinations/update',
   async (
-    { householdId, vaccinationId, changes },
+    { householdId, vaccinationId, reminderUid, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -147,6 +189,13 @@ export const updateVaccination = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    if (nextVaccination.expiresAt !== current.expiresAt) {
+      await cancelEntityReminders(current.reminderIds);
+      nextVaccination.reminderIds = reminderUid
+        ? await scheduleVaccinationReminders(state, householdId, reminderUid, nextVaccination)
+        : [];
+    }
+
     dispatch(upsertVaccination(nextVaccination));
 
     try {
@@ -156,6 +205,7 @@ export const updateVaccination = createAsyncThunk<
         lastAdministeredAt: nextVaccination.lastAdministeredAt,
         expiresAt: nextVaccination.expiresAt,
         firstAdministeredAt: nextVaccination.firstAdministeredAt,
+        reminderIds: nextVaccination.reminderIds,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
       return nextVaccination;
@@ -209,6 +259,16 @@ export const logVaccinationDose = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    if (nextVaccination.expiresAt !== current.expiresAt) {
+      await cancelEntityReminders(current.reminderIds);
+      nextVaccination.reminderIds = await scheduleVaccinationReminders(
+        state,
+        householdId,
+        uid,
+        nextVaccination,
+      );
+    }
+
     dispatch(upsertVaccination(nextVaccination));
 
     try {
@@ -216,6 +276,7 @@ export const logVaccinationDose = createAsyncThunk<
         history: nextHistory,
         lastAdministeredAt: nextVaccination.lastAdministeredAt,
         expiresAt: nextVaccination.expiresAt,
+        reminderIds: nextVaccination.reminderIds,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
       return nextVaccination;
@@ -246,6 +307,7 @@ export const deleteVaccination = createAsyncThunk<
 
     try {
       await deleteDoc(getVaccinationDocRef(householdId, vaccinationId));
+      await cancelEntityReminders(current.reminderIds);
       return { id: vaccinationId };
     } catch (error) {
       dispatch(revertVaccination({ id: vaccinationId }));
@@ -262,11 +324,11 @@ export const deleteVaccination = createAsyncThunk<
  */
 export const deleteVaccinationDose = createAsyncThunk<
   { id: string; deletedRecord: boolean },
-  { householdId: string; vaccinationId: string; doseId: string },
+  { householdId: string; vaccinationId: string; doseId: string; reminderUid?: string },
   { rejectValue: string }
 >(
   'nineLives/vaccinations/deleteDose',
-  async ({ householdId, vaccinationId, doseId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, vaccinationId, doseId, reminderUid }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.vaccinations.items.find((item) => item.id === vaccinationId);
 
@@ -292,6 +354,13 @@ export const deleteVaccinationDose = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    if (nextVaccination.expiresAt !== current.expiresAt) {
+      await cancelEntityReminders(current.reminderIds);
+      nextVaccination.reminderIds = reminderUid
+        ? await scheduleVaccinationReminders(state, householdId, reminderUid, nextVaccination)
+        : [];
+    }
+
     dispatch(upsertVaccination(nextVaccination));
 
     try {
@@ -300,6 +369,7 @@ export const deleteVaccinationDose = createAsyncThunk<
         lastAdministeredAt: nextVaccination.lastAdministeredAt,
         expiresAt: nextVaccination.expiresAt,
         firstAdministeredAt: nextVaccination.firstAdministeredAt,
+        reminderIds: nextVaccination.reminderIds,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
       return { id: vaccinationId, deletedRecord: false };

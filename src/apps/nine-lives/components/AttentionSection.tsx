@@ -13,6 +13,7 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { formatTime } from '@/utils/formatUtils';
 import AvatarStack from '@/ui/AvatarStack';
 
 import { useAttentionFocus } from '../context/attentionFocusContext';
@@ -96,11 +97,12 @@ async function copyClinicField(
   }
 }
 
-function formatDueLabel(timestamp: number, now: number): string {
+/** `includeTime` shows the clock time alongside "Today" — meaningful for a visit's `scheduledAt`, but not for a vaccination/preventive's date-only `expiresAt`. */
+function formatDueLabel(timestamp: number, now: number, includeTime = false): string {
   const diffDays = Math.round((timestamp - now) / 86_400_000);
 
   if (diffDays === 0) {
-    return 'Today';
+    return includeTime ? `Today, ${formatTime(timestamp)}` : 'Today';
   }
 
   if (diffDays > 0) {
@@ -129,7 +131,7 @@ function getVisitStatusText(
     return null;
   }
 
-  return dueLabel === 'Today'
+  return dueLabel.startsWith('Today')
     ? { text: 'Today', className: 'text-success font-semibold' }
     : { text: 'Overdue', className: 'text-destructive font-semibold' };
 }
@@ -198,7 +200,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
           catIds: item.catIds,
           title: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
           subtitle: catNames(item.catIds),
-          dueLabel: formatDueLabel(item.scheduledAt, now),
+          dueLabel: formatDueLabel(item.scheduledAt, now, true),
           actionLabel: MARK_VISIT_DONE_LABEL,
           onAction: () =>
             requestFocus({
@@ -536,7 +538,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                         {renderClinicInfo(row, 'popover')}
                       </div>
                     </div>
-                    {row.dueLabel === 'Today' && (
+                    {row.dueLabel.startsWith('Today') && (
                       <Button
                         type='button'
                         variant='link'
@@ -570,7 +572,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
                           )}
                         </div>
                       </div>
-                      {row.dueLabel === 'Today' && (
+                      {row.dueLabel.startsWith('Today') && (
                         <Button
                           type='button'
                           variant='link'

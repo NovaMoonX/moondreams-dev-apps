@@ -111,6 +111,7 @@ function PreventivesSection({ householdId, catId, catName, cats }: PreventivesSe
           updatePreventive({
             householdId,
             preventiveId: editingPreventive.id,
+            reminderUid: user.uid,
             changes: preventive,
           }),
         ).unwrap();
@@ -148,7 +149,7 @@ function PreventivesSection({ householdId, catId, catName, cats }: PreventivesSe
     }
 
     const result = await dispatch(
-      deletePreventiveDose({ householdId, preventiveId, doseId }),
+      deletePreventiveDose({ householdId, preventiveId, doseId, reminderUid: user?.uid }),
     ).unwrap();
 
     if (result.deletedRecord) {

@@ -656,9 +656,9 @@ Build the reminder system as shared infrastructure any mini-app can call — del
 
 #### Success Criteria
 
-- [ ] A manually-created `Reminder` with `scheduledFor` in the past triggers a push notification within one scheduled run.
-- [ ] The `reminders` slice reflects only reminders where the signed-in user is in `targetUids`.
-- [ ] `scheduleReminder()` is callable without any Nine Lives–specific imports.
+- [x] A manually-created `Reminder` with `scheduledFor` in the past triggers a push notification within one scheduled run.
+- [x] The `reminders` slice reflects only reminders where the signed-in user is in `targetUids`.
+- [x] `scheduleReminder()` is callable without any Nine Lives–specific imports.
 
 ### Issue 18: Wire Nine Lives to the Reminder System
 
@@ -670,24 +670,36 @@ Build the reminder system as shared infrastructure any mini-app can call — del
 
 * `src/apps/nine-lives/store/actions/visitsActions.ts`
 * `src/apps/nine-lives/store/actions/vaccinationsActions.ts`
+* `src/apps/nine-lives/store/actions/preventivesActions.ts`
+* `src/apps/nine-lives/store/actions/litterBoxesActions.ts`
+* `src/apps/nine-lives/store/actions/litterEntriesActions.ts`
+* `src/apps/nine-lives/store/actions/catsActions.ts`
+* `src/apps/nine-lives/utils/reminders.ts` (new, shared scheduling/cancellation helper)
+* `src/apps/nine-lives/utils/catAnniversaries.ts` (exports `nextOccurrenceOnOrAfter` for reuse)
+* `src/apps/nine-lives/components/AttentionSection.tsx` (shows the time alongside "Today" for visits due today)
 
 **Context:** Read `src/apps/nine-lives/TECHNICAL.md`'s "Reminder lifecycle" subsection for exactly when reminders should fire (a day before a visit; near a vaccination's `expiresAt`), and `src/lib/notifications/scheduleReminder.ts`'s own signature from Issue 17 rather than guessing its shape.
 
 #### Description
 
-Connects Nine Lives to the central reminder infrastructure built in Issue 17: scheduling a reminder when a visit is created, and when a vaccination's due date approaches.
+Connects Nine Lives to the central reminder infrastructure built in Issue 17: scheduling a reminder when a visit is created, and when a vaccination's due date approaches. Expanded past the original scope, based on follow-up feedback, to cover every other date-driven "needs attention" item the same way: preventives (mirroring vaccinations), litter box changes, and cats' birthdays/adoption anniversaries (yearly-recurring, via `Reminder.recurrence` from Issue 17).
 
 #### Possible Approach
 
 1. In `createVisit`, call `scheduleReminder()` with `targetUids: household.members`, `scheduledFor` one day before `scheduledAt`, and `relatedEntityPath` pointing at the visit.
-2. In `createVaccination`/`updateVaccination`, schedule a reminder near `expiresAt` if present.
-3. Cancel the associated reminder if a visit is rescheduled or cancelled, or a vaccination's `expiresAt` changes.
+2. In `createVaccination`/`updateVaccination` and `createPreventive`/`updatePreventive`, schedule two reminders per `expiresAt` if present — a week before (matching the dashboard's own due-soon window) and the day of.
+3. Cancel the associated reminder(s) if a visit is rescheduled or cancelled, or a vaccination/preventive's `expiresAt` changes.
+4. In `litterEntriesActions.ts`, recompute a box's "litter change coming up" reminder (two days before the 30-day overdue mark) from its latest full-change entry whenever one is created, edited, or deleted.
+5. In `createCat`/`updateCat`, schedule a yearly-recurring reminder for the birthday, and one more for the adoption anniversary if `adoptedAt` is set.
 
 #### Success Criteria
 
-- [ ] Scheduling a visit creates a corresponding `Reminder` targeting all household members.
-- [ ] Rescheduling or cancelling a visit cancels the stale reminder rather than leaving it pending.
-- [ ] A vaccination with an `expiresAt` date produces a reminder near that date.
+- [x] Scheduling a visit creates a corresponding `Reminder` targeting all household members.
+- [x] Rescheduling or cancelling a visit cancels the stale reminder rather than leaving it pending.
+- [x] A vaccination with an `expiresAt` date produces a reminder a week before and a reminder the day of.
+- [x] A preventive with an `expiresAt` date produces the same pair of reminders.
+- [x] Logging a full litter change reschedules that box's "coming up" reminder to two days before its next 30-day mark.
+- [x] A cat's birthday and (if set) adoption anniversary each produce a yearly-recurring reminder.
 
 ## Tier: Cross-App Alignment (final)
 
