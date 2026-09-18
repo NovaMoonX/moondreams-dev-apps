@@ -24,4 +24,3 @@ export function detectDuplicateWeightEntry(
       Math.abs(pounds(entry.weight, entry.unit) - proposedPounds) <= Math.max(0.1, proposedPounds * 0.01),
   );
 }
-

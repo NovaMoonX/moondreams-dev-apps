@@ -24,4 +24,3 @@ export function detectDuplicateSymptom(
       normalizeDescription(symptom.description) === description,
   );
 }
-

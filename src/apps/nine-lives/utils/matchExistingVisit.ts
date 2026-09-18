@@ -22,4 +22,3 @@ export function matchExistingVisit(
 
   return candidates[0]?.id ?? null;
 }
-

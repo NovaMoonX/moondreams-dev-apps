@@ -44,4 +44,3 @@ export function matchExistingClinic(
     ? candidates[0].clinic.id
     : null;
 }
-

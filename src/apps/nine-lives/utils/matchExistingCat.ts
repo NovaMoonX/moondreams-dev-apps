@@ -41,4 +41,3 @@ export function matchExistingCat(name: string | null | undefined, cats: Cat[]): 
     ? candidates[0].cat.id
     : null;
 }
-
