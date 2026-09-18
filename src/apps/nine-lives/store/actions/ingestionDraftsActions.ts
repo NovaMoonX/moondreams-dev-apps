@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
+import { formatDateTime } from '@/utils/formatUtils';
 
 import { getHealthRecordStoragePath } from './healthRecordsActions';
 
@@ -38,6 +39,7 @@ import type {
   IngestionWeightProposal,
 } from '../../lib/extractProposalFromFile.types';
 import { extractProposalFromFile } from '../../lib/extractProposalFromFile';
+import { extractProposalFromText } from '../../lib/extractProposalFromText';
 import { detectDuplicateSymptom } from '../../utils/detectDuplicateSymptom';
 import { detectDuplicateWeightEntry } from '../../utils/detectDuplicateWeightEntry';
 import { matchExistingCat } from '../../utils/matchExistingCat';
@@ -311,21 +313,33 @@ function computeIngestionMatches(
 
 export const createDraftFromExtraction = createAsyncThunk<
   IngestionDraft,
-  { householdId: string; uid: string; file: File },
+  { householdId: string; uid: string; file?: File; text?: string },
   { rejectValue: string }
 >(
   'nineLives/ingestionDrafts/createFromExtraction',
-  async ({ householdId, uid, file }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, uid, file, text }, { dispatch, getState, rejectWithValue }) => {
     try {
-      const proposal = await extractProposalFromFile(file);
+      if (!file && !text?.trim()) {
+        return rejectWithValue('Nothing to extract.');
+      }
+
       const state = getState() as RootState;
+      const now = Date.now();
+      const proposal = file
+        ? await extractProposalFromFile(file)
+        : await extractProposalFromText(
+            text ?? '',
+            state.nineLives.cats.items
+              .filter((cat) => cat.householdId === householdId)
+              .map((cat) => cat.name),
+          );
       const matches = computeIngestionMatches(proposal, householdId, state);
       const draftId = doc(getDraftCollectionRef(householdId)).id;
       const draft: IngestionDraft = {
         id: draftId,
         householdId,
-        sourceType: file.type === 'application/pdf' ? 'pdf' : 'photo',
-        sourceFileName: file.name,
+        sourceType: file ? (file.type === 'application/pdf' ? 'pdf' : 'photo') : 'voice',
+        sourceFileName: file?.name ?? `Voice note — ${formatDateTime(now)}`,
         ...proposal,
         ...matches,
         createdBy: uid,

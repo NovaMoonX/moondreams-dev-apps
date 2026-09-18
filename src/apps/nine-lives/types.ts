@@ -417,7 +417,7 @@ export interface Expense {
 export interface IngestionDraft {
   id: string;
   householdId: string;
-  sourceType: 'pdf' | 'photo';
+  sourceType: 'pdf' | 'photo' | 'voice';
   sourceFileName: string;
   proposedCats: IngestionCatProposal[];
   proposedClinics: IngestionClinicProposal[];

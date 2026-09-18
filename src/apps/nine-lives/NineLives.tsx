@@ -162,7 +162,7 @@ function NineLives() {
 
   return (
     <div className='page'>
-      <div className='mx-auto max-w-6xl space-y-6 py-8'>
+      <div className='mx-auto max-w-6xl space-y-6 py-8 relative'>
         <div className='pb-2'>
           <NavButton href='/' variant='link'>
             <ChevronLeft /> Back home

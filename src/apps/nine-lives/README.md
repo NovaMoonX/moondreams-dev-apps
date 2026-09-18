@@ -32,6 +32,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 12. **See what's coming up, at a glance**: a household-wide timeline of visits, vaccination due dates, and preventive due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
 13. **Get reminders**: push notifications for upcoming visits, vaccination due dates, and preventive due dates, once that infrastructure is built (see Stretch Goals — the visibility in #11 doesn't depend on it).
 14. **Upload and review a document**: the dashboard, Expenses, and Records sections can send a PDF or photo to Firebase AI Logic. The resulting `IngestionDraft` is household-scoped and contains optional cat, clinic, visit, vaccination, preventive, weight, symptom, condition, and expense proposals. Reviewers can edit or exclude each proposal, choose an existing cat or clinic, keep the file as a health record, then confirm the linked writes or discard the draft.
+15. **Use voice quick entry**: the dashboard microphone button transcribes a short note on-device with the browser's Web Speech API, then sends the transcript through the same extraction, matching, duplicate detection, and review flow as uploaded documents. Browsers without `SpeechRecognition` support show the action as disabled; Safari support varies by version.
 
 ## How it Feels
 
