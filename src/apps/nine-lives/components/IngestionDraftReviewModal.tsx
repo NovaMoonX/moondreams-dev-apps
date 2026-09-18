@@ -279,11 +279,16 @@ function ReviewStatusBadge({
   label: string;
   message: string;
   variant: 'success' | 'warning';
-  badgePlacement: 'corner' | 'inline';
+  /** Where the badge sits within the modal, so the tooltip can open toward the free space. */
+  badgePlacement: 'left' | 'center' | 'right';
   className?: string;
 }) {
+  const tooltipPlacement = badgePlacement === 'left' ? 'right' : badgePlacement === 'right' ? 'left' : 'top';
   return (
-    <Tooltip message={<div className={join('text-xs', badgePlacement === 'inline' && 'max-w-48')}>{message}</div>} placement={badgePlacement === 'corner' ? 'left' : 'top'}>
+    <Tooltip
+      message={<div className={join('text-xs', badgePlacement === 'center' && 'max-w-48')}>{message}</div>}
+      placement={tooltipPlacement}
+    >
       <Badge variant={variant} size='xs' className={join('cursor-help', className)}>
         {label}
       </Badge>
@@ -545,6 +550,8 @@ function IngestionDraftReviewModal({
     customRecordTypeId: null,
     customLabel: '',
   });
+  const [recordLabel, setRecordLabel] = useState('');
+  const [recordLabelOpen, setRecordLabelOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -896,6 +903,7 @@ function IngestionDraftReviewModal({
           selections,
           file,
           recordTypeChoice,
+          recordLabel,
         }),
       ).unwrap();
       onClose();
@@ -1011,7 +1019,7 @@ function IngestionDraftReviewModal({
                         : 'This proposal will create a new cat.'
                     }
                     variant='success'
-                    badgePlacement='corner'
+                    badgePlacement='right'
                   />
                   <EditPencilButton
                     editing={isEditing('cat', index)}
@@ -1117,7 +1125,7 @@ function IngestionDraftReviewModal({
                         : 'This proposal will create a new clinic.'
                     }
                     variant='success'
-                    badgePlacement='corner'
+                    badgePlacement='right'
                   />
                   <EditPencilButton
                     editing={isEditing('clinic', index)}
@@ -1222,7 +1230,7 @@ function IngestionDraftReviewModal({
                           : 'This proposal will create a new visit.'
                       }
                       variant='success'
-                      badgePlacement='corner'
+                      badgePlacement='right'
                     />
                     <EditPencilButton
                       editing={isEditing('visit', index)}
@@ -1296,7 +1304,7 @@ function IngestionDraftReviewModal({
                         ?.scheduledAt ?? visit.scheduledAt,
                     )} completed instead of creating another visit.`}
                     variant='success'
-                    badgePlacement='corner'
+                    badgePlacement='left'
                   />
                 )}
                 {selections.visitIds?.[index] && (
@@ -1405,7 +1413,7 @@ function IngestionDraftReviewModal({
                   }
                   variant={likelyDuplicateVaccinations[index] ? 'warning' : 'success'}
                   className='ml-2'
-                  badgePlacement='inline'
+                  badgePlacement='left'
                 />
                 {selections.vaccinationIds?.[index] && (
                   <Button
@@ -1493,7 +1501,7 @@ function IngestionDraftReviewModal({
                   }
                   variant={likelyDuplicatePreventives[index] ? 'warning' : 'success'}
                   className='ml-2'
-                  badgePlacement='inline'
+                  badgePlacement='left'
                 />
                 {selections.preventiveIds?.[index] && (
                   <Button
@@ -1535,7 +1543,7 @@ function IngestionDraftReviewModal({
                           : 'This proposal will create a new weight entry.'
                       }
                       variant={likelyDuplicateWeightEntries[index] ? 'warning' : 'success'}
-                      badgePlacement='corner'
+                      badgePlacement='right'
                     />
                     <EditPencilButton
                       editing={isEditing('weight', index)}
@@ -1596,7 +1604,7 @@ function IngestionDraftReviewModal({
                           : 'This proposal will create a new symptom.'
                       }
                       variant={likelyDuplicateSymptoms[index] ? 'warning' : 'success'}
-                      badgePlacement='corner'
+                      badgePlacement='right'
                     />
                     <EditPencilButton
                       editing={isEditing('symptom', index)}
@@ -1645,7 +1653,7 @@ function IngestionDraftReviewModal({
                             : 'This proposal will create a new custom condition.'
                       }
                       variant='success'
-                      badgePlacement='corner'
+                      badgePlacement='right'
                     />
                     <EditPencilButton
                       editing={isEditing('condition', index)}
@@ -1714,7 +1722,7 @@ function IngestionDraftReviewModal({
                             : 'This proposal will create a new expense.'
                         }
                         variant={likelyDuplicateExpenses[expenseIndex] ? 'warning' : 'success'}
-                        badgePlacement='corner'
+                        badgePlacement='right'
                       />
                       <EditPencilButton
                         editing={isEditing('expense', expenseIndex)}
@@ -1799,11 +1807,31 @@ function IngestionDraftReviewModal({
             : "The original file isn't available to save — re-upload the document to keep it as a record."}
         </p>
         {file && selections.saveAsRecord !== false && (
-          <RecordTypeField
-            value={recordTypeChoice}
-            onValueChange={setRecordTypeChoice}
-            householdId={householdId}
-          />
+          <>
+            {recordLabelOpen ? (
+              <Input
+                value={recordLabel}
+                aria-label='Record label'
+                placeholder='e.g. Rabies certificate photo'
+                onChange={(event) => setRecordLabel(event.target.value)}
+              />
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className={mutedLinkClassName}
+                onClick={() => setRecordLabelOpen(true)}
+              >
+                + Add label
+              </Button>
+            )}
+            <RecordTypeField
+              value={recordTypeChoice}
+              onValueChange={setRecordTypeChoice}
+              householdId={householdId}
+            />
+          </>
         )}
       </div>
 

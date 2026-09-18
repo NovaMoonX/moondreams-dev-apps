@@ -133,6 +133,7 @@ export interface ConfirmIngestionDraftInput {
     customRecordTypeId: string | null;
     customLabel: string;
   };
+  recordLabel?: string | null;
 }
 
 function draftDefaults(draft: IngestionDraft): IngestionDraft {
@@ -712,7 +713,7 @@ export const confirmIngestionDraft = createAsyncThunk<
 >(
   'nineLives/ingestionDrafts/confirm',
   async (
-    { householdId, draftId, uid, selections = {}, file = null, recordTypeChoice },
+    { householdId, draftId, uid, selections = {}, file = null, recordTypeChoice, recordLabel = null },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -1132,7 +1133,7 @@ export const confirmIngestionDraft = createAsyncThunk<
             fileURL,
             fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
             fileName: file.name,
-            label: null,
+            label: recordLabel?.trim() || null,
             recordType,
             customRecordTypeId,
             recordDate: primaryVisit?.scheduledAt ?? null,
