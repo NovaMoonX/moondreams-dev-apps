@@ -11,9 +11,10 @@
 Document ingestion stores every match as a draft-time default so the review modal can show and override it before confirmation:
 
 - Cat and clinic names use trimmed, whitespace-collapsed, case-insensitive Levenshtein similarity. A score of at least `0.82` is required, and an ambiguous tie is rejected rather than guessed.
-- Scheduled visits match only `upcoming` visits within three days (`72` hours) of the extracted date. When a clinic is named and confidently matched, the visit must use that clinic.
-- Vaccinations match the same cat and normalized vaccine name. Preventives match the same preventive type and all extracted cats. A kept match appends a newest-first dose to the existing history.
+- Visits match non-cancelled visits within three days (`72` hours) of the extracted date when the reason, confidently matched clinic (when supplied), and every confidently resolved extracted cat agree. A single-cat extraction can therefore match a shared household visit. Completed visits are included so re-uploading the same document is recognized.
+- Vaccinations match the same cat and normalized vaccine name. Preventives match the same preventive type/name and all extracted cats. A kept match appends a newest-first dose to the existing history; an administration within five minutes of an existing dose is separately flagged as a likely duplicate and is excluded by default.
 - Weight duplicates use the same cat, a one-day window, and a converted weight difference of no more than `0.1 lb` or `1%` (whichever is larger). Symptoms use the same cat, normalized description, and a seven-day window.
+- Expenses are likely duplicates when the same cats have a same-day charge with the same total and line-item category, label, and amount breakdown. Duplicate proposals are excluded by default but remain overridable.
 - Conditions use the same `0.82` name threshold against the shared `ConditionLibrary`. Separately, only `active` or `ongoing` conditions for the extracted cat can be matched for visit linking; confirmation appends the visit ID to `linkedVisitIds`.
 - Unmatched custom symptom descriptions and condition names are trimmed, whitespace-collapsed, and stored with an initial capital, matching the app's Title Case preset labels without changing already matched library labels.
 

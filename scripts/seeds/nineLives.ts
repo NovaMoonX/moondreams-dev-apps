@@ -2209,7 +2209,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         {
           catName: 'Mochi',
           name: 'FVRCP',
-          administeredAt: context.now,
+          administeredAt: context.now - 31_536_000_000,
           expiresAt: context.now + 31_536_000_000,
           lotNumber: 'DEMO-001',
         },
@@ -2226,7 +2226,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
           catNames: ['Mochi'],
           name: 'Revolution Plus',
           type: 'flea-tick',
-          administeredAt: context.now,
+          administeredAt: context.now - 2_592_000_000,
           expiresAt: context.now + 2_592_000_000,
           dosage: '0.5 mL',
         },
@@ -2295,7 +2295,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
           description: null,
         },
       ],
-      proposedExpenses: [],
+      proposedExpenses: [
+        {
+          catNames: ['Mochi'],
+          items: [{ category: 'vet', label: null, amount: 82 }],
+          incurredAt: context.now - 2_592_000_000,
+          notes: 'Routine checkup at Blue Bark Veterinary Clinic.',
+        },
+      ],
       proposedRecordType: 'vet_paperwork',
       suggestKeepAsRecord: false,
       confidence: 0.91,
@@ -2306,6 +2313,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       matchedPreventiveIds: ['seed-preventive-mochi-revolution', null],
       likelyDuplicateWeightEntries: [true, false],
       likelyDuplicateSymptoms: [true, false],
+      likelyDuplicateVaccinations: [true, false],
+      likelyDuplicatePreventives: [true, false],
+      likelyDuplicateExpenses: [true],
       matchedLibraryConditionIds: [
         'seed-condition-flea-allergy-dermatitis',
         'seed-condition-dental-disease',

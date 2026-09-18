@@ -439,6 +439,9 @@ export interface IngestionDraft {
   matchedPreventiveIds: (string | null)[];
   likelyDuplicateWeightEntries: boolean[];
   likelyDuplicateSymptoms: boolean[];
+  likelyDuplicateVaccinations: boolean[];
+  likelyDuplicatePreventives: boolean[];
+  likelyDuplicateExpenses: boolean[];
   matchedLibraryConditionIds: (string | null)[];
   matchedCatConditionIds: (string | null)[];
   createdBy: string;

@@ -43,9 +43,15 @@ import { detectDuplicateWeightEntry } from '../../utils/detectDuplicateWeightEnt
 import { matchExistingCat } from '../../utils/matchExistingCat';
 import { matchExistingClinic } from '../../utils/matchExistingClinic';
 import { matchExistingCondition } from '../../utils/matchExistingCondition';
-import { matchExistingVaccination, matchExistingPreventive } from '../../utils/matchExistingVaccinationOrPreventive';
+import {
+  detectDuplicatePreventive,
+  detectDuplicateVaccination,
+  matchExistingPreventive,
+  matchExistingVaccination,
+} from '../../utils/matchExistingVaccinationOrPreventive';
 import { matchExistingVisit } from '../../utils/matchExistingVisit';
 import { normalizeCustomLabelCasing } from '../../utils/normalizeCustomLabelCasing';
+import { detectDuplicateExpense } from '../../utils/detectDuplicateExpense';
 import {
   removeIngestionDraft,
   upsertIngestionDraft,
@@ -153,6 +159,12 @@ function draftDefaults(draft: IngestionDraft): IngestionDraft {
     likelyDuplicateWeightEntries:
       draft.likelyDuplicateWeightEntries ?? draft.proposedWeightEntries.map(() => false),
     likelyDuplicateSymptoms: draft.likelyDuplicateSymptoms ?? draft.proposedSymptoms.map(() => false),
+    likelyDuplicateVaccinations:
+      draft.likelyDuplicateVaccinations ?? draft.proposedVaccinations.map(() => false),
+    likelyDuplicatePreventives:
+      draft.likelyDuplicatePreventives ?? draft.proposedPreventives.map(() => false),
+    likelyDuplicateExpenses:
+      draft.likelyDuplicateExpenses ?? draft.proposedExpenses.map(() => false),
     matchedLibraryConditionIds:
       draft.matchedLibraryConditionIds ?? draft.proposedConditions.map(() => null),
     matchedCatConditionIds:
@@ -191,6 +203,9 @@ export const createDraftFromExtraction = createAsyncThunk<
       const symptoms = state.nineLives.symptoms.items.filter((symptom) =>
         cats.some((cat) => cat.id === symptom.catId),
       );
+      const expenses = state.nineLives.expenses.items.filter(
+        (expense) => expense.householdId === householdId,
+      );
       const catConditions = state.nineLives.catConditions.items.filter((condition) =>
         cats.some((cat) => cat.id === condition.catId),
       );
@@ -198,26 +213,35 @@ export const createDraftFromExtraction = createAsyncThunk<
       const matchedClinicIds = proposal.proposedClinics.map((item) =>
         matchExistingClinic(item.name, clinics),
       );
-      const matchedVisitIds = proposal.proposedVisits.map((item) =>
-        matchExistingVisit(item, visits, clinics),
-      );
       const catIdForName = (name: string | null): string | null =>
         matchExistingCat(name, cats);
       const catIdsForNames = (names: string[]): string[] =>
         names
           .map((name) => catIdForName(name))
           .filter((id): id is string => Boolean(id));
+      const matchedVisitIds = proposal.proposedVisits.map((item) =>
+        matchExistingVisit(item, visits, clinics, catIdsForNames(item.catNames)),
+      );
       const matchedVaccinationIds = proposal.proposedVaccinations.map((item) =>
         matchExistingVaccination(item, catIdForName(item.catName), vaccinations),
       );
       const matchedPreventiveIds = proposal.proposedPreventives.map((item) =>
         matchExistingPreventive(item, catIdsForNames(item.catNames), preventives),
       );
+      const likelyDuplicateVaccinations = proposal.proposedVaccinations.map((item) =>
+        detectDuplicateVaccination(item, catIdForName(item.catName), vaccinations),
+      );
+      const likelyDuplicatePreventives = proposal.proposedPreventives.map((item) =>
+        detectDuplicatePreventive(item, catIdsForNames(item.catNames), preventives),
+      );
       const likelyDuplicateWeightEntries = proposal.proposedWeightEntries.map((item) =>
         detectDuplicateWeightEntry(item, catIdForName(item.catName), weightEntries),
       );
       const likelyDuplicateSymptoms = proposal.proposedSymptoms.map((item) =>
         detectDuplicateSymptom(item, catIdForName(item.catName), symptoms),
+      );
+      const likelyDuplicateExpenses = proposal.proposedExpenses.map((item) =>
+        detectDuplicateExpense(item, catIdsForNames(item.catNames), expenses),
       );
       const conditionMatches = proposal.proposedConditions.map((item) =>
         matchExistingCondition(item, catIdForName(item.catName), state.nineLives.conditionLibrary.items, catConditions),
@@ -252,6 +276,9 @@ export const createDraftFromExtraction = createAsyncThunk<
         matchedPreventiveIds,
         likelyDuplicateWeightEntries,
         likelyDuplicateSymptoms,
+        likelyDuplicateVaccinations,
+        likelyDuplicatePreventives,
+        likelyDuplicateExpenses,
         matchedLibraryConditionIds,
         matchedCatConditionIds,
         createdBy: uid,

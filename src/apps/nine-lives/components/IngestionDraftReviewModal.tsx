@@ -97,6 +97,10 @@ const REASON_OPTIONS = [
   { text: 'Custom', value: 'custom' },
 ];
 
+function getOptionLabel(options: Array<{ text: string; value: string }>, value: string | null | undefined) {
+  return options.find((option) => option.value === value)?.text ?? value ?? '';
+}
+
 interface IngestionDraftReviewModalProps {
   isOpen: boolean;
   householdId: string;
@@ -117,6 +121,8 @@ type ReviewSection =
   | 'symptoms'
   | 'conditions'
   | 'expense';
+
+type ExpandedSection = ReviewSection | 'all' | null;
 
 const SECTION_LABELS: Record<ReviewSection, string> = {
   cat: 'Cats',
@@ -382,11 +388,23 @@ function ReviewProgressPills({
 }: {
   sections: ReviewSection[];
   reviewed: Set<ReviewSection>;
-  expanded: ReviewSection | null;
-  onSelect: (section: ReviewSection) => void;
+  expanded: ExpandedSection;
+  onSelect: (section: ReviewSection | 'all') => void;
 }) {
   return (
     <div className='flex flex-wrap gap-1.5'>
+      <Button
+        type='button'
+        variant='base'
+        size='sm'
+        onClick={() => onSelect('all')}
+        className={join(
+          'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+          expanded === 'all' ? 'border-primary text-primary' : 'border-border text-muted-foreground',
+        )}
+      >
+        All
+      </Button>
       {sections.map((section) => {
         const isActive = expanded === section;
         const isReviewed = reviewed.has(section);
@@ -424,7 +442,7 @@ function Section({
 }: {
   title: ReactNode;
   section: ReviewSection;
-  expanded: ReviewSection | null;
+  expanded: ExpandedSection;
   onToggle: (section: ReviewSection) => void;
   children: ReactNode;
 }) {
@@ -438,7 +456,7 @@ function Section({
             <Icon className='h-4 w-4' /> {title}
           </span>
         }
-        isOpen={expanded === section}
+        isOpen={expanded === section || expanded === 'all'}
         onToggle={() => onToggle(section)}
         buttonClassName='w-full px-3 py-2.5 hover:bg-muted/40'
         className='overflow-visible'
@@ -474,6 +492,12 @@ function IngestionDraftReviewModal({
     draft.likelyDuplicateWeightEntries ?? draft.proposedWeightEntries.map(() => false);
   const likelyDuplicateSymptoms =
     draft.likelyDuplicateSymptoms ?? draft.proposedSymptoms.map(() => false);
+  const likelyDuplicateVaccinations =
+    draft.likelyDuplicateVaccinations ?? draft.proposedVaccinations.map(() => false);
+  const likelyDuplicatePreventives =
+    draft.likelyDuplicatePreventives ?? draft.proposedPreventives.map(() => false);
+  const likelyDuplicateExpenses =
+    draft.likelyDuplicateExpenses ?? draft.proposedExpenses.map(() => false);
   const matchedLibraryConditionIds =
     draft.matchedLibraryConditionIds ?? draft.proposedConditions.map(() => null);
   const matchedCatConditionIds =
@@ -493,7 +517,7 @@ function IngestionDraftReviewModal({
   const initialSection: ReviewSection | null =
     intent === 'expense' && draft.proposedExpenses.length ? 'expense' : (sectionsWithContent[0] ?? null);
 
-  const [expanded, setExpanded] = useState<ReviewSection | null>(initialSection);
+  const [expanded, setExpanded] = useState<ExpandedSection>(initialSection);
   const [reviewed, setReviewed] = useState<Set<ReviewSection>>(
     new Set(initialSection ? [initialSection] : []),
   );
@@ -508,6 +532,9 @@ function IngestionDraftReviewModal({
     visitIds: matchedVisitIds,
     vaccinationIds: matchedVaccinationIds,
     preventiveIds: matchedPreventiveIds,
+    includeVaccinations: likelyDuplicateVaccinations.map((isDuplicate) => !isDuplicate),
+    includePreventives: likelyDuplicatePreventives.map((isDuplicate) => !isDuplicate),
+    includeExpenses: likelyDuplicateExpenses.map((isDuplicate) => !isDuplicate),
     conditionIds: matchedCatConditionIds,
     conditionLibraryIds: matchedLibraryConditionIds,
   });
@@ -522,6 +549,10 @@ function IngestionDraftReviewModal({
   const toggleSection = (section: ReviewSection) => {
     setExpanded((current) => (current === section ? null : section));
     setReviewed((current) => new Set(current).add(section));
+  };
+  const expandAllSections = () => {
+    setExpanded('all');
+    setReviewed(new Set(sectionsWithContent));
   };
 
   const isEditing = (section: EditingKey['section'], index: number) =>
@@ -829,6 +860,28 @@ function IngestionDraftReviewModal({
     draft.proposedSymptoms.filter((_, i) => isIncluded('includeSymptoms', i)).length +
     draft.proposedConditions.filter((_, i) => isIncluded('includeConditions', i)).length +
     draft.proposedExpenses.filter((_, i) => isIncluded('includeExpenses', i)).length;
+  const countNewItems = (
+    length: number,
+    key: ArrayIncludeKey,
+    selectedIds?: (string | null)[],
+  ) =>
+    Array.from({ length }, (_, index) => index).filter(
+      (index) => isIncluded(key, index) && !selectedIds?.[index],
+    ).length;
+  const newCount =
+    countNewItems(draft.proposedCats.length, 'includeCats', selections.catIds) +
+    countNewItems(draft.proposedClinics.length, 'includeClinics', selections.clinicIds) +
+    countNewItems(draft.proposedVisits.length, 'includeVisits', selections.visitIds) +
+    countNewItems(
+      draft.proposedVaccinations.length,
+      'includeVaccinations',
+      selections.vaccinationIds,
+    ) +
+    countNewItems(draft.proposedPreventives.length, 'includePreventives', selections.preventiveIds) +
+    draft.proposedWeightEntries.filter((_, index) => isIncluded('includeWeightEntries', index)).length +
+    draft.proposedSymptoms.filter((_, index) => isIncluded('includeSymptoms', index)).length +
+    countNewItems(draft.proposedConditions.length, 'includeConditions', selections.conditionIds) +
+    draft.proposedExpenses.filter((_, index) => isIncluded('includeExpenses', index)).length;
 
   const handleConfirm = async () => {
     setError(null);
@@ -926,8 +979,9 @@ function IngestionDraftReviewModal({
             sections={sectionsWithContent}
             reviewed={reviewed}
             expanded={expanded}
-            onSelect={toggleSection}
+            onSelect={(section) => (section === 'all' ? expandAllSections() : toggleSection(section))}
           />
+          <p className='text-success text-sm'>{newCount} new records will be created.</p>
           <DropdownMenu
             items={addItemMenuItems}
             onItemSelect={(value) => addBlankItem(value as ReviewSection)}
@@ -1028,8 +1082,18 @@ function IngestionDraftReviewModal({
                   (() => {
                     const existingCat = cats.find((candidate) => candidate.id === selections.catIds?.[index]);
                     const summary = existingCat
-                      ? [existingCat.name, existingCat.breed, existingCat.sex].filter(Boolean).join(' · ')
-                      : [cat.name || 'New cat', cat.breed, cat.sex && cat.sex !== 'unknown' ? cat.sex : null]
+                      ? [
+                          existingCat.name,
+                          existingCat.breed,
+                          getOptionLabel(SEX_OPTIONS, existingCat.sex),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : [
+                          cat.name || 'New cat',
+                          cat.breed,
+                          cat.sex ? getOptionLabel(SEX_OPTIONS, cat.sex) : null,
+                        ]
                           .filter(Boolean)
                           .join(' · ');
                     return <p className='text-sm'>{summary}</p>;
@@ -1218,7 +1282,10 @@ function IngestionDraftReviewModal({
                   </div>
                 ) : (
                   <p className='text-muted-foreground text-sm'>
-                    {formatDateTime(visit.scheduledAt)} · {visit.reason}
+                    {formatDateTime(visit.scheduledAt)} ·{' '}
+                    {visit.reason === 'custom'
+                      ? visit.customReasonLabel || getOptionLabel(REASON_OPTIONS, visit.reason)
+                      : getOptionLabel(REASON_OPTIONS, visit.reason)}
                     {visit.catNames.length > 0 && ` · ${visit.catNames.join(', ')}`}
                     {visit.clinicName && ` · ${visit.clinicName}`}
                   </p>
@@ -1334,13 +1401,21 @@ function IngestionDraftReviewModal({
                   </span>
                 )}
                 <ReviewStatusBadge
-                  label={selections.vaccinationIds?.[index] ? 'Adds dose' : 'New'}
+                  label={
+                    likelyDuplicateVaccinations[index]
+                      ? 'Potential duplicate'
+                      : selections.vaccinationIds?.[index]
+                        ? 'Adds dose'
+                        : 'New'
+                  }
                   message={
-                    selections.vaccinationIds?.[index]
+                    likelyDuplicateVaccinations[index]
+                      ? 'This vaccination matches an existing dose for the same cat and administration time. Turn off Include to skip it, or leave it on to append it anyway.'
+                      : selections.vaccinationIds?.[index]
                       ? 'This administration will be appended to the existing vaccination dose history.'
                       : 'This proposal will create a new vaccination record.'
                   }
-                  variant='success'
+                  variant={likelyDuplicateVaccinations[index] ? 'warning' : 'success'}
                   className='ml-2'
                   badgePlacement='inline'
                 />
@@ -1424,13 +1499,21 @@ function IngestionDraftReviewModal({
                   </span>
                 )}
                 <ReviewStatusBadge
-                  label={selections.preventiveIds?.[index] ? 'Adds dose' : 'New'}
+                  label={
+                    likelyDuplicatePreventives[index]
+                      ? 'Potential duplicate'
+                      : selections.preventiveIds?.[index]
+                        ? 'Adds dose'
+                        : 'New'
+                  }
                   message={
-                    selections.preventiveIds?.[index]
+                    likelyDuplicatePreventives[index]
+                      ? 'This preventive matches an existing dose for the same cat(s) and administration time. Turn off Include to skip it, or leave it on to append it anyway.'
+                      : selections.preventiveIds?.[index]
                       ? 'This administration will be appended to the existing preventive dose history.'
                       : 'This proposal will create a new preventive record.'
                   }
-                  variant='success'
+                  variant={likelyDuplicatePreventives[index] ? 'warning' : 'success'}
                   className='ml-2'
                   badgePlacement='inline'
                 />
@@ -1656,9 +1739,13 @@ function IngestionDraftReviewModal({
                     />
                     <div className='flex items-center gap-2'>
                       <ReviewStatusBadge
-                        label='New'
-                        message='This proposal will create a new expense.'
-                        variant='success'
+                        label={likelyDuplicateExpenses[expenseIndex] ? 'Potential duplicate' : 'New'}
+                        message={
+                          likelyDuplicateExpenses[expenseIndex]
+                            ? 'This expense matches an existing charge for the same cat(s), date, total, and line-item breakdown. Turn off Include to skip it.'
+                            : 'This proposal will create a new expense.'
+                        }
+                        variant={likelyDuplicateExpenses[expenseIndex] ? 'warning' : 'success'}
                         badgePlacement='corner'
                       />
                       <EditPencilButton
