@@ -347,7 +347,7 @@ function ReviewProgressPills({
         const isReviewed = reviewed.has(section);
         const Icon = SECTION_ICONS[section];
         return (
-          <Button
+          <button
             key={section}
             type='button'
             onClick={() => onSelect(section)}
@@ -361,7 +361,7 @@ function ReviewProgressPills({
             )}
           >
             <Icon className='h-3 w-3' /> {SECTION_LABELS[section]}
-          </Button>
+          </button>
         );
       })}
     </div>
