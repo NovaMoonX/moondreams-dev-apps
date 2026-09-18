@@ -4,6 +4,7 @@
 
 ### Quick reference
 - Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`).
+- **No IIFEs: never write an anonymous function that is immediately invoked in place (`(() => { ... })()`). Arrow functions passed as arguments to another call (`.map()`, `onClick={() => ...}`, etc.) are fine and idiomatic — the rule is about self-invoking anonymous functions, not callbacks.**
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check Dreamer UI first before building custom UI.
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
@@ -141,6 +142,7 @@ useEffect(() => {
 - Update, remove, or compress stale content instead of adding long commentary.
 
 ### Critical reminders
+- **No IIFEs — never self-invoke an anonymous function (`(() => {...})()`). Arrow functions passed as arguments (`.map()`, `onClick={() => ...}`, `setState((current) => ...)`) are normal and fine. See "No IIFEs" under Coding Styles.**
 - **Template literals with `${` in `className` are FORBIDDEN.**
 - **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`.**
 - **Before writing any conditional className, ask: “Am I using `join()`?”**
@@ -181,6 +183,38 @@ interface ButtonProps {
 
 // ✅ Use type only when an interface cannot express the shape
 type Status = 'idle' | 'loading' | 'success';
+```
+
+### No IIFEs (self-invoking anonymous functions)
+- Never write an anonymous function that is immediately invoked in place — `(() => { ... })()` or `(function () { ... })()`. If a JSX branch needs a computed value (a derived string, a `.find()` result, etc.), compute it as a local `const` in the enclosing scope instead of wrapping it in a self-invoking closure.
+- This is narrowly about self-invocation, not arrow functions in general. **Arrow functions passed as arguments to another call remain the normal, idiomatic style** — `.map((item) => ...)`, `.filter(...)`, `onClick={() => doThing()}`, `setState((current) => ...)` are all fine and expected. Do not hoist these into named functions; that's a needless departure from how the rest of the codebase (and React generally) is written.
+- If the value a `.map()` callback needs requires more than one expression, give the arrow function a block body (`(item, index) => { const x = ...; return <Row />; }`) rather than reaching for an IIFE inside an implicit-return arrow.
+
+```tsx
+// ❌ Anonymous function immediately invoked in place
+{isEditing ? (
+  <Input />
+) : (
+  (() => {
+    const summary = [item.name, item.breed].filter(Boolean).join(' · ');
+    return <p>{summary}</p>;
+  })()
+)}
+
+// ✅ Compute the value as a local const in the enclosing arrow's block body
+{items.map((item, index) => {
+  const summary = [item.name, item.breed].filter(Boolean).join(' · ');
+  return (
+    <div key={index}>
+      {isEditing ? <Input /> : <p>{summary}</p>}
+    </div>
+  );
+})}
+
+// ✅ Arrow functions as callback arguments are fine, no change needed
+<Button onClick={() => toggleSection(section)}>Toggle</Button>
+{items.map((item) => <Row key={item.id} onDelete={() => removeItem(item.id)} />)}
+setSelections((current) => ({ ...current, saveAsRecord: !current.saveAsRecord }));
 ```
 
 ### Return-value debugging

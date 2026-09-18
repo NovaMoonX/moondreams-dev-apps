@@ -38,6 +38,20 @@ import type {
   IngestionWeightProposal,
 } from '../../lib/extractProposalFromFile.types';
 import { extractProposalFromFile } from '../../lib/extractProposalFromFile';
+import { detectDuplicateSymptom } from '../../utils/detectDuplicateSymptom';
+import { detectDuplicateWeightEntry } from '../../utils/detectDuplicateWeightEntry';
+import { matchExistingCat } from '../../utils/matchExistingCat';
+import { matchExistingClinic } from '../../utils/matchExistingClinic';
+import { matchExistingCondition } from '../../utils/matchExistingCondition';
+import {
+  detectDuplicatePreventive,
+  detectDuplicateVaccination,
+  matchExistingPreventive,
+  matchExistingVaccination,
+} from '../../utils/matchExistingVaccinationOrPreventive';
+import { matchExistingVisit } from '../../utils/matchExistingVisit';
+import { normalizeCustomLabelCasing } from '../../utils/normalizeCustomLabelCasing';
+import { detectDuplicateExpense } from '../../utils/detectDuplicateExpense';
 import {
   removeIngestionDraft,
   upsertIngestionDraft,
@@ -94,11 +108,16 @@ export interface IngestionDraftSelections {
   includeClinics?: boolean[];
   clinicIds?: (string | null)[];
   includeVisits?: boolean[];
+  visitIds?: (string | null)[];
   includeVaccinations?: boolean[];
+  vaccinationIds?: (string | null)[];
   includePreventives?: boolean[];
+  preventiveIds?: (string | null)[];
   includeWeightEntries?: boolean[];
   includeSymptoms?: boolean[];
   includeConditions?: boolean[];
+  conditionIds?: (string | null)[];
+  conditionLibraryIds?: (string | null)[];
   includeExpenses?: boolean[];
   saveAsRecord?: boolean;
 }
@@ -114,6 +133,7 @@ export interface ConfirmIngestionDraftInput {
     customRecordTypeId: string | null;
     customLabel: string;
   };
+  recordLabel?: string | null;
 }
 
 function draftDefaults(draft: IngestionDraft): IngestionDraft {
@@ -131,6 +151,161 @@ function draftDefaults(draft: IngestionDraft): IngestionDraft {
     proposedRecordType: draft.proposedRecordType ?? null,
     suggestKeepAsRecord: draft.suggestKeepAsRecord ?? true,
     confidence: draft.confidence ?? null,
+    matchedCatIds: draft.matchedCatIds ?? draft.proposedCats.map(() => null),
+    matchedClinicIds: draft.matchedClinicIds ?? draft.proposedClinics.map(() => null),
+    matchedVisitIds: draft.matchedVisitIds ?? draft.proposedVisits.map(() => null),
+    matchedVaccinationIds:
+      draft.matchedVaccinationIds ?? draft.proposedVaccinations.map(() => null),
+    matchedPreventiveIds: draft.matchedPreventiveIds ?? draft.proposedPreventives.map(() => null),
+    likelyDuplicateWeightEntries:
+      draft.likelyDuplicateWeightEntries ?? draft.proposedWeightEntries.map(() => false),
+    likelyDuplicateSymptoms: draft.likelyDuplicateSymptoms ?? draft.proposedSymptoms.map(() => false),
+    likelyDuplicateVaccinations:
+      draft.likelyDuplicateVaccinations ?? draft.proposedVaccinations.map(() => false),
+    likelyDuplicatePreventives:
+      draft.likelyDuplicatePreventives ?? draft.proposedPreventives.map(() => false),
+    likelyDuplicateExpenses:
+      draft.likelyDuplicateExpenses ?? draft.proposedExpenses.map(() => false),
+    matchedLibraryConditionIds:
+      draft.matchedLibraryConditionIds ?? draft.proposedConditions.map(() => null),
+    matchedCatConditionIds:
+      draft.matchedCatConditionIds ?? draft.proposedConditions.map(() => null),
+  };
+}
+
+function selectionAt<T>(values: T[] | undefined, index: number, fallback: T): T {
+  return values && index < values.length ? values[index] : fallback;
+}
+
+type IngestionMatchFields = Pick<
+  IngestionDraft,
+  | 'proposedSymptoms'
+  | 'proposedConditions'
+  | 'matchedCatIds'
+  | 'matchedClinicIds'
+  | 'matchedVisitIds'
+  | 'matchedVaccinationIds'
+  | 'matchedPreventiveIds'
+  | 'likelyDuplicateWeightEntries'
+  | 'likelyDuplicateSymptoms'
+  | 'likelyDuplicateVaccinations'
+  | 'likelyDuplicatePreventives'
+  | 'likelyDuplicateExpenses'
+  | 'matchedLibraryConditionIds'
+  | 'matchedCatConditionIds'
+>;
+
+/**
+ * Runs every existing-record match/duplicate check against the household's *current* data.
+ * Used both when a draft is first created and to refresh a resumed draft, since matches
+ * computed once at extraction time go stale the moment anything they'd match against changes.
+ */
+function computeIngestionMatches(
+  proposal: Pick<
+    IngestionDraft,
+    | 'proposedCats'
+    | 'proposedClinics'
+    | 'proposedVisits'
+    | 'proposedVaccinations'
+    | 'proposedPreventives'
+    | 'proposedWeightEntries'
+    | 'proposedSymptoms'
+    | 'proposedConditions'
+    | 'proposedExpenses'
+  >,
+  householdId: string,
+  state: RootState,
+): IngestionMatchFields {
+  const cats = state.nineLives.cats.items.filter((cat) => cat.householdId === householdId);
+  const clinics = state.nineLives.vetClinics.items.filter(
+    (clinic) => clinic.householdId === householdId,
+  );
+  const visits = state.nineLives.visits.items.filter((visit) => visit.householdId === householdId);
+  const vaccinations = state.nineLives.vaccinations.items.filter(
+    (vaccination) => vaccination.householdId === householdId,
+  );
+  const preventives = state.nineLives.preventives.items.filter(
+    (preventive) => preventive.householdId === householdId,
+  );
+  const weightEntries = state.nineLives.weightEntries.items.filter((entry) =>
+    cats.some((cat) => cat.id === entry.catId),
+  );
+  const symptoms = state.nineLives.symptoms.items.filter((symptom) =>
+    cats.some((cat) => cat.id === symptom.catId),
+  );
+  const expenses = state.nineLives.expenses.items.filter(
+    (expense) => expense.householdId === householdId,
+  );
+  const catConditions = state.nineLives.catConditions.items.filter((condition) =>
+    cats.some((cat) => cat.id === condition.catId),
+  );
+  const matchedCatIds = proposal.proposedCats.map((item) => matchExistingCat(item.name, cats));
+  const matchedClinicIds = proposal.proposedClinics.map((item) =>
+    matchExistingClinic(item.name, clinics),
+  );
+  const catIdForName = (name: string | null): string | null => matchExistingCat(name, cats);
+  const catIdsForNames = (names: string[]): string[] =>
+    names.map((name) => catIdForName(name)).filter((id): id is string => Boolean(id));
+  const matchedVisitIds = proposal.proposedVisits.map((item) =>
+    matchExistingVisit(item, visits, clinics, catIdsForNames(item.catNames)),
+  );
+  const matchedVaccinationIds = proposal.proposedVaccinations.map((item) =>
+    matchExistingVaccination(item, catIdForName(item.catName), vaccinations),
+  );
+  const matchedPreventiveIds = proposal.proposedPreventives.map((item) =>
+    matchExistingPreventive(item, catIdsForNames(item.catNames), preventives),
+  );
+  const likelyDuplicateVaccinations = proposal.proposedVaccinations.map((item) =>
+    detectDuplicateVaccination(item, catIdForName(item.catName), vaccinations),
+  );
+  const likelyDuplicatePreventives = proposal.proposedPreventives.map((item) =>
+    detectDuplicatePreventive(item, catIdsForNames(item.catNames), preventives),
+  );
+  const likelyDuplicateWeightEntries = proposal.proposedWeightEntries.map((item) =>
+    detectDuplicateWeightEntry(item, catIdForName(item.catName), weightEntries),
+  );
+  const likelyDuplicateSymptoms = proposal.proposedSymptoms.map((item) =>
+    detectDuplicateSymptom(item, catIdForName(item.catName), symptoms),
+  );
+  const likelyDuplicateExpenses = proposal.proposedExpenses.map((item) =>
+    detectDuplicateExpense(item, catIdsForNames(item.catNames), expenses),
+  );
+  const conditionMatches = proposal.proposedConditions.map((item) =>
+    matchExistingCondition(
+      item,
+      catIdForName(item.catName),
+      state.nineLives.conditionLibrary.items,
+      catConditions,
+    ),
+  );
+  const matchedLibraryConditionIds = conditionMatches.map((match) => match.matchedLibraryConditionId);
+  const matchedCatConditionIds = conditionMatches.map((match) => match.matchedCatConditionId);
+  const proposedSymptoms = proposal.proposedSymptoms.map((item, index) =>
+    likelyDuplicateSymptoms[index]
+      ? item
+      : { ...item, description: normalizeCustomLabelCasing(item.description) },
+  );
+  const proposedConditions = proposal.proposedConditions.map((item, index) =>
+    matchedLibraryConditionIds[index] || matchedCatConditionIds[index]
+      ? item
+      : { ...item, name: normalizeCustomLabelCasing(item.name) },
+  );
+
+  return {
+    proposedSymptoms,
+    proposedConditions,
+    matchedCatIds,
+    matchedClinicIds,
+    matchedVisitIds,
+    matchedVaccinationIds,
+    matchedPreventiveIds,
+    likelyDuplicateWeightEntries,
+    likelyDuplicateSymptoms,
+    likelyDuplicateVaccinations,
+    likelyDuplicatePreventives,
+    likelyDuplicateExpenses,
+    matchedLibraryConditionIds,
+    matchedCatConditionIds,
   };
 }
 
@@ -140,9 +315,11 @@ export const createDraftFromExtraction = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/ingestionDrafts/createFromExtraction',
-  async ({ householdId, uid, file }, { dispatch, rejectWithValue }) => {
+  async ({ householdId, uid, file }, { dispatch, getState, rejectWithValue }) => {
     try {
       const proposal = await extractProposalFromFile(file);
+      const state = getState() as RootState;
+      const matches = computeIngestionMatches(proposal, householdId, state);
       const draftId = doc(getDraftCollectionRef(householdId)).id;
       const draft: IngestionDraft = {
         id: draftId,
@@ -150,6 +327,7 @@ export const createDraftFromExtraction = createAsyncThunk<
         sourceType: file.type === 'application/pdf' ? 'pdf' : 'photo',
         sourceFileName: file.name,
         ...proposal,
+        ...matches,
         createdBy: uid,
         createdAt: Date.now(),
       };
@@ -160,6 +338,41 @@ export const createDraftFromExtraction = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         error instanceof Error ? error.message : 'Unable to read this document.',
+      );
+    }
+  },
+);
+
+/**
+ * Recomputes an existing draft's match/duplicate fields against current household data.
+ * Matches are only ever computed once, at extraction time, and stored on the draft — so
+ * resuming a draft later (after any relevant record has since changed) would otherwise keep
+ * showing stale results. Call this whenever a draft is reopened for review.
+ */
+export const refreshIngestionDraftMatches = createAsyncThunk<
+  IngestionDraft,
+  { householdId: string; draftId: string },
+  { rejectValue: string }
+>(
+  'nineLives/ingestionDrafts/refreshMatches',
+  async ({ householdId, draftId }, { dispatch, getState, rejectWithValue }) => {
+    const state = getState() as RootState;
+    const current = state.nineLives.ingestionDrafts.items.find((draft) => draft.id === draftId);
+
+    if (!current) {
+      return rejectWithValue('Ingestion draft not found.');
+    }
+
+    const matches = computeIngestionMatches(current, householdId, state);
+    const nextDraft: IngestionDraft = { ...current, ...matches };
+    dispatch(upsertIngestionDraft(nextDraft));
+
+    try {
+      await setDoc(getDraftDocRef(householdId, draftId), matches, { merge: true });
+      return nextDraft;
+    } catch (error) {
+      return rejectWithValue(
+        error instanceof Error ? error.message : 'Unable to refresh this draft.',
       );
     }
   },
@@ -268,6 +481,8 @@ function findCatId(name: string | null | undefined, cats: Cat[]): string | null 
     if (match) {
       return match.id;
     }
+
+    return matchExistingCat(name, cats);
   }
 
   return cats.length === 1 ? cats[0].id : null;
@@ -286,6 +501,8 @@ function findClinicId(name: string | null | undefined, clinics: VetClinic[]): st
     if (match) {
       return match.id;
     }
+
+    return matchExistingClinic(name, clinics);
   }
 
   return clinics.length === 1 ? clinics[0].id : null;
@@ -433,13 +650,14 @@ function createCondition(
   catId: string,
   visitId: string | null,
   now: number,
+  libraryConditionId: string | null,
 ): CatCondition {
   const id = doc(getCollectionRef(householdId, 'conditions')).id;
   return {
     id,
     catId,
-    source: 'custom',
-    libraryConditionId: null,
+    source: libraryConditionId ? 'library' : 'custom',
+    libraryConditionId,
     name: proposal.name.trim(),
     category: proposal.category,
     status: proposal.status,
@@ -495,7 +713,7 @@ export const confirmIngestionDraft = createAsyncThunk<
 >(
   'nineLives/ingestionDrafts/confirm',
   async (
-    { householdId, draftId, uid, selections = {}, file = null, recordTypeChoice },
+    { householdId, draftId, uid, selections = {}, file = null, recordTypeChoice, recordLabel = null },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -516,12 +734,18 @@ export const confirmIngestionDraft = createAsyncThunk<
     const batch = writeBatch(db);
     const createdCats: Cat[] = [];
     const createdClinics: VetClinic[] = [];
+    const selectedCatIds = normalizedDraft.proposedCats.map((_, index) =>
+      selectionAt(selections.catIds, index, normalizedDraft.matchedCatIds[index] ?? null),
+    );
+    const selectedClinicIds = normalizedDraft.proposedClinics.map((_, index) =>
+      selectionAt(selections.clinicIds, index, normalizedDraft.matchedClinicIds[index] ?? null),
+    );
 
     normalizedDraft.proposedCats.forEach((proposal, index) => {
       if (selections.includeCats?.[index] === false) {
         return;
       }
-      const selectedCatId = selections.catIds?.[index];
+      const selectedCatId = selectedCatIds[index];
       if (selectedCatId) {
         return;
       }
@@ -534,7 +758,7 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (selections.includeClinics?.[index] === false) {
         return;
       }
-      const selectedClinicId = selections.clinicIds?.[index];
+      const selectedClinicId = selectedClinicIds[index];
       if (selectedClinicId) {
         return;
       }
@@ -543,11 +767,11 @@ export const confirmIngestionDraft = createAsyncThunk<
       createdClinics.push(clinic);
     });
 
-    const selectedCats = (selections.catIds ?? [])
+    const selectedCats = selectedCatIds
       .filter((id): id is string => Boolean(id))
       .map((id) => existingCats.find((cat) => cat.id === id))
       .filter((cat): cat is Cat => Boolean(cat));
-    const selectedClinics = (selections.clinicIds ?? [])
+    const selectedClinics = selectedClinicIds
       .filter((id): id is string => Boolean(id))
       .map((id) => existingClinics.find((clinic) => clinic.id === id))
       .filter((clinic): clinic is VetClinic => Boolean(clinic));
@@ -563,31 +787,48 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (catIds.length === 0) {
         return;
       }
-      const visit: Visit = {
-        id: doc(getCollectionRef(householdId, 'visits')).id,
-        householdId,
-        catIds,
-        clinicId: findClinicId(proposal.clinicName, availableClinics),
-        doctorId: null,
-        status: 'completed',
-        reason: proposal.reason,
-        customReasonLabel: proposal.customReasonLabel ?? null,
-        followUpOfVisitId: null,
-        followUpNote: null,
-        title: null,
-        scheduledAt: proposal.scheduledAt,
-        completedAt: now,
-        summary: proposal.notes ?? null,
-        linkedSymptomIds: [],
-        linkedConditionIds: [],
-        linkedHealthRecordIds: [],
-        linkedVaccinationIds: [],
-        linkedWeightEntryIds: [],
-        reminderIds: [],
-        createdBy: uid,
-        createdAt: now,
-        lastEditedAt: now,
-      };
+      const selectedVisitId = selectionAt(
+        selections.visitIds,
+        index,
+        normalizedDraft.matchedVisitIds[index] ?? null,
+      );
+      const existingVisit = selectedVisitId
+        ? state.nineLives.visits.items.find((visit) => visit.id === selectedVisitId)
+        : undefined;
+      const visit: Visit = existingVisit
+        ? {
+            ...existingVisit,
+            catIds: [...new Set([...existingVisit.catIds, ...catIds])],
+            status: 'completed',
+            completedAt: existingVisit.completedAt ?? now,
+            summary: proposal.notes ?? existingVisit.summary,
+            lastEditedAt: now,
+          }
+        : {
+            id: doc(getCollectionRef(householdId, 'visits')).id,
+            householdId,
+            catIds,
+            clinicId: findClinicId(proposal.clinicName, availableClinics),
+            doctorId: null,
+            status: 'completed',
+            reason: proposal.reason,
+            customReasonLabel: proposal.customReasonLabel ?? null,
+            followUpOfVisitId: null,
+            followUpNote: null,
+            title: null,
+            scheduledAt: proposal.scheduledAt,
+            completedAt: now,
+            summary: proposal.notes ?? null,
+            linkedSymptomIds: [],
+            linkedConditionIds: [],
+            linkedHealthRecordIds: [],
+            linkedVaccinationIds: [],
+            linkedWeightEntryIds: [],
+            reminderIds: [],
+            createdBy: uid,
+            createdAt: now,
+            lastEditedAt: now,
+          };
       batch.set(getDocRef(householdId, 'visits', visit.id), visit);
       visits.push(visit);
     });
@@ -604,13 +845,25 @@ export const confirmIngestionDraft = createAsyncThunk<
       symptomIds: [],
       conditionIds: [],
     });
-    const visitLinks = new Map<string, VisitLinks>();
+    const visitLinks = new Map<string, VisitLinks>(
+      visits.map((visit) => [
+        visit.id,
+        {
+          vaccinationIds: [...visit.linkedVaccinationIds],
+          weightEntryIds: [...visit.linkedWeightEntryIds],
+          symptomIds: [...visit.linkedSymptomIds],
+          conditionIds: [...visit.linkedConditionIds],
+        },
+      ]),
+    );
     const linkToVisit = (visitId: string | null, key: keyof VisitLinks, id: string) => {
       if (!visitId) {
         return;
       }
       const links = visitLinks.get(visitId) ?? emptyLinks();
-      links[key].push(id);
+      if (!links[key].includes(id)) {
+        links[key].push(id);
+      }
       visitLinks.set(visitId, links);
     };
 
@@ -623,8 +876,38 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (!targetCatId) {
         return;
       }
-      const visitId = findNearestVisit(proposal.administeredAt, visits)?.id ?? null;
-      const vaccination = createVaccination(householdId, uid, proposal, targetCatId, visitId, now);
+      const visitId =
+        findNearestVisit(proposal.administeredAt, visits)?.id ??
+        selections.visitIds?.[index] ??
+        null;
+      const selectedVaccinationId = selectionAt(
+        selections.vaccinationIds,
+        index,
+        normalizedDraft.matchedVaccinationIds[index] ?? null,
+      );
+      const existingVaccination = selectedVaccinationId
+        ? state.nineLives.vaccinations.items.find((item) => item.id === selectedVaccinationId)
+        : undefined;
+      const dose: VaccinationDose = {
+        id: doc(getCollectionRef(householdId, 'vaccinations')).id,
+        administeredAt: proposal.administeredAt,
+        expiresAt: proposal.expiresAt ?? null,
+        clinicId: null,
+        doctorId: null,
+        lotNumber: proposal.lotNumber ?? null,
+        linkedVisitId: visitId,
+        createdBy: uid,
+        createdAt: now,
+      };
+      const vaccination = existingVaccination
+        ? {
+            ...existingVaccination,
+            history: [dose, ...existingVaccination.history],
+            lastAdministeredAt: dose.administeredAt,
+            expiresAt: dose.expiresAt,
+            lastEditedAt: now,
+          }
+        : createVaccination(householdId, uid, proposal, targetCatId, visitId, now);
       batch.set(getDocRef(householdId, 'vaccinations', vaccination.id), vaccination);
       vaccinations.push(vaccination);
       linkToVisit(visitId, 'vaccinationIds', vaccination.id);
@@ -639,8 +922,39 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (targetCatIds.length === 0) {
         return;
       }
-      const visitId = findNearestVisit(proposal.administeredAt, visits)?.id ?? null;
-      const preventive = createPreventive(householdId, uid, proposal, targetCatIds, visitId, now);
+      const visitId =
+        findNearestVisit(proposal.administeredAt, visits)?.id ??
+        selections.visitIds?.[index] ??
+        null;
+      const selectedPreventiveId = selectionAt(
+        selections.preventiveIds,
+        index,
+        normalizedDraft.matchedPreventiveIds[index] ?? null,
+      );
+      const existingPreventive = selectedPreventiveId
+        ? state.nineLives.preventives.items.find((item) => item.id === selectedPreventiveId)
+        : undefined;
+      const dose: PreventiveDose = {
+        id: doc(getCollectionRef(householdId, 'preventives')).id,
+        administeredAt: proposal.administeredAt,
+        expiresAt: proposal.expiresAt ?? null,
+        dosage: proposal.dosage ?? null,
+        clinicId: null,
+        doctorId: null,
+        linkedVisitId: visitId,
+        createdBy: uid,
+        createdAt: now,
+      };
+      const preventive = existingPreventive
+        ? {
+            ...existingPreventive,
+            catIds: [...new Set([...existingPreventive.catIds, ...targetCatIds])],
+            history: [dose, ...existingPreventive.history],
+            lastAdministeredAt: dose.administeredAt,
+            expiresAt: dose.expiresAt,
+            lastEditedAt: now,
+          }
+        : createPreventive(householdId, uid, proposal, targetCatIds, visitId, now);
       batch.set(getDocRef(householdId, 'preventives', preventive.id), preventive);
       preventives.push(preventive);
     });
@@ -686,8 +1000,40 @@ export const confirmIngestionDraft = createAsyncThunk<
       if (!targetCatId) {
         return;
       }
-      const visitId = findNearestVisit(proposal.occurredAt, visits)?.id ?? null;
-      const condition = createCondition(householdId, uid, proposal, targetCatId, visitId, now);
+      const visitId =
+        findNearestVisit(proposal.occurredAt, visits)?.id ??
+        selections.visitIds?.[index] ??
+        null;
+      const selectedConditionId = selectionAt(
+        selections.conditionIds,
+        index,
+        normalizedDraft.matchedCatConditionIds[index] ?? null,
+      );
+      const selectedLibraryConditionId = selectionAt(
+        selections.conditionLibraryIds,
+        index,
+        normalizedDraft.matchedLibraryConditionIds[index] ?? null,
+      );
+      const existingCondition = selectedConditionId
+        ? state.nineLives.catConditions.items.find((item) => item.id === selectedConditionId)
+        : undefined;
+      const condition = existingCondition
+        ? {
+            ...existingCondition,
+            linkedVisitIds: visitId
+              ? [...new Set([...existingCondition.linkedVisitIds, visitId])]
+              : existingCondition.linkedVisitIds,
+            lastEditedAt: now,
+          }
+        : createCondition(
+            householdId,
+            uid,
+            proposal,
+            targetCatId,
+            visitId,
+            now,
+            selectedLibraryConditionId,
+          );
       batch.set(getCatDetailDocRef(householdId, 'conditions', condition.id), condition);
       conditions.push(condition);
       linkToVisit(visitId, 'conditionIds', condition.id);
@@ -787,7 +1133,7 @@ export const confirmIngestionDraft = createAsyncThunk<
             fileURL,
             fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
             fileName: file.name,
-            label: null,
+            label: recordLabel?.trim() || null,
             recordType,
             customRecordTypeId,
             recordDate: primaryVisit?.scheduledAt ?? null,

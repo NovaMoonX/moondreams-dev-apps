@@ -1609,6 +1609,22 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
   ] as const;
 
+  const catConditions = [
+    {
+      id: 'seed-cat-condition-mochi-flea-allergy',
+      catId: 'seed-cat-mochi',
+      source: 'library' as const,
+      libraryConditionId: 'seed-condition-flea-allergy-dermatitis',
+      name: 'Flea allergy dermatitis',
+      category: 'allergy' as const,
+      status: 'ongoing' as const,
+      occurredAt: context.now - 8_640_000_000,
+      resolvedAt: null,
+      description: 'Managing seasonal itching with flea prevention and monitoring.',
+      linkedVisitIds: ['seed-visit-mochi-checkup'],
+    },
+  ] as const;
+
   const linkedVaccinationVisits: Record<string, string> = {
     'seed-vaccination-mochi-rabies': 'seed-visit-mochi-checkup',
   };
@@ -1626,6 +1642,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   let customLitterTypeCount = 0;
   let healthRecordCount = 0;
   let conditionLibraryCount = 0;
+  let catConditionCount = 0;
   let symptomCount = 0;
   let visitCount = 0;
 
@@ -1900,6 +1917,23 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     visitCount += 1;
   });
 
+  catConditions.forEach((condition) => {
+    const conditionRef = householdRef.collection('catConditions').doc(condition.id);
+
+    batch.set(
+      conditionRef,
+      {
+        ...condition,
+        householdId: HOUSEHOLD_ID,
+        createdBy: caretaker.uid,
+        createdAt,
+        lastEditedAt: context.now,
+      },
+      { merge: true },
+    );
+    catConditionCount += 1;
+  });
+
   expenses.forEach((expense) => {
     const expenseRef = householdRef.collection('expenses').doc(expense.id);
 
@@ -2114,6 +2148,185 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     },
     { merge: true },
   );
+  batch.set(
+    householdRef.collection('ingestionDrafts').doc('seed-ingestion-matching-draft'),
+    {
+      id: 'seed-ingestion-matching-draft',
+      householdId: HOUSEHOLD_ID,
+      sourceType: 'pdf',
+      sourceFileName: 'blue-bark-intelligent-matching-demo.pdf',
+      proposedCats: [
+        {
+          name: 'Mochi',
+          breed: 'Domestic Shorthair',
+          dateOfBirth: null,
+          isDateOfBirthEstimated: null,
+          sex: 'female',
+        },
+        {
+          name: 'Nimbus',
+          breed: null,
+          dateOfBirth: null,
+          isDateOfBirthEstimated: null,
+          sex: 'unknown',
+        },
+      ],
+      proposedClinics: [
+        {
+          name: 'Blue Bark Veterinary Clinic',
+          phone: '(415) 555-0147',
+          email: 'urgent@bluebarkvet.example',
+          website: null,
+          address: '272 Maple Avenue, Portland, OR',
+        },
+        {
+          name: 'Paws & Co. Mobile Vet',
+          phone: null,
+          email: null,
+          website: null,
+          address: null,
+        },
+      ],
+      proposedVisits: [
+        {
+          catNames: ['Mochi'],
+          clinicName: 'Blue Bark Veterinary Clinic',
+          scheduledAt: context.now + 2 * 3_600_000,
+          reason: 'follow_up',
+          customReasonLabel: null,
+          notes: 'Recheck appetite and skin irritation.',
+        },
+        {
+          catNames: ['Nimbus'],
+          clinicName: null,
+          scheduledAt: context.now + 10 * 86_400_000,
+          reason: 'checkup',
+          customReasonLabel: null,
+          notes: null,
+        },
+      ],
+      proposedVaccinations: [
+        {
+          catName: 'Mochi',
+          name: 'FVRCP',
+          administeredAt: context.now - 31_536_000_000,
+          expiresAt: context.now + 31_536_000_000,
+          lotNumber: 'DEMO-001',
+        },
+        {
+          catName: 'Nimbus',
+          name: 'Calicivirus',
+          administeredAt: context.now,
+          expiresAt: null,
+          lotNumber: null,
+        },
+      ],
+      proposedPreventives: [
+        {
+          catNames: ['Mochi'],
+          name: 'Revolution Plus',
+          type: 'flea-tick',
+          administeredAt: context.now - 2_592_000_000,
+          expiresAt: context.now + 2_592_000_000,
+          dosage: '0.5 mL',
+        },
+        {
+          catNames: ['Nimbus'],
+          name: 'Omega supplement',
+          type: 'medication',
+          administeredAt: context.now,
+          expiresAt: null,
+          dosage: null,
+        },
+      ],
+      proposedWeightEntries: [
+        {
+          catName: 'Mochi',
+          weight: 8.92,
+          unit: 'lb',
+          measuredAt: context.now - 2_505_600_000,
+        },
+        {
+          catName: 'Nimbus',
+          weight: 7.4,
+          unit: 'lb',
+          measuredAt: context.now,
+        },
+      ],
+      proposedSymptoms: [
+        {
+          catName: 'Mochi',
+          description: 'Skipped breakfast two days in a row but drinking water normally.',
+          quickTags: ['appetite_change'],
+          firstNoticedAt: context.now - 1_641_600_000,
+          severity: 'mild',
+        },
+        {
+          catName: 'Nimbus',
+          description: 'Sneezing after dusty litter change',
+          quickTags: ['other'],
+          firstNoticedAt: context.now,
+          severity: null,
+        },
+      ],
+      proposedConditions: [
+        {
+          catName: 'Mochi',
+          name: 'Flea allergy dermatitis',
+          category: 'allergy',
+          status: 'ongoing',
+          occurredAt: context.now,
+          description: 'Follow-up noted on the imported visit.',
+        },
+        {
+          catName: 'Juniper',
+          name: 'Periodontal disease',
+          category: 'chronic',
+          status: 'active',
+          occurredAt: context.now,
+          description: null,
+        },
+        {
+          catName: 'Nimbus',
+          name: 'Seasonal sneezing',
+          category: 'illness',
+          status: 'active',
+          occurredAt: context.now,
+          description: null,
+        },
+      ],
+      proposedExpenses: [
+        {
+          catNames: ['Mochi'],
+          items: [{ category: 'vet', label: null, amount: 82 }],
+          incurredAt: context.now - 2_592_000_000,
+          notes: 'Routine checkup at Blue Bark Veterinary Clinic.',
+        },
+      ],
+      proposedRecordType: 'vet_paperwork',
+      suggestKeepAsRecord: false,
+      confidence: 0.91,
+      matchedCatIds: ['seed-cat-mochi', null],
+      matchedClinicIds: ['seed-vet-clinic-blue-bark', null],
+      matchedVisitIds: ['seed-visit-mochi-follow-up', null],
+      matchedVaccinationIds: ['seed-vaccination-mochi-fvrcp', null],
+      matchedPreventiveIds: ['seed-preventive-mochi-revolution', null],
+      likelyDuplicateWeightEntries: [true, false],
+      likelyDuplicateSymptoms: [true, false],
+      likelyDuplicateVaccinations: [true, false],
+      likelyDuplicatePreventives: [true, false],
+      likelyDuplicateExpenses: [true],
+      matchedLibraryConditionIds: [
+        'seed-condition-flea-allergy-dermatitis',
+        'seed-condition-dental-disease',
+        null,
+      ],
+      matchedCatConditionIds: ['seed-cat-condition-mochi-flea-allergy', null, null],
+      createdBy: caretaker.uid,
+      createdAt: context.now,
+    },
+    { merge: true },
+  );
 
   await batch.commit();
 
@@ -2141,7 +2354,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       healthRecordCount +
       symptomCount +
       visitCount +
-      1, // seed-ingestion-draft
+      2, // seeded ingestion drafts
+      catConditionCount,
   };
 
   return result;
