@@ -512,9 +512,9 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
 
   return (
     <section className='border-border bg-card rounded-lg border p-4'>
-      <div className='grid gap-6 md:grid-cols-2'>
+      <div className='grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2'>
         {visitRows.length > 0 && (
-          <div>
+          <div className='min-w-0'>
             <div className='flex items-center justify-between'>
               <h2 className='text-lg font-semibold'>Upcoming visits</h2>
             </div>
@@ -603,7 +603,7 @@ function AttentionSection({ householdId }: AttentionSectionProps) {
         )}
 
         {otherRows.length > 0 && (
-          <div>
+          <div className='min-w-0'>
             <div className='flex items-center justify-between'>
               <h2 className='text-lg font-semibold'>Care reminders</h2>
               <span className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>

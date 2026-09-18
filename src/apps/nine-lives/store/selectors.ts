@@ -23,12 +23,16 @@ export const selectDoctorsByHousehold = (householdId: string | null | undefined)
     ? state.nineLives.doctors.items.filter((doctor) => doctor.householdId === householdId)
     : [];
 
-/** Sorted oldest-first, so the list reads as a queue and "resume" always means the longest-unfinished one first. */
+/**
+ * Sorted oldest-first, so the list reads as a queue and "resume" always means the longest-unfinished one first.
+ * Voice drafts are excluded — they're reviewed immediately after recording and are never meant to be a resumable
+ * "unfinished upload" (see useVoiceQuickEntry, which discards a voice draft as soon as its review ends).
+ */
 export const selectIngestionDraftsByHousehold =
   (householdId: string | null | undefined) => (state: RootState) =>
     householdId
       ? [...state.nineLives.ingestionDrafts.items]
-          .filter((draft) => draft.householdId === householdId)
+          .filter((draft) => draft.householdId === householdId && draft.sourceType !== 'voice')
           .sort((a, b) => a.createdAt - b.createdAt)
       : [];
 
@@ -36,7 +40,9 @@ export const selectIngestionDraftsByHousehold =
 export const selectIngestionDraftCountByHousehold =
   (householdId: string | null | undefined) => (state: RootState) =>
     householdId
-      ? state.nineLives.ingestionDrafts.items.filter((draft) => draft.householdId === householdId).length
+      ? state.nineLives.ingestionDrafts.items.filter(
+          (draft) => draft.householdId === householdId && draft.sourceType !== 'voice',
+        ).length
       : 0;
 
 export const selectDoctorsByClinic =

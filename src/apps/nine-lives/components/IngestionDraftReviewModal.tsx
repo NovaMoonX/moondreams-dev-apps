@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   Hospital,
+  Mic,
   Pencil,
   Pill,
   Plus,
@@ -109,6 +110,8 @@ interface IngestionDraftReviewModalProps {
   file: File | null;
   intent?: 'expense' | 'record';
   onClose: () => void;
+  /** Voice drafts only: discards this draft and starts listening again without leaving the review flow. */
+  onReRecord?: () => void;
 }
 
 type ReviewSection =
@@ -480,6 +483,7 @@ function IngestionDraftReviewModal({
   file,
   intent,
   onClose,
+  onReRecord,
 }: IngestionDraftReviewModalProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -1827,9 +1831,16 @@ function IngestionDraftReviewModal({
         {newCount} new item{newCount === 1 ? '' : 's'} will be created.
       </p>
       <div className='mt-2 flex flex-wrap justify-between gap-2'>
-        <Button type='button' variant='destructive' disabled={isSubmitting} onClick={() => void handleDiscard()}>
-          Discard
-        </Button>
+        <div className='flex gap-2'>
+          <Button type='button' variant='destructive' disabled={isSubmitting} onClick={() => void handleDiscard()}>
+            Discard
+          </Button>
+          {onReRecord && (
+            <Button type='button' variant='secondary' disabled={isSubmitting} onClick={onReRecord}>
+              <Mic className='h-4 w-4' /> Re-record
+            </Button>
+          )}
+        </div>
         <div className='flex gap-2'>
           <Button type='button' variant='secondary' disabled={isSubmitting} onClick={onClose}>
             Cancel

@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
+import { formatDateTime } from '@/utils/formatUtils';
 
 import { getHealthRecordStoragePath } from './healthRecordsActions';
 
@@ -322,17 +323,23 @@ export const createDraftFromExtraction = createAsyncThunk<
         return rejectWithValue('Nothing to extract.');
       }
 
+      const state = getState() as RootState;
+      const now = Date.now();
       const proposal = file
         ? await extractProposalFromFile(file)
-        : await extractProposalFromText(text ?? '');
-      const state = getState() as RootState;
+        : await extractProposalFromText(
+            text ?? '',
+            state.nineLives.cats.items
+              .filter((cat) => cat.householdId === householdId)
+              .map((cat) => cat.name),
+          );
       const matches = computeIngestionMatches(proposal, householdId, state);
       const draftId = doc(getDraftCollectionRef(householdId)).id;
       const draft: IngestionDraft = {
         id: draftId,
         householdId,
         sourceType: file ? (file.type === 'application/pdf' ? 'pdf' : 'photo') : 'voice',
-        sourceFileName: file?.name ?? 'Voice note',
+        sourceFileName: file?.name ?? `Voice note — ${formatDateTime(now)}`,
         ...proposal,
         ...matches,
         createdBy: uid,
