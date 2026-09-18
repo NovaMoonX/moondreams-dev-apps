@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { Button, Input, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
@@ -62,7 +62,7 @@ function Section({
   section: ReviewSection;
   expanded: ReviewSection;
   onToggle: (section: ReviewSection) => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const isExpanded = expanded === section;
 
@@ -105,6 +105,9 @@ function IngestionDraftReviewModal({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const proposedCat = draft.proposedCat;
+  const proposedClinic = draft.proposedClinic;
+  const proposedVisit = draft.proposedVisit;
 
   const catOptions = useMemo(
     () => [
@@ -191,20 +194,29 @@ function IngestionDraftReviewModal({
           {draft.confidence !== null && ` · ${Math.round(draft.confidence * 100)}% confidence`}
         </p>
 
-        {draft.proposedCat && (
+        {proposedCat && (
           <Section title='Cat' section='cat' expanded={expanded} onToggle={toggleSection}>
             <ToggleProposal
               included={selections.includeCat !== false}
               onToggle={() => setSelections((current) => ({ ...current, includeCat: current.includeCat === false }))}
             />
             <Input
-              value={draft.proposedCat.name}
+              value={proposedCat.name}
               aria-label='Proposed cat name'
               onChange={(event) =>
                 void dispatch(updateIngestionDraft({
                   householdId,
                   draftId: draft.id,
-                  changes: { proposedCat: { ...draft.proposedCat, name: event.target.value } },
+                  changes: {
+                    proposedCat: {
+                      ...proposedCat,
+                      name: event.target.value,
+                      breed: proposedCat.breed ?? null,
+                      dateOfBirth: proposedCat.dateOfBirth ?? null,
+                      isDateOfBirthEstimated: proposedCat.isDateOfBirthEstimated ?? null,
+                      sex: proposedCat.sex ?? null,
+                    },
+                  },
                 }))
               }
             />
@@ -217,20 +229,29 @@ function IngestionDraftReviewModal({
           </Section>
         )}
 
-        {draft.proposedClinic && (
+        {proposedClinic && (
           <Section title='Vet clinic' section='clinic' expanded={expanded} onToggle={toggleSection}>
             <ToggleProposal
               included={selections.includeClinic !== false}
               onToggle={() => setSelections((current) => ({ ...current, includeClinic: current.includeClinic === false }))}
             />
             <Input
-              value={draft.proposedClinic.name}
+              value={proposedClinic.name}
               aria-label='Proposed clinic name'
               onChange={(event) =>
                 void dispatch(updateIngestionDraft({
                   householdId,
                   draftId: draft.id,
-                  changes: { proposedClinic: { ...draft.proposedClinic, name: event.target.value } },
+                  changes: {
+                    proposedClinic: {
+                      ...proposedClinic,
+                      name: event.target.value,
+                      phone: proposedClinic.phone ?? null,
+                      email: proposedClinic.email ?? null,
+                      website: proposedClinic.website ?? null,
+                      address: proposedClinic.address ?? null,
+                    },
+                  },
                 }))
               }
             />
@@ -243,23 +264,32 @@ function IngestionDraftReviewModal({
           </Section>
         )}
 
-        {draft.proposedVisit && (
+        {proposedVisit && (
           <Section title='Visit' section='visit' expanded={expanded} onToggle={toggleSection}>
             <ToggleProposal
               included={selections.includeVisit !== false}
               onToggle={() => setSelections((current) => ({ ...current, includeVisit: current.includeVisit === false }))}
             />
             <p className='text-muted-foreground text-sm'>
-              {formatDateTime(draft.proposedVisit.scheduledAt)} · {draft.proposedVisit.reason}
+              {formatDateTime(proposedVisit.scheduledAt)} · {proposedVisit.reason}
             </p>
             <Input
-              value={draft.proposedVisit.notes ?? ''}
+              value={proposedVisit.notes ?? ''}
               placeholder='Visit notes'
               onChange={(event) =>
                 void dispatch(updateIngestionDraft({
                   householdId,
                   draftId: draft.id,
-                  changes: { proposedVisit: { ...draft.proposedVisit, notes: event.target.value } },
+                  changes: {
+                    proposedVisit: {
+                      ...proposedVisit,
+                      notes: event.target.value,
+                      catName: proposedVisit.catName ?? null,
+                      scheduledAt: proposedVisit.scheduledAt,
+                      reason: proposedVisit.reason,
+                      customReasonLabel: proposedVisit.customReasonLabel ?? null,
+                    },
+                  },
                 }))
               }
             />

@@ -29,7 +29,6 @@ import type {
   Vaccination,
   VaccinationDose,
   VetClinic,
-  Visit,
   WeightEntry,
 } from '../../types';
 import { extractProposalFromFile } from '../../lib/extractProposalFromFile';
@@ -62,7 +61,6 @@ const getDocRef = (householdId: string, name: string, id: string) =>
 
 const getCatDetailDocRef = (
   householdId: string,
-  catId: string,
   collectionName: 'conditions' | 'symptoms',
   id: string,
 ) => doc(getCollectionRef(householdId, collectionName), id);
@@ -479,7 +477,6 @@ export const confirmIngestionDraft = createAsyncThunk<
     const cat = shouldCreateCat
       ? createCat(householdId, uid, normalizedDraft.proposedCat as NonNullable<IngestionDraft['proposedCat']>, now)
       : null;
-    const catIds = cat ? [...cats.map((item) => item.id), cat.id] : cats.map((item) => item.id);
     const availableCats = cat ? [...cats, cat] : cats;
     const fallbackCatId = selectedCatId ?? cat?.id ?? availableCats[0]?.id ?? null;
     const shouldCreateClinic =
@@ -605,7 +602,7 @@ export const confirmIngestionDraft = createAsyncThunk<
         return;
       }
       const symptom = createSymptom(householdId, uid, proposal, targetCatId, visitId, now);
-      batch.set(getCatDetailDocRef(householdId, targetCatId, 'symptoms', symptom.id), symptom);
+      batch.set(getCatDetailDocRef(householdId, 'symptoms', symptom.id), symptom);
       symptoms.push(symptom);
     });
 
@@ -619,7 +616,7 @@ export const confirmIngestionDraft = createAsyncThunk<
         return;
       }
       const condition = createCondition(householdId, uid, proposal, targetCatId, visitId, now);
-      batch.set(getCatDetailDocRef(householdId, targetCatId, 'conditions', condition.id), condition);
+      batch.set(getCatDetailDocRef(householdId, 'conditions', condition.id), condition);
       conditions.push(condition);
     });
 

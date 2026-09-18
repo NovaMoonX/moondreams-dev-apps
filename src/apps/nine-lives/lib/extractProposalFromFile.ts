@@ -179,17 +179,27 @@ function normalizeProposal(value: Partial<ExtractedIngestionProposal>): Extracte
 export async function extractProposalFromFile(file: File): Promise<ExtractedIngestionProposal> {
   const inputFile = await compressIngestionImage(file);
   const data = asBase64(await inputFile.arrayBuffer());
-  const result = await generativeModel.generateContent([
-    `Extract only facts explicitly present in this veterinary document. Return null or an empty array when an entity is not present. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates. The source filename is "${file.name}".`,
-    {
-      inlineData: {
-        data,
-        mimeType: inputFile.type || file.type,
+  const result = await generativeModel.generateContent({
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `Extract only facts explicitly present in this veterinary document. Return null or an empty array when an entity is not present. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates. The source filename is "${file.name}".`,
+          },
+          {
+            inlineData: {
+              data,
+              mimeType: inputFile.type || file.type,
+            },
+          },
+        ],
       },
+    ],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema,
     },
-  ], {
-    responseMimeType: 'application/json',
-    responseSchema,
   });
   const parsed = JSON.parse(result.response.text()) as Partial<ExtractedIngestionProposal>;
 

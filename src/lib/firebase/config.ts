@@ -35,7 +35,8 @@ export const isUsingFirebaseEmulators =
   import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 
 if (isUsingFirebaseEmulators && typeof self !== 'undefined') {
-  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  (self as typeof self & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+    true;
 }
 
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY as
