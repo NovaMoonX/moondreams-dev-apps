@@ -38,6 +38,7 @@ import type {
   IngestionWeightProposal,
 } from '../../lib/extractProposalFromFile.types';
 import { extractProposalFromFile } from '../../lib/extractProposalFromFile';
+import { extractProposalFromText } from '../../lib/extractProposalFromText';
 import { detectDuplicateSymptom } from '../../utils/detectDuplicateSymptom';
 import { detectDuplicateWeightEntry } from '../../utils/detectDuplicateWeightEntry';
 import { matchExistingCat } from '../../utils/matchExistingCat';
@@ -311,21 +312,27 @@ function computeIngestionMatches(
 
 export const createDraftFromExtraction = createAsyncThunk<
   IngestionDraft,
-  { householdId: string; uid: string; file: File },
+  { householdId: string; uid: string; file?: File; text?: string },
   { rejectValue: string }
 >(
   'nineLives/ingestionDrafts/createFromExtraction',
-  async ({ householdId, uid, file }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, uid, file, text }, { dispatch, getState, rejectWithValue }) => {
     try {
-      const proposal = await extractProposalFromFile(file);
+      if (!file && !text?.trim()) {
+        return rejectWithValue('Nothing to extract.');
+      }
+
+      const proposal = file
+        ? await extractProposalFromFile(file)
+        : await extractProposalFromText(text ?? '');
       const state = getState() as RootState;
       const matches = computeIngestionMatches(proposal, householdId, state);
       const draftId = doc(getDraftCollectionRef(householdId)).id;
       const draft: IngestionDraft = {
         id: draftId,
         householdId,
-        sourceType: file.type === 'application/pdf' ? 'pdf' : 'photo',
-        sourceFileName: file.name,
+        sourceType: file ? (file.type === 'application/pdf' ? 'pdf' : 'photo') : 'voice',
+        sourceFileName: file?.name ?? 'Voice note',
         ...proposal,
         ...matches,
         createdBy: uid,

@@ -221,7 +221,7 @@ An upload is extracted by Firebase AI Logic into one temporary `IngestionDraft` 
 measurement, or expense — each proposed expense is itself itemized, mirroring
 `Expense`/`ExpenseLineItem`, and a visit's `catNames` can list more than one cat when the document
 makes clear one visit event covers several), plus arrays of proposed vaccinations, preventives,
-symptoms, and conditions. It also stores `sourceType`, `sourceFileName`, `proposedRecordType` (the
+symptoms, and conditions. It also stores `sourceType` (`pdf`, `photo`, or `voice`), `sourceFileName`, `proposedRecordType` (the
 model's guess at what kind of document this is, for the optional health record), a
 `suggestKeepAsRecord` toggle, `confidence`, `createdBy`, and `createdAt`; there is intentionally
 no status field. The proposal types themselves (`IngestionCatProposal`, `IngestionVisitProposal`,
@@ -236,6 +236,13 @@ brand-new item to any section the model missed, and confirming resolves cross-re
 clinics, visits, linked health data, expenses, and an optional health-record upload, tagged with
 `proposedRecordType` and linked to the first confirmed visit) before deleting the draft.
 Discarding only deletes the draft.
+
+The dashboard's voice quick-entry action uses the browser Web Speech API
+(`SpeechRecognition` or the `webkitSpeechRecognition` fallback) and never sends audio to a
+transcription service. The resulting transcript is sent to the same Firebase AI Logic extraction
+prompt as document ingestion, so matching and duplicate detection are shared automatically. The
+action is disabled when the browser does not expose either recognition API; Safari support is
+partial and version-dependent.
 
 Firebase App Check protects AI Logic calls. Production uses `VITE_FIREBASE_APPCHECK_SITE_KEY`
 with reCAPTCHA v3. Local emulator builds enable the App Check debug token; setting

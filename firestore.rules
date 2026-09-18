@@ -738,7 +738,9 @@ service cloud.firestore {
       }
 
       function isIngestionDraftShapeValid() {
-        return (request.resource.data.sourceType == 'pdf' || request.resource.data.sourceType == 'photo')
+        return (request.resource.data.sourceType == 'pdf'
+            || request.resource.data.sourceType == 'photo'
+            || request.resource.data.sourceType == 'voice')
           && isNonEmptyString(request.resource.data.sourceFileName)
           && request.resource.data.proposedCats is list
           && request.resource.data.proposedClinics is list

@@ -37,7 +37,7 @@ export interface ExtractedIngestionProposal {
 const nullableString = { type: SchemaType.STRING, nullable: true };
 const nullableNumber = { type: SchemaType.NUMBER, nullable: true };
 
-const responseSchema = {
+export const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
     proposedCats: {
@@ -367,6 +367,8 @@ function endOfToday(now: number): number {
   return date.getTime();
 }
 
+export { endOfToday };
+
 /**
  * Drops proposals whose event already-happened date is in the future relative to `cutoff`.
  * This is a defensive backstop for cases where the model still surfaces an upcoming
@@ -374,7 +376,10 @@ function endOfToday(now: number): number {
  * it not to. Fields like `expiresAt`/next-due dates are untouched — those are supposed to
  * be future dates.
  */
-function dropFutureEvents(proposal: ExtractedIngestionProposal, cutoff: number): ExtractedIngestionProposal {
+export function dropFutureEvents(
+  proposal: ExtractedIngestionProposal,
+  cutoff: number,
+): ExtractedIngestionProposal {
   return {
     ...proposal,
     proposedVisits: proposal.proposedVisits.filter((item) => item.scheduledAt <= cutoff),
@@ -387,7 +392,9 @@ function dropFutureEvents(proposal: ExtractedIngestionProposal, cutoff: number):
   };
 }
 
-function normalizeProposal(value: Partial<ExtractedIngestionProposal>): ExtractedIngestionProposal {
+export function normalizeProposal(
+  value: Partial<ExtractedIngestionProposal>,
+): ExtractedIngestionProposal {
   return {
     proposedCats: (value.proposedCats ?? []).map(normalizeCat),
     proposedClinics: (value.proposedClinics ?? []).map(normalizeClinic),
@@ -404,6 +411,16 @@ function normalizeProposal(value: Partial<ExtractedIngestionProposal>): Extracte
   };
 }
 
+export function buildExtractionPrompt(today: string, sourceContext: string): string {
+  const prompt = `Extract every fact explicitly present in this veterinary note — don't stop at the first or most prominent item of a given type; scan the entire source for every vaccination, weight measurement, clinic detail, and expense line, including ones stated only in a table, invoice line, or vitals block rather than in prose. Return an empty array when an entity type is not present — a source can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. When a source gives a date with no specific time of day (which is the normal case for a vaccination, preventive, weight, or expense date), encode it as noon UTC (12:00 UTC) on that calendar date, not midnight — midnight UTC shifts to the wrong calendar day once converted to a US time zone for display. Do not invent cat names, diagnoses, costs, or dates.
+
+Today's date is ${today}. Be strict about what counts as something that has actually happened: a visit's scheduledAt, a vaccination's or preventive's administeredAt, a weight's measuredAt, a symptom's firstNoticedAt, a condition's occurredAt, and an expense's incurredAt must all be on or before today. Many vet documents also list upcoming reminders — "next vaccination due", "revolution due in 3 weeks", a future recheck appointment, an upcoming refill — these describe something that has NOT happened yet and must NOT be proposed as a vaccination/preventive/visit/etc. The one exception is a vaccination or preventive's expiresAt (its next-due date) — that field is supposed to be in the future when known; only the administeredAt (when it was actually given) is constrained to today or earlier.
+
+${sourceContext}`;
+
+  return prompt;
+}
+
 export async function extractProposalFromFile(file: File): Promise<ExtractedIngestionProposal> {
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
@@ -415,11 +432,7 @@ export async function extractProposalFromFile(file: File): Promise<ExtractedInge
         role: 'user',
         parts: [
           {
-            text: `Extract every fact explicitly present in this veterinary document — don't stop at the first or most prominent item of a given type; scan the entire document for every vaccination, weight measurement, clinic detail, and expense line, including ones stated only in a table, invoice line, or vitals block rather than in prose. Return an empty array when an entity type is not present — a document can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. When a document gives a date with no specific time of day (which is the normal case for a vaccination, preventive, weight, or expense date), encode it as noon UTC (12:00 UTC) on that calendar date, not midnight — midnight UTC shifts to the wrong calendar day once converted to a US time zone for display. Do not invent cat names, diagnoses, costs, or dates.
-
-Today's date is ${today}. Be strict about what counts as something that has actually happened: a visit's scheduledAt, a vaccination's or preventive's administeredAt, a weight's measuredAt, a symptom's firstNoticedAt, a condition's occurredAt, and an expense's incurredAt must all be on or before today. Many vet documents also list upcoming reminders — "next vaccination due", "revolution due in 3 weeks", a future recheck appointment, an upcoming refill — these describe something that has NOT happened yet and must NOT be proposed as a vaccination/preventive/visit/etc. The one exception is a vaccination or preventive's expiresAt (its next-due date) — that field is supposed to be in the future when known; only the administeredAt (when it was actually given) is constrained to today or earlier.
-
-The source filename is "${file.name}".`,
+            text: buildExtractionPrompt(today, `The source filename is "${file.name}".`),
           },
           {
             inlineData: {
