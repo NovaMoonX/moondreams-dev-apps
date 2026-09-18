@@ -2,7 +2,20 @@ import { useState, type ReactNode } from 'react';
 
 import { Button, Disclosure, Input, Modal, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Check, Pencil } from 'lucide-react';
+import {
+  Activity,
+  Calendar,
+  Cat,
+  Check,
+  Hospital,
+  Pencil,
+  Pill,
+  Receipt,
+  Scale,
+  Stethoscope,
+  Syringe,
+  type LucideIcon,
+} from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -38,8 +51,7 @@ type ReviewSection =
   | 'weight'
   | 'symptoms'
   | 'conditions'
-  | 'expense'
-  | 'record';
+  | 'expense';
 
 const SECTION_LABELS: Record<ReviewSection, string> = {
   cat: 'Cats',
@@ -51,7 +63,18 @@ const SECTION_LABELS: Record<ReviewSection, string> = {
   symptoms: 'Symptoms',
   conditions: 'Conditions',
   expense: 'Expenses',
-  record: 'Record',
+};
+
+const SECTION_ICONS: Record<ReviewSection, LucideIcon> = {
+  cat: Cat,
+  clinic: Hospital,
+  visit: Calendar,
+  vaccinations: Syringe,
+  preventives: Pill,
+  weight: Scale,
+  symptoms: Activity,
+  conditions: Stethoscope,
+  expense: Receipt,
 };
 
 type ArrayIncludeKey =
@@ -65,7 +88,7 @@ type ArrayIncludeKey =
   | 'includeExpenses';
 
 interface EditingKey {
-  section: 'cat' | 'clinic' | 'visit' | 'vaccination' | 'preventive' | 'weight' | 'expense';
+  section: 'visit' | 'vaccination' | 'preventive' | 'weight' | 'expense';
   index: number;
 }
 
@@ -73,14 +96,16 @@ function IncludeToggle({
   included,
   onToggle,
   label = 'Include',
+  disabled = false,
 }: {
   included: boolean;
   onToggle: () => void;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className='flex items-center gap-2 text-sm'>
-      <Toggle size='sm' checked={included} onCheckedChange={onToggle} />
+      <Toggle size='sm' checked={included} onCheckedChange={onToggle} disabled={disabled} />
       {label}
     </label>
   );
@@ -117,12 +142,13 @@ function ReviewProgressPills({
       {sections.map((section) => {
         const isActive = expanded === section;
         const isReviewed = reviewed.has(section);
+        const Icon = SECTION_ICONS[section];
         return (
           <button
             key={section}
             type='button'
             onClick={() => onSelect(section)}
-            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
               isActive
                 ? 'border-primary text-primary'
                 : isReviewed
@@ -130,7 +156,7 @@ function ReviewProgressPills({
                   : 'border-border text-muted-foreground'
             }`}
           >
-            {SECTION_LABELS[section]}
+            <Icon className='h-3 w-3' /> {SECTION_LABELS[section]}
           </button>
         );
       })}
@@ -151,15 +177,22 @@ function Section({
   onToggle: (section: ReviewSection) => void;
   children: ReactNode;
 }) {
+  const Icon = SECTION_ICONS[section];
+
   return (
-    <div className='border-b border-border pb-3'>
+    <div className='rounded-lg border-2 border-border'>
       <Disclosure
-        label={<span className='font-medium'>{title}</span>}
+        label={
+          <span className='flex items-center gap-2 font-medium'>
+            <Icon className='h-4 w-4' /> {title}
+          </span>
+        }
         isOpen={expanded === section}
         onToggle={() => onToggle(section)}
-        buttonClassName='w-full'
+        buttonClassName='w-full px-3 py-2.5 hover:bg-muted/40'
+        className='overflow-visible'
       >
-        <div className='space-y-3 pt-2'>{children}</div>
+        <div className='space-y-3 border-t-2 border-border bg-muted/20 p-3'>{children}</div>
       </Disclosure>
     </div>
   );
@@ -189,17 +222,14 @@ function IngestionDraftReviewModal({
     ...(draft.proposedSymptoms.length ? (['symptoms'] as const) : []),
     ...(draft.proposedConditions.length ? (['conditions'] as const) : []),
     ...(draft.proposedExpenses.length ? (['expense'] as const) : []),
-    'record',
   ];
-  const initialSection: ReviewSection =
-    intent === 'expense' && draft.proposedExpenses.length
-      ? 'expense'
-      : intent === 'record'
-        ? 'record'
-        : (sectionsWithContent[0] ?? 'record');
+  const initialSection: ReviewSection | null =
+    intent === 'expense' && draft.proposedExpenses.length ? 'expense' : (sectionsWithContent[0] ?? null);
 
   const [expanded, setExpanded] = useState<ReviewSection | null>(initialSection);
-  const [reviewed, setReviewed] = useState<Set<ReviewSection>>(new Set([initialSection]));
+  const [reviewed, setReviewed] = useState<Set<ReviewSection>>(
+    new Set(initialSection ? [initialSection] : []),
+  );
   const [editing, setEditing] = useState<EditingKey | null>(null);
   const [selections, setSelections] = useState<IngestionDraftSelections>({
     saveAsRecord: draft.suggestKeepAsRecord,
@@ -359,7 +389,7 @@ function IngestionDraftReviewModal({
       isOpen={isOpen}
       onClose={onClose}
       title='Review extracted records'
-      className='w-full sm:min-w-[36rem] sm:max-w-2xl'
+      className='w-full sm:min-w-xl sm:max-w-2xl'
     >
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
@@ -379,19 +409,12 @@ function IngestionDraftReviewModal({
           <Section title='Cats' section='cat' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedCats.map((cat, index) => (
               <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includeCats', index)} onToggle={() => toggleArrayInclude('includeCats', index)} />
-                  <EditPencilButton editing={isEditing('cat', index)} onClick={() => toggleEditing('cat', index)} />
-                </div>
-                {isEditing('cat', index) ? (
-                  <Input
-                    value={cat.name}
-                    aria-label='Proposed cat name'
-                    onChange={(event) => updateCatAt(index, { name: event.target.value })}
-                  />
-                ) : (
-                  <p>{cat.name}</p>
-                )}
+                <IncludeToggle included={isIncluded('includeCats', index)} onToggle={() => toggleArrayInclude('includeCats', index)} />
+                <Input
+                  value={cat.name}
+                  aria-label='Proposed cat name'
+                  onChange={(event) => updateCatAt(index, { name: event.target.value })}
+                />
                 <Select
                   options={catOptionsFor(cat.name)}
                   value={selections.catIds?.[index] ?? ''}
@@ -413,19 +436,12 @@ function IngestionDraftReviewModal({
           <Section title='Vet clinics' section='clinic' expanded={expanded} onToggle={toggleSection}>
             {draft.proposedClinics.map((clinic, index) => (
               <div key={index} className='space-y-2 rounded-md border border-border p-2'>
-                <div className='flex items-center justify-between gap-2'>
-                  <IncludeToggle included={isIncluded('includeClinics', index)} onToggle={() => toggleArrayInclude('includeClinics', index)} />
-                  <EditPencilButton editing={isEditing('clinic', index)} onClick={() => toggleEditing('clinic', index)} />
-                </div>
-                {isEditing('clinic', index) ? (
-                  <Input
-                    value={clinic.name}
-                    aria-label='Proposed clinic name'
-                    onChange={(event) => updateClinicAt(index, { name: event.target.value })}
-                  />
-                ) : (
-                  <p>{clinic.name}</p>
-                )}
+                <IncludeToggle included={isIncluded('includeClinics', index)} onToggle={() => toggleArrayInclude('includeClinics', index)} />
+                <Input
+                  value={clinic.name}
+                  aria-label='Proposed clinic name'
+                  onChange={(event) => updateClinicAt(index, { name: event.target.value })}
+                />
                 <Select
                   options={clinicOptionsFor(clinic.name)}
                   value={selections.clinicIds?.[index] ?? ''}
@@ -686,15 +702,21 @@ function IngestionDraftReviewModal({
           </Section>
         )}
 
-        <Section title='Permanent health record' section='record' expanded={expanded} onToggle={toggleSection}>
-          <IncludeToggle
-            label='Save as record'
-            included={selections.saveAsRecord !== false}
-            onToggle={() => setSelections((current) => ({ ...current, saveAsRecord: current.saveAsRecord === false }))}
-          />
-          <p className='text-muted-foreground text-sm'>Keep the uploaded file attached to the confirmed visit.</p>
-        </Section>
         {error && <p className='text-sm text-red-500'>{error}</p>}
+      </div>
+
+      <div className='mt-3 space-y-1 border-t border-border pt-3'>
+        <IncludeToggle
+          label='Save as a permanent health record'
+          included={Boolean(file) && selections.saveAsRecord !== false}
+          onToggle={() => setSelections((current) => ({ ...current, saveAsRecord: current.saveAsRecord === false }))}
+          disabled={!file}
+        />
+        <p className='text-muted-foreground text-sm'>
+          {file
+            ? 'Keep the uploaded file attached to the confirmed visit.'
+            : "The original file isn't available to save — re-upload the document to keep it as a record."}
+        </p>
       </div>
 
       <p className='mt-3 text-sm text-muted-foreground'>

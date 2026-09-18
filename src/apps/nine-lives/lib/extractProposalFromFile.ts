@@ -3,6 +3,7 @@ import { SchemaType } from 'firebase/ai';
 import { generativeModel } from '@/lib/firebase/ai';
 
 import { compressIngestionImage } from '../utils/imageCompression';
+import { DEFAULT_EXPENSE_CATEGORIES } from '../utils/budgetCalculators';
 import type {
   IngestionCatProposal,
   IngestionClinicProposal,
@@ -85,7 +86,11 @@ const responseSchema = {
         type: SchemaType.OBJECT,
         properties: {
           catName: nullableString,
-          name: { type: SchemaType.STRING },
+          name: {
+            type: SchemaType.STRING,
+            description:
+              "The vaccine name only (e.g. 'FVRCP', 'Rabies', 'FeLV') — never include a duration, dosing interval, or next-due information; that belongs in expiresAt.",
+          },
           administeredAt: { type: SchemaType.NUMBER },
           expiresAt: nullableNumber,
           lotNumber: nullableString,
@@ -160,7 +165,12 @@ const responseSchema = {
             items: {
               type: SchemaType.OBJECT,
               properties: {
-                category: { type: SchemaType.STRING },
+                category: {
+                  type: SchemaType.STRING,
+                  enum: DEFAULT_EXPENSE_CATEGORIES,
+                  description:
+                    "Use 'vet' for anything tied to a clinic visit, exam, or vet service — including when it's billed alongside vaccines, labs, or medication given during that visit — not just when the line item literally says 'vet'.",
+                },
                 label: nullableString,
                 amount: { type: SchemaType.NUMBER },
               },
