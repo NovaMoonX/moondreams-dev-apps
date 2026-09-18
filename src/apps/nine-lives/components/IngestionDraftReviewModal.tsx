@@ -535,6 +535,8 @@ function IngestionDraftReviewModal({
     includeVaccinations: likelyDuplicateVaccinations.map((isDuplicate) => !isDuplicate),
     includePreventives: likelyDuplicatePreventives.map((isDuplicate) => !isDuplicate),
     includeExpenses: likelyDuplicateExpenses.map((isDuplicate) => !isDuplicate),
+    includeWeightEntries: likelyDuplicateWeightEntries.map((isDuplicate) => !isDuplicate),
+    includeSymptoms: likelyDuplicateSymptoms.map((isDuplicate) => !isDuplicate),
     conditionIds: matchedCatConditionIds,
     conditionLibraryIds: matchedLibraryConditionIds,
   });
@@ -862,6 +864,12 @@ function IngestionDraftReviewModal({
     draft.proposedSymptoms.filter((_, index) => isIncluded('includeSymptoms', index)).length +
     countNewItems(draft.proposedConditions.length, 'includeConditions', selections.conditionIds) +
     draft.proposedExpenses.filter((_, index) => isIncluded('includeExpenses', index)).length;
+  const duplicateCount =
+    likelyDuplicateVaccinations.filter(Boolean).length +
+    likelyDuplicatePreventives.filter(Boolean).length +
+    likelyDuplicateWeightEntries.filter(Boolean).length +
+    likelyDuplicateSymptoms.filter(Boolean).length +
+    likelyDuplicateExpenses.filter(Boolean).length;
 
   const handleConfirm = async () => {
     setError(null);
@@ -961,8 +969,16 @@ function IngestionDraftReviewModal({
             expanded={expanded}
             onSelect={(section) => (section === 'all' ? expandAllSections() : toggleSection(section))}
           />
-          <p className='text-success text-sm'>
-            {newCount} new item{newCount === 1 ? '' : 's'}
+          <p className='text-sm'>
+            <span className='text-success'>
+              {newCount} new item{newCount === 1 ? '' : 's'}
+            </span>
+            {duplicateCount > 0 && (
+              <span className='text-warning'>
+                {' · '}
+                {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} detected
+              </span>
+            )}
           </p>
           <DropdownMenu
             items={addItemMenuItems}
