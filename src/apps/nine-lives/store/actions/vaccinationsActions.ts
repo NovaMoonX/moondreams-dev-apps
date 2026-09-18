@@ -2,7 +2,6 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
 import type { RootState } from '@/store';
 import type { Vaccination, VaccinationDose } from '@apps/nine-lives/types';
 
@@ -11,61 +10,42 @@ import {
   revertVaccination,
   upsertVaccination,
 } from '../slices/vaccinationsSlice';
+import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-// A booster running out warrants more lead time than a same-week visit reminder.
-const VACCINATION_REMINDER_LEAD_MS = 3 * ONE_DAY_MS;
+// Matches the "due soon" window the dashboard already flags (see DUE_SOON_WINDOW_MS in
+// utils/attentionItems.ts) plus a same-day nudge — a booster running out warrants more
+// lead time than a same-week visit reminder.
+const VACCINATION_REMINDER_LEAD_MS = 7 * ONE_DAY_MS;
 
-/** Best-effort: reminders are a stretch feature, so a failure here shouldn't block the vaccination write. */
-export async function scheduleVaccinationReminder(
+/** Schedules a week-before and a day-of reminder for the vaccination's `expiresAt`, if it has one. */
+export async function scheduleVaccinationReminders(
   state: RootState,
   householdId: string,
   uid: string,
   vaccination: Pick<Vaccination, 'id' | 'catId' | 'name' | 'expiresAt'>,
-): Promise<string | null> {
+): Promise<string[]> {
   if (!vaccination.expiresAt) {
-    return null;
-  }
-
-  const targetUids =
-    state.nineLives.households.items.find((household) => household.id === householdId)
-      ?.members ?? [];
-
-  if (targetUids.length === 0) {
-    return null;
+    return [];
   }
 
   const cat = state.nineLives.cats.items.find((item) => item.id === vaccination.catId);
   const catName = cat?.name ? `${cat.name}'s ` : '';
+  const relatedEntityPath = `apps/nine-lives/households/${householdId}/vaccinations/${vaccination.id}`;
 
-  try {
-    const reminder = await scheduleReminder({
-      appId: 'nine-lives',
-      targetUids,
+  return scheduleEntityReminders(state, householdId, uid, [
+    {
       title: 'Vaccination due soon',
-      body: `${catName}${vaccination.name} is due soon.`,
+      body: `${catName}${vaccination.name} is due in a week.`,
       scheduledFor: vaccination.expiresAt - VACCINATION_REMINDER_LEAD_MS,
-      createdBy: uid,
-      relatedEntityPath: `apps/nine-lives/households/${householdId}/vaccinations/${vaccination.id}`,
-    });
-
-    return reminder.id;
-  } catch {
-    return null;
-  }
-}
-
-/** Best-effort: same rationale as `scheduleVaccinationReminder`. */
-export async function cancelVaccinationReminder(reminderId: string | null): Promise<void> {
-  if (!reminderId) {
-    return;
-  }
-
-  try {
-    await cancelReminder(reminderId);
-  } catch {
-    // Reminders are a stretch feature — a stale one is a lesser problem than blocking the write.
-  }
+      relatedEntityPath,
+    },
+    {
+      title: 'Vaccination due today',
+      body: `${catName}${vaccination.name} is due today.`,
+      scheduledFor: vaccination.expiresAt,
+      relatedEntityPath,
+    },
+  ]);
 }
 
 export type VaccinationDoseInput = Partial<VaccinationDose> &
@@ -151,13 +131,13 @@ export const createVaccination = createAsyncThunk<
       firstAdministeredAt: dose.administeredAt,
       lastAdministeredAt: dose.administeredAt,
       expiresAt: dose.expiresAt,
-      reminderId: null,
+      reminderIds: [],
       createdBy: uid,
       createdAt: now,
       lastEditedAt: now,
     };
 
-    nextVaccination.reminderId = await scheduleVaccinationReminder(
+    nextVaccination.reminderIds = await scheduleVaccinationReminders(
       getState() as RootState,
       householdId,
       uid,
@@ -215,10 +195,10 @@ export const updateVaccination = createAsyncThunk<
     };
 
     if (nextVaccination.expiresAt !== current.expiresAt) {
-      await cancelVaccinationReminder(current.reminderId);
-      nextVaccination.reminderId = uid
-        ? await scheduleVaccinationReminder(state, householdId, uid, nextVaccination)
-        : null;
+      await cancelEntityReminders(current.reminderIds);
+      nextVaccination.reminderIds = uid
+        ? await scheduleVaccinationReminders(state, householdId, uid, nextVaccination)
+        : [];
     }
 
     dispatch(upsertVaccination(nextVaccination));
@@ -230,7 +210,7 @@ export const updateVaccination = createAsyncThunk<
         lastAdministeredAt: nextVaccination.lastAdministeredAt,
         expiresAt: nextVaccination.expiresAt,
         firstAdministeredAt: nextVaccination.firstAdministeredAt,
-        reminderId: nextVaccination.reminderId,
+        reminderIds: nextVaccination.reminderIds,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
       return nextVaccination;
@@ -285,8 +265,8 @@ export const logVaccinationDose = createAsyncThunk<
     };
 
     if (nextVaccination.expiresAt !== current.expiresAt) {
-      await cancelVaccinationReminder(current.reminderId);
-      nextVaccination.reminderId = await scheduleVaccinationReminder(
+      await cancelEntityReminders(current.reminderIds);
+      nextVaccination.reminderIds = await scheduleVaccinationReminders(
         state,
         householdId,
         uid,
@@ -301,7 +281,7 @@ export const logVaccinationDose = createAsyncThunk<
         history: nextHistory,
         lastAdministeredAt: nextVaccination.lastAdministeredAt,
         expiresAt: nextVaccination.expiresAt,
-        reminderId: nextVaccination.reminderId,
+        reminderIds: nextVaccination.reminderIds,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
       return nextVaccination;
@@ -332,7 +312,7 @@ export const deleteVaccination = createAsyncThunk<
 
     try {
       await deleteDoc(getVaccinationDocRef(householdId, vaccinationId));
-      await cancelVaccinationReminder(current.reminderId);
+      await cancelEntityReminders(current.reminderIds);
       return { id: vaccinationId };
     } catch (error) {
       dispatch(revertVaccination({ id: vaccinationId }));
@@ -380,10 +360,10 @@ export const deleteVaccinationDose = createAsyncThunk<
     };
 
     if (nextVaccination.expiresAt !== current.expiresAt) {
-      await cancelVaccinationReminder(current.reminderId);
-      nextVaccination.reminderId = uid
-        ? await scheduleVaccinationReminder(state, householdId, uid, nextVaccination)
-        : null;
+      await cancelEntityReminders(current.reminderIds);
+      nextVaccination.reminderIds = uid
+        ? await scheduleVaccinationReminders(state, householdId, uid, nextVaccination)
+        : [];
     }
 
     dispatch(upsertVaccination(nextVaccination));
@@ -394,7 +374,7 @@ export const deleteVaccinationDose = createAsyncThunk<
         lastAdministeredAt: nextVaccination.lastAdministeredAt,
         expiresAt: nextVaccination.expiresAt,
         firstAdministeredAt: nextVaccination.firstAdministeredAt,
-        reminderId: nextVaccination.reminderId,
+        reminderIds: nextVaccination.reminderIds,
         lastEditedAt: nextVaccination.lastEditedAt,
       });
       return { id: vaccinationId, deletedRecord: false };

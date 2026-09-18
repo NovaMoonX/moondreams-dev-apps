@@ -10,6 +10,7 @@ import {
   revertLitterEntry,
   upsertLitterEntry,
 } from '../slices/litterEntriesSlice';
+import { syncLitterBoxReminder } from './litterBoxesActions';
 
 function normalizeLitterEntryInput(value: Partial<LitterEntry>): Partial<LitterEntry> {
   const next = { ...value };
@@ -55,7 +56,7 @@ export const createLitterEntry = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/litterEntries/create',
-  async ({ householdId, uid, litterEntry }, { dispatch }) => {
+  async ({ householdId, uid, litterEntry }, { dispatch, getState }) => {
     const normalizedEntry = normalizeLitterEntryInput(litterEntry);
     const now = Date.now();
     const entryId =
@@ -90,6 +91,17 @@ export const createLitterEntry = createAsyncThunk<
     await setDoc(getLitterEntryDocRef(householdId, entryId), nextEntry);
     dispatch(upsertLitterEntry(nextEntry));
 
+    if (nextEntry.isFullChange) {
+      const state = getState() as RootState;
+      await syncLitterBoxReminder(
+        state,
+        householdId,
+        uid,
+        nextEntry.litterBoxId,
+        state.nineLives.litterEntries.items,
+      );
+    }
+
     return nextEntry;
   },
 );
@@ -99,12 +111,14 @@ export const updateLitterEntry = createAsyncThunk<
   {
     householdId: string;
     entryId: string;
+    /** Only needed to schedule a fresh litter reminder if this edit changes which entry is the box's latest full change. */
+    uid?: string;
     changes: Partial<LitterEntry>;
   },
   { rejectValue: string }
 >(
   'nineLives/litterEntries/update',
-  async ({ householdId, entryId, changes }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, entryId, uid, changes }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.litterEntries.items.find((entry) => entry.id === entryId);
 
@@ -145,6 +159,26 @@ export const updateLitterEntry = createAsyncThunk<
         notes: nextEntry.notes,
         lastEditedAt: nextEntry.lastEditedAt,
       });
+
+      const nextState = getState() as RootState;
+      await syncLitterBoxReminder(
+        nextState,
+        householdId,
+        uid,
+        nextEntry.litterBoxId,
+        nextState.nineLives.litterEntries.items,
+      );
+
+      if (current.litterBoxId !== nextEntry.litterBoxId) {
+        await syncLitterBoxReminder(
+          nextState,
+          householdId,
+          uid,
+          current.litterBoxId,
+          nextState.nineLives.litterEntries.items,
+        );
+      }
+
       return nextEntry;
     } catch (error) {
       dispatch(revertLitterEntry({ id: entryId }));
@@ -157,11 +191,11 @@ export const updateLitterEntry = createAsyncThunk<
 
 export const deleteLitterEntry = createAsyncThunk<
   { id: string },
-  { householdId: string; entryId: string },
+  { householdId: string; entryId: string; uid?: string },
   { rejectValue: string }
 >(
   'nineLives/litterEntries/delete',
-  async ({ householdId, entryId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, entryId, uid }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.litterEntries.items.find((entry) => entry.id === entryId);
 
@@ -173,6 +207,18 @@ export const deleteLitterEntry = createAsyncThunk<
 
     try {
       await deleteDoc(getLitterEntryDocRef(householdId, entryId));
+
+      if (current.isFullChange) {
+        const nextState = getState() as RootState;
+        await syncLitterBoxReminder(
+          nextState,
+          householdId,
+          uid,
+          current.litterBoxId,
+          nextState.nineLives.litterEntries.items,
+        );
+      }
+
       return { id: entryId };
     } catch (error) {
       dispatch(revertLitterEntry({ id: entryId }));

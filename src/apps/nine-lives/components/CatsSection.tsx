@@ -87,7 +87,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
     try {
       await dispatch(
-        updateCat({ householdId, catId: nextCat.id, changes: nextCat }),
+        updateCat({ householdId, catId: nextCat.id, uid: user?.uid, changes: nextCat }),
       ).unwrap();
       setPendingDetailsCat(null);
       setEditingCat(null);

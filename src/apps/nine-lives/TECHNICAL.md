@@ -91,6 +91,7 @@ interface Cat {
   };
   personalityTraits?: string[]; // free text; UI offers a preset list plus custom entry — Next Step
   notes?: string;
+  reminderIds: string[]; // yearly-recurring birthday reminder, plus an adoption-anniversary one if adoptedAt is set
   createdAt: number;
   lastEditedAt: number;
 }
@@ -218,7 +219,7 @@ interface Vaccination {
   doctorId?: string;
   lotNumber?: string;
   linkedVisitId?: string;
-  reminderId: string | null; // Issue 18 — pending push reminder scheduled near expiresAt, cancelled/rescheduled when it changes
+  reminderIds: string[]; // pending push reminders (a week before expiresAt, and the day of), cancelled/rescheduled when it changes
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -250,6 +251,7 @@ interface Preventive {
   clinicId: string | null;
   doctorId: string | null;
   linkedVisitId: string | null;
+  reminderIds: string[]; // pending push reminders (a week before expiresAt, and the day of), cancelled/rescheduled when it changes
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -308,6 +310,7 @@ interface LitterBox {
   name: string;
   location: string | null;
   isActive: boolean; // false once retired (e.g. after switching litter); history is kept, but it's hidden from new weigh-ins
+  reminderIds: string[]; // pending "litter change coming up" reminder, recomputed from the box's latest full change whenever a litter entry affecting it changes
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -399,7 +402,7 @@ interface Visit {
   linkedHealthRecordIds: string[];
   linkedVaccinationIds: string[];
   linkedWeightEntryIds: string[];
-  reminderId: string | null; // Issue 18 — pending push reminder scheduled a day before scheduledAt, cancelled/rescheduled when it changes
+  reminderIds: string[]; // pending push reminders (a day before scheduledAt), cancelled/rescheduled when it changes
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -745,10 +748,18 @@ The UI groups this into buckets like "This month," "Next 3 months," "Beyond," an
 
 ```
 [PENDING] ---> scheduled Cloud Function finds scheduledFor <= now ---> sends push via FCM ---> [SENT]
+                                                                    (recurrence: 'yearly') ---> [PENDING], scheduledFor rolled to next year
 [PENDING] ---> creator cancels (e.g. visit was rescheduled)        ---> [CANCELLED]
 ```
 
-Nine Lives would create a `Reminder` when a `Visit` is scheduled (a day before `scheduledAt`) and when a `Vaccination.expiresAt` or `Preventive.expiresAt` approaches. This is explicitly sequenced after the rest of Nine Lives' UI is working, not early — see the Issue Roadmap's tiering.
+Nine Lives schedules a `Reminder` (or a small set of them) for several entities, each entity carrying its own `reminderIds: string[]` back-pointer so they can be cancelled and rescheduled when the underlying date changes:
+
+- **Visit**: one reminder, a day before `scheduledAt`.
+- **Vaccination / Preventive**: two reminders per `expiresAt` — a week before (matching the dashboard's own `DUE_SOON_WINDOW_MS`) and the day of.
+- **LitterBox**: one reminder, two days before the 30-day overdue mark (`LITTER_OVERDUE_DAYS`), recomputed from the box's latest logged full change whenever a litter entry affecting it is created, edited, or deleted.
+- **Cat**: one `recurrence: 'yearly'` reminder for the birthday (`dateOfBirth`), and one more for the adoption anniversary if `adoptedAt` is set — each keeps firing every year without being rescheduled, since the Cloud Function itself rolls a yearly reminder's `scheduledFor` forward after each send instead of marking it `sent`.
+
+This is explicitly sequenced after the rest of Nine Lives' UI is working, not early — see the Issue Roadmap's tiering.
 
 ## Client State Management (Redux Toolkit)
 

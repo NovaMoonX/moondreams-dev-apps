@@ -30,7 +30,7 @@ function utcCalendarDaysBetween(fromMs: number, toMs: number): number {
 }
 
 /** The next occurrence (today or later) of `timestamp`'s UTC month/day, anchored to `nowMs`'s year (or the following year, if this year's date has already passed). */
-function nextOccurrenceOnOrAfter(timestamp: number, nowMs: number): number {
+export function nextOccurrenceOnOrAfter(timestamp: number, nowMs: number): number {
   const source = new Date(timestamp);
   const now = new Date(nowMs);
   const occurrence = Date.UTC(now.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate());

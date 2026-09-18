@@ -10,6 +10,44 @@ import {
   revertPreventive,
   upsertPreventive,
 } from '../slices/preventivesSlice';
+import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
+
+// Matches the "due soon" window the dashboard already flags (see DUE_SOON_WINDOW_MS in
+// utils/attentionItems.ts) plus a same-day nudge.
+const PREVENTIVE_REMINDER_LEAD_MS = 7 * ONE_DAY_MS;
+
+/** Schedules a week-before and a day-of reminder for the preventive's `expiresAt`, if it has one. */
+async function schedulePreventiveReminders(
+  state: RootState,
+  householdId: string,
+  uid: string,
+  preventive: Pick<Preventive, 'id' | 'catIds' | 'name' | 'expiresAt'>,
+): Promise<string[]> {
+  if (!preventive.expiresAt) {
+    return [];
+  }
+
+  const catNames = preventive.catIds
+    .map((catId) => state.nineLives.cats.items.find((cat) => cat.id === catId)?.name)
+    .filter((name): name is string => Boolean(name));
+  const forCats = catNames.length > 0 ? `${catNames.join(', ')}'s ` : '';
+  const relatedEntityPath = `apps/nine-lives/households/${householdId}/preventives/${preventive.id}`;
+
+  return scheduleEntityReminders(state, householdId, uid, [
+    {
+      title: 'Preventive due soon',
+      body: `${forCats}${preventive.name} is due in a week.`,
+      scheduledFor: preventive.expiresAt - PREVENTIVE_REMINDER_LEAD_MS,
+      relatedEntityPath,
+    },
+    {
+      title: 'Preventive due today',
+      body: `${forCats}${preventive.name} is due today.`,
+      scheduledFor: preventive.expiresAt,
+      relatedEntityPath,
+    },
+  ]);
+}
 
 export type PreventiveDoseInput = Partial<PreventiveDose> &
   Pick<PreventiveDose, 'administeredAt'>;
@@ -61,7 +99,7 @@ export const createPreventive = createAsyncThunk<
   { rejectValue: string }
 >(
   'nineLives/preventives/create',
-  async ({ householdId, uid, preventive }, { dispatch, rejectWithValue }) => {
+  async ({ householdId, uid, preventive }, { dispatch, getState, rejectWithValue }) => {
     const trimmedName = preventive.name.trim();
 
     if (!trimmedName) {
@@ -101,10 +139,18 @@ export const createPreventive = createAsyncThunk<
       firstAdministeredAt: dose.administeredAt,
       lastAdministeredAt: dose.administeredAt,
       expiresAt: dose.expiresAt,
+      reminderIds: [],
       createdBy: uid,
       createdAt: now,
       lastEditedAt: now,
     };
+
+    nextPreventive.reminderIds = await schedulePreventiveReminders(
+      getState() as RootState,
+      householdId,
+      uid,
+      nextPreventive,
+    );
 
     await setDoc(getPreventiveDocRef(householdId, preventiveId), nextPreventive);
     dispatch(upsertPreventive(nextPreventive));
@@ -119,6 +165,8 @@ export const updatePreventive = createAsyncThunk<
   {
     householdId: string;
     preventiveId: string;
+    /** Only needed to schedule fresh reminders when `expiresAt` changes — omit it and a change still cancels the stale ones, they just won't be replaced. */
+    uid?: string;
     changes: Partial<PreventiveDose> &
       Partial<Pick<Preventive, 'name' | 'customProductId' | 'type' | 'customTypeId' | 'catIds'>>;
   },
@@ -126,7 +174,7 @@ export const updatePreventive = createAsyncThunk<
 >(
   'nineLives/preventives/update',
   async (
-    { householdId, preventiveId, changes },
+    { householdId, preventiveId, uid, changes },
     { dispatch, getState, rejectWithValue },
   ) => {
     const state = getState() as RootState;
@@ -164,6 +212,13 @@ export const updatePreventive = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    if (nextPreventive.expiresAt !== current.expiresAt) {
+      await cancelEntityReminders(current.reminderIds);
+      nextPreventive.reminderIds = uid
+        ? await schedulePreventiveReminders(state, householdId, uid, nextPreventive)
+        : [];
+    }
+
     dispatch(upsertPreventive(nextPreventive));
 
     try {
@@ -177,6 +232,7 @@ export const updatePreventive = createAsyncThunk<
         lastAdministeredAt: nextPreventive.lastAdministeredAt,
         expiresAt: nextPreventive.expiresAt,
         firstAdministeredAt: nextPreventive.firstAdministeredAt,
+        reminderIds: nextPreventive.reminderIds,
         lastEditedAt: nextPreventive.lastEditedAt,
       });
       return nextPreventive;
@@ -230,6 +286,16 @@ export const logPreventiveDose = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    if (nextPreventive.expiresAt !== current.expiresAt) {
+      await cancelEntityReminders(current.reminderIds);
+      nextPreventive.reminderIds = await schedulePreventiveReminders(
+        state,
+        householdId,
+        uid,
+        nextPreventive,
+      );
+    }
+
     dispatch(upsertPreventive(nextPreventive));
 
     try {
@@ -237,6 +303,7 @@ export const logPreventiveDose = createAsyncThunk<
         history: nextHistory,
         lastAdministeredAt: nextPreventive.lastAdministeredAt,
         expiresAt: nextPreventive.expiresAt,
+        reminderIds: nextPreventive.reminderIds,
         lastEditedAt: nextPreventive.lastEditedAt,
       });
       return nextPreventive;
@@ -267,6 +334,7 @@ export const deletePreventive = createAsyncThunk<
 
     try {
       await deleteDoc(getPreventiveDocRef(householdId, preventiveId));
+      await cancelEntityReminders(current.reminderIds);
       return { id: preventiveId };
     } catch (error) {
       dispatch(revertPreventive({ id: preventiveId }));
@@ -283,11 +351,11 @@ export const deletePreventive = createAsyncThunk<
  */
 export const deletePreventiveDose = createAsyncThunk<
   { id: string; deletedRecord: boolean },
-  { householdId: string; preventiveId: string; doseId: string },
+  { householdId: string; preventiveId: string; doseId: string; uid?: string },
   { rejectValue: string }
 >(
   'nineLives/preventives/deleteDose',
-  async ({ householdId, preventiveId, doseId }, { dispatch, getState, rejectWithValue }) => {
+  async ({ householdId, preventiveId, doseId, uid }, { dispatch, getState, rejectWithValue }) => {
     const state = getState() as RootState;
     const current = state.nineLives.preventives.items.find((item) => item.id === preventiveId);
 
@@ -313,6 +381,13 @@ export const deletePreventiveDose = createAsyncThunk<
       lastEditedAt: Date.now(),
     };
 
+    if (nextPreventive.expiresAt !== current.expiresAt) {
+      await cancelEntityReminders(current.reminderIds);
+      nextPreventive.reminderIds = uid
+        ? await schedulePreventiveReminders(state, householdId, uid, nextPreventive)
+        : [];
+    }
+
     dispatch(upsertPreventive(nextPreventive));
 
     try {
@@ -321,6 +396,7 @@ export const deletePreventiveDose = createAsyncThunk<
         lastAdministeredAt: nextPreventive.lastAdministeredAt,
         expiresAt: nextPreventive.expiresAt,
         firstAdministeredAt: nextPreventive.firstAdministeredAt,
+        reminderIds: nextPreventive.reminderIds,
         lastEditedAt: nextPreventive.lastEditedAt,
       });
       return { id: preventiveId, deletedRecord: false };
