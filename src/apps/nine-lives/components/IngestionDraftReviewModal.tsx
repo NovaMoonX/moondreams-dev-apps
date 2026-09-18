@@ -30,7 +30,15 @@ import {
 } from '../store/actions/ingestionDraftsActions';
 import { selectCatsByHousehold, selectClinicsByHousehold } from '../store/selectors';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
-import type { IngestionDraft } from '../types';
+import type { CatSex, IngestionDraft } from '../types';
+
+const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
+
+const SEX_OPTIONS = [
+  { text: 'Unknown', value: 'unknown' },
+  { text: 'Male', value: 'male' },
+  { text: 'Female', value: 'female' },
+];
 
 interface IngestionDraftReviewModalProps {
   isOpen: boolean;
@@ -231,6 +239,7 @@ function IngestionDraftReviewModal({
     new Set(initialSection ? [initialSection] : []),
   );
   const [editing, setEditing] = useState<EditingKey | null>(null);
+  const [pickingExisting, setPickingExisting] = useState<Set<string>>(new Set());
   const [selections, setSelections] = useState<IngestionDraftSelections>({
     saveAsRecord: draft.suggestKeepAsRecord,
   });
@@ -248,6 +257,24 @@ function IngestionDraftReviewModal({
     setEditing((current) =>
       current && current.section === section && current.index === index ? null : { section, index },
     );
+  };
+
+  const isPickingExisting = (section: 'cat' | 'clinic', index: number) =>
+    pickingExisting.has(`${section}-${index}`);
+  const startPickingExisting = (section: 'cat' | 'clinic', index: number) =>
+    setPickingExisting((current) => new Set(current).add(`${section}-${index}`));
+  const stopPickingExisting = (section: 'cat' | 'clinic', index: number) => {
+    setPickingExisting((current) => {
+      const next = new Set(current);
+      next.delete(`${section}-${index}`);
+      return next;
+    });
+    const key = section === 'cat' ? 'catIds' : 'clinicIds';
+    setSelections((current) => {
+      const values = [...(current[key] ?? [])];
+      values[index] = null;
+      return { ...current, [key]: values };
+    });
   };
 
   const toggleArrayInclude = (key: ArrayIncludeKey, index: number) => {
@@ -309,15 +336,6 @@ function IngestionDraftReviewModal({
       items: expense.items.map((item, i) => (i === itemIndex ? { ...item, ...patch } : item)),
     });
   };
-
-  const catOptionsFor = (name: string) => [
-    { text: `Create new: ${name || 'cat'}`, value: '' },
-    ...cats.map((cat) => ({ text: cat.name, value: cat.id })),
-  ];
-  const clinicOptionsFor = (name: string) => [
-    { text: `Create new: ${name || 'clinic'}`, value: '' },
-    ...clinics.map((clinic) => ({ text: clinic.name, value: clinic.id })),
-  ];
 
   const totalCount =
     draft.proposedCats.length +
@@ -410,23 +428,55 @@ function IngestionDraftReviewModal({
             {draft.proposedCats.map((cat, index) => (
               <div key={index} className='space-y-2 rounded-md border border-border p-2'>
                 <IncludeToggle included={isIncluded('includeCats', index)} onToggle={() => toggleArrayInclude('includeCats', index)} />
-                <Input
-                  value={cat.name}
-                  aria-label='Proposed cat name'
-                  onChange={(event) => updateCatAt(index, { name: event.target.value })}
-                />
-                <Select
-                  options={catOptionsFor(cat.name)}
-                  value={selections.catIds?.[index] ?? ''}
-                  placeholder='Create new cat'
-                  onChange={(value) =>
-                    setSelections((current) => {
-                      const values = [...(current.catIds ?? [])];
-                      values[index] = value || null;
-                      return { ...current, catIds: values };
-                    })
-                  }
-                />
+                {isPickingExisting('cat', index) ? (
+                  <>
+                    <Select
+                      options={cats.map((existingCat) => ({ text: existingCat.name, value: existingCat.id }))}
+                      value={selections.catIds?.[index] ?? ''}
+                      placeholder='Select an existing cat'
+                      onChange={(value) =>
+                        setSelections((current) => {
+                          const values = [...(current.catIds ?? [])];
+                          values[index] = value || null;
+                          return { ...current, catIds: values };
+                        })
+                      }
+                    />
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      className={mutedLinkClassName}
+                      onClick={() => stopPickingExisting('cat', index)}
+                    >
+                      Enter a new name instead
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      value={cat.name}
+                      aria-label='Proposed cat name'
+                      onChange={(event) => updateCatAt(index, { name: event.target.value })}
+                    />
+                    <Select
+                      options={SEX_OPTIONS}
+                      value={cat.sex ?? 'unknown'}
+                      onChange={(value) => updateCatAt(index, { sex: value as CatSex })}
+                    />
+                    {cats.length > 0 && (
+                      <Button
+                        type='button'
+                        variant='link'
+                        size='sm'
+                        className={mutedLinkClassName}
+                        onClick={() => startPickingExisting('cat', index)}
+                      >
+                        Choose from existing instead
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </Section>
@@ -437,23 +487,67 @@ function IngestionDraftReviewModal({
             {draft.proposedClinics.map((clinic, index) => (
               <div key={index} className='space-y-2 rounded-md border border-border p-2'>
                 <IncludeToggle included={isIncluded('includeClinics', index)} onToggle={() => toggleArrayInclude('includeClinics', index)} />
-                <Input
-                  value={clinic.name}
-                  aria-label='Proposed clinic name'
-                  onChange={(event) => updateClinicAt(index, { name: event.target.value })}
-                />
-                <Select
-                  options={clinicOptionsFor(clinic.name)}
-                  value={selections.clinicIds?.[index] ?? ''}
-                  placeholder='Create new clinic'
-                  onChange={(value) =>
-                    setSelections((current) => {
-                      const values = [...(current.clinicIds ?? [])];
-                      values[index] = value || null;
-                      return { ...current, clinicIds: values };
-                    })
-                  }
-                />
+                {isPickingExisting('clinic', index) ? (
+                  <>
+                    <Select
+                      options={clinics.map((existingClinic) => ({ text: existingClinic.name, value: existingClinic.id }))}
+                      value={selections.clinicIds?.[index] ?? ''}
+                      placeholder='Select an existing clinic'
+                      onChange={(value) =>
+                        setSelections((current) => {
+                          const values = [...(current.clinicIds ?? [])];
+                          values[index] = value || null;
+                          return { ...current, clinicIds: values };
+                        })
+                      }
+                    />
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      className={mutedLinkClassName}
+                      onClick={() => stopPickingExisting('clinic', index)}
+                    >
+                      Enter a new name instead
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      value={clinic.name}
+                      aria-label='Proposed clinic name'
+                      onChange={(event) => updateClinicAt(index, { name: event.target.value })}
+                    />
+                    <div className='grid grid-cols-2 gap-2'>
+                      <Input
+                        value={clinic.phone ?? ''}
+                        placeholder='Phone'
+                        onChange={(event) => updateClinicAt(index, { phone: event.target.value || null })}
+                      />
+                      <Input
+                        value={clinic.email ?? ''}
+                        placeholder='Email'
+                        onChange={(event) => updateClinicAt(index, { email: event.target.value || null })}
+                      />
+                    </div>
+                    <Input
+                      value={clinic.address ?? ''}
+                      placeholder='Address'
+                      onChange={(event) => updateClinicAt(index, { address: event.target.value || null })}
+                    />
+                    {clinics.length > 0 && (
+                      <Button
+                        type='button'
+                        variant='link'
+                        size='sm'
+                        className={mutedLinkClassName}
+                        onClick={() => startPickingExisting('clinic', index)}
+                      >
+                        Choose from existing instead
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </Section>

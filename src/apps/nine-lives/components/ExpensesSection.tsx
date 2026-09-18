@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -11,7 +11,11 @@ import {
   deleteExpense,
   updateExpense,
 } from '../store/actions/expensesActions';
-import { selectCatsByHousehold, selectExpensesByHousehold } from '../store/selectors';
+import {
+  selectCatsByHousehold,
+  selectExpensesByHousehold,
+  selectIngestionDraftsByHousehold,
+} from '../store/selectors';
 import type { Expense } from '../types';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseFormModal from './ExpenseFormModal';
@@ -27,6 +31,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const expenses = useAppSelector(selectExpensesByHousehold(householdId), shallowEqual);
+  const pendingDraftCount = useAppSelector(selectIngestionDraftsByHousehold(householdId)).length;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -93,10 +98,16 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
                 type='button'
                 variant='outline'
                 size='sm'
+                className='gap-1'
                 disabled={!user?.uid}
                 onClick={() => setIsIngestionOpen(true)}
               >
                 Upload
+                {pendingDraftCount > 0 && (
+                  <Badge variant='primary' size='xs' aspect='square' use='status'>
+                    {pendingDraftCount}
+                  </Badge>
+                )}
               </Button>
               <Button
                 type='button'

@@ -46,12 +46,14 @@ const responseSchema = {
           breed: nullableString,
           dateOfBirth: nullableNumber,
           isDateOfBirthEstimated: { type: SchemaType.BOOLEAN, nullable: true },
-          sex: nullableString,
+          sex: { type: SchemaType.STRING, nullable: true, enum: ['male', 'female', 'unknown'] },
         },
       },
     },
     proposedClinics: {
       type: SchemaType.ARRAY,
+      description:
+        'Every clinic named in the document, with as much contact detail (phone, email, website, address) as is actually printed on it — headers, footers, and letterhead often carry this even when the body text does not.',
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -82,6 +84,8 @@ const responseSchema = {
     },
     proposedVaccinations: {
       type: SchemaType.ARRAY,
+      description:
+        'Every vaccine administration stated in the document, even ones only listed in a table or invoice line rather than called out in prose.',
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -117,6 +121,8 @@ const responseSchema = {
     proposedWeightEntry: {
       type: SchemaType.OBJECT,
       nullable: true,
+      description:
+        'A weight measurement stated anywhere in the document — exam vitals, a weigh-in log line, or a summary table — not only a dedicated "weight" section.',
       properties: {
         catName: nullableString,
         weight: { type: SchemaType.NUMBER },
@@ -329,7 +335,7 @@ export async function extractProposalFromFile(file: File): Promise<ExtractedInge
         role: 'user',
         parts: [
           {
-            text: `Extract only facts explicitly present in this veterinary document. Return an empty array when an entity type is not present — a document can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates. The source filename is "${file.name}".`,
+            text: `Extract every fact explicitly present in this veterinary document — don't stop at the first or most prominent item of a given type; scan the entire document for every vaccination, weight measurement, clinic detail, and expense line, including ones stated only in a table, invoice line, or vitals block rather than in prose. Return an empty array when an entity type is not present — a document can mention more than one cat, clinic, visit, or expense, so propose one entry per distinct one found. Dates must be Unix milliseconds. Do not invent cat names, diagnoses, costs, or dates. The source filename is "${file.name}".`,
           },
           {
             inlineData: {
