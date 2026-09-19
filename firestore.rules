@@ -34,17 +34,27 @@ service cloud.firestore {
     // query (used by admin/dev) fails outright if a rule can't prove it
     // won't throw on a missing field.
     function isAppVisibleToUser(appData) {
-      return ('status' in appData) && appData.status == 'public' && (
-        !(('isRestricted' in appData) && appData.isRestricted) || (
-          request.auth != null
-            && ('allowedUsers' in appData)
-            && appData.allowedUsers is list
-            && (
-              request.auth.uid in appData.allowedUsers ||
-              request.auth.token.email in appData.allowedUsers
-            )
-        )
-      );
+      let isPublic = ('status' in appData) && appData.status == 'public';
+      let isRestricted = ('isRestricted' in appData) && appData.isRestricted == true;
+      let allowedUsers = ('allowedUsers' in appData) && appData.allowedUsers is list ? appData.allowedUsers : [];
+
+      // Branch 1: Matches Query 1 (Public & Unrestricted)
+      let isUnrestrictedPublic = isPublic && !isRestricted;
+
+      // Branch 2: Matches Query 2 (Public & Restricted & UID match)
+      let isUidAllowed = isPublic 
+        && isRestricted 
+        && request.auth != null 
+        && (request.auth.uid in allowedUsers);
+
+      // Branch 3: Matches Query 3 (Public & Restricted & Email match)
+      let isEmailAllowed = isPublic 
+        && isRestricted 
+        && request.auth != null 
+        && ('email' in request.auth.token) 
+        && (request.auth.token.email in allowedUsers);
+
+      return isUnrestrictedPublic || isUidAllowed || isEmailAllowed;
     }
 
     // Shared read rule for every /apps/{appId} doc, used by each explicit
