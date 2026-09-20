@@ -78,7 +78,12 @@ export interface VoiceTranscription {
 
 export function useVoiceTranscription(): VoiceTranscription {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Finalized transcript from prior sub-sessions (see `continuous` note
+  // below); the current sub-session's own results are layered on top of
+  // this in `onresult`, and `stop()` reads the combined value from `finish`.
+  const accumulatedTranscriptRef = useRef('');
   const transcriptRef = useRef('');
+  const isStoppingRef = useRef(false);
   const resolveStopRef = useRef<((transcript: string) => void) | null>(null);
   const rejectStopRef = useRef<((error: Error) => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,30 +104,52 @@ export function useVoiceTranscription(): VoiceTranscription {
     }
   }, []);
 
-  const start = useCallback(() => {
+  // `createAndStartRecognition` calls itself (indirectly, via this ref) from
+  // its own `onend` handler to restart listening — see the comment below.
+  const createAndStartRecognitionRef = useRef<() => void>(() => {});
+
+  // `continuous: true` is unreliable on Android Chrome — recognition simply
+  // refuses to start (https://issues.chromium.org/issues/40324711), even
+  // though the identical code works fine on desktop Chrome. Using
+  // `continuous: false` and restarting on every non-user-initiated `onend`
+  // is the standard cross-platform workaround: each restart is its own
+  // recognition instance, so this factory (used by both `start()` and the
+  // `onend` restart path) attaches the same handlers to whichever instance
+  // is current.
+  const createAndStartRecognition = useCallback(() => {
     const SpeechRecognition = getSpeechRecognitionConstructor();
 
-    if (!SpeechRecognition || recognitionRef.current) {
+    if (!SpeechRecognition) {
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = navigator.language || 'en-US';
     recognition.onresult = (event) => {
-      let nextTranscript = '';
+      let sessionTranscript = '';
 
       for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index];
-        nextTranscript += `${result[0].transcript} `;
+        sessionTranscript += `${result[0].transcript} `;
       }
 
-      const trimmedTranscript = nextTranscript.trim();
-      transcriptRef.current = trimmedTranscript;
-      setTranscript(trimmedTranscript);
+      const combinedTranscript = `${accumulatedTranscriptRef.current} ${sessionTranscript}`.trim();
+      transcriptRef.current = combinedTranscript;
+      setTranscript(combinedTranscript);
     };
     recognition.onerror = (event) => {
+      // A silence-timeout between utterances is expected with
+      // `continuous: false` — `onend` (below) decides whether to restart or
+      // finish, so only surface errors that mean the session can't continue.
+      // An intentional stop()/cancel() can itself surface as an 'aborted'
+      // error here; `onend` is the single source of truth for finalizing,
+      // so let it handle cleanup instead of also surfacing an error.
+      if (event.error === 'no-speech' || isStoppingRef.current) {
+        return;
+      }
+
       const nextError = new Error(getSpeechRecognitionError(event.error));
       setError(nextError.message);
       setIsListening(false);
@@ -130,18 +157,39 @@ export function useVoiceTranscription(): VoiceTranscription {
       finish(nextError);
     };
     recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-      finish();
+      if (isStoppingRef.current) {
+        isStoppingRef.current = false;
+        setIsListening(false);
+        recognitionRef.current = null;
+        finish();
+        return;
+      }
+
+      accumulatedTranscriptRef.current = transcriptRef.current;
+      createAndStartRecognitionRef.current();
     };
 
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [finish]);
+
+  useEffect(() => {
+    createAndStartRecognitionRef.current = createAndStartRecognition;
+  }, [createAndStartRecognition]);
+
+  const start = useCallback(() => {
+    if (recognitionRef.current) {
+      return;
+    }
+
+    accumulatedTranscriptRef.current = '';
     transcriptRef.current = '';
     setTranscript('');
     setError(null);
-    recognitionRef.current = recognition;
+    isStoppingRef.current = false;
     setIsListening(true);
-    recognition.start();
-  }, [finish]);
+    createAndStartRecognition();
+  }, [createAndStartRecognition]);
 
   const stop = useCallback(() => {
     const recognition = recognitionRef.current;
@@ -154,12 +202,14 @@ export function useVoiceTranscription(): VoiceTranscription {
       resolveStopRef.current = resolve;
       rejectStopRef.current = reject;
     });
+    isStoppingRef.current = true;
     recognition.stop();
 
     return result;
   }, []);
 
   const cancel = useCallback(() => {
+    isStoppingRef.current = true;
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     resolveStopRef.current = null;
@@ -175,6 +225,7 @@ export function useVoiceTranscription(): VoiceTranscription {
 
   useEffect(() => {
     return () => {
+      isStoppingRef.current = true;
       recognitionRef.current?.abort();
     };
   }, []);
