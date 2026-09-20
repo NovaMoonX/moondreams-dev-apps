@@ -2,7 +2,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
 import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { db } from '@/lib/firebase/config';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -28,6 +28,7 @@ const ROLE_OPTIONS = [
 function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const [requests, setRequests] = useState<TripJoinRequest[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Record<string, UserRole>>(
     {},
@@ -84,6 +85,17 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
   };
 
   const handleDecline = async (request: TripJoinRequest) => {
+    const confirmed = await confirm({
+      title: 'Decline request',
+      message:
+        'Are you sure you want to decline this join request? This action cannot be undone.',
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     const requestId = `${request.uid}_${request.tripId}`;
     setBusyRequestId(requestId);
 

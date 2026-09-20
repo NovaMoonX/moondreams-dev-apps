@@ -12,6 +12,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/formatUtils';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -88,9 +89,7 @@ function Waypoint() {
       await dispatch(requestToJoinTrip({ uid: user.uid, inviteCode })).unwrap();
       setInviteRequestSent(true);
     } catch (error) {
-      setInviteError(
-        error instanceof Error ? error.message : 'Unable to request access.',
-      );
+      setInviteError(getErrorMessage(error, 'Unable to request access.'));
     } finally {
       setIsInviteSubmitting(false);
     }

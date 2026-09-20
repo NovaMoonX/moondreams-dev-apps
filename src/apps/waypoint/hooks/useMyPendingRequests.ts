@@ -1,8 +1,10 @@
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { db } from '@/lib/firebase/config';
+import { useAppDispatch, useAppSelector } from '@/store';
 import type { TripJoinRequest } from '@apps/waypoint/types';
+import { setPendingRequests } from '@apps/waypoint/store/slices/pendingRequestsSlice';
 
 const PENDING_REQUESTS_COLLECTION = collection(
   db,
@@ -12,12 +14,17 @@ const PENDING_REQUESTS_COLLECTION = collection(
 );
 
 export function useMyPendingRequests(uid: string | null) {
-  const [requests, setRequests] = useState<TripJoinRequest[]>([]);
-  const [loadedUid, setLoadedUid] = useState<string | null>(null);
-  const uidKey = uid ?? '';
+  const dispatch = useAppDispatch();
+  const requests = useAppSelector(
+    (state) => state.waypoint.pendingRequests.items,
+  );
+  const loaded = useAppSelector(
+    (state) => state.waypoint.pendingRequests.loaded,
+  );
 
   useEffect(() => {
     if (!uid) {
+      dispatch(setPendingRequests([]));
       return;
     }
 
@@ -29,23 +36,22 @@ export function useMyPendingRequests(uid: string | null) {
     return onSnapshot(
       requestsQuery,
       (snapshot) => {
-        setRequests(
-          snapshot.docs.map(
-            (docSnapshot) => docSnapshot.data() as TripJoinRequest,
+        dispatch(
+          setPendingRequests(
+            snapshot.docs.map(
+              (docSnapshot) => docSnapshot.data() as TripJoinRequest,
+            ),
           ),
         );
-        setLoadedUid(uid);
       },
       () => {
-        setRequests([]);
-        setLoadedUid(uid);
+        dispatch(setPendingRequests([]));
       },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- uidKey is the uid content signal
-  }, [uidKey]);
+  }, [dispatch, uid]);
 
   return {
     requests: uid ? requests : [],
-    loading: Boolean(uid && loadedUid !== uid),
+    loading: Boolean(uid) && !loaded,
   };
 }

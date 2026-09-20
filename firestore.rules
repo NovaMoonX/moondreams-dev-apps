@@ -1439,10 +1439,6 @@ service cloud.firestore {
         return requestId.split('_')[0];
       }
 
-      function tripIdFromRequest() {
-        return requestId.split('_')[1];
-      }
-
       function isMemberOfTrip(tripId) {
         return request.auth != null
           && exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId))
