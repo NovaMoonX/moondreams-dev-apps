@@ -4,7 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
       return request.auth != null && (
-        request.auth.token.admin == true ||
+        (('admin' in request.auth.token) && request.auth.token.admin == true) ||
         request.auth.token.email == 'nova@moondreams.dev'
       );
     }
@@ -30,37 +30,36 @@ service cloud.firestore {
       return request.auth != null && 'dev' in request.auth.token && request.auth.token.dev == true;
     }
 
-    // Field access guarded with `'field' in appData`: an unfiltered list()
-    // query (used by admin/dev) fails outright if a rule can't prove it
-    // won't throw on a missing field.
-    function isAppVisibleToUser(appData) {
-      let isPublic = ('status' in appData) && appData.status == 'public';
-      let isRestricted = ('isRestricted' in appData) && appData.isRestricted == true;
-      let allowedUsers = ('allowedUsers' in appData) && appData.allowedUsers is list ? appData.allowedUsers : [];
-
-      // Branch 1: Matches Query 1 (Public & Unrestricted)
-      let isUnrestrictedPublic = isPublic && !isRestricted;
-
-      // Branch 2: Matches Query 2 (Public & Restricted & UID match)
-      let isUidAllowed = isPublic 
-        && isRestricted 
-        && request.auth != null 
-        && (request.auth.uid in allowedUsers);
-
-      // Branch 3: Matches Query 3 (Public & Restricted & Email match)
-      let isEmailAllowed = isPublic 
-        && isRestricted 
-        && request.auth != null 
-        && ('email' in request.auth.token) 
-        && (request.auth.token.email in allowedUsers);
-
-      return isUnrestrictedPublic || isUidAllowed || isEmailAllowed;
+    // Split into three separate predicates — one per query the app catalog
+    // fetch runs (see AppCatalogContext.tsx's buildAppQueries) — instead of
+    // one combined boolean, and each app block below issues one `allow read`
+    // per predicate instead of OR'ing them into a single condition.
+    //
+    // This isn't just style: Firestore's list() safety check can't prove a
+    // single OR'd expression matches the query filters once a query combines
+    // more than one equality filter with an array-contains (our Query 2/3 —
+    // status + isRestricted + allowedUsers array-contains). It denies the
+    // whole list with "Missing or insufficient permissions" even though
+    // get() on the exact same doc succeeds. Separate `allow read` statements
+    // (Firestore ORs them) each map 1:1 to one query and stay provable.
+    // Only `status` is existence-guarded: it's checked first in every
+    // predicate, so short-circuiting means isRestricted/allowedUsers are
+    // never touched unless status is already confirmed 'public' — guarding
+    // those two as well reintroduces the same unprovable-list failure.
+    function isUnrestrictedPublicApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted != true;
     }
 
-    // Shared read rule for every /apps/{appId} doc, used by each explicit
-    // app block plus the generic fallback below.
-    function canReadAppDoc(appData) {
-      return isAdmin() || isDevUser() || isAppVisibleToUser(appData);
+    function isUidAllowedApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
+        && request.auth != null
+        && request.auth.uid in appData.allowedUsers;
+    }
+
+    function isEmailAllowedApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
+        && request.auth != null && ('email' in request.auth.token)
+        && request.auth.token.email in appData.allowedUsers;
     }
 
     // Apps below use explicit paths (not a generic wildcard) so each app's
@@ -70,7 +69,10 @@ service cloud.firestore {
     // --- App: nine-lives ---
 
     match /apps/nine-lives {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -1054,7 +1056,10 @@ service cloud.firestore {
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -1327,7 +1332,10 @@ service cloud.firestore {
         // --- App: waypoint ---
 
     match /apps/waypoint {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -1403,7 +1411,10 @@ service cloud.firestore {
     // block above — same rule as every explicit app block, so a new app
     // works correctly even before it's given its own block.
     match /apps/{appId} {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 

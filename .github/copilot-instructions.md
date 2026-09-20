@@ -13,6 +13,7 @@
 - Follow the existing folder organization and keep responsibilities separated by feature, UI, hooks, context, routes, lib, and utils.
 - Use shared date/time formatting helpers from `src/utils/formatUtils.ts` for timestamp display instead of inline `Date` formatting.
 - When showing a user or member avatar in the UI, prefer the shared `UserAvatar` component from `src/ui/UserAvatar.tsx` instead of raw `Avatar` components.
+- **Bump `SITE_VERSION` in `src/lib/app/app.constants.ts` on every PR that changes app code or behavior** — patch (`1.0.x`) for fixes/small tweaks, minor (`1.x.0`) for new features. It's the single site-wide version, shown in the corner badge and logged once on mount across every mini-app; it must never go stale.
 
 ### File structure and imports
 - Follow the existing project structure and keep code organized by feature, UI, hooks, context, routes, lib, and utils.
@@ -162,6 +163,7 @@ useEffect(() => {
 - **No raw `<button>`/`<input>`/`<select>`/`<textarea>` in `.tsx` files — always the matching Dreamer UI component, or `Form`/`FormFactories` for multi-field UI. Grep the diff for these tags before finishing any PR.**
 - **`setState` inside a `useEffect` body or during render, to mirror props or derive values, is a bug — not a style nit. Derive the value during render or move the update into an event handler.**
 - **An issue's checklist sections are all mandatory — a `CRUD & Entry-Point Requirements` section is not optional supplementary work. Before opening the PR, re-read the whole issue and confirm the new feature is actually wired into a reachable screen, not just present in the codebase.**
+- **Every PR bumps `SITE_VERSION` (`src/lib/app/app.constants.ts`) — this is a checklist item, not optional. Forgetting it is an incomplete PR.**
 
 ## Coding Styles
 
