@@ -2,8 +2,9 @@
   "name": "Worth the Wait - Moondreams Dev Apps",
   "short_name": "Worth the Wait",
   "description": "A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.",
+  "id": "/worth-the-wait/",
   "start_url": "/worth-the-wait/",
-  "scope": "/",
+  "scope": "/worth-the-wait/",
   "scope_extensions": [
     {
       "type": "origin",
