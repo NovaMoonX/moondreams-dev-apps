@@ -66,6 +66,10 @@ const STATIC_APP_REGISTRY: AppMetadata[] = APP_REGISTRY.map((app) => ({
   updatedAt: new Date().toISOString(),
 }));
 
+const PUBLIC_STATIC_APP_REGISTRY: AppMetadata[] = STATIC_APP_REGISTRY.filter(
+  (app) => app.status === 'public' && !app.isRestricted,
+);
+
 // Mirrors firestore.rules' canReadAppDoc(): admins, and anyone in the
 // local emulator, see every app regardless of status.
 function canSeeAllApps(isAdmin: boolean) {
@@ -79,17 +83,8 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
     return [query(appsCollection)];
   }
 
-  if (!user) {
-    return [
-      query(
-        appsCollection,
-        where('status', '==', 'public'),
-        where('isRestricted', '==', false),
-      ),
-    ];
-  }
-
   const queries = [
+    // Query 1: Targets ONLY public & UNRESTRICTED docs
     query(
       appsCollection,
       where('status', '==', 'public'),
@@ -97,21 +92,25 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
     ),
   ];
 
-  if (user.uid) {
+  if (user?.uid) {
+    // Query 2: Targets ONLY public & RESTRICTED docs where UID matches
     queries.push(
       query(
         appsCollection,
         where('status', '==', 'public'),
+        where('isRestricted', '==', true),
         where('allowedUsers', 'array-contains', user.uid),
       ),
     );
   }
 
-  if (user.email) {
+  if (user?.email) {
+    // Query 3: Targets ONLY public & RESTRICTED docs where Email matches
     queries.push(
       query(
         appsCollection,
         where('status', '==', 'public'),
+        where('isRestricted', '==', true),
         where('allowedUsers', 'array-contains', user.email),
       ),
     );
@@ -153,7 +152,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
         (error) => {
           console.error('Failed to load app catalog:', error);
           if (isActive) {
-            setAllApps(STATIC_APP_REGISTRY);
+            setAllApps(PUBLIC_STATIC_APP_REGISTRY);
             setLoading(false);
           }
         },
