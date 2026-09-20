@@ -1,10 +1,47 @@
 import { useMemo, useState } from 'react';
 
-import { Input, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
+import { Input, Pagination, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { Cat, Expense } from '../types';
-import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
+import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  getExpenseCategories,
+  getExpenseCategoryLabel,
+} from '../utils/budgetCalculators';
+import { usePagination } from '../utils/usePagination';
+
+const PAGE_SIZE = 5;
+
+function getExpenseTitle(expense: Expense): string {
+  if (expense.label) {
+    return expense.label;
+  }
+
+  if (expense.items.length > 1) {
+    return 'Itemized expense';
+  }
+
+  const categories = getExpenseCategories(expense);
+
+  if (categories.length === 1) {
+    return getExpenseCategoryLabel(categories[0]);
+  }
+
+  return `${categories.length} categories`;
+}
+
+function getItemLabelsSummary(expense: Expense): string | null {
+  if (expense.items.length <= 1) {
+    return null;
+  }
+
+  const labels = expense.items
+    .map((item) => item.label?.trim())
+    .filter((label): label is string => Boolean(label));
+
+  return labels.length > 0 ? labels.join(', ') : null;
+}
 
 interface ExpenseTimelineProps {
   expenses: Expense[];
@@ -75,16 +112,24 @@ function ExpenseTimeline({
     [cats],
   );
 
-  const categoryFilterOptions = useMemo(
-    () => [
+  const categoryFilterOptions = useMemo(() => {
+    const customCategories = Array.from(
+      new Set(
+        expenses
+          .flatMap((expense) => getExpenseCategories(expense))
+          .filter((category) => !(DEFAULT_EXPENSE_CATEGORIES as readonly string[]).includes(category)),
+      ),
+    );
+
+    return [
       { text: 'All categories', value: 'all' },
       ...DEFAULT_EXPENSE_CATEGORIES.map((category) => ({
         text: getExpenseCategoryLabel(category),
         value: category,
       })),
-    ],
-    [],
-  );
+      ...customCategories.map((category) => ({ text: category, value: category })),
+    ];
+  }, [expenses]);
 
   const visibleExpenses = useMemo(() => {
     const searchTerm = searchQuery.trim().toLowerCase();
@@ -94,7 +139,7 @@ function ExpenseTimeline({
         return false;
       }
 
-      if (categoryFilter !== 'all' && expense.category !== categoryFilter) {
+      if (categoryFilter !== 'all' && !getExpenseCategories(expense).includes(categoryFilter)) {
         return false;
       }
 
@@ -120,8 +165,9 @@ function ExpenseTimeline({
         .map((catId) => cats.find((cat) => cat.id === catId)?.name ?? '')
         .join(' ');
       const searchableText = [
-        getExpenseCategoryLabel(expense.category),
+        ...getExpenseCategories(expense).map(getExpenseCategoryLabel),
         expense.label ?? '',
+        expense.items.map((item) => item.label ?? '').join(' '),
         catNames,
         expense.notes ?? '',
       ]
@@ -143,6 +189,7 @@ function ExpenseTimeline({
 
   const hasExpenses = expenses.length > 0;
   const visibleTotal = visibleExpenses.reduce((total, expense) => total + expense.amount, 0);
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(visibleExpenses, PAGE_SIZE);
 
   return (
     <div>
@@ -224,11 +271,12 @@ function ExpenseTimeline({
         </p>
       ) : (
         <div className={join('divide-border divide-y', hasExpenses && 'mt-0')}>
-          {visibleExpenses.map((expense) => {
+          {pagedItems.map((expense) => {
             const catNames = expense.catIds
               .map((catId) => cats.find((cat) => cat.id === catId)?.name)
               .filter(Boolean)
               .join(', ');
+            const itemLabelsSummary = getItemLabelsSummary(expense);
 
             return (
               <button
@@ -241,11 +289,7 @@ function ExpenseTimeline({
                 )}
               >
                 <div className='min-w-0'>
-                  <strong className='text-sm'>
-                    {expense.label
-                      ? `${expense.label} (${getExpenseCategoryLabel(expense.category)})`
-                      : getExpenseCategoryLabel(expense.category)}
-                  </strong>
+                  <strong className='text-sm'>{getExpenseTitle(expense)}</strong>
                   <div className='text-muted-foreground text-sm'>
                     {new Date(expense.incurredAt).toLocaleDateString('en-US', {
                       month: 'short',
@@ -253,6 +297,7 @@ function ExpenseTimeline({
                       year: 'numeric',
                     })}
                     {catNames ? ` · ${catNames}` : ''}
+                    {itemLabelsSummary ? ` · ${itemLabelsSummary}` : ''}
                     {expense.isRecurring
                       ? ` · ${expense.recurrenceInterval ?? 'monthly'}${
                           expense.recurrenceEndedAt != null ? ' (stopped)' : ''
@@ -266,6 +311,12 @@ function ExpenseTimeline({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {shouldPaginate && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' showFirstLast={pageCount >= 5} />
         </div>
       )}
     </div>

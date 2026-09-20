@@ -3,8 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @utility page {
-	/* use dynamic viewport to handle browser UI (i.e. search bar, keyboard, etc) obscuring viewport */
-  @apply min-h-dvh w-dvw px-4 pb-12 pt-16; 
+	/* Use the available layout width instead of the viewport width, which can include the scrollbar on mobile browsers. */
+  @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
 }
 
 @theme app {
@@ -19,17 +19,21 @@
 }
 
 #root {
-  @apply min-h-dvh w-dvw bg-background text-foreground;
+  @apply min-h-dvh w-full max-w-full bg-background text-foreground;
 }
 
 body {
+  max-width: 100%;
+  overflow-x: hidden;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 html {
-	@apply bg-background
+	@apply bg-background;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Smooth height transitions for when keyboard appears on mobile */

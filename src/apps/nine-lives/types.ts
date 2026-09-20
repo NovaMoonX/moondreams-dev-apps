@@ -1,3 +1,15 @@
+import type {
+  IngestionCatProposal,
+  IngestionClinicProposal,
+  IngestionConditionProposal,
+  IngestionExpenseProposal,
+  IngestionPreventiveProposal,
+  IngestionSymptomProposal,
+  IngestionVaccinationProposal,
+  IngestionVisitProposal,
+  IngestionWeightProposal,
+} from './lib/extractProposalFromFile.types';
+
 export interface Household {
   id: string;
   name: string;
@@ -18,9 +30,18 @@ export interface PendingHouseholdRequest {
 export type CatLifestyle = 'indoor' | 'outdoor' | 'indoor_outdoor';
 
 export interface CatKeyDate {
+  id: string;
   label: string;
   date: number;
 }
+
+export interface CatLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export type CatSex = 'male' | 'female' | 'unknown';
 
 export type CatFoodType = 'dry' | 'wet' | 'mixed';
 
@@ -50,20 +71,31 @@ export interface Cat {
   id: string;
   householdId: string;
   name: string;
+  originalName: string | null;
   photoURL: string | null;
   dateOfBirth: number;
   isDateOfBirthEstimated: boolean;
+  sex: CatSex;
   breed: string;
+  coatColors: string[] | null;
   lifestyle: CatLifestyle | null;
   microchipNumber: string | null;
+  microchipServiceURL: string | null;
+  rabiesTagNumber: string | null;
+  isSpayedNeutered: boolean;
+  spayedNeuteredAt: number | null;
   shelterOrigin: CatShelterOrigin | null;
   adoptedAt: number | null;
+  adoptionProfileURL: string | null;
+  otherLinks: CatLink[] | null;
   customKeyDates: CatKeyDate[] | null;
   diet: CatDiet | null;
   currentClinicId: string | null;
   insurance: CatInsurance | null;
   personalityTraits: string[] | null;
   notes: string | null;
+  /** Pending yearly-recurring reminders (birthday, adoption anniversary) — rescheduled when `dateOfBirth`/`adoptedAt` change. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -75,6 +107,7 @@ export interface VetClinic {
   name: string;
   phone: string | null;
   email: string | null;
+  website: string | null;
   address: string | null;
   isEmergency24Hour: boolean | null;
   notes: string | null;
@@ -156,16 +189,15 @@ export interface Visit {
   linkedHealthRecordIds: string[];
   linkedVaccinationIds: string[];
   linkedWeightEntryIds: string[];
+  /** Pending push reminders scheduled a day before `scheduledAt`, if any — cancelled and rescheduled when `scheduledAt` changes. */
+  reminderIds: string[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
 }
 
-export interface Vaccination {
+export interface VaccinationDose {
   id: string;
-  householdId: string;
-  catId: string;
-  name: string;
   administeredAt: number;
   expiresAt: number | null;
   clinicId: string | null;
@@ -174,7 +206,86 @@ export interface Vaccination {
   linkedVisitId: string | null;
   createdBy: string;
   createdAt: number;
+}
+
+export interface Vaccination {
+  id: string;
+  householdId: string;
+  catId: string;
+  name: string;
+  /** Full dose history, newest first. Always at least one entry. */
+  history: VaccinationDose[];
+  /** Set once, from history's first entry, and never changed afterward. */
+  firstAdministeredAt: number;
+  /** Denormalized from history[0] (the most recent dose), kept in sync on every write. */
+  lastAdministeredAt: number;
+  /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
+  expiresAt: number | null;
+  /** Pending push reminders scheduled ahead of `expiresAt` (a week before, and the day of), if any — cancelled and rescheduled when `expiresAt` changes. */
+  reminderIds: string[];
+  createdBy: string;
+  createdAt: number;
   lastEditedAt: number;
+}
+
+export type PreventiveType =
+  | 'flea-tick'
+  | 'heartworm'
+  | 'mite'
+  | 'dewormer'
+  | 'medication'
+  | 'other'
+  | 'custom';
+
+export interface PreventiveDose {
+  id: string;
+  administeredAt: number;
+  expiresAt: number | null;
+  dosage: string | null;
+  clinicId: string | null;
+  doctorId: string | null;
+  linkedVisitId: string | null;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface Preventive {
+  id: string;
+  householdId: string;
+  catIds: string[];
+  name: string;
+  customProductId: string | null;
+  type: PreventiveType;
+  customTypeId: string | null;
+  /** Full dose history, newest first. Always at least one entry. */
+  history: PreventiveDose[];
+  /** Set once, from history's first entry, and never changed afterward. */
+  firstAdministeredAt: number;
+  /** Denormalized from history[0] (the most recent dose), kept in sync on every write. */
+  lastAdministeredAt: number;
+  /** Denormalized from history[0]. The "next due" date shown throughout the UI. */
+  expiresAt: number | null;
+  /** Pending push reminders scheduled ahead of `expiresAt` (a week before, and the day of), if any — cancelled and rescheduled when `expiresAt` changes. */
+  reminderIds: string[];
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface CustomPreventiveProduct {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface CustomPreventiveType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
 }
 
 export interface WeightEntry {
@@ -186,6 +297,76 @@ export interface WeightEntry {
   linkedVisitId: string | null;
   createdBy: string;
   createdAt: number;
+}
+
+export type LitterType =
+  | 'clumping_clay'
+  | 'non_clumping_clay'
+  | 'pine_wood_pellet'
+  | 'paper'
+  | 'crystal_silica'
+  | 'corn'
+  | 'wheat'
+  | 'walnut'
+  | 'custom';
+
+export interface LitterBox {
+  id: string;
+  householdId: string;
+  name: string;
+  location: string | null;
+  /** When false, the box is retired (e.g. after switching litter) and hidden from new weigh-ins, but its history is kept. */
+  isActive: boolean;
+  /** Pending push reminder scheduled a couple days before the box's litter is due for a full change, if any — cancelled and rescheduled whenever a new full change is logged. */
+  reminderIds: string[];
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface CustomLitterType {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+/** A specific litter product (brand + type + bag size + price), used to derive per-entry usage cost. */
+export interface Litter {
+  id: string;
+  householdId: string;
+  brand: string;
+  litterType: LitterType;
+  customLitterTypeId: string | null;
+  weight: number;
+  weightUnit: 'lb' | 'kg';
+  cost: number | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface LitterEntry {
+  id: string;
+  householdId: string;
+  litterBoxId: string;
+  litterId: string;
+  /** The box's weight after sifting — before any litter is added during this check. */
+  weightBefore: number;
+  weightUnit: 'lb' | 'kg';
+  /**
+   * The box's weight after adding litter during this check, if any was added.
+   * Null means this was just a reading, with nothing topped off or changed.
+   */
+  refillWeight: number | null;
+  /** Only meaningful when `refillWeight` is set: true if the box was fully emptied before refilling, false if it was just topped off. */
+  isFullChange: boolean;
+  loggedAt: number;
+  notes: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
 }
 
 export type ExpenseCategory =
@@ -203,22 +384,68 @@ export type ExpenseCategory =
 
 export type RecurrenceInterval = 'monthly' | 'yearly';
 
+export interface ExpenseLineItem {
+  id: string;
+  /** A preset `ExpenseCategory` value or a household's custom category label. */
+  category: string;
+  label: string | null;
+  amount: number;
+}
+
 export interface Expense {
   id: string;
   householdId: string;
   catIds: string[];
-  category: ExpenseCategory;
-  label: string | null;
+  /** Line items making up this expense (e.g. exam + bloodwork for one vet visit). Always at least one. */
+  items: ExpenseLineItem[];
+  /** Denormalized sum of `items[].amount`, kept in sync on every write so totals don't need to re-derive it. */
   amount: number;
+  label: string | null;
   isRecurring: boolean;
   recurrenceInterval: RecurrenceInterval | null;
   /** When set, this recurring expense has stopped billing as of this date. Always null when `isRecurring` is false. */
   recurrenceEndedAt: number | null;
   incurredAt: number;
+  /** The visit this expense was incurred for, if any. */
+  visitId: string | null;
   notes: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
+}
+
+export interface IngestionDraft {
+  id: string;
+  householdId: string;
+  sourceType: 'pdf' | 'photo' | 'voice';
+  sourceFileName: string;
+  proposedCats: IngestionCatProposal[];
+  proposedClinics: IngestionClinicProposal[];
+  proposedVisits: IngestionVisitProposal[];
+  proposedVaccinations: IngestionVaccinationProposal[];
+  proposedPreventives: IngestionPreventiveProposal[];
+  proposedWeightEntries: IngestionWeightProposal[];
+  proposedSymptoms: IngestionSymptomProposal[];
+  proposedConditions: IngestionConditionProposal[];
+  proposedExpenses: IngestionExpenseProposal[];
+  /** What kind of document this is, for the health record created if `suggestKeepAsRecord`/`saveAsRecord` is kept. Never 'custom' — that requires a household's own `customRecordTypeId`, which extraction can't know. */
+  proposedRecordType: Exclude<HealthRecordType, 'custom'> | null;
+  suggestKeepAsRecord: boolean;
+  confidence: number | null;
+  matchedCatIds: (string | null)[];
+  matchedClinicIds: (string | null)[];
+  matchedVisitIds: (string | null)[];
+  matchedVaccinationIds: (string | null)[];
+  matchedPreventiveIds: (string | null)[];
+  likelyDuplicateWeightEntries: boolean[];
+  likelyDuplicateSymptoms: boolean[];
+  likelyDuplicateVaccinations: boolean[];
+  likelyDuplicatePreventives: boolean[];
+  likelyDuplicateExpenses: boolean[];
+  matchedLibraryConditionIds: (string | null)[];
+  matchedCatConditionIds: (string | null)[];
+  createdBy: string;
+  createdAt: number;
 }
 
 export type SymptomSeverity = 'mild' | 'moderate' | 'severe';
@@ -233,11 +460,20 @@ export type SymptomQuickTag =
   | 'grooming_change'
   | 'other';
 
+export interface CustomSymptomQuickTag {
+  id: string;
+  householdId: string;
+  label: string;
+  createdBy: string;
+  createdAt: number;
+}
+
 export interface Symptom {
   id: string;
   catId: string;
   description: string;
-  quickTags: SymptomQuickTag[];
+  /** Preset `SymptomQuickTag` values or a household's custom tag labels (see `CustomSymptomQuickTag`). */
+  quickTags: string[];
   firstNoticedAt: number;
   severity: SymptomSeverity | null;
   linkedVisitIds: string[];
@@ -248,13 +484,7 @@ export interface Symptom {
   lastEditedAt: number;
 }
 
-export type ConditionCategory =
-  | 'illness'
-  | 'injury'
-  | 'chronic'
-  | 'parasite'
-  | 'allergy'
-  | 'other';
+export type ConditionCategory = 'illness' | 'injury' | 'chronic' | 'parasite' | 'allergy';
 
 export interface LibraryCondition {
   id: string;

@@ -4,7 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
       return request.auth != null && (
-        request.auth.token.admin == true ||
+        (('admin' in request.auth.token) && request.auth.token.admin == true) ||
         request.auth.token.email == 'nova@moondreams.dev'
       );
     }
@@ -30,27 +30,24 @@ service cloud.firestore {
       return request.auth != null && 'dev' in request.auth.token && request.auth.token.dev == true;
     }
 
-    // Field access guarded with `'field' in appData`: an unfiltered list()
-    // query (used by admin/dev) fails outright if a rule can't prove it
-    // won't throw on a missing field.
-    function isAppVisibleToUser(appData) {
-      return ('status' in appData) && appData.status == 'public' && (
-        !(('isRestricted' in appData) && appData.isRestricted) || (
-          request.auth != null
-            && ('allowedUsers' in appData)
-            && appData.allowedUsers is list
-            && (
-              request.auth.uid in appData.allowedUsers ||
-              request.auth.token.email in appData.allowedUsers
-            )
-        )
-      );
+    // Each predicate is its own `allow read`, not OR'd together — Firestore's
+    // list() safety check can't prove a combined expression once a query mixes
+    // equality filters with array-contains, and denies reads get() allows fine.
+    // Only `status` is existence-guarded; short-circuit order protects the rest.
+    function isUnrestrictedPublicApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted != true;
     }
 
-    // Shared read rule for every /apps/{appId} doc, used by each explicit
-    // app block plus the generic fallback below.
-    function canReadAppDoc(appData) {
-      return isAdmin() || isDevUser() || isAppVisibleToUser(appData);
+    function isUidAllowedApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
+        && request.auth != null
+        && request.auth.uid in appData.allowedUsers;
+    }
+
+    function isEmailAllowedApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
+        && request.auth != null && ('email' in request.auth.token)
+        && request.auth.token.email in appData.allowedUsers;
     }
 
     // Apps below use explicit paths (not a generic wildcard) so each app's
@@ -60,7 +57,10 @@ service cloud.firestore {
     // --- App: nine-lives ---
 
     match /apps/nine-lives {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -239,10 +239,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/conditions/{conditionId} {
+    match /apps/nine-lives/households/{householdId}/conditions/{conditionId} {
       function isConditionIdentityValid() {
         return request.resource.data.id == conditionId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isConditionBaseShapeValid() {
@@ -256,7 +256,6 @@ service cloud.firestore {
               || request.resource.data.category == 'chronic'
               || request.resource.data.category == 'parasite'
               || request.resource.data.category == 'allergy'
-              || request.resource.data.category == 'other'
           )
           && isTimestampNumber(request.resource.data.occurredAt)
           && (request.resource.data.resolvedAt == null || isTimestampNumber(request.resource.data.resolvedAt))
@@ -274,12 +273,11 @@ service cloud.firestore {
       function isConditionImmutableFieldsValid() {
         return request.resource.data.id == resource.data.id
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isConditionIdentityValid()
@@ -292,21 +290,20 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/vaccinations/{vaccinationId} {
+    match /apps/nine-lives/households/{householdId}/vaccinations/{vaccinationId} {
       function isVaccinationIdentityValid() {
         return request.resource.data.id == vaccinationId
           && request.resource.data.householdId == householdId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isVaccinationBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
-          && isTimestampNumber(request.resource.data.administeredAt)
+          && request.resource.data.history is list
+          && request.resource.data.history.size() > 0
+          && isTimestampNumber(request.resource.data.firstAdministeredAt)
+          && isTimestampNumber(request.resource.data.lastAdministeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
-          && (request.resource.data.clinicId == null || request.resource.data.clinicId is string)
-          && (request.resource.data.doctorId == null || request.resource.data.doctorId is string)
-          && (request.resource.data.lotNumber == null || request.resource.data.lotNumber is string)
-          && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);
@@ -317,12 +314,12 @@ service cloud.firestore {
           && request.resource.data.householdId == resource.data.householdId
           && request.resource.data.householdId == householdId
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.catId == catId
+          && request.resource.data.firstAdministeredAt == resource.data.firstAdministeredAt
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isVaccinationIdentityValid()
@@ -335,10 +332,64 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/weightEntries/{weightEntryId} {
+    match /apps/nine-lives/households/{householdId}/preventives/{preventiveId} {
+      function isPreventiveIdentityValid() {
+        return request.resource.data.id == preventiveId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.catIds is list
+          && request.resource.data.catIds.size() > 0;
+      }
+
+      function isPreventiveBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.customProductId == null || request.resource.data.customProductId is string)
+          && request.resource.data.type in ['flea-tick', 'heartworm', 'mite', 'dewormer', 'medication', 'other', 'custom']
+          && (request.resource.data.customTypeId == null || request.resource.data.customTypeId is string)
+          && request.resource.data.history is list
+          && request.resource.data.history.size() > 0
+          && isTimestampNumber(request.resource.data.firstAdministeredAt)
+          && isTimestampNumber(request.resource.data.lastAdministeredAt)
+          && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (
+            request.resource.data.customProductId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveProducts/$(request.resource.data.customProductId))
+          )
+          && (
+            request.resource.data.customTypeId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveTypes/$(request.resource.data.customTypeId))
+          )
+          && (request.resource.data.type != 'custom' || request.resource.data.customTypeId is string);
+      }
+
+      function isPreventiveImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.firstAdministeredAt == resource.data.firstAdministeredAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isPreventiveIdentityValid()
+        && isPreventiveBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isPreventiveImmutableFieldsValid()
+        && isPreventiveBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/weightEntries/{weightEntryId} {
       function isWeightEntryIdentityValid() {
         return request.resource.data.id == weightEntryId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isWeightEntryBaseShapeValid() {
@@ -358,7 +409,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isWeightEntryIdentityValid()
@@ -371,10 +422,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/symptoms/{symptomId} {
+    match /apps/nine-lives/households/{householdId}/symptoms/{symptomId} {
       function isSymptomIdentityValid() {
         return request.resource.data.id == symptomId
-          && request.resource.data.catId == catId;
+          && request.resource.data.catId is string;
       }
 
       function isSymptomBaseShapeValid() {
@@ -397,7 +448,7 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      allow read: if request.auth != null && isHouseholdMember(householdId);
+      allow read: if isHouseholdMember(householdId);
       allow create: if request.auth != null
         && isHouseholdMember(householdId)
         && isSymptomIdentityValid()
@@ -528,6 +579,105 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/customPreventiveProducts/{productId} {
+      function isCustomPreventiveProductIdentityValid() {
+        return request.resource.data.id == productId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomPreventiveProductShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomPreventiveProductImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveProductIdentityValid()
+        && isCustomPreventiveProductShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveProductImmutableFieldsValid()
+        && isCustomPreventiveProductShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customPreventiveTypes/{typeId} {
+      function isCustomPreventiveTypeIdentityValid() {
+        return request.resource.data.id == typeId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomPreventiveTypeShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomPreventiveTypeImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveTypeIdentityValid()
+        && isCustomPreventiveTypeShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomPreventiveTypeImmutableFieldsValid()
+        && isCustomPreventiveTypeShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customSymptomQuickTags/{tagId} {
+      function isCustomSymptomQuickTagIdentityValid() {
+        return request.resource.data.id == tagId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomSymptomQuickTagShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomSymptomQuickTagImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomSymptomQuickTagIdentityValid()
+        && isCustomSymptomQuickTagShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomSymptomQuickTagImmutableFieldsValid()
+        && isCustomSymptomQuickTagShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     match /apps/nine-lives/households/{householdId}/healthRecords/{recordId} {
       function isHealthRecordIdentityValid() {
         return request.resource.data.id == recordId
@@ -577,6 +727,52 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isHealthRecordImmutableFieldsValid()
         && isHealthRecordShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/ingestionDrafts/{draftId} {
+      function isIngestionDraftIdentityValid() {
+        return request.resource.data.id == draftId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == request.auth.uid;
+      }
+
+      function isIngestionDraftShapeValid() {
+        return (request.resource.data.sourceType == 'pdf'
+            || request.resource.data.sourceType == 'photo'
+            || request.resource.data.sourceType == 'voice')
+          && isNonEmptyString(request.resource.data.sourceFileName)
+          && request.resource.data.proposedCats is list
+          && request.resource.data.proposedClinics is list
+          && request.resource.data.proposedVisits is list
+          && request.resource.data.proposedVaccinations is list
+          && request.resource.data.proposedPreventives is list
+          && request.resource.data.proposedWeightEntries is list
+          && request.resource.data.proposedSymptoms is list
+          && request.resource.data.proposedConditions is list
+          && request.resource.data.proposedExpenses is list
+          && (request.resource.data.proposedRecordType == null || request.resource.data.proposedRecordType is string)
+          && request.resource.data.suggestKeepAsRecord is bool
+          && (request.resource.data.confidence == null || request.resource.data.confidence is number)
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isIngestionDraftImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isIngestionDraftIdentityValid()
+        && isIngestionDraftShapeValid();
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isIngestionDraftImmutableFieldsValid()
+        && isIngestionDraftShapeValid();
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
@@ -640,10 +836,8 @@ service cloud.firestore {
       function isExpenseBaseShapeValid() {
         return request.resource.data.catIds is list
           && request.resource.data.catIds.size() > 0
-          && request.resource.data.category in [
-            'adoption_fee', 'insurance', 'food', 'litter', 'vet',
-            'grooming', 'supplies', 'medication', 'microchipping', 'spay_neuter', 'other'
-          ]
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0
           && (request.resource.data.label == null || request.resource.data.label is string)
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -657,6 +851,7 @@ service cloud.firestore {
               || (request.resource.data.isRecurring == true && isTimestampNumber(request.resource.data.recurrenceEndedAt))
           )
           && isTimestampNumber(request.resource.data.incurredAt)
+          && (request.resource.data.visitId == null || request.resource.data.visitId is string)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
@@ -684,10 +879,175 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    match /apps/nine-lives/households/{householdId}/litterBoxes/{litterBoxId} {
+      function isLitterBoxIdentityValid() {
+        return request.resource.data.id == litterBoxId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterBoxBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.name)
+          && (request.resource.data.location == null || request.resource.data.location is string)
+          && request.resource.data.isActive is bool
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isLitterBoxImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterBoxIdentityValid()
+        && isLitterBoxBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterBoxImmutableFieldsValid()
+        && isLitterBoxBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/customLitterTypes/{typeId} {
+      function isCustomLitterTypeIdentityValid() {
+        return request.resource.data.id == typeId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isCustomLitterTypeShapeValid() {
+        return isNonEmptyString(request.resource.data.label)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      function isCustomLitterTypeImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomLitterTypeIdentityValid()
+        && isCustomLitterTypeShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isCustomLitterTypeImmutableFieldsValid()
+        && isCustomLitterTypeShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/litters/{litterId} {
+      function isLitterIdentityValid() {
+        return request.resource.data.id == litterId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.brand)
+          && request.resource.data.litterType in [
+            'clumping_clay', 'non_clumping_clay', 'pine_wood_pellet', 'paper',
+            'crystal_silica', 'corn', 'wheat', 'walnut', 'custom'
+          ]
+          && (request.resource.data.customLitterTypeId == null || request.resource.data.customLitterTypeId is string)
+          && request.resource.data.weight is number
+          && request.resource.data.weight > 0
+          && request.resource.data.weightUnit in ['lb', 'kg']
+          && (request.resource.data.cost == null || (request.resource.data.cost is number && request.resource.data.cost >= 0))
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && (request.resource.data.litterType != 'custom' || isNonEmptyString(request.resource.data.customLitterTypeId))
+          && (
+            request.resource.data.customLitterTypeId == null
+              || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customLitterTypes/$(request.resource.data.customLitterTypeId))
+          );
+      }
+
+      function isLitterImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterIdentityValid()
+        && isLitterBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterImmutableFieldsValid()
+        && isLitterBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/litterEntries/{entryId} {
+      function isLitterEntryIdentityValid() {
+        return request.resource.data.id == entryId
+          && request.resource.data.householdId == householdId;
+      }
+
+      function isLitterEntryBaseShapeValid() {
+        return isNonEmptyString(request.resource.data.litterBoxId)
+          && isNonEmptyString(request.resource.data.litterId)
+          && request.resource.data.weightBefore is number
+          && request.resource.data.weightBefore > 0
+          && request.resource.data.weightUnit in ['lb', 'kg']
+          && (request.resource.data.refillWeight == null || (request.resource.data.refillWeight is number && request.resource.data.refillWeight > 0))
+          && request.resource.data.isFullChange is bool
+          && (request.resource.data.isFullChange == false || request.resource.data.refillWeight != null)
+          && isTimestampNumber(request.resource.data.loggedAt)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/litterBoxes/$(request.resource.data.litterBoxId))
+          && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/litters/$(request.resource.data.litterId));
+      }
+
+      function isLitterEntryImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.householdId == resource.data.householdId
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isHouseholdMember(householdId);
+      allow create: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterEntryIdentityValid()
+        && isLitterEntryBaseShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && isHouseholdMember(householdId)
+        && isLitterEntryImmutableFieldsValid()
+        && isLitterEntryBaseShapeValid();
+      allow delete: if request.auth != null && isHouseholdMember(householdId);
+    }
+
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -960,7 +1320,10 @@ service cloud.firestore {
         // --- App: waypoint ---
 
     match /apps/waypoint {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
@@ -1112,13 +1475,33 @@ service cloud.firestore {
     // block above — same rule as every explicit app block, so a new app
     // works correctly even before it's given its own block.
     match /apps/{appId} {
-      allow read: if canReadAppDoc(resource.data);
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
     }
 
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Central, cross-app: lives at the top level rather than under any
+    // single app's namespace, so every mini-app can schedule and read its
+    // own reminders. Only the scheduled Cloud Function (Admin SDK, bypasses
+    // rules) may mark one `sent` or roll a recurring one to its next date.
+    match /reminders/{reminderId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.targetUids;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.createdBy
+        && request.auth.uid in request.resource.data.targetUids;
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.targetUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'cancelled';
+      allow delete: if false;
     }
   }
 }

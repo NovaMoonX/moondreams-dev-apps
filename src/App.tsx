@@ -4,8 +4,17 @@ import { RouterProvider } from 'react-router-dom';
 
 import { AppCatalogProvider } from '@contexts/AppCatalogContext';
 import { AuthProvider } from '@contexts/AuthContext';
+import { useReminderSync } from '@hooks/useReminderSync';
 import { router } from '@routes/AppRoutes';
 import { store } from '@store/index';
+
+// Central, app-wide reminder sync — every mini-app shares this one
+// subscription instead of each wiring its own.
+function AppShell() {
+  useReminderSync();
+
+  return <RouterProvider router={router} />;
+}
 
 function App() {
   return (
@@ -13,7 +22,7 @@ function App() {
       <DreamerUIProvider>
         <AuthProvider>
           <AppCatalogProvider>
-            <RouterProvider router={router} />
+            <AppShell />
           </AppCatalogProvider>
         </AuthProvider>
       </DreamerUIProvider>

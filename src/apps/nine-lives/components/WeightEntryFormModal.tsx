@@ -6,6 +6,7 @@ import WeightEntryFormFields from './WeightEntryFormFields';
 
 interface WeightEntryFormModalProps {
   isOpen: boolean;
+  householdId?: string;
   catName?: string;
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
@@ -20,6 +21,7 @@ interface WeightEntryFormModalProps {
 
 function WeightEntryFormModal({
   isOpen,
+  householdId,
   catName,
   catOptions,
   initialWeightEntry,
@@ -28,15 +30,10 @@ function WeightEntryFormModal({
   onDelete,
   onClose,
 }: WeightEntryFormModalProps) {
-  const isEditing = Boolean(initialWeightEntry?.id);
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEditing ? 'Edit weight entry' : `Add weight entry${catName ? ` for ${catName}` : ''}`}
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={`Weight entry${catName ? ` for ${catName}` : ''}`}>
       <WeightEntryFormFields
+        householdId={householdId}
         catName={catName}
         catOptions={catOptions}
         initialWeightEntry={initialWeightEntry}

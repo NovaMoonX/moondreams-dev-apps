@@ -1,25 +1,14 @@
-import {
-  Avatar,
-  Modal,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { Avatar, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ImageUploadField from '@/components/forms/ImageUploadField';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { getInitials } from '@/utils/accountUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { deleteFile, uploadFile } from '@lib/firebase/storage';
 
-import { useCatDetailSync } from '../hooks/useCatDetailSync';
 import type { Cat } from '../types';
-import CatConditionsSection from './CatConditionsSection';
 import CatProfileForm from './CatProfileForm';
-import SymptomsSection from './SymptomsSection';
-import VaccinationsSection from './VaccinationsSection';
-import WeightEntriesSection from './WeightEntriesSection';
 
 interface CatDetailsModalProps {
   isOpen: boolean;
@@ -41,8 +30,6 @@ function CatDetailsModal({
   onClose,
 }: CatDetailsModalProps) {
   const { confirm } = useActionModal();
-
-  useCatDetailSync(householdId, cat?.id);
 
   const handleDelete = async () => {
     if (!cat || !onDelete) {
@@ -70,7 +57,6 @@ function CatDetailsModal({
           isSubmitting={isSubmitting}
           onSubmit={onSubmit}
           onDelete={onDelete ? handleDelete : undefined}
-          onClose={onClose}
         />
       )}
     </Modal>
@@ -83,7 +69,6 @@ interface CatDetailsModalContentProps {
   isSubmitting?: boolean;
   onSubmit: (nextCat: Cat) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
-  onClose: () => void;
 }
 
 /** Keyed by `cat.id` in the parent so photo-picker state resets when switching cats without remounting the modal itself. */
@@ -93,26 +78,34 @@ function CatDetailsModalContent({
   isSubmitting,
   onSubmit,
   onDelete,
-  onClose,
 }: CatDetailsModalContentProps) {
   const photoUpload = useImageUpload(cat.photoURL ?? null);
   const photoRemoved = photoUpload.previewUrl === null && Boolean(cat.photoURL);
+  const { addToast } = useToast();
 
   const handleFormSubmit = async (nextCat: Cat) => {
     let photoURL = nextCat.photoURL;
 
-    if (householdId) {
-      const photoPath = `nine-lives/households/${householdId}/cats/${cat.id}/photo`;
+    try {
+      if (householdId) {
+        const photoPath = `nine-lives/households/${householdId}/cats/${cat.id}/photo`;
 
-      if (photoUpload.file) {
-        photoURL = await uploadFile(photoPath, photoUpload.file);
-      } else if (photoRemoved) {
-        await deleteFile(photoPath);
-        photoURL = null;
+        if (photoUpload.file) {
+          photoURL = await uploadFile(photoPath, photoUpload.file);
+        } else if (photoRemoved) {
+          await deleteFile(photoPath);
+          photoURL = null;
+        }
       }
-    }
 
-    await onSubmit({ ...nextCat, photoURL });
+      await onSubmit({ ...nextCat, photoURL });
+    } catch (error) {
+      addToast({
+        title: 'Unable to save changes',
+        description: getStorageErrorMessage(error, getErrorMessage(error, 'Please try again.')),
+        type: 'error',
+      });
+    }
   };
 
   return (
@@ -136,70 +129,13 @@ function CatDetailsModalContent({
         />
       </div>
 
-      <Tabs defaultValue='details' tabsWidth='full' variant='pills'>
-        <TabsList>
-          <TabsTrigger value='details'>Details</TabsTrigger>
-          <TabsTrigger value='vaccinations' disabled={!householdId}>
-            Vaccinations
-          </TabsTrigger>
-          <TabsTrigger value='weight' disabled={!householdId}>
-            Weight history
-          </TabsTrigger>
-          <TabsTrigger value='conditions' disabled={!householdId}>
-            Conditions
-          </TabsTrigger>
-          <TabsTrigger value='symptoms' disabled={!householdId}>
-            Symptoms
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value='details' className='pt-4'>
-          <CatProfileForm
-            cat={cat}
-            householdId={householdId}
-            isSubmitting={isSubmitting}
-            onSubmit={handleFormSubmit}
-            onCancel={onClose}
-            onDelete={onDelete}
-          />
-        </TabsContent>
-
-        {householdId && (
-          <>
-            <TabsContent value='vaccinations' className='pt-4'>
-              <VaccinationsSection
-                householdId={householdId}
-                catId={cat.id}
-                catName={cat.name}
-              />
-            </TabsContent>
-
-            <TabsContent value='weight' className='pt-4'>
-              <WeightEntriesSection
-                householdId={householdId}
-                catId={cat.id}
-                catName={cat.name}
-              />
-            </TabsContent>
-
-            <TabsContent value='conditions' className='pt-4'>
-              <CatConditionsSection
-                householdId={householdId}
-                catId={cat.id}
-                catName={cat.name}
-              />
-            </TabsContent>
-
-            <TabsContent value='symptoms' className='pt-4'>
-              <SymptomsSection
-                householdId={householdId}
-                catId={cat.id}
-                catName={cat.name}
-              />
-            </TabsContent>
-          </>
-        )}
-      </Tabs>
+      <CatProfileForm
+        cat={cat}
+        householdId={householdId}
+        isSubmitting={isSubmitting}
+        onSubmit={handleFormSubmit}
+        onDelete={onDelete}
+      />
     </>
   );
 }

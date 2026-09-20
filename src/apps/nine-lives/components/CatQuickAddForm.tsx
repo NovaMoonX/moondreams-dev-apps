@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
@@ -6,6 +6,7 @@ import { createDateInputField, fromDateInputValue } from '@/utils';
 import { getBreedInitialValue, resolveBreedValue, type BreedValue } from '@apps/nine-lives/utils/breedUtils';
 
 import BreedField from './BreedField';
+import ModalFooterActions from './ModalFooterActions';
 
 export interface CatQuickAddValues {
   name: string;
@@ -17,7 +18,6 @@ export interface CatQuickAddValues {
 interface CatQuickAddFormProps {
   isSubmitting?: boolean;
   onSubmit: (values: CatQuickAddValues) => Promise<void> | void;
-  onCancel?: () => void;
 }
 
 interface CatQuickAddFormData {
@@ -36,7 +36,9 @@ const initialData: CatQuickAddFormData = {
   isDateOfBirthEstimated: false,
 };
 
-function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickAddFormProps) {
+function CatQuickAddForm({ isSubmitting = false, onSubmit }: CatQuickAddFormProps) {
+  const [isValid, setIsValid] = useState(false);
+
   const fields = useMemo(
     () => [
       input({
@@ -93,20 +95,20 @@ function CatQuickAddForm({ isSubmitting = false, onSubmit, onCancel }: CatQuickA
       initialData={initialData}
       columns={1}
       spacing='normal'
+      onDataChange={(data) => {
+        setIsValid(Boolean((data as CatQuickAddFormData).name.trim()));
+      }}
       onSubmit={(data) => {
         void handleSubmit(data as CatQuickAddFormData);
       }}
       submitButton={
-        <div className='flex justify-end gap-2'>
-          {onCancel && (
-            <Button type='button' variant='secondary' onClick={onCancel}>
-              Cancel
+        <ModalFooterActions
+          rightActions={
+            <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+              {isSubmitting ? 'Saving…' : 'Add'}
             </Button>
-          )}
-          <Button type='submit' loading={isSubmitting}>
-            {isSubmitting ? 'Saving…' : 'Add cat'}
-          </Button>
-        </div>
+          }
+        />
       }
     />
   );

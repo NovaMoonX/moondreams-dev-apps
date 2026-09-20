@@ -1,9 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import type { Doctor } from '@apps/nine-lives/types';
+
+import DeleteIconButton from './DeleteIconButton';
+import ModalFooterActions from './ModalFooterActions';
 
 interface DoctorFormValues {
   name: string;
@@ -34,6 +37,7 @@ function DoctorFormModal({
   const { confirm } = useActionModal();
   const isEditing = Boolean(initialDoctor?.id);
   const formId = initialDoctor?.id ?? 'new-nine-lives-doctor';
+  const [isValid, setIsValid] = useState(Boolean(initialDoctor?.name?.trim()));
 
   const fields = useMemo(
     () => [
@@ -88,7 +92,7 @@ function DoctorFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? `Edit doctor at ${clinicName}` : `Add doctor to ${clinicName}`}
+      title={`Doctor at ${clinicName}`}
     >
       <Form
         key={formId}
@@ -97,27 +101,24 @@ function DoctorFormModal({
         initialData={{ name: initialDoctor?.name ?? '', notes: initialDoctor?.notes ?? '' }}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => {
+          setIsValid(Boolean((data as DoctorFormValues).name.trim()));
+        }}
         onSubmit={(data) => {
           void handleSubmit(data as DoctorFormValues);
         }}
         submitButton={
-          <div className='flex items-center justify-between gap-2'>
-            <div className='flex items-center gap-2'>
-              {isEditing && onDelete && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={() => void handleDelete()}
-                  disabled={isSubmitting}
-                >
-                  Delete doctor
-                </Button>
-              )}
-            </div>
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save doctor' : 'Add doctor'}
-            </Button>
-          </div>
+          <ModalFooterActions
+            leftActions={
+              isEditing &&
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} label='Delete doctor' />
+            }
+            rightActions={
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
+              </Button>
+            }
+          />
         }
       />
     </Modal>

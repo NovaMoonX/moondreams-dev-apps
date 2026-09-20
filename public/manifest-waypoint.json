@@ -2,8 +2,9 @@
   "name": "Waypoint - Moondreams Dev Apps",
   "short_name": "Waypoint",
   "description": "A collaborative trip planner for shared itineraries, checklists, and live travel coordination.",
+  "id": "/waypoint/",
   "start_url": "/waypoint/",
-  "scope": "/",
+  "scope": "/waypoint/",
   "scope_extensions": [
     {
       "type": "origin",

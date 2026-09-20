@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Avatar,
@@ -15,6 +15,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft, ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import {
   fromLocalDateAndTimeInputValues,
@@ -23,27 +24,40 @@ import {
 } from '@/utils';
 import { getInitials } from '@/utils/accountUtils';
 
+import { useAppSelector } from '@/store';
+
 import {
-  startCatConditionsListener,
-  startSymptomsListener,
-} from '../store/listeners/catDetailListeners';
-import { startWeightEntriesListener } from '../store/listeners/weightEntriesListener';
+  selectConditionsByCat,
+  selectSymptomsByCat,
+  selectWeightEntriesByCat,
+} from '../store/selectors';
 import type {
   Cat,
   CatCondition,
+  ExpenseLineItem,
   Symptom,
   Visit,
   VisitReason,
-  WeightEntry,
 } from '../types';
 import type { VisitOutcome } from '../store/actions/visitsActions';
-import { getDefaultVisitTitle } from '../utils/dateHelpers';
+import { createEmptyLineItem, type LineItemValue } from '../utils/expenseLineItems';
+import { getVisitOptions } from '../utils/visitOptions';
+import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
+import ExpenseLineItemsField from './ExpenseLineItemsField';
+import ModalFooterActions from './ModalFooterActions';
+
+export interface VisitExpenseDraft {
+  catIds: string[];
+  items: ExpenseLineItem[];
+  incurredAt: number;
+  label: string | null;
+}
 
 interface VisitFormModalProps {
   isOpen: boolean;
   cats: Cat[];
-  householdId?: string;
   clinics?: Array<{ id: string; name: string }>;
   doctors?: Array<{ id: string; name: string; clinicId: string }>;
   visits?: Visit[];
@@ -53,7 +67,7 @@ interface VisitFormModalProps {
   onSubmit: (
     visit: Partial<Visit> & Pick<Visit, 'catIds' | 'reason' | 'scheduledAt'>,
   ) => Promise<void> | void;
-  onComplete?: (outcome: VisitOutcome) => Promise<void> | void;
+  onComplete?: (outcome: VisitOutcome, expenseDraft?: VisitExpenseDraft) => Promise<void> | void;
   onCancelVisit?: () => Promise<void> | void;
   onReopenVisit?: () => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
@@ -80,7 +94,7 @@ interface VisitFormValues {
   moreDetails: VisitMoreDetailsValue;
 }
 
-const { checkboxGroup, custom } = FormFactories;
+const { custom } = FormFactories;
 
 const REASON_OPTIONS = [
   { label: 'Checkup', value: 'checkup' },
@@ -375,39 +389,11 @@ function RepeatableTextInputs({
   );
 }
 
-/** Fetches a cat's symptoms/conditions/weight independently of the shared "currently open cat" Redux slice (which `useCatDetailSync` overwrites per-cat), since a visit's outcome form may need this for several cats at once. */
-function useCatOutcomeContext(householdId: string | undefined, catId: string) {
-  const [symptoms, setSymptoms] = useState<Symptom[]>([]);
-  const [conditions, setConditions] = useState<CatCondition[]>([]);
-  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
-
-  useEffect(() => {
-    if (!householdId) {
-      return;
-    }
-
-    const unsubscribeSymptoms = startSymptomsListener(
-      householdId,
-      catId,
-      setSymptoms,
-    );
-    const unsubscribeConditions = startCatConditionsListener(
-      householdId,
-      catId,
-      setConditions,
-    );
-    const unsubscribeWeightEntries = startWeightEntriesListener(
-      householdId,
-      catId,
-      setWeightEntries,
-    );
-
-    return () => {
-      unsubscribeSymptoms();
-      unsubscribeConditions();
-      unsubscribeWeightEntries();
-    };
-  }, [householdId, catId]);
+/** Reads a cat's symptoms/conditions/weight from the household-wide sync, since a visit's outcome form may need this for several cats at once. */
+function useCatOutcomeContext(catId: string) {
+  const symptoms = useAppSelector(selectSymptomsByCat(catId), shallowEqual);
+  const conditions = useAppSelector(selectConditionsByCat(catId), shallowEqual);
+  const weightEntries = useAppSelector(selectWeightEntriesByCat(catId), shallowEqual);
 
   return { symptoms, conditions, weightEntries };
 }
@@ -460,7 +446,6 @@ function VisitOutcomeCatCard({
 
 interface VisitOutcomeCatDetailProps {
   cat: Cat;
-  householdId: string | undefined;
   value: VisitOutcomeCatValue;
   onValueChange: (value: VisitOutcomeCatValue) => void;
   onDone: () => void;
@@ -470,16 +455,12 @@ interface VisitOutcomeCatDetailProps {
 /** The drill-down screen for one cat's outcome details, reached from `VisitOutcomeCatCard`. */
 function VisitOutcomeCatDetail({
   cat,
-  householdId,
   value,
   onValueChange,
   onDone,
   disabled,
 }: VisitOutcomeCatDetailProps) {
-  const { symptoms, conditions, weightEntries } = useCatOutcomeContext(
-    householdId,
-    cat.id,
-  );
+  const { symptoms, conditions, weightEntries } = useCatOutcomeContext(cat.id);
   const openSymptoms = symptoms.filter(
     (symptom) => symptom.resolvedAt === null,
   );
@@ -896,7 +877,74 @@ function VisitOutcomeReview({
           Back
         </Button>
         <Button type='button' onClick={onConfirm} loading={isSubmitting}>
-          {isSubmitting ? 'Completing…' : 'Complete visit'}
+          Continue
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function VisitOutcomeExpenseStep({
+  visit,
+  isSubmitting,
+  onSkip,
+  onConfirm,
+}: {
+  visit: Visit;
+  isSubmitting: boolean;
+  onSkip: () => void;
+  onConfirm: (expenseDraft: VisitExpenseDraft) => void;
+}) {
+  const [items, setItems] = useState<LineItemValue[]>(() => [createEmptyLineItem()]);
+
+  const validItems = items.filter((item) => {
+    const amount = Number(item.amount);
+    return Number.isFinite(amount) && amount > 0;
+  });
+  const isValid = validItems.length > 0;
+
+  const handleAdd = () => {
+    if (!isValid) {
+      return;
+    }
+
+    onConfirm({
+      catIds: visit.catIds,
+      items: validItems.map((item) => ({
+        id: item.id,
+        category: 'other',
+        label: item.label.trim() || null,
+        amount: Number(item.amount),
+      })),
+      incurredAt: visit.completedAt ?? visit.scheduledAt,
+      label: null,
+    });
+  };
+
+  return (
+    <div className='space-y-4'>
+      <p className='text-muted-foreground text-sm'>
+        Want to log an expense for this visit? You can always add one later.
+      </p>
+
+      <ExpenseLineItemsField value={items} onValueChange={setItems} disabled={isSubmitting} />
+
+      <div className='flex items-center justify-between gap-2'>
+        <Button
+          type='button'
+          variant='secondary'
+          onClick={onSkip}
+          disabled={isSubmitting}
+        >
+          Skip
+        </Button>
+        <Button
+          type='button'
+          onClick={handleAdd}
+          loading={isSubmitting}
+          disabled={!isValid}
+        >
+          {isSubmitting ? 'Completing…' : 'Complete with expense'}
         </Button>
       </div>
     </div>
@@ -904,15 +952,15 @@ function VisitOutcomeReview({
 }
 
 function VisitOutcomeForm({
+  visit,
   cats,
-  householdId,
   isSubmitting,
   onComplete,
 }: {
+  visit: Visit;
   cats: Cat[];
-  householdId: string | undefined;
   isSubmitting: boolean;
-  onComplete: (outcome: VisitOutcome) => Promise<void> | void;
+  onComplete: (outcome: VisitOutcome, expenseDraft?: VisitExpenseDraft) => Promise<void> | void;
 }) {
   const [summary, setSummary] = useState('');
   const [catValues, setCatValues] = useState<
@@ -926,9 +974,21 @@ function VisitOutcomeForm({
   const [pendingOutcome, setPendingOutcome] = useState<VisitOutcome | null>(
     null,
   );
+  const [showExpenseStep, setShowExpenseStep] = useState(false);
 
   const updateCatValue = (catId: string, value: VisitOutcomeCatValue) =>
     setCatValues((current) => ({ ...current, [catId]: value }));
+
+  if (showExpenseStep && pendingOutcome) {
+    return (
+      <VisitOutcomeExpenseStep
+        visit={visit}
+        isSubmitting={isSubmitting}
+        onSkip={() => void onComplete(pendingOutcome)}
+        onConfirm={(expenseDraft) => void onComplete(pendingOutcome, expenseDraft)}
+      />
+    );
+  }
 
   if (pendingOutcome) {
     return (
@@ -942,7 +1002,7 @@ function VisitOutcomeForm({
             current ? removeReviewItem(current, item) : current,
           )
         }
-        onConfirm={() => void onComplete(pendingOutcome)}
+        onConfirm={() => setShowExpenseStep(true)}
       />
     );
   }
@@ -955,7 +1015,6 @@ function VisitOutcomeForm({
     return (
       <VisitOutcomeCatDetail
         cat={activeCat}
-        householdId={householdId}
         value={catValues[activeCat.id] ?? buildEmptyOutcomeCatValue()}
         onValueChange={(value) => updateCatValue(activeCat.id, value)}
         onDone={() => setActiveCatId(null)}
@@ -1001,7 +1060,10 @@ function VisitOutcomeForm({
         <Button
           type='button'
           variant='secondary'
-          onClick={() => void onComplete({})}
+          onClick={() => {
+            setPendingOutcome({});
+            setShowExpenseStep(true);
+          }}
           disabled={isSubmitting}
         >
           Complete without entries
@@ -1022,7 +1084,6 @@ function VisitOutcomeForm({
 function VisitFormModal({
   isOpen,
   cats,
-  householdId,
   clinics = [],
   doctors = [],
   visits = [],
@@ -1040,14 +1101,11 @@ function VisitFormModal({
   const isEditing = Boolean(initialVisit?.id);
   const showOutcome = Boolean(isCompleting && initialVisit && onComplete);
   const formId = initialVisit?.id ?? 'new-nine-lives-visit';
+  const [isValid, setIsValid] = useState(
+    Boolean((initialVisit?.catIds?.length ?? 0) > 0),
+  );
   const originalVisitOptions = useMemo(
-    () =>
-      visits
-        .filter((visit) => visit.id !== initialVisit?.id)
-        .map((visit) => ({
-          label: visit.title ?? getDefaultVisitTitle(visit.scheduledAt),
-          value: visit.id,
-        })),
+    () => getVisitOptions(visits, { excludeVisitId: initialVisit?.id }),
     [visits, initialVisit?.id],
   );
   const defaultClinicAndDoctor = useMemo(() => {
@@ -1075,10 +1133,18 @@ function VisitFormModal({
 
   const fields = useMemo(
     () => [
-      checkboxGroup({
+      custom({
         name: 'catIds',
         label: 'Cats',
-        options: cats.map((cat) => ({ label: cat.name, value: cat.id })),
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={cats.map((cat) => ({ label: cat.name, value: cat.id, photoURL: cat.photoURL }))}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       custom({
         name: 'scheduledAt',
@@ -1164,18 +1230,12 @@ function VisitFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={
-        showOutcome
-          ? 'Complete visit'
-          : isEditing
-            ? 'Edit visit'
-            : 'Schedule visit'
-      }
+      title={showOutcome ? 'Complete visit' : 'Visit'}
     >
       {showOutcome ? (
         <VisitOutcomeForm
+          visit={initialVisit!}
           cats={cats.filter((cat) => initialVisit?.catIds.includes(cat.id))}
-          householdId={householdId}
           isSubmitting={isSubmitting}
           onComplete={onComplete!}
         />
@@ -1206,65 +1266,35 @@ function VisitFormModal({
           }}
           columns={1}
           spacing='normal'
+          onDataChange={(data) => {
+            setIsValid(Boolean((data as VisitFormValues).catIds.length > 0));
+          }}
           onSubmit={(data) => {
             void handleSubmit(data as VisitFormValues);
           }}
           submitButton={
-            <div className='flex items-center justify-between gap-2'>
-              <div className='flex items-center gap-2'>
-                {isEditing && onDelete && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={() => void handleDelete()}
-                    disabled={isSubmitting}
-                  >
-                    Delete
+            <ModalFooterActions
+              leftActions={
+                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+              }
+              rightActions={
+                <>
+                  {isEditing && onCancelVisit && initialVisit?.status === 'upcoming' && (
+                    <Button type='button' variant='secondary' onClick={() => void onCancelVisit()} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                  )}
+                  {isEditing && onReopenVisit && initialVisit?.status === 'cancelled' && (
+                    <Button type='button' variant='secondary' onClick={() => void onReopenVisit()} disabled={isSubmitting}>
+                      Reopen
+                    </Button>
+                  )}
+                  <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                    {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Schedule'}
                   </Button>
-                )}
-                {isEditing &&
-                  onCancelVisit &&
-                  initialVisit?.status === 'upcoming' && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={() => void onCancelVisit()}
-                      disabled={isSubmitting}
-                    >
-                      Cancel visit
-                    </Button>
-                  )}
-                {isEditing &&
-                  onReopenVisit &&
-                  initialVisit?.status === 'cancelled' && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={() => void onReopenVisit()}
-                      disabled={isSubmitting}
-                    >
-                      Reopen visit
-                    </Button>
-                  )}
-              </div>
-              <div className='flex items-center gap-2'>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                >
-                  Close
-                </Button>
-                <Button type='submit' loading={isSubmitting}>
-                  {isSubmitting
-                    ? 'Saving…'
-                    : isEditing
-                      ? 'Save visit'
-                      : 'Schedule visit'}
-                </Button>
-              </div>
-            </div>
+                </>
+              }
+            />
           }
         />
       )}

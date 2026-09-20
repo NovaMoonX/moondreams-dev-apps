@@ -43,6 +43,7 @@ function QuickAddWeightEntryModal({ isOpen, householdId, cats, onClose }: QuickA
   return (
     <WeightEntryFormModal
       isOpen={isOpen}
+      householdId={householdId}
       catOptions={catOptions}
       isSubmitting={isSubmitting}
       onSubmit={handleSubmit}

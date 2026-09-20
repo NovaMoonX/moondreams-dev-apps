@@ -57,3 +57,8 @@ export function fromLocalDateAndTimeInputValues(
   const timestamp = new Date(`${dateValue}T${timeValue || '00:00'}`).getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
 }
+
+/** Whether two timestamps fall on the same calendar day (UTC) — for duplicate-matching fields whose time-of-day isn't meaningful. */
+export function isSameCalendarDay(left: number, right: number) {
+  return toDateInputValue(left) === toDateInputValue(right);
+}

@@ -24,11 +24,15 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 4. **Track visits**: schedule and log vet visits — for one cat, or several at once (say, both kittens seeing the vet the same day) — tagged with a reason (checkup, illness, accident, vaccination, follow-up, or custom) and the doctor seen, so future visits can just pick them from a list instead of retyping. Visits get a sensible default name based on time of day and date ("Morning Visit — Mar 4"), but you can always rename one. Logging a completed visit is also where you update the key things that actually change at the vet — vaccinations given, conditions diagnosed, current weight, and symptoms discussed — instead of hunting down separate screens afterward.
 5. **Track conditions and incidents**: browse the shared condition library, log accidents/injuries, or add a fully custom entry specific to your cat.
 6. **Track symptoms**: quick-tag cat behavior changes like litter box changes, appetite shifts, hiding, playfulness, and grooming, or write your own note; log either quick tags, free text, or both, and link them to a visit or condition so the timeline connects.
-7. **Budget**: log expenses with sensible presets (adoption fee, insurance, food, vet, litter, grooming...) and see both monthly and lifetime totals.
-8. **Stay emergency-ready**: the app nudges you to record an emergency/after-hours vet and confirm insurance is on file until both are done.
-9. **Browse resources and the glossary**: look up unfamiliar terms (what's FVRCP?) with definitions linked to relevant resource articles.
-10. **See what's coming up, at a glance**: a household-wide timeline of visits and vaccination due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
-11. **Get reminders**: push notifications for upcoming visits and vaccination due dates, once that infrastructure is built (see Stretch Goals — the visibility in #10 doesn't depend on it).
+7. **Track preventives**: log each flea, tick, mite, heartworm, or dewormer dose, including when it was administered and when the next dose is due. Records can be edited or deleted from the cat's Preventives tab.
+8. **Budget**: log expenses with sensible presets (adoption fee, insurance, food, vet, litter, grooming...) and see both monthly and lifetime totals.
+9. **Track litter usage**: log household litter weigh-ins by box and type, see usage between weigh-ins, and track how long each box has been since its last change.
+10. **Stay emergency-ready**: the app nudges you to record an emergency/after-hours vet and confirm insurance is on file until both are done.
+11. **Browse resources and the glossary**: look up unfamiliar terms (what's FVRCP?) with definitions linked to relevant resource articles.
+12. **See what's coming up, at a glance**: a household-wide timeline of visits, vaccination due dates, and preventive due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
+13. **Get reminders**: push notifications for upcoming visits, vaccination due dates, and preventive due dates, once that infrastructure is built (see Stretch Goals — the visibility in #11 doesn't depend on it).
+14. **Upload and review a document**: the dashboard, Expenses, and Records sections can send a PDF or photo to Firebase AI Logic. The resulting `IngestionDraft` is household-scoped and contains optional cat, clinic, visit, vaccination, preventive, weight, symptom, condition, and expense proposals. Reviewers can edit or exclude each proposal, choose an existing cat or clinic, keep the file as a health record, then confirm the linked writes or discard the draft.
+15. **Use voice quick entry**: the dashboard microphone button transcribes a short note on-device with the browser's Web Speech API, then sends the transcript through the same extraction, matching, duplicate detection, and review flow as uploaded documents. Browsers without `SpeechRecognition` support show the action as disabled; Safari support varies by version.
 
 ## How it Feels
 
@@ -48,6 +52,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Vet clinics and doctors: add a clinic, log doctors seen there, reusable as a select on future visits instead of retyping
 - [x] Health record file uploads (PDF, image) attached to a cat, with persisted custom record types (typed once, reused as a select — not retyped every time)
 - [ ] Vaccination tracking: vaccine name, date administered, next due date
+- [x] Preventive tracking: flea/tick/heartworm/mite/dewormer product, administered date, and next due date, with edit/delete
 - [ ] Weight entries: log a cat's current weight, optionally as part of a visit
 - [x] Visit tracking: schedule/log visits with a reason (checkup, illness, accident, vaccination, follow-up, custom), supporting one or several cats in a single entry, with a sensible default name based on time of day, and vaccinations/conditions/weight/symptoms updatable in the same completion flow
 - [x] Condition/incident library seeded from a public data source, browsable and searchable — covering illnesses as well as injuries, with full visit history per condition
@@ -55,13 +60,15 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - [ ] Symptom log with quick-tap cat-specific tags plus free text, optionally linked to one or more visits and/or a condition
 - [ ] Budgeting with default category presets (adoption fee, insurance, food, litter, vet, grooming, supplies, medication, microchipping/spay-neuter, other), monthly totals, and a running lifetime total
 - [ ] Emergency readiness: a dedicated place for an emergency/after-hours vet contact, with a dashboard nudge until it's filled in
-- [ ] Household dashboard: a full timeline of visits and vaccination due dates, past and upcoming (roughly a year out), plus CTAs to add a visit or reminder spanning multiple cats without opening a specific cat's profile first
+- [ ] Household dashboard: a full timeline of visits, vaccination due dates, and preventive due dates, past and upcoming (roughly a year out), plus CTAs to add a visit or reminder spanning multiple cats without opening a specific cat's profile first
 
 ### Next Steps
 
+- [x] Preventive treatment tracking with recurring dose history and next-due dates
 - [ ] Structured glossary (e.g., "what's FVRCP?") with entries linked to relevant resource articles
-- [ ] Cat personality traits/notes per cat
+- [x] Cat personality traits/notes per cat
 - [ ] Cat diet: food type (dry/wet/mixed), brand, feedings per day, automatic feeder, snacks/treats
+- [x] Litter usage: household weigh-ins by litter box and type, usage deltas, and time since box changes
 
 ### Stretch Goals
 
@@ -83,4 +90,5 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - **State**: Redux Toolkit (typed per-mini-app slice trees, optimistic thunks, cross-slice selectors) — see the Technical Design Document for the full architecture
 - **Data**: Firestore, namespaced under `apps/nine-lives/...`, household-scoped for owned data and globally shared for reference content (condition library, glossary, resources, vaccine reference list)
 - **Files**: Firebase Storage for health-record uploads and photos
+- **Document ingestion**: Firebase AI Logic uses App Check. Production builds require `VITE_FIREBASE_APPCHECK_SITE_KEY`. Local emulator builds enable the App Check debug token; set `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` to a fixed UUID in `.env.local` so the whole team shares one token registered once in Firebase Console > App Check > Manage debug tokens, instead of every browser generating (and needing to separately register) its own.
 - **Notifications**: Firebase Cloud Messaging, via shared cross-app infrastructure rather than a Nine Lives–specific implementation

@@ -5,6 +5,7 @@ import SymptomFormFields from './SymptomFormFields';
 
 interface SymptomFormModalProps {
   isOpen: boolean;
+  householdId?: string;
   catName?: string;
   conditions?: CatCondition[];
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
@@ -18,6 +19,7 @@ interface SymptomFormModalProps {
 
 function SymptomFormModal({
   isOpen,
+  householdId,
   catName,
   conditions = [],
   catOptions,
@@ -27,15 +29,10 @@ function SymptomFormModal({
   onDelete,
   onClose,
 }: SymptomFormModalProps) {
-  const isEditing = Boolean(initialSymptom?.id);
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEditing ? 'Edit symptom' : `Add symptom${catName ? ` for ${catName}` : ''}`}
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={`Symptom${catName ? ` for ${catName}` : ''}`}>
       <SymptomFormFields
+        householdId={householdId}
         conditions={conditions}
         catOptions={catOptions}
         initialSymptom={initialSymptom}

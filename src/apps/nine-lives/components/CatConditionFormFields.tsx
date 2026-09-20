@@ -3,11 +3,19 @@ import { useMemo, useState } from 'react';
 import { Badge, Button, Form, FormFactories, HelpIcon, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { shallowEqual } from 'react-redux';
 
+import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 
+import { selectVisitsByHousehold } from '../store/selectors';
 import type { CatCondition, ConditionCategory, LibraryCondition } from '../types';
+import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
+import { getVisitOptions } from '../utils/visitOptions';
 import ConditionLibraryBrowser from './ConditionLibraryBrowser';
+import DeleteIconButton from './DeleteIconButton';
+import LinkedVisitsField from './LinkedVisitsField';
+import ModalFooterActions from './ModalFooterActions';
 
 interface CatConditionFormValues {
   name: string;
@@ -16,9 +24,11 @@ interface CatConditionFormValues {
   isResolved: boolean;
   occurredAt: string;
   resolvedAt: string;
+  linkedVisitIds: string[];
 }
 
 interface CatConditionFormFieldsProps {
+  householdId?: string;
   libraryConditions: LibraryCondition[];
   /** When provided, renders a required "Cat" selector so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
@@ -31,15 +41,6 @@ interface CatConditionFormFieldsProps {
   onCancel?: () => void;
 }
 
-const CONDITION_CATEGORIES: ConditionCategory[] = [
-  'illness',
-  'injury',
-  'chronic',
-  'parasite',
-  'allergy',
-  'other',
-];
-
 const STATUS_OPTIONS = [
   { text: 'Active', value: 'active' },
   { text: 'Ongoing', value: 'ongoing' },
@@ -51,6 +52,7 @@ const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 const { input, select, textarea, checkbox, custom } = FormFactories;
 
 function CatConditionFormFields({
+  householdId,
   libraryConditions,
   catOptions,
   initialCondition,
@@ -60,6 +62,8 @@ function CatConditionFormFields({
   onCancel,
 }: CatConditionFormFieldsProps) {
   const { confirm } = useActionModal();
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
+  const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
   const isEditing = Boolean(initialCondition?.id);
   const formId = initialCondition?.id ?? 'new-nine-lives-cat-condition';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
@@ -74,6 +78,9 @@ function CatConditionFormFields({
   );
   const [notesOpen, setNotesOpen] = useState(Boolean(initialCondition?.description));
   const [isResolved, setIsResolved] = useState(Boolean(initialCondition?.resolvedAt));
+  const [isValid, setIsValid] = useState(
+    Boolean((!showCatField || catId) && initialCondition?.occurredAt),
+  );
 
   const hasChosenCondition = mode === 'custom' || Boolean(selectedLibraryCondition);
 
@@ -107,7 +114,10 @@ function CatConditionFormFields({
             select({
               name: 'category',
               label: 'Category',
-              options: CONDITION_CATEGORIES.map((category) => ({ label: category, value: category })),
+              options: CONDITION_CATEGORIES.map((category) => ({
+                label: getConditionCategoryLabel(category),
+                value: category,
+              })),
             }),
           ]
         : []),
@@ -154,8 +164,25 @@ function CatConditionFormFields({
             }),
           ]
         : []),
+      ...(visitOptions.length > 0
+        ? [
+            custom({
+              name: 'linkedVisitIds',
+              label: 'Linked visits',
+              renderComponent: (props) => (
+                <LinkedVisitsField
+                  value={props.value as string[]}
+                  onValueChange={props.onValueChange}
+                  visitOptions={visitOptions}
+                  disabled={props.disabled}
+                />
+              ),
+              colSpan: 'full',
+            }),
+          ]
+        : []),
     ],
-    [mode, notesOpen, isResolved],
+    [mode, notesOpen, isResolved, visitOptions],
   );
 
   const handleSubmit = async (data: CatConditionFormValues) => {
@@ -185,6 +212,7 @@ function CatConditionFormFields({
         status,
         occurredAt,
         resolvedAt,
+        linkedVisitIds: data.linkedVisitIds ?? [],
       });
 
       return;
@@ -205,6 +233,7 @@ function CatConditionFormFields({
       status,
       occurredAt,
       resolvedAt,
+      linkedVisitIds: data.linkedVisitIds ?? [],
     });
   };
 
@@ -281,7 +310,7 @@ function CatConditionFormFields({
             <div className='flex items-center gap-2'>
               <strong className='text-sm'>{selectedLibraryCondition.name}</strong>
               <Badge variant='muted' outline>
-                {selectedLibraryCondition.category}
+                {getConditionCategoryLabel(selectedLibraryCondition.category)}
               </Badge>
             </div>
             <p className='text-muted-foreground text-sm'>{selectedLibraryCondition.description}</p>
@@ -310,45 +339,43 @@ function CatConditionFormFields({
             isResolved,
             occurredAt: toDateInputValue(initialCondition?.occurredAt ?? undefined),
             resolvedAt: toDateInputValue(initialCondition?.resolvedAt ?? undefined),
+            linkedVisitIds: initialCondition?.linkedVisitIds ?? [],
           }}
           columns={1}
           spacing='normal'
           onDataChange={(data) => {
-            const nextIsResolved = Boolean((data as CatConditionFormValues).isResolved);
+            const values = data as CatConditionFormValues;
+            const nextIsResolved = Boolean(values.isResolved);
 
             if (nextIsResolved !== isResolved) {
               setIsResolved(nextIsResolved);
               setStatus(nextIsResolved ? 'resolved' : 'active');
             }
+
+            const hasName = mode === 'custom' ? Boolean(values.name?.trim()) : Boolean(selectedLibraryCondition);
+            setIsValid(Boolean(hasName && (!showCatField || catId) && values.occurredAt));
           }}
           onSubmit={(data) => {
             void handleSubmit(data as CatConditionFormValues);
           }}
           submitButton={
-            <div className='flex items-center justify-between gap-2'>
-              <div className='flex items-center gap-2'>
-                {isEditing && onDelete && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={() => void handleDelete()}
-                    disabled={isSubmitting}
-                  >
-                    Delete
+            <ModalFooterActions
+              leftActions={
+                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+              }
+              rightActions={
+                <>
+                  {onCancel && (
+                    <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                  )}
+                  <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                    {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
                   </Button>
-                )}
-              </div>
-              <div className='flex items-center gap-2'>
-                {onCancel && (
-                  <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                    Cancel
-                  </Button>
-                )}
-                <Button type='submit' loading={isSubmitting}>
-                  {isSubmitting ? 'Saving…' : isEditing ? 'Save condition' : 'Add condition'}
-                </Button>
-              </div>
-            </div>
+                </>
+              }
+            />
           }
         />
       )}

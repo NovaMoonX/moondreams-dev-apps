@@ -1,41 +1,136 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
-import { selectClinicsByHousehold, selectDoctorsByHousehold } from '@apps/nine-lives/store/selectors';
-import type { Vaccination } from '@apps/nine-lives/types';
+import type { VaccinationFormSubmission } from '@apps/nine-lives/store/actions/vaccinationsActions';
+import {
+  selectClinicsByHousehold,
+  selectDoctorsByHousehold,
+  selectVisitsByHousehold,
+} from '@apps/nine-lives/store/selectors';
+import { getVisitOptions } from '@apps/nine-lives/utils/visitOptions';
+
+import DeleteIconButton from './DeleteIconButton';
+import DetailsDisclosure from './DetailsDisclosure';
+import LinkedVisitsField from './LinkedVisitsField';
+import ModalFooterActions from './ModalFooterActions';
 
 const NONE_OPTION_VALUE = '';
+
+interface AdditionalDetailsValue {
+  expiresAt: string;
+  clinicId: string;
+  doctorId: string;
+  lotNumber: string;
+  linkedVisitId: string;
+}
 
 interface VaccinationFormValues {
   catId?: string;
   name: string;
   administeredAt: string;
-  expiresAt?: string | null;
-  clinicId?: string | null;
-  doctorId?: string | null;
-  lotNumber?: string | null;
-  linkedVisitId?: string | null;
+  additionalDetails: AdditionalDetailsValue;
 }
+
+function AdditionalDetailsFields({
+  value,
+  onValueChange,
+  disabled,
+  clinicOptions,
+  doctorOptions,
+  visitOptions,
+}: {
+  value: AdditionalDetailsValue;
+  onValueChange: (value: AdditionalDetailsValue) => void;
+  disabled?: boolean;
+  clinicOptions: { label: string; value: string }[];
+  doctorOptions: { label: string; value: string }[];
+  visitOptions: { label: string; value: string }[];
+}) {
+  const update = (changes: Partial<AdditionalDetailsValue>) =>
+    onValueChange({ ...value, ...changes });
+
+  return (
+    <DetailsDisclosure label='Additional details'>
+      <div className='space-y-3'>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Next due date</Label>
+          <Input
+            type='date'
+            value={value.expiresAt}
+            onChange={(event) => update({ expiresAt: event.target.value })}
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Clinic</Label>
+          <Select
+            options={clinicOptions.map((option) => ({ text: option.label, value: option.value }))}
+            value={value.clinicId}
+            disabled={disabled}
+            onChange={(clinicId) => update({ clinicId })}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Doctor</Label>
+          <Select
+            options={doctorOptions.map((option) => ({ text: option.label, value: option.value }))}
+            value={value.doctorId}
+            disabled={disabled}
+            onChange={(doctorId) => update({ doctorId })}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Lot number</Label>
+          <Input
+            value={value.lotNumber}
+            onChange={(event) => update({ lotNumber: event.target.value })}
+            placeholder='L-1024'
+            variant='outline'
+            disabled={disabled}
+          />
+        </div>
+        <div className='space-y-1'>
+          <Label className='text-sm'>Linked visit</Label>
+          <LinkedVisitsField
+            value={value.linkedVisitId ? [value.linkedVisitId] : []}
+            onValueChange={(ids) => update({ linkedVisitId: ids[0] ?? '' })}
+            visitOptions={visitOptions}
+            disabled={disabled}
+            multiple={false}
+          />
+        </div>
+      </div>
+    </DetailsDisclosure>
+  );
+}
+
+/**
+ * `id` here is purely a UI signal for this form ("is a record's latest dose being edited in
+ * place?") — it does not have to be the record actually being submitted to. Callers logging a
+ * new dose against an existing record track that record's id themselves and omit `id` here so
+ * the form renders as a fresh "Add" (no Delete button, submit reads "Add vaccination").
+ */
+export type VaccinationFormInitialValues = Partial<VaccinationFormSubmission>;
 
 interface VaccinationFormFieldsProps {
   householdId?: string;
   /** When provided, renders a required "Cat" selector as the first field so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
-  initialVaccination?: Partial<Vaccination> | null;
+  initialVaccination?: VaccinationFormInitialValues | null;
   isSubmitting?: boolean;
-  onSubmit: (
-    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
-  ) => Promise<void> | void;
+  onSubmit: (vaccination: VaccinationFormSubmission) => Promise<void> | void;
   onDelete?: (vaccinationId: string) => Promise<void> | void;
   /** When provided, renders a Cancel button (for inline/non-modal usage). */
   onCancel?: () => void;
 }
 
-const { input, select } = FormFactories;
+const { input, select, custom } = FormFactories;
 
 function VaccinationFormFields({
   householdId,
@@ -47,11 +142,15 @@ function VaccinationFormFields({
   onCancel,
 }: VaccinationFormFieldsProps) {
   const { confirm } = useActionModal();
-  const clinics = useAppSelector(selectClinicsByHousehold(householdId));
-  const doctors = useAppSelector(selectDoctorsByHousehold(householdId));
+  const clinics = useAppSelector(selectClinicsByHousehold(householdId), shallowEqual);
+  const doctors = useAppSelector(selectDoctorsByHousehold(householdId), shallowEqual);
+  const visits = useAppSelector(selectVisitsByHousehold(householdId), shallowEqual);
   const isEditing = Boolean(initialVaccination?.id);
   const formId = initialVaccination?.id ?? 'new-nine-lives-vaccination';
   const showCatField = Boolean(catOptions && catOptions.length > 0);
+  const [isValid, setIsValid] = useState(
+    Boolean(initialVaccination?.name?.trim() && initialVaccination?.administeredAt && (!showCatField || initialVaccination?.catId)),
+  );
 
   const clinicOptions = useMemo(
     () => [
@@ -68,6 +167,8 @@ function VaccinationFormFields({
     ],
     [doctors],
   );
+
+  const visitOptions = useMemo(() => getVisitOptions(visits), [visits]);
 
   const fields = useMemo(
     () => [
@@ -93,36 +194,23 @@ function VaccinationFormFields({
         required: true,
         variant: 'outline',
       }),
-      createDateInputField({
-        name: 'expiresAt',
-        label: 'Next due date (optional)',
-        variant: 'outline',
-      }),
-      select({
-        name: 'clinicId',
-        label: 'Clinic (optional)',
-        options: clinicOptions,
-      }),
-      select({
-        name: 'doctorId',
-        label: 'Doctor (optional)',
-        options: doctorOptions,
-      }),
-      input({
-        name: 'lotNumber',
-        label: 'Lot number (optional)',
-        placeholder: initialVaccination?.lotNumber || 'L-1024',
-        variant: 'outline',
-      }),
-      // TODO: replace with a select populated from this cat's visits once visit records exist.
-      input({
-        name: 'linkedVisitId',
-        label: 'Linked visit ID (optional)',
-        placeholder: initialVaccination?.linkedVisitId || 'visit-id',
-        variant: 'outline',
+      custom({
+        name: 'additionalDetails',
+        label: '',
+        renderComponent: (props) => (
+          <AdditionalDetailsFields
+            value={props.value as AdditionalDetailsValue}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+            clinicOptions={clinicOptions}
+            doctorOptions={doctorOptions}
+            visitOptions={visitOptions}
+          />
+        ),
+        colSpan: 'full',
       }),
     ],
-    [showCatField, catOptions, clinicOptions, doctorOptions, initialVaccination],
+    [showCatField, catOptions, clinicOptions, doctorOptions, visitOptions, initialVaccination],
   );
 
   const handleSubmit = async (data: VaccinationFormValues) => {
@@ -138,11 +226,13 @@ function VaccinationFormFields({
       catId: data.catId || initialVaccination?.catId,
       name: trimmedName,
       administeredAt,
-      expiresAt: data.expiresAt ? (fromDateInputValue(data.expiresAt) ?? null) : null,
-      clinicId: data.clinicId?.trim() || null,
-      doctorId: data.doctorId?.trim() || null,
-      lotNumber: data.lotNumber?.trim() || null,
-      linkedVisitId: data.linkedVisitId?.trim() || null,
+      expiresAt: data.additionalDetails.expiresAt
+        ? (fromDateInputValue(data.additionalDetails.expiresAt) ?? null)
+        : null,
+      clinicId: data.additionalDetails.clinicId?.trim() || null,
+      doctorId: data.additionalDetails.doctorId?.trim() || null,
+      lotNumber: data.additionalDetails.lotNumber?.trim() || null,
+      linkedVisitId: data.additionalDetails.linkedVisitId?.trim() || null,
     });
   };
 
@@ -171,42 +261,41 @@ function VaccinationFormFields({
         catId: initialVaccination?.catId ?? '',
         name: initialVaccination?.name ?? '',
         administeredAt: toDateInputValue(initialVaccination?.administeredAt ?? undefined),
-        expiresAt: toDateInputValue(initialVaccination?.expiresAt ?? undefined),
-        clinicId: initialVaccination?.clinicId ?? '',
-        doctorId: initialVaccination?.doctorId ?? '',
-        lotNumber: initialVaccination?.lotNumber ?? '',
-        linkedVisitId: initialVaccination?.linkedVisitId ?? '',
+        additionalDetails: {
+          expiresAt: toDateInputValue(initialVaccination?.expiresAt ?? undefined),
+          clinicId: initialVaccination?.clinicId ?? '',
+          doctorId: initialVaccination?.doctorId ?? '',
+          lotNumber: initialVaccination?.lotNumber ?? '',
+          linkedVisitId: initialVaccination?.linkedVisitId ?? '',
+        },
       }}
       columns={1}
       spacing='normal'
+      onDataChange={(data) => {
+        const values = data as VaccinationFormValues;
+        setIsValid(Boolean(values.name.trim() && values.administeredAt && (!showCatField || values.catId)));
+      }}
       onSubmit={(data) => {
         void handleSubmit(data as VaccinationFormValues);
       }}
       submitButton={
-        <div className='flex items-center justify-between gap-2'>
-          <div className='flex items-center gap-2'>
-            {isEditing && onDelete && (
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => void handleDelete()}
-                disabled={isSubmitting}
-              >
-                Delete
+        <ModalFooterActions
+          leftActions={
+            isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+          }
+          rightActions={
+            <>
+              {onCancel && (
+                <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+              )}
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Add'}
               </Button>
-            )}
-          </div>
-          <div className='flex items-center gap-2'>
-            {onCancel && (
-              <Button type='button' variant='secondary' onClick={onCancel} disabled={isSubmitting}>
-                Cancel
-              </Button>
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save vaccination' : 'Add vaccination'}
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
       }
     />
   );

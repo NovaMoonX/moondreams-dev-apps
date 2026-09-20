@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -10,11 +11,17 @@ import {
   deleteExpense,
   updateExpense,
 } from '../store/actions/expensesActions';
-import { selectCatsByHousehold, selectExpensesByHousehold } from '../store/selectors';
+import {
+  selectCatsByHousehold,
+  selectExpensesByHousehold,
+  selectIngestionDraftCountByHousehold,
+} from '../store/selectors';
 import type { Expense } from '../types';
+import CountBadge from './CountBadge';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseFormModal from './ExpenseFormModal';
 import ExpenseTimeline from './ExpenseTimeline';
+import DocumentIngestionModal from './DocumentIngestionModal';
 
 interface ExpensesSectionProps {
   householdId: string;
@@ -23,12 +30,14 @@ interface ExpensesSectionProps {
 function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const cats = useAppSelector(selectCatsByHousehold(householdId));
-  const expenses = useAppSelector(selectExpensesByHousehold(householdId));
+  const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
+  const expenses = useAppSelector(selectExpensesByHousehold(householdId), shallowEqual);
+  const pendingDraftCount = useAppSelector(selectIngestionDraftCountByHousehold(householdId));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [isIngestionOpen, setIsIngestionOpen] = useState(false);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
 
@@ -38,8 +47,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   };
 
   const handleSubmit = async (
-    expense: Partial<Expense> &
-      Pick<Expense, 'catIds' | 'category' | 'amount' | 'isRecurring' | 'incurredAt'>,
+    expense: Partial<Expense> & Pick<Expense, 'catIds' | 'items' | 'isRecurring' | 'incurredAt'>,
   ) => {
     if (!user?.uid) {
       return;
@@ -86,17 +94,31 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
             <small className='text-muted-foreground text-sm'>
               Track spending and recurring costs across every cat.
             </small>
-            <Button
-              type='button'
-              size='sm'
-              disabled={cats.length === 0}
-              onClick={() => {
-                setEditingExpense(null);
-                setIsFormOpen(true);
-              }}
-            >
-              Log expense
-            </Button>
+            <div className='flex gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='gap-1'
+                disabled={!user?.uid}
+                onClick={() => setIsIngestionOpen(true)}
+              >
+                Upload
+                {pendingDraftCount > 0 && <CountBadge count={pendingDraftCount} />}
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                disabled={cats.length === 0}
+                onClick={() => {
+                  setEditingExpense(null);
+                  setIsFormOpen(true);
+                }}
+              >
+                <span className='hidden sm:inline'>Log expense</span>
+                <span className='sm:hidden'>Log</span>
+              </Button>
+            </div>
           </div>
 
           <ExpenseTimeline
@@ -113,6 +135,7 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
       <ExpenseFormModal
         key={editingExpense?.id ?? 'new'}
         isOpen={isFormOpen}
+        householdId={householdId}
         catOptions={catOptions}
         initialExpense={editingExpense}
         isSubmitting={isSubmitting}
@@ -120,6 +143,15 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
         onDelete={editingExpense ? handleDelete : undefined}
         onClose={closeModal}
       />
+      {user?.uid && (
+        <DocumentIngestionModal
+          isOpen={isIngestionOpen}
+          householdId={householdId}
+          uid={user.uid}
+          intent='expense'
+          onClose={() => setIsIngestionOpen(false)}
+        />
+      )}
     </section>
   );
 }

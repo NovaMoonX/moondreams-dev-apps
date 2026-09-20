@@ -66,27 +66,22 @@ const STATIC_APP_REGISTRY: AppMetadata[] = APP_REGISTRY.map((app) => ({
   updatedAt: new Date().toISOString(),
 }));
 
-// Mirrors firestore.rules' canReadAppDoc(): admins, and anyone in the
-// local emulator, see every app regardless of status.
+const PUBLIC_STATIC_APP_REGISTRY: AppMetadata[] = STATIC_APP_REGISTRY.filter(
+  (app) => app.status === 'public' && !app.isRestricted,
+);
+
+// Mirrors firestore.rules: admins and local-emulator users can read every
+// app doc regardless of status.
 function canSeeAllApps(isAdmin: boolean) {
   return isAdmin || isUsingFirebaseEmulators;
 }
 
+// Firestore has no OR — one query per way a doc can be visible.
 function buildAppQueries(user: User | null, isAdmin: boolean) {
   const appsCollection = collection(db, 'apps');
 
   if (canSeeAllApps(isAdmin)) {
     return [query(appsCollection)];
-  }
-
-  if (!user) {
-    return [
-      query(
-        appsCollection,
-        where('status', '==', 'public'),
-        where('isRestricted', '==', false),
-      ),
-    ];
   }
 
   const queries = [
@@ -97,21 +92,23 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
     ),
   ];
 
-  if (user.uid) {
+  if (user?.uid) {
     queries.push(
       query(
         appsCollection,
         where('status', '==', 'public'),
+        where('isRestricted', '==', true),
         where('allowedUsers', 'array-contains', user.uid),
       ),
     );
   }
 
-  if (user.email) {
+  if (user?.email) {
     queries.push(
       query(
         appsCollection,
         where('status', '==', 'public'),
+        where('isRestricted', '==', true),
         where('allowedUsers', 'array-contains', user.email),
       ),
     );
@@ -120,17 +117,37 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   return queries;
 }
 
+// Identifies which user/role a resolved catalog belongs to, so `loading`
+// can be derived at render time instead of reset imperatively in an effect.
+function getQueryKey(user: User | null, isAdmin: boolean) {
+  return `${user?.uid ?? 'anon'}:${isAdmin}`;
+}
+
 export function AppCatalogProvider({ children }: PropsWithChildren) {
   const { user, isAdmin } = useAuth();
   const [allApps, setAllApps] = useState<AppMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [resolvedQueryKey, setResolvedQueryKey] = useState<string | null>(null);
+
+  const queryKey = getQueryKey(user, isAdmin);
+  // True until every query for this user has resolved at least once — not
+  // just the first one — so a restricted app isn't missing from `apps` yet.
+  const loading = resolvedQueryKey !== queryKey;
 
   useEffect(() => {
+    const currentQueryKey = getQueryKey(user, isAdmin);
     const queries = buildAppQueries(user, isAdmin);
     const appMap = new Map<string, AppMetadata>();
     let isActive = true;
 
-    const unsubscribers = queries.map((queryRef) =>
+    const resolvedQueryIndexes = new Set<number>();
+    function markQueryResolved(index: number) {
+      resolvedQueryIndexes.add(index);
+      if (isActive && resolvedQueryIndexes.size === queries.length) {
+        setResolvedQueryKey(currentQueryKey);
+      }
+    }
+
+    const unsubscribers = queries.map((queryRef, index) =>
       onSnapshot(
         queryRef,
         (snapshot) => {
@@ -148,13 +165,13 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
 
           const nextApps = Array.from(appMap.values())
           setAllApps(nextApps);
-          setLoading(false);
+          markQueryResolved(index);
         },
         (error) => {
           console.error('Failed to load app catalog:', error);
           if (isActive) {
-            setAllApps(STATIC_APP_REGISTRY);
-            setLoading(false);
+            setAllApps(PUBLIC_STATIC_APP_REGISTRY);
+            markQueryResolved(index);
           }
         },
       ),

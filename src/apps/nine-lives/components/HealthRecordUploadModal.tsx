@@ -6,49 +6,38 @@ import {
   FormFactories,
   Input,
   Modal,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
-import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
-
 import {
-  createCustomHealthRecordType,
-} from '../store/actions/customHealthRecordTypesActions';
+  createDateInputField,
+  fromDateInputValue,
+  toDateInputValue,
+} from '@/utils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+
+import { createCustomHealthRecordType } from '../store/actions/customHealthRecordTypesActions';
 import {
   createHealthRecord,
   getHealthRecordFileType,
   updateHealthRecord,
 } from '../store/actions/healthRecordsActions';
-import { selectCustomHealthRecordTypesByHousehold } from '../store/selectors';
-import type {
-  CustomHealthRecordType,
-  HealthRecord,
-  HealthRecordType,
-} from '../types';
+import { selectVisitsByHousehold } from '../store/selectors';
+import type { HealthRecord, HealthRecordType } from '../types';
+import { getVisitOptions } from '../utils/visitOptions';
+import CatPillSelector from './CatPillSelector';
+import DeleteIconButton from './DeleteIconButton';
+import ModalFooterActions from './ModalFooterActions';
+import RecordTypeField, { RecordTypeChoice } from './RecordTypeField';
 
-const { checkboxGroup, custom, input } = FormFactories;
+const { custom, input, select } = FormFactories;
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
 const NEW_TYPE_VALUE = '__new__';
 const MAX_HEALTH_RECORD_BYTES = 10 * 1024 * 1024;
-const BUILT_IN_TYPE_OPTIONS = [
-  { label: 'Lab result', value: 'lab_result' },
-  { label: 'Vet paperwork', value: 'vet_paperwork' },
-  { label: 'Insurance', value: 'insurance' },
-  { label: 'Adoption / shelter', value: 'shelter_adoption' },
-  { label: 'Prescription', value: 'prescription' },
-  { label: 'Microchip registration', value: 'microchip_registration' },
-  { label: 'Miscellaneous', value: 'miscellaneous' },
-] as const;
-
-interface RecordTypeChoice {
-  value: HealthRecordType | typeof NEW_TYPE_VALUE;
-  customRecordTypeId: string | null;
-  customLabel: string;
-}
 
 interface HealthRecordFormValues {
   catIds: string[];
@@ -56,6 +45,7 @@ interface HealthRecordFormValues {
   label?: string | null;
   recordType: RecordTypeChoice;
   recordDate: string;
+  linkedVisitId?: string | null;
 }
 
 interface HealthRecordUploadModalProps {
@@ -112,7 +102,9 @@ function FilePicker({
           }
 
           if (!getHealthRecordFileType(file)) {
-            setError('Unsupported file type. Please choose a PDF or image file.');
+            setError(
+              'Unsupported file type. Please choose a PDF or image file.',
+            );
             onValueChange(null);
             return;
           }
@@ -133,84 +125,6 @@ function FilePicker({
   );
 }
 
-function RecordTypeField({
-  value,
-  onValueChange,
-  disabled,
-  customTypes,
-}: {
-  value: RecordTypeChoice;
-  onValueChange: (choice: RecordTypeChoice) => void;
-  disabled?: boolean;
-  customTypes: CustomHealthRecordType[];
-}) {
-  const options = [
-    ...BUILT_IN_TYPE_OPTIONS,
-    ...customTypes.map((type) => ({
-      label: type.label,
-      value: `custom:${type.id}`,
-    })),
-    { label: 'Add a custom type…', value: NEW_TYPE_VALUE },
-  ];
-  const selectedValue =
-    value.value === 'custom' && value.customRecordTypeId
-      ? `custom:${value.customRecordTypeId}`
-      : value.value;
-
-  return (
-    <div className='space-y-2'>
-      <Select
-        options={options.map((option) => ({
-          text: option.label,
-          value: option.value,
-        }))}
-        value={selectedValue}
-        placeholder='Select a record type'
-        disabled={disabled}
-        searchable
-        onChange={(nextValue) => {
-          if (nextValue === NEW_TYPE_VALUE) {
-            onValueChange({
-              value: NEW_TYPE_VALUE,
-              customRecordTypeId: null,
-              customLabel: value.customLabel,
-            });
-            return;
-          }
-
-          if (nextValue.startsWith('custom:')) {
-            onValueChange({
-              value: 'custom',
-              customRecordTypeId: nextValue.slice('custom:'.length),
-              customLabel: '',
-            });
-            return;
-          }
-
-          onValueChange({
-            value: nextValue as HealthRecordType,
-            customRecordTypeId: null,
-            customLabel: '',
-          });
-        }}
-      />
-      {value.value === NEW_TYPE_VALUE && (
-        <Input
-          value={value.customLabel}
-          placeholder='e.g. Allergy test'
-          disabled={disabled}
-          onChange={(event) =>
-            onValueChange({
-              ...value,
-              customLabel: event.target.value,
-            })
-          }
-        />
-      )}
-    </div>
-  );
-}
-
 function HealthRecordUploadModal({
   isOpen,
   householdId,
@@ -222,21 +136,42 @@ function HealthRecordUploadModal({
 }: HealthRecordUploadModalProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const customTypes = useAppSelector(
-    selectCustomHealthRecordTypesByHousehold(householdId),
+
+  const visits = useAppSelector(
+    selectVisitsByHousehold(householdId),
+    shallowEqual,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [labelOpen, setLabelOpen] = useState(Boolean(initialRecord?.label));
   const isEditing = Boolean(initialRecord?.id);
+  const [isValid, setIsValid] = useState(
+    Boolean(
+      (initialRecord?.catIds?.length ?? 0) > 0 &&
+      (isEditing || initialRecord?.fileName),
+    ),
+  );
   const formId = initialRecord?.id ?? 'new-nine-lives-health-record';
+
+  const visitOptions = useMemo(
+    () => [{ label: 'None', value: '' }, ...getVisitOptions(visits)],
+    [visits],
+  );
 
   const fields = useMemo(
     () => [
-      checkboxGroup({
+      custom({
         name: 'catIds',
         label: 'Cats',
-        options: catOptions,
+        renderComponent: (props) => (
+          <CatPillSelector
+            catOptions={catOptions}
+            value={props.value as string[]}
+            onValueChange={props.onValueChange}
+            disabled={props.disabled}
+          />
+        ),
+        colSpan: 'full',
       }),
       custom({
         name: 'file',
@@ -286,7 +221,7 @@ function HealthRecordUploadModal({
             value={value as RecordTypeChoice}
             onValueChange={onValueChange}
             disabled={disabled}
-            customTypes={customTypes}
+            householdId={householdId}
           />
         ),
       }),
@@ -295,14 +230,27 @@ function HealthRecordUploadModal({
         label: 'Record date (optional)',
         variant: 'outline',
       }),
+      select({
+        name: 'linkedVisitId',
+        label: 'Linked visit (optional)',
+        options: visitOptions,
+      }),
     ],
-    [catOptions, customTypes, initialRecord?.fileName, isEditing, labelOpen],
+    [
+      catOptions,
+      householdId,
+      initialRecord?.fileName,
+      isEditing,
+      labelOpen,
+      visitOptions,
+    ],
   );
 
   const handleSubmit = async (data: HealthRecordFormValues) => {
     setSubmitError(null);
 
-    const catIds = data.catIds.length > 0 ? data.catIds : initialRecord?.catIds ?? [];
+    const catIds =
+      data.catIds.length > 0 ? data.catIds : (initialRecord?.catIds ?? []);
 
     if (catIds.length === 0) {
       setSubmitError('Select at least one cat.');
@@ -312,7 +260,8 @@ function HealthRecordUploadModal({
     setIsSubmitting(true);
 
     try {
-      let recordType: HealthRecordType = data.recordType.value as HealthRecordType;
+      let recordType: HealthRecordType = data.recordType
+        .value as HealthRecordType;
       let customRecordTypeId = data.recordType.customRecordTypeId;
 
       if (data.recordType.value === NEW_TYPE_VALUE) {
@@ -337,6 +286,7 @@ function HealthRecordUploadModal({
         : null;
 
       const label = data.label?.trim() || null;
+      const linkedVisitId = data.linkedVisitId?.trim() || null;
 
       if (isEditing && initialRecord) {
         await dispatch(
@@ -349,6 +299,7 @@ function HealthRecordUploadModal({
               recordType,
               customRecordTypeId,
               recordDate,
+              linkedVisitId,
             },
           }),
         ).unwrap();
@@ -363,6 +314,7 @@ function HealthRecordUploadModal({
             recordType,
             customRecordTypeId,
             recordDate,
+            linkedVisitId,
           }),
         ).unwrap();
       } else {
@@ -373,11 +325,10 @@ function HealthRecordUploadModal({
       onClose();
     } catch (error) {
       setSubmitError(
-        typeof error === 'string'
-          ? error
-          : error instanceof Error
-            ? error.message
-            : 'Unable to save health record.',
+        getStorageErrorMessage(
+          error,
+          getErrorMessage(error, 'Unable to save health record.'),
+        ),
       );
     } finally {
       setIsSubmitting(false);
@@ -406,11 +357,7 @@ function HealthRecordUploadModal({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEditing ? 'Edit health record' : 'Add health record'}
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title='Health record'>
       <Form
         key={formId}
         id={formId}
@@ -421,33 +368,47 @@ function HealthRecordUploadModal({
           label: initialRecord?.label ?? '',
           recordType: getInitialRecordTypeChoice(initialRecord),
           recordDate: toDateInputValue(initialRecord?.recordDate ?? undefined),
+          linkedVisitId: initialRecord?.linkedVisitId ?? '',
         }}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => {
+          const values = data as HealthRecordFormValues;
+          const catIds =
+            values.catIds.length > 0
+              ? values.catIds
+              : (initialRecord?.catIds ?? []);
+          setIsValid(
+            Boolean(
+              catIds.length > 0 && (isEditing || values.file instanceof File),
+            ),
+          );
+        }}
         onSubmit={(data) => {
           void handleSubmit(data as HealthRecordFormValues);
         }}
         submitButton={
-          <div className='flex items-center justify-between gap-2'>
-            {isEditing && onDelete ? (
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={() => void handleDelete()}
-                disabled={isSubmitting}
-              >
-                Delete
+          <ModalFooterActions
+            leftActions={
+              isEditing &&
+              onDelete && (
+                <DeleteIconButton
+                  onClick={() => void handleDelete()}
+                  disabled={isSubmitting}
+                />
+              )
+            }
+            rightActions={
+              <Button type='submit' loading={isSubmitting} disabled={!isValid}>
+                {isSubmitting ? 'Saving…' : isEditing ? 'Save' : 'Upload'}
               </Button>
-            ) : (
-              <span />
-            )}
-            <Button type='submit' loading={isSubmitting}>
-              {isSubmitting ? 'Saving…' : isEditing ? 'Save record' : 'Upload record'}
-            </Button>
-          </div>
+            }
+          />
         }
       />
-      {submitError && <p className='mt-3 text-sm text-red-500'>{submitError}</p>}
+      {submitError && (
+        <p className='mt-3 text-sm text-red-500'>{submitError}</p>
+      )}
       {!isEditing && (
         <p className='text-muted-foreground mt-3 text-xs'>
           PDF and image files only, up to 10MB.

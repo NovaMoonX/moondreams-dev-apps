@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Input,
+  Pagination,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, ChevronUp } from '@moondreamsdev/dreamer-ui/symbols';
@@ -11,17 +12,24 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatDateTime } from '@/utils/formatUtils';
 
-import type { Cat, Visit } from '../types';
+import { MARK_VISIT_DONE_LABEL } from '../constants/copy';
+import type { Cat, Expense, Visit } from '../types';
 import { getDefaultVisitTitle } from '../utils/dateHelpers';
+
+const PAGE_SIZE = 5;
 
 interface VisitTimelineProps {
   visits: Visit[];
   cats?: Cat[];
+  expenses?: Expense[];
   title?: string;
   emptyLabel?: string;
+  /** The id of the visit whose modal is currently open (from any trigger) — highlights that row. */
+  activeVisitId?: string | null;
   onEdit?: (visit: Visit) => void;
   onComplete?: (visit: Visit) => void;
   onReopen?: (visit: Visit) => void;
+  onViewExpense?: (expense: Expense) => void;
 }
 
 type StatusFilter = 'all' | Visit['status'];
@@ -60,16 +68,30 @@ function getVisitReasonLabel(visit: Visit) {
 function VisitTimeline({
   visits,
   cats = [],
+  expenses = [],
   title = 'Visits',
   emptyLabel = 'No visits scheduled yet.',
+  activeVisitId = null,
   onEdit,
   onComplete,
   onReopen,
+  onViewExpense,
 }: VisitTimelineProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [catFilter, setCatFilter] = useState('all');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [page, setPage] = useState(1);
+
+  const expenseByVisitId = useMemo(() => {
+    const map = new Map<string, Expense>();
+    for (const expense of expenses) {
+      if (expense.visitId) {
+        map.set(expense.visitId, expense);
+      }
+    }
+    return map;
+  }, [expenses]);
 
   const catFilterOptions = useMemo(
     () => [
@@ -120,6 +142,12 @@ function VisitTimeline({
   }, [visits, cats, searchQuery, statusFilter, catFilter, sortDirection]);
 
   const hasVisits = visits.length > 0;
+  const pageCount = Math.max(1, Math.ceil(visibleVisits.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pagedVisits = visibleVisits.slice(
+    (clampedPage - 1) * PAGE_SIZE,
+    clampedPage * PAGE_SIZE,
+  );
 
   return (
     <div>
@@ -188,7 +216,7 @@ function VisitTimeline({
         </p>
       ) : (
         <div className={join('divide-border divide-y', hasVisits && 'mt-0')}>
-          {visibleVisits.map((visit) => {
+          {pagedVisits.map((visit) => {
             const catNames = visit.catIds
               .map((catId) => cats.find((cat) => cat.id === catId)?.name)
               .filter(Boolean)
@@ -198,11 +226,16 @@ function VisitTimeline({
               visit.linkedWeightEntryIds.length +
               visit.linkedConditionIds.length +
               visit.linkedSymptomIds.length;
+            const linkedExpense = expenseByVisitId.get(visit.id);
 
             return (
               <div
                 key={visit.id}
-                className='flex items-start justify-between gap-3 py-3 first:pt-0'
+                className={join(
+                  '-ml-3 flex items-start justify-between gap-3 py-3 pl-3 first:pt-0',
+                  visit.id === activeVisitId &&
+                    'border-l-primary bg-primary/5 border-l-2',
+                )}
               >
                 <div className='min-w-0'>
                   <div className='flex flex-wrap items-center gap-2'>
@@ -236,7 +269,7 @@ function VisitTimeline({
                       size='sm'
                       onClick={() => onComplete(visit)}
                     >
-                      Complete
+                      {MARK_VISIT_DONE_LABEL}
                     </Button>
                   )}
                   {onReopen && visit.status === 'cancelled' && (
@@ -247,6 +280,16 @@ function VisitTimeline({
                       onClick={() => onReopen(visit)}
                     >
                       Reopen
+                    </Button>
+                  )}
+                  {onViewExpense && linkedExpense && (
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      onClick={() => onViewExpense(linkedExpense)}
+                    >
+                      View expense
                     </Button>
                   )}
                   {onEdit && (
@@ -263,6 +306,18 @@ function VisitTimeline({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {visibleVisits.length > PAGE_SIZE && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination
+            page={clampedPage}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            size='sm'
+            showFirstLast={pageCount >= 5}
+          />
         </div>
       )}
     </div>

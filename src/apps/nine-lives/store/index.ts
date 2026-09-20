@@ -36,6 +36,10 @@ import {
   type VaccinationsState,
 } from './slices/vaccinationsSlice';
 import {
+  preventivesReducer,
+  type PreventivesState,
+} from './slices/preventivesSlice';
+import {
   vetClinicsReducer,
   type VetClinicsState,
 } from './slices/vetClinicsSlice';
@@ -55,6 +59,38 @@ import {
   customHealthRecordTypesReducer,
   type CustomHealthRecordTypesState,
 } from './slices/customHealthRecordTypesSlice';
+import {
+  litterEntriesReducer,
+  type LitterEntriesState,
+} from './slices/litterEntriesSlice';
+import {
+  litterBoxesReducer,
+  type LitterBoxesState,
+} from './slices/litterBoxesSlice';
+import {
+  littersReducer,
+  type LittersState,
+} from './slices/littersSlice';
+import {
+  customLitterTypesReducer,
+  type CustomLitterTypesState,
+} from './slices/customLitterTypesSlice';
+import {
+  customPreventiveProductsReducer,
+  type CustomPreventiveProductsState,
+} from './slices/customPreventiveProductsSlice';
+import {
+  customPreventiveTypesReducer,
+  type CustomPreventiveTypesState,
+} from './slices/customPreventiveTypesSlice';
+import {
+  customSymptomQuickTagsReducer,
+  type CustomSymptomQuickTagsState,
+} from './slices/customSymptomQuickTagsSlice';
+import {
+  ingestionDraftsReducer,
+  type IngestionDraftsState,
+} from './slices/ingestionDraftsSlice';
 
 export interface NineLivesState {
   households: HouseholdsState;
@@ -67,10 +103,19 @@ export interface NineLivesState {
   catConditions: CatConditionsState;
   expenses: ExpensesState;
   vaccinations: VaccinationsState;
+  preventives: PreventivesState;
   weightEntries: WeightEntriesState;
   visits: VisitsState;
   healthRecords: HealthRecordsState;
   customHealthRecordTypes: CustomHealthRecordTypesState;
+  litterEntries: LitterEntriesState;
+  litterBoxes: LitterBoxesState;
+  litters: LittersState;
+  customLitterTypes: CustomLitterTypesState;
+  customPreventiveProducts: CustomPreventiveProductsState;
+  customPreventiveTypes: CustomPreventiveTypesState;
+  customSymptomQuickTags: CustomSymptomQuickTagsState;
+  ingestionDrafts: IngestionDraftsState;
 }
 
 export const nineLivesReducer = combineReducers({
@@ -84,10 +129,19 @@ export const nineLivesReducer = combineReducers({
   catConditions: catConditionsReducer,
   expenses: expensesReducer,
   vaccinations: vaccinationsReducer,
+  preventives: preventivesReducer,
   weightEntries: weightEntriesReducer,
   visits: visitsReducer,
   healthRecords: healthRecordsReducer,
   customHealthRecordTypes: customHealthRecordTypesReducer,
+  litterEntries: litterEntriesReducer,
+  litterBoxes: litterBoxesReducer,
+  litters: littersReducer,
+  customLitterTypes: customLitterTypesReducer,
+  customPreventiveProducts: customPreventiveProductsReducer,
+  customPreventiveTypes: customPreventiveTypesReducer,
+  customSymptomQuickTags: customSymptomQuickTagsReducer,
+  ingestionDrafts: ingestionDraftsReducer,
 });
 
 export const selectNineLives = (state: RootState): NineLivesState =>

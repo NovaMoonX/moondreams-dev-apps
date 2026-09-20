@@ -6,16 +6,15 @@ import type { Vaccination } from '@apps/nine-lives/types';
 
 export function startVaccinationsListener(
   householdId: string,
-  catId: string,
   onChange: (vaccinations: Vaccination[]) => void,
 ): Unsubscribe {
-  if (!householdId || !catId) {
+  if (!householdId) {
     onChange([]);
     return () => undefined;
   }
 
   const vaccinationsQuery = query(
-    collection(db, 'apps', 'nine-lives', 'households', householdId, 'cats', catId, 'vaccinations'),
+    collection(db, 'apps', 'nine-lives', 'households', householdId, 'vaccinations'),
   );
 
   return createFirestoreCollectionListener<Vaccination>({
