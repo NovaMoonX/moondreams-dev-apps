@@ -78,9 +78,7 @@ export interface VoiceTranscription {
 
 export function useVoiceTranscription(): VoiceTranscription {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  // Finalized transcript from prior sub-sessions (see `continuous` note
-  // below); the current sub-session's own results are layered on top of
-  // this in `onresult`, and `stop()` reads the combined value from `finish`.
+  // Transcript finalized from prior restarts; current results layer on top in `onresult`.
   const accumulatedTranscriptRef = useRef('');
   const transcriptRef = useRef('');
   const isStoppingRef = useRef(false);
@@ -104,18 +102,12 @@ export function useVoiceTranscription(): VoiceTranscription {
     }
   }, []);
 
-  // `createAndStartRecognition` calls itself (indirectly, via this ref) from
-  // its own `onend` handler to restart listening — see the comment below.
+  // Lets `onend` (below) call the latest `createAndStartRecognition` without a circular reference.
   const createAndStartRecognitionRef = useRef<() => void>(() => {});
 
-  // `continuous: true` is unreliable on Android Chrome — recognition simply
-  // refuses to start (https://issues.chromium.org/issues/40324711), even
-  // though the identical code works fine on desktop Chrome. Using
-  // `continuous: false` and restarting on every non-user-initiated `onend`
-  // is the standard cross-platform workaround: each restart is its own
-  // recognition instance, so this factory (used by both `start()` and the
-  // `onend` restart path) attaches the same handlers to whichever instance
-  // is current.
+  // `continuous: true` silently fails to start on some mobile browsers
+  // (chromium.org/issues/40324711). Using `continuous: false` and
+  // restarting on every non-user `onend` works everywhere instead.
   const createAndStartRecognition = useCallback(() => {
     const SpeechRecognition = getSpeechRecognitionConstructor();
 
@@ -140,12 +132,8 @@ export function useVoiceTranscription(): VoiceTranscription {
       setTranscript(combinedTranscript);
     };
     recognition.onerror = (event) => {
-      // A silence-timeout between utterances is expected with
-      // `continuous: false` — `onend` (below) decides whether to restart or
-      // finish, so only surface errors that mean the session can't continue.
-      // An intentional stop()/cancel() can itself surface as an 'aborted'
-      // error here; `onend` is the single source of truth for finalizing,
-      // so let it handle cleanup instead of also surfacing an error.
+      // 'no-speech' is expected between utterances; a user-initiated stop
+      // can also surface as an error. `onend` handles both, so ignore here.
       if (event.error === 'no-speech' || isStoppingRef.current) {
         return;
       }

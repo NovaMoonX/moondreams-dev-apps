@@ -30,22 +30,10 @@ service cloud.firestore {
       return request.auth != null && 'dev' in request.auth.token && request.auth.token.dev == true;
     }
 
-    // Split into three separate predicates — one per query the app catalog
-    // fetch runs (see AppCatalogContext.tsx's buildAppQueries) — instead of
-    // one combined boolean, and each app block below issues one `allow read`
-    // per predicate instead of OR'ing them into a single condition.
-    //
-    // This isn't just style: Firestore's list() safety check can't prove a
-    // single OR'd expression matches the query filters once a query combines
-    // more than one equality filter with an array-contains (our Query 2/3 —
-    // status + isRestricted + allowedUsers array-contains). It denies the
-    // whole list with "Missing or insufficient permissions" even though
-    // get() on the exact same doc succeeds. Separate `allow read` statements
-    // (Firestore ORs them) each map 1:1 to one query and stay provable.
-    // Only `status` is existence-guarded: it's checked first in every
-    // predicate, so short-circuiting means isRestricted/allowedUsers are
-    // never touched unless status is already confirmed 'public' — guarding
-    // those two as well reintroduces the same unprovable-list failure.
+    // Each predicate is its own `allow read`, not OR'd together — Firestore's
+    // list() safety check can't prove a combined expression once a query mixes
+    // equality filters with array-contains, and denies reads get() allows fine.
+    // Only `status` is existence-guarded; short-circuit order protects the rest.
     function isUnrestrictedPublicApp(appData) {
       return ('status' in appData) && appData.status == 'public' && appData.isRestricted != true;
     }

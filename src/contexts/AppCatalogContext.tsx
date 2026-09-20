@@ -70,12 +70,13 @@ const PUBLIC_STATIC_APP_REGISTRY: AppMetadata[] = STATIC_APP_REGISTRY.filter(
   (app) => app.status === 'public' && !app.isRestricted,
 );
 
-// Mirrors firestore.rules' canReadAppDoc(): admins, and anyone in the
-// local emulator, see every app regardless of status.
+// Mirrors firestore.rules: admins and local-emulator users can read every
+// app doc regardless of status.
 function canSeeAllApps(isAdmin: boolean) {
   return isAdmin || isUsingFirebaseEmulators;
 }
 
+// Firestore has no OR — one query per way a doc can be visible.
 function buildAppQueries(user: User | null, isAdmin: boolean) {
   const appsCollection = collection(db, 'apps');
 
@@ -84,7 +85,6 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   }
 
   const queries = [
-    // Query 1: Targets ONLY public & UNRESTRICTED docs
     query(
       appsCollection,
       where('status', '==', 'public'),
@@ -93,7 +93,6 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   ];
 
   if (user?.uid) {
-    // Query 2: Targets ONLY public & RESTRICTED docs where UID matches
     queries.push(
       query(
         appsCollection,
@@ -105,7 +104,6 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   }
 
   if (user?.email) {
-    // Query 3: Targets ONLY public & RESTRICTED docs where Email matches
     queries.push(
       query(
         appsCollection,
@@ -119,9 +117,8 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   return queries;
 }
 
-// Identifies which user/role combo a resolved app catalog belongs to, so
-// `loading` can be derived at render time (see below) instead of reset with
-// an imperative `setLoading(true)` inside the effect body.
+// Identifies which user/role a resolved catalog belongs to, so `loading`
+// can be derived at render time instead of reset imperatively in an effect.
 function getQueryKey(user: User | null, isAdmin: boolean) {
   return `${user?.uid ?? 'anon'}:${isAdmin}`;
 }
@@ -132,15 +129,8 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const [resolvedQueryKey, setResolvedQueryKey] = useState<string | null>(null);
 
   const queryKey = getQueryKey(user, isAdmin);
-  // Restricted apps (Nine Lives, Worth the Wait) only ever show up via
-  // Query 2/3 below — the uid/email `array-contains` queries. Deriving
-  // `loading` from whether *all* of this user's queries have resolved (set
-  // in markQueryResolved, once per full query set) instead of flipping it
-  // false as soon as ANY one resolves (usually Query 1, the
-  // unrestricted-public query, which is often fast and empty) closes a
-  // narrow window right after a hard refresh where `apps` doesn't yet
-  // include a restricted app the user actually has access to, and
-  // ProtectedRoute bounces them to /unauthorized before Query 2/3 catch up.
+  // True until every query for this user has resolved at least once — not
+  // just the first one — so a restricted app isn't missing from `apps` yet.
   const loading = resolvedQueryKey !== queryKey;
 
   useEffect(() => {
