@@ -119,17 +119,45 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
   return queries;
 }
 
+// Identifies which user/role combo a resolved app catalog belongs to, so
+// `loading` can be derived at render time (see below) instead of reset with
+// an imperative `setLoading(true)` inside the effect body.
+function getQueryKey(user: User | null, isAdmin: boolean) {
+  return `${user?.uid ?? 'anon'}:${isAdmin}`;
+}
+
 export function AppCatalogProvider({ children }: PropsWithChildren) {
   const { user, isAdmin } = useAuth();
   const [allApps, setAllApps] = useState<AppMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [resolvedQueryKey, setResolvedQueryKey] = useState<string | null>(null);
+
+  const queryKey = getQueryKey(user, isAdmin);
+  // Restricted apps (Nine Lives, Worth the Wait) only ever show up via
+  // Query 2/3 below — the uid/email `array-contains` queries. Deriving
+  // `loading` from whether *all* of this user's queries have resolved (set
+  // in markQueryResolved, once per full query set) instead of flipping it
+  // false as soon as ANY one resolves (usually Query 1, the
+  // unrestricted-public query, which is often fast and empty) closes a
+  // narrow window right after a hard refresh where `apps` doesn't yet
+  // include a restricted app the user actually has access to, and
+  // ProtectedRoute bounces them to /unauthorized before Query 2/3 catch up.
+  const loading = resolvedQueryKey !== queryKey;
 
   useEffect(() => {
+    const currentQueryKey = getQueryKey(user, isAdmin);
     const queries = buildAppQueries(user, isAdmin);
     const appMap = new Map<string, AppMetadata>();
     let isActive = true;
 
-    const unsubscribers = queries.map((queryRef) =>
+    const resolvedQueryIndexes = new Set<number>();
+    function markQueryResolved(index: number) {
+      resolvedQueryIndexes.add(index);
+      if (isActive && resolvedQueryIndexes.size === queries.length) {
+        setResolvedQueryKey(currentQueryKey);
+      }
+    }
+
+    const unsubscribers = queries.map((queryRef, index) =>
       onSnapshot(
         queryRef,
         (snapshot) => {
@@ -147,13 +175,13 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
 
           const nextApps = Array.from(appMap.values())
           setAllApps(nextApps);
-          setLoading(false);
+          markQueryResolved(index);
         },
         (error) => {
           console.error('Failed to load app catalog:', error);
           if (isActive) {
             setAllApps(PUBLIC_STATIC_APP_REGISTRY);
-            setLoading(false);
+            markQueryResolved(index);
           }
         },
       ),
