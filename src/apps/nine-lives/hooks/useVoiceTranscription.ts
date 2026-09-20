@@ -78,7 +78,10 @@ export interface VoiceTranscription {
 
 export function useVoiceTranscription(): VoiceTranscription {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Transcript finalized from prior restarts; current results layer on top in `onresult`.
+  const accumulatedTranscriptRef = useRef('');
   const transcriptRef = useRef('');
+  const isStoppingRef = useRef(false);
   const resolveStopRef = useRef<((transcript: string) => void) | null>(null);
   const rejectStopRef = useRef<((error: Error) => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,30 +102,42 @@ export function useVoiceTranscription(): VoiceTranscription {
     }
   }, []);
 
-  const start = useCallback(() => {
+  // Lets `onend` (below) call the latest `createAndStartRecognition` without a circular reference.
+  const createAndStartRecognitionRef = useRef<() => void>(() => {});
+
+  // `continuous: true` silently fails to start on some mobile browsers
+  // (chromium.org/issues/40324711). Using `continuous: false` and
+  // restarting on every non-user `onend` works everywhere instead.
+  const createAndStartRecognition = useCallback(() => {
     const SpeechRecognition = getSpeechRecognitionConstructor();
 
-    if (!SpeechRecognition || recognitionRef.current) {
+    if (!SpeechRecognition) {
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = navigator.language || 'en-US';
     recognition.onresult = (event) => {
-      let nextTranscript = '';
+      let sessionTranscript = '';
 
       for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index];
-        nextTranscript += `${result[0].transcript} `;
+        sessionTranscript += `${result[0].transcript} `;
       }
 
-      const trimmedTranscript = nextTranscript.trim();
-      transcriptRef.current = trimmedTranscript;
-      setTranscript(trimmedTranscript);
+      const combinedTranscript = `${accumulatedTranscriptRef.current} ${sessionTranscript}`.trim();
+      transcriptRef.current = combinedTranscript;
+      setTranscript(combinedTranscript);
     };
     recognition.onerror = (event) => {
+      // 'no-speech' is expected between utterances; a user-initiated stop
+      // can also surface as an error. `onend` handles both, so ignore here.
+      if (event.error === 'no-speech' || isStoppingRef.current) {
+        return;
+      }
+
       const nextError = new Error(getSpeechRecognitionError(event.error));
       setError(nextError.message);
       setIsListening(false);
@@ -130,18 +145,39 @@ export function useVoiceTranscription(): VoiceTranscription {
       finish(nextError);
     };
     recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-      finish();
+      if (isStoppingRef.current) {
+        isStoppingRef.current = false;
+        setIsListening(false);
+        recognitionRef.current = null;
+        finish();
+        return;
+      }
+
+      accumulatedTranscriptRef.current = transcriptRef.current;
+      createAndStartRecognitionRef.current();
     };
 
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [finish]);
+
+  useEffect(() => {
+    createAndStartRecognitionRef.current = createAndStartRecognition;
+  }, [createAndStartRecognition]);
+
+  const start = useCallback(() => {
+    if (recognitionRef.current) {
+      return;
+    }
+
+    accumulatedTranscriptRef.current = '';
     transcriptRef.current = '';
     setTranscript('');
     setError(null);
-    recognitionRef.current = recognition;
+    isStoppingRef.current = false;
     setIsListening(true);
-    recognition.start();
-  }, [finish]);
+    createAndStartRecognition();
+  }, [createAndStartRecognition]);
 
   const stop = useCallback(() => {
     const recognition = recognitionRef.current;
@@ -154,12 +190,14 @@ export function useVoiceTranscription(): VoiceTranscription {
       resolveStopRef.current = resolve;
       rejectStopRef.current = reject;
     });
+    isStoppingRef.current = true;
     recognition.stop();
 
     return result;
   }, []);
 
   const cancel = useCallback(() => {
+    isStoppingRef.current = true;
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     resolveStopRef.current = null;
@@ -175,6 +213,7 @@ export function useVoiceTranscription(): VoiceTranscription {
 
   useEffect(() => {
     return () => {
+      isStoppingRef.current = true;
       recognitionRef.current?.abort();
     };
   }, []);
