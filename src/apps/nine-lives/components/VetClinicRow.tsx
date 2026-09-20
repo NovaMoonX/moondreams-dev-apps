@@ -3,9 +3,8 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { copyToClipboard } from '@/utils/clipboardUtils';
-
 import type { Doctor, VetClinic } from '@apps/nine-lives/types';
+import { getClinicContactMenuItems, handleClinicContactAction } from '@apps/nine-lives/utils/clinicContactMenu';
 
 interface VetClinicRowProps {
   clinic: VetClinic;
@@ -28,45 +27,7 @@ function VetClinicRow({
   const { addToast } = useToast();
   const { group, option, separator } = DropdownMenuFactories;
 
-  const clinicContactItems = [
-    ...(clinic.phone
-      ? [
-          option({
-            label: 'Call clinic',
-            value: 'call-clinic',
-            description: clinic.phone,
-          }),
-          option({
-            label: 'Copy phone',
-            value: 'copy-phone',
-            description: 'Copy the clinic phone number.',
-          }),
-        ]
-      : []),
-    ...(clinic.email
-      ? [
-          option({
-            label: 'Email clinic',
-            value: 'email-clinic',
-            description: clinic.email,
-          }),
-          option({
-            label: 'Copy email',
-            value: 'copy-email',
-            description: 'Copy the clinic email address.',
-          }),
-        ]
-      : []),
-    ...(clinic.address
-      ? [
-          option({
-            label: 'Copy address',
-            value: 'copy-address',
-            description: 'Copy the clinic address.',
-          }),
-        ]
-      : []),
-  ];
+  const clinicContactItems = getClinicContactMenuItems(clinic);
 
   const clinicMenuItems = [
     ...(clinicContactItems.length > 0 ? [group(clinicContactItems, 'Contact')] : []),
@@ -124,51 +85,22 @@ function VetClinicRow({
           {clinic.address && (
             <p className='text-muted-foreground text-sm'>{clinic.address}</p>
           )}
+          {clinic.website && (
+            <a
+              href={clinic.website}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-primary text-sm hover:underline'
+            >
+              {clinic.website}
+            </a>
+          )}
         </div>
 
         <DropdownMenu
           items={clinicMenuItems}
           onItemSelect={async (value) => {
-            if (value === 'call-clinic' && clinic.phone) {
-              window.location.href = `tel:${clinic.phone.replace(/[^+\d]/g, '')}`;
-              return;
-            }
-
-            if (value === 'email-clinic' && clinic.email) {
-              window.location.href = `mailto:${clinic.email}`;
-              return;
-            }
-
-            if (value === 'copy-phone' && clinic.phone) {
-              const copied = await copyToClipboard(clinic.phone);
-              if (copied) {
-                addToast({
-                  title: 'Phone copied',
-                  description: 'Clinic phone number copied to your clipboard.',
-                });
-              }
-              return;
-            }
-
-            if (value === 'copy-email' && clinic.email) {
-              const copied = await copyToClipboard(clinic.email);
-              if (copied) {
-                addToast({
-                  title: 'Email copied',
-                  description: 'Clinic email address copied to your clipboard.',
-                });
-              }
-              return;
-            }
-
-            if (value === 'copy-address' && clinic.address) {
-              const copied = await copyToClipboard(clinic.address);
-              if (copied) {
-                addToast({
-                  title: 'Address copied',
-                  description: 'Clinic address copied to your clipboard.',
-                });
-              }
+            if (await handleClinicContactAction(value, clinic, addToast)) {
               return;
             }
 

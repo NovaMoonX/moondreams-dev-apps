@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Input, Tabs } from '@moondreamsdev/dreamer-ui/components';
 
 import type { ConditionCategory, LibraryCondition } from '../types';
+import { CONDITION_CATEGORIES, getConditionCategoryLabel } from '../utils/conditionCategories';
 
 interface ConditionLibraryBrowserProps {
   conditions: LibraryCondition[];
@@ -10,15 +11,7 @@ interface ConditionLibraryBrowserProps {
   onSelect: (condition: LibraryCondition) => void;
 }
 
-const CATEGORY_FILTERS: Array<ConditionCategory | 'all'> = [
-  'all',
-  'illness',
-  'injury',
-  'chronic',
-  'parasite',
-  'allergy',
-  'other',
-];
+const CATEGORY_FILTERS: Array<ConditionCategory | 'all'> = ['all', ...CONDITION_CATEGORIES];
 
 function ConditionLibraryBrowser({
   conditions,
@@ -51,19 +44,16 @@ function ConditionLibraryBrowser({
         variant='outline'
       />
 
-      <div className='flex flex-wrap gap-2'>
-        {CATEGORY_FILTERS.map((category) => (
-          <Button
-            key={category}
-            type='button'
-            size='sm'
-            variant={activeCategory === category ? 'primary' : 'outline'}
-            onClick={() => setActiveCategory(category)}
-          >
-            {category === 'all' ? 'All' : category}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        value={activeCategory}
+        onValueChange={(value) => setActiveCategory(value as ConditionCategory | 'all')}
+        tabsWidth='fit'
+        variant='pills'
+        tabsList={CATEGORY_FILTERS.map((category) => ({
+          value: category,
+          label: category === 'all' ? 'All' : getConditionCategoryLabel(category),
+        }))}
+      />
 
       <div className='max-h-64 space-y-2 overflow-y-auto'>
         {filteredConditions.length === 0 ? (
@@ -80,7 +70,7 @@ function ConditionLibraryBrowser({
               <span className='flex w-full items-center justify-between gap-2'>
                 <span className='font-medium'>{condition.name}</span>
                 <Badge variant='muted' outline>
-                  {condition.category}
+                  {getConditionCategoryLabel(condition.category)}
                 </Badge>
               </span>
               <span className='text-sm opacity-80'>{condition.description}</span>

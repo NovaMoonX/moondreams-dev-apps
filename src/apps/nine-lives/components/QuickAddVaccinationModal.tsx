@@ -3,8 +3,8 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch } from '@/store';
 
-import { createVaccination } from '../store/actions/vaccinationsActions';
-import type { Cat, Vaccination } from '../types';
+import { createVaccination, type VaccinationFormSubmission } from '../store/actions/vaccinationsActions';
+import type { Cat } from '../types';
 import VaccinationFormModal from './VaccinationFormModal';
 
 interface QuickAddVaccinationModalProps {
@@ -21,9 +21,7 @@ function QuickAddVaccinationModal({ isOpen, householdId, cats, onClose }: QuickA
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
 
-  const handleSubmit = async (
-    vaccination: Partial<Vaccination> & Pick<Vaccination, 'name' | 'administeredAt'>,
-  ) => {
+  const handleSubmit = async (vaccination: VaccinationFormSubmission) => {
     if (!user?.uid || !vaccination.catId) {
       return;
     }

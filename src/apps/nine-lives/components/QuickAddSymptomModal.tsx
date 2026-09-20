@@ -39,6 +39,7 @@ function QuickAddSymptomModal({ isOpen, householdId, cats, onClose }: QuickAddSy
   return (
     <SymptomFormModal
       isOpen={isOpen}
+      householdId={householdId}
       catOptions={catOptions}
       isSubmitting={isSubmitting}
       onSubmit={handleSubmit}

@@ -6,6 +6,7 @@ import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
 import AuthAvatar from '@ui/AuthAvatar';
 import ThemeToggle from '@ui/ThemeToggle';
+import VersionBadge from '@ui/VersionBadge';
 
 function LocationSync() {
   const navigate = useNavigate();
@@ -93,6 +94,8 @@ function Layout() {
       </div>
 
       <Outlet />
+
+      <VersionBadge />
     </div>
   );
 }

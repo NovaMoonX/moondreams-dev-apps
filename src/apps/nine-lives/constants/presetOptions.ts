@@ -40,7 +40,10 @@ export const CAT_BREEDS = [
   'Unknown',
 ] as const;
 
+export const NONE_INSURANCE_PROVIDER = 'None';
+
 export const INSURANCE_PROVIDER_OPTIONS = [
+  'None',
   'ASPCA Pet Health Insurance',
   'Nationwide',
   'Trupanion',
@@ -53,6 +56,22 @@ export const INSURANCE_PROVIDER_OPTIONS = [
   'Prudent Pet',
   'Figo',
   'Other',
+] as const;
+
+export const PREVENTIVE_NAME_OPTIONS = [
+  'Revolution Plus',
+  'Revolution',
+  'Advantage Multi',
+  'Drontal',
+] as const;
+
+export const PREVENTIVE_TYPE_OPTIONS = [
+  { value: 'flea-tick', label: 'Flea / tick' },
+  { value: 'heartworm', label: 'Heartworm' },
+  { value: 'mite', label: 'Mite' },
+  { value: 'dewormer', label: 'Dewormer' },
+  { value: 'medication', label: 'Medication' },
+  { value: 'other', label: 'Other' },
 ] as const;
 
 export const PERSONALITY_TRAIT_OPTIONS = [
@@ -68,4 +87,35 @@ export const PERSONALITY_TRAIT_OPTIONS = [
   'Gentle',
   'Feisty',
   'Cuddly',
+] as const;
+
+export const CUSTOM_COAT_COLOR_OPTION = 'custom';
+
+export const COAT_COLOR_OPTIONS = [
+  'Black',
+  'White',
+  'Gray',
+  'Orange / Ginger',
+  'Brown',
+  'Cream',
+  'Calico',
+  'Tabby',
+  'Tortoiseshell',
+  'Tuxedo',
+  'Bicolor',
+  'Siamese Point',
+] as const;
+
+export const CUSTOM_EXPENSE_CATEGORY_OPTION = 'custom';
+
+export const LITTER_TYPE_OPTIONS = [
+  'clumping_clay',
+  'non_clumping_clay',
+  'pine_wood_pellet',
+  'paper',
+  'crystal_silica',
+  'corn',
+  'wheat',
+  'walnut',
+  'custom',
 ] as const;

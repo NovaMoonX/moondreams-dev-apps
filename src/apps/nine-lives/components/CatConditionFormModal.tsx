@@ -5,6 +5,7 @@ import CatConditionFormFields from './CatConditionFormFields';
 
 interface CatConditionFormModalProps {
   isOpen: boolean;
+  householdId?: string;
   libraryConditions: LibraryCondition[];
   /** When provided, renders a required "Cat" selector so the form isn't tied to one cat. */
   catOptions?: { label: string; value: string }[];
@@ -19,6 +20,7 @@ interface CatConditionFormModalProps {
 
 function CatConditionFormModal({
   isOpen,
+  householdId,
   libraryConditions,
   catOptions,
   initialCondition,
@@ -27,11 +29,10 @@ function CatConditionFormModal({
   onDelete,
   onClose,
 }: CatConditionFormModalProps) {
-  const isEditing = Boolean(initialCondition?.id);
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit condition' : 'Add condition'}>
+    <Modal isOpen={isOpen} onClose={onClose} title='Condition'>
       <CatConditionFormFields
+        householdId={householdId}
         libraryConditions={libraryConditions}
         catOptions={catOptions}
         initialCondition={initialCondition}

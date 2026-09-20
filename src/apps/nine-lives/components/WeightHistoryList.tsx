@@ -1,7 +1,10 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Pagination } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateTime } from '@/utils/formatUtils';
 import type { WeightEntry } from '@apps/nine-lives/types';
+import { usePagination } from '@apps/nine-lives/utils/usePagination';
+
+const PAGE_SIZE = 5;
 
 interface WeightHistoryListProps {
   entries: WeightEntry[];
@@ -19,6 +22,7 @@ function WeightHistoryList({
   const sortedEntries = [...entries].sort(
     (left, right) => right.measuredAt - left.measuredAt,
   );
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(sortedEntries, PAGE_SIZE);
 
   if (sortedEntries.length === 0) {
     return (
@@ -33,7 +37,7 @@ function WeightHistoryList({
     <div>
       <h3 className='text-sm font-medium'>{title}</h3>
       <div className='divide-border divide-y'>
-        {sortedEntries.map((entry) => (
+        {pagedItems.map((entry) => (
           <div key={entry.id} className='flex items-center justify-between gap-3 py-2 first:pt-0'>
             <div className='min-w-0'>
               <strong className='text-sm'>
@@ -49,6 +53,12 @@ function WeightHistoryList({
           </div>
         ))}
       </div>
+
+      {shouldPaginate && (
+        <div className='mt-3 flex justify-center'>
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' showFirstLast={pageCount >= 5} />
+        </div>
+      )}
     </div>
   );
 }

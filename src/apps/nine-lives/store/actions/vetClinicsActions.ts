@@ -43,6 +43,7 @@ export const createVetClinic = createAsyncThunk<
       name: trimmedName,
       phone: clinic.phone?.trim() || null,
       email: clinic.email?.trim() || null,
+      website: clinic.website?.trim() || null,
       address: clinic.address?.trim() || null,
       notes: clinic.notes?.trim() || null,
       isEmergency24Hour: Boolean(clinic.isEmergency24Hour),

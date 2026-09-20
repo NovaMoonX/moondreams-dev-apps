@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
+import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -10,6 +11,7 @@ import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
 
+import AttentionSection from './components/AttentionSection';
 import CatsSection from './components/CatsSection';
 import ClinicsSection from './components/ClinicsSection';
 import ExpensesSection from './components/ExpensesSection';
@@ -17,10 +19,14 @@ import HealthRecordsSection from './components/HealthRecordsSection';
 import HouseholdSetupModal from './components/HouseholdSetupModal';
 import HouseholdSwitcher from './components/HouseholdSwitcher';
 import MyPendingHouseholdRequests from './components/MyPendingHouseholdRequests';
+import CatAnniversaryBanners from './components/CatAnniversaryBanners';
 import StatsSummary from './components/StatsSummary';
 import VisitsSection from './components/VisitsSection';
+import { AttentionFocusContext, type AttentionFocusRequest } from './context/attentionFocusContext';
 import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
+import LitterLogSection from './components/LitterLogSection';
+import DashboardQuickActions from './components/DashboardQuickActions';
 import { createHousehold } from './store/actions/householdsActions';
 import { requestToJoinHousehold } from './store/actions/pendingRequestsActions';
 
@@ -33,6 +39,7 @@ function NineLives() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(
     null,
   );
+  const [focusRequest, setFocusRequest] = useState<AttentionFocusRequest | null>(null);
 
   const households = useAppSelector((state) => {
     if (!user?.uid) {
@@ -42,7 +49,7 @@ function NineLives() {
     return state.nineLives.households.items.filter((household) =>
       household.members.includes(user.uid),
     );
-  });
+  }, shallowEqual);
 
   const selectedHousehold = useMemo(() => {
     if (households.length === 0) {
@@ -155,7 +162,7 @@ function NineLives() {
 
   return (
     <div className='page'>
-      <div className='mx-auto max-w-6xl space-y-6 py-8'>
+      <div className='mx-auto max-w-6xl space-y-6 py-8 relative'>
         <div className='pb-2'>
           <NavButton href='/' variant='link'>
             <ChevronLeft /> Back home
@@ -170,23 +177,20 @@ function NineLives() {
         />
 
         {selectedHousehold && (
-          <StatsSummary householdId={selectedHousehold.id} />
-        )}
-
-        {selectedHousehold && (
-          <CatsSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <VisitsSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <ExpensesSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <ClinicsSection householdId={selectedHousehold.id} />
-        )}
-        {selectedHousehold && (
-          <HealthRecordsSection householdId={selectedHousehold.id} />
+          <AttentionFocusContext.Provider
+            value={{ focusRequest, requestFocus: setFocusRequest }}
+          >
+            <DashboardQuickActions householdId={selectedHousehold.id} />
+            <AttentionSection householdId={selectedHousehold.id} />
+            <CatAnniversaryBanners householdId={selectedHousehold.id} />
+            <StatsSummary householdId={selectedHousehold.id} />
+            <CatsSection householdId={selectedHousehold.id} />
+            <VisitsSection householdId={selectedHousehold.id} />
+            <ExpensesSection householdId={selectedHousehold.id} />
+            <LitterLogSection householdId={selectedHousehold.id} />
+            <ClinicsSection householdId={selectedHousehold.id} />
+            <HealthRecordsSection householdId={selectedHousehold.id} />
+          </AttentionFocusContext.Provider>
         )}
       </div>
     </div>

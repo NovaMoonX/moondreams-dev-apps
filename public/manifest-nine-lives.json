@@ -2,8 +2,9 @@
   "name": "Nine Lives - Moondreams Dev Apps",
   "short_name": "Nine Lives",
   "description": "A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and everyday care.",
+  "id": "/nine-lives/",
   "start_url": "/nine-lives/",
-  "scope": "/",
+  "scope": "/nine-lives/",
   "scope_extensions": [
     {
       "type": "origin",
