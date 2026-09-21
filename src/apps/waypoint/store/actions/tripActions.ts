@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  type DocumentReference,
+  getDocs,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getUniqueInviteCode } from '@/lib/firebase/firestore';
@@ -97,6 +103,22 @@ function getShiftedTimestamp(value: unknown, delta: number) {
     : null;
 }
 
+// Firestore caps a single batch at 500 writes; trips with hundreds of
+// events/stays can exceed that, so timestamp-shift updates are committed in
+// chunks rather than one batch.
+const FIRESTORE_BATCH_LIMIT = 450;
+
+async function commitInChunks(
+  updates: { ref: DocumentReference; data: Record<string, number> }[],
+) {
+  for (let i = 0; i < updates.length; i += FIRESTORE_BATCH_LIMIT) {
+    const chunk = updates.slice(i, i + FIRESTORE_BATCH_LIMIT);
+    const chunkBatch = writeBatch(db);
+    chunk.forEach(({ ref, data }) => chunkBatch.update(ref, data));
+    await chunkBatch.commit();
+  }
+}
+
 export const editTrip = createAsyncThunk<
   TripSpace,
   EditTripInput,
@@ -127,7 +149,6 @@ export const editTrip = createAsyncThunk<
 
     const dateDelta = values.startDate - trip.startDate;
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, trip.id);
-    const batch = writeBatch(db);
     const lastEditedAt = Date.now();
 
     if (dateDelta !== 0) {
@@ -135,6 +156,11 @@ export const editTrip = createAsyncThunk<
         getDocs(collection(tripRef, 'events')),
         getDocs(collection(tripRef, 'stays')),
       ]);
+
+      const timestampUpdates: {
+        ref: DocumentReference;
+        data: Record<string, number>;
+      }[] = [];
 
       eventsSnapshot.docs.forEach((eventSnapshot) => {
         const data = eventSnapshot.data();
@@ -149,7 +175,7 @@ export const editTrip = createAsyncThunk<
           updates.endAt = shiftedEndAt;
         }
         if (Object.keys(updates).length > 0) {
-          batch.update(eventSnapshot.ref, updates);
+          timestampUpdates.push({ ref: eventSnapshot.ref, data: updates });
         }
       });
 
@@ -170,12 +196,15 @@ export const editTrip = createAsyncThunk<
         }
 
         if (Object.keys(updates).length > 0) {
-          batch.update(staySnapshot.ref, updates);
+          timestampUpdates.push({ ref: staySnapshot.ref, data: updates });
         }
       });
+
+      await commitInChunks(timestampUpdates);
     }
 
-    batch.update(tripRef, {
+    const tripBatch = writeBatch(db);
+    tripBatch.update(tripRef, {
       title,
       startDate: values.startDate,
       endDate: values.endDate,
@@ -183,7 +212,7 @@ export const editTrip = createAsyncThunk<
       defaultCurrency,
       lastEditedAt,
     });
-    await batch.commit();
+    await tripBatch.commit();
 
     const updatedTrip: TripSpace = {
       ...trip,

@@ -133,6 +133,15 @@ regularly gets the shape right but the UX wrong:
   files; if more than one file hand-writes the same list, hoist it once next
   to the type it constrains (typically `types.ts`) and have every consumer
   import and derive from it.
+- **Audit every comment the coding agent added in its diff, not just the
+  code.** Default is zero comments; a comment earns its place only if the
+  reader would genuinely be lost without it — restating a param/field name
+  in prose (`// The trip the user currently has open, if any` above a
+  `tripId: string | null`) doesn't count, even when it's short and names no
+  files. Delete anything that doesn't clear that bar, cap what survives at
+  3 lines, and strip any mention of a specific app/file/function name from
+  what's left (see the comment-necessity memory). Do this pass on every
+  file the PR touches, not just the ones with an obvious CRUD/UX issue.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
