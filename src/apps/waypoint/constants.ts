@@ -14,3 +14,11 @@ export const MEMBER_ROLE_LABELS: Record<UserRole, string> = {
   COMMENTER: 'Commenter',
   VIEWER: 'Viewer',
 };
+
+export const MEMBER_ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  ADMIN:
+    'Full control over this trip, including editing details and managing other members.',
+  EDITOR: 'Can edit trip details and itinerary items.',
+  COMMENTER: 'Can comment on the trip but cannot edit details.',
+  VIEWER: 'Can view the trip but cannot comment or edit.',
+};

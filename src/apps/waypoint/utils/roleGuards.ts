@@ -30,6 +30,7 @@ export function canChangeRole(
 ) {
   return (
     currentUserId !== targetUserId &&
+    targetUserId !== trip.createdBy &&
     isTripAdmin(trip, currentUserId) &&
     isTripMember(trip, targetUserId)
   );

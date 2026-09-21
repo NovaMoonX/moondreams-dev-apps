@@ -1463,9 +1463,11 @@ service cloud.firestore {
           && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.members.keys().hasAll([request.auth.uid])
+          && request.resource.data.members.keys().hasAll([request.auth.uid, resource.data.createdBy])
           && request.resource.data.members[request.auth.uid]
             == resource.data.members[request.auth.uid]
+          && request.resource.data.members[resource.data.createdBy]
+            == resource.data.members[resource.data.createdBy]
           && (
             request.resource.data.members.keys().hasAll(resource.data.members.keys())
               && resource.data.members.keys().hasAll(request.resource.data.members.keys())

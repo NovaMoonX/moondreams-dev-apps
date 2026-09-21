@@ -131,8 +131,27 @@ regularly gets the shape right but the UX wrong:
   declared separately in more than one file is a duplication bug.** Grep for
   the option values (e.g. `'EDITOR'`, `'COMMENTER'`) across the feature's
   files; if more than one file hand-writes the same list, hoist it once next
-  to the type it constrains (typically `types.ts`) and have every consumer
-  import and derive from it.
+  to the type it constrains — but in a sibling `constants.ts`, not `types.ts`
+  itself (`types.ts` holds type/interface declarations only; runtime values
+  belong in `constants.ts` — `src/apps/waypoint/constants.ts` is the
+  reference shape) — and have every consumer import and derive from it.
+- **An action thunk that reads a document, derives a new value for a field
+  another action can also mutate concurrently (a shared map like `members`,
+  a counter — anything read-modify-written rather than replaced outright),
+  and writes it back must do the read and the write inside one
+  `runTransaction`, not a `getDoc`/Redux-cache read followed by a separate
+  `setDoc`/`updateDoc`/`writeBatch`.** The read-then-write shape loses
+  silently under concurrency: two admins changing two different members'
+  roles near-simultaneously can each read the same stale map, and the
+  second write overwrites the first's change with no error surfaced to
+  either user. `src/apps/waypoint/store/actions/membershipActions.ts`'s
+  `changeRole`/`removeMember`/`approveJoinRequest` are the reference shape —
+  always `transaction.get()` the document fresh inside the transaction,
+  never from a Redux-cached copy read before the transaction started. Skip
+  this for a thunk that only assigns literal caller-supplied values to
+  disjoint scalar fields (e.g. editing a title or toggling an archived
+  flag) — nothing is derived from the field's prior value, so there's
+  nothing for a race to lose.
 - **Audit every comment the coding agent added in its diff, not just the
   code.** Default is zero comments; a comment earns its place only if the
   reader would genuinely be lost without it — restating a param/field name
