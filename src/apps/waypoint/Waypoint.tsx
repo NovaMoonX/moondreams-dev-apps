@@ -23,6 +23,7 @@ import NavButton from '@/ui/NavButton';
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
+import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
@@ -201,6 +202,7 @@ function Waypoint() {
             <TabsList>
               <TabsTrigger value='overview'>Overview</TabsTrigger>
               <TabsTrigger value='members'>Members</TabsTrigger>
+              <TabsTrigger value='expenses'>Expenses</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
               <p className='text-muted-foreground text-sm'>
@@ -209,6 +211,9 @@ function Waypoint() {
             </TabsContent>
             <TabsContent value='members'>
               <MembersSection trip={selectedTrip} currentUserId={user.uid} />
+            </TabsContent>
+            <TabsContent value='expenses'>
+              <ExpensesSection trip={selectedTrip} currentUserId={user.uid} />
             </TabsContent>
           </Tabs>
         </div>

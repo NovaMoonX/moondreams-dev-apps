@@ -42,6 +42,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('pendingRequests')
     .doc(`${jamie.uid}_${TRIP_ID}`);
+  const expenseRef = tripRef.collection('expenses').doc('seed-expense-dinner');
 
   await tripRef.set({
     id: TRIP_ID,
@@ -106,8 +107,31 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     requestedAt: context.now - 3_600_000,
   });
 
+  await expenseRef.set({
+    id: 'seed-expense-dinner',
+    tripId: TRIP_ID,
+    dayIndex: 1,
+    title: 'Dinner reservation',
+    amount: null,
+    amountMin: 80,
+    amountMax: 120,
+    currency: 'USD',
+    payerUid: alex.uid,
+    status: 'EXPECTED',
+    targetType: 'EVERYONE_CURRENT',
+    targetMemberIds: [alex.uid, taylor.uid],
+    splitAmounts: null,
+    paidMemberStatus: {
+      [alex.uid]: { isPaid: false, paidAt: null },
+      [taylor.uid]: { isPaid: false, paidAt: null },
+    },
+    createdBy: alex.uid,
+    createdAt: context.now,
+    lastEditedAt: context.now,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 5,
+    firestoreDocuments: 6,
   };
 }

@@ -1,0 +1,80 @@
+import { createAsyncThunk } from '@reduxjs/toolkit';
+import { collection, doc, setDoc } from 'firebase/firestore';
+
+import { db } from '@/lib/firebase/config';
+import type { TripExpense, ExpenseStatus } from '@apps/waypoint/types';
+
+interface CreateExpenseInput {
+  uid: string;
+  tripId: string;
+  memberIds: string[];
+  title: string;
+  amount: number | null;
+  amountMin: number | null;
+  amountMax: number | null;
+  currency: string;
+  payerUid: string;
+  status: ExpenseStatus;
+  dayIndex: number | null;
+}
+
+export const createExpense = createAsyncThunk<
+  TripExpense,
+  CreateExpenseInput,
+  { rejectValue: string }
+>('waypoint/expenses/create', async (input, { rejectWithValue }) => {
+  const title = input.title.trim();
+  const currency = input.currency.trim().toUpperCase();
+
+  if (!title) {
+    return rejectWithValue('Expense title is required.');
+  }
+  if (!currency) {
+    return rejectWithValue('Currency is required.');
+  }
+  if (
+    input.amount === null &&
+    (input.amountMin === null ||
+      input.amountMax === null ||
+      input.amountMin < 0 ||
+      input.amountMax < input.amountMin)
+  ) {
+    return rejectWithValue('Enter a valid amount or range.');
+  }
+  if (
+    input.amount !== null &&
+    (!Number.isFinite(input.amount) || input.amount < 0)
+  ) {
+    return rejectWithValue('Enter a valid amount.');
+  }
+
+  const expenseRef = doc(
+    collection(db, 'apps', 'waypoint', 'trips', input.tripId, 'expenses'),
+  );
+  const now = Date.now();
+  const paidMemberStatus = Object.fromEntries(
+    input.memberIds.map((uid) => [uid, { isPaid: false, paidAt: null }]),
+  );
+  const expense: TripExpense = {
+    id: expenseRef.id,
+    tripId: input.tripId,
+    dayIndex: input.dayIndex,
+    title,
+    amount: input.amount,
+    amountMin: input.amountMin,
+    amountMax: input.amountMax,
+    currency,
+    payerUid: input.payerUid,
+    status: input.status,
+    targetType: 'EVERYONE_CURRENT',
+    targetMemberIds: input.memberIds,
+    splitAmounts: null,
+    paidMemberStatus,
+    createdBy: input.uid,
+    createdAt: now,
+    lastEditedAt: now,
+  };
+
+  await setDoc(expenseRef, expense);
+  return expense;
+});
