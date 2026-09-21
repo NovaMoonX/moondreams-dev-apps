@@ -22,7 +22,9 @@ import type {
 } from '@apps/waypoint/types';
 import {
   createChecklistItem,
+  deleteChecklistItem,
   toggleChecklistItem,
+  updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
@@ -45,6 +47,7 @@ export default function ChecklistSection({
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const items = useAppSelector((state) => state.waypoint.checklist.items);
@@ -115,7 +118,7 @@ export default function ChecklistSection({
     }
   };
 
-  const handleCreate = async (values: {
+  const handleSave = async (values: {
     title: string;
     category: ChecklistCategory;
     customCategoryLabel: string | null;
@@ -123,14 +126,44 @@ export default function ChecklistSection({
   }) => {
     setIsSubmitting(true);
     try {
+      if (editingItem) {
+        await dispatch(
+          updateChecklistItem({
+            tripId: trip.id,
+            itemId: editingItem.id,
+            ...values,
+          }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          createChecklistItem({
+            tripId: trip.id,
+            uid: currentUserId,
+            ...values,
+          }),
+        ).unwrap();
+      }
+      setIsModalOpen(false);
+      setEditingItem(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (item: ChecklistItem) => {
+    setIsSubmitting(true);
+    try {
       await dispatch(
-        createChecklistItem({
-          tripId: trip.id,
-          uid: currentUserId,
-          ...values,
-        }),
+        deleteChecklistItem({ tripId: trip.id, itemId: item.id }),
       ).unwrap();
       setIsModalOpen(false);
+      setEditingItem(null);
+    } catch (error) {
+      addToast({
+        title: 'Unable to delete checklist item',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -145,7 +178,16 @@ export default function ChecklistSection({
             {completedCount} of {items.length} complete
           </p>
         </div>
-        {canEdit && <Button onClick={() => setIsModalOpen(true)}>Add item</Button>}
+        {canEdit && (
+          <Button
+            onClick={() => {
+              setEditingItem(null);
+              setIsModalOpen(true);
+            }}
+          >
+            Add item
+          </Button>
+        )}
       </div>
       <div
         className='bg-muted h-2 overflow-hidden rounded-full'
@@ -232,6 +274,19 @@ export default function ChecklistSection({
                             Everyone
                           </span>
                         )}
+                        {canEdit && (
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='secondary'
+                            onClick={() => {
+                              setEditingItem(item);
+                              setIsModalOpen(true);
+                            }}
+                          >
+                            Modify
+                          </Button>
+                        )}
                       </div>
                     </li>
                   );
@@ -243,7 +298,9 @@ export default function ChecklistSection({
       )}
 
       <ChecklistItemFormModal
+        key={editingItem?.id ?? 'new'}
         isOpen={isModalOpen}
+        item={editingItem}
         memberOptions={memberIds.map((uid) => ({
           label:
             members[uid]?.displayName?.trim() ||
@@ -252,8 +309,12 @@ export default function ChecklistSection({
           value: uid,
         }))}
         isSubmitting={isSubmitting}
-        onSubmit={handleCreate}
-        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSave}
+        onDelete={editingItem ? () => handleDelete(editingItem) : undefined}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingItem(null);
+        }}
       />
     </section>
   );

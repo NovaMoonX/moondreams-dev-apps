@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -74,6 +74,73 @@ interface ToggleChecklistItemInput {
   uid: string;
   isCompleted: boolean;
 }
+
+interface UpdateChecklistItemInput {
+  tripId: string;
+  itemId: string;
+  title: string;
+  category: ChecklistCategory;
+  customCategoryLabel: string | null;
+  assignedToUids: string[];
+}
+
+export const updateChecklistItem = createAsyncThunk<
+  void,
+  UpdateChecklistItemInput,
+  { rejectValue: string }
+>(
+  'waypoint/checklist/update',
+  async (
+    {
+      tripId,
+      itemId,
+      title,
+      category,
+      customCategoryLabel,
+      assignedToUids,
+    },
+    { rejectWithValue },
+  ) => {
+    const trimmedTitle = title.trim();
+    const trimmedCustomLabel = customCategoryLabel?.trim() || null;
+
+    if (!trimmedTitle) {
+      return rejectWithValue('Checklist title is required.');
+    }
+    if (category === 'OTHER' && !trimmedCustomLabel) {
+      return rejectWithValue('Enter a label for the custom category.');
+    }
+
+    await updateDoc(
+      doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId),
+      {
+        title: trimmedTitle,
+        category,
+        customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
+        assignedToUids: [...new Set(assignedToUids)],
+        lastEditedAt: Date.now(),
+      },
+    );
+  },
+);
+
+interface DeleteChecklistItemInput {
+  tripId: string;
+  itemId: string;
+}
+
+export const deleteChecklistItem = createAsyncThunk<
+  void,
+  DeleteChecklistItemInput,
+  { rejectValue: string }
+>(
+  'waypoint/checklist/delete',
+  async ({ tripId, itemId }) => {
+    await deleteDoc(
+      doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId),
+    );
+  },
+);
 
 export const toggleChecklistItem = createAsyncThunk<
   void,

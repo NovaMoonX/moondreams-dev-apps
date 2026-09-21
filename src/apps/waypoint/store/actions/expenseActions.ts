@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { TripExpense, ExpenseStatus } from '@apps/waypoint/types';
@@ -78,6 +78,77 @@ export const createExpense = createAsyncThunk<
 
   await setDoc(expenseRef, expense);
   return expense;
+});
+
+interface UpdateExpenseInput {
+  expense: TripExpense;
+  title: string;
+  amount: number | null;
+  amountMin: number | null;
+  amountMax: number | null;
+  payerUid: string;
+  dayIndex: number | null;
+  paidAmount: number | null;
+}
+
+export const updateExpense = createAsyncThunk<
+  TripExpense,
+  UpdateExpenseInput,
+  { rejectValue: string }
+>('waypoint/expenses/update', async (input, { rejectWithValue }) => {
+  const title = input.title.trim();
+  if (!title) {
+    return rejectWithValue('Expense title is required.');
+  }
+  if (
+    input.amount === null &&
+    (input.amountMin === null ||
+      input.amountMax === null ||
+      input.amountMin < 0 ||
+      input.amountMax < input.amountMin)
+  ) {
+    return rejectWithValue('Enter a valid amount or range.');
+  }
+  if (
+    input.amount !== null &&
+    (!Number.isFinite(input.amount) || input.amount < 0)
+  ) {
+    return rejectWithValue('Enter a valid amount.');
+  }
+  if (
+    input.paidAmount !== null &&
+    (!Number.isFinite(input.paidAmount) || input.paidAmount < 0)
+  ) {
+    return rejectWithValue('Enter a valid paid amount.');
+  }
+
+  const changes = {
+    title,
+    amount: input.amount,
+    amountMin: input.amountMin,
+    amountMax: input.amountMax,
+    payerUid: input.payerUid,
+    dayIndex: input.dayIndex,
+    paidAmount: input.expense.amount === null ? input.paidAmount : null,
+    lastEditedAt: Date.now(),
+  };
+
+  await updateDoc(
+    doc(db, 'apps', 'waypoint', 'trips', input.expense.tripId, 'expenses', input.expense.id),
+    changes,
+  );
+  return { ...input.expense, ...changes };
+});
+
+export const deleteExpense = createAsyncThunk<
+  string,
+  TripExpense,
+  { rejectValue: string }
+>('waypoint/expenses/delete', async (expense) => {
+  await deleteDoc(
+    doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
+  );
+  return expense.id;
 });
 
 interface MarkExpensePaidInput {

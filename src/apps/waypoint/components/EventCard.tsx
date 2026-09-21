@@ -1,4 +1,4 @@
-import { Badge } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { formatTime } from '@/utils/formatUtils';
@@ -11,9 +11,11 @@ import {
 
 interface EventCardProps {
   event: TimelineEvent;
+  canEdit: boolean;
+  onEdit: (event: TimelineEvent) => void;
 }
 
-export function EventCard({ event }: EventCardProps) {
+export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
   const details = event.eventDetails;
   const quickField =
     event.eventType === 'TRAVEL' && details && 'transitType' in details
@@ -48,7 +50,14 @@ export function EventCard({ event }: EventCardProps) {
             </p>
           )}
         </div>
-        <MapNavigationButton {...event} />
+        <div className='flex shrink-0 gap-2'>
+          <MapNavigationButton {...event} />
+          {canEdit && (
+            <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
+              Modify
+            </Button>
+          )}
+        </div>
       </div>
     </article>
   );
