@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { TripExpense, ExpenseStatus } from '@apps/waypoint/types';
@@ -122,8 +122,7 @@ export const updateExpense = createAsyncThunk<
     return rejectWithValue('Enter a valid paid amount.');
   }
 
-  const updatedExpense: TripExpense = {
-    ...input.expense,
+  const changes = {
     title,
     amount: input.amount,
     amountMin: input.amountMin,
@@ -134,11 +133,11 @@ export const updateExpense = createAsyncThunk<
     lastEditedAt: Date.now(),
   };
 
-  await setDoc(
+  await updateDoc(
     doc(db, 'apps', 'waypoint', 'trips', input.expense.tripId, 'expenses', input.expense.id),
-    updatedExpense,
+    changes,
   );
-  return updatedExpense;
+  return { ...input.expense, ...changes };
 });
 
 export const deleteExpense = createAsyncThunk<

@@ -235,7 +235,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 <Button
                   key={value}
                   type='button'
-                  variant='ghost'
+                  variant='base'
                   size='sm'
                   aria-pressed={isSelected}
                   onClick={() => toggleDayFilter(value)}
@@ -251,7 +251,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             })}
             <Button
               type='button'
-              variant='ghost'
+              variant='base'
               size='sm'
               aria-pressed={dayFilter.includes('other')}
               onClick={() => toggleDayFilter('other')}
@@ -281,7 +281,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 <Button
                   key={uid}
                   type='button'
-                  variant='ghost'
+                  variant='base'
                   size='sm'
                   aria-pressed={isSelected}
                   onClick={() => togglePayerFilter(uid)}
@@ -341,7 +341,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   <>
                     <Button
                       type='button'
-                      variant='ghost'
+                      variant='secondary'
                       size='sm'
                       onClick={() => {
                         setEditingExpense(expense);
@@ -352,7 +352,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                     </Button>
                     <Button
                       type='button'
-                      variant='ghost'
+                      variant='destructive'
                       size='sm'
                       onClick={() => void handleDelete(expense)}
                     >
