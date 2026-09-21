@@ -167,20 +167,20 @@ regularly gets the shape right but the UX wrong:
   nothing for a race to lose.
 - **Audit every comment in the diff — the coding agent's and any you add
   yourself while working this session — not just the code.** Default is
-  zero comments; a comment earns its place only if the reader would
-  genuinely be lost without it. Two comment shapes fail that bar every
-  time, no matter how short or well-worded: restating a param/field name
-  in prose (`// The trip the user currently has open, if any` above a
-  `tripId: string | null`), and explaining what a standard SDK/library call
-  already means by definition (`// wraps this in a transaction so
-  concurrent writes don't clobber each other` above a `runTransaction(...)`
-  call — that's what `runTransaction` *is*, not a hidden constraint of this
-  code). Delete anything that doesn't clear the bar, cap what survives at 3
-  lines, and strip any mention of a specific app/file/function name from
-  what's left (see the comment-necessity memory). Do this pass on every
-  file touched this session, not just the ones inherited from the coding
-  agent or the ones with an obvious CRUD/UX issue — re-check it right
-  before wrap-up, since a fix added late in the session is easy to skip.
+  zero comments. A comment describing what code does (restating a
+  param/field name in prose, explaining what a function call or pattern
+  accomplishes) is noise, even when accurate and short, as long as a
+  reader who knows the language/platform can infer that from the code
+  itself. A comment earns its place only when the *process* doesn't make
+  sense on its own even to that reader — a hidden constraint, a workaround
+  for a specific bug, a non-obvious invariant, a reason the approach isn't
+  the one a reader would expect. That bar is rarely cleared. Delete
+  anything that doesn't clear it, cap what survives at 3 lines, and strip
+  any mention of a specific app/file/function name from what's left (see
+  the comment-necessity memory). Do this pass on every file touched this
+  session, not just the ones inherited from the coding agent or the ones
+  with an obvious CRUD/UX issue — re-check it right before wrap-up, since a
+  fix added late in the session is easy to skip.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
