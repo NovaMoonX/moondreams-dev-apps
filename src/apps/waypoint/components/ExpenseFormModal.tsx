@@ -7,10 +7,13 @@ import {
   Modal,
   Tabs,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import type { ExpenseStatus, TripSpace } from '@apps/waypoint/types';
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import type { ExpenseStatus, TripExpense, TripSpace } from '@apps/waypoint/types';
 
 interface ExpenseFormData {
   title: string;
@@ -22,6 +25,7 @@ interface ExpenseFormData {
   payerUid: string;
   status: ExpenseStatus;
   dayIndex: string;
+  paidAmount: string;
 }
 
 export interface ExpenseSubmitValues {
@@ -33,14 +37,17 @@ export interface ExpenseSubmitValues {
   status: ExpenseStatus;
   dayIndex: number | null;
   currency: string;
+  paidAmount: number | null;
 }
 
 interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   defaultPayerUid: string;
+  initialExpense?: TripExpense;
   isSubmitting?: boolean;
   onSubmit: (values: ExpenseSubmitValues) => Promise<void> | void;
+  onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -54,23 +61,33 @@ function ExpenseFormModal({
   isOpen,
   trip,
   defaultPayerUid,
+  initialExpense,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: ExpenseFormModalProps) {
+  const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<ExpenseFormData['amountMode']>('amount');
+  const [mode, setMode] = useState<ExpenseFormData['amountMode']>(
+    initialExpense?.amount === null ? 'range' : 'amount',
+  );
   const [formData, setFormData] = useState<ExpenseFormData>({
-    title: '',
-    amountMode: 'amount',
-    amount: '',
-    amountMin: '',
-    amountMax: '',
-    currency: trip.defaultCurrency ?? 'USD',
-    payerUid: defaultPayerUid,
-    status: 'EXPECTED',
-    dayIndex: '',
+    title: initialExpense?.title ?? '',
+    amountMode: initialExpense?.amount === null ? 'range' : 'amount',
+    amount: initialExpense?.amount === null ? '' : String(initialExpense?.amount ?? ''),
+    amountMin: String(initialExpense?.amountMin ?? ''),
+    amountMax: String(initialExpense?.amountMax ?? ''),
+    currency: initialExpense?.currency ?? trip.defaultCurrency ?? 'USD',
+    payerUid: initialExpense?.payerUid ?? defaultPayerUid,
+    status: initialExpense?.status ?? 'EXPECTED',
+    dayIndex:
+      initialExpense?.dayIndex === null || initialExpense?.dayIndex === undefined
+        ? ''
+        : String(initialExpense.dayIndex),
+    paidAmount: String(initialExpense?.paidAmount ?? ''),
   });
+  const isEditing = Boolean(initialExpense);
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
   const parsedAmount = Number(formData.amount);
@@ -162,32 +179,51 @@ function ExpenseFormModal({
               variant: 'outline',
             }),
           ]),
-      input({
-        name: 'currency',
-        label: 'Currency',
-        placeholder: 'USD',
-        variant: 'outline',
-      }),
+      ...(isEditing && mode === 'range' && initialExpense?.status === 'PAID'
+        ? [
+            input({
+              name: 'paidAmount',
+              label: 'Paid amount',
+              type: 'number',
+              placeholder: '0.00',
+              variant: 'outline',
+            }),
+          ]
+        : []),
+      ...(!isEditing
+        ? [
+            input({
+              name: 'currency',
+              label: 'Currency',
+              placeholder: 'USD',
+              variant: 'outline',
+            }),
+          ]
+        : []),
       select({
         name: 'payerUid',
         label: 'Paid by',
         options: memberOptions,
       }),
-      select({
-        name: 'status',
-        label: 'Status',
-        options: [
-          { value: 'EXPECTED', label: 'Expected' },
-          { value: 'PAID', label: 'Paid' },
-        ],
-      }),
+      ...(!isEditing
+        ? [
+            select({
+              name: 'status',
+              label: 'Status',
+              options: [
+                { value: 'EXPECTED', label: 'Expected' },
+                { value: 'PAID', label: 'Paid' },
+              ],
+            }),
+          ]
+        : []),
       select({
         name: 'dayIndex',
         label: 'Trip day',
         options: dayOptions,
       }),
     ],
-    [dayOptions, memberOptions, mode],
+    [dayOptions, initialExpense?.status, isEditing, memberOptions, mode],
   );
 
   const handleSubmit = async (data: ExpenseFormData) => {
@@ -198,6 +234,10 @@ function ExpenseFormModal({
     const amount = mode === 'amount' ? parseAmount(data.amount) : null;
     const amountMin = mode === 'range' ? parseAmount(data.amountMin) : null;
     const amountMax = mode === 'range' ? parseAmount(data.amountMax) : null;
+    const paidAmount =
+      isEditing && mode === 'range' && initialExpense?.status === 'PAID'
+        ? parseAmount(data.paidAmount)
+        : null;
 
     if (
       !data.title.trim() ||
@@ -219,10 +259,28 @@ function ExpenseFormModal({
         status: data.status,
         dayIndex: data.dayIndex === '' ? null : Number(data.dayIndex),
         currency: data.currency,
+        paidAmount,
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to add this expense.'));
     }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete expense',
+      message: `Delete "${initialExpense?.title}"? This action cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    await onDelete();
   };
 
   return (
@@ -237,18 +295,32 @@ function ExpenseFormModal({
         onDataChange={(data) => setFormData(data as ExpenseFormData)}
         onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
         submitButton={
-          <div className='flex justify-end gap-2'>
-            <Button type='button' variant='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              loading={isSubmitting}
-              disabled={isSubmitting || !isFormComplete}
-            >
-              {isSubmitting ? 'Adding…' : 'Add expense'}
-            </Button>
-          </div>
+          <ModalFooterActions
+            leftActions={
+              isEditing &&
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
+            rightActions={
+              <>
+                <Button type='button' variant='secondary' onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  type='submit'
+                  loading={isSubmitting}
+                  disabled={isSubmitting || !isFormComplete}
+                >
+                  {isSubmitting
+                    ? isEditing
+                      ? 'Saving…'
+                      : 'Adding…'
+                    : isEditing
+                      ? 'Save changes'
+                      : 'Add expense'}
+                </Button>
+              </>
+            }
+          />
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}

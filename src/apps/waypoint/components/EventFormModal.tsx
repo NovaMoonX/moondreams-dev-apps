@@ -8,12 +8,15 @@ import {
   Modal,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import {
   fromLocalDateAndTimeInputValues,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type {
   ActivitySetting,
   EventDetails,
@@ -41,6 +44,7 @@ interface EventFormModalProps {
   onSubmit: (
     event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
   ) => Promise<void> | void;
+  onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -98,8 +102,10 @@ function EventFormModal({
   event,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: EventFormModalProps) {
+  const { confirm } = useActionModal();
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(event));
@@ -157,6 +163,23 @@ function EventFormModal({
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));
     }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete timeline event',
+      message: `Delete "${event?.title}"? This action cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    await onDelete();
   };
 
   const quickLabel =
@@ -224,14 +247,22 @@ function EventFormModal({
                 onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
               />
             </div>
-            <div className='flex justify-end gap-2'>
-              <Button type='button' variant='secondary' onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type='button' onClick={handleNext}>
-                Next
-              </Button>
-            </div>
+            <ModalFooterActions
+              leftActions={
+                event &&
+                onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+              }
+              rightActions={
+                <>
+                  <Button type='button' variant='secondary' onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <Button type='button' onClick={handleNext}>
+                    Next
+                  </Button>
+                </>
+              }
+            />
           </>
         ) : (
           <>
@@ -279,14 +310,23 @@ function EventFormModal({
                 </label>
               ))}
             </div>
-            <div className='flex justify-between gap-2'>
-              <Button type='button' variant='secondary' onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
-                {isSubmitting ? 'Saving…' : event ? 'Save changes' : 'Add event'}
-              </Button>
-            </div>
+            <ModalFooterActions
+              leftActions={
+                <>
+                  {event && onDelete && (
+                    <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+                  )}
+                  <Button type='button' variant='secondary' onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                </>
+              }
+              rightActions={
+                <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
+                  {isSubmitting ? 'Saving…' : event ? 'Save changes' : 'Add event'}
+                </Button>
+              }
+            />
           </>
         )}
         {error && <p className='text-destructive text-sm'>{error}</p>}
