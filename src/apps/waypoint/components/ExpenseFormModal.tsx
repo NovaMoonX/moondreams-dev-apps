@@ -89,7 +89,7 @@ function ExpenseFormModal({
     formData.payerUid !== '';
   const dayOptions = useMemo(
     () => [
-      { value: '', label: 'Other' },
+      { value: '', label: 'No specific day' },
       ...Array.from({ length: getDayCount(trip) }, (_, index) => ({
         value: String(index),
         label: `Day ${index + 1}`,

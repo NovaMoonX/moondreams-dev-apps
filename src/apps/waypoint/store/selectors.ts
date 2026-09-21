@@ -40,20 +40,23 @@ function addExpenseValue(total: ExpenseTotal, expense: TripExpense) {
   total.max += value.max;
 }
 
-export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals => {
+export function computeExpenseTotals(expenses: TripExpense[]): TripExpenseTotals {
   const totals: TripExpenseTotals = {
     paid: { min: 0, max: 0 },
     expected: { min: 0, max: 0 },
     total: { min: 0, max: 0 },
   };
 
-  for (const expense of state.waypoint.expenses.items) {
+  for (const expense of expenses) {
     addExpenseValue(totals.total, expense);
     addExpenseValue(expense.status === 'PAID' ? totals.paid : totals.expected, expense);
   }
 
   return totals;
-};
+}
+
+export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals =>
+  computeExpenseTotals(state.waypoint.expenses.items);
 
 export const selectTimelineEvents = (state: RootState) => state.waypoint.events.items;
 

@@ -78,3 +78,20 @@ export const createExpense = createAsyncThunk<
   await setDoc(expenseRef, expense);
   return expense;
 });
+
+export const markExpensePaid = createAsyncThunk<TripExpense, TripExpense>(
+  'waypoint/expenses/markPaid',
+  async (expense) => {
+    const updatedExpense: TripExpense = {
+      ...expense,
+      status: 'PAID',
+      lastEditedAt: Date.now(),
+    };
+
+    await setDoc(
+      doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
+      updatedExpense,
+    );
+    return updatedExpense;
+  },
+);
