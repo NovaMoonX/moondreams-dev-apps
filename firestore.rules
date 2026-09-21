@@ -1588,9 +1588,8 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
-      allow read: if isTripSubcollectionMember();
-      allow create: if isTripSubcollectionEditor()
-        && request.resource.data.keys().hasOnly([
+      function isEventShapeValid() {
+        return request.resource.data.keys().hasOnly([
             'id',
             'tripId',
             'eventType',
@@ -1610,30 +1609,44 @@ service cloud.firestore {
             'createdAt',
             'lastEditedAt'
           ])
-        && request.resource.data.id == eventId
-        && request.resource.data.tripId == tripId
-        && request.resource.data.eventType in ['TRAVEL', 'DINING', 'ACTIVITY', 'FREE_TIME']
-        && request.resource.data.dayIndex is int
-        && request.resource.data.endDayIndex is int
-        && request.resource.data.title is string
-        && request.resource.data.title.size() > 0
-        && isTimestampNumber(request.resource.data.startAt)
-        && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt))
-        && (request.resource.data.locationName == null || request.resource.data.locationName is string)
-        && (request.resource.data.address == null || request.resource.data.address is string)
-        && (request.resource.data.latitude == null || request.resource.data.latitude is number)
-        && (request.resource.data.longitude == null || request.resource.data.longitude is number)
-        && (request.resource.data.eventDetails == null || request.resource.data.eventDetails is map)
-        && (request.resource.data.notes == null || request.resource.data.notes is string)
-        && request.resource.data.assignedMemberIds is list
-        && request.resource.data.createdBy == request.auth.uid
-        && isTimestampNumber(request.resource.data.createdAt)
-        && isTimestampNumber(request.resource.data.lastEditedAt);
+          && request.resource.data.id == eventId
+          && request.resource.data.tripId == tripId
+          && request.resource.data.eventType in ['TRAVEL', 'DINING', 'ACTIVITY', 'FREE_TIME']
+          && request.resource.data.dayIndex is int
+          && request.resource.data.endDayIndex is int
+          && request.resource.data.endDayIndex >= request.resource.data.dayIndex
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && isTimestampNumber(request.resource.data.startAt)
+          && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt))
+          && (request.resource.data.locationName == null || request.resource.data.locationName is string)
+          && (request.resource.data.address == null || request.resource.data.address is string)
+          && (request.resource.data.latitude == null || request.resource.data.latitude is number)
+          && (request.resource.data.longitude == null || request.resource.data.longitude is number)
+          && (request.resource.data.eventDetails == null || request.resource.data.eventDetails is map)
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.assignedMemberIds is list
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isEventImmutableFieldsValid() {
+        return request.resource.data.id == resource.data.id
+          && request.resource.data.tripId == resource.data.tripId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      allow read: if isTripSubcollectionMember();
+      allow create: if isTripSubcollectionEditor()
+        && isEventShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripSubcollectionEditor()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'endAt'])
-        && isTimestampNumber(request.resource.data.startAt)
-        && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt));
-      allow delete: if false;
+        && isEventShapeValid()
+        && isEventImmutableFieldsValid();
+      // Issue 13 will narrow this to Admin-only once a trip has started.
+      allow delete: if isTripSubcollectionEditor();
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {
@@ -1659,6 +1672,72 @@ service cloud.firestore {
         && isTimestampNumber(request.resource.data.checkOutAt)
         && isTimestampNumber(request.resource.data.plannedArrivalAt)
         && isTimestampNumber(request.resource.data.plannedDepartureAt);
+    }
+
+    match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {
+      function isTripExpenseMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      function isTripExpenseEditor() {
+        return isTripExpenseMember()
+          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      function isTripExpenseValid(data) {
+        return data.keys().hasOnly([
+            'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
+            'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'targetType',
+            'targetMemberIds', 'splitAmounts', 'paidMemberStatus',
+            'createdBy', 'createdAt', 'lastEditedAt'
+          ])
+          && data.id == expenseId
+          && data.tripId == tripId
+          && (data.dayIndex == null || data.dayIndex is int)
+          && isNonEmptyString(data.title)
+          && (data.amount == null || data.amount is number)
+          && (data.amountMin == null || data.amountMin is number)
+          && (data.amountMax == null || data.amountMax is number)
+          && ((data.amount != null && data.amountMin == null && data.amountMax == null)
+            || (data.amount == null && data.amountMin != null && data.amountMax != null
+              && data.amountMax >= data.amountMin))
+          && (data.paidAmount == null || (data.paidAmount is number && data.amount == null))
+          && isNonEmptyString(data.currency)
+          && data.payerUid is string
+          && data.payerUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
+          && data.status in ['PAID', 'EXPECTED']
+          && data.targetType in [
+            'EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE', 'JUST_ME', 'SPECIFIC_MEMBERS'
+          ]
+          && data.targetMemberIds is list
+          && (data.splitAmounts == null || data.splitAmounts is map)
+          && data.paidMemberStatus is map
+          && data.createdBy is string
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      allow read: if isTripExpenseMember();
+      allow create: if isTripExpenseEditor()
+        && isTripExpenseValid(request.resource.data)
+        && request.resource.data.targetType == 'EVERYONE_CURRENT'
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isTripExpenseEditor()
+        && isTripExpenseValid(request.resource.data)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow update: if isTripExpenseMember()
+        && resource.data.paidMemberStatus.keys().hasAll([request.auth.uid])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
+        && request.resource.data.paidMemberStatus.diff(resource.data.paidMemberStatus)
+          .affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
+        && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null
+          || isTimestampNumber(request.resource.data.paidMemberStatus[request.auth.uid].paidAt));
+      allow delete: if false;
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {
