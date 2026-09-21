@@ -23,7 +23,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
-import { selectStays } from '@apps/waypoint/store/selectors';
+import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
 interface TimelineSectionProps {
@@ -42,7 +42,8 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   const [activeTab, setActiveTab] = useState('all');
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const memberIds = Object.keys(trip.members);
-  const stays = useAppSelector(selectStays);
+  const activeDayIndex = activeTab === 'all' ? 0 : Number(activeTab);
+  const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex));
   const members = useUserInfo(memberIds)?.map ?? {};
   const memberOptions = memberIds.map((uid) => ({
     label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
@@ -50,17 +51,15 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   }));
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const renderStayBanners = (dayIndex: number) => {
-    const dayStart = trip.startDate + dayIndex * 86_400_000;
-    const dayEnd = dayStart + 86_400_000;
-    const activeStays = stays.filter(
-      (stay) =>
-        stay.plannedArrivalAt < dayEnd && stay.plannedDepartureAt >= dayStart,
-    );
-    return activeStays.length > 0 ? (
+    if (dayIndex !== activeDayIndex || activeTab === 'all' || activeStays.length === 0) {
+      return null;
+    }
+
+    return (
       <div className='space-y-2'>
         {activeStays.map((stay) => <StayBanner key={stay.id} stay={stay} />)}
       </div>
-    ) : null;
+    );
   };
   const tabs = useMemo(
     () => [
