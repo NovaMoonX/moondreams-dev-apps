@@ -1359,6 +1359,7 @@ service cloud.firestore {
             'startDate',
             'endDate',
             'defaultCurrency',
+            'isArchived',
             'members',
             'inviteCode',
             'createdBy',
@@ -1372,6 +1373,7 @@ service cloud.firestore {
           && isTimestampNumber(data.endDate)
           && data.endDate >= data.startDate
           && (data.defaultCurrency == null || data.defaultCurrency is string)
+          && (!('isArchived' in data) || data.isArchived is bool)
           && data.members is map
           && (data.inviteCode == null || data.inviteCode is string)
           && data.createdBy is string
@@ -1390,6 +1392,7 @@ service cloud.firestore {
       function isTripCreateValid() {
         return request.auth != null
           && isTripFieldSetValid(request.resource.data)
+          && request.resource.data.isArchived == false
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.members.keys().hasOnly([request.auth.uid])
           && isTripMemberEntryValid(
@@ -1405,6 +1408,33 @@ service cloud.firestore {
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.members == resource.data.members;
+      }
+
+      function isTripEditorOrAdmin() {
+        return request.auth != null
+          && request.auth.uid in resource.data.members
+          && resource.data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      function isTripArchiveUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isArchived',
+            'lastEditedAt'
+          ])
+          && request.resource.data.isArchived is bool
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      function isTripGeneralUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title',
+            'coverImageUrl',
+            'startDate',
+            'endDate',
+            'defaultCurrency',
+            'lastEditedAt'
+          ])
+          && isTripUpdateValid();
       }
 
       function isTripMembershipApprovalValid() {
@@ -1429,9 +1459,55 @@ service cloud.firestore {
 
       allow read: if isTripMember();
       allow create: if isTripCreateValid();
-      allow update: if isTripMember()
-        && (isTripUpdateValid() || isTripMembershipApprovalValid());
+      allow update: if isTripMember() && (
+        (isTripEditorOrAdmin() && isTripGeneralUpdate())
+        || (isTripAdmin() && isTripArchiveUpdate())
+        || isTripMembershipApprovalValid()
+      );
       allow delete: if false;
+    }
+
+    match /apps/waypoint/trips/{tripId}/events/{eventId} {
+      function isTripSubcollectionMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      function isTripSubcollectionEditor() {
+        return isTripSubcollectionMember()
+          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      allow read: if isTripSubcollectionMember();
+      allow update: if isTripSubcollectionEditor()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'endAt'])
+        && isTimestampNumber(request.resource.data.startAt)
+        && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt));
+    }
+
+    match /apps/waypoint/trips/{tripId}/stays/{stayId} {
+      function isTripSubcollectionMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      function isTripSubcollectionEditor() {
+        return isTripSubcollectionMember()
+          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      allow read: if isTripSubcollectionMember();
+      allow update: if isTripSubcollectionEditor()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'checkInAt',
+            'checkOutAt',
+            'plannedArrivalAt',
+            'plannedDepartureAt'
+          ])
+        && isTimestampNumber(request.resource.data.checkInAt)
+        && isTimestampNumber(request.resource.data.checkOutAt)
+        && isTimestampNumber(request.resource.data.plannedArrivalAt)
+        && isTimestampNumber(request.resource.data.plannedDepartureAt);
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {

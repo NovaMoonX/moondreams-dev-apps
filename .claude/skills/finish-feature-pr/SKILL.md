@@ -19,6 +19,15 @@ Run every step below. Don't skip validation because the diff "looks right."
   body, branch, mergeable state, base branch.
 - Check out the PR's head branch locally (`gh pr checkout <n>` or manual
   fetch+checkout). Confirm `git status` is clean before touching anything.
+- **After checking out, verify the branch is actually current before doing
+  any fix work**: `git fetch origin <head-branch>` and compare `git
+  rev-parse HEAD` against `git rev-parse origin/<head-branch>`. The coding
+  agent can still be pushing commits (including its own conflict-resolution
+  merges) right up to when you start, and diagnosing/fixing against a stale
+  local checkout wastes work or reintroduces something already fixed
+  upstream. If the remote has moved, re-pull/re-checkout before proceeding.
+  If it's a long-running session, re-check this before step 1 as well, not
+  just once at the very start.
 - Read the PR body and the linked issue (`Fixes #NN`) to recover original
   intent — but treat both as a starting point, not ground truth. The user's
   live instructions in this conversation always win over what the PR body
@@ -124,6 +133,15 @@ regularly gets the shape right but the UX wrong:
   files; if more than one file hand-writes the same list, hoist it once next
   to the type it constrains (typically `types.ts`) and have every consumer
   import and derive from it.
+- **Audit every comment the coding agent added in its diff, not just the
+  code.** Default is zero comments; a comment earns its place only if the
+  reader would genuinely be lost without it — restating a param/field name
+  in prose (`// The trip the user currently has open, if any` above a
+  `tripId: string | null`) doesn't count, even when it's short and names no
+  files. Delete anything that doesn't clear that bar, cap what survives at
+  3 lines, and strip any mention of a specific app/file/function name from
+  what's left (see the comment-necessity memory). Do this pass on every
+  file the PR touches, not just the ones with an obvious CRUD/UX issue.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
