@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { X } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -33,7 +34,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const expenses = useAppSelector(selectTripExpenses);
   const totals = useAppSelector(selectTripExpenseTotals);
-  const [dayFilter, setDayFilter] = useState('all');
+  const [dayFilter, setDayFilter] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +45,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     trip.members[currentUserId]?.role ?? '',
   );
   const filteredExpenses = expenses.filter((expense) => {
-    if (dayFilter === 'all') return true;
-    if (dayFilter === 'other') return expense.dayIndex === null;
-    return expense.dayIndex === Number(dayFilter);
+    if (dayFilter.length === 0) return true;
+    return expense.dayIndex === null
+      ? dayFilter.includes('other')
+      : dayFilter.includes(String(expense.dayIndex));
   });
+  const toggleDayFilter = (value: string) => {
+    setDayFilter((current) =>
+      current.includes(value)
+        ? current.filter((filterValue) => filterValue !== value)
+        : [...current, value],
+    );
+  };
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
     { label: 'Paid so far', total: totals.paid },
     { label: 'Expected', total: totals.expected },
@@ -96,18 +105,45 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
         ))}
       </div>
-      <div className='flex flex-wrap gap-2'>
-        <Button variant={dayFilter === 'all' ? 'primary' : 'secondary'} size='sm' onClick={() => setDayFilter('all')}>
-          All
-        </Button>
-        {Array.from({ length: dayCount }, (_, index) => (
-          <Button key={index} variant={dayFilter === String(index) ? 'primary' : 'secondary'} size='sm' onClick={() => setDayFilter(String(index))}>
-            Day {index + 1}
+      <div role='group' aria-label='Filter by day' className='flex flex-wrap gap-2'>
+        {Array.from({ length: dayCount }, (_, index) => {
+          const value = String(index);
+          const isSelected = dayFilter.includes(value);
+
+          return (
+            <button
+              key={value}
+              type='button'
+              aria-pressed={isSelected}
+              onClick={() => toggleDayFilter(value)}
+            >
+              <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
+                Day {index + 1}
+              </Badge>
+            </button>
+          );
+        })}
+        <button
+          type='button'
+          aria-pressed={dayFilter.includes('other')}
+          onClick={() => toggleDayFilter('other')}
+        >
+          <Badge variant={dayFilter.includes('other') ? 'primary' : 'muted'} outline={!dayFilter.includes('other')}>
+            No day
+          </Badge>
+        </button>
+        {dayFilter.length > 0 && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='icon'
+            onClick={() => setDayFilter([])}
+            aria-label='Clear day filter'
+            className='bg-transparent'
+          >
+            Clear
           </Button>
-        ))}
-        <Button variant={dayFilter === 'other' ? 'primary' : 'secondary'} size='sm' onClick={() => setDayFilter('other')}>
-          Other
-        </Button>
+        )}
       </div>
       {filteredExpenses.length === 0 ? (
         <p className='text-muted-foreground text-sm'>No expenses for this selection.</p>
