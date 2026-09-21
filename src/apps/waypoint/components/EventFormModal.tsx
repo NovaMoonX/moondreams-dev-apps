@@ -9,7 +9,10 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import { fromLocalDateAndTimeInputValues } from '@/utils/dateInputUtils';
+import {
+  fromLocalDateAndTimeInputValues,
+  toLocalTimeInputValue,
+} from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type {
   ActivitySetting,
@@ -33,6 +36,7 @@ interface EventFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
+  event?: TimelineEvent;
   isSubmitting?: boolean;
   onSubmit: (
     event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
@@ -56,6 +60,7 @@ interface EventDraft {
   eventType: EventType;
   title: string;
   dayIndex: number;
+  endDayIndex: number;
   time: string;
   quickField: string;
   locationName: string;
@@ -67,22 +72,34 @@ function EventFormModal({
   isOpen,
   trip,
   memberOptions,
+  event,
   isSubmitting = false,
   onSubmit,
   onClose,
 }: EventFormModalProps) {
+  const initialDraft: EventDraft = {
+    eventType: event?.eventType ?? 'ACTIVITY',
+    title: event?.title ?? '',
+    dayIndex: event?.dayIndex ?? 0,
+    endDayIndex: event?.endDayIndex ?? event?.dayIndex ?? 0,
+    time: toLocalTimeInputValue(event?.startAt) || '09:00',
+    quickField:
+      event?.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
+        ? event.eventDetails.transitType
+        : event?.eventType === 'DINING' && event.eventDetails && 'mealType' in event.eventDetails
+          ? event.eventDetails.mealType
+          : event?.eventType === 'ACTIVITY' &&
+              event.eventDetails &&
+              'settings' in event.eventDetails
+            ? event.eventDetails.settings[0] ?? 'INDOOR'
+            : 'INDOOR',
+    locationName: event?.locationName ?? '',
+    address: event?.address ?? '',
+    assignedMemberIds: event?.assignedMemberIds ?? [],
+  };
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>({
-    eventType: 'ACTIVITY',
-    title: '',
-    dayIndex: 0,
-    time: '09:00',
-    quickField: 'INDOOR',
-    locationName: '',
-    address: '',
-    assignedMemberIds: [],
-  });
+  const [draft, setDraft] = useState<EventDraft>(initialDraft);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const updateDraft = (changes: Partial<EventDraft>) =>
@@ -120,22 +137,22 @@ function EventFormModal({
       await onSubmit({
         eventType: draft.eventType,
         dayIndex: draft.dayIndex,
-        endDayIndex: draft.dayIndex,
+        endDayIndex: Math.max(draft.dayIndex, draft.endDayIndex),
         title: draft.title,
         startAt,
-        endAt: null,
+        endAt: event?.endAt ?? null,
         locationName: draft.locationName,
         address: draft.address,
-        latitude: null,
-        longitude: null,
+        latitude: event?.latitude ?? null,
+        longitude: event?.longitude ?? null,
         eventDetails,
-        notes: null,
+        notes: event?.notes ?? null,
         assignedMemberIds: draft.assignedMemberIds,
       });
       setStep(1);
       setError(null);
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to add this event.'));
+      setError(getErrorMessage(submitError, 'Unable to save this event.'));
     }
   };
 
@@ -153,7 +170,7 @@ function EventFormModal({
         : activitySettingOptions;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Add timeline event'>
+    <Modal isOpen={isOpen} onClose={onClose} title={event ? 'Edit timeline event' : 'Add timeline event'}>
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>Step {step} of 2</p>
         {step === 1 ? (
@@ -191,6 +208,17 @@ function EventFormModal({
                 type='time'
                 value={draft.time}
                 onChange={(event) => updateDraft({ time: event.target.value })}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>End day</Label>
+              <Select
+                options={Array.from({ length: dayCount }, (_, index) => ({
+                  text: getDayLabel(trip.startDate, index),
+                  value: String(index),
+                }))}
+                value={String(draft.endDayIndex)}
+                onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
               />
             </div>
             <div className='flex justify-end gap-2'>
@@ -253,7 +281,7 @@ function EventFormModal({
                 Back
               </Button>
               <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
-                {isSubmitting ? 'Adding…' : 'Add event'}
+                {isSubmitting ? 'Saving…' : event ? 'Save changes' : 'Add event'}
               </Button>
             </div>
           </>

@@ -8,14 +8,21 @@ import {
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
-import { createEvent } from '@apps/waypoint/store/actions/eventActions';
+import {
+  createEvent,
+  deleteEvent,
+  updateEvent,
+} from '@apps/waypoint/store/actions/eventActions';
 import { useAppDispatch } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
+import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
+import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -26,7 +33,10 @@ interface TimelineSectionProps {
 export function TimelineSection({ trip, events, currentUserId }: TimelineSectionProps) {
   const dispatch = useAppDispatch();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState('all');
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const memberIds = Object.keys(trip.members);
@@ -35,6 +45,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
     label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
     value: uid,
   }));
+  const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const tabs = useMemo(
     () => [
       { value: 'all', label: 'All' },
@@ -57,7 +68,16 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
     return (
       <div className='space-y-3'>
         {visibleEvents.map((event) => (
-          <EventCard key={event.id} event={event} />
+          <EventCard
+            key={event.id}
+            event={event}
+            canEdit={canEdit}
+            onEdit={(selectedEvent) => {
+              setEditingEvent(selectedEvent);
+              setIsFormOpen(true);
+            }}
+            onDelete={(selectedEvent) => void handleDelete(selectedEvent)}
+          />
         ))}
       </div>
     );
@@ -68,10 +88,43 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   ) => {
     setIsSubmitting(true);
     try {
-      await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
+      if (editingEvent) {
+        await dispatch(
+          updateEvent({
+            uid: currentUserId,
+            trip,
+            eventId: editingEvent.id,
+            event: { ...editingEvent, ...event },
+          }),
+        ).unwrap();
+      } else {
+        await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
+      }
       setIsFormOpen(false);
+      setEditingEvent(undefined);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (event: TimelineEvent) => {
+    const confirmed = await confirm({
+      title: 'Delete timeline event',
+      message: `Are you sure you want to delete “${event.title}”? This cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await dispatch(deleteEvent({ uid: currentUserId, trip, eventId: event.id })).unwrap();
+    } catch (error) {
+      addToast({
+        title: 'Unable to delete event',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
     }
   };
 
@@ -97,7 +150,14 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
               </TabsTrigger>
             ))}
           </TabsList>
-          <Button type='button' className='mt-4 w-full' onClick={() => setIsFormOpen(true)}>
+          <Button
+            type='button'
+            className='mt-4 w-full'
+            onClick={() => {
+              setEditingEvent(undefined);
+              setIsFormOpen(true);
+            }}
+          >
             + Add Event
           </Button>
           <TabsContent value='all' className='pt-4'>
@@ -111,12 +171,17 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
         </Tabs>
       </section>
       <EventFormModal
+        key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}
         isOpen={isFormOpen}
         trip={trip}
         memberOptions={memberOptions}
+        event={editingEvent}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
-        onClose={() => setIsFormOpen(false)}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingEvent(undefined);
+        }}
       />
     </>
   );
