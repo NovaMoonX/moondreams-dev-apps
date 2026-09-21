@@ -112,6 +112,14 @@ regularly gets the shape right but the UX wrong:
 - Submit buttons disable until required fields are valid, rather than
   showing required-field asterisks (check `onDataChange` + `isValid` state
   in sibling form modals for the current convention).
+- **Modal/section titles avoid CRUD terminology** — a plain noun for the
+  thing being edited ("Expense", "Visit", "New cat"), not the database verb
+  ("Add Expense", "Edit Visit", "Create Clinic"); the same title applies
+  whether the modal is creating or editing. See `.github/copilot-instructions.md`'s
+  "Avoid CRUD terminology in headers" section — the verb still belongs on
+  the primary action button and on a destructive confirm dialog's title,
+  since there the reader needs it to understand the consequence of
+  clicking.
 - Optional secondary fields use a "+ Add X" reveal-link, not "(optional)" in
   the label.
 - A modal component that's always-mounted (visibility via an `isOpen` prop)

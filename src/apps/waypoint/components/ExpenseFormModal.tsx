@@ -226,7 +226,7 @@ function ExpenseFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Add expense'>
+    <Modal isOpen={isOpen} onClose={onClose} title='Expense'>
       <Form
         key={isOpen ? 'open' : 'closed'}
         id='waypoint-add-expense'

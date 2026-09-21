@@ -137,68 +137,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         ))}
       </div>
       <div className='space-y-2'>
-        <div
-          role='group'
-          aria-label='Filter by day'
-          className='flex flex-wrap gap-2'
-        >
-          {Array.from({ length: dayCount }, (_, index) => {
-            const value = String(index);
-            const isSelected = dayFilter.includes(value);
-
-            return (
-              <button
-                key={value}
-                type='button'
-                aria-pressed={isSelected}
-                onClick={() => toggleDayFilter(value)}
-              >
-                <Badge
-                  variant={isSelected ? 'primary' : 'muted'}
-                  outline={!isSelected}
-                >
-                  Day {index + 1}
-                </Badge>
-              </button>
-            );
-          })}
-          <button
-            type='button'
-            aria-pressed={dayFilter.includes('other')}
-            onClick={() => toggleDayFilter('other')}
-          >
-            <Badge
-              variant={dayFilter.includes('other') ? 'primary' : 'muted'}
-              outline={!dayFilter.includes('other')}
-            >
-              No specific day
-            </Badge>
-          </button>
-        </div>
-        <div
-          role='group'
-          aria-label='Filter by person'
-          className='flex flex-wrap items-center gap-2'
-        >
-          {memberIds.map((uid) => {
-            const isSelected = payerFilter.includes(uid);
-
-            return (
-              <button
-                key={uid}
-                type='button'
-                aria-pressed={isSelected}
-                onClick={() => togglePayerFilter(uid)}
-              >
-                <Badge
-                  variant={isSelected ? 'primary' : 'muted'}
-                  outline={!isSelected}
-                >
-                  {memberLabel(uid)}
-                </Badge>
-              </button>
-            );
-          })}
+        <div className='flex items-center justify-between'>
+          <span className='text-muted-foreground text-sm font-medium'>
+            Filter by
+          </span>
           {hasActiveFilters && (
             <Button
               type='button'
@@ -212,6 +154,79 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </Button>
           )}
         </div>
+        <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
+          <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
+            Days
+          </span>
+          <div
+            role='group'
+            aria-label='Filter by day'
+            className='flex flex-wrap gap-2'
+          >
+            {Array.from({ length: dayCount }, (_, index) => {
+              const value = String(index);
+              const isSelected = dayFilter.includes(value);
+
+              return (
+                <button
+                  key={value}
+                  type='button'
+                  aria-pressed={isSelected}
+                  onClick={() => toggleDayFilter(value)}
+                >
+                  <Badge
+                    variant={isSelected ? 'primary' : 'muted'}
+                    outline={!isSelected}
+                  >
+                    Day {index + 1}
+                  </Badge>
+                </button>
+              );
+            })}
+            <button
+              type='button'
+              aria-pressed={dayFilter.includes('other')}
+              onClick={() => toggleDayFilter('other')}
+            >
+              <Badge
+                variant={dayFilter.includes('other') ? 'primary' : 'muted'}
+                outline={!dayFilter.includes('other')}
+              >
+                No specific day
+              </Badge>
+            </button>
+          </div>
+        </div>
+        <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
+          <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
+            Member
+          </span>
+          <div
+            role='group'
+            aria-label='Filter by person'
+            className='flex flex-wrap items-center gap-2'
+          >
+            {memberIds.map((uid) => {
+              const isSelected = payerFilter.includes(uid);
+
+              return (
+                <button
+                  key={uid}
+                  type='button'
+                  aria-pressed={isSelected}
+                  onClick={() => togglePayerFilter(uid)}
+                >
+                  <Badge
+                    variant={isSelected ? 'primary' : 'muted'}
+                    outline={!isSelected}
+                  >
+                    {memberLabel(uid)}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
       {filteredExpenses.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
@@ -222,7 +237,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {filteredExpenses.map((expense) => (
             <li
               key={expense.id}
-              className='flex items-center justify-between gap-3 py-3'
+              className='flex flex-wrap items-center justify-between gap-3 py-3'
             >
               <div>
                 <p className='font-medium'>{expense.title}</p>

@@ -42,7 +42,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('pendingRequests')
     .doc(`${jamie.uid}_${TRIP_ID}`);
-  const expenseRef = tripRef.collection('expenses').doc('seed-expense-dinner');
+  const expensesCollection = tripRef.collection('expenses');
   const eventsCollection = tripRef.collection('events');
   const checklistCollection = tripRef.collection('checklist');
 
@@ -109,28 +109,93 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     requestedAt: context.now - 3_600_000,
   });
 
-  await expenseRef.set({
-    id: 'seed-expense-dinner',
-    tripId: TRIP_ID,
-    dayIndex: 1,
-    title: 'Dinner reservation',
-    amount: null,
-    amountMin: 80,
-    amountMax: 120,
-    currency: 'USD',
-    payerUid: alex.uid,
-    status: 'EXPECTED',
-    targetType: 'EVERYONE_CURRENT',
-    targetMemberIds: [alex.uid, taylor.uid],
-    splitAmounts: null,
-    paidMemberStatus: {
-      [alex.uid]: { isPaid: false, paidAt: null },
-      [taylor.uid]: { isPaid: false, paidAt: null },
+  const expenseMemberIds = [alex.uid, taylor.uid];
+  const unpaidMemberStatus = Object.fromEntries(
+    expenseMemberIds.map((uid) => [uid, { isPaid: false, paidAt: null }]),
+  );
+  const seedExpenses: Array<{
+    id: string;
+    dayIndex: number | null;
+    title: string;
+    amount: number | null;
+    amountMin: number | null;
+    amountMax: number | null;
+    payerUid: string;
+    status: 'PAID' | 'EXPECTED';
+  }> = [
+    {
+      id: 'seed-expense-dinner',
+      dayIndex: 1,
+      title: 'Dinner reservation',
+      amount: null,
+      amountMin: 80,
+      amountMax: 120,
+      payerUid: alex.uid,
+      status: 'EXPECTED',
     },
-    createdBy: alex.uid,
-    createdAt: context.now,
-    lastEditedAt: context.now,
-  });
+    {
+      id: 'seed-expense-parking',
+      dayIndex: 0,
+      title: 'Airport parking',
+      amount: 18,
+      amountMin: null,
+      amountMax: null,
+      payerUid: taylor.uid,
+      status: 'PAID',
+    },
+    {
+      id: 'seed-expense-hike-permits',
+      dayIndex: 1,
+      title: 'Discovery Park parking permit',
+      amount: 12,
+      amountMin: null,
+      amountMax: null,
+      payerUid: alex.uid,
+      status: 'PAID',
+    },
+    {
+      id: 'seed-expense-ferry',
+      dayIndex: 2,
+      title: 'Bainbridge ferry tickets',
+      amount: null,
+      amountMin: 30,
+      amountMax: 45,
+      payerUid: taylor.uid,
+      status: 'EXPECTED',
+    },
+    {
+      id: 'seed-expense-souvenirs',
+      dayIndex: null,
+      title: 'Souvenirs',
+      amount: 25,
+      amountMin: null,
+      amountMax: null,
+      payerUid: alex.uid,
+      status: 'PAID',
+    },
+  ];
+
+  for (const seedExpense of seedExpenses) {
+    await expensesCollection.doc(seedExpense.id).set({
+      id: seedExpense.id,
+      tripId: TRIP_ID,
+      dayIndex: seedExpense.dayIndex,
+      title: seedExpense.title,
+      amount: seedExpense.amount,
+      amountMin: seedExpense.amountMin,
+      amountMax: seedExpense.amountMax,
+      currency: 'USD',
+      payerUid: seedExpense.payerUid,
+      status: seedExpense.status,
+      targetType: 'EVERYONE_CURRENT',
+      targetMemberIds: expenseMemberIds,
+      splitAmounts: null,
+      paidMemberStatus: unpaidMemberStatus,
+      createdBy: alex.uid,
+      createdAt: context.now,
+      lastEditedAt: context.now,
+    });
+  }
 
   await eventsCollection.doc('seed-waypoint-flight').set({
     id: 'seed-waypoint-flight',
@@ -248,6 +313,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 12,
+    firestoreDocuments: 16,
   };
 }

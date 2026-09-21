@@ -153,7 +153,7 @@ function EventFormModal({
         : activitySettingOptions;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Add timeline event'>
+    <Modal isOpen={isOpen} onClose={onClose} title='Timeline event'>
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>Step {step} of 2</p>
         {step === 1 ? (
