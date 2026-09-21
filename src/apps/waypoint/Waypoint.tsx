@@ -24,6 +24,7 @@ import NavButton from '@/ui/NavButton';
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
+import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
@@ -36,8 +37,7 @@ import {
   setTripArchived,
 } from '@apps/waypoint/store/actions/tripActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
-import { selectTrips } from '@apps/waypoint/store/selectors';
-import { selectTimelineEvents } from '@apps/waypoint/store/selectors';
+import { selectTrips, selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
@@ -206,6 +206,7 @@ function Waypoint() {
             <TabsList>
               <TabsTrigger value='overview'>Timeline</TabsTrigger>
               <TabsTrigger value='members'>Members</TabsTrigger>
+              <TabsTrigger value='expenses'>Expenses</TabsTrigger>
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
@@ -217,6 +218,9 @@ function Waypoint() {
             </TabsContent>
             <TabsContent value='members'>
               <MembersSection trip={selectedTrip} currentUserId={user.uid} />
+            </TabsContent>
+            <TabsContent value='expenses'>
+              <ExpensesSection trip={selectedTrip} currentUserId={user.uid} />
             </TabsContent>
             <TabsContent value='checklist'>
               <ChecklistSection trip={selectedTrip} currentUserId={user.uid} />

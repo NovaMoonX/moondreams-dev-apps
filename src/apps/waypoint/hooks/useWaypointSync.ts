@@ -7,6 +7,7 @@ import {
   startTripPendingRequestsListener,
 } from '../store/listeners/pendingRequestsListeners';
 import { startTripListener } from '../store/listeners/tripListeners';
+import { startTripExpensesListener } from '../store/listeners/expenseListeners';
 import { startTripEventsListener } from '../store/listeners/eventListeners';
 import { startChecklistListener } from '../store/listeners/checklistListeners';
 import {
@@ -14,6 +15,7 @@ import {
   setTripPendingRequests,
 } from '../store/slices/pendingRequestsSlice';
 import { setTrips } from '../store/slices/tripSlice';
+import { clearExpenses, setExpenses } from '../store/slices/expensesSlice';
 import { clearEvents, setEvents } from '../store/slices/eventsSlice';
 import { setChecklist } from '../store/slices/checklistSlice';
 
@@ -58,6 +60,17 @@ export function useWaypointSync(
       dispatch(setTripPendingRequests(requests));
     });
   }, [dispatch, tripId, isTripAdmin]);
+
+  useEffect(() => {
+    if (!tripId) {
+      dispatch(clearExpenses());
+      return;
+    }
+
+    return startTripExpensesListener(tripId, (expenses) => {
+      dispatch(setExpenses({ tripId, expenses }));
+    });
+  }, [dispatch, tripId]);
 
   useEffect(() => {
     if (!tripId) {

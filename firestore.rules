@@ -1661,6 +1661,72 @@ service cloud.firestore {
         && isTimestampNumber(request.resource.data.plannedDepartureAt);
     }
 
+    match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {
+      function isTripExpenseMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      function isTripExpenseEditor() {
+        return isTripExpenseMember()
+          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      function isTripExpenseValid(data) {
+        return data.keys().hasOnly([
+            'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
+            'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'targetType',
+            'targetMemberIds', 'splitAmounts', 'paidMemberStatus',
+            'createdBy', 'createdAt', 'lastEditedAt'
+          ])
+          && data.id == expenseId
+          && data.tripId == tripId
+          && (data.dayIndex == null || data.dayIndex is int)
+          && isNonEmptyString(data.title)
+          && (data.amount == null || data.amount is number)
+          && (data.amountMin == null || data.amountMin is number)
+          && (data.amountMax == null || data.amountMax is number)
+          && ((data.amount != null && data.amountMin == null && data.amountMax == null)
+            || (data.amount == null && data.amountMin != null && data.amountMax != null
+              && data.amountMax >= data.amountMin))
+          && (data.paidAmount == null || (data.paidAmount is number && data.amount == null))
+          && isNonEmptyString(data.currency)
+          && data.payerUid is string
+          && data.payerUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
+          && data.status in ['PAID', 'EXPECTED']
+          && data.targetType in [
+            'EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE', 'JUST_ME', 'SPECIFIC_MEMBERS'
+          ]
+          && data.targetMemberIds is list
+          && (data.splitAmounts == null || data.splitAmounts is map)
+          && data.paidMemberStatus is map
+          && data.createdBy is string
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      allow read: if isTripExpenseMember();
+      allow create: if isTripExpenseEditor()
+        && isTripExpenseValid(request.resource.data)
+        && request.resource.data.targetType == 'EVERYONE_CURRENT'
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isTripExpenseEditor()
+        && isTripExpenseValid(request.resource.data)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow update: if isTripExpenseMember()
+        && resource.data.paidMemberStatus.keys().hasAll([request.auth.uid])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
+        && request.resource.data.paidMemberStatus.diff(resource.data.paidMemberStatus)
+          .affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
+        && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null
+          || isTimestampNumber(request.resource.data.paidMemberStatus[request.auth.uid].paidAt));
+      allow delete: if false;
+    }
+
     match /apps/waypoint/pendingRequests/{requestId} {
       function requestUid() {
         return requestId.split('_')[0];

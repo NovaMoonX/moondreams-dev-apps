@@ -90,7 +90,7 @@ function CreateTripModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Create a trip'>
+    <Modal isOpen={isOpen} onClose={onClose} title='New trip'>
       <Form
         id='waypoint-create-trip'
         form={fields}
