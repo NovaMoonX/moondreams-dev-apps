@@ -128,7 +128,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     title: 'Book the first-night dinner',
     category: 'BOOKINGS',
     customCategoryLabel: null,
-    assignedToUids: [alex.uid, jamie.uid],
+    assignedToUids: [alex.uid, taylor.uid],
     isCompleted: true,
     markedCompletedByUid: alex.uid,
     markedCompletedAt: context.now - 1_800_000,
@@ -139,6 +139,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 5,
+    firestoreDocuments: 7,
   };
 }

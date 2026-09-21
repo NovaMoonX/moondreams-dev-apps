@@ -11,8 +11,8 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_LABELS,
-  type ChecklistCategory,
-} from '@apps/waypoint/types';
+} from '@apps/waypoint/constants';
+import type { ChecklistCategory } from '@apps/waypoint/types';
 
 interface ChecklistFormData {
   title: string;
@@ -36,6 +36,13 @@ interface ChecklistItemFormModalProps {
 
 const { input, select, checkboxGroup } = FormFactories;
 
+const INITIAL_FORM_DATA: ChecklistFormData = {
+  title: '',
+  category: 'DOCUMENTS',
+  customCategoryLabel: '',
+  assignedToUids: [],
+};
+
 export default function ChecklistItemFormModal({
   isOpen,
   memberOptions,
@@ -43,13 +50,12 @@ export default function ChecklistItemFormModal({
   onSubmit,
   onClose,
 }: ChecklistItemFormModalProps) {
-  const [formData, setFormData] = useState<ChecklistFormData>({
-    title: '',
-    category: 'DOCUMENTS',
-    customCategoryLabel: '',
-    assignedToUids: [],
-  });
+  const [formData, setFormData] = useState<ChecklistFormData>(INITIAL_FORM_DATA);
   const [error, setError] = useState<string | null>(null);
+
+  const isFormComplete =
+    formData.title.trim() !== '' &&
+    (formData.category !== 'OTHER' || formData.customCategoryLabel.trim() !== '');
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
@@ -127,12 +133,7 @@ export default function ChecklistItemFormModal({
       <Form
         id='waypoint-checklist-item'
         form={fields}
-        initialData={{
-          title: '',
-          category: 'DOCUMENTS',
-          customCategoryLabel: '',
-          assignedToUids: [],
-        }}
+        initialData={INITIAL_FORM_DATA}
         columns={1}
         onDataChange={(data) => setFormData(data as ChecklistFormData)}
         onSubmit={(data) => {
@@ -143,7 +144,11 @@ export default function ChecklistItemFormModal({
             <Button type='button' variant='secondary' onClick={onClose}>
               Cancel
             </Button>
-            <Button type='submit' loading={isSubmitting} disabled={isSubmitting}>
+            <Button
+              type='submit'
+              loading={isSubmitting}
+              disabled={isSubmitting || !isFormComplete}
+            >
               {isSubmitting ? 'Adding…' : 'Add item'}
             </Button>
           </div>

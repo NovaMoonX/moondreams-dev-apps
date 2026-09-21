@@ -12,16 +12,17 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import UserAvatar from '@/ui/UserAvatar';
 import FormSection from '@/ui/FormSection';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
-import {
-  CHECKLIST_CATEGORY_LABELS,
-  type ChecklistCategory,
-  type ChecklistItem,
-  type TripSpace,
+import { CHECKLIST_CATEGORY_LABELS } from '@apps/waypoint/constants';
+import type {
+  ChecklistCategory,
+  ChecklistItem,
+  TripSpace,
 } from '@apps/waypoint/types';
 import {
   createChecklistItem,
   toggleChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
+import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface ChecklistSectionProps {
   trip: TripSpace;
@@ -47,8 +48,10 @@ export default function ChecklistSection({
   const items = useAppSelector((state) => state.waypoint.checklist.items);
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
-  const role = trip.members[currentUserId]?.role;
-  const canEdit = role === 'ADMIN' || role === 'EDITOR';
+  const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+
+  const mayToggle = (item: ChecklistItem) =>
+    canEdit || item.assignedToUids.includes(currentUserId);
 
   const visibleItems = useMemo(
     () =>
@@ -88,11 +91,7 @@ export default function ChecklistSection({
     items.length === 0 ? 0 : Math.round((completedCount / items.length) * 100);
 
   const handleToggle = async (item: ChecklistItem, isCompleted: boolean) => {
-    const mayToggle =
-      canEdit ||
-      (role === 'COMMENTER' && item.assignedToUids.includes(currentUserId));
-
-    if (!mayToggle) {
+    if (!mayToggle(item)) {
       return;
     }
 
@@ -186,10 +185,6 @@ export default function ChecklistSection({
                   const assignedUsers = item.assignedToUids
                     .map((uid) => members[uid])
                     .filter(Boolean);
-                  const mayToggle =
-                    canEdit ||
-                    (role === 'COMMENTER' &&
-                      item.assignedToUids.includes(currentUserId));
 
                   return (
                     <li
@@ -199,7 +194,7 @@ export default function ChecklistSection({
                       <div className='flex min-w-0 items-center gap-3'>
                         <Checkbox
                           checked={item.isCompleted}
-                          disabled={!mayToggle}
+                          disabled={!mayToggle(item)}
                           onCheckedChange={(checked) =>
                             void handleToggle(item, checked)
                           }

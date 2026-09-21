@@ -1544,9 +1544,8 @@ service cloud.firestore {
             && request.resource.data.createdAt == resource.data.createdAt;
         }
 
-        function isChecklistCommenterToggleValid() {
+        function isChecklistAssignedToggleValid() {
           return isChecklistMember()
-            && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role == 'COMMENTER'
             && request.auth.uid in resource.data.assignedToUids
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'isCompleted',
@@ -1573,7 +1572,7 @@ service cloud.firestore {
           isChecklistEditor()
           && isChecklistShapeValid(request.resource.data)
           && isChecklistImmutableFieldsValid()
-        ) || isChecklistCommenterToggleValid();
+        ) || isChecklistAssignedToggleValid();
         allow delete: if isChecklistEditor();
       }
     }

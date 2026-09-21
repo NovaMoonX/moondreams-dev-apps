@@ -6,22 +6,6 @@ export type ChecklistCategory =
   | 'LOGISTICS'
   | 'OTHER';
 
-export const CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
-  'DOCUMENTS',
-  'PACKING',
-  'BOOKINGS',
-  'LOGISTICS',
-  'OTHER',
-];
-
-export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
-  DOCUMENTS: 'Documents',
-  PACKING: 'Packing',
-  BOOKINGS: 'Bookings',
-  LOGISTICS: 'Logistics',
-  OTHER: 'Other',
-};
-
 export interface TripMember {
   uid: string;
   role: UserRole;
