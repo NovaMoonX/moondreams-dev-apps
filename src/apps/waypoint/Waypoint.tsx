@@ -78,6 +78,7 @@ function Waypoint() {
     title: string;
     startDate: number;
     endDate: number;
+    coverImageFile: File | null;
   }) => {
     if (!user?.uid) {
       return;
@@ -196,6 +197,13 @@ function Waypoint() {
             <ChevronLeft /> Back to My Trips
           </Button>
           <div>
+            {selectedTrip.coverImageUrl && (
+              <img
+                src={selectedTrip.coverImageUrl}
+                alt={`${selectedTrip.title} cover`}
+                className='mb-4 h-48 w-full rounded-lg object-cover'
+              />
+            )}
             <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
             <p className='text-muted-foreground mt-1'>
               {formatDateTime(selectedTrip.startDate)} –{' '}

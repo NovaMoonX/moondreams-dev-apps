@@ -7,6 +7,8 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import ImageUploadField from '@/components/forms/ImageUploadField';
+import { useImageUpload } from '@/hooks/useImageUpload';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -18,7 +20,7 @@ interface EditTripFormData {
   title: string;
   startDate: string;
   endDate: string;
-  coverImageUrl: string;
+  coverImageFile: File | null;
   defaultCurrency: string;
 }
 
@@ -30,7 +32,7 @@ interface EditTripModalProps {
   onClose: () => void;
 }
 
-const { input } = FormFactories;
+const { custom, input } = FormFactories;
 
 function EditTripModal({
   isOpen,
@@ -41,6 +43,7 @@ function EditTripModal({
 }: EditTripModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<EditTripFormData | null>(null);
+  const coverUpload = useImageUpload(trip?.coverImageUrl ?? null);
 
   const fields = useMemo(
     () => [
@@ -60,11 +63,31 @@ function EditTripModal({
         label: 'Estimated end date',
         variant: 'outline',
       }),
-      input({
-        name: 'coverImageUrl',
-        label: 'Cover photo URL',
-        placeholder: 'https://example.com/trip-cover.jpg',
-        variant: 'outline',
+      custom({
+        name: 'coverImageFile',
+        label: 'Cover photo',
+        renderComponent: () => (
+          <ImageUploadField
+            previewUrl={coverUpload.previewUrl}
+            error={coverUpload.error}
+            disabled={isSubmitting}
+            hideAvatar
+            onSelect={(file) => {
+              coverUpload.pick(file);
+              setFormData((current) => ({
+                ...(current ?? initialData),
+                coverImageFile: file,
+              }));
+            }}
+            onRemove={() => {
+              coverUpload.clear();
+              setFormData((current) => ({
+                ...(current ?? initialData),
+                coverImageFile: null,
+              }));
+            }}
+          />
+        ),
       }),
       input({
         name: 'defaultCurrency',
@@ -73,7 +96,7 @@ function EditTripModal({
         variant: 'outline',
       }),
     ],
-    [],
+    [coverUpload, isSubmitting],
   );
 
   if (!trip) {
@@ -84,7 +107,7 @@ function EditTripModal({
     title: trip.title,
     startDate: toDateInputValue(trip.startDate),
     endDate: toDateInputValue(trip.endDate),
-    coverImageUrl: trip.coverImageUrl ?? '',
+    coverImageFile: null,
     defaultCurrency: trip.defaultCurrency ?? '',
   };
   const currentData = formData ?? initialData;
@@ -110,7 +133,9 @@ function EditTripModal({
         title,
         startDate,
         endDate,
-        coverImageUrl: data.coverImageUrl.trim() || null,
+        coverImageUrl: trip.coverImageUrl,
+        coverImageFile: data.coverImageFile,
+        coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
         defaultCurrency: data.defaultCurrency.trim() || null,
       });
     } catch (submitError) {

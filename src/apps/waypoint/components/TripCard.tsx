@@ -26,6 +26,13 @@ function TripCard({
 
   return (
     <div className='border-border bg-card rounded-lg border p-4'>
+      {trip.coverImageUrl && (
+        <img
+          src={trip.coverImageUrl}
+          alt={`${trip.title} cover`}
+          className='mb-4 h-40 w-full rounded-md object-cover'
+        />
+      )}
       <div className='flex items-start justify-between gap-3'>
         <div>
           <div className='flex items-center gap-2'>
