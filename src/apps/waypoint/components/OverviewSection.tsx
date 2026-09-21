@@ -27,11 +27,11 @@ function OverviewSection({
       {shouldShowReminder && (
         <Callout
           variant='info'
-          title='Add today&apos;s photos'
+          title="Add today's photos"
           description={
             trip.sharedAlbumUrl
-              ? 'The day is nearly over. Add today&apos;s photos to the shared album.'
-              : 'The day is nearly over. Add a shared album link so everyone can upload today&apos;s photos.'
+              ? "The day is nearly over. Add today's photos to the shared album."
+              : "The day is nearly over. Add a shared album link so everyone can upload today's photos."
           }
         />
       )}

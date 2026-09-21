@@ -28,18 +28,22 @@ function SharedAlbumLinkCard({
     trip.members[currentUserId]?.role === 'EDITOR';
   const canSet = trip.sharedAlbumUrl === null || canChangeExisting;
 
-  const handleSave = async () => {
+  const saveUrl = async (nextUrl: string) => {
     setIsSaving(true);
     try {
       await dispatch(
         setSharedAlbumLink({
           uid: currentUserId,
           trip,
-          url,
+          url: nextUrl,
         }),
       ).unwrap();
       setIsEditing(false);
-      addToast({ title: 'Shared album link saved.' });
+      addToast({
+        title: nextUrl.trim()
+          ? 'Shared album link saved.'
+          : 'Shared album link removed.',
+      });
     } catch (error) {
       addToast({
         title: 'Unable to save album link',
@@ -50,6 +54,9 @@ function SharedAlbumLinkCard({
       setIsSaving(false);
     }
   };
+
+  const handleSave = () => saveUrl(url);
+  const handleClear = () => saveUrl('');
 
   return (
     <section className='border-border bg-card rounded-lg border p-4'>
@@ -82,7 +89,11 @@ function SharedAlbumLinkCard({
             onChange={(event) => setUrl(event.target.value)}
           />
           <div className='flex gap-2 pt-1'>
-            <Button type='button' loading={isSaving} onClick={() => void handleSave()}>
+            <Button
+              type='button'
+              loading={isSaving}
+              onClick={() => void handleSave()}
+            >
               {isSaving ? 'Saving…' : 'Save link'}
             </Button>
             <Button
@@ -96,6 +107,16 @@ function SharedAlbumLinkCard({
             >
               Cancel
             </Button>
+            {trip.sharedAlbumUrl && (
+              <Button
+                type='button'
+                variant='link'
+                disabled={isSaving}
+                onClick={() => void handleClear()}
+              >
+                Clear link
+              </Button>
+            )}
           </div>
         </div>
       ) : trip.sharedAlbumUrl ? (
