@@ -20,6 +20,7 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
     startDate: values.startDate,
     endDate: values.endDate,
     defaultCurrency: null,
+    isArchived: false,
     members: {
       [values.createdBy]: {
         uid: values.createdBy,

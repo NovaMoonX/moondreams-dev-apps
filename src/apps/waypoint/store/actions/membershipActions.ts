@@ -181,7 +181,6 @@ export const declineJoinRequest = createAsyncThunk<
   },
 );
 
-// Lets a requester pull back a request they sent before an Admin acts on it.
 export const cancelJoinRequest = createAsyncThunk<
   { uid: string; tripId: string },
   { uid: string; tripId: string },

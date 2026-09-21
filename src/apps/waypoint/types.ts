@@ -28,6 +28,7 @@ export interface TripSpace {
   startDate: number;
   endDate: number;
   defaultCurrency: string | null;
+  isArchived: boolean;
   members: Record<string, TripMember>;
   inviteCode: string | null;
   createdBy: string;
