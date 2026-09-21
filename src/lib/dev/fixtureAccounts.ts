@@ -35,6 +35,6 @@ export const FIXTURE_USERS = {
     email: 'taylor@example.test',
     displayName: 'Taylor Brooks',
     label: 'Taylor',
-    apps: ['Nine Lives'],
+    apps: ['Nine Lives', 'Waypoint'],
   },
 } satisfies Record<string, FixtureAccount>;

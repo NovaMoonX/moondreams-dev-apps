@@ -11,11 +11,11 @@ import {
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import {
-  ASSIGNABLE_MEMBER_ROLES,
-  type TripJoinRequest,
-  type TripSpace,
-  type UserRole,
+import { ASSIGNABLE_MEMBER_ROLES } from '@apps/waypoint/constants';
+import type {
+  TripJoinRequest,
+  TripSpace,
+  UserRole,
 } from '@apps/waypoint/types';
 import { TRIP_COLLECTION_PATH } from '@apps/waypoint/security';
 import {

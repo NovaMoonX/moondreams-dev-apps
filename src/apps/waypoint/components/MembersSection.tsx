@@ -6,11 +6,8 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch } from '@/store';
 import UserAvatar from '@/ui/UserAvatar';
 import { getErrorMessage } from '@/utils';
-import {
-  MEMBER_ROLE_LABELS,
-  type TripSpace,
-  type UserRole,
-} from '@apps/waypoint/types';
+import { MEMBER_ROLE_LABELS } from '@apps/waypoint/constants';
+import type { TripSpace, UserRole } from '@apps/waypoint/types';
 import {
   changeRole,
   removeMember,
@@ -106,8 +103,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
                   <span className='font-medium'>{displayName}</span>
                 </div>
                 <div className='flex items-center gap-2'>
-                  <MemberRoleBadge role={trip.members[memberId].role} />
-                  {canChangeRole(trip, currentUserId, memberId) && (
+                  {canChangeRole(trip, currentUserId, memberId) ? (
                     <Select
                       size='sm'
                       options={roleOptions}
@@ -118,6 +114,8 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
                       }
                       aria-label={`Role for ${displayName}`}
                     />
+                  ) : (
+                    <MemberRoleBadge role={trip.members[memberId].role} />
                   )}
                   {canRemoveMembers(trip, currentUserId, memberId) && (
                     <Button

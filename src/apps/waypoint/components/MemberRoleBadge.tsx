@@ -1,6 +1,7 @@
 import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
-import { MEMBER_ROLE_LABELS, type UserRole } from '@apps/waypoint/types';
+import { MEMBER_ROLE_LABELS } from '@apps/waypoint/constants';
+import type { UserRole } from '@apps/waypoint/types';
 
 interface MemberRoleBadgeProps {
   role: UserRole;
