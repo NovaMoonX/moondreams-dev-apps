@@ -13,6 +13,7 @@ const ARCHIVED_INVITE_CODE = 'PNW2025';
 export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
   const jamie = FIXTURE_USERS.partnerTwo;
+  const taylor = FIXTURE_USERS.nineLivesCaretaker;
   const joinedAt = context.now - 86_400_000;
   const tripTitle = 'Pacific Northwest Weekend';
   const archivedTripTitle = 'Last Year’s Coast Trip';
@@ -54,6 +55,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       [alex.uid]: {
         uid: alex.uid,
         role: 'ADMIN',
+        joinedAt,
+      },
+      [taylor.uid]: {
+        uid: taylor.uid,
+        role: 'EDITOR',
         joinedAt,
       },
     },

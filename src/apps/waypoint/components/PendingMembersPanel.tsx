@@ -11,9 +11,8 @@ import { formatDateTime, getErrorMessage } from '@/utils';
 import {
   ASSIGNABLE_MEMBER_ROLES,
   MEMBER_ROLE_LABELS,
-  type TripJoinRequest,
-  type UserRole,
-} from '@apps/waypoint/types';
+} from '@apps/waypoint/constants';
+import type { TripJoinRequest, UserRole } from '@apps/waypoint/types';
 import {
   approveJoinRequest,
   declineJoinRequest,
