@@ -17,7 +17,7 @@ export const createEvent = createAsyncThunk<
   TimelineEvent,
   CreateEventInput,
   { rejectValue: string }
->('waypoint/events/create', async ({ uid, trip, event }, { dispatch, rejectWithValue }) => {
+>('waypoint/events/create', async ({ uid, trip, event }, { rejectWithValue }) => {
   if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
     return rejectWithValue('You do not have permission to add timeline events.');
   }

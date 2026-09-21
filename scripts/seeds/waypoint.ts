@@ -110,7 +110,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   await eventRef.set({
     id: 'seed-waypoint-dinner',
     tripId: TRIP_ID,
-    eventType: 'MEAL',
+    eventType: 'DINING',
     dayIndex: 0,
     endDayIndex: 0,
     title: 'Dinner at Pike Place',

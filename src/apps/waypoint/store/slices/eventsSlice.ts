@@ -24,6 +24,14 @@ export const eventsSlice = createSlice({
       state.items = action.payload.events;
       state.loaded = true;
     },
+    upsertEvent(state, action: PayloadAction<TimelineEvent>) {
+      const index = state.items.findIndex((event) => event.id === action.payload.id);
+      if (index >= 0) {
+        state.items[index] = action.payload;
+      } else {
+        state.items.push(action.payload);
+      }
+    },
     clearEvents: () => initialState,
   },
   extraReducers: (builder) => {
@@ -31,7 +39,7 @@ export const eventsSlice = createSlice({
   },
 });
 
-export const { setEvents, clearEvents } = eventsSlice.actions;
+export const { setEvents, upsertEvent, clearEvents } = eventsSlice.actions;
 export const eventsReducer = eventsSlice.reducer;
 
 export default eventsReducer;

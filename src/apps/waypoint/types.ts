@@ -27,10 +27,18 @@ export interface TripJoinRequest {
   requestedAt: number;
 }
 
-export type EventType = 'TRAVEL' | 'MEAL' | 'ACTIVITY' | 'FREE_TIME';
-export type TransitType = 'FLIGHT' | 'DRIVE' | 'TRAIN' | 'BUS' | 'FERRY' | 'WALK';
+export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME';
+export type TransitType =
+  | 'FLIGHT'
+  | 'DRIVE'
+  | 'FERRY'
+  | 'TRAIN'
+  | 'WALK'
+  | 'BIKE'
+  | 'SCOOTER'
+  | 'OTHER';
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
-export type ActivitySetting = 'INDOOR' | 'OUTDOOR' | 'MIXED';
+export type ActivitySetting = 'INDOOR' | 'OUTDOOR';
 
 export interface TravelEventDetails {
   transitType: TransitType;

@@ -1522,7 +1522,7 @@ service cloud.firestore {
           ])
         && request.resource.data.id == eventId
         && request.resource.data.tripId == tripId
-        && request.resource.data.eventType in ['TRAVEL', 'MEAL', 'ACTIVITY', 'FREE_TIME']
+        && request.resource.data.eventType in ['TRAVEL', 'DINING', 'ACTIVITY', 'FREE_TIME']
         && request.resource.data.dayIndex is int
         && request.resource.data.endDayIndex is int
         && request.resource.data.title is string

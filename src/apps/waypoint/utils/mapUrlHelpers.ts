@@ -6,6 +6,9 @@ interface MapLocation {
 }
 
 function isApplePlatform() {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
   return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
@@ -22,11 +25,13 @@ export function getMapNavigationUrl(location: MapLocation) {
       : encodeURIComponent(query);
 
   if (isApplePlatform()) {
-    return `https://maps.apple.com/?${location.latitude !== null && location.longitude !== null ? `ll=${destination}&q=${encodeURIComponent(query)}` : `q=${destination}`}`;
+    return `maps://maps.apple.com/?${location.latitude !== null && location.longitude !== null ? `ll=${destination}&q=${encodeURIComponent(query)}` : `q=${destination}`}`;
   }
 
-  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+  return `https://maps.google.com/?q=${destination}`;
 }
+
+export const getNavigationUrl = getMapNavigationUrl;
 
 export function openMapNavigation(location: MapLocation) {
   const url = getMapNavigationUrl(location);

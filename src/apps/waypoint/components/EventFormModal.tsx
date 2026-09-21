@@ -20,6 +20,12 @@ import type {
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
+import {
+  ACTIVITY_SETTING_LABELS,
+  EVENT_TYPE_LABELS,
+  MEAL_TYPE_LABELS,
+  TRANSIT_TYPE_LABELS,
+} from '@apps/waypoint/constants';
 import { getDayInputValue, getDayLabel, getTripDayCount } from '@apps/waypoint/utils/dateUtils';
 
 interface EventFormModalProps {
@@ -32,31 +38,10 @@ interface EventFormModalProps {
   onClose: () => void;
 }
 
-const EVENT_TYPES = [
-  { text: 'Travel', value: 'TRAVEL' },
-  { text: 'Meal', value: 'MEAL' },
-  { text: 'Activity', value: 'ACTIVITY' },
-  { text: 'Free time', value: 'FREE_TIME' },
-];
-const TRANSIT_TYPES = [
-  { text: 'Flight', value: 'FLIGHT' },
-  { text: 'Drive', value: 'DRIVE' },
-  { text: 'Train', value: 'TRAIN' },
-  { text: 'Bus', value: 'BUS' },
-  { text: 'Ferry', value: 'FERRY' },
-  { text: 'Walk', value: 'WALK' },
-];
-const MEAL_TYPES = [
-  { text: 'Breakfast', value: 'BREAKFAST' },
-  { text: 'Lunch', value: 'LUNCH' },
-  { text: 'Dinner', value: 'DINNER' },
-  { text: 'Snack', value: 'SNACK' },
-];
-const SETTINGS = [
-  { text: 'Indoor', value: 'INDOOR' },
-  { text: 'Outdoor', value: 'OUTDOOR' },
-  { text: 'Mixed', value: 'MIXED' },
-];
+const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(([value, text]) => ({ value, text }));
+const transitTypeOptions = Object.entries(TRANSIT_TYPE_LABELS).map(([value, text]) => ({ value, text }));
+const mealTypeOptions = Object.entries(MEAL_TYPE_LABELS).map(([value, text]) => ({ value, text }));
+const activitySettingOptions = Object.entries(ACTIVITY_SETTING_LABELS).map(([value, text]) => ({ value, text }));
 
 interface EventDraft {
   eventType: EventType;
@@ -114,7 +99,7 @@ function EventFormModal({
     let eventDetails: EventDetails | null = null;
     if (draft.eventType === 'TRAVEL') {
       eventDetails = { transitType: draft.quickField as TransitType };
-    } else if (draft.eventType === 'MEAL') {
+    } else if (draft.eventType === 'DINING') {
       eventDetails = { mealType: draft.quickField as MealType };
     } else if (draft.eventType === 'ACTIVITY') {
       eventDetails = { settings: [draft.quickField as ActivitySetting] };
@@ -148,15 +133,15 @@ function EventFormModal({
   const quickLabel =
     draft.eventType === 'TRAVEL'
       ? 'Transit type'
-      : draft.eventType === 'MEAL'
+      : draft.eventType === 'DINING'
         ? 'Meal type'
         : 'Setting';
   const quickOptions =
     draft.eventType === 'TRAVEL'
-      ? TRANSIT_TYPES
-      : draft.eventType === 'MEAL'
-        ? MEAL_TYPES
-        : SETTINGS;
+      ? transitTypeOptions
+      : draft.eventType === 'DINING'
+        ? mealTypeOptions
+        : activitySettingOptions;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Add timeline event'>
@@ -166,7 +151,7 @@ function EventFormModal({
           <>
             <Select
               label='Event type'
-              options={EVENT_TYPES}
+              options={eventTypeOptions}
               value={draft.eventType}
               onChange={(value) => updateDraft({ eventType: value as EventType })}
             />
