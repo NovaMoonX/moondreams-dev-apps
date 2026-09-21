@@ -27,6 +27,7 @@ import MembersSection from '@apps/waypoint/components/MembersSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
+import StaysSection from '@apps/waypoint/components/StaysSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
@@ -207,6 +208,7 @@ function Waypoint() {
               <TabsTrigger value='overview'>Timeline</TabsTrigger>
               <TabsTrigger value='members'>Members</TabsTrigger>
               <TabsTrigger value='expenses'>Expenses</TabsTrigger>
+              <TabsTrigger value='stays'>Stays</TabsTrigger>
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
@@ -221,6 +223,9 @@ function Waypoint() {
             </TabsContent>
             <TabsContent value='expenses'>
               <ExpensesSection trip={selectedTrip} currentUserId={user.uid} />
+            </TabsContent>
+            <TabsContent value='stays'>
+              <StaysSection trip={selectedTrip} currentUserId={user.uid} />
             </TabsContent>
             <TabsContent value='checklist'>
               <ChecklistSection trip={selectedTrip} currentUserId={user.uid} />

@@ -1,5 +1,5 @@
 import type { RootState } from '@/store';
-import type { TripExpense } from '@apps/waypoint/types';
+import type { Stay, TripExpense } from '@apps/waypoint/types';
 
 export const selectTrips = (state: RootState) => state.waypoint.trip.items;
 
@@ -63,6 +63,25 @@ export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals =>
   computeExpenseTotals(state.waypoint.expenses.items);
 
 export const selectTimelineEvents = (state: RootState) => state.waypoint.events.items;
+
+export const selectStays = (state: RootState) => state.waypoint.stays.items;
+
+export const selectActiveStaysForDay =
+  (dayIndex: number) => (state: RootState): Stay[] => {
+    const trip = state.waypoint.trip.items.find(
+      (item) => item.id === state.waypoint.stays.tripId,
+    );
+    if (!trip) {
+      return [];
+    }
+
+    const dayStart = trip.startDate + dayIndex * 86_400_000;
+    const dayEnd = dayStart + 86_400_000;
+    return state.waypoint.stays.items.filter(
+      (stay) =>
+        stay.plannedArrivalAt < dayEnd && stay.plannedDepartureAt >= dayStart,
+    );
+  };
 
 export const selectEventsByDay =
   (dayIndex: number) => (state: RootState) =>

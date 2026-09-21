@@ -44,6 +44,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc(`${jamie.uid}_${TRIP_ID}`);
   const expensesCollection = tripRef.collection('expenses');
   const eventsCollection = tripRef.collection('events');
+  const staysCollection = tripRef.collection('stays');
   const checklistCollection = tripRef.collection('checklist');
 
   await tripRef.set({
@@ -294,6 +295,44 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     eventDetails: {},
     notes: null,
     assignedMemberIds: [],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await staysCollection.doc('seed-waypoint-seattle').set({
+    id: 'seed-waypoint-seattle',
+    tripId: TRIP_ID,
+    name: 'Pike Place Suites',
+    address: 'Seattle, WA',
+    latitude: 47.6097,
+    longitude: -122.3425,
+    checkInAt: Date.UTC(2026, 8, 25, 15),
+    checkOutAt: Date.UTC(2026, 8, 27, 11),
+    checkInTimezone: 'America/Los_Angeles',
+    plannedArrivalAt: Date.UTC(2026, 8, 25, 15),
+    plannedDepartureAt: Date.UTC(2026, 8, 27, 11),
+    confirmationCode: null,
+    notes: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await staysCollection.doc('seed-waypoint-portland').set({
+    id: 'seed-waypoint-portland',
+    tripId: TRIP_ID,
+    name: 'Pearl District Hotel',
+    address: 'Portland, OR',
+    latitude: 45.5231,
+    longitude: -122.6765,
+    checkInAt: Date.UTC(2026, 8, 27, 15),
+    checkOutAt: Date.UTC(2026, 8, 28, 11),
+    checkInTimezone: 'America/Los_Angeles',
+    plannedArrivalAt: Date.UTC(2026, 8, 27, 15),
+    plannedDepartureAt: Date.UTC(2026, 8, 28, 11),
+    confirmationCode: null,
+    notes: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
