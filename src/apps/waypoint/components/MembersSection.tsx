@@ -138,7 +138,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
                   <UserAvatar user={member ?? null} size='md' />
                   <span className='font-medium'>{displayName}</span>
                   {memberId === trip.createdBy && (
-                    <Badge variant='muted' outline size='sm'>
+                    <Badge variant='muted' outline size='xs'>
                       Trip creator
                     </Badge>
                   )}
