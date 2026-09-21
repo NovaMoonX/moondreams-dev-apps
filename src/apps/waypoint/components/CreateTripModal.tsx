@@ -76,20 +76,29 @@ function CreateTripModal({
         name: 'coverImageFile',
         label: 'Cover photo',
         renderComponent: () => (
-          <ImageUploadField
-            previewUrl={coverUpload.previewUrl}
-            error={coverUpload.error}
-            disabled={isSubmitting}
-            hideAvatar
-            onSelect={(file) => {
-              coverUpload.pick(file);
-              setFormData((current) => ({ ...current, coverImageFile: file }));
-            }}
-            onRemove={() => {
-              coverUpload.clear();
-              setFormData((current) => ({ ...current, coverImageFile: null }));
-            }}
-          />
+          <div className='space-y-2'>
+            {coverUpload.previewUrl && (
+              <img
+                src={coverUpload.previewUrl}
+                alt='Cover preview'
+                className='h-40 w-full rounded-md object-cover'
+              />
+            )}
+            <ImageUploadField
+              previewUrl={coverUpload.previewUrl}
+              error={coverUpload.error}
+              disabled={isSubmitting}
+              hideAvatar
+              onSelect={(file) => {
+                coverUpload.pick(file);
+                setFormData((current) => ({ ...current, coverImageFile: file }));
+              }}
+              onRemove={() => {
+                coverUpload.clear();
+                setFormData((current) => ({ ...current, coverImageFile: null }));
+              }}
+            />
+          </div>
         ),
       }),
     ],
