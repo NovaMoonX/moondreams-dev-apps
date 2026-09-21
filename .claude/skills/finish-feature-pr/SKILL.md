@@ -19,6 +19,15 @@ Run every step below. Don't skip validation because the diff "looks right."
   body, branch, mergeable state, base branch.
 - Check out the PR's head branch locally (`gh pr checkout <n>` or manual
   fetch+checkout). Confirm `git status` is clean before touching anything.
+- **After checking out, verify the branch is actually current before doing
+  any fix work**: `git fetch origin <head-branch>` and compare `git
+  rev-parse HEAD` against `git rev-parse origin/<head-branch>`. The coding
+  agent can still be pushing commits (including its own conflict-resolution
+  merges) right up to when you start, and diagnosing/fixing against a stale
+  local checkout wastes work or reintroduces something already fixed
+  upstream. If the remote has moved, re-pull/re-checkout before proceeding.
+  If it's a long-running session, re-check this before step 1 as well, not
+  just once at the very start.
 - Read the PR body and the linked issue (`Fixes #NN`) to recover original
   intent — but treat both as a starting point, not ground truth. The user's
   live instructions in this conversation always win over what the PR body
