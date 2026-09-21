@@ -1,4 +1,4 @@
-import { Badge } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { formatDateTime } from '@/utils/formatUtils';
@@ -7,9 +7,12 @@ import type { Stay } from '@apps/waypoint/types';
 
 interface StayCardProps {
   stay: Stay;
+  canEdit: boolean;
+  onEdit: (stay: Stay) => void;
+  onDelete: (stay: Stay) => void;
 }
 
-export function StayCard({ stay }: StayCardProps) {
+export function StayCard({ stay, canEdit, onEdit, onDelete }: StayCardProps) {
   return (
     <article className='border-border bg-card rounded-lg border p-4'>
       <div className='flex items-start justify-between gap-3'>
@@ -26,12 +29,24 @@ export function StayCard({ stay }: StayCardProps) {
             </p>
           )}
         </div>
-        <MapNavigationButton
-          locationName={stay.name}
-          address={stay.address}
-          latitude={stay.latitude}
-          longitude={stay.longitude}
-        />
+        <div className='flex shrink-0 gap-2'>
+          <MapNavigationButton
+            locationName={stay.name}
+            address={stay.address}
+            latitude={stay.latitude}
+            longitude={stay.longitude}
+          />
+          {canEdit && (
+            <>
+              <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
+                Modify
+              </Button>
+              <Button type='button' size='sm' variant='destructive' onClick={() => onDelete(stay)}>
+                Delete
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </article>
   );
