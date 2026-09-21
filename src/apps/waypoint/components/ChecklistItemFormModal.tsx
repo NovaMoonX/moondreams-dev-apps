@@ -13,6 +13,7 @@ import {
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
 import type { ChecklistCategory } from '@apps/waypoint/types';
+import type { ChecklistItem } from '@apps/waypoint/types';
 
 interface ChecklistFormData {
   title: string;
@@ -24,6 +25,7 @@ interface ChecklistFormData {
 interface ChecklistItemFormModalProps {
   isOpen: boolean;
   memberOptions: { label: string; value: string }[];
+  item?: ChecklistItem | null;
   isSubmitting?: boolean;
   onSubmit: (values: {
     title: string;
@@ -46,11 +48,20 @@ const INITIAL_FORM_DATA: ChecklistFormData = {
 export default function ChecklistItemFormModal({
   isOpen,
   memberOptions,
+  item = null,
   isSubmitting = false,
   onSubmit,
   onClose,
 }: ChecklistItemFormModalProps) {
-  const [formData, setFormData] = useState<ChecklistFormData>(INITIAL_FORM_DATA);
+  const initialData: ChecklistFormData = item
+    ? {
+        title: item.title,
+        category: item.category,
+        customCategoryLabel: item.customCategoryLabel ?? '',
+        assignedToUids: item.assignedToUids,
+      }
+    : INITIAL_FORM_DATA;
+  const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
 
   const isFormComplete =
@@ -123,17 +134,21 @@ export default function ChecklistItemFormModal({
       setError(
         submitError instanceof Error
           ? submitError.message
-          : 'Unable to add checklist item.',
+          : 'Unable to save checklist item.',
       );
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Add checklist item'>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={item ? 'Edit checklist item' : 'Add checklist item'}
+    >
       <Form
         id='waypoint-checklist-item'
         form={fields}
-        initialData={INITIAL_FORM_DATA}
+        initialData={initialData}
         columns={1}
         onDataChange={(data) => setFormData(data as ChecklistFormData)}
         onSubmit={(data) => {
@@ -149,7 +164,7 @@ export default function ChecklistItemFormModal({
               loading={isSubmitting}
               disabled={isSubmitting || !isFormComplete}
             >
-              {isSubmitting ? 'Adding…' : 'Add item'}
+              {isSubmitting ? 'Saving…' : item ? 'Save changes' : 'Add item'}
             </Button>
           </div>
         }

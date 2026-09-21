@@ -6,6 +6,7 @@ import {
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -22,7 +23,9 @@ import type {
 } from '@apps/waypoint/types';
 import {
   createChecklistItem,
+  deleteChecklistItem,
   toggleChecklistItem,
+  updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
@@ -44,8 +47,11 @@ export default function ChecklistSection({
 }: ChecklistSectionProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const items = useAppSelector((state) => state.waypoint.checklist.items);
   const memberIds = Object.keys(trip.members);
@@ -115,7 +121,7 @@ export default function ChecklistSection({
     }
   };
 
-  const handleCreate = async (values: {
+  const handleSave = async (values: {
     title: string;
     category: ChecklistCategory;
     customCategoryLabel: string | null;
@@ -123,16 +129,53 @@ export default function ChecklistSection({
   }) => {
     setIsSubmitting(true);
     try {
-      await dispatch(
-        createChecklistItem({
-          tripId: trip.id,
-          uid: currentUserId,
-          ...values,
-        }),
-      ).unwrap();
+      if (editingItem) {
+        await dispatch(
+          updateChecklistItem({
+            tripId: trip.id,
+            itemId: editingItem.id,
+            ...values,
+          }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          createChecklistItem({
+            tripId: trip.id,
+            uid: currentUserId,
+            ...values,
+          }),
+        ).unwrap();
+      }
       setIsModalOpen(false);
+      setEditingItem(null);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (item: ChecklistItem) => {
+    const confirmed = await confirm({
+      title: 'Delete checklist item',
+      message: `Delete “${item.title}”? This action cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingItemId(item.id);
+    try {
+      await dispatch(
+        deleteChecklistItem({ tripId: trip.id, itemId: item.id }),
+      ).unwrap();
+    } catch (error) {
+      addToast({
+        title: 'Unable to delete checklist item',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setDeletingItemId(null);
     }
   };
 
@@ -145,7 +188,16 @@ export default function ChecklistSection({
             {completedCount} of {items.length} complete
           </p>
         </div>
-        {canEdit && <Button onClick={() => setIsModalOpen(true)}>Add item</Button>}
+        {canEdit && (
+          <Button
+            onClick={() => {
+              setEditingItem(null);
+              setIsModalOpen(true);
+            }}
+          >
+            Add item
+          </Button>
+        )}
       </div>
       <div
         className='bg-muted h-2 overflow-hidden rounded-full'
@@ -232,6 +284,31 @@ export default function ChecklistSection({
                             Everyone
                           </span>
                         )}
+                        {canEdit && (
+                          <>
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='secondary'
+                              onClick={() => {
+                                setEditingItem(item);
+                                setIsModalOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='destructive'
+                              loading={deletingItemId === item.id}
+                              disabled={deletingItemId !== null}
+                              onClick={() => void handleDelete(item)}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </li>
                   );
@@ -243,7 +320,9 @@ export default function ChecklistSection({
       )}
 
       <ChecklistItemFormModal
+        key={editingItem?.id ?? 'new'}
         isOpen={isModalOpen}
+        item={editingItem}
         memberOptions={memberIds.map((uid) => ({
           label:
             members[uid]?.displayName?.trim() ||
@@ -252,8 +331,11 @@ export default function ChecklistSection({
           value: uid,
         }))}
         isSubmitting={isSubmitting}
-        onSubmit={handleCreate}
-        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSave}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingItem(null);
+        }}
       />
     </section>
   );
