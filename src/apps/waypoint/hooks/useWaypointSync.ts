@@ -7,11 +7,13 @@ import {
   startTripPendingRequestsListener,
 } from '../store/listeners/pendingRequestsListeners';
 import { startTripListener } from '../store/listeners/tripListeners';
+import { startTripEventsListener } from '../store/listeners/eventListeners';
 import {
   setMyPendingRequests,
   setTripPendingRequests,
 } from '../store/slices/pendingRequestsSlice';
 import { setTrips } from '../store/slices/tripSlice';
+import { clearEvents, setEvents } from '../store/slices/eventsSlice';
 
 interface UseWaypointSyncOptions {
   tripId: string | null;
@@ -54,4 +56,15 @@ export function useWaypointSync(
       dispatch(setTripPendingRequests(requests));
     });
   }, [dispatch, tripId, isTripAdmin]);
+
+  useEffect(() => {
+    if (!tripId) {
+      dispatch(clearEvents());
+      return;
+    }
+
+    return startTripEventsListener(tripId, (events) => {
+      dispatch(setEvents({ tripId, events }));
+    });
+  }, [dispatch, tripId]);
 }

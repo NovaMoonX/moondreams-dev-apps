@@ -42,6 +42,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('pendingRequests')
     .doc(`${jamie.uid}_${TRIP_ID}`);
+  const eventRef = tripRef.collection('events').doc('seed-waypoint-dinner');
 
   await tripRef.set({
     id: TRIP_ID,
@@ -106,8 +107,29 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     requestedAt: context.now - 3_600_000,
   });
 
+  await eventRef.set({
+    id: 'seed-waypoint-dinner',
+    tripId: TRIP_ID,
+    eventType: 'MEAL',
+    dayIndex: 0,
+    endDayIndex: 0,
+    title: 'Dinner at Pike Place',
+    startAt: Date.UTC(2026, 8, 25, 19),
+    endAt: null,
+    locationName: 'Pike Place Market',
+    address: 'Seattle, WA',
+    latitude: 47.6097,
+    longitude: -122.3425,
+    eventDetails: { mealType: 'DINNER' },
+    notes: null,
+    assignedMemberIds: [alex.uid, taylor.uid],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 5,
+    firestoreDocuments: 6,
   };
 }

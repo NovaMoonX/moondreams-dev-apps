@@ -26,3 +26,49 @@ export interface TripJoinRequest {
   tripId: string;
   requestedAt: number;
 }
+
+export type EventType = 'TRAVEL' | 'MEAL' | 'ACTIVITY' | 'FREE_TIME';
+export type TransitType = 'FLIGHT' | 'DRIVE' | 'TRAIN' | 'BUS' | 'FERRY' | 'WALK';
+export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+export type ActivitySetting = 'INDOOR' | 'OUTDOOR' | 'MIXED';
+
+export interface TravelEventDetails {
+  transitType: TransitType;
+}
+
+export interface DiningEventDetails {
+  mealType: MealType;
+}
+
+export interface ActivityEventDetails {
+  settings: ActivitySetting[];
+}
+
+export interface FreeTimeEventDetails {}
+
+export type EventDetails =
+  | TravelEventDetails
+  | DiningEventDetails
+  | ActivityEventDetails
+  | FreeTimeEventDetails;
+
+export interface TimelineEvent {
+  id: string;
+  tripId: string;
+  eventType: EventType;
+  dayIndex: number;
+  endDayIndex: number;
+  title: string;
+  startAt: number;
+  endAt: number | null;
+  locationName: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  eventDetails: EventDetails | null;
+  notes: string | null;
+  assignedMemberIds: string[];
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}

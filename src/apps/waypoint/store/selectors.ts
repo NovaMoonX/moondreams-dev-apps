@@ -7,3 +7,5 @@ export const selectTripById =
     tripId
       ? (state.waypoint.trip.items.find((trip) => trip.id === tripId) ?? null)
       : null;
+
+export const selectTimelineEvents = (state: RootState) => state.waypoint.events.items;
