@@ -37,6 +37,24 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   FREE_TIME: 'Free time',
 };
 
+export const EVENT_TYPE_EMOJIS: Record<EventType, string> = {
+  TRAVEL: '✈️',
+  DINING: '🍽️',
+  ACTIVITY: '🎒',
+  FREE_TIME: '🌤️',
+};
+
+// Badge colors per event type — chosen so each stays legible in both themes
+// and doesn't clash with its emoji's own colors (e.g. the sun in ☀️ against violet).
+export const EVENT_TYPE_BADGE_CLASSES: Record<EventType, string> = {
+  TRAVEL: 'bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-100',
+  DINING: 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
+  ACTIVITY:
+    'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
+  FREE_TIME:
+    'bg-violet-200 text-violet-900 dark:bg-violet-900 dark:text-violet-100',
+};
+
 export const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {
   FLIGHT: 'Flight',
   DRIVE: 'Drive',

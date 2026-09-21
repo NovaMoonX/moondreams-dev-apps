@@ -3,7 +3,11 @@ import { Badge } from '@moondreamsdev/dreamer-ui/components';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { formatTime } from '@/utils/formatUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
-import { EVENT_TYPE_LABELS } from '@apps/waypoint/constants';
+import {
+  EVENT_TYPE_BADGE_CLASSES,
+  EVENT_TYPE_EMOJIS,
+  EVENT_TYPE_LABELS,
+} from '@apps/waypoint/constants';
 
 interface EventCardProps {
   event: TimelineEvent;
@@ -25,7 +29,9 @@ export function EventCard({ event }: EventCardProps) {
       <div className='flex items-start justify-between gap-3'>
         <div>
           <div className='flex flex-wrap items-center gap-2'>
-            <Badge variant='muted'>{EVENT_TYPE_LABELS[event.eventType]}</Badge>
+            <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
+              {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
+            </Badge>
             <span className='text-muted-foreground text-sm'>
               {formatTime(event.startAt)}
               {event.endAt ? ` – ${formatTime(event.endAt)}` : ''}

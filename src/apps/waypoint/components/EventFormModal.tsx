@@ -22,6 +22,7 @@ import type {
 } from '@apps/waypoint/types';
 import {
   ACTIVITY_SETTING_LABELS,
+  EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
   TRANSIT_TYPE_LABELS,
@@ -43,7 +44,10 @@ function toSelectOptions<T extends string>(labels: Record<T, string>) {
   return Object.entries(labels).map(([value, text]) => ({ value, text: text as string }));
 }
 
-const eventTypeOptions = toSelectOptions(EVENT_TYPE_LABELS);
+const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(([value, text]) => ({
+  value,
+  text: `${EVENT_TYPE_EMOJIS[value as EventType]} ${text}`,
+}));
 const transitTypeOptions = toSelectOptions(TRANSIT_TYPE_LABELS);
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
 const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
@@ -52,7 +56,6 @@ interface EventDraft {
   eventType: EventType;
   title: string;
   dayIndex: number;
-  date: string;
   time: string;
   quickField: string;
   locationName: string;
@@ -74,7 +77,6 @@ function EventFormModal({
     eventType: 'ACTIVITY',
     title: '',
     dayIndex: 0,
-    date: getDayInputValue(trip.startDate, 0),
     time: '09:00',
     quickField: 'INDOOR',
     locationName: '',
@@ -87,7 +89,7 @@ function EventFormModal({
     setDraft((current) => ({ ...current, ...changes }));
 
   const handleNext = () => {
-    if (!draft.title.trim() || !draft.date || !draft.time) {
+    if (!draft.title.trim() || !draft.time) {
       setError('Enter a title, day, and start time.');
       return;
     }
@@ -96,9 +98,10 @@ function EventFormModal({
   };
 
   const handleSubmit = async () => {
-    const startAt = fromLocalDateAndTimeInputValues(draft.date, draft.time);
+    const date = getDayInputValue(trip.startDate, draft.dayIndex);
+    const startAt = fromLocalDateAndTimeInputValues(date, draft.time);
     if (startAt === undefined) {
-      setError('Choose a valid start date and time.');
+      setError('Choose a valid start time.');
       return;
     }
 
@@ -179,20 +182,7 @@ function EventFormModal({
                   value: String(index),
                 }))}
                 value={String(draft.dayIndex)}
-                onChange={(value) =>
-                  updateDraft({
-                    dayIndex: Number(value),
-                    date: getDayInputValue(trip.startDate, Number(value)),
-                  })
-                }
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Start date</Label>
-              <Input
-                type='date'
-                value={draft.date}
-                onChange={(event) => updateDraft({ date: event.target.value })}
+                onChange={(value) => updateDraft({ dayIndex: Number(value) })}
               />
             </div>
             <div className='space-y-1.5'>
