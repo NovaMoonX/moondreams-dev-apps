@@ -25,7 +25,7 @@ import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
-import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
@@ -218,7 +218,7 @@ function Waypoint() {
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
-              <TimelineSection
+              <OverviewSection
                 trip={selectedTrip}
                 events={timelineEvents}
                 currentUserId={user.uid}

@@ -59,6 +59,12 @@ interface SetTripArchivedInput {
   isArchived: boolean;
 }
 
+interface SetSharedAlbumLinkInput {
+  uid: string;
+  trip: TripSpace;
+  url: string | null;
+}
+
 export const createTrip = createAsyncThunk<
   TripSpace,
   CreateTripInput,
@@ -285,6 +291,57 @@ export const setTripArchived = createAsyncThunk<
     const batch = writeBatch(db);
     batch.update(doc(db, ...TRIP_COLLECTION_PATH, trip.id), {
       isArchived,
+      lastEditedAt: updatedTrip.lastEditedAt,
+    });
+    await batch.commit();
+    dispatch(upsertTrip(updatedTrip));
+    return updatedTrip;
+  },
+);
+
+export const setSharedAlbumLink = createAsyncThunk<
+  TripSpace,
+  SetSharedAlbumLinkInput,
+  { rejectValue: string }
+>(
+  'waypoint/trips/setSharedAlbumLink',
+  async ({ uid, trip, url }, { dispatch, rejectWithValue }) => {
+    const trimmedUrl = url?.trim() || null;
+    if (trimmedUrl !== null) {
+      try {
+        const parsedUrl = new URL(trimmedUrl);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          throw new Error('Unsupported protocol');
+        }
+      } catch {
+        return rejectWithValue('Enter a valid album link.');
+      }
+    }
+
+    const memberRole = trip.members[uid]?.role;
+    if (!memberRole) {
+      return rejectWithValue('You must be a trip member to set the album link.');
+    }
+    if (
+      trip.sharedAlbumUrl !== null &&
+      !['ADMIN', 'EDITOR'].includes(memberRole)
+    ) {
+      return rejectWithValue('Only Editors and Admins can change the album link.');
+    }
+
+    const sharedAlbumSetAt = trimmedUrl === null ? null : Date.now();
+    const updatedTrip: TripSpace = {
+      ...trip,
+      sharedAlbumUrl: trimmedUrl,
+      sharedAlbumSetByUid: trimmedUrl === null ? null : uid,
+      sharedAlbumSetAt,
+      lastEditedAt: Date.now(),
+    };
+    const batch = writeBatch(db);
+    batch.update(doc(db, ...TRIP_COLLECTION_PATH, trip.id), {
+      sharedAlbumUrl: updatedTrip.sharedAlbumUrl,
+      sharedAlbumSetByUid: updatedTrip.sharedAlbumSetByUid,
+      sharedAlbumSetAt: updatedTrip.sharedAlbumSetAt,
       lastEditedAt: updatedTrip.lastEditedAt,
     });
     await batch.commit();
