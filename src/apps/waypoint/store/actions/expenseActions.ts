@@ -63,6 +63,7 @@ export const createExpense = createAsyncThunk<
     amount: input.amount,
     amountMin: input.amountMin,
     amountMax: input.amountMax,
+    paidAmount: null,
     currency,
     payerUid: input.payerUid,
     status: input.status,
@@ -79,12 +80,18 @@ export const createExpense = createAsyncThunk<
   return expense;
 });
 
-export const markExpensePaid = createAsyncThunk<TripExpense, TripExpense>(
+interface MarkExpensePaidInput {
+  expense: TripExpense;
+  paidAmount: number | null;
+}
+
+export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
-  async (expense) => {
+  async ({ expense, paidAmount }) => {
     const updatedExpense: TripExpense = {
       ...expense,
       status: 'PAID',
+      paidAmount: expense.amount === null ? paidAmount : null,
       lastEditedAt: Date.now(),
     };
 

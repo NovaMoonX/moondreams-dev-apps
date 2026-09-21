@@ -47,6 +47,7 @@ export interface TripExpense {
   amount: number | null;
   amountMin: number | null;
   amountMax: number | null;
+  paidAmount: number | null;
   currency: string;
   payerUid: string;
   status: ExpenseStatus;

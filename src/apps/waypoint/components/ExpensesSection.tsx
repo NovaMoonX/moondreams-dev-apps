@@ -7,6 +7,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
+import MarkExpensePaidModal from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
   markExpensePaid,
@@ -40,6 +41,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dayCount = Math.floor((trip.endDate - trip.startDate) / 86_400_000) + 1;
   const currency = trip.defaultCurrency ?? 'USD';
@@ -106,16 +108,26 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
   };
 
-  const handleMarkPaid = async (expense: TripExpense) => {
+  const handleMarkPaid = async (expense: TripExpense, paidAmount: number | null) => {
     setMarkingPaidId(expense.id);
     setError(null);
     try {
-      await dispatch(markExpensePaid(expense)).unwrap();
+      await dispatch(markExpensePaid({ expense, paidAmount })).unwrap();
+      setPayingExpense(null);
     } catch (markError) {
       setError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
     } finally {
       setMarkingPaidId(null);
     }
+  };
+
+  const handleMarkPaidClick = (expense: TripExpense) => {
+    if (expense.amount === null) {
+      setPayingExpense(expense);
+      return;
+    }
+
+    void handleMarkPaid(expense, null);
   };
 
   return (
@@ -248,11 +260,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               </div>
               <div className='flex items-center gap-3'>
                 <span className='font-medium'>
-                  {formatTotal(
-                    expense.amount ?? expense.amountMin ?? 0,
-                    expense.amount ?? expense.amountMax ?? expense.amountMin ?? 0,
-                    expense.currency,
-                  )}
+                  {expense.status === 'PAID' && expense.paidAmount !== null
+                    ? formatTotal(expense.paidAmount, expense.paidAmount, expense.currency)
+                    : formatTotal(
+                        expense.amount ?? expense.amountMin ?? 0,
+                        expense.amount ?? expense.amountMax ?? expense.amountMin ?? 0,
+                        expense.currency,
+                      )}
                 </span>
                 {canAddExpenses && expense.status === 'EXPECTED' && (
                   <Button
@@ -260,7 +274,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                     variant='secondary'
                     size='sm'
                     disabled={markingPaidId === expense.id}
-                    onClick={() => void handleMarkPaid(expense)}
+                    onClick={() => handleMarkPaidClick(expense)}
                   >
                     {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
                   </Button>
@@ -278,6 +292,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
         onClose={() => setIsModalOpen(false)}
+      />
+      <MarkExpensePaidModal
+        isOpen={payingExpense !== null}
+        expense={payingExpense}
+        isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
+        onSubmit={(paidAmount) => {
+          if (payingExpense) {
+            void handleMarkPaid(payingExpense, paidAmount);
+          }
+        }}
+        onClose={() => setPayingExpense(null)}
       />
     </section>
   );

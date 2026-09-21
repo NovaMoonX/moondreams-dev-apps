@@ -1675,7 +1675,7 @@ service cloud.firestore {
       function isTripExpenseValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
-            'amountMax', 'currency', 'payerUid', 'status', 'targetType',
+            'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'targetType',
             'targetMemberIds', 'splitAmounts', 'paidMemberStatus',
             'createdBy', 'createdAt', 'lastEditedAt'
           ])
@@ -1689,6 +1689,7 @@ service cloud.firestore {
           && ((data.amount != null && data.amountMin == null && data.amountMax == null)
             || (data.amount == null && data.amountMin != null && data.amountMax != null
               && data.amountMax >= data.amountMin))
+          && (data.paidAmount == null || (data.paidAmount is number && data.amount == null))
           && isNonEmptyString(data.currency)
           && data.payerUid is string
           && data.payerUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members

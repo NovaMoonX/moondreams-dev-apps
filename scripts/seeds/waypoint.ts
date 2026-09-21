@@ -120,6 +120,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     amount: number | null;
     amountMin: number | null;
     amountMax: number | null;
+    paidAmount: number | null;
     payerUid: string;
     status: 'PAID' | 'EXPECTED';
   }> = [
@@ -130,6 +131,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amount: null,
       amountMin: 80,
       amountMax: 120,
+      paidAmount: null,
       payerUid: alex.uid,
       status: 'EXPECTED',
     },
@@ -140,6 +142,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amount: 18,
       amountMin: null,
       amountMax: null,
+      paidAmount: null,
       payerUid: taylor.uid,
       status: 'PAID',
     },
@@ -150,6 +153,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amount: 12,
       amountMin: null,
       amountMax: null,
+      paidAmount: null,
       payerUid: alex.uid,
       status: 'PAID',
     },
@@ -160,6 +164,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amount: null,
       amountMin: 30,
       amountMax: 45,
+      paidAmount: null,
       payerUid: taylor.uid,
       status: 'EXPECTED',
     },
@@ -170,7 +175,19 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amount: 25,
       amountMin: null,
       amountMax: null,
+      paidAmount: null,
       payerUid: alex.uid,
+      status: 'PAID',
+    },
+    {
+      id: 'seed-expense-rental-car',
+      dayIndex: 0,
+      title: 'Rental car',
+      amount: null,
+      amountMin: 150,
+      amountMax: 200,
+      paidAmount: 175,
+      payerUid: taylor.uid,
       status: 'PAID',
     },
   ];
@@ -184,6 +201,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amount: seedExpense.amount,
       amountMin: seedExpense.amountMin,
       amountMax: seedExpense.amountMax,
+      paidAmount: seedExpense.paidAmount,
       currency: 'USD',
       payerUid: seedExpense.payerUid,
       status: seedExpense.status,
@@ -313,6 +331,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 16,
+    firestoreDocuments: 17,
   };
 }

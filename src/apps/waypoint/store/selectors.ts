@@ -28,6 +28,10 @@ function getExpenseValue(expense: TripExpense): ExpenseTotal {
     return { min: expense.amount, max: expense.amount };
   }
 
+  if (expense.status === 'PAID' && expense.paidAmount !== null) {
+    return { min: expense.paidAmount, max: expense.paidAmount };
+  }
+
   return {
     min: expense.amountMin ?? 0,
     max: expense.amountMax ?? expense.amountMin ?? 0,
