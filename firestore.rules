@@ -1699,7 +1699,51 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
+      function isStayShapeValid() {
+        return request.resource.data.keys().hasOnly([
+            'id',
+            'tripId',
+            'name',
+            'address',
+            'latitude',
+            'longitude',
+            'checkInAt',
+            'checkOutAt',
+            'checkInTimezone',
+            'plannedArrivalAt',
+            'plannedDepartureAt',
+            'confirmationCode',
+            'notes',
+            'createdBy',
+            'createdAt',
+            'lastEditedAt'
+          ])
+          && request.resource.data.id == stayId
+          && request.resource.data.tripId == tripId
+          && isNonEmptyString(request.resource.data.name)
+          && isNonEmptyString(request.resource.data.address)
+          && (request.resource.data.latitude == null || request.resource.data.latitude is number)
+          && (request.resource.data.longitude == null || request.resource.data.longitude is number)
+          && isTimestampNumber(request.resource.data.checkInAt)
+          && isTimestampNumber(request.resource.data.checkOutAt)
+          && request.resource.data.checkOutAt > request.resource.data.checkInAt
+          && (request.resource.data.checkInTimezone == null
+            || isNonEmptyString(request.resource.data.checkInTimezone))
+          && isTimestampNumber(request.resource.data.plannedArrivalAt)
+          && isTimestampNumber(request.resource.data.plannedDepartureAt)
+          && request.resource.data.plannedDepartureAt > request.resource.data.plannedArrivalAt
+          && (request.resource.data.confirmationCode == null
+            || isNonEmptyString(request.resource.data.confirmationCode))
+          && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt)
+          && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
       allow read: if isTripSubcollectionMember();
+      allow create: if isTripSubcollectionEditor()
+        && isStayShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripSubcollectionEditor()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'checkInAt',
@@ -1711,6 +1755,7 @@ service cloud.firestore {
         && isTimestampNumber(request.resource.data.checkOutAt)
         && isTimestampNumber(request.resource.data.plannedArrivalAt)
         && isTimestampNumber(request.resource.data.plannedDepartureAt);
+      allow delete: if false;
     }
 
     match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {

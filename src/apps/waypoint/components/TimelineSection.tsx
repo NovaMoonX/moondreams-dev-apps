@@ -17,12 +17,14 @@ import {
   deleteEvent,
   updateEvent,
 } from '@apps/waypoint/store/actions/eventActions';
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
+import type { Stay } from '@apps/waypoint/types';
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -39,12 +41,25 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   const [activeTab, setActiveTab] = useState('all');
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const memberIds = Object.keys(trip.members);
+  const activeDayIndex = activeTab === 'all' ? 0 : Number(activeTab);
+  const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex));
   const members = useUserInfo(memberIds)?.map ?? {};
   const memberOptions = memberIds.map((uid) => ({
     label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
     value: uid,
   }));
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const renderStayBanners = (dayIndex: number) => {
+    if (dayIndex !== activeDayIndex || activeTab === 'all' || activeStays.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className='space-y-2'>
+        {activeStays.map((stay) => <StayBanner key={stay.id} stay={stay} />)}
+      </div>
+    );
+  };
   const tabs = useMemo(
     () => [
       { value: 'all', label: 'All' },
@@ -191,6 +206,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
           </TabsContent>
           {tabs.slice(1).map((tab, index) => (
             <TabsContent key={tab.value} value={tab.value} className='pt-4'>
+              {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>
           ))}
@@ -211,6 +227,18 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
         }}
       />
     </>
+  );
+}
+
+function StayBanner({ stay }: { stay: Stay }) {
+  return (
+    <div className='border-border bg-card rounded-lg border px-4 py-3'>
+      <p className='text-muted-foreground text-xs font-medium uppercase tracking-wide'>
+        Staying at
+      </p>
+      <p className='mt-1 font-semibold'>{stay.name}</p>
+      <p className='text-muted-foreground text-sm'>{stay.address}</p>
+    </div>
   );
 }
 

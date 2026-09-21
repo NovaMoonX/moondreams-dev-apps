@@ -42,6 +42,25 @@ export interface TripJoinRequest {
   requestedAt: number;
 }
 
+export interface Stay {
+  id: string;
+  tripId: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  checkInAt: number;
+  checkOutAt: number;
+  checkInTimezone: string | null;
+  plannedArrivalAt: number;
+  plannedDepartureAt: number;
+  confirmationCode: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export interface TripExpense {
   id: string;
   tripId: string;
