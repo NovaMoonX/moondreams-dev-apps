@@ -342,7 +342,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                       setIsModalOpen(true);
                     }}
                   >
-                    Edit
+                    Modify
                   </Button>
                 )}
               </div>

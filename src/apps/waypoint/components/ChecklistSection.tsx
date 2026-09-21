@@ -284,7 +284,7 @@ export default function ChecklistSection({
                               setIsModalOpen(true);
                             }}
                           >
-                            Edit
+                            Modify
                           </Button>
                         )}
                       </div>

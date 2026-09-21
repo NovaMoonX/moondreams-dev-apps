@@ -54,7 +54,7 @@ export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
           <MapNavigationButton {...event} />
           {canEdit && (
             <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
-              Edit
+              Modify
             </Button>
           )}
         </div>
