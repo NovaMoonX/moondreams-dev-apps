@@ -1,13 +1,12 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { openMapNavigation } from '@apps/waypoint/utils/mapUrlHelpers';
+import { openMapNavigation } from '@/utils/mapUrlUtils';
+import type { TimelineEvent } from '@apps/waypoint/types';
 
-interface MapNavigationButtonProps {
-  locationName: string | null;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-}
+type MapNavigationButtonProps = Pick<
+  TimelineEvent,
+  'locationName' | 'address' | 'latitude' | 'longitude'
+>;
 
 export function MapNavigationButton({
   locationName,

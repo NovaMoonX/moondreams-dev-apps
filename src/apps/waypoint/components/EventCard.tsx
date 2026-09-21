@@ -1,7 +1,7 @@
 import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
-import { formatEventTime } from '@apps/waypoint/utils/dateUtils';
+import { formatTime } from '@/utils/formatUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
 import { EVENT_TYPE_LABELS } from '@apps/waypoint/constants';
 
@@ -27,8 +27,8 @@ export function EventCard({ event }: EventCardProps) {
           <div className='flex flex-wrap items-center gap-2'>
             <Badge variant='muted'>{EVENT_TYPE_LABELS[event.eventType]}</Badge>
             <span className='text-muted-foreground text-sm'>
-              {formatEventTime(event.startAt)}
-              {event.endAt ? ` – ${formatEventTime(event.endAt)}` : ''}
+              {formatTime(event.startAt)}
+              {event.endAt ? ` – ${formatTime(event.endAt)}` : ''}
             </span>
           </div>
           <h3 className='mt-2 font-semibold'>{event.title}</h3>
@@ -42,12 +42,7 @@ export function EventCard({ event }: EventCardProps) {
             </p>
           )}
         </div>
-        <MapNavigationButton
-          locationName={event.locationName}
-          address={event.address}
-          latitude={event.latitude}
-          longitude={event.longitude}
-        />
+        <MapNavigationButton {...event} />
       </div>
     </article>
   );

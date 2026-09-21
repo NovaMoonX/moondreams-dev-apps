@@ -1,13 +1,21 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Select,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@moondreamsdev/dreamer-ui/components';
 
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import { createEvent } from '@apps/waypoint/store/actions/eventActions';
 import { useAppDispatch } from '@/store';
+import { useUserInfo } from '@/hooks/useUserInfo';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { getDayLabel, getTripDayCount } from '@apps/waypoint/utils/dateUtils';
+import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -19,7 +27,14 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   const dispatch = useAppDispatch();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const dayCount = getTripDayCount(trip.startDate, trip.endDate);
+  const [activeTab, setActiveTab] = useState('all');
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  const memberIds = Object.keys(trip.members);
+  const members = useUserInfo(memberIds)?.map ?? {};
+  const memberOptions = memberIds.map((uid) => ({
+    label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
+    value: uid,
+  }));
   const tabs = useMemo(
     () => [
       { value: 'all', label: 'All' },
@@ -63,8 +78,19 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   return (
     <>
       <section className='space-y-4 pt-4'>
-        <Tabs defaultValue='all' tabsWidth='full' variant='pills'>
-          <TabsList>
+        <Select
+          className='sm:hidden'
+          options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          tabsWidth='full'
+          variant='pills'
+        >
+          <TabsList className='hidden sm:flex'>
             {tabs.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
@@ -87,6 +113,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
       <EventFormModal
         isOpen={isFormOpen}
         trip={trip}
+        memberOptions={memberOptions}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
         onClose={() => setIsFormOpen(false)}

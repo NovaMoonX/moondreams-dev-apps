@@ -5,12 +5,18 @@ interface MapLocation {
   longitude: number | null;
 }
 
+/** iPadOS reports itself as `MacIntel` with no way to tell it apart from desktop Safari except touch support. */
 function isApplePlatform() {
   if (typeof navigator === 'undefined') {
     return false;
   }
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  const platform = navigator.platform ?? '';
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const isDesktopMac = /Mac/.test(platform) && navigator.maxTouchPoints === 0;
+
+  return isIOS || isIPadOS || isDesktopMac;
 }
 
 export function getMapNavigationUrl(location: MapLocation) {
@@ -30,8 +36,6 @@ export function getMapNavigationUrl(location: MapLocation) {
 
   return `https://maps.google.com/?q=${destination}`;
 }
-
-export const getNavigationUrl = getMapNavigationUrl;
 
 export function openMapNavigation(location: MapLocation) {
   const url = getMapNavigationUrl(location);

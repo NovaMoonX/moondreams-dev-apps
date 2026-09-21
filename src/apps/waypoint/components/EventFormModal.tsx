@@ -26,11 +26,12 @@ import {
   MEAL_TYPE_LABELS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
-import { getDayInputValue, getDayLabel, getTripDayCount } from '@apps/waypoint/utils/dateUtils';
+import { getDayCount, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
 
 interface EventFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
+  memberOptions: { label: string; value: string }[];
   isSubmitting?: boolean;
   onSubmit: (
     event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
@@ -38,10 +39,14 @@ interface EventFormModalProps {
   onClose: () => void;
 }
 
-const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(([value, text]) => ({ value, text }));
-const transitTypeOptions = Object.entries(TRANSIT_TYPE_LABELS).map(([value, text]) => ({ value, text }));
-const mealTypeOptions = Object.entries(MEAL_TYPE_LABELS).map(([value, text]) => ({ value, text }));
-const activitySettingOptions = Object.entries(ACTIVITY_SETTING_LABELS).map(([value, text]) => ({ value, text }));
+function toSelectOptions<T extends string>(labels: Record<T, string>) {
+  return Object.entries(labels).map(([value, text]) => ({ value, text: text as string }));
+}
+
+const eventTypeOptions = toSelectOptions(EVENT_TYPE_LABELS);
+const transitTypeOptions = toSelectOptions(TRANSIT_TYPE_LABELS);
+const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
+const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
 
 interface EventDraft {
   eventType: EventType;
@@ -58,6 +63,7 @@ interface EventDraft {
 function EventFormModal({
   isOpen,
   trip,
+  memberOptions,
   isSubmitting = false,
   onSubmit,
   onClose,
@@ -75,7 +81,7 @@ function EventFormModal({
     address: '',
     assignedMemberIds: [],
   });
-  const dayCount = getTripDayCount(trip.startDate, trip.endDate);
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const updateDraft = (changes: Partial<EventDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -96,7 +102,7 @@ function EventFormModal({
       return;
     }
 
-    let eventDetails: EventDetails | null = null;
+    let eventDetails: EventDetails;
     if (draft.eventType === 'TRAVEL') {
       eventDetails = { transitType: draft.quickField as TransitType };
     } else if (draft.eventType === 'DINING') {
@@ -149,44 +155,54 @@ function EventFormModal({
         <p className='text-muted-foreground text-sm'>Step {step} of 2</p>
         {step === 1 ? (
           <>
-            <Select
-              label='Event type'
-              options={eventTypeOptions}
-              value={draft.eventType}
-              onChange={(value) => updateDraft({ eventType: value as EventType })}
-            />
-            <Input
-              label='Title'
-              value={draft.title}
-              placeholder='Dinner at Ichiran'
-              onChange={(event) => updateDraft({ title: event.target.value })}
-            />
-            <Select
-              label='Day'
-              options={Array.from({ length: dayCount }, (_, index) => ({
-                text: getDayLabel(trip.startDate, index),
-                value: String(index),
-              }))}
-              value={String(draft.dayIndex)}
-              onChange={(value) =>
-                updateDraft({
-                  dayIndex: Number(value),
-                  date: getDayInputValue(trip.startDate, Number(value)),
-                })
-              }
-            />
-            <Input
-              label='Start date'
-              type='date'
-              value={draft.date}
-              onChange={(event) => updateDraft({ date: event.target.value })}
-            />
-            <Input
-              label='Start time'
-              type='time'
-              value={draft.time}
-              onChange={(event) => updateDraft({ time: event.target.value })}
-            />
+            <div className='space-y-1.5'>
+              <Label>Event type</Label>
+              <Select
+                options={eventTypeOptions}
+                value={draft.eventType}
+                onChange={(value) => updateDraft({ eventType: value as EventType })}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Title</Label>
+              <Input
+                value={draft.title}
+                placeholder='Dinner at Ichiran'
+                onChange={(event) => updateDraft({ title: event.target.value })}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Day</Label>
+              <Select
+                options={Array.from({ length: dayCount }, (_, index) => ({
+                  text: getDayLabel(trip.startDate, index),
+                  value: String(index),
+                }))}
+                value={String(draft.dayIndex)}
+                onChange={(value) =>
+                  updateDraft({
+                    dayIndex: Number(value),
+                    date: getDayInputValue(trip.startDate, Number(value)),
+                  })
+                }
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Start date</Label>
+              <Input
+                type='date'
+                value={draft.date}
+                onChange={(event) => updateDraft({ date: event.target.value })}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Start time</Label>
+              <Input
+                type='time'
+                value={draft.time}
+                onChange={(event) => updateDraft({ time: event.target.value })}
+              />
+            </div>
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>
                 Cancel
@@ -199,40 +215,46 @@ function EventFormModal({
         ) : (
           <>
             {draft.eventType !== 'FREE_TIME' && (
-              <Select
-                label={quickLabel}
-                options={quickOptions}
-                value={draft.quickField}
-                onChange={(value) => updateDraft({ quickField: value })}
-              />
+              <div className='space-y-1.5'>
+                <Label>{quickLabel}</Label>
+                <Select
+                  options={quickOptions}
+                  value={draft.quickField}
+                  onChange={(value) => updateDraft({ quickField: value })}
+                />
+              </div>
             )}
-            <Input
-              label='Location'
-              placeholder='Ichiran Shibuya'
-              value={draft.locationName}
-              onChange={(event) => updateDraft({ locationName: event.target.value })}
-            />
-            <Input
-              label='Address'
-              placeholder='Location address (optional)'
-              value={draft.address}
-              onChange={(event) => updateDraft({ address: event.target.value })}
-            />
+            <div className='space-y-1.5'>
+              <Label>Location</Label>
+              <Input
+                placeholder='Ichiran Shibuya'
+                value={draft.locationName}
+                onChange={(event) => updateDraft({ locationName: event.target.value })}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Address</Label>
+              <Input
+                placeholder='Location address (optional)'
+                value={draft.address}
+                onChange={(event) => updateDraft({ address: event.target.value })}
+              />
+            </div>
             <div className='space-y-2'>
               <Label>Assignees</Label>
-              {Object.values(trip.members).map((member) => (
-                <label key={member.uid} className='flex items-center gap-2 text-sm'>
+              {memberOptions.map((member) => (
+                <label key={member.value} className='flex items-center gap-2 text-sm'>
                   <Checkbox
-                    checked={draft.assignedMemberIds.includes(member.uid)}
+                    checked={draft.assignedMemberIds.includes(member.value)}
                     onCheckedChange={(checked) =>
                       updateDraft({
                         assignedMemberIds: checked
-                          ? [...draft.assignedMemberIds, member.uid]
-                          : draft.assignedMemberIds.filter((uid) => uid !== member.uid),
+                          ? [...draft.assignedMemberIds, member.value]
+                          : draft.assignedMemberIds.filter((uid) => uid !== member.value),
                       })
                     }
                   />
-                  {member.uid}
+                  {member.label}
                 </label>
               ))}
             </div>

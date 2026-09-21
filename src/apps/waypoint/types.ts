@@ -58,7 +58,7 @@ export interface ActivityEventDetails {
   settings: ActivitySetting[];
 }
 
-export interface FreeTimeEventDetails {}
+export type FreeTimeEventDetails = Record<string, never>;
 
 export type EventDetails =
   | TravelEventDetails
