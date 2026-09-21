@@ -24,6 +24,7 @@ import NavButton from '@/ui/NavButton';
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
+import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
@@ -36,6 +37,7 @@ import {
 } from '@apps/waypoint/store/actions/tripActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import { selectTrips } from '@apps/waypoint/store/selectors';
+import { selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
@@ -54,6 +56,7 @@ function Waypoint() {
   const [inviteRequestSent, setInviteRequestSent] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const trips = useAppSelector(selectTrips);
+  const timelineEvents = useAppSelector(selectTimelineEvents);
   const tripsLoaded = useAppSelector((state) => state.waypoint.trip.loaded);
   const pendingRequests = useAppSelector(
     (state) => state.waypoint.pendingRequests.myRequests,
@@ -201,14 +204,16 @@ function Waypoint() {
           </div>
           <Tabs defaultValue='overview' tabsWidth='full' variant='pills'>
             <TabsList>
-              <TabsTrigger value='overview'>Overview</TabsTrigger>
+              <TabsTrigger value='overview'>Timeline</TabsTrigger>
               <TabsTrigger value='members'>Members</TabsTrigger>
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
-              <p className='text-muted-foreground text-sm'>
-                Your trip planning workspace is ready.
-              </p>
+              <TimelineSection
+                trip={selectedTrip}
+                events={timelineEvents}
+                currentUserId={user.uid}
+              />
             </TabsContent>
             <TabsContent value='members'>
               <MembersSection trip={selectedTrip} currentUserId={user.uid} />

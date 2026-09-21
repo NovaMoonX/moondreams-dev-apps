@@ -1589,10 +1589,51 @@ service cloud.firestore {
       }
 
       allow read: if isTripSubcollectionMember();
+      allow create: if isTripSubcollectionEditor()
+        && request.resource.data.keys().hasOnly([
+            'id',
+            'tripId',
+            'eventType',
+            'dayIndex',
+            'endDayIndex',
+            'title',
+            'startAt',
+            'endAt',
+            'locationName',
+            'address',
+            'latitude',
+            'longitude',
+            'eventDetails',
+            'notes',
+            'assignedMemberIds',
+            'createdBy',
+            'createdAt',
+            'lastEditedAt'
+          ])
+        && request.resource.data.id == eventId
+        && request.resource.data.tripId == tripId
+        && request.resource.data.eventType in ['TRAVEL', 'DINING', 'ACTIVITY', 'FREE_TIME']
+        && request.resource.data.dayIndex is int
+        && request.resource.data.endDayIndex is int
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && isTimestampNumber(request.resource.data.startAt)
+        && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt))
+        && (request.resource.data.locationName == null || request.resource.data.locationName is string)
+        && (request.resource.data.address == null || request.resource.data.address is string)
+        && (request.resource.data.latitude == null || request.resource.data.latitude is number)
+        && (request.resource.data.longitude == null || request.resource.data.longitude is number)
+        && (request.resource.data.eventDetails == null || request.resource.data.eventDetails is map)
+        && (request.resource.data.notes == null || request.resource.data.notes is string)
+        && request.resource.data.assignedMemberIds is list
+        && request.resource.data.createdBy == request.auth.uid
+        && isTimestampNumber(request.resource.data.createdAt)
+        && isTimestampNumber(request.resource.data.lastEditedAt);
       allow update: if isTripSubcollectionEditor()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'endAt'])
         && isTimestampNumber(request.resource.data.startAt)
         && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt));
+      allow delete: if false;
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {
