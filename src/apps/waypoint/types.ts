@@ -1,4 +1,26 @@
 export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
+export type ChecklistCategory =
+  | 'DOCUMENTS'
+  | 'PACKING'
+  | 'BOOKINGS'
+  | 'LOGISTICS'
+  | 'OTHER';
+
+export const CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
+  'DOCUMENTS',
+  'PACKING',
+  'BOOKINGS',
+  'LOGISTICS',
+  'OTHER',
+];
+
+export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
+  DOCUMENTS: 'Documents',
+  PACKING: 'Packing',
+  BOOKINGS: 'Bookings',
+  LOGISTICS: 'Logistics',
+  OTHER: 'Other',
+};
 
 // The roles an Admin can assign when approving a join request — everything
 // except ADMIN itself, which is only ever granted via a separate promotion.
@@ -39,4 +61,19 @@ export interface TripJoinRequest {
   uid: string;
   tripId: string;
   requestedAt: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  tripId: string;
+  title: string;
+  category: ChecklistCategory;
+  customCategoryLabel: string | null;
+  assignedToUids: string[];
+  isCompleted: boolean;
+  markedCompletedByUid: string | null;
+  markedCompletedAt: number | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
 }
