@@ -38,7 +38,11 @@ Run every step below. Don't skip validation because the diff "looks right."
 
 ## 1. Resolve merge conflicts with main
 
-- `git fetch origin main && git merge origin/main`.
+- `git fetch origin main && git merge origin/main`. Do this even if the
+  branch's `git status`/PR mergeable-state already looks clean — "clean
+  right now" only means clean as of whenever the branch was last synced,
+  not as of this moment, and running this once at the start of a long
+  session doesn't cover changes main picks up mid-session.
 - Where main and the branch both touched the same shared file (household
   sync hooks, `selectors.ts`, `types.ts`, `store/index.ts` are the recurring
   offenders in this codebase because every feature wires into the same few
@@ -161,6 +165,26 @@ regularly gets the shape right but the UX wrong:
 
 ## 6. Wrap up
 
+- **Re-sync with main immediately before this step, every time** —
+  `git fetch origin main && git merge origin/main` again, exactly like
+  step 1, resolving any new conflicts the same way. This skill's steps can
+  span a long session (research, multiple rounds of user feedback,
+  emulator testing); main can pick up new commits during that time, and
+  step 1's sync only covers what existed when the session started. Do not
+  skip this because step 1 already ran once — treat every push in this
+  skill as needing a fresh sync first, not just the first one.
+- **Bump `SITE_VERSION` in `src/lib/app/app.constants.ts` — check this
+  before every commit in this skill, not just the first.** It's a
+  site-wide, single-source version bumped on every PR that changes app
+  code or behavior; this is a checklist item per
+  `.github/copilot-instructions.md`'s Critical reminders, not optional.
+  `grep SITE_VERSION src/lib/app/app.constants.ts` to see the current
+  value first. Patch (`1.0.x`) for a fix or small tweak; minor (`1.x.0`)
+  for a feature — finishing an in-progress feature PR (which is what this
+  skill does) is a minor bump, even when the individual commit is "just"
+  a bug fix or refactor on top of it. If this skill produces more than one
+  commit on the branch, bump once, in the first commit that changes app
+  code — don't re-bump per commit.
 - Commit with a message describing the actual end state, not the original
   PR title if it no longer matches.
 - Push to the PR's branch.
