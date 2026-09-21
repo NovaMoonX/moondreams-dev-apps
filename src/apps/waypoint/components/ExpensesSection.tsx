@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -38,7 +37,6 @@ function formatTotal(min: number, max: number, currency: string) {
 
 function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
-  const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
   const [payerFilter, setPayerFilter] = useState<string[]>([]);
@@ -137,19 +135,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const handleDelete = async (expense: TripExpense) => {
-    const confirmed = await confirm({
-      title: 'Delete expense',
-      message: `Delete "${expense.title}"? This action cannot be undone.`,
-      destructive: true,
-    });
-    if (!confirmed) {
-      return;
-    }
+    setIsSubmitting(true);
     setError(null);
     try {
       await dispatch(deleteExpense(expense)).unwrap();
+      setEditingExpense(null);
+      setIsModalOpen(false);
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, 'Unable to delete this expense.'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -338,27 +333,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   </Button>
                 )}
                 {canAddExpenses && (
-                  <>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      onClick={() => {
-                        setEditingExpense(expense);
-                        setIsModalOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='destructive'
-                      size='sm'
-                      onClick={() => void handleDelete(expense)}
-                    >
-                      Delete
-                    </Button>
-                  </>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    onClick={() => {
+                      setEditingExpense(expense);
+                      setIsModalOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
                 )}
               </div>
             </li>
@@ -374,6 +359,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         initialExpense={editingExpense ?? undefined}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
+        onDelete={editingExpense ? () => handleDelete(editingExpense) : undefined}
         onClose={() => {
           setEditingExpense(null);
           setIsModalOpen(false);

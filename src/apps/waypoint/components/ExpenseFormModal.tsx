@@ -7,9 +7,12 @@ import {
   Modal,
   Tabs,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { ExpenseStatus, TripExpense, TripSpace } from '@apps/waypoint/types';
 
 interface ExpenseFormData {
@@ -44,6 +47,7 @@ interface ExpenseFormModalProps {
   initialExpense?: TripExpense;
   isSubmitting?: boolean;
   onSubmit: (values: ExpenseSubmitValues) => Promise<void> | void;
+  onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -60,8 +64,10 @@ function ExpenseFormModal({
   initialExpense,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: ExpenseFormModalProps) {
+  const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<ExpenseFormData['amountMode']>(
     initialExpense?.amount === null ? 'range' : 'amount',
@@ -260,6 +266,23 @@ function ExpenseFormModal({
     }
   };
 
+  const handleDelete = async () => {
+    if (!onDelete) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete expense',
+      message: `Delete "${initialExpense?.title}"? This action cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    await onDelete();
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Expense'>
       <Form
@@ -272,24 +295,32 @@ function ExpenseFormModal({
         onDataChange={(data) => setFormData(data as ExpenseFormData)}
         onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
         submitButton={
-          <div className='flex justify-end gap-2'>
-            <Button type='button' variant='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              loading={isSubmitting}
-              disabled={isSubmitting || !isFormComplete}
-            >
-              {isSubmitting
-                ? isEditing
-                  ? 'Saving…'
-                  : 'Adding…'
-                : isEditing
-                  ? 'Save changes'
-                  : 'Add expense'}
-            </Button>
-          </div>
+          <ModalFooterActions
+            leftActions={
+              isEditing &&
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
+            rightActions={
+              <>
+                <Button type='button' variant='secondary' onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  type='submit'
+                  loading={isSubmitting}
+                  disabled={isSubmitting || !isFormComplete}
+                >
+                  {isSubmitting
+                    ? isEditing
+                      ? 'Saving…'
+                      : 'Adding…'
+                    : isEditing
+                      ? 'Save changes'
+                      : 'Add expense'}
+                </Button>
+              </>
+            }
+          />
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
