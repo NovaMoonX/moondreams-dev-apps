@@ -1,15 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import {
-  Badge,
   Button,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/formatUtils';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
@@ -17,40 +22,52 @@ import NavButton from '@/ui/NavButton';
 
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
+import MembersSection from '@apps/waypoint/components/MembersSection';
+import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
+import TripCard from '@apps/waypoint/components/TripCard';
+import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
+import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
 import {
   createTrip,
   editTrip,
   setTripArchived,
 } from '@apps/waypoint/store/actions/tripActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
-import { startTripListener } from '@apps/waypoint/store/listeners/tripListeners';
 import { selectTrips } from '@apps/waypoint/store/selectors';
-import { setTrips } from '@apps/waypoint/store/slices/tripSlice';
 import type { TripSpace } from '@apps/waypoint/types';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 function Waypoint() {
   const { user, loading } = useAuth();
   const { confirm } = useActionModal();
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
+  const [searchParams] = useSearchParams();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<TripSpace | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteRequestSent, setInviteRequestSent] = useState(false);
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const trips = useAppSelector(selectTrips);
   const tripsLoaded = useAppSelector((state) => state.waypoint.trip.loaded);
+  const pendingRequests = useAppSelector(
+    (state) => state.waypoint.pendingRequests.myRequests,
+  );
+  const pendingRequestsLoaded = useAppSelector(
+    (state) => state.waypoint.pendingRequests.myRequestsLoaded,
+  );
+  const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
+  const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
+  const isSelectedTripAdmin =
+    selectedTrip?.members[user?.uid ?? '']?.role === 'ADMIN';
 
-  useEffect(() => {
-    if (!user?.uid) {
-      dispatch(setTrips([]));
-      return;
-    }
-
-    return startTripListener(user.uid, (nextTrips) => {
-      dispatch(setTrips(nextTrips));
-    });
-  }, [dispatch, user?.uid]);
+  useWaypointSync(user?.uid ?? null, {
+    tripId: selectedTrip?.id ?? null,
+    isTripAdmin: isSelectedTripAdmin,
+  });
 
   const handleCreateTrip = async (values: {
     title: string;
@@ -117,6 +134,34 @@ function Waypoint() {
     }
   };
 
+  const handleRequestToJoin = async () => {
+    if (!user?.uid || !inviteCode) {
+      return;
+    }
+
+    setIsInviteSubmitting(true);
+    setInviteError(null);
+
+    try {
+      await dispatch(requestToJoinTrip({ uid: user.uid, inviteCode })).unwrap();
+      setInviteRequestSent(true);
+    } catch (requestError) {
+      setInviteError(getErrorMessage(requestError, 'Unable to request access.'));
+    } finally {
+      setIsInviteSubmitting(false);
+    }
+  };
+
+  const handleCopyInviteLink = async (tripInviteCode: string) => {
+    await copyToClipboard(
+      `${window.location.origin}/waypoint?inviteCode=${tripInviteCode}`,
+    );
+    addToast({
+      title: 'Invite link copied',
+      description: 'Share the link with someone you want to invite.',
+    });
+  };
+
   const visibleTrips = trips.filter(
     (trip) => showArchived || !trip.isArchived,
   );
@@ -131,6 +176,44 @@ function Waypoint() {
 
   if (!tripsLoaded) {
     return <Loading />;
+  }
+
+  if (selectedTrip) {
+    return (
+      <div className='page'>
+        <div className='mx-auto max-w-4xl space-y-6 py-8'>
+          <Button
+            type='button'
+            variant='link'
+            className='px-0'
+            onClick={() => setSelectedTripId(null)}
+          >
+            Back to My Trips
+          </Button>
+          <div>
+            <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
+            <p className='text-muted-foreground mt-1'>
+              {formatDateTime(selectedTrip.startDate)} –{' '}
+              {formatDateTime(selectedTrip.endDate)}
+            </p>
+          </div>
+          <Tabs defaultValue='overview' tabsWidth='full' variant='pills'>
+            <TabsList>
+              <TabsTrigger value='overview'>Overview</TabsTrigger>
+              <TabsTrigger value='members'>Members</TabsTrigger>
+            </TabsList>
+            <TabsContent value='overview' className='pt-4'>
+              <p className='text-muted-foreground text-sm'>
+                Your trip planning workspace is ready.
+              </p>
+            </TabsContent>
+            <TabsContent value='members'>
+              <MembersSection trip={selectedTrip} currentUserId={user.uid} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -162,6 +245,39 @@ function Waypoint() {
           </div>
         </div>
 
+        {inviteCode && (
+          <section className='border-border bg-card rounded-lg border p-4'>
+            <h2 className='text-lg font-semibold'>You&apos;ve been invited</h2>
+            <p className='text-muted-foreground mt-1 text-sm'>
+              Request access to this Waypoint trip. An Admin will choose your
+              role before you can view it.
+            </p>
+            {inviteRequestSent ? (
+              <p className='text-muted-foreground mt-4 text-sm'>
+                Your request has been sent. You&apos;ll see it below while you
+                wait.
+              </p>
+            ) : (
+              <Button
+                type='button'
+                className='mt-4'
+                disabled={isInviteSubmitting}
+                onClick={handleRequestToJoin}
+              >
+                {isInviteSubmitting ? 'Requesting…' : 'Request to join'}
+              </Button>
+            )}
+            {inviteError && (
+              <p className='text-destructive mt-3 text-sm'>{inviteError}</p>
+            )}
+          </section>
+        )}
+
+        <MyPendingTrips
+          requests={pendingRequests}
+          loading={!pendingRequestsLoaded}
+        />
+
         {visibleTrips.length === 0 ? (
           <div className='border-border rounded-lg border border-dashed p-8 text-center'>
             <p className='text-muted-foreground text-sm'>
@@ -175,57 +291,24 @@ function Waypoint() {
           </div>
         ) : (
           <div className='grid gap-4 sm:grid-cols-2'>
-            {visibleTrips.map((trip) => {
-              const canEdit = hasTripRole(trip, user.uid, ['ADMIN', 'EDITOR']);
-              const canArchive = hasTripRole(trip, user.uid, 'ADMIN');
-
-              return (
-                <div
-                  key={trip.id}
-                  className='border-border bg-card rounded-lg border p-4'
-                >
-                  <div className='flex items-start justify-between gap-3'>
-                    <div>
-                      <div className='flex items-center gap-2'>
-                        <h2 className='text-lg font-semibold'>{trip.title}</h2>
-                        {trip.isArchived && (
-                          <Badge variant='muted'>Archived</Badge>
-                        )}
-                      </div>
-                      <p className='text-muted-foreground mt-2 text-sm'>
-                        {formatDateTime(trip.startDate)} –{' '}
-                        {formatDateTime(trip.endDate)}
-                      </p>
-                    </div>
-                    <div className='flex shrink-0 gap-2'>
-                      {canEdit && (
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant='secondary'
-                          onClick={() => {
-                            setError(null);
-                            setEditingTrip(trip);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                      )}
-                      {canArchive && (
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant='secondary'
-                          onClick={() => void handleToggleArchived(trip)}
-                        >
-                          {trip.isArchived ? 'Unarchive' : 'Archive'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {visibleTrips.map((trip) => (
+              <TripCard
+                key={trip.id}
+                trip={trip}
+                currentUserId={user.uid}
+                onOpen={setSelectedTripId}
+                onEdit={(tripToEdit) => {
+                  setError(null);
+                  setEditingTrip(tripToEdit);
+                }}
+                onToggleArchived={(tripToToggle) =>
+                  void handleToggleArchived(tripToToggle)
+                }
+                onCopyInviteLink={(inviteLinkCode) =>
+                  void handleCopyInviteLink(inviteLinkCode)
+                }
+              />
+            ))}
           </div>
         )}
         {error && <p className='text-destructive text-sm'>{error}</p>}

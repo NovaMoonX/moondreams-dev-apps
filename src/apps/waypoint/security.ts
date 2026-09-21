@@ -9,6 +9,7 @@ export interface CreateTripValues {
   endDate: number;
   createdBy: string;
   createdAt: number;
+  inviteCode?: string | null;
 }
 
 export function createTripSpace(values: CreateTripValues): TripSpace {
@@ -27,7 +28,7 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
         joinedAt: values.createdAt,
       },
     },
-    inviteCode: null,
+    inviteCode: values.inviteCode ?? null,
     createdBy: values.createdBy,
     createdAt: values.createdAt,
     lastEditedAt: values.createdAt,

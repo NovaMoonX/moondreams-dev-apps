@@ -1,13 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  collection,
-  doc,
-  getDocs,
-  setDoc,
-  writeBatch,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import type { TripSpace } from '@apps/waypoint/types';
 import {
   createTripSpace,
@@ -15,6 +10,14 @@ import {
   validateTripDates,
 } from '@apps/waypoint/security';
 import { upsertTrip } from '@apps/waypoint/store/slices/tripSlice';
+
+export const WAYPOINT_CODE_LENGTH = 6;
+const INVITE_CODE_COLLECTION = collection(
+  db,
+  'apps',
+  'waypoint',
+  'inviteCodes',
+);
 
 interface CreateTripInput {
   uid: string;
@@ -62,6 +65,9 @@ export const createTrip = createAsyncThunk<
     }
 
     const tripId = doc(collection(db, ...TRIP_COLLECTION_PATH)).id;
+    const inviteCode = await getUniqueInviteCode(INVITE_CODE_COLLECTION, {
+      length: WAYPOINT_CODE_LENGTH,
+    });
     const trip = createTripSpace({
       id: tripId,
       title: trimmedTitle,
@@ -69,9 +75,16 @@ export const createTrip = createAsyncThunk<
       endDate,
       createdBy: uid,
       createdAt: Date.now(),
+      inviteCode,
     });
 
-    await setDoc(doc(db, ...TRIP_COLLECTION_PATH, tripId), trip);
+    const batch = writeBatch(db);
+    batch.set(doc(db, ...TRIP_COLLECTION_PATH, tripId), trip);
+    batch.set(doc(INVITE_CODE_COLLECTION, inviteCode), {
+      tripId,
+      title: trip.title,
+    });
+    await batch.commit();
     dispatch(upsertTrip(trip));
 
     return trip;

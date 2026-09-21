@@ -556,10 +556,11 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 - **Member display info is never in Waypoint's own state.** `TripMember` only carries `uid`/`role`/`joinedAt`; any component rendering a member's name or avatar resolves it via the existing central `useUserInfo(uid)` hook.
 - **`resetAllState`**: dispatched on UID change, including via `DevAccountSwitcher`.
 - **Multi-doc atomic mutations get their own actions**: `proposalActions.ts` (approve/decline), `membershipActions.ts` (approve/decline pending request, change role, remove member — all Admin-only, atomic per State Machine #13), `ideaActions.ts` (convert idea → event or stay).
-- **Snapshot listener tiering**:
-  - *Eager* (on opening a trip): the trip doc, events, stays, checklist, ideas, stay criteria, a lightweight expenses listener (dues/totals are whole-trip visibility, not a per-item drill-down), a pending-proposal *count* for `ADMIN`/`EDITOR`, and — for an `ADMIN` — a `where('tripId', '==', tripId)` query against `apps/waypoint/pendingRequests`.
+- **Snapshot listener tiering**: all Firestore listeners are started from `useWaypointSync.ts`, called once at the app root (`Waypoint.tsx`), mirroring Nine Lives' `useNineLivesSync.ts` — never from inside a leaf/tab component, so switching tabs or reopening the same trip never tears down and resubscribes a listener.
+  - *User-level* (while signed in, not tied to any open trip): every trip the user belongs to, and "my pending trips" — `where('uid', '==', myUid)` against `apps/waypoint/pendingRequests`, rendered via `MyPendingTrips.tsx` with a follow-up fetch per result to resolve `tripId` to a trip title, and a Withdraw action that deletes the requester's own doc (`cancelJoinRequest` — see Client hooks pattern: the requester-facing cancel action is mandatory, not a later follow-up).
+  - *Eager* (on opening a trip): the trip doc, events, stays, checklist, ideas, stay criteria, a lightweight expenses listener (dues/totals are whole-trip visibility, not a per-item drill-down), a pending-proposal *count* for `ADMIN`/`EDITOR`, and — for an `ADMIN` — a `where('tripId', '==', tripId)` query against `apps/waypoint/pendingRequests`, gated the same way the Members tab UI is (Admin only).
   - *Lazy* (only while open): full comment/proposal threads per event.
-  - *Outside any single trip*: "my pending trips" is `where('uid', '==', myUid)` against `apps/waypoint/pendingRequests` — not tied to one open trip, wired up once at the app root (`MyPendingTrips.tsx` / `useMyPendingRequests.ts`), with a follow-up fetch per result to resolve `tripId` to a trip title. This hook has more than one item to key off, so it's worth explicitly following the skill's Known Footguns: key its effect on a stable derived string (not the array reference itself), and resolve `loading` to `false` immediately when there are zero pending requests rather than waiting on a listener that will never fire.
+  - This hook has more than one item to key off, so it's worth explicitly following the skill's Known Footguns: key an effect on a stable derived string (not the array reference itself), and resolve `loading` to `false` immediately when there are zero pending requests rather than waiting on a listener that will never fire.
 - **No Context/Provider.** `waypointContext.ts`/`WaypointProvider.tsx` from the very first draft don't exist in this design — components read via `useAppSelector`/`useAppDispatch` directly.
 
 ---
@@ -648,14 +649,18 @@ src/apps/waypoint/
 │   │   ├── membershipActions.ts    (approve/decline pending, change role, remove member — Admin-only, atomic)
 │   │   └── ideaActions.ts          (convert idea → event or stay — atomic multi-doc write)
 │   ├── listeners/
-│   │   └── tripListeners.ts        (eager tier — trip, events, stays, checklist, ideas, stayCriteria,
-│   │                                 expenses, proposal counts, and (Admin) this trip's pendingRequests)
+│   │   ├── tripListeners.ts        (eager tier — trip, events, stays, checklist, ideas, stayCriteria,
+│   │   │                             expenses, proposal counts)
+│   │   └── pendingRequestsListeners.ts (startMyPendingRequestsListener + startTripPendingRequestsListener —
+│   │                                     plain functions, called only from useWaypointSync.ts)
 │   ├── selectors.ts                (selectWaypoint + derived selectors, incl. dues/totals/stay-segmentation)
 │   └── index.ts                    (exports WaypointState, reducer, selectWaypoint)
 ├── hooks/                          (thin — mostly listener-wiring, not data hooks)
+│   ├── useWaypointSync.ts          (app-scoped Firestore sync, mirrors Nine Lives' useNineLivesSync.ts —
+│   │                                 every listener starts here, called once from Waypoint.tsx, never from
+│   │                                 a leaf/tab component; see Known Footguns note above)
 │   ├── useTripTimeline.ts
-│   ├── useTravelStatus.ts          (thin RTDB read/write wrapper, outside Redux)
-│   └── useMyPendingRequests.ts     (flat-collection query, not tied to one open trip — see Known Footguns note above)
+│   └── useTravelStatus.ts          (thin RTDB read/write wrapper, outside Redux)
 ├── utils/
 │   ├── dateUtils.ts
 │   ├── mapUrlHelpers.ts
