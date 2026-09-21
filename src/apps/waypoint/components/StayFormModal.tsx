@@ -1,6 +1,11 @@
 import { useState } from 'react';
 
-import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Input,
+  Label,
+  Modal,
+} from '@moondreamsdev/dreamer-ui/components';
 
 import {
   fromLocalDateAndTimeInputValues,
@@ -9,7 +14,10 @@ import {
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
 
-type StayValues = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
+type StayValues = Omit<
+  Stay,
+  'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'
+>;
 
 interface StayFormModalProps {
   isOpen: boolean;
@@ -50,8 +58,24 @@ export function StayFormModal({
 }: StayFormModalProps) {
   const [draft, setDraft] = useState(() => getInitialDraft(trip));
   const [error, setError] = useState<string | null>(null);
+  const [showTimezoneField, setShowTimezoneField] = useState(false);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
+
+  const draftCheckInAt = fromLocalDateAndTimeInputValues(
+    draft.checkInDate,
+    draft.checkInTime,
+  );
+  const draftCheckOutAt = fromLocalDateAndTimeInputValues(
+    draft.checkOutDate,
+    draft.checkOutTime,
+  );
+  const isFormComplete =
+    draft.name.trim() !== '' &&
+    draft.address.trim() !== '' &&
+    draftCheckInAt !== undefined &&
+    draftCheckOutAt !== undefined &&
+    draftCheckOutAt > draftCheckInAt;
 
   const handleSubmit = async () => {
     if (!draft.name.trim() || !draft.address.trim()) {
@@ -59,9 +83,19 @@ export function StayFormModal({
       return;
     }
 
-    const checkInAt = fromLocalDateAndTimeInputValues(draft.checkInDate, draft.checkInTime);
-    const checkOutAt = fromLocalDateAndTimeInputValues(draft.checkOutDate, draft.checkOutTime);
-    if (checkInAt === undefined || checkOutAt === undefined || checkOutAt <= checkInAt) {
+    const checkInAt = fromLocalDateAndTimeInputValues(
+      draft.checkInDate,
+      draft.checkInTime,
+    );
+    const checkOutAt = fromLocalDateAndTimeInputValues(
+      draft.checkOutDate,
+      draft.checkOutTime,
+    );
+    if (
+      checkInAt === undefined ||
+      checkOutAt === undefined ||
+      checkOutAt <= checkInAt
+    ) {
       setError('Choose valid check-in and check-out times.');
       return;
     }
@@ -113,7 +147,10 @@ export function StayFormModal({
               value={`${draft.checkInDate}T${draft.checkInTime}`}
               onChange={(event) => {
                 const [date, time] = event.target.value.split('T');
-                updateDraft({ checkInDate: date ?? '', checkInTime: time ?? '' });
+                updateDraft({
+                  checkInDate: date ?? '',
+                  checkInTime: time ?? '',
+                });
               }}
             />
           </div>
@@ -124,24 +161,45 @@ export function StayFormModal({
               value={`${draft.checkOutDate}T${draft.checkOutTime}`}
               onChange={(event) => {
                 const [date, time] = event.target.value.split('T');
-                updateDraft({ checkOutDate: date ?? '', checkOutTime: time ?? '' });
+                updateDraft({
+                  checkOutDate: date ?? '',
+                  checkOutTime: time ?? '',
+                });
               }}
             />
           </div>
         </div>
-        <div className='space-y-1.5'>
-          <Label>Timezone (optional)</Label>
-          <Input
-            value={draft.checkInTimezone}
-            placeholder='America/Los_Angeles'
-            onChange={(event) => updateDraft({ checkInTimezone: event.target.value })}
-          />
-        </div>
+        {showTimezoneField ? (
+          <div className='space-y-1.5'>
+            <Label>Timezone</Label>
+            <Input
+              value={draft.checkInTimezone}
+              placeholder='America/Los_Angeles'
+              onChange={(event) =>
+                updateDraft({ checkInTimezone: event.target.value })
+              }
+            />
+          </div>
+        ) : (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            onClick={() => setShowTimezoneField(true)}
+          >
+            + Add timezone
+          </Button>
+        )}
         <div className='flex justify-end gap-2'>
           <Button type='button' variant='secondary' onClick={onClose}>
             Cancel
           </Button>
-          <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
+          <Button
+            type='button'
+            loading={isSubmitting}
+            disabled={isSubmitting || !isFormComplete}
+            onClick={() => void handleSubmit()}
+          >
             {isSubmitting ? 'Saving…' : 'Add stay'}
           </Button>
         </div>
