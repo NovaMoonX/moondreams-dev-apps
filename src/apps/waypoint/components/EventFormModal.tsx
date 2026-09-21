@@ -68,16 +68,8 @@ interface EventDraft {
   assignedMemberIds: string[];
 }
 
-function EventFormModal({
-  isOpen,
-  trip,
-  memberOptions,
-  event,
-  isSubmitting = false,
-  onSubmit,
-  onClose,
-}: EventFormModalProps) {
-  const initialDraft: EventDraft = {
+function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
+  return {
     eventType: event?.eventType ?? 'ACTIVITY',
     title: event?.title ?? '',
     dayIndex: event?.dayIndex ?? 0,
@@ -97,9 +89,20 @@ function EventFormModal({
     address: event?.address ?? '',
     assignedMemberIds: event?.assignedMemberIds ?? [],
   };
+}
+
+function EventFormModal({
+  isOpen,
+  trip,
+  memberOptions,
+  event,
+  isSubmitting = false,
+  onSubmit,
+  onClose,
+}: EventFormModalProps) {
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>(initialDraft);
+  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(event));
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const updateDraft = (changes: Partial<EventDraft>) =>
@@ -170,7 +173,7 @@ function EventFormModal({
         : activitySettingOptions;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={event ? 'Edit timeline event' : 'Add timeline event'}>
+    <Modal isOpen={isOpen} onClose={onClose} title='Timeline event'>
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>Step {step} of 2</p>
         {step === 1 ? (

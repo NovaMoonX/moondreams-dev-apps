@@ -1,4 +1,10 @@
 export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
+export type ExpenseTargetType =
+  | 'EVERYONE_CURRENT'
+  | 'EVERYONE_INCLUDING_FUTURE'
+  | 'JUST_ME'
+  | 'SPECIFIC_MEMBERS';
+export type ExpenseStatus = 'PAID' | 'EXPECTED';
 export type ChecklistCategory =
   | 'DOCUMENTS'
   | 'PACKING'
@@ -31,6 +37,27 @@ export interface TripJoinRequest {
   uid: string;
   tripId: string;
   requestedAt: number;
+}
+
+export interface TripExpense {
+  id: string;
+  tripId: string;
+  dayIndex: number | null;
+  title: string;
+  amount: number | null;
+  amountMin: number | null;
+  amountMax: number | null;
+  paidAmount: number | null;
+  currency: string;
+  payerUid: string;
+  status: ExpenseStatus;
+  targetType: ExpenseTargetType;
+  targetMemberIds: string[];
+  splitAmounts: Record<string, number> | null;
+  paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
 }
 
 export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME';

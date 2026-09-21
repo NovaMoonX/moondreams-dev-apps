@@ -129,7 +129,7 @@ export default function ChecklistItemFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Add checklist item'>
+    <Modal isOpen={isOpen} onClose={onClose} title='Checklist item'>
       <Form
         id='waypoint-checklist-item'
         form={fields}

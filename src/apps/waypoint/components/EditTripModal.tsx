@@ -119,7 +119,7 @@ function EditTripModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Edit trip'>
+    <Modal isOpen={isOpen} onClose={onClose} title='Trip details'>
       <Form
         key={trip.id}
         id='waypoint-edit-trip'

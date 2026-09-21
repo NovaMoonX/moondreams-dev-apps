@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { EventDetails, EventType, TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -92,7 +92,7 @@ export const updateEvent = createAsyncThunk<
     lastEditedAt: Date.now(),
   };
 
-  await updateDoc(eventRef, updatedEvent);
+  await setDoc(eventRef, updatedEvent);
   return updatedEvent;
 });
 
