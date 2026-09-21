@@ -5,7 +5,6 @@ import {
   Checkbox,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useUserInfo } from '@/hooks/useUserInfo';

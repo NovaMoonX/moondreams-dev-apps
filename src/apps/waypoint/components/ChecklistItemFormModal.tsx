@@ -12,8 +12,7 @@ import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
-import type { ChecklistCategory } from '@apps/waypoint/types';
-import type { ChecklistItem } from '@apps/waypoint/types';
+import type { ChecklistCategory, ChecklistItem } from '@apps/waypoint/types';
 
 interface ChecklistFormData {
   title: string;
