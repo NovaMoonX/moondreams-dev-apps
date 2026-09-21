@@ -54,3 +54,9 @@ export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals => 
 
   return totals;
 };
+
+export const selectTimelineEvents = (state: RootState) => state.waypoint.events.items;
+
+export const selectEventsByDay =
+  (dayIndex: number) => (state: RootState) =>
+    state.waypoint.events.items.filter((event) => event.dayIndex === dayIndex);

@@ -10,10 +10,10 @@ import {
   Modal,
   Select,
   Tooltip,
-  Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import AppToggle from '@/components/AppToggle';
 import {
   Activity,
   Calendar,
@@ -229,7 +229,7 @@ function IncludeToggle({
 }) {
   return (
     <label className='flex items-center gap-2 text-sm'>
-      <Toggle size='sm' checked={included} onCheckedChange={onToggle} disabled={disabled} />
+      <AppToggle size='sm' checked={included} onCheckedChange={onToggle} disabled={disabled} />
       {label}
     </label>
   );

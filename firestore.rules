@@ -1485,6 +1485,96 @@ service cloud.firestore {
         || isTripMembershipManagementValid()
       );
       allow delete: if false;
+
+      match /checklist/{checklistId} {
+        function tripExists() {
+          return exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId));
+        }
+
+        function isChecklistMember() {
+          return request.auth != null
+            && tripExists()
+            && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+        }
+
+        function hasChecklistRole(role) {
+          return isChecklistMember()
+            && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role == role;
+        }
+
+        function isChecklistEditor() {
+          return hasChecklistRole('ADMIN') || hasChecklistRole('EDITOR');
+        }
+
+        function isChecklistShapeValid(data) {
+          return data.keys().hasOnly([
+              'id',
+              'tripId',
+              'title',
+              'category',
+              'customCategoryLabel',
+              'assignedToUids',
+              'isCompleted',
+              'markedCompletedByUid',
+              'markedCompletedAt',
+              'createdBy',
+              'createdAt',
+              'lastEditedAt'
+            ])
+            && data.id == checklistId
+            && data.tripId == tripId
+            && isNonEmptyString(data.title)
+            && data.category in ['DOCUMENTS', 'PACKING', 'BOOKINGS', 'LOGISTICS', 'OTHER']
+            && (data.customCategoryLabel == null || isNonEmptyString(data.customCategoryLabel))
+            && (data.category != 'OTHER' || isNonEmptyString(data.customCategoryLabel))
+            && data.assignedToUids is list
+            && data.isCompleted is bool
+            && (data.markedCompletedByUid == null || data.markedCompletedByUid is string)
+            && (data.markedCompletedAt == null || isTimestampNumber(data.markedCompletedAt))
+            && data.createdBy is string
+            && isTimestampNumber(data.createdAt)
+            && isTimestampNumber(data.lastEditedAt);
+        }
+
+        function isChecklistImmutableFieldsValid() {
+          return request.resource.data.id == resource.data.id
+            && request.resource.data.tripId == resource.data.tripId
+            && request.resource.data.tripId == tripId
+            && request.resource.data.createdBy == resource.data.createdBy
+            && request.resource.data.createdAt == resource.data.createdAt;
+        }
+
+        function isChecklistAssignedToggleValid() {
+          return isChecklistMember()
+            && request.auth.uid in resource.data.assignedToUids
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'isCompleted',
+              'markedCompletedByUid',
+              'markedCompletedAt',
+              'lastEditedAt'
+            ])
+            && request.resource.data.isCompleted is bool
+            && (
+              request.resource.data.isCompleted == false
+                ? request.resource.data.markedCompletedByUid == null
+                  && request.resource.data.markedCompletedAt == null
+                : request.resource.data.markedCompletedByUid == request.auth.uid
+                  && isTimestampNumber(request.resource.data.markedCompletedAt)
+            )
+            && isTimestampNumber(request.resource.data.lastEditedAt);
+        }
+
+        allow read: if isChecklistMember();
+        allow create: if isChecklistEditor()
+          && isChecklistShapeValid(request.resource.data)
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if (
+          isChecklistEditor()
+          && isChecklistShapeValid(request.resource.data)
+          && isChecklistImmutableFieldsValid()
+        ) || isChecklistAssignedToggleValid();
+        allow delete: if isChecklistEditor();
+      }
     }
 
     match /apps/waypoint/trips/{tripId}/events/{eventId} {
@@ -1499,10 +1589,51 @@ service cloud.firestore {
       }
 
       allow read: if isTripSubcollectionMember();
+      allow create: if isTripSubcollectionEditor()
+        && request.resource.data.keys().hasOnly([
+            'id',
+            'tripId',
+            'eventType',
+            'dayIndex',
+            'endDayIndex',
+            'title',
+            'startAt',
+            'endAt',
+            'locationName',
+            'address',
+            'latitude',
+            'longitude',
+            'eventDetails',
+            'notes',
+            'assignedMemberIds',
+            'createdBy',
+            'createdAt',
+            'lastEditedAt'
+          ])
+        && request.resource.data.id == eventId
+        && request.resource.data.tripId == tripId
+        && request.resource.data.eventType in ['TRAVEL', 'DINING', 'ACTIVITY', 'FREE_TIME']
+        && request.resource.data.dayIndex is int
+        && request.resource.data.endDayIndex is int
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && isTimestampNumber(request.resource.data.startAt)
+        && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt))
+        && (request.resource.data.locationName == null || request.resource.data.locationName is string)
+        && (request.resource.data.address == null || request.resource.data.address is string)
+        && (request.resource.data.latitude == null || request.resource.data.latitude is number)
+        && (request.resource.data.longitude == null || request.resource.data.longitude is number)
+        && (request.resource.data.eventDetails == null || request.resource.data.eventDetails is map)
+        && (request.resource.data.notes == null || request.resource.data.notes is string)
+        && request.resource.data.assignedMemberIds is list
+        && request.resource.data.createdBy == request.auth.uid
+        && isTimestampNumber(request.resource.data.createdAt)
+        && isTimestampNumber(request.resource.data.lastEditedAt);
       allow update: if isTripSubcollectionEditor()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startAt', 'endAt'])
         && isTimestampNumber(request.resource.data.startAt)
         && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt));
+      allow delete: if false;
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {

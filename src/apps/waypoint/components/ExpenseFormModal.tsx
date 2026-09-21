@@ -73,6 +73,20 @@ function ExpenseFormModal({
   });
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
+  const parsedAmount = Number(formData.amount);
+  const parsedAmountMin = Number(formData.amountMin);
+  const parsedAmountMax = Number(formData.amountMax);
+  const isFormComplete =
+    formData.title.trim() !== '' &&
+    (mode === 'amount'
+      ? formData.amount.trim() !== '' && Number.isFinite(parsedAmount)
+      : formData.amountMin.trim() !== '' &&
+        formData.amountMax.trim() !== '' &&
+        Number.isFinite(parsedAmountMin) &&
+        Number.isFinite(parsedAmountMax) &&
+        parsedAmountMax >= parsedAmountMin) &&
+    formData.currency.trim() !== '' &&
+    formData.payerUid !== '';
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'Other' },
@@ -227,7 +241,11 @@ function ExpenseFormModal({
             <Button type='button' variant='secondary' onClick={onClose}>
               Cancel
             </Button>
-            <Button type='submit' loading={isSubmitting} disabled={isSubmitting}>
+            <Button
+              type='submit'
+              loading={isSubmitting}
+              disabled={isSubmitting || !isFormComplete}
+            >
               {isSubmitting ? 'Adding…' : 'Add expense'}
             </Button>
           </div>
