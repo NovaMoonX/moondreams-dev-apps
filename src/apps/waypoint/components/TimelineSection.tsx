@@ -8,7 +8,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
@@ -37,7 +37,6 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { confirm } = useActionModal();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState('all');
   const dayCount = getDayCount(trip.startDate, trip.endDate);
@@ -81,7 +80,6 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
         setEditingEvent(selectedEvent);
         setIsFormOpen(true);
       }}
-      onDelete={(selectedEvent) => void handleDelete(selectedEvent)}
     />
   );
 
@@ -155,23 +153,19 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   };
 
   const handleDelete = async (event: TimelineEvent) => {
-    const confirmed = await confirm({
-      title: 'Delete timeline event',
-      message: `Are you sure you want to delete “${event.title}”? This cannot be undone.`,
-      destructive: true,
-    });
-    if (!confirmed) {
-      return;
-    }
-
+    setIsSubmitting(true);
     try {
       await dispatch(deleteEvent({ uid: currentUserId, trip, eventId: event.id })).unwrap();
+      setIsFormOpen(false);
+      setEditingEvent(undefined);
     } catch (error) {
       addToast({
         title: 'Unable to delete event',
         description: getErrorMessage(error, 'Please try again.'),
         type: 'error',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -226,6 +220,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
         event={editingEvent}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
+        onDelete={editingEvent ? () => handleDelete(editingEvent) : undefined}
         onClose={() => {
           setIsFormOpen(false);
           setEditingEvent(undefined);

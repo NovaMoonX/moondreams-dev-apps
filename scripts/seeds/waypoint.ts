@@ -50,7 +50,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   await tripRef.set({
     id: TRIP_ID,
     title: tripTitle,
-    coverImageUrl: null, // null for now, can be updated to the following when functionality is supported: https://images.rawpixel.com/image_800/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvZmwyNzkwOTU5NzA1Ni1pbWFnZS1rdXFtcjRxNi5qcGc.jpg
+    coverImageUrl:
+      'https://images.rawpixel.com/image_800/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvZmwyNzkwOTU5NzA1Ni1pbWFnZS1rdXFtcjRxNi5qcGc.jpg',
     startDate: Date.UTC(2026, 8, 25),
     endDate: Date.UTC(2026, 8, 28),
     defaultCurrency: null,
@@ -68,6 +69,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       },
     },
     inviteCode: INVITE_CODE,
+    sharedAlbumUrl: null,
+    sharedAlbumSetByUid: null,
+    sharedAlbumSetAt: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -89,6 +93,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       },
     },
     inviteCode: ARCHIVED_INVITE_CODE,
+    sharedAlbumUrl: null,
+    sharedAlbumSetByUid: null,
+    sharedAlbumSetAt: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,

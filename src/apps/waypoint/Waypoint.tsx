@@ -25,7 +25,7 @@ import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
-import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
@@ -79,6 +79,7 @@ function Waypoint() {
     title: string;
     startDate: number;
     endDate: number;
+    coverImageFile: File | null;
   }) => {
     if (!user?.uid) {
       return;
@@ -197,6 +198,13 @@ function Waypoint() {
             <ChevronLeft /> Back to My Trips
           </Button>
           <div>
+            {selectedTrip.coverImageUrl && (
+              <img
+                src={selectedTrip.coverImageUrl}
+                alt={`${selectedTrip.title} cover`}
+                className='mb-4 h-48 w-full rounded-lg object-cover'
+              />
+            )}
             <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
             <p className='text-muted-foreground mt-1'>
               {formatDateTime(selectedTrip.startDate)} –{' '}
@@ -212,7 +220,7 @@ function Waypoint() {
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
-              <TimelineSection
+              <OverviewSection
                 trip={selectedTrip}
                 events={timelineEvents}
                 currentUserId={user.uid}

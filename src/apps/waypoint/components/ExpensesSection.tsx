@@ -10,7 +10,9 @@ import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import MarkExpensePaidModal from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
+  deleteExpense,
   markExpensePaid,
+  updateExpense,
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
@@ -42,6 +44,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
+  const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dayCount = Math.floor((trip.endDate - trip.startDate) / 86_400_000) + 1;
   const currency = trip.defaultCurrency ?? 'USD';
@@ -92,17 +95,54 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setIsSubmitting(true);
     setError(null);
     try {
-      await dispatch(
-        createExpense({
-          uid: currentUserId,
-          tripId: trip.id,
-          memberIds: Object.keys(trip.members),
-          ...values,
-        }),
-      ).unwrap();
+      if (editingExpense) {
+        await dispatch(
+          updateExpense({
+            expense: editingExpense,
+            title: values.title,
+            amount: values.amount,
+            amountMin: values.amountMin,
+            amountMax: values.amountMax,
+            payerUid: values.payerUid,
+            dayIndex: values.dayIndex,
+            paidAmount: values.paidAmount,
+          }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          createExpense({
+            uid: currentUserId,
+            tripId: trip.id,
+            memberIds: Object.keys(trip.members),
+            ...values,
+          }),
+        ).unwrap();
+      }
+      setEditingExpense(null);
       setIsModalOpen(false);
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to add this expense.'));
+      setError(
+        getErrorMessage(
+          submitError,
+          editingExpense
+            ? 'Unable to update this expense.'
+            : 'Unable to add this expense.',
+        ),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (expense: TripExpense) => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await dispatch(deleteExpense(expense)).unwrap();
+      setEditingExpense(null);
+      setIsModalOpen(false);
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError, 'Unable to delete this expense.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -135,7 +175,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       <div className='flex items-center justify-between gap-3'>
         <h2 className='text-xl font-semibold'>Expenses</h2>
         {canAddExpenses && (
-          <Button onClick={() => setIsModalOpen(true)}>Add expense</Button>
+          <Button
+            onClick={() => {
+              setEditingExpense(null);
+              setIsModalOpen(true);
+            }}
+          >
+            Add expense
+          </Button>
         )}
       </div>
       <div className='grid gap-3 sm:grid-cols-3'>
@@ -180,9 +227,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               const isSelected = dayFilter.includes(value);
 
               return (
-                <button
+                <Button
                   key={value}
                   type='button'
+                  variant='base'
+                  size='sm'
                   aria-pressed={isSelected}
                   onClick={() => toggleDayFilter(value)}
                 >
@@ -192,11 +241,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   >
                     Day {index + 1}
                   </Badge>
-                </button>
+                </Button>
               );
             })}
-            <button
+            <Button
               type='button'
+              variant='base'
+              size='sm'
               aria-pressed={dayFilter.includes('other')}
               onClick={() => toggleDayFilter('other')}
             >
@@ -206,7 +257,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               >
                 No specific day
               </Badge>
-            </button>
+            </Button>
           </div>
         </div>
         <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
@@ -222,9 +273,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               const isSelected = payerFilter.includes(uid);
 
               return (
-                <button
+                <Button
                   key={uid}
                   type='button'
+                  variant='base'
+                  size='sm'
                   aria-pressed={isSelected}
                   onClick={() => togglePayerFilter(uid)}
                 >
@@ -234,7 +287,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   >
                     {memberLabel(uid)}
                   </Badge>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -279,6 +332,19 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                     {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
                   </Button>
                 )}
+                {canAddExpenses && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    onClick={() => {
+                      setEditingExpense(expense);
+                      setIsModalOpen(true);
+                    }}
+                  >
+                    Modify
+                  </Button>
+                )}
               </div>
             </li>
           ))}
@@ -286,12 +352,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <ExpenseFormModal
+        key={editingExpense?.id ?? 'new'}
         isOpen={isModalOpen}
         trip={trip}
         defaultPayerUid={currentUserId}
+        initialExpense={editingExpense ?? undefined}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
-        onClose={() => setIsModalOpen(false)}
+        onDelete={editingExpense ? () => handleDelete(editingExpense) : undefined}
+        onClose={() => {
+          setEditingExpense(null);
+          setIsModalOpen(false);
+        }}
       />
       <MarkExpensePaidModal
         isOpen={payingExpense !== null}

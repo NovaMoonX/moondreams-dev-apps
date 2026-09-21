@@ -1,6 +1,9 @@
 import type { RootState } from '@/store';
 import type { Stay, TripExpense } from '@apps/waypoint/types';
 
+const REMINDER_WINDOW_MS = 2 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export const selectTrips = (state: RootState) => state.waypoint.trip.items;
 
 export const selectTripById =
@@ -8,6 +11,30 @@ export const selectTripById =
     tripId
       ? (state.waypoint.trip.items.find((trip) => trip.id === tripId) ?? null)
       : null;
+
+export function selectShouldShowAlbumReminder(
+  state: RootState,
+  tripId: string,
+  currentUserId: string,
+  now = Date.now(),
+) {
+  const trip = state.waypoint.trip.items.find((item) => item.id === tripId);
+  if (!trip || now < trip.startDate || now > trip.endDate + DAY_MS) {
+    return false;
+  }
+
+  const dayEnd = Math.min(
+    trip.endDate + DAY_MS,
+    trip.startDate +
+      (Math.floor((now - trip.startDate) / DAY_MS) + 1) * DAY_MS,
+  );
+  const isNearEnd = now >= dayEnd - REMINDER_WINDOW_MS;
+  const canSetAlbum =
+    trip.members[currentUserId]?.role === 'ADMIN' ||
+    trip.members[currentUserId]?.role === 'EDITOR';
+
+  return isNearEnd && (trip.sharedAlbumUrl !== null || canSetAlbum);
+}
 
 export const selectTripExpenses = (state: RootState) =>
   state.waypoint.expenses.items;

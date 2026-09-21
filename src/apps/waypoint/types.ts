@@ -28,6 +28,9 @@ export interface TripSpace {
   isArchived: boolean;
   members: Record<string, TripMember>;
   inviteCode: string | null;
+  sharedAlbumUrl: string | null;
+  sharedAlbumSetByUid: string | null;
+  sharedAlbumSetAt: number | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

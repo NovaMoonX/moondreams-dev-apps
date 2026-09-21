@@ -7,14 +7,17 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import ImageUploadField from '@/components/forms/ImageUploadField';
+import { useImageUpload } from '@/hooks/useImageUpload';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 
 interface CreateTripFormData {
   title: string;
   startDate: string;
   endDate: string;
+  coverImageFile: File | null;
 }
 
 interface CreateTripModalProps {
@@ -24,11 +27,12 @@ interface CreateTripModalProps {
     title: string;
     startDate: number;
     endDate: number;
+    coverImageFile: File | null;
   }) => Promise<void> | void;
   onClose: () => void;
 }
 
-const { input } = FormFactories;
+const { custom, input } = FormFactories;
 
 function CreateTripModal({
   isOpen,
@@ -41,7 +45,9 @@ function CreateTripModal({
     title: '',
     startDate: '',
     endDate: '',
+    coverImageFile: null,
   });
+  const coverUpload = useImageUpload();
 
   const isFormComplete =
     formData.title.trim() !== '' &&
@@ -66,8 +72,37 @@ function CreateTripModal({
         label: 'Estimated end date',
         variant: 'outline',
       }),
+      custom({
+        name: 'coverImageFile',
+        label: 'Cover photo',
+        renderComponent: () => (
+          <div className='space-y-2'>
+            {coverUpload.previewUrl && (
+              <img
+                src={coverUpload.previewUrl}
+                alt='Cover preview'
+                className='h-40 w-full rounded-md object-cover'
+              />
+            )}
+            <ImageUploadField
+              previewUrl={coverUpload.previewUrl}
+              error={coverUpload.error}
+              disabled={isSubmitting}
+              hideAvatar
+              onSelect={(file) => {
+                coverUpload.pick(file);
+                setFormData((current) => ({ ...current, coverImageFile: file }));
+              }}
+              onRemove={() => {
+                coverUpload.clear();
+                setFormData((current) => ({ ...current, coverImageFile: null }));
+              }}
+            />
+          </div>
+        ),
+      }),
     ],
-    [],
+    [coverUpload, isSubmitting],
   );
 
   const handleSubmit = async (data: CreateTripFormData) => {
@@ -83,9 +118,19 @@ function CreateTripModal({
     setError(null);
 
     try {
-      await onSubmit({ title, startDate, endDate });
+      await onSubmit({
+        title,
+        startDate,
+        endDate,
+        coverImageFile: coverUpload.file,
+      });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to create this trip.'));
+      setError(
+        getStorageErrorMessage(
+          submitError,
+          getErrorMessage(submitError, 'Unable to create this trip.'),
+        ),
+      );
     }
   };
 
@@ -94,7 +139,12 @@ function CreateTripModal({
       <Form
         id='waypoint-create-trip'
         form={fields}
-        initialData={{ title: '', startDate: '', endDate: '' }}
+        initialData={{
+          title: '',
+          startDate: '',
+          endDate: '',
+          coverImageFile: null,
+        }}
         columns={1}
         spacing='normal'
         onDataChange={(data) => setFormData(data as CreateTripFormData)}

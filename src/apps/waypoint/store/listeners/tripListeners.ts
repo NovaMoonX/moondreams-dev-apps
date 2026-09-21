@@ -32,6 +32,9 @@ export function startTripListener(
         return {
           id: docSnapshot.id,
           ...data,
+          sharedAlbumUrl: data.sharedAlbumUrl ?? null,
+          sharedAlbumSetByUid: data.sharedAlbumSetByUid ?? null,
+          sharedAlbumSetAt: data.sharedAlbumSetAt ?? null,
           isArchived: data.isArchived ?? false,
         };
       });

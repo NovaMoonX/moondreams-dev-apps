@@ -1362,6 +1362,9 @@ service cloud.firestore {
             'isArchived',
             'members',
             'inviteCode',
+            'sharedAlbumUrl',
+            'sharedAlbumSetByUid',
+            'sharedAlbumSetAt',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1376,6 +1379,15 @@ service cloud.firestore {
           && (!('isArchived' in data) || data.isArchived is bool)
           && data.members is map
           && (data.inviteCode == null || data.inviteCode is string)
+          && (!('sharedAlbumUrl' in data)
+            || data.sharedAlbumUrl == null
+            || data.sharedAlbumUrl is string)
+          && (!('sharedAlbumSetByUid' in data)
+            || data.sharedAlbumSetByUid == null
+            || data.sharedAlbumSetByUid is string)
+          && (!('sharedAlbumSetAt' in data)
+            || data.sharedAlbumSetAt == null
+            || isTimestampNumber(data.sharedAlbumSetAt))
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);
@@ -1437,6 +1449,32 @@ service cloud.firestore {
           && isTripUpdateValid();
       }
 
+      function isTripAlbumUpdate() {
+        let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+        let isFirstSet = !('sharedAlbumUrl' in resource.data)
+          || resource.data.sharedAlbumUrl == null;
+        return affectedKeys.hasOnly([
+            'sharedAlbumUrl',
+            'sharedAlbumSetByUid',
+            'sharedAlbumSetAt',
+            'lastEditedAt'
+          ])
+          && (
+            (
+              request.resource.data.sharedAlbumUrl == null
+              && request.resource.data.sharedAlbumSetByUid == null
+              && request.resource.data.sharedAlbumSetAt == null
+            )
+            || (
+              request.resource.data.sharedAlbumUrl is string
+              && request.resource.data.sharedAlbumSetByUid == request.auth.uid
+              && isTimestampNumber(request.resource.data.sharedAlbumSetAt)
+            )
+          )
+          && isTripUpdateValid()
+          && (isFirstSet || isTripEditorOrAdmin());
+      }
+
       function isTripMembershipApprovalValid() {
         let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
         return isTripAdmin()
@@ -1480,6 +1518,7 @@ service cloud.firestore {
       allow create: if isTripCreateValid();
       allow update: if isTripMember() && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
+         || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
         || isTripMembershipApprovalValid()
         || isTripMembershipManagementValid()
@@ -1782,7 +1821,7 @@ service cloud.firestore {
         && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
         && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null
           || isTimestampNumber(request.resource.data.paidMemberStatus[request.auth.uid].paidAt));
-      allow delete: if false;
+      allow delete: if isTripExpenseEditor();
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {
