@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Button,
   Input,
   Label,
   Modal,
+  Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import {
@@ -12,6 +13,7 @@ import {
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { getTimezoneOptions } from '@/utils/timezoneUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
 
 type StayValues = Omit<
@@ -59,6 +61,7 @@ export function StayFormModal({
   const [draft, setDraft] = useState(() => getInitialDraft(trip));
   const [error, setError] = useState<string | null>(null);
   const [showTimezoneField, setShowTimezoneField] = useState(false);
+  const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
 
@@ -172,12 +175,10 @@ export function StayFormModal({
         {showTimezoneField ? (
           <div className='space-y-1.5'>
             <Label>Timezone</Label>
-            <Input
+            <Select
+              options={timezoneOptions}
               value={draft.checkInTimezone}
-              placeholder='America/Los_Angeles'
-              onChange={(event) =>
-                updateDraft({ checkInTimezone: event.target.value })
-              }
+              onChange={(value) => updateDraft({ checkInTimezone: value })}
             />
           </div>
         ) : (

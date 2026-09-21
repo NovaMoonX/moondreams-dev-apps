@@ -2,6 +2,7 @@ import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { formatDateTime } from '@/utils/formatUtils';
+import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import type { Stay } from '@apps/waypoint/types';
 
 interface StayCardProps {
@@ -20,7 +21,9 @@ export function StayCard({ stay }: StayCardProps) {
             {formatDateTime(stay.checkInAt)} – {formatDateTime(stay.checkOutAt)}
           </p>
           {stay.checkInTimezone && (
-            <p className='text-muted-foreground mt-1 text-xs'>{stay.checkInTimezone}</p>
+            <p className='text-muted-foreground mt-1 text-xs'>
+              {formatTimezoneLabel(stay.checkInTimezone)}
+            </p>
           )}
         </div>
         <MapNavigationButton
