@@ -165,15 +165,22 @@ regularly gets the shape right but the UX wrong:
   disjoint scalar fields (e.g. editing a title or toggling an archived
   flag) — nothing is derived from the field's prior value, so there's
   nothing for a race to lose.
-- **Audit every comment the coding agent added in its diff, not just the
-  code.** Default is zero comments; a comment earns its place only if the
-  reader would genuinely be lost without it — restating a param/field name
+- **Audit every comment in the diff — the coding agent's and any you add
+  yourself while working this session — not just the code.** Default is
+  zero comments; a comment earns its place only if the reader would
+  genuinely be lost without it. Two comment shapes fail that bar every
+  time, no matter how short or well-worded: restating a param/field name
   in prose (`// The trip the user currently has open, if any` above a
-  `tripId: string | null`) doesn't count, even when it's short and names no
-  files. Delete anything that doesn't clear that bar, cap what survives at
-  3 lines, and strip any mention of a specific app/file/function name from
+  `tripId: string | null`), and explaining what a standard SDK/library call
+  already means by definition (`// wraps this in a transaction so
+  concurrent writes don't clobber each other` above a `runTransaction(...)`
+  call — that's what `runTransaction` *is*, not a hidden constraint of this
+  code). Delete anything that doesn't clear the bar, cap what survives at 3
+  lines, and strip any mention of a specific app/file/function name from
   what's left (see the comment-necessity memory). Do this pass on every
-  file the PR touches, not just the ones with an obvious CRUD/UX issue.
+  file touched this session, not just the ones inherited from the coding
+  agent or the ones with an obvious CRUD/UX issue — re-check it right
+  before wrap-up, since a fix added late in the session is easy to skip.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 

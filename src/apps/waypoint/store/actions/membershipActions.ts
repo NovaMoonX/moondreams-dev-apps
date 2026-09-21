@@ -107,9 +107,6 @@ export const approveJoinRequest = createAsyncThunk<
     const requestRef = pendingRequestRef(uid, tripId);
 
     try {
-      // Reads and writes happen inside one transaction so a concurrent
-      // approval/role-change/removal on the same trip can't be silently
-      // overwritten by a write based on a stale read of `members`.
       const request = await runTransaction(db, async (transaction) => {
         const tripSnapshot = await transaction.get(tripRef);
         if (!tripSnapshot.exists()) {
@@ -213,9 +210,6 @@ export const changeRole = createAsyncThunk<
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
 
     try {
-      // Read the trip and write the role change inside one transaction so
-      // two admins acting on the same trip at once can't clobber each
-      // other's write with a `members` map read before the other's commit.
       return await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(tripRef);
         if (!snapshot.exists()) {
