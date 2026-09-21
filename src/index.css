@@ -16,6 +16,8 @@
 .dark {
 	--color-background: var(--color-zinc-950);
 	--color-foreground: var(--color-zinc-50);
+	/* Tells the browser to render native widgets (date/time picker icons, file input button) with dark chrome instead of their light default. */
+	color-scheme: dark;
 }
 
 #root {

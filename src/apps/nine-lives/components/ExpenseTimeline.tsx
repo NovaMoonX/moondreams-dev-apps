@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 
-import { Input, Pagination, Select, Toggle } from '@moondreamsdev/dreamer-ui/components';
+import { Input, Pagination, Select } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppToggle from '@/components/AppToggle';
 import type { Cat, Expense } from '../types';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
@@ -235,7 +236,7 @@ function ExpenseTimeline({
               </div>
               {hasStoppedExpenses && cadenceFilter !== 'one_time' && (
                 <label className='flex items-center gap-2 text-sm'>
-                  <Toggle size='sm' checked={showStopped} onCheckedChange={setShowStopped} />
+                  <AppToggle size='sm' checked={showStopped} onCheckedChange={setShowStopped} />
                   Show stopped
                 </label>
               )}

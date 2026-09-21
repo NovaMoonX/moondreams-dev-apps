@@ -3,12 +3,14 @@ import { useMemo, useState } from 'react';
 import {
   Button,
   Checkbox,
+  Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
 import FormSection from '@/ui/FormSection';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
@@ -159,7 +161,8 @@ export default function ChecklistSection({
         />
       </div>
       <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-        <Checkbox
+        <AppToggle
+          size='sm'
           checked={assignedToMeOnly}
           onCheckedChange={setAssignedToMeOnly}
         />
@@ -192,13 +195,23 @@ export default function ChecklistSection({
                       className='flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0'
                     >
                       <div className='flex min-w-0 items-center gap-3'>
-                        <Checkbox
-                          checked={item.isCompleted}
-                          disabled={!mayToggle(item)}
-                          onCheckedChange={(checked) =>
-                            void handleToggle(item, checked)
-                          }
-                        />
+                        <Tooltip
+                          message='Only assigned members or trip editors can update this item.'
+                          placement='right'
+                          disabled={mayToggle(item)}
+                        >
+                          {/* Checkbox doesn't forward children, so Tooltip's
+                          child-cloning needs a plain wrapper to attach to. */}
+                          <span className='inline-flex'>
+                            <Checkbox
+                              checked={item.isCompleted}
+                              disabled={!mayToggle(item)}
+                              onCheckedChange={(checked) =>
+                                void handleToggle(item, checked)
+                              }
+                            />
+                          </span>
+                        </Tooltip>
                         <span
                           className={
                             item.isCompleted
