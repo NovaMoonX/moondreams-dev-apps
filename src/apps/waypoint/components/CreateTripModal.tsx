@@ -11,7 +11,7 @@ import ImageUploadField from '@/components/forms/ImageUploadField';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 
 interface CreateTripFormData {
   title: string;
@@ -27,6 +27,7 @@ interface CreateTripModalProps {
     title: string;
     startDate: number;
     endDate: number;
+    coverImageFile: File | null;
   }) => Promise<void> | void;
   onClose: () => void;
 }
@@ -112,10 +113,15 @@ function CreateTripModal({
         title,
         startDate,
         endDate,
-        coverImageFile: formData.coverImageFile,
+        coverImageFile: coverUpload.file,
       });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to create this trip.'));
+      setError(
+        getStorageErrorMessage(
+          submitError,
+          getErrorMessage(submitError, 'Unable to create this trip.'),
+        ),
+      );
     }
   };
 

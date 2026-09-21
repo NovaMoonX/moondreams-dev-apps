@@ -11,7 +11,7 @@ import ImageUploadField from '@/components/forms/ImageUploadField';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 
 import type { TripSpace } from '@apps/waypoint/types';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
@@ -134,12 +134,17 @@ function EditTripModal({
         startDate,
         endDate,
         coverImageUrl: trip.coverImageUrl,
-        coverImageFile: data.coverImageFile,
+        coverImageFile: coverUpload.file,
         coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
         defaultCurrency: data.defaultCurrency.trim() || null,
       });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to update this trip.'));
+      setError(
+        getStorageErrorMessage(
+          submitError,
+          getErrorMessage(submitError, 'Unable to update this trip.'),
+        ),
+      );
     }
   };
 

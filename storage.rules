@@ -36,14 +36,21 @@ service firebase.storage {
     }
 
     match /waypoint/trips/{tripId}/cover/{fileName} {
-      function isTripEditor() {
+      function isTripMember() {
         return request.auth != null
+          && firestore.get(
+            /databases/(default)/documents/apps/waypoint/trips/$(tripId)
+          ).data.members[request.auth.uid] != null;
+      }
+
+      function isTripEditor() {
+        return isTripMember()
           && firestore.get(
             /databases/(default)/documents/apps/waypoint/trips/$(tripId)
           ).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
-      allow read: if isTripEditor();
+      allow read: if isTripMember();
       allow create, update: if isTripEditor()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');

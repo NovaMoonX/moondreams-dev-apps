@@ -94,6 +94,7 @@ export const createTrip = createAsyncThunk<
       inviteCode,
     });
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
+    const lastEditedAt = Date.now();
 
     const batch = writeBatch(db);
     batch.set(tripRef, trip);
@@ -109,9 +110,9 @@ export const createTrip = createAsyncThunk<
           getTripCoverStoragePath(tripId),
           coverImageFile,
         );
-        await updateDoc(tripRef, { coverImageUrl, lastEditedAt: Date.now() });
+        await updateDoc(tripRef, { coverImageUrl, lastEditedAt });
         trip.coverImageUrl = coverImageUrl;
-        trip.lastEditedAt = Date.now();
+        trip.lastEditedAt = lastEditedAt;
       } catch (error) {
         await deleteFile(getTripCoverStoragePath(tripId));
         throw error;
