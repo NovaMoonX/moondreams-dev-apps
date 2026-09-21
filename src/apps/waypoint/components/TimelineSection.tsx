@@ -57,27 +57,59 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
     [dayCount, trip.startDate],
   );
 
+  const renderEventCard = (event: TimelineEvent) => (
+    <EventCard
+      key={event.id}
+      event={event}
+      canEdit={canEdit}
+      onEdit={(selectedEvent) => {
+        setEditingEvent(selectedEvent);
+        setIsFormOpen(true);
+      }}
+      onDelete={(selectedEvent) => void handleDelete(selectedEvent)}
+    />
+  );
+
+  const renderDayDivider = (groupDayIndex: number) => (
+    <div className='flex items-center gap-3'>
+      <div className='border-border flex-1 border-t' />
+      <span className='text-muted-foreground text-sm font-medium'>
+        {getDayLabel(trip.startDate, groupDayIndex)}
+      </span>
+      <div className='border-border flex-1 border-t' />
+    </div>
+  );
+
   const renderEvents = (dayIndex?: number) => {
-    const visibleEvents =
+    const visibleEvents = [...(
       dayIndex === undefined
         ? events
-        : events.filter((event) => event.dayIndex === dayIndex);
+        : events.filter((event) => event.dayIndex === dayIndex)
+    )].sort((a, b) => a.startAt - b.startAt);
+
     if (visibleEvents.length === 0) {
       return <p className='text-muted-foreground py-6 text-sm'>No events planned yet.</p>;
     }
+
+    if (dayIndex !== undefined) {
+      return <div className='space-y-3'>{visibleEvents.map(renderEventCard)}</div>;
+    }
+
+    const eventsByDay = new Map<number, TimelineEvent[]>();
+    for (const event of visibleEvents) {
+      const dayEvents = eventsByDay.get(event.dayIndex) ?? [];
+      dayEvents.push(event);
+      eventsByDay.set(event.dayIndex, dayEvents);
+    }
+    const sortedDayIndices = Array.from(eventsByDay.keys()).sort((a, b) => a - b);
+
     return (
       <div className='space-y-3'>
-        {visibleEvents.map((event) => (
-          <EventCard
-            key={event.id}
-            event={event}
-            canEdit={canEdit}
-            onEdit={(selectedEvent) => {
-              setEditingEvent(selectedEvent);
-              setIsFormOpen(true);
-            }}
-            onDelete={(selectedEvent) => void handleDelete(selectedEvent)}
-          />
+        {sortedDayIndices.map((groupDayIndex) => (
+          <div key={groupDayIndex} className='space-y-3'>
+            {renderDayDivider(groupDayIndex)}
+            {(eventsByDay.get(groupDayIndex) ?? []).map(renderEventCard)}
+          </div>
         ))}
       </div>
     );
