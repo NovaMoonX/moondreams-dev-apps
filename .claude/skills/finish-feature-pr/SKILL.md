@@ -60,6 +60,19 @@ Run every step below. Don't skip validation because the diff "looks right."
   conflict here usually means two independent features each added their own
   listener/selector and both need to survive.
 - Rebuild and typecheck after resolving (see step 5) before moving on.
+- **A resolved conflict is not "done" until you've confirmed neither side's
+  behavior regressed, not just that the merged code compiles.** Combining
+  two sides' additions (e.g. two `allow update` branches folded into one
+  `||` expression) is exactly the shape of edit that silently drops a
+  clause or narrows an existing permission while looking correct at a
+  glance. Give special weight to `firestore.rules`/`storage.rules` conflicts
+  specifically — a dropped clause there doesn't fail loudly, it just starts
+  denying (or, worse, allowing) writes that used to behave differently, and
+  nothing in a typecheck or build catches that. After resolving, identify
+  every pre-existing feature that touches the merged file(s) — not just the
+  one this PR is about — and re-verify it in step 5's UI pass alongside the
+  PR's own feature, not only the new behavior. Don't defer this to "someone
+  will notice if it breaks."
 
 ## 2. Fix entry points and placement
 
@@ -199,6 +212,23 @@ regularly gets the shape right but the UX wrong:
   Playwright script signed in as the "Taylor" dev fixture — see the `run`
   skill's driving guidance. Delete the script when done. A passing typecheck
   is not evidence the feature works; only driving it is.
+- **This same pass must also re-drive every pre-existing feature that
+  touches a file this session's merge/edits changed — not just the PR's own
+  feature.** If step 1 found conflicts in `firestore.rules`, drive the
+  other features gated by the rules you touched (a sibling `allow update`
+  branch, a different collection's rule sharing a helper function) to
+  confirm they still behave the same as before the merge — seed whatever
+  data state that requires (a second trip, a second household member, a
+  pending request alongside an existing member) rather than skipping the
+  check because the seed data doesn't happen to cover it yet. Treat "the
+  new feature works" and "nothing else regressed" as two separate things to
+  verify, not one — a change that visibly adds the new behavior can still
+  silently narrow or drop an existing `allow` clause it was merged next to.
+  For anything hard to reach through the UI (a security-rule denial, an
+  atomicity/race guarantee), verify it directly against the rules/Firestore
+  emulator instead of only trusting what renders on screen — e.g. a raw
+  REST write against the emulator to confirm a write is actually rejected,
+  not just that no button for it exists in the UI.
 
 ## 6. Wrap up
 
