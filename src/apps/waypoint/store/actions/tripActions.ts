@@ -4,11 +4,13 @@ import {
   doc,
   type DocumentReference,
   getDocs,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getUniqueInviteCode } from '@/lib/firebase/firestore';
+import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { TripSpace } from '@apps/waypoint/types';
 import {
   createTripSpace,
@@ -18,6 +20,8 @@ import {
 import { upsertTrip } from '@apps/waypoint/store/slices/tripSlice';
 
 export const WAYPOINT_CODE_LENGTH = 6;
+export const getTripCoverStoragePath = (tripId: string) =>
+  `waypoint/trips/${tripId}/cover/cover`;
 const INVITE_CODE_COLLECTION = collection(
   db,
   'apps',
@@ -30,6 +34,7 @@ interface CreateTripInput {
   title: string;
   startDate: number;
   endDate: number;
+  coverImageFile: File | null;
 }
 
 export interface EditTripValues {
@@ -37,6 +42,8 @@ export interface EditTripValues {
   startDate: number;
   endDate: number;
   coverImageUrl: string | null;
+  coverImageFile: File | null;
+  coverImageRemoved: boolean;
   defaultCurrency: string | null;
 }
 
@@ -58,7 +65,10 @@ export const createTrip = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/trips/create',
-  async ({ uid, title, startDate, endDate }, { dispatch, rejectWithValue }) => {
+  async (
+    { uid, title, startDate, endDate, coverImageFile },
+    { dispatch, rejectWithValue },
+  ) => {
     const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
@@ -83,14 +93,32 @@ export const createTrip = createAsyncThunk<
       createdAt: Date.now(),
       inviteCode,
     });
+    const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
+    const lastEditedAt = Date.now();
 
     const batch = writeBatch(db);
-    batch.set(doc(db, ...TRIP_COLLECTION_PATH, tripId), trip);
+    batch.set(tripRef, trip);
     batch.set(doc(INVITE_CODE_COLLECTION, inviteCode), {
       tripId,
       title: trip.title,
     });
     await batch.commit();
+
+    if (coverImageFile) {
+      try {
+        const coverImageUrl = await uploadFile(
+          getTripCoverStoragePath(tripId),
+          coverImageFile,
+        );
+        await updateDoc(tripRef, { coverImageUrl, lastEditedAt });
+        trip.coverImageUrl = coverImageUrl;
+        trip.lastEditedAt = lastEditedAt;
+      } catch (error) {
+        await deleteFile(getTripCoverStoragePath(tripId));
+        throw error;
+      }
+    }
+
     dispatch(upsertTrip(trip));
 
     return trip;
@@ -127,7 +155,7 @@ export const editTrip = createAsyncThunk<
   'waypoint/trips/edit',
   async ({ uid, trip, values }, { dispatch, rejectWithValue }) => {
     const title = values.title.trim();
-    const coverImageUrl = values.coverImageUrl?.trim() || null;
+    let coverImageUrl = values.coverImageUrl?.trim() || null;
     const defaultCurrency =
       values.defaultCurrency?.trim().toUpperCase() || null;
 
@@ -150,6 +178,16 @@ export const editTrip = createAsyncThunk<
     const dateDelta = values.startDate - trip.startDate;
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, trip.id);
     const lastEditedAt = Date.now();
+
+    if (values.coverImageFile) {
+      coverImageUrl = await uploadFile(
+        getTripCoverStoragePath(trip.id),
+        values.coverImageFile,
+      );
+    } else if (values.coverImageRemoved) {
+      coverImageUrl = null;
+      await deleteFile(getTripCoverStoragePath(trip.id));
+    }
 
     if (dateDelta !== 0) {
       const [eventsSnapshot, staysSnapshot] = await Promise.all([
