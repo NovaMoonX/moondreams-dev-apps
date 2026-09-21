@@ -19,6 +19,15 @@ Run every step below. Don't skip validation because the diff "looks right."
   body, branch, mergeable state, base branch.
 - Check out the PR's head branch locally (`gh pr checkout <n>` or manual
   fetch+checkout). Confirm `git status` is clean before touching anything.
+- **After checking out, verify the branch is actually current before doing
+  any fix work**: `git fetch origin <head-branch>` and compare `git
+  rev-parse HEAD` against `git rev-parse origin/<head-branch>`. The coding
+  agent can still be pushing commits (including its own conflict-resolution
+  merges) right up to when you start, and diagnosing/fixing against a stale
+  local checkout wastes work or reintroduces something already fixed
+  upstream. If the remote has moved, re-pull/re-checkout before proceeding.
+  If it's a long-running session, re-check this before step 1 as well, not
+  just once at the very start.
 - Read the PR body and the linked issue (`Fixes #NN`) to recover original
   intent — but treat both as a starting point, not ground truth. The user's
   live instructions in this conversation always win over what the PR body
@@ -51,6 +60,19 @@ Run every step below. Don't skip validation because the diff "looks right."
   conflict here usually means two independent features each added their own
   listener/selector and both need to survive.
 - Rebuild and typecheck after resolving (see step 5) before moving on.
+- **A resolved conflict is not "done" until you've confirmed neither side's
+  behavior regressed, not just that the merged code compiles.** Combining
+  two sides' additions (e.g. two `allow update` branches folded into one
+  `||` expression) is exactly the shape of edit that silently drops a
+  clause or narrows an existing permission while looking correct at a
+  glance. Give special weight to `firestore.rules`/`storage.rules` conflicts
+  specifically — a dropped clause there doesn't fail loudly, it just starts
+  denying (or, worse, allowing) writes that used to behave differently, and
+  nothing in a typecheck or build catches that. After resolving, identify
+  every pre-existing feature that touches the merged file(s) — not just the
+  one this PR is about — and re-verify it in step 5's UI pass alongside the
+  PR's own feature, not only the new behavior. Don't defer this to "someone
+  will notice if it breaks."
 
 ## 2. Fix entry points and placement
 
@@ -122,8 +144,43 @@ regularly gets the shape right but the UX wrong:
   declared separately in more than one file is a duplication bug.** Grep for
   the option values (e.g. `'EDITOR'`, `'COMMENTER'`) across the feature's
   files; if more than one file hand-writes the same list, hoist it once next
-  to the type it constrains (typically `types.ts`) and have every consumer
-  import and derive from it.
+  to the type it constrains — but in a sibling `constants.ts`, not `types.ts`
+  itself (`types.ts` holds type/interface declarations only; runtime values
+  belong in `constants.ts` — `src/apps/waypoint/constants.ts` is the
+  reference shape) — and have every consumer import and derive from it.
+- **An action thunk that reads a document, derives a new value for a field
+  another action can also mutate concurrently (a shared map like `members`,
+  a counter — anything read-modify-written rather than replaced outright),
+  and writes it back must do the read and the write inside one
+  `runTransaction`, not a `getDoc`/Redux-cache read followed by a separate
+  `setDoc`/`updateDoc`/`writeBatch`.** The read-then-write shape loses
+  silently under concurrency: two admins changing two different members'
+  roles near-simultaneously can each read the same stale map, and the
+  second write overwrites the first's change with no error surfaced to
+  either user. `src/apps/waypoint/store/actions/membershipActions.ts`'s
+  `changeRole`/`removeMember`/`approveJoinRequest` are the reference shape —
+  always `transaction.get()` the document fresh inside the transaction,
+  never from a Redux-cached copy read before the transaction started. Skip
+  this for a thunk that only assigns literal caller-supplied values to
+  disjoint scalar fields (e.g. editing a title or toggling an archived
+  flag) — nothing is derived from the field's prior value, so there's
+  nothing for a race to lose.
+- **Audit every comment in the diff — the coding agent's and any you add
+  yourself while working this session — not just the code.** Default is
+  zero comments. A comment describing what code does (restating a
+  param/field name in prose, explaining what a function call or pattern
+  accomplishes) is noise, even when accurate and short, as long as a
+  reader who knows the language/platform can infer that from the code
+  itself. A comment earns its place only when the *process* doesn't make
+  sense on its own even to that reader — a hidden constraint, a workaround
+  for a specific bug, a non-obvious invariant, a reason the approach isn't
+  the one a reader would expect. That bar is rarely cleared. Delete
+  anything that doesn't clear it, cap what survives at 3 lines, and strip
+  any mention of a specific app/file/function name from what's left (see
+  the comment-necessity memory). Do this pass on every file touched this
+  session, not just the ones inherited from the coding agent or the ones
+  with an obvious CRUD/UX issue — re-check it right before wrap-up, since a
+  fix added late in the session is easy to skip.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
@@ -162,6 +219,23 @@ regularly gets the shape right but the UX wrong:
   Playwright script signed in as the "Taylor" dev fixture — see the `run`
   skill's driving guidance. Delete the script when done. A passing typecheck
   is not evidence the feature works; only driving it is.
+- **This same pass must also re-drive every pre-existing feature that
+  touches a file this session's merge/edits changed — not just the PR's own
+  feature.** If step 1 found conflicts in `firestore.rules`, drive the
+  other features gated by the rules you touched (a sibling `allow update`
+  branch, a different collection's rule sharing a helper function) to
+  confirm they still behave the same as before the merge — seed whatever
+  data state that requires (a second trip, a second household member, a
+  pending request alongside an existing member) rather than skipping the
+  check because the seed data doesn't happen to cover it yet. Treat "the
+  new feature works" and "nothing else regressed" as two separate things to
+  verify, not one — a change that visibly adds the new behavior can still
+  silently narrow or drop an existing `allow` clause it was merged next to.
+  For anything hard to reach through the UI (a security-rule denial, an
+  atomicity/race guarantee), verify it directly against the rules/Firestore
+  emulator instead of only trusting what renders on screen — e.g. a raw
+  REST write against the emulator to confirm a write is actually rejected,
+  not just that no button for it exists in the UI.
 
 ## 6. Wrap up
 

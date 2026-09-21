@@ -7,8 +7,9 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { copyToClipboard } from '@/utils/clipboardUtils';
@@ -20,21 +21,33 @@ import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
 
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
+import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
+import TripCard from '@apps/waypoint/components/TripCard';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
 import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
-import { createTrip } from '@apps/waypoint/store/actions/tripActions';
+import {
+  createTrip,
+  editTrip,
+  setTripArchived,
+} from '@apps/waypoint/store/actions/tripActions';
+import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import { selectTrips } from '@apps/waypoint/store/selectors';
+import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
   const { user, loading } = useAuth();
+  const { confirm } = useActionModal();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [searchParams] = useSearchParams();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<TripSpace | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteRequestSent, setInviteRequestSent] = useState(false);
@@ -76,6 +89,52 @@ function Waypoint() {
     }
   };
 
+  const handleEditTrip = async (values: EditTripValues) => {
+    if (!user?.uid || !editingTrip) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await dispatch(
+        editTrip({ uid: user.uid, trip: editingTrip, values }),
+      ).unwrap();
+      setEditingTrip(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleArchived = async (trip: TripSpace) => {
+    if (!user?.uid) {
+      return;
+    }
+
+    if (!trip.isArchived) {
+      const confirmed = await confirm({
+        title: 'Archive trip',
+        message:
+          'Archive this trip? It will stay available under Show archived and can be restored later.',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setError(null);
+    try {
+      await dispatch(
+        setTripArchived({
+          uid: user.uid,
+          trip,
+          isArchived: !trip.isArchived,
+        }),
+      ).unwrap();
+    } catch (archiveError) {
+      setError(getErrorMessage(archiveError, 'Unable to update this trip.'));
+    }
+  };
+
   const handleRequestToJoin = async () => {
     if (!user?.uid || !inviteCode) {
       return;
@@ -87,18 +146,14 @@ function Waypoint() {
     try {
       await dispatch(requestToJoinTrip({ uid: user.uid, inviteCode })).unwrap();
       setInviteRequestSent(true);
-    } catch (error) {
-      setInviteError(getErrorMessage(error, 'Unable to request access.'));
+    } catch (requestError) {
+      setInviteError(getErrorMessage(requestError, 'Unable to request access.'));
     } finally {
       setIsInviteSubmitting(false);
     }
   };
 
-  const handleCopyInviteLink = async (tripInviteCode: string | null) => {
-    if (!tripInviteCode) {
-      return;
-    }
-
+  const handleCopyInviteLink = async (tripInviteCode: string) => {
     await copyToClipboard(
       `${window.location.origin}/waypoint?inviteCode=${tripInviteCode}`,
     );
@@ -107,6 +162,10 @@ function Waypoint() {
       description: 'Share the link with someone you want to invite.',
     });
   };
+
+  const visibleTrips = trips.filter(
+    (trip) => showArchived || !trip.isArchived,
+  );
 
   if (loading) {
     return <Loading />;
@@ -176,9 +235,19 @@ function Waypoint() {
               Create a trip to start planning together.
             </p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
-            Create trip
-          </Button>
+          <div className='flex items-center gap-3'>
+            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <Toggle
+                size='sm'
+                checked={showArchived}
+                onCheckedChange={setShowArchived}
+              />
+              Show archived
+            </label>
+            <Button onClick={() => setIsCreateModalOpen(true)}>
+              Create trip
+            </Button>
+          </div>
         </div>
 
         {inviteCode && (
@@ -214,10 +283,12 @@ function Waypoint() {
           loading={!pendingRequestsLoaded}
         />
 
-        {trips.length === 0 ? (
+        {visibleTrips.length === 0 ? (
           <div className='border-border rounded-lg border border-dashed p-8 text-center'>
             <p className='text-muted-foreground text-sm'>
-              You do not belong to any trips yet.
+              {showArchived
+                ? 'You do not have any trips to show.'
+                : 'You do not belong to any active trips yet.'}
             </p>
             <Button className='mt-4' onClick={() => setIsCreateModalOpen(true)}>
               Create your first trip
@@ -225,42 +296,27 @@ function Waypoint() {
           </div>
         ) : (
           <div className='grid gap-4 sm:grid-cols-2'>
-            {trips.map((trip) => (
-              <div
+            {visibleTrips.map((trip) => (
+              <TripCard
                 key={trip.id}
-                className='border-border bg-card rounded-lg border p-4'
-              >
-                <h2 className='text-lg font-semibold'>{trip.title}</h2>
-                <p className='text-muted-foreground mt-2 text-sm'>
-                  {formatDateTime(trip.startDate)} –{' '}
-                  {formatDateTime(trip.endDate)}
-                </p>
-                {trip.inviteCode && (
-                  <div className='mt-4 flex items-center justify-between gap-3'>
-                    <code className='text-muted-foreground text-sm'>
-                      Invite: {trip.inviteCode}
-                    </code>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      onClick={() => handleCopyInviteLink(trip.inviteCode)}
-                    >
-                      Copy invite link
-                    </Button>
-                  </div>
-                )}
-                <Button
-                  type='button'
-                  className='mt-4 w-full'
-                  onClick={() => setSelectedTripId(trip.id)}
-                >
-                  Open trip
-                </Button>
-              </div>
+                trip={trip}
+                currentUserId={user.uid}
+                onOpen={setSelectedTripId}
+                onEdit={(tripToEdit) => {
+                  setError(null);
+                  setEditingTrip(tripToEdit);
+                }}
+                onToggleArchived={(tripToToggle) =>
+                  void handleToggleArchived(tripToToggle)
+                }
+                onCopyInviteLink={(inviteLinkCode) =>
+                  void handleCopyInviteLink(inviteLinkCode)
+                }
+              />
             ))}
           </div>
         )}
+        {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
 
       <CreateTripModal
@@ -268,6 +324,14 @@ function Waypoint() {
         isSubmitting={isSubmitting}
         onSubmit={handleCreateTrip}
         onClose={() => setIsCreateModalOpen(false)}
+      />
+      <EditTripModal
+        key={editingTrip?.id ?? 'waypoint-no-edit'}
+        isOpen={editingTrip !== null}
+        trip={editingTrip}
+        isSubmitting={isSubmitting}
+        onSubmit={handleEditTrip}
+        onClose={() => setEditingTrip(null)}
       />
     </div>
   );

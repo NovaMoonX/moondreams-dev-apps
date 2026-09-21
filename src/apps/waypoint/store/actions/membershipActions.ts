@@ -4,18 +4,18 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  runTransaction,
   setDoc,
-  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import {
-  ASSIGNABLE_MEMBER_ROLES,
-  type TripJoinRequest,
-  type TripSpace,
-  type UserRole,
+import { ASSIGNABLE_MEMBER_ROLES } from '@apps/waypoint/constants';
+import type {
+  TripJoinRequest,
+  TripSpace,
+  UserRole,
 } from '@apps/waypoint/types';
 import { TRIP_COLLECTION_PATH } from '@apps/waypoint/security';
 import {
@@ -23,6 +23,7 @@ import {
   removeTripPendingRequest,
   upsertMyPendingRequest,
 } from '@apps/waypoint/store/slices/pendingRequestsSlice';
+import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
 const PENDING_REQUESTS_COLLECTION = collection(
   db,
@@ -97,67 +98,63 @@ export const approveJoinRequest = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/membership/approve',
-  async ({ tripId, uid, role }, { dispatch, getState, rejectWithValue }) => {
+  async ({ tripId, uid, role }, { dispatch, rejectWithValue }) => {
     if (!ASSIGNABLE_MEMBER_ROLES.includes(role)) {
       return rejectWithValue('Choose a valid member role.');
     }
 
-    const state = getState() as RootState;
-    let trip = state.waypoint.trip.items.find((item) => item.id === tripId);
-
-    if (!trip) {
-      const tripSnapshot = await getDoc(
-        doc(db, ...TRIP_COLLECTION_PATH, tripId),
-      );
-
-      if (!tripSnapshot.exists()) {
-        return rejectWithValue('Trip not found.');
-      }
-
-      trip = {
-        id: tripSnapshot.id,
-        ...(tripSnapshot.data() as Omit<TripSpace, 'id'>),
-      };
-    }
-
+    const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
     const requestRef = pendingRequestRef(uid, tripId);
-    const requestSnapshot = await getDoc(requestRef);
 
-    if (!requestSnapshot.exists()) {
-      return rejectWithValue('That request no longer exists.');
+    try {
+      const request = await runTransaction(db, async (transaction) => {
+        const tripSnapshot = await transaction.get(tripRef);
+        if (!tripSnapshot.exists()) {
+          throw new Error('Trip not found.');
+        }
+
+        const requestSnapshot = await transaction.get(requestRef);
+        if (!requestSnapshot.exists()) {
+          throw new Error('That request no longer exists.');
+        }
+
+        const trip: TripSpace = {
+          id: tripSnapshot.id,
+          ...(tripSnapshot.data() as Omit<TripSpace, 'id'>),
+        };
+
+        if (trip.members[uid]) {
+          throw new Error('That user is already a member of this trip.');
+        }
+
+        const requestedAt = requestSnapshot.data().requestedAt;
+        const approvedRequest: TripJoinRequest = {
+          uid,
+          tripId,
+          requestedAt:
+            typeof requestedAt === 'number' ? requestedAt : Date.now(),
+        };
+        const now = Date.now();
+
+        transaction.update(tripRef, {
+          members: {
+            ...trip.members,
+            [uid]: { uid, role, joinedAt: now },
+          },
+          lastEditedAt: now,
+        });
+        transaction.delete(requestRef);
+
+        return approvedRequest;
+      });
+
+      dispatch(removeTripPendingRequest({ uid, tripId }));
+      return request;
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to approve this request.'),
+      );
     }
-
-    if (trip.members[uid]) {
-      return rejectWithValue('That user is already a member of this trip.');
-    }
-
-    const requestedAt = requestSnapshot.data().requestedAt;
-    const request: TripJoinRequest = {
-      uid,
-      tripId,
-      requestedAt: typeof requestedAt === 'number' ? requestedAt : Date.now(),
-    };
-    const now = Date.now();
-    const nextMembers = {
-      ...trip.members,
-      [uid]: {
-        uid,
-        role,
-        joinedAt: now,
-      },
-    };
-
-    const batch = writeBatch(db);
-    batch.update(doc(db, ...TRIP_COLLECTION_PATH, tripId), {
-      members: nextMembers,
-      lastEditedAt: now,
-    });
-    batch.delete(requestRef);
-    await batch.commit();
-
-    dispatch(removeTripPendingRequest({ uid, tripId }));
-
-    return request;
   },
 );
 
@@ -180,7 +177,6 @@ export const declineJoinRequest = createAsyncThunk<
   },
 );
 
-// Lets a requester pull back a request they sent before an Admin acts on it.
 export const cancelJoinRequest = createAsyncThunk<
   { uid: string; tripId: string },
   { uid: string; tripId: string },
@@ -195,6 +191,99 @@ export const cancelJoinRequest = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to withdraw this request.'),
+      );
+    }
+  },
+);
+
+export const changeRole = createAsyncThunk<
+  TripSpace,
+  { tripId: string; uid: string; role: UserRole; currentUserId: string },
+  { rejectValue: string }
+>(
+  'waypoint/membership/changeRole',
+  async ({ tripId, uid, role, currentUserId }, { rejectWithValue }) => {
+    if (!ASSIGNABLE_MEMBER_ROLES.includes(role) && role !== 'ADMIN') {
+      return rejectWithValue('Choose a valid member role.');
+    }
+
+    const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
+
+    try {
+      return await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(tripRef);
+        if (!snapshot.exists()) {
+          throw new Error('Trip not found.');
+        }
+
+        const trip: TripSpace = {
+          id: snapshot.id,
+          ...(snapshot.data() as Omit<TripSpace, 'id'>),
+        };
+
+        if (!canChangeRole(trip, currentUserId, uid)) {
+          throw new Error('You cannot change this member’s role.');
+        }
+
+        const updatedTrip: TripSpace = {
+          ...trip,
+          members: {
+            ...trip.members,
+            [uid]: { ...trip.members[uid], role },
+          },
+          lastEditedAt: Date.now(),
+        };
+
+        transaction.set(tripRef, updatedTrip);
+        return updatedTrip;
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to change this member’s role.'),
+      );
+    }
+  },
+);
+
+export const removeMember = createAsyncThunk<
+  { tripId: string; uid: string },
+  { tripId: string; uid: string; currentUserId: string },
+  { rejectValue: string }
+>(
+  'waypoint/membership/removeMember',
+  async ({ tripId, uid, currentUserId }, { rejectWithValue }) => {
+    const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(tripRef);
+        if (!snapshot.exists()) {
+          throw new Error('Trip not found.');
+        }
+
+        const trip: TripSpace = {
+          id: snapshot.id,
+          ...(snapshot.data() as Omit<TripSpace, 'id'>),
+        };
+
+        if (!canRemoveMembers(trip, currentUserId, uid)) {
+          throw new Error('You cannot remove this member.');
+        }
+
+        const members = { ...trip.members };
+        delete members[uid];
+
+        transaction.set(tripRef, {
+          ...trip,
+          members,
+          lastEditedAt: Date.now(),
+        });
+      });
+
+      return { tripId, uid };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to remove this member.'),
       );
     }
   },
