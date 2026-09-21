@@ -120,6 +120,12 @@ regularly gets the shape right but the UX wrong:
   in this codebase, not a hypothetical.
 - Deletes go through `useActionModal().confirm(...)` with `destructive:
   true`, not a bare `window.confirm` or no confirmation at all.
+- Use `AppToggle` (`@/components/AppToggle`), never the raw `Toggle` from
+  Dreamer UI — grep the diff for `Toggle` imported from
+  `@moondreamsdev/dreamer-ui/components`.
+- Use a `Toggle`, not a `Checkbox`, for any control whose change takes effect
+  immediately (a live filter, a "show archived" switch); keep `Checkbox` for
+  form-staged values and to-do-style completion marks.
 - **Any Firestore listener the coding agent wrote directly inside a leaf
   component's `useEffect` — a tab, a panel inside a modal, anything that
   isn't the mini-app's single top-level orchestrator — is a bug, not a

@@ -13,12 +13,12 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
 
+import AppToggle from '@/components/AppToggle';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
@@ -1197,7 +1197,7 @@ function SelectedLitterBoxPanel({
               </div>
               {boxEntriesAscending.some((entry) => entry.isFullChange) && (
                 <label className='flex items-center gap-2 text-sm'>
-                  <Toggle checked={showOnlyChanges} onCheckedChange={setShowOnlyChanges} size='sm' />
+                  <AppToggle checked={showOnlyChanges} onCheckedChange={setShowOnlyChanges} size='sm' />
                   Full changes only
                 </label>
               )}

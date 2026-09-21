@@ -1,4 +1,10 @@
 export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
+export type ChecklistCategory =
+  | 'DOCUMENTS'
+  | 'PACKING'
+  | 'BOOKINGS'
+  | 'LOGISTICS'
+  | 'OTHER';
 
 export interface TripMember {
   uid: string;
@@ -25,4 +31,19 @@ export interface TripJoinRequest {
   uid: string;
   tripId: string;
   requestedAt: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  tripId: string;
+  title: string;
+  category: ChecklistCategory;
+  customCategoryLabel: string | null;
+  assignedToUids: string[];
+  isCompleted: boolean;
+  markedCompletedByUid: string | null;
+  markedCompletedAt: number | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
 }

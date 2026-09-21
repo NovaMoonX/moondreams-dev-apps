@@ -42,6 +42,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('pendingRequests')
     .doc(`${jamie.uid}_${TRIP_ID}`);
+  const checklistCollection = tripRef.collection('checklist');
 
   await tripRef.set({
     id: TRIP_ID,
@@ -106,8 +107,38 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     requestedAt: context.now - 3_600_000,
   });
 
+  await checklistCollection.doc('confirm-passports').set({
+    id: 'confirm-passports',
+    tripId: TRIP_ID,
+    title: 'Confirm passport expiration dates',
+    category: 'DOCUMENTS',
+    customCategoryLabel: null,
+    assignedToUids: [alex.uid],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await checklistCollection.doc('book-dinner').set({
+    id: 'book-dinner',
+    tripId: TRIP_ID,
+    title: 'Book the first-night dinner',
+    category: 'BOOKINGS',
+    customCategoryLabel: null,
+    assignedToUids: [alex.uid, taylor.uid],
+    isCompleted: true,
+    markedCompletedByUid: alex.uid,
+    markedCompletedAt: context.now - 1_800_000,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now - 1_800_000,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 5,
+    firestoreDocuments: 7,
   };
 }

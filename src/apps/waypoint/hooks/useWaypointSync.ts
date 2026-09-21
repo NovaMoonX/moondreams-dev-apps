@@ -7,11 +7,13 @@ import {
   startTripPendingRequestsListener,
 } from '../store/listeners/pendingRequestsListeners';
 import { startTripListener } from '../store/listeners/tripListeners';
+import { startChecklistListener } from '../store/listeners/checklistListeners';
 import {
   setMyPendingRequests,
   setTripPendingRequests,
 } from '../store/slices/pendingRequestsSlice';
 import { setTrips } from '../store/slices/tripSlice';
+import { setChecklist } from '../store/slices/checklistSlice';
 
 interface UseWaypointSyncOptions {
   tripId: string | null;
@@ -54,4 +56,10 @@ export function useWaypointSync(
       dispatch(setTripPendingRequests(requests));
     });
   }, [dispatch, tripId, isTripAdmin]);
+
+  useEffect(() => {
+    return startChecklistListener(tripId, (items) => {
+      dispatch(setChecklist({ tripId, items }));
+    });
+  }, [dispatch, tripId]);
 }
