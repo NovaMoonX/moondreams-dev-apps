@@ -1,7 +1,7 @@
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Select, Separator } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { db } from '@/lib/firebase/config';
@@ -157,6 +157,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
                   <Select
+                    size='sm'
                     options={ROLE_OPTIONS}
                     value={selectedRoles[request.uid] ?? 'VIEWER'}
                     onChange={(value) =>
@@ -166,19 +167,20 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                       }))
                     }
                     aria-label={`Role for ${displayName}`}
+                    className='mr-2'
                   />
                   <Button
                     type='button'
-                    size='sm'
+                    variant='link'
                     disabled={busyRequestId !== null}
                     onClick={() => handleApprove(request)}
                   >
                     Approve
                   </Button>
+                  <Separator orientation='vertical' thickness='medium' />
                   <Button
                     type='button'
-                    variant='secondary'
-                    size='sm'
+                    variant='link'
                     disabled={busyRequestId !== null}
                     onClick={() => handleDecline(request)}
                   >
