@@ -5,4 +5,4 @@ export const APP_DESCRIPTION =
 export const ADMIN_EMAIL = 'nova@moondreams.dev';
 
 // Site-wide version, shared across every mini-app. Bump manually per release.
-export const SITE_VERSION = '1.6.0';
+export const SITE_VERSION = '1.6.1';

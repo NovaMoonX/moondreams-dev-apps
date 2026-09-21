@@ -92,7 +92,7 @@ service cloud.firestore {
       allow list: if false;
       allow create: if isInviteCodeCreateValid();
       allow update: if false;
-      allow delete: if false;
+      allow delete: if isTripExpenseEditor();
     }
 
     match /apps/nine-lives/households/{householdId} {
