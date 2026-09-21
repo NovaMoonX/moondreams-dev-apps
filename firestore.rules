@@ -1776,7 +1776,7 @@ service cloud.firestore {
         && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
         && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null
           || isTimestampNumber(request.resource.data.paidMemberStatus[request.auth.uid].paidAt));
-      allow delete: if false;
+      allow delete: if isTripExpenseEditor();
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {

@@ -7,11 +7,14 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { ChecklistCategory, ChecklistItem } from '@apps/waypoint/types';
 
 interface ChecklistFormData {
@@ -32,6 +35,7 @@ interface ChecklistItemFormModalProps {
     customCategoryLabel: string | null;
     assignedToUids: string[];
   }) => Promise<void> | void;
+  onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -50,8 +54,10 @@ export default function ChecklistItemFormModal({
   item = null,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: ChecklistItemFormModalProps) {
+  const { confirm } = useActionModal();
   const initialData: ChecklistFormData = item
     ? {
         title: item.title,
@@ -138,6 +144,23 @@ export default function ChecklistItemFormModal({
     }
   };
 
+  const handleDelete = async () => {
+    if (!onDelete) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete checklist item',
+      message: `Delete "${item?.title}"? This action cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    await onDelete();
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Checklist item'>
       <Form
@@ -150,18 +173,26 @@ export default function ChecklistItemFormModal({
           void handleSubmit(data as ChecklistFormData);
         }}
         submitButton={
-          <div className='flex justify-end gap-2'>
-            <Button type='button' variant='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              loading={isSubmitting}
-              disabled={isSubmitting || !isFormComplete}
-            >
-              {isSubmitting ? 'Saving…' : item ? 'Save changes' : 'Add item'}
-            </Button>
-          </div>
+          <ModalFooterActions
+            leftActions={
+              item &&
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
+            rightActions={
+              <>
+                <Button type='button' variant='secondary' onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  type='submit'
+                  loading={isSubmitting}
+                  disabled={isSubmitting || !isFormComplete}
+                >
+                  {isSubmitting ? 'Saving…' : item ? 'Save changes' : 'Add item'}
+                </Button>
+              </>
+            }
+          />
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
