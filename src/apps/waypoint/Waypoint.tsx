@@ -7,15 +7,16 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  Toggle,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/formatUtils';
+import AppToggle from '@/components/AppToggle';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
@@ -24,6 +25,7 @@ import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
@@ -191,7 +193,7 @@ function Waypoint() {
             className='px-0'
             onClick={() => setSelectedTripId(null)}
           >
-            Back to My Trips
+            <ChevronLeft /> Back to My Trips
           </Button>
           <div>
             <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
@@ -204,6 +206,7 @@ function Waypoint() {
             <TabsList>
               <TabsTrigger value='overview'>Timeline</TabsTrigger>
               <TabsTrigger value='members'>Members</TabsTrigger>
+              <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
               <TimelineSection
@@ -215,6 +218,9 @@ function Waypoint() {
             <TabsContent value='members'>
               <MembersSection trip={selectedTrip} currentUserId={user.uid} />
             </TabsContent>
+            <TabsContent value='checklist'>
+              <ChecklistSection trip={selectedTrip} currentUserId={user.uid} />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -225,7 +231,7 @@ function Waypoint() {
     <div className='page'>
       <div className='mx-auto max-w-4xl space-y-6 py-8'>
         <NavButton href='/' variant='link'>
-          Back home
+          <ChevronLeft /> Back home
         </NavButton>
 
         <div className='flex items-center justify-between gap-4'>
@@ -237,7 +243,7 @@ function Waypoint() {
           </div>
           <div className='flex items-center gap-3'>
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <Toggle
+              <AppToggle
                 size='sm'
                 checked={showArchived}
                 onCheckedChange={setShowArchived}

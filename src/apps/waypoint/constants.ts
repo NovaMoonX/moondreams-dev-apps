@@ -1,5 +1,6 @@
 import type {
   ActivitySetting,
+  ChecklistCategory,
   EventType,
   MealType,
   TransitType,
@@ -57,4 +58,20 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
 export const ACTIVITY_SETTING_LABELS: Record<ActivitySetting, string> = {
   INDOOR: 'Indoor',
   OUTDOOR: 'Outdoor',
+};
+
+export const CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
+  'DOCUMENTS',
+  'PACKING',
+  'BOOKINGS',
+  'LOGISTICS',
+  'OTHER',
+];
+
+export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
+  DOCUMENTS: 'Documents',
+  PACKING: 'Packing',
+  BOOKINGS: 'Bookings',
+  LOGISTICS: 'Logistics',
+  OTHER: 'Other',
 };

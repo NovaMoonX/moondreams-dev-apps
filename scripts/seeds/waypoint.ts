@@ -42,7 +42,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('pendingRequests')
     .doc(`${jamie.uid}_${TRIP_ID}`);
-  const eventRef = tripRef.collection('events').doc('seed-waypoint-dinner');
+  const eventsCollection = tripRef.collection('events');
+  const checklistCollection = tripRef.collection('checklist');
 
   await tripRef.set({
     id: TRIP_ID,
@@ -107,7 +108,28 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     requestedAt: context.now - 3_600_000,
   });
 
-  await eventRef.set({
+  await eventsCollection.doc('seed-waypoint-flight').set({
+    id: 'seed-waypoint-flight',
+    tripId: TRIP_ID,
+    eventType: 'TRAVEL',
+    dayIndex: 0,
+    endDayIndex: 0,
+    title: 'Flight to Seattle',
+    startAt: Date.UTC(2026, 8, 25, 9),
+    endAt: Date.UTC(2026, 8, 25, 11, 30),
+    locationName: 'Seattle–Tacoma International Airport',
+    address: null,
+    latitude: 47.4502,
+    longitude: -122.3088,
+    eventDetails: { transitType: 'FLIGHT' },
+    notes: null,
+    assignedMemberIds: [alex.uid, taylor.uid],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await eventsCollection.doc('seed-waypoint-dinner').set({
     id: 'seed-waypoint-dinner',
     tripId: TRIP_ID,
     eventType: 'DINING',
@@ -128,8 +150,80 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  await eventsCollection.doc('seed-waypoint-hike').set({
+    id: 'seed-waypoint-hike',
+    tripId: TRIP_ID,
+    eventType: 'ACTIVITY',
+    dayIndex: 1,
+    endDayIndex: 1,
+    title: 'Discovery Park hike',
+    startAt: Date.UTC(2026, 8, 26, 10),
+    endAt: Date.UTC(2026, 8, 26, 13),
+    locationName: 'Discovery Park',
+    address: '3801 Discovery Park Blvd, Seattle, WA',
+    latitude: 47.6613,
+    longitude: -122.4183,
+    eventDetails: { settings: ['OUTDOOR'] },
+    notes: null,
+    assignedMemberIds: [alex.uid],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await eventsCollection.doc('seed-waypoint-free-time').set({
+    id: 'seed-waypoint-free-time',
+    tripId: TRIP_ID,
+    eventType: 'FREE_TIME',
+    dayIndex: 2,
+    endDayIndex: 2,
+    title: 'Free time downtown',
+    startAt: Date.UTC(2026, 8, 27, 14),
+    endAt: null,
+    locationName: null,
+    address: null,
+    latitude: null,
+    longitude: null,
+    eventDetails: {},
+    notes: null,
+    assignedMemberIds: [],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await checklistCollection.doc('confirm-passports').set({
+    id: 'confirm-passports',
+    tripId: TRIP_ID,
+    title: 'Confirm passport expiration dates',
+    category: 'DOCUMENTS',
+    customCategoryLabel: null,
+    assignedToUids: [alex.uid],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await checklistCollection.doc('book-dinner').set({
+    id: 'book-dinner',
+    tripId: TRIP_ID,
+    title: 'Book the first-night dinner',
+    category: 'BOOKINGS',
+    customCategoryLabel: null,
+    assignedToUids: [alex.uid, taylor.uid],
+    isCompleted: true,
+    markedCompletedByUid: alex.uid,
+    markedCompletedAt: context.now - 1_800_000,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now - 1_800_000,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 6,
+    firestoreDocuments: 11,
   };
 }
