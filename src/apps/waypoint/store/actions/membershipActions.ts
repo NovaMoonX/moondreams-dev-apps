@@ -23,6 +23,7 @@ import {
   removeTripPendingRequest,
   upsertMyPendingRequest,
 } from '@apps/waypoint/store/slices/pendingRequestsSlice';
+import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
 const PENDING_REQUESTS_COLLECTION = collection(
   db,
@@ -197,5 +198,87 @@ export const cancelJoinRequest = createAsyncThunk<
         getErrorMessage(error, 'Unable to withdraw this request.'),
       );
     }
+  },
+);
+
+async function getTrip(tripId: string, state: RootState) {
+  const trip = state.waypoint.trip.items.find((item) => item.id === tripId);
+  if (trip) {
+    return trip;
+  }
+
+  const snapshot = await getDoc(doc(db, ...TRIP_COLLECTION_PATH, tripId));
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return {
+    id: snapshot.id,
+    ...(snapshot.data() as Omit<TripSpace, 'id'>),
+  };
+}
+
+export const changeRole = createAsyncThunk<
+  TripSpace,
+  { tripId: string; uid: string; role: UserRole; currentUserId: string },
+  { rejectValue: string }
+>(
+  'waypoint/membership/changeRole',
+  async (
+    { tripId, uid, role, currentUserId },
+    { getState, rejectWithValue },
+  ) => {
+    if (!ASSIGNABLE_MEMBER_ROLES.includes(role) && role !== 'ADMIN') {
+      return rejectWithValue('Choose a valid member role.');
+    }
+
+    const trip = await getTrip(tripId, getState() as RootState);
+    if (!trip) {
+      return rejectWithValue('Trip not found.');
+    }
+
+    if (!canChangeRole(trip, currentUserId, uid)) {
+      return rejectWithValue('You cannot change this member’s role.');
+    }
+
+    const updatedTrip = {
+      ...trip,
+      members: {
+        ...trip.members,
+        [uid]: { ...trip.members[uid], role },
+      },
+      lastEditedAt: Date.now(),
+    };
+
+    await setDoc(doc(db, ...TRIP_COLLECTION_PATH, tripId), updatedTrip);
+    return updatedTrip;
+  },
+);
+
+export const removeMember = createAsyncThunk<
+  { tripId: string; uid: string },
+  { tripId: string; uid: string; currentUserId: string },
+  { rejectValue: string }
+>(
+  'waypoint/membership/removeMember',
+  async ({ tripId, uid, currentUserId }, { getState, rejectWithValue }) => {
+    const trip = await getTrip(tripId, getState() as RootState);
+    if (!trip) {
+      return rejectWithValue('Trip not found.');
+    }
+
+    if (!canRemoveMembers(trip, currentUserId, uid)) {
+      return rejectWithValue('You cannot remove this member.');
+    }
+
+    const members = { ...trip.members };
+    delete members[uid];
+    await setDoc(doc(db, ...TRIP_COLLECTION_PATH, tripId), {
+      ...trip,
+      members,
+      lastEditedAt: Date.now(),
+    });
+
+    return { tripId, uid };
   },
 );

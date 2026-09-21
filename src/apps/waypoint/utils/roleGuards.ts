@@ -22,3 +22,23 @@ export function hasTripRole(
 export function isTripAdmin(trip: TripSpace, uid: string) {
   return hasTripRole(trip, uid, 'ADMIN');
 }
+
+export function canChangeRole(
+  trip: TripSpace,
+  currentUserId: string,
+  targetUserId: string,
+) {
+  return (
+    currentUserId !== targetUserId &&
+    isTripAdmin(trip, currentUserId) &&
+    isTripMember(trip, targetUserId)
+  );
+}
+
+export function canRemoveMembers(
+  trip: TripSpace,
+  currentUserId: string,
+  targetUserId: string,
+) {
+  return canChangeRole(trip, currentUserId, targetUserId);
+}
