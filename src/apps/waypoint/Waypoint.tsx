@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -22,12 +22,10 @@ import NavButton from '@/ui/NavButton';
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
-import { useMyPendingRequests } from '@apps/waypoint/hooks/useMyPendingRequests';
+import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
 import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
 import { createTrip } from '@apps/waypoint/store/actions/tripActions';
-import { startTripListener } from '@apps/waypoint/store/listeners/tripListeners';
 import { selectTrips } from '@apps/waypoint/store/selectors';
-import { setTrips } from '@apps/waypoint/store/slices/tripSlice';
 
 function Waypoint() {
   const { user, loading } = useAuth();
@@ -42,21 +40,21 @@ function Waypoint() {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const trips = useAppSelector(selectTrips);
   const tripsLoaded = useAppSelector((state) => state.waypoint.trip.loaded);
-  const { requests: pendingRequests, loading: pendingRequestsLoading } =
-    useMyPendingRequests(user?.uid ?? null);
+  const pendingRequests = useAppSelector(
+    (state) => state.waypoint.pendingRequests.myRequests,
+  );
+  const pendingRequestsLoaded = useAppSelector(
+    (state) => state.waypoint.pendingRequests.myRequestsLoaded,
+  );
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
+  const isSelectedTripAdmin =
+    selectedTrip?.members[user?.uid ?? '']?.role === 'ADMIN';
 
-  useEffect(() => {
-    if (!user?.uid) {
-      dispatch(setTrips([]));
-      return;
-    }
-
-    return startTripListener(user.uid, (nextTrips) => {
-      dispatch(setTrips(nextTrips));
-    });
-  }, [dispatch, user?.uid]);
+  useWaypointSync(user?.uid ?? null, {
+    tripId: selectedTrip?.id ?? null,
+    isTripAdmin: isSelectedTripAdmin,
+  });
 
   const handleCreateTrip = async (values: {
     title: string;
@@ -208,7 +206,7 @@ function Waypoint() {
 
         <MyPendingTrips
           requests={pendingRequests}
-          loading={pendingRequestsLoading}
+          loading={!pendingRequestsLoaded}
         />
 
         {trips.length === 0 ? (

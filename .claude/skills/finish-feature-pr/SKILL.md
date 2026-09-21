@@ -94,6 +94,32 @@ regularly gets the shape right but the UX wrong:
   in this codebase, not a hypothetical.
 - Deletes go through `useActionModal().confirm(...)` with `destructive:
   true`, not a bare `window.confirm` or no confirmation at all.
+- **Any Firestore listener the coding agent wrote directly inside a leaf
+  component's `useEffect` — a tab, a panel inside a modal, anything that
+  isn't the mini-app's single top-level orchestrator — is a bug, not a
+  style preference.** That component mounts/unmounts every time its tab or
+  panel opens and closes, so the listener tears down and resubscribes on
+  every one of those instead of once per actual key change. Move it into
+  `store/listeners/` as a plain `startXListener(key, onChange)` function,
+  dispatched from a `useXSync` hook called once at the top-level page
+  (`useNineLivesSync.ts` is the reference shape: one effect for data scoped
+  to the signed-in user, a second for data scoped to whichever resource is
+  currently open, each keyed only on the id it actually depends on). The
+  leaf component becomes a pure `useAppSelector` reader with no listener of
+  its own — grep the diff for `onSnapshot(` outside `store/listeners/` to
+  catch this.
+- **A pending-request/invite feature that ships approve/decline but not a
+  requester-side cancel/withdraw action is incomplete**, even if the
+  original issue didn't call it out — `.github/copilot-instructions.md`'s
+  Invite/join/pending-request pattern requires both sides in the same PR.
+  Add the Remove/cancel action (delete the requester's own doc, confirm
+  destructive) rather than leaving it for a follow-up issue.
+- **A static option list (UI dropdown options, a role/status allowlist)
+  declared separately in more than one file is a duplication bug.** Grep for
+  the option values (e.g. `'EDITOR'`, `'COMMENTER'`) across the feature's
+  files; if more than one file hand-writes the same list, hoist it once next
+  to the type it constrains (typically `types.ts`) and have every consumer
+  import and derive from it.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 

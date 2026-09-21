@@ -10,15 +10,18 @@ import {
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
-import type {
-  TripJoinRequest,
-  TripSpace,
-  UserRole,
+import { getErrorMessage } from '@/utils/errorUtils';
+import {
+  ASSIGNABLE_MEMBER_ROLES,
+  type TripJoinRequest,
+  type TripSpace,
+  type UserRole,
 } from '@apps/waypoint/types';
 import { TRIP_COLLECTION_PATH } from '@apps/waypoint/security';
 import {
-  removePendingRequest,
-  upsertPendingRequest,
+  removeMyPendingRequest,
+  removeTripPendingRequest,
+  upsertMyPendingRequest,
 } from '@apps/waypoint/store/slices/pendingRequestsSlice';
 
 const PENDING_REQUESTS_COLLECTION = collection(
@@ -82,13 +85,11 @@ export const requestToJoinTrip = createAsyncThunk<
     };
 
     await setDoc(requestRef, request);
-    dispatch(upsertPendingRequest(request));
+    dispatch(upsertMyPendingRequest(request));
 
     return request;
   },
 );
-
-const APPROVAL_ROLES: UserRole[] = ['EDITOR', 'COMMENTER', 'VIEWER'];
 
 export const approveJoinRequest = createAsyncThunk<
   TripJoinRequest,
@@ -97,7 +98,7 @@ export const approveJoinRequest = createAsyncThunk<
 >(
   'waypoint/membership/approve',
   async ({ tripId, uid, role }, { dispatch, getState, rejectWithValue }) => {
-    if (!APPROVAL_ROLES.includes(role)) {
+    if (!ASSIGNABLE_MEMBER_ROLES.includes(role)) {
       return rejectWithValue('Choose a valid member role.');
     }
 
@@ -154,7 +155,7 @@ export const approveJoinRequest = createAsyncThunk<
     batch.delete(requestRef);
     await batch.commit();
 
-    dispatch(removePendingRequest({ uid, tripId }));
+    dispatch(removeTripPendingRequest({ uid, tripId }));
 
     return request;
   },
@@ -169,10 +170,32 @@ export const declineJoinRequest = createAsyncThunk<
   async ({ uid, tripId }, { dispatch, rejectWithValue }) => {
     try {
       await deleteDoc(pendingRequestRef(uid, tripId));
-      dispatch(removePendingRequest({ uid, tripId }));
+      dispatch(removeTripPendingRequest({ uid, tripId }));
       return { uid, tripId };
-    } catch {
-      return rejectWithValue('Unable to decline this request.');
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to decline this request.'),
+      );
+    }
+  },
+);
+
+// Lets a requester pull back a request they sent before an Admin acts on it.
+export const cancelJoinRequest = createAsyncThunk<
+  { uid: string; tripId: string },
+  { uid: string; tripId: string },
+  { rejectValue: string }
+>(
+  'waypoint/membership/cancel',
+  async ({ uid, tripId }, { dispatch, rejectWithValue }) => {
+    try {
+      await deleteDoc(pendingRequestRef(uid, tripId));
+      dispatch(removeMyPendingRequest({ uid, tripId }));
+      return { uid, tripId };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to withdraw this request.'),
+      );
     }
   },
 );

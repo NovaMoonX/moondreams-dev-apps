@@ -1,15 +1,19 @@
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { shallowEqual } from 'react-redux';
 
 import { Button, Select, Separator } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { db } from '@/lib/firebase/config';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDateTime, getErrorMessage } from '@/utils';
-import type { TripJoinRequest, UserRole } from '@apps/waypoint/types';
+import {
+  ASSIGNABLE_MEMBER_ROLES,
+  MEMBER_ROLE_LABELS,
+  type TripJoinRequest,
+  type UserRole,
+} from '@apps/waypoint/types';
 import {
   approveJoinRequest,
   declineJoinRequest,
@@ -19,47 +23,31 @@ interface PendingMembersPanelProps {
   tripId: string;
 }
 
-const ROLE_OPTIONS = [
-  { text: 'Editor', value: 'EDITOR' },
-  { text: 'Commenter', value: 'COMMENTER' },
-  { text: 'Viewer', value: 'VIEWER' },
-];
+const ROLE_OPTIONS = ASSIGNABLE_MEMBER_ROLES.map((role) => ({
+  text: MEMBER_ROLE_LABELS[role],
+  value: role,
+}));
 
 function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
-  const [requests, setRequests] = useState<TripJoinRequest[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<Record<string, UserRole>>(
     {},
   );
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const requests = useAppSelector(
+    (state) =>
+      state.waypoint.pendingRequests.tripRequests.filter(
+        (request) => request.tripId === tripId,
+      ),
+    shallowEqual,
+  );
+  const loading = useAppSelector(
+    (state) => !state.waypoint.pendingRequests.tripRequestsLoaded,
+  );
   const userInfo = useUserInfo(requests.map((request) => request.uid));
   const members = userInfo?.users ?? [];
-
-  useEffect(() => {
-    const requestsQuery = query(
-      collection(db, 'apps', 'waypoint', 'pendingRequests'),
-      where('tripId', '==', tripId),
-    );
-
-    return onSnapshot(
-      requestsQuery,
-      (snapshot) => {
-        setRequests(
-          snapshot.docs.map(
-            (docSnapshot) => docSnapshot.data() as TripJoinRequest,
-          ),
-        );
-        setLoading(false);
-      },
-      () => {
-        setRequests([]);
-        setLoading(false);
-      },
-    );
-  }, [tripId]);
 
   const handleApprove = async (request: TripJoinRequest) => {
     const requestId = `${request.uid}_${request.tripId}`;
