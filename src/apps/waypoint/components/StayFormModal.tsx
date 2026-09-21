@@ -5,7 +5,6 @@ import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/component
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,
-  toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';

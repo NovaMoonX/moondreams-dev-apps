@@ -54,6 +54,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <StayFormModal
+        key={isModalOpen ? 'stay-form-open' : 'stay-form-closed'}
         isOpen={isModalOpen}
         trip={trip}
         isSubmitting={isSubmitting}
