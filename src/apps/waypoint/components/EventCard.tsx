@@ -1,5 +1,6 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
+import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { formatTime } from '@/utils/formatUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
@@ -49,6 +50,7 @@ export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
               {event.address ? ` · ${event.address}` : ''}
             </p>
           )}
+          <ChangeBadge changeHistory={event.changeHistory} />
         </div>
         <div className='flex shrink-0 gap-2'>
           <MapNavigationButton {...event} />

@@ -1,6 +1,7 @@
 import type {
   ActivitySetting,
   ChecklistCategory,
+  EventFieldChange,
   EventType,
   MealType,
   TransitType,
@@ -53,6 +54,14 @@ export const EVENT_TYPE_BADGE_CLASSES: Record<EventType, string> = {
     'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
   FREE_TIME:
     'bg-violet-200 text-violet-900 dark:bg-violet-900 dark:text-violet-100',
+};
+
+export const EVENT_FIELD_LABELS: Record<EventFieldChange['field'], string> = {
+  startAt: 'Start time',
+  endAt: 'End time',
+  locationName: 'Location',
+  dayIndex: 'Day',
+  endDayIndex: 'End day',
 };
 
 export const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {

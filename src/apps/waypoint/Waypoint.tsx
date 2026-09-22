@@ -247,7 +247,7 @@ function Waypoint() {
   return (
     <div className='page'>
       <div className='mx-auto max-w-4xl space-y-6 py-8'>
-        <NavButton href='/' variant='link'>
+        <NavButton href='/' variant='link' className='mb-2'>
           <ChevronLeft /> Back home
         </NavButton>
 

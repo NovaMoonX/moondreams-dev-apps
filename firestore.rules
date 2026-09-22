@@ -1627,6 +1627,15 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
+      function isTripAdminOnlyPostStart() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return request.auth != null && request.auth.uid in trip.members && (
+          request.time.toMillis() < trip.startDate
+            ? trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+            : trip.members[request.auth.uid].role == 'ADMIN'
+        );
+      }
+
       function isEventShapeValid() {
         return request.resource.data.keys().hasOnly([
             'id',
@@ -1644,6 +1653,7 @@ service cloud.firestore {
             'eventDetails',
             'notes',
             'assignedMemberIds',
+            'changeHistory',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1681,11 +1691,10 @@ service cloud.firestore {
       allow create: if isTripSubcollectionEditor()
         && isEventShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isTripSubcollectionEditor()
+      allow update: if isTripAdminOnlyPostStart()
         && isEventShapeValid()
         && isEventImmutableFieldsValid();
-      // Issue 13 will narrow this to Admin-only once a trip has started.
-      allow delete: if isTripSubcollectionEditor();
+      allow delete: if isTripAdminOnlyPostStart();
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {

@@ -43,3 +43,8 @@ export function canRemoveMembers(
 ) {
   return canChangeRole(trip, currentUserId, targetUserId);
 }
+
+export function canEditExistingEvent(trip: TripSpace, uid: string) {
+  const tripStarted = Date.now() >= trip.startDate;
+  return tripStarted ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
+}
