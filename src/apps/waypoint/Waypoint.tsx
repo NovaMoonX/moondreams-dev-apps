@@ -239,18 +239,18 @@ function Waypoint() {
   return (
     <div className='page'>
       <div className='mx-auto max-w-4xl space-y-6 py-8'>
-        <NavButton href='/' variant='link' className='mb-2'>
+        <NavButton href='/' variant='link'>
           <ChevronLeft /> Back home
         </NavButton>
 
-        <div className='flex items-center justify-between gap-4'>
+        <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h1 className='text-3xl font-semibold'>My Trips</h1>
             <p className='text-muted-foreground mt-1'>
               Create a trip to start planning together.
             </p>
           </div>
-          <div className='flex items-center gap-3'>
+          <div className='flex items-center gap-3 justify-center'>
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
               <AppToggle
                 size='sm'
