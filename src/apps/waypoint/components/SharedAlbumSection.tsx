@@ -67,7 +67,8 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
       <Callout
         variant={shouldShowReminder ? 'info' : 'base'}
         icon='📷'
-        title='Shared album'
+        title{}
+        className='text-sm'
         description={
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <span>{description}</span>
