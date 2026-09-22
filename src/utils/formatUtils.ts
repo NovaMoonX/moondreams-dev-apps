@@ -34,6 +34,32 @@ export function formatDate(timestamp: number) {
   });
 }
 
+/** Minutes-granularity duration string, e.g. "45m" or "2h 5m", for a span of milliseconds. */
+export function formatDuration(ms: number) {
+  const totalMinutes = Math.max(0, Math.round(ms / 60_000));
+  if (totalMinutes < 1) {
+    return 'less than a minute';
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
+/** Minutes-granularity countdown to a future timestamp, e.g. "in 45m" or "in 2h 5m". Assumes targetTimestamp >= now. */
+export function formatCountdown(targetTimestamp: number, now: number) {
+  const remainingMs = targetTimestamp - now;
+  if (Math.round(remainingMs / 60_000) < 1) {
+    return 'starting now';
+  }
+
+  return `in ${formatDuration(remainingMs)}`;
+}
+
 export function formatDateTime(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getFullYear() === new Date().getFullYear();

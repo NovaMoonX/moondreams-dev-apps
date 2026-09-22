@@ -1,21 +1,15 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import {
-  Button,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { formatDateTime } from '@/utils/formatUtils';
 import AppToggle from '@/components/AppToggle';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
@@ -23,13 +17,9 @@ import NavButton from '@/ui/NavButton';
 
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
-import MembersSection from '@apps/waypoint/components/MembersSection';
-import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
-import OverviewSection from '@apps/waypoint/components/OverviewSection';
-import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
-import StaysSection from '@apps/waypoint/components/StaysSection';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
+import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
 import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
 import {
@@ -38,7 +28,11 @@ import {
   setTripArchived,
 } from '@apps/waypoint/store/actions/tripActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
-import { selectTrips, selectTimelineEvents } from '@apps/waypoint/store/selectors';
+import {
+  getTripStatus,
+  selectTrips,
+  selectTimelineEvents,
+} from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
@@ -65,6 +59,7 @@ function Waypoint() {
   const pendingRequestsLoaded = useAppSelector(
     (state) => state.waypoint.pendingRequests.myRequestsLoaded,
   );
+  const now = useNow();
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
   const isSelectedTripAdmin =
@@ -172,6 +167,15 @@ function Waypoint() {
   const visibleTrips = trips.filter(
     (trip) => showArchived || !trip.isArchived,
   );
+  const activeTrips = visibleTrips.filter(
+    (trip) => getTripStatus(trip, now) === 'ACTIVE',
+  );
+  const upcomingTrips = visibleTrips.filter(
+    (trip) => getTripStatus(trip, now) === 'UPCOMING',
+  );
+  const pastTrips = visibleTrips.filter(
+    (trip) => getTripStatus(trip, now) === 'PAST',
+  );
 
   if (loading) {
     return <Loading />;
@@ -185,80 +189,68 @@ function Waypoint() {
     return <Loading />;
   }
 
+  const renderTripSection = (label: string, sectionTrips: TripSpace[]) => {
+    if (sectionTrips.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className='space-y-4'>
+        <h2 className='text-muted-foreground text-sm font-semibold tracking-wide uppercase'>
+          {label}
+        </h2>
+        <div className='grid items-start gap-4 sm:grid-cols-2'>
+          {sectionTrips.map((trip) => (
+            <TripCard
+              key={trip.id}
+              trip={trip}
+              currentUserId={user.uid}
+              now={now}
+              onOpen={setSelectedTripId}
+              onEdit={(tripToEdit) => {
+                setError(null);
+                setEditingTrip(tripToEdit);
+              }}
+              onToggleArchived={(tripToToggle) =>
+                void handleToggleArchived(tripToToggle)
+              }
+              onCopyInviteLink={(inviteLinkCode) =>
+                void handleCopyInviteLink(inviteLinkCode)
+              }
+            />
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   if (selectedTrip) {
     return (
-      <div className='page'>
-        <div className='mx-auto max-w-4xl space-y-6 py-8'>
-          <Button
-            type='button'
-            variant='link'
-            className='px-0'
-            onClick={() => setSelectedTripId(null)}
-          >
-            <ChevronLeft /> Back to My Trips
-          </Button>
-          <div>
-            {selectedTrip.coverImageUrl && (
-              <img
-                src={selectedTrip.coverImageUrl}
-                alt={`${selectedTrip.title} cover`}
-                className='mb-4 h-48 w-full rounded-lg object-cover'
-              />
-            )}
-            <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
-            <p className='text-muted-foreground mt-1'>
-              {formatDateTime(selectedTrip.startDate)} –{' '}
-              {formatDateTime(selectedTrip.endDate)}
-            </p>
-          </div>
-          <Tabs defaultValue='overview' tabsWidth='full' variant='pills'>
-            <TabsList>
-              <TabsTrigger value='overview'>Timeline</TabsTrigger>
-              <TabsTrigger value='members'>Members</TabsTrigger>
-              <TabsTrigger value='expenses'>Expenses</TabsTrigger>
-              <TabsTrigger value='stays'>Stays</TabsTrigger>
-              <TabsTrigger value='checklist'>Checklist</TabsTrigger>
-            </TabsList>
-            <TabsContent value='overview' className='pt-4'>
-              <OverviewSection
-                trip={selectedTrip}
-                events={timelineEvents}
-                currentUserId={user.uid}
-              />
-            </TabsContent>
-            <TabsContent value='members'>
-              <MembersSection trip={selectedTrip} currentUserId={user.uid} />
-            </TabsContent>
-            <TabsContent value='expenses'>
-              <ExpensesSection trip={selectedTrip} currentUserId={user.uid} />
-            </TabsContent>
-            <TabsContent value='stays'>
-              <StaysSection trip={selectedTrip} currentUserId={user.uid} />
-            </TabsContent>
-            <TabsContent value='checklist'>
-              <ChecklistSection trip={selectedTrip} currentUserId={user.uid} />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+      <TripDetailPage
+        key={selectedTrip.id}
+        trip={selectedTrip}
+        events={timelineEvents}
+        currentUserId={user.uid}
+        onBack={() => setSelectedTripId(null)}
+      />
     );
   }
 
   return (
     <div className='page'>
       <div className='mx-auto max-w-4xl space-y-6 py-8'>
-        <NavButton href='/' variant='link' className='mb-2'>
+        <NavButton href='/' variant='link'>
           <ChevronLeft /> Back home
         </NavButton>
 
-        <div className='flex items-center justify-between gap-4'>
+        <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h1 className='text-3xl font-semibold'>My Trips</h1>
             <p className='text-muted-foreground mt-1'>
               Create a trip to start planning together.
             </p>
           </div>
-          <div className='flex items-center gap-3'>
+          <div className='flex items-center gap-3 justify-center'>
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
               <AppToggle
                 size='sm'
@@ -318,25 +310,10 @@ function Waypoint() {
             </Button>
           </div>
         ) : (
-          <div className='grid items-start gap-4 sm:grid-cols-2'>
-            {visibleTrips.map((trip) => (
-              <TripCard
-                key={trip.id}
-                trip={trip}
-                currentUserId={user.uid}
-                onOpen={setSelectedTripId}
-                onEdit={(tripToEdit) => {
-                  setError(null);
-                  setEditingTrip(tripToEdit);
-                }}
-                onToggleArchived={(tripToToggle) =>
-                  void handleToggleArchived(tripToToggle)
-                }
-                onCopyInviteLink={(inviteLinkCode) =>
-                  void handleCopyInviteLink(inviteLinkCode)
-                }
-              />
-            ))}
+          <div className='space-y-8'>
+            {renderTripSection('Active', activeTrips)}
+            {renderTripSection('Upcoming', upcomingTrips)}
+            {renderTripSection('Past', pastTrips)}
           </div>
         )}
         {error && <p className='text-destructive text-sm'>{error}</p>}

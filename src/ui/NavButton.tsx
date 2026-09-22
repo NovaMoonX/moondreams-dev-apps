@@ -12,7 +12,7 @@ type NavButtonProps = Omit<ButtonOnlyProps, 'href' | 'ref'> & {
 // which prevents a full page reload and allows for client-side routing.
 function NavButton({ href, ...rest }: NavButtonProps) {
   return (
-    <Link to={href} className='shrink-0'>
+    <Link to={href} className='inline-flex shrink-0'>
       <Button {...rest}>
         {rest.children}
       </Button>

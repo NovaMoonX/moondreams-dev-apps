@@ -30,18 +30,25 @@ interface TimelineSectionProps {
   trip: TripSpace;
   events: TimelineEvent[];
   currentUserId: string;
+  activeDayTab: string;
+  onActiveDayTabChange: (value: string) => void;
 }
 
-export function TimelineSection({ trip, events, currentUserId }: TimelineSectionProps) {
+export function TimelineSection({
+  trip,
+  events,
+  currentUserId,
+  activeDayTab,
+  onActiveDayTabChange,
+}: TimelineSectionProps) {
   const dispatch = useAppDispatch();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
-  const [activeTab, setActiveTab] = useState('all');
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const memberIds = Object.keys(trip.members);
-  const activeDayIndex = activeTab === 'all' ? 0 : Number(activeTab);
+  const activeDayIndex = activeDayTab === 'all' ? 0 : Number(activeDayTab);
   const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex));
   const members = useUserInfo(memberIds)?.map ?? {};
   const memberOptions = memberIds.map((uid) => ({
@@ -50,7 +57,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
   const renderStayBanners = (dayIndex: number) => {
-    if (dayIndex !== activeDayIndex || activeTab === 'all' || activeStays.length === 0) {
+    if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
       return null;
     }
 
@@ -172,16 +179,19 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
 
   return (
     <>
-      <section className='space-y-4 pt-4'>
+      <section className='space-y-4'>
+        <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+          View by day
+        </p>
         <Select
           className='sm:hidden'
           options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}
-          value={activeTab}
-          onChange={setActiveTab}
+          value={activeDayTab}
+          onChange={onActiveDayTabChange}
         />
         <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
+          value={activeDayTab}
+          onValueChange={onActiveDayTabChange}
           tabsWidth='full'
           variant='pills'
         >

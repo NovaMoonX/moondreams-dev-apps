@@ -94,6 +94,8 @@ export type TransitType =
   | 'OTHER';
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type ActivitySetting = 'INDOOR' | 'OUTDOOR';
+export type EventStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
+export type TripStatus = 'UPCOMING' | 'ACTIVE' | 'PAST';
 
 export interface TravelEventDetails {
   transitType: TransitType;
