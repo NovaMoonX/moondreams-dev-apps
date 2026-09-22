@@ -10,6 +10,8 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AppToggle from '@/components/AppToggle';
+import EnrichedImage from '@apps/waypoint/components/EnrichedImage';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import {
@@ -17,12 +19,16 @@ import {
   deleteEvent,
   updateEvent,
 } from '@apps/waypoint/store/actions/eventActions';
+import { patchStayPlacePhoto } from '@apps/waypoint/store/actions/stayActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
+import { useRichContentPreference } from '@apps/waypoint/hooks/useRichContentPreference';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
+import { getDisplayImage, getDisplayLink } from '@apps/waypoint/utils/enrichment';
+import { getPlaceBiasFromItems } from '@apps/waypoint/utils/placesApi';
 import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
@@ -56,6 +62,8 @@ export function TimelineSection({
     value: uid,
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
+  const { showRichContent, setShowRichContent } = useRichContentPreference();
+  const placeBias = getPlaceBiasFromItems(events);
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
       return null;
@@ -63,7 +71,14 @@ export function TimelineSection({
 
     return (
       <div className='space-y-2'>
-        {activeStays.map((stay) => <StayBanner key={stay.id} stay={stay} />)}
+        {activeStays.map((stay) => (
+          <StayBanner
+            key={stay.id}
+            stay={stay}
+            canEdit={canEdit}
+            showRichContent={showRichContent}
+          />
+        ))}
       </div>
     );
   };
@@ -83,6 +98,7 @@ export function TimelineSection({
       key={event.id}
       event={event}
       canEdit={canEdit}
+      showRichContent={showRichContent}
       onEdit={(selectedEvent) => {
         setEditingEvent(selectedEvent);
         setIsFormOpen(true);
@@ -212,6 +228,14 @@ export function TimelineSection({
           >
             + Add Event
           </Button>
+          <label className='text-muted-foreground mt-3 flex items-center gap-2 text-sm'>
+            <AppToggle
+              size='sm'
+              checked={showRichContent}
+              onCheckedChange={setShowRichContent}
+            />
+            Show rich content
+          </label>
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>
@@ -229,6 +253,7 @@ export function TimelineSection({
         trip={trip}
         memberOptions={memberOptions}
         event={editingEvent}
+        placeBias={placeBias}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
         onDelete={editingEvent ? () => handleDelete(editingEvent) : undefined}
@@ -241,14 +266,54 @@ export function TimelineSection({
   );
 }
 
-function StayBanner({ stay }: { stay: Stay }) {
+function StayBanner({
+  stay,
+  canEdit,
+  showRichContent,
+}: {
+  stay: Stay;
+  canEdit: boolean;
+  showRichContent: boolean;
+}) {
+  const imageUrl = showRichContent ? getDisplayImage(stay) : null;
+  const linkHref = showRichContent ? getDisplayLink(stay) : null;
+
   return (
-    <div className='border-border bg-card rounded-lg border px-4 py-3'>
-      <p className='text-muted-foreground text-xs font-medium uppercase tracking-wide'>
-        Staying at
-      </p>
-      <p className='mt-1 font-semibold'>{stay.name}</p>
-      <p className='text-muted-foreground text-sm'>{stay.address}</p>
+    <div className='border-border bg-card flex items-center gap-3 overflow-hidden rounded-lg border'>
+      {imageUrl && (
+        <EnrichedImage
+          src={imageUrl}
+          alt=''
+          className='h-16 w-16 shrink-0 object-cover'
+          refreshFrom={
+            stay.place
+              ? {
+                  place: stay.place,
+                  canEdit,
+                  onRefreshed: (photoUrl, photoRefreshedAt) =>
+                    void patchStayPlacePhoto(stay.tripId, stay.id, photoUrl, photoRefreshedAt),
+                }
+              : undefined
+          }
+        />
+      )}
+      <div className='min-w-0 flex-1 px-4 py-3'>
+        <p className='text-muted-foreground text-xs font-medium uppercase tracking-wide'>
+          Staying at
+        </p>
+        <p className='mt-1 font-semibold'>{stay.name}</p>
+        <p className='text-muted-foreground text-sm'>{stay.address}</p>
+        {linkHref && (
+          <a
+            href={linkHref}
+            target='_blank'
+            rel='noreferrer'
+            className='text-primary text-xs font-medium hover:underline'
+          >
+            View link
+          </a>
+        )}
+      </div>
     </div>
   );
 }

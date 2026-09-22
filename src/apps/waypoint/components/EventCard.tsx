@@ -1,9 +1,12 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
+import EnrichedImage from '@apps/waypoint/components/EnrichedImage';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { formatTime } from '@/utils/formatUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
+import { getDisplayImage, getDisplayLink } from '@apps/waypoint/utils/enrichment';
+import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
@@ -13,11 +16,14 @@ import {
 interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
+  showRichContent: boolean;
   onEdit: (event: TimelineEvent) => void;
 }
 
-export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
+export function EventCard({ event, canEdit, showRichContent, onEdit }: EventCardProps) {
   const details = event.eventDetails;
+  const imageUrl = showRichContent ? getDisplayImage(event) : null;
+  const linkHref = showRichContent ? getDisplayLink(event) : null;
   const quickField =
     event.eventType === 'TRAVEL' && details && 'transitType' in details
       ? details.transitType
@@ -28,8 +34,25 @@ export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
           : null;
 
   return (
-    <article className='border-border bg-card rounded-lg border p-4'>
-      <div className='flex items-start justify-between gap-3'>
+    <article className='border-border bg-card overflow-hidden rounded-lg border'>
+      {imageUrl && (
+        <EnrichedImage
+          src={imageUrl}
+          alt=''
+          className='h-36 w-full object-cover'
+          refreshFrom={
+            event.place
+              ? {
+                  place: event.place,
+                  canEdit,
+                  onRefreshed: (photoUrl, photoRefreshedAt) =>
+                    void patchEventPlacePhoto(event.tripId, event.id, photoUrl, photoRefreshedAt),
+                }
+              : undefined
+          }
+        />
+      )}
+      <div className='flex items-start justify-between gap-3 p-4'>
         <div>
           <div className='flex flex-wrap items-center gap-2'>
             <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
@@ -52,12 +75,24 @@ export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
           )}
           <ChangeBadge changeHistory={event.changeHistory} />
         </div>
-        <div className='flex shrink-0 gap-2'>
-          <MapNavigationButton {...event} />
-          {canEdit && (
-            <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
-              Modify
-            </Button>
+        <div className='flex shrink-0 flex-col items-end gap-2'>
+          <div className='flex gap-2'>
+            <MapNavigationButton {...event} />
+            {canEdit && (
+              <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
+                Modify
+              </Button>
+            )}
+          </div>
+          {linkHref && (
+            <a
+              href={linkHref}
+              target='_blank'
+              rel='noreferrer'
+              className='text-primary text-xs font-medium hover:underline'
+            >
+              View link
+            </a>
           )}
         </div>
       </div>

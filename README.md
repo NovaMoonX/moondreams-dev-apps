@@ -61,6 +61,14 @@ VITE_FIREBASE_AI_MODEL=
 # true to point the app at the local Firebase Emulator Suite (see SEEDING.md) instead of
 # the live project. Leave unset/false to hit real Firebase.
 VITE_USE_FIREBASE_EMULATORS=
+
+# Waypoint place search (Places API (New), called directly from the browser — see
+# src/apps/waypoint/utils/placesApi.ts). Optional: place search is hidden when unset.
+# Create in Google Cloud Console > APIs & Services > Credentials, then restrict it:
+#   - Application restriction: HTTP referrers — apps.moondreams.dev, *.web.app, localhost.
+#   - API restriction: Places API (New) only.
+#   - Set a daily quota cap on Autocomplete + Place Details and a billing budget alert.
+VITE_GOOGLE_PLACES_API_KEY=
 ```
 
 > [!IMPORTANT]

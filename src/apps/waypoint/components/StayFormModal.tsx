@@ -9,14 +9,17 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import LinkAttachField from '@apps/waypoint/components/LinkAttachField';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import PlaceSearchInput from '@apps/waypoint/components/PlaceSearchInput';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { getTimezoneOptions } from '@/utils/timezoneUtils';
-import type { Stay, TripSpace } from '@apps/waypoint/types';
+import type { LinkPreview, PlaceRef, Stay, TripSpace } from '@apps/waypoint/types';
+import type { PlaceSelectionBias, PlaceSelectionResult } from '@apps/waypoint/utils/placesApi';
 
 type StayValues = Omit<
   Stay,
@@ -27,6 +30,7 @@ interface StayFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   stay?: Stay;
+  placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
   onSubmit: (stay: StayValues) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
@@ -36,6 +40,13 @@ interface StayFormModalProps {
 interface StayDraft {
   name: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
+  place: PlaceRef | null;
+  linkUrl: string;
+  linkPreview: LinkPreview | null;
+  confirmationCode: string;
+  notes: string;
   checkInDate: string;
   checkInTime: string;
   checkOutDate: string;
@@ -51,6 +62,13 @@ function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
   return {
     name: stay?.name ?? '',
     address: stay?.address ?? '',
+    latitude: stay?.latitude ?? null,
+    longitude: stay?.longitude ?? null,
+    place: stay?.place ?? null,
+    linkUrl: stay?.linkUrl ?? '',
+    linkPreview: stay?.linkPreview ?? null,
+    confirmationCode: stay?.confirmationCode ?? '',
+    notes: stay?.notes ?? '',
     checkInDate: toLocalDateInputValue(stay?.checkInAt ?? trip.startDate),
     checkInTime: stay ? new Date(stay.checkInAt).toTimeString().slice(0, 5) : '15:00',
     checkOutDate: toLocalDateInputValue(stay?.checkOutAt ?? trip.endDate),
@@ -67,6 +85,7 @@ export function StayFormModal({
   isOpen,
   trip,
   stay,
+  placeBias,
   isSubmitting = false,
   onSubmit,
   onDelete,
@@ -135,15 +154,18 @@ export function StayFormModal({
       await onSubmit({
         name: draft.name,
         address: draft.address,
-        latitude: null,
-        longitude: null,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
         checkInAt,
         checkOutAt,
         checkInTimezone: draft.checkInTimezone,
         plannedArrivalAt: draftPlannedArrivalAt,
         plannedDepartureAt: draftPlannedDepartureAt,
-        confirmationCode: null,
-        notes: null,
+        confirmationCode: draft.confirmationCode,
+        notes: draft.notes,
+        place: draft.place,
+        linkUrl: draft.linkUrl,
+        linkPreview: draft.linkPreview,
       });
       setError(null);
     } catch (submitError) {
@@ -154,6 +176,25 @@ export function StayFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-4'>
+        <PlaceSearchInput
+          bias={placeBias}
+          onSelect={(result: PlaceSelectionResult) =>
+            updateDraft({
+              name: draft.name.trim() ? draft.name : result.name,
+              address: result.address,
+              latitude: result.latitude,
+              longitude: result.longitude,
+              place: result.place,
+            })
+          }
+          onPhotoResolved={(placeId, photoUrl) =>
+            setDraft((current) =>
+              current.place?.placeId === placeId
+                ? { ...current, place: { ...current.place, photoUrl, photoRefreshedAt: Date.now() } }
+                : current,
+            )
+          }
+        />
         <div className='space-y-1.5'>
           <Label>Stay name</Label>
           <Input
@@ -170,6 +211,22 @@ export function StayFormModal({
             onChange={(event) => updateDraft({ address: event.target.value })}
           />
         </div>
+        {draft.place && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            onClick={() => updateDraft({ place: null, latitude: null, longitude: null })}
+          >
+            Remove place
+          </Button>
+        )}
+        <LinkAttachField
+          url={draft.linkUrl}
+          preview={draft.linkPreview}
+          onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+          onUseTitle={(title) => !draft.name.trim() && updateDraft({ name: title })}
+        />
         <div className='grid gap-3 sm:grid-cols-2'>
           <div className='space-y-1.5'>
             <Label>Check-in</Label>

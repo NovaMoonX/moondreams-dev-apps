@@ -1667,6 +1667,9 @@ service cloud.firestore {
             'notes',
             'assignedMemberIds',
             'changeHistory',
+            'place',
+            'linkUrl',
+            'linkPreview',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1688,6 +1691,16 @@ service cloud.firestore {
           && (request.resource.data.eventDetails == null || request.resource.data.eventDetails is map)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.assignedMemberIds is list
+          && (request.resource.data.place == null || (
+            request.resource.data.place is map
+            && request.resource.data.place.placeId is string
+          ))
+          && (request.resource.data.linkUrl == null || (
+            request.resource.data.linkUrl is string
+            && request.resource.data.linkUrl.size() <= 2048
+            && request.resource.data.linkUrl.matches('^https?://.*')
+          ))
+          && (request.resource.data.linkPreview == null || request.resource.data.linkPreview is map)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);
@@ -1745,6 +1758,9 @@ service cloud.firestore {
             'plannedDepartureAt',
             'confirmationCode',
             'notes',
+            'place',
+            'linkUrl',
+            'linkPreview',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1766,6 +1782,16 @@ service cloud.firestore {
           && (request.resource.data.confirmationCode == null
             || isNonEmptyString(request.resource.data.confirmationCode))
           && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && (request.resource.data.place == null || (
+            request.resource.data.place is map
+            && request.resource.data.place.placeId is string
+          ))
+          && (request.resource.data.linkUrl == null || (
+            request.resource.data.linkUrl is string
+            && request.resource.data.linkUrl.size() <= 2048
+            && request.resource.data.linkUrl.matches('^https?://.*')
+          ))
+          && (request.resource.data.linkPreview == null || request.resource.data.linkPreview is map)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);
@@ -1788,6 +1814,9 @@ service cloud.firestore {
             'plannedDepartureAt',
             'confirmationCode',
             'notes',
+            'place',
+            'linkUrl',
+            'linkPreview',
             'lastEditedAt'
           ])
         && isStayShapeValid();

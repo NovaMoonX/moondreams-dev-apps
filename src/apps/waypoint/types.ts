@@ -42,6 +42,27 @@ export interface TripJoinRequest {
   requestedAt: number;
 }
 
+/** A Google Places (New) pick, resolved once at selection time and stored on the
+ * event/stay doc. Only `placeId` is safe to keep indefinitely per Google's terms —
+ * see src/apps/waypoint/utils/placesApi.ts for the refresh policy on the rest. */
+export interface PlaceRef {
+  placeId: string;
+  mapsUrl: string;
+  primaryType: string | null;
+  photoUrl: string | null;
+  photoRefreshedAt: number | null;
+}
+
+/** Metadata scraped from an attached URL (a booking/listing link, or a Google Maps
+ * link) by the fetchLinkMetadata cloud function. See functions/src/apps/waypoint. */
+export interface LinkPreview {
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  siteName: string | null;
+  fetchedAt: number;
+}
+
 export interface Stay {
   id: string;
   tripId: string;
@@ -56,6 +77,9 @@ export interface Stay {
   plannedDepartureAt: number;
   confirmationCode: string | null;
   notes: string | null;
+  place: PlaceRef | null;
+  linkUrl: string | null;
+  linkPreview: LinkPreview | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -147,6 +171,10 @@ export interface TimelineEvent {
   notes: string | null;
   assignedMemberIds: string[];
   changeHistory: EventChangeSnapshot[];
+  place: PlaceRef | null;
+  /** Only meaningful for DINING and ACTIVITY events; other types leave this null. */
+  linkUrl: string | null;
+  linkPreview: LinkPreview | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

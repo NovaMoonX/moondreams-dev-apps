@@ -16,16 +16,21 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import LinkAttachField from '@apps/waypoint/components/LinkAttachField';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import PlaceSearchInput from '@apps/waypoint/components/PlaceSearchInput';
 import type {
   ActivitySetting,
   EventDetails,
   EventType,
+  LinkPreview,
   MealType,
+  PlaceRef,
   TimelineEvent,
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
+import type { PlaceSelectionBias, PlaceSelectionResult } from '@apps/waypoint/utils/placesApi';
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_TYPE_EMOJIS,
@@ -40,6 +45,9 @@ interface EventFormModalProps {
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
+  /** A rough center point (from an existing trip event/stay) to bias place search
+   * results toward, so "starbucks" finds the one near this trip first. */
+  placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
   onSubmit: (
     event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
@@ -69,8 +77,17 @@ interface EventDraft {
   quickField: string;
   locationName: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
+  place: PlaceRef | null;
+  linkUrl: string;
+  linkPreview: LinkPreview | null;
   assignedMemberIds: string[];
 }
+
+/** Only these event types carry a bookable link (dining reservations, activity
+ * tickets); travel and free time don't have a natural "booking" to attach. */
+const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'];
 
 function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
   return {
@@ -91,6 +108,11 @@ function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
             : 'INDOOR',
     locationName: event?.locationName ?? '',
     address: event?.address ?? '',
+    latitude: event?.latitude ?? null,
+    longitude: event?.longitude ?? null,
+    place: event?.place ?? null,
+    linkUrl: event?.linkUrl ?? '',
+    linkPreview: event?.linkPreview ?? null,
     assignedMemberIds: event?.assignedMemberIds ?? [],
   };
 }
@@ -100,6 +122,7 @@ function EventFormModal({
   trip,
   memberOptions,
   event,
+  placeBias,
   isSubmitting = false,
   onSubmit,
   onDelete,
@@ -152,12 +175,17 @@ function EventFormModal({
         endAt: event?.endAt ?? null,
         locationName: draft.locationName,
         address: draft.address,
-        latitude: event?.latitude ?? null,
-        longitude: event?.longitude ?? null,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
         eventDetails,
         notes: event?.notes ?? null,
         assignedMemberIds: draft.assignedMemberIds,
         changeHistory: event?.changeHistory ?? [],
+        place: draft.place,
+        linkUrl: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) ? draft.linkUrl : null,
+        linkPreview: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
+          ? draft.linkPreview
+          : null,
       });
       setStep(1);
       setError(null);
@@ -277,6 +305,26 @@ function EventFormModal({
                 />
               </div>
             )}
+            <PlaceSearchInput
+              bias={placeBias}
+              onSelect={(result: PlaceSelectionResult) =>
+                updateDraft({
+                  title: draft.title.trim() ? draft.title : result.name,
+                  locationName: result.name,
+                  address: result.address,
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                  place: result.place,
+                })
+              }
+              onPhotoResolved={(placeId, photoUrl) =>
+                setDraft((current) =>
+                  current.place?.placeId === placeId
+                    ? { ...current, place: { ...current.place, photoUrl, photoRefreshedAt: Date.now() } }
+                    : current,
+                )
+              }
+            />
             <div className='space-y-1.5'>
               <Label>Location</Label>
               <Input
@@ -293,6 +341,28 @@ function EventFormModal({
                 onChange={(event) => updateDraft({ address: event.target.value })}
               />
             </div>
+            {draft.place && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                onClick={() =>
+                  updateDraft({ place: null, latitude: null, longitude: null })
+                }
+              >
+                Remove place
+              </Button>
+            )}
+            {LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) && (
+              <LinkAttachField
+                url={draft.linkUrl}
+                preview={draft.linkPreview}
+                onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+                onUseTitle={(title) =>
+                  !draft.title.trim() && updateDraft({ title })
+                }
+              />
+            )}
             <div className='space-y-2'>
               <Label>Assignees</Label>
               {memberOptions.map((member) => (

@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
@@ -62,6 +62,8 @@ export const createStay = createAsyncThunk<
     plannedDepartureAt: stay.plannedDepartureAt,
     confirmationCode: stay.confirmationCode?.trim() || null,
     notes: stay.notes?.trim() || null,
+    linkUrl: stay.linkUrl?.trim() || null,
+    linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -111,6 +113,8 @@ export const updateStay = createAsyncThunk<
     checkInTimezone: stay.checkInTimezone?.trim() || null,
     confirmationCode: stay.confirmationCode?.trim() || null,
     notes: stay.notes?.trim() || null,
+    linkUrl: stay.linkUrl?.trim() || null,
+    linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
   };
   await setDoc(stayRef, { ...currentStay, lastEditedAt: Date.now() }, { merge: true });
   return stay;
@@ -127,3 +131,17 @@ export const deleteStay = createAsyncThunk<
   await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId));
   return stayId;
 });
+
+/** See patchEventPlacePhoto in eventActions.ts — same self-heal refresh, for stays. */
+export async function patchStayPlacePhoto(
+  tripId: string,
+  stayId: string,
+  photoUrl: string | null,
+  photoRefreshedAt: number,
+) {
+  const stayRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'stays', stayId);
+  await updateDoc(stayRef, {
+    'place.photoUrl': photoUrl,
+    'place.photoRefreshedAt': photoRefreshedAt,
+  });
+}

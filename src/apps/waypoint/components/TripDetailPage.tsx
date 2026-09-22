@@ -73,7 +73,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
           </div>
         </div>
-        <OverviewSection trip={trip} onViewDay={handleViewDay} />
+        <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
         <hr className='border-border' />
         <Tabs
           value={sectionTab}
