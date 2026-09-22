@@ -13,8 +13,27 @@ of those branches to an actually-mergeable state — not just "compiles."
 
 Run every step below. Don't skip validation because the diff "looks right."
 
+This skill is also triggered automatically once a feature branch is pushed
+and has a clean working tree, via a Stop hook
+(`.claude/hooks/finish-feature-pr-stop.sh`, registered in
+`.claude/settings.json`) that fires once per new HEAD commit. When entering
+this way, do steps 0a/0b below before anything else, then continue with the
+rest of step 0.
+
 ## 0. Orient
 
+- **0a. Find or create the PR.** Look up whether an open pull request already
+  exists for the current branch (list pull requests filtered by head branch —
+  `gh pr view --json number,url,isDraft` if `gh` is available in this
+  environment, otherwise the equivalent GitHub API/MCP call). If none exists,
+  push the branch if it isn't already pushed, then open one as a **draft**
+  pull request (never a ready-for-review PR — only open it non-draft if the
+  user explicitly says to) with a title/body describing what's actually on
+  the branch. If a PR already exists, use it as-is (don't flip an
+  already-non-draft PR back to draft).
+- **0b. Skip straight to step 1** when the PR was just created in 0a — there's
+  no PR body, linked issue, or review comments yet to read. Otherwise
+  continue below.
 - Identify the PR (number or URL). `gh pr view <n> --json ...` for title,
   body, branch, mergeable state, base branch.
 - Check out the PR's head branch locally (`gh pr checkout <n>` or manual

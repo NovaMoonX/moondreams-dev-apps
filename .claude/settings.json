@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/finish-feature-pr-stop.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
