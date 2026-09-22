@@ -28,6 +28,7 @@ import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import {
   computeDuesSummary,
   getResolvedExpenseAmount,
+  getSplitMemberIds,
 } from '@apps/waypoint/utils/splitCalculators';
 
 interface ExpensesSectionProps {
@@ -41,6 +42,7 @@ function isCustomSplit(expense: TripExpense): boolean {
 
 function describeSplit(
   expense: TripExpense,
+  memberIds: string[],
   memberLabel: (uid: string) => string,
 ): string {
   const targetLabel = (() => {
@@ -55,6 +57,11 @@ function describeSplit(
         return expense.targetMemberIds.map(memberLabel).join(', ');
     }
   })();
+
+  const splitMemberCount = getSplitMemberIds(expense, memberIds).length;
+  if (splitMemberCount <= 1) {
+    return `Split · ${targetLabel}`;
+  }
 
   return expense.splitAmounts !== null
     ? `Split · ${targetLabel} (custom)`
@@ -398,7 +405,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ) : (
         <ul className='divide-border divide-y'>
           {filteredExpenses.map((expense) => {
-            const splitDescription = describeSplit(expense, memberLabel);
+            const splitDescription = describeSplit(expense, memberIds, memberLabel);
 
             return (
             <li
