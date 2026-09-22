@@ -450,7 +450,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                       size='sm'
                       onClick={() => setSplittingExpense(expense)}
                     >
-                      Split
+                      {isExpenseSplit(expense) ? 'Edit split' : 'Split'}
                     </Button>
                   )}
                 {canAddExpenses && (
