@@ -35,18 +35,14 @@ interface ExpensesSectionProps {
   currentUserId: string;
 }
 
-function isExpenseSplit(expense: TripExpense): boolean {
+function isCustomSplit(expense: TripExpense): boolean {
   return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
 }
 
 function describeSplit(
   expense: TripExpense,
   memberLabel: (uid: string) => string,
-): string | null {
-  if (!isExpenseSplit(expense)) {
-    return null;
-  }
-
+): string {
   const targetLabel = (() => {
     switch (expense.targetType) {
       case 'EVERYONE_CURRENT':
@@ -62,7 +58,7 @@ function describeSplit(
 
   return expense.splitAmounts !== null
     ? `Split · ${targetLabel} (custom)`
-    : `Split · ${targetLabel}`;
+    : `Split · ${targetLabel} (even)`;
 }
 
 function formatTotal(min: number, max: number, currency: string) {
@@ -106,7 +102,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         : dayFilter.includes(String(expense.dayIndex)));
     const matchesPayer =
       payerFilter.length === 0 || payerFilter.includes(expense.payerUid);
-    const matchesSplit = !splitOnly || isExpenseSplit(expense);
+    const matchesSplit = !splitOnly || isCustomSplit(expense);
     const matchesSearch =
       searchQuery.trim() === '' ||
       expense.title.toLowerCase().includes(searchQuery.trim().toLowerCase());
@@ -313,7 +309,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         />
         <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
           <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
-          Split only
+          Custom split only
         </label>
         <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
           <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
@@ -415,11 +411,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   {expense.status === 'PAID' ? 'Paid' : 'Expected'} ·{' '}
                   {memberLabel(expense.payerUid)}
                 </p>
-                {splitDescription && (
-                  <Badge variant='muted' outline className='mt-1'>
-                    {splitDescription}
-                  </Badge>
-                )}
+                <Badge variant='muted' outline className='mt-1'>
+                  {splitDescription}
+                </Badge>
               </div>
               <div className='flex items-center gap-3'>
                 <span className='font-medium'>
@@ -450,7 +444,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                       size='sm'
                       onClick={() => setSplittingExpense(expense)}
                     >
-                      {isExpenseSplit(expense) ? 'Edit split' : 'Split'}
+                      Edit split
                     </Button>
                   )}
                 {canAddExpenses && (
