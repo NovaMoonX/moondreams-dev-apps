@@ -2,10 +2,11 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
+import EnrichedImage from '@/components/EnrichedImage';
 import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
+import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
 
-import EnrichedImage from '@apps/waypoint/components/EnrichedImage';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
 import {
@@ -14,7 +15,6 @@ import {
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { getDisplayImage, getDisplayLink } from '@apps/waypoint/utils/enrichment';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import {
   EVENT_TYPE_BADGE_CLASSES,

@@ -11,7 +11,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
 import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
-import { getPlaceBiasFromItems } from '@apps/waypoint/utils/placesApi';
+import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 
 interface StaysSectionProps {
   trip: TripSpace;

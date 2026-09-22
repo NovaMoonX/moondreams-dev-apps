@@ -11,7 +11,7 @@ import {
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AppToggle from '@/components/AppToggle';
-import EnrichedImage from '@apps/waypoint/components/EnrichedImage';
+import EnrichedImage from '@/components/EnrichedImage';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import {
@@ -22,13 +22,13 @@ import {
 import { patchStayPlacePhoto } from '@apps/waypoint/store/actions/stayActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { useRichContentPreference } from '@apps/waypoint/hooks/useRichContentPreference';
+import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
-import { getDisplayImage, getDisplayLink } from '@apps/waypoint/utils/enrichment';
-import { getPlaceBiasFromItems } from '@apps/waypoint/utils/placesApi';
+import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
+import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
@@ -62,7 +62,10 @@ export function TimelineSection({
     value: uid,
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
-  const { showRichContent, setShowRichContent } = useRichContentPreference();
+  const [showRichContent, setShowRichContent] = useLocalStoragePreference(
+    'waypoint:richContent',
+    true,
+  );
   const placeBias = getPlaceBiasFromItems(events);
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {

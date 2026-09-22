@@ -8,18 +8,20 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import LinkAttachField from '@/components/forms/LinkAttachField';
+import PlaceSearchInput from '@/components/forms/PlaceSearchInput';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import LinkAttachField from '@apps/waypoint/components/LinkAttachField';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
-import PlaceSearchInput from '@apps/waypoint/components/PlaceSearchInput';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { getTimezoneOptions } from '@/utils/timezoneUtils';
-import type { LinkPreview, PlaceRef, Stay, TripSpace } from '@apps/waypoint/types';
-import type { PlaceSelectionBias, PlaceSelectionResult } from '@apps/waypoint/utils/placesApi';
+import type { Stay, TripSpace } from '@apps/waypoint/types';
+import type { LinkPreview } from '@/lib/linkMetadata/types';
+import type { PlaceRef } from '@/lib/places/types';
+import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 
 type StayValues = Omit<
   Stay,
@@ -224,6 +226,8 @@ export function StayFormModal({
         <LinkAttachField
           url={draft.linkUrl}
           preview={draft.linkPreview}
+          label='Listing or website link (optional)'
+          placeholder='https://www.airbnb.com/rooms/… or the property website'
           onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
           onUseTitle={(title) => !draft.name.trim() && updateDraft({ name: title })}
         />

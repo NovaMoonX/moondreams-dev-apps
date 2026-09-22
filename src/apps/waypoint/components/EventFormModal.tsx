@@ -15,22 +15,22 @@ import {
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import LinkAttachField from '@/components/forms/LinkAttachField';
+import PlaceSearchInput from '@/components/forms/PlaceSearchInput';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import LinkAttachField from '@apps/waypoint/components/LinkAttachField';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
-import PlaceSearchInput from '@apps/waypoint/components/PlaceSearchInput';
 import type {
   ActivitySetting,
   EventDetails,
   EventType,
-  LinkPreview,
   MealType,
-  PlaceRef,
   TimelineEvent,
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
-import type { PlaceSelectionBias, PlaceSelectionResult } from '@apps/waypoint/utils/placesApi';
+import type { LinkPreview } from '@/lib/linkMetadata/types';
+import type { PlaceRef } from '@/lib/places/types';
+import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_TYPE_EMOJIS,
@@ -357,6 +357,8 @@ function EventFormModal({
               <LinkAttachField
                 url={draft.linkUrl}
                 preview={draft.linkPreview}
+                label='Booking, reservation, or website link (optional)'
+                placeholder='https://…'
                 onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
                 onUseTitle={(title) =>
                   !draft.title.trim() && updateDraft({ title })

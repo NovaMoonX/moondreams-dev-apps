@@ -18,7 +18,7 @@ const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_URL_LENGTH = 2048;
 const USER_AGENT =
-  'Mozilla/5.0 (compatible; WaypointLinkPreview/1.0; +https://apps.moondreams.dev)';
+  'Mozilla/5.0 (compatible; MoondreamsLinkPreview/1.0; +https://apps.moondreams.dev)';
 
 interface LinkMetadataResult {
   title: string | null;

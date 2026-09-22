@@ -2,6 +2,7 @@ export * from './accountUtils';
 export * from './clipboardUtils';
 export * from './dateInputUtils';
 export * from './dateRangeUtils';
+export * from './enrichmentUtils';
 export * from './errorUtils';
 export * from './formatUtils';
 export * from './formFactoryHelpers';

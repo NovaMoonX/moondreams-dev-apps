@@ -1,3 +1,6 @@
+import type { LinkPreview } from '@/lib/linkMetadata/types';
+import type { PlaceRef } from '@/lib/places/types';
+
 export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
 export type ExpenseTargetType =
   | 'EVERYONE_CURRENT'
@@ -40,27 +43,6 @@ export interface TripJoinRequest {
   uid: string;
   tripId: string;
   requestedAt: number;
-}
-
-/** A Google Places (New) pick, resolved once at selection time and stored on the
- * event/stay doc. Only `placeId` is safe to keep indefinitely per Google's terms —
- * the rest is refreshed on a cooldown rather than treated as permanent. */
-export interface PlaceRef {
-  placeId: string;
-  mapsUrl: string;
-  primaryType: string | null;
-  photoUrl: string | null;
-  photoRefreshedAt: number | null;
-}
-
-/** Metadata scraped from an attached URL — a booking/listing link, or a Google
- * Maps link used as a free photo source for a Places pick. */
-export interface LinkPreview {
-  title: string | null;
-  description: string | null;
-  imageUrl: string | null;
-  siteName: string | null;
-  fetchedAt: number;
 }
 
 export interface Stay {

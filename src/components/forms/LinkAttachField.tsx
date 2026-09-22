@@ -3,14 +3,18 @@ import { useState } from 'react';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 
 import { getErrorMessage } from '@/utils/errorUtils';
-import { fetchLinkMetadata } from '@apps/waypoint/utils/linkMetadataApi';
-import type { LinkPreview } from '@apps/waypoint/types';
+import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
+import type { LinkPreview } from '@/lib/linkMetadata/types';
 
 interface LinkAttachFieldProps {
   url: string;
   preview: LinkPreview | null;
   onChange: (url: string, preview: LinkPreview | null) => void;
   onUseTitle?: (title: string) => void;
+  /** Also doubles as a manual fallback for site details Places doesn't give for
+   * free (e.g. a business's own website) — callers can relabel it accordingly. */
+  label?: string;
+  placeholder?: string;
 }
 
 function isValidHttpUrl(value: string) {
@@ -22,10 +26,16 @@ function isValidHttpUrl(value: string) {
   }
 }
 
-/** A URL field with an on-demand preview fetch — the fallback path for events/stays
- * that aren't on Google Places (an Airbnb listing, tickets, a menu). Fetched once
- * when the user attaches or changes the link, never on render. */
-function LinkAttachField({ url, preview, onChange, onUseTitle }: LinkAttachFieldProps) {
+/** An app-agnostic URL field with an on-demand preview fetch. Fetched once when
+ * the user attaches or changes the link, never on render. */
+function LinkAttachField({
+  url,
+  preview,
+  onChange,
+  onUseTitle,
+  label = 'Link (optional)',
+  placeholder = 'https://…',
+}: LinkAttachFieldProps) {
   const [draftUrl, setDraftUrl] = useState(url);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,12 +73,12 @@ function LinkAttachField({ url, preview, onChange, onUseTitle }: LinkAttachField
 
   return (
     <div className='space-y-1.5'>
-      <Label>Booking or listing link (optional)</Label>
+      <Label>{label}</Label>
       <div className='flex gap-2'>
         <div className='flex-1'>
           <Input
             type='url'
-            placeholder='https://www.airbnb.com/rooms/…'
+            placeholder={placeholder}
             value={draftUrl}
             disabled={isFetching}
             onChange={(event) => setDraftUrl(event.target.value)}

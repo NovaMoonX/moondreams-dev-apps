@@ -1,12 +1,12 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
-import EnrichedImage from '@apps/waypoint/components/EnrichedImage';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { patchStayPlacePhoto } from '@apps/waypoint/store/actions/stayActions';
+import EnrichedImage from '@/components/EnrichedImage';
 import { formatDateTime } from '@/utils/formatUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
+import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
 import type { Stay } from '@apps/waypoint/types';
-import { getDisplayImage, getDisplayLink } from '@apps/waypoint/utils/enrichment';
 
 interface StayCardProps {
   stay: Stay;

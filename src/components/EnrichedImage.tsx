@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import { fetchLinkMetadata } from '@apps/waypoint/utils/linkMetadataApi';
-import type { PlaceRef } from '@apps/waypoint/types';
+import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
+import type { PlaceRef } from '@/lib/places/types';
 
 const REFRESH_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // Module-level (not per-component) so a place already retried this tab doesn't

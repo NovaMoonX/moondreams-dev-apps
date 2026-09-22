@@ -1,8 +1,9 @@
-import type { PlaceRef } from '@apps/waypoint/types';
+import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from './types';
 
 /**
- * Thin client for Google Places API (New), called directly from the browser with a
- * restricted API key. No Cloud Functions round trip, so type-ahead stays fast.
+ * App-agnostic client for Google Places API (New), called directly from the
+ * browser with a restricted API key. No Cloud Functions round trip, so
+ * type-ahead stays fast.
  *
  * Autocomplete requests inside a session that ends in a Details call aren't
  * billed on their own, so a session token must be created per search and reused
@@ -15,31 +16,12 @@ import type { PlaceRef } from '@apps/waypoint/types';
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
 const PLACES_BASE_URL = 'https://places.googleapis.com/v1';
 
-export interface PlaceSuggestion {
-  placeId: string;
-  primaryText: string;
-  secondaryText: string;
-}
-
-export interface PlaceSelectionBias {
-  latitude: number;
-  longitude: number;
-}
-
-export interface PlaceSelectionResult {
-  name: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  place: PlaceRef;
-}
-
 export function isPlacesSearchAvailable() {
   return Boolean(PLACES_API_KEY);
 }
 
 /** Finds a rough center point to bias place search toward: the first item in the
- * list (events or stays) that already has coordinates. */
+ * list that already has coordinates. */
 export function getPlaceBiasFromItems(
   items: { latitude: number | null; longitude: number | null }[],
 ): PlaceSelectionBias | undefined {

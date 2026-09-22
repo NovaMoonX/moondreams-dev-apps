@@ -305,9 +305,11 @@ instead the client calls `fetchLinkMetadata` with the place's Maps URL and keeps
 `googleusercontent.com` image if the page has one (a static-map placeholder counts as "no
 photo"). Once stored, rendering never calls Google or the function again; a broken image
 retries the scrape at most once per place per browser session, and only if the stored photo
-is more than 7 days old. See `src/apps/waypoint/utils/placesApi.ts`,
-`src/apps/waypoint/components/EnrichedImage.tsx`, and
-`functions/src/apps/waypoint/fetchLinkMetadata.ts`.
+is more than 7 days old. These are app-agnostic, so other mini-apps can reuse them: the
+Places client lives at `src/lib/places/placesApi.ts`, the link-metadata client and the
+image component at `src/lib/linkMetadata/fetchLinkMetadata.ts` and
+`src/components/EnrichedImage.tsx`, and the Cloud Function at
+`functions/src/linkMetadata/fetchLinkMetadata.ts`.
 
 **On keeping these as timestamps, not strings:** the skill's Data Schema rule is explicit and repeated three times — "no excuse for a TDD to introduce a `string` date field." I kept `checkInAt`/`checkOutAt` as `number` rather than following the string suggestion, but added `checkInTimezone` to solve the actual underlying concern: a hotel's "3pm check-in" means 3pm *local to the property*, and a raw millisecond timestamp alone doesn't carry that — the timezone field is what lets it render correctly as local time without abandoning the convention. This is the "date + timezone" option floated as an alternative, applied without the string-typing part. Flagging this as a real judgment call rather than silently picking a side — happy to revisit if the intent was specifically to break from the timestamp convention here.
 

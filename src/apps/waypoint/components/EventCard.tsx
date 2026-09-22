@@ -1,11 +1,11 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
-import EnrichedImage from '@apps/waypoint/components/EnrichedImage';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import EnrichedImage from '@/components/EnrichedImage';
 import { formatTime } from '@/utils/formatUtils';
+import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
-import { getDisplayImage, getDisplayLink } from '@apps/waypoint/utils/enrichment';
 import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
 import {
   EVENT_TYPE_BADGE_CLASSES,

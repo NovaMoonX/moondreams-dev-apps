@@ -1,11 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@/lib/firebase/config';
-import type { LinkPreview } from '@apps/waypoint/types';
-
-export interface FetchedLinkMetadata extends LinkPreview {
-  mapsPlace: { name: string; latitude: number; longitude: number } | null;
-}
+import type { FetchedLinkMetadata } from './types';
 
 const fetchLinkMetadataCallable = httpsCallable<{ url: string }, FetchedLinkMetadata>(
   functions,

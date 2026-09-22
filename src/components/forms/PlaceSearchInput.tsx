@@ -7,11 +7,9 @@ import {
   createSessionToken,
   getPlaceForSelection,
   isPlacesSearchAvailable,
-  type PlaceSelectionBias,
-  type PlaceSelectionResult,
-  type PlaceSuggestion,
-} from '@apps/waypoint/utils/placesApi';
-import { fetchLinkMetadata } from '@apps/waypoint/utils/linkMetadataApi';
+} from '@/lib/places/placesApi';
+import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '@/lib/places/types';
+import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 3;
@@ -28,8 +26,8 @@ interface PlaceSearchInputProps {
 /**
  * Google Places (New) type-ahead. Typing is free — a session token ties the
  * keystrokes to the Details call that follows a pick, so they aren't billed on
- * their own. Hidden entirely when no API key is configured, so the event/stay
- * forms still work without one.
+ * their own. Hidden entirely when no API key is configured, so the surrounding
+ * form still works without one.
  */
 function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputProps) {
   const [query, setQuery] = useState('');
