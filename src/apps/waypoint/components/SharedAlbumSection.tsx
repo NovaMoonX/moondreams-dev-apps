@@ -72,7 +72,7 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
         description={
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <span>{description}</span>
-            <div className='flex shrink-0 gap-2 mr-1.5'>
+            <div className='flex shrink-0 gap-2 mr-1.5 mb-1 sm:mb-0'>
               {trip.sharedAlbumUrl && (
                 <Button
                   href={trip.sharedAlbumUrl}

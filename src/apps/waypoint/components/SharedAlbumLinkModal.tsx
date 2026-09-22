@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
 
 interface SharedAlbumLinkModalProps {
   isOpen: boolean;
@@ -27,17 +27,6 @@ function SharedAlbumLinkModal({
       onClose={onClose}
       title='Shared album link'
       disableCloseOnOverlayClick={isSaving}
-      actions={[
-        ...(currentUrl
-          ? [{ label: 'Clear link', variant: 'link' as const, disabled: isSaving, onClick: () => onSubmit('') }]
-          : []),
-        { label: 'Cancel', variant: 'secondary' as const, disabled: isSaving, onClick: onClose },
-        {
-          label: isSaving ? 'Saving…' : 'Save link',
-          loading: isSaving,
-          onClick: () => onSubmit(url),
-        },
-      ]}
     >
       <div className='space-y-2'>
         <Label htmlFor={`album-link-${tripId}`}>Album URL</Label>
@@ -48,6 +37,42 @@ function SharedAlbumLinkModal({
           placeholder='https://photos.example.com/your-trip'
           onChange={(event) => setUrl(event.target.value)}
         />
+        <p className='text-muted-foreground text-xs'>
+          Google Photos and Google Drive both work well.{' '}
+          <strong className='font-semibold'>
+            Make sure the album&apos;s sharing settings let others add photos
+          </strong>
+          , not just view them.
+        </p>
+      </div>
+      <div className='mt-4 flex flex-nowrap items-center justify-between gap-2'>
+        {currentUrl ? (
+          <Button
+            type='button'
+            variant='link'
+            disabled={isSaving}
+            className='shrink-0'
+            onClick={() => onSubmit('')}
+          >
+            <span className='sm:hidden'>Clear</span>
+            <span className='hidden sm:inline'>Clear link</span>
+          </Button>
+        ) : (
+          <span />
+        )}
+        <div className='flex shrink-0 gap-2'>
+          <Button
+            type='button'
+            variant='secondary'
+            disabled={isSaving}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button type='button' loading={isSaving} onClick={() => onSubmit(url)}>
+            {isSaving ? 'Saving…' : 'Save link'}
+          </Button>
+        </div>
       </div>
     </Modal>
   );
