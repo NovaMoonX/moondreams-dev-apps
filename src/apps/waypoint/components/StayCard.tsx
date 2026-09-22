@@ -39,7 +39,7 @@ export function StayCard({ stay, canEdit, onEdit, onDelete }: StayCardProps) {
           {canEdit && (
             <>
               <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
-                Modify
+                Edit
               </Button>
               <Button type='button' size='sm' variant='destructive' onClick={() => onDelete(stay)}>
                 Delete

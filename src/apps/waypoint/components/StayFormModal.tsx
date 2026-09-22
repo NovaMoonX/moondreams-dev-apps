@@ -150,7 +150,7 @@ export function StayFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={stay ? 'Stay' : 'Add stay'}>
+    <Modal isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-4'>
         <div className='space-y-1.5'>
           <Label>Stay name</Label>
