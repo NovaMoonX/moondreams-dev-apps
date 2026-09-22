@@ -8,6 +8,7 @@ import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import SharedAlbumLinkCard from '@apps/waypoint/components/SharedAlbumLinkCard';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import {
+  getTripStatus,
   selectActiveEvent,
   selectShouldShowAlbumReminder,
   selectUpNextEvent,
@@ -31,7 +32,7 @@ function OverviewSection({
   currentUserId,
 }: OverviewSectionProps) {
   const now = useNow();
-  const isLive = now >= trip.startDate;
+  const isLive = getTripStatus(trip, now) === 'ACTIVE';
   const activeEvent = useAppSelector(selectActiveEvent(now));
   const upNextEvent = useAppSelector(selectUpNextEvent(now));
   const shouldShowReminder = useAppSelector((state) =>

@@ -1,12 +1,14 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDate } from '@/utils/formatUtils';
+import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface TripCardProps {
   trip: TripSpace;
   currentUserId: string;
+  now: number;
   onOpen: (tripId: string) => void;
   onEdit: (trip: TripSpace) => void;
   onToggleArchived: (trip: TripSpace) => void;
@@ -16,6 +18,7 @@ interface TripCardProps {
 function TripCard({
   trip,
   currentUserId,
+  now,
   onOpen,
   onEdit,
   onToggleArchived,
@@ -23,6 +26,7 @@ function TripCard({
 }: TripCardProps) {
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canArchive = hasTripRole(trip, currentUserId, 'ADMIN');
+  const isActive = getTripStatus(trip, now) === 'ACTIVE';
 
   return (
     <div className='border-border bg-card rounded-lg border p-4'>
@@ -37,6 +41,11 @@ function TripCard({
         <div>
           <div className='flex items-center gap-2'>
             <h2 className='text-lg font-semibold'>{trip.title}</h2>
+            {isActive && (
+              <Badge variant='success' use='status'>
+                Active
+              </Badge>
+            )}
             {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
           </div>
           <p className='text-muted-foreground mt-2 text-sm'>

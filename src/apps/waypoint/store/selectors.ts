@@ -1,10 +1,27 @@
 import type { RootState } from '@/store';
-import type { EventStatus, Stay, TimelineEvent, TripExpense } from '@apps/waypoint/types';
+import type {
+  EventStatus,
+  Stay,
+  TimelineEvent,
+  TripExpense,
+  TripSpace,
+  TripStatus,
+} from '@apps/waypoint/types';
 
 const REMINDER_WINDOW_MS = 2 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const selectTrips = (state: RootState) => state.waypoint.trip.items;
+
+export function getTripStatus(trip: TripSpace, now: number): TripStatus {
+  if (now < trip.startDate) {
+    return 'UPCOMING';
+  }
+  if (now >= trip.endDate) {
+    return 'PAST';
+  }
+  return 'ACTIVE';
+}
 
 export const selectTripById =
   (tripId: string | null | undefined) => (state: RootState) =>

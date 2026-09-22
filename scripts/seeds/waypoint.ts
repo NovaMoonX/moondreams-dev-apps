@@ -473,6 +473,31 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  // Straddles seed time (not activeTripStart-relative like its siblings) so a
+  // fresh seed always has one event genuinely ACTIVE right now, matching what
+  // the Overview HUD's Active Now card needs to demonstrate.
+  await activeEventsCollection.doc('active-trip-lunch').set({
+    id: 'active-trip-lunch',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'DINING',
+    dayIndex: 1,
+    endDayIndex: 1,
+    title: 'Lunch at Salt Creek',
+    startAt: context.now - 1_800_000,
+    endAt: context.now + 1_800_000,
+    locationName: 'Salt Creek Recreation Area',
+    address: null,
+    latitude: 48.1585,
+    longitude: -123.6928,
+    eventDetails: { mealType: 'LUNCH' },
+    notes: null,
+    assignedMemberIds: [alex.uid, taylor.uid],
+    changeHistory: [],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   await activeEventsCollection.doc('active-trip-tidepools').set({
     id: 'active-trip-tidepools',
     tripId: ACTIVE_TRIP_ID,
@@ -566,6 +591,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 25,
+    firestoreDocuments: 26,
   };
 }

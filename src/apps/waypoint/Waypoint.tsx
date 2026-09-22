@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import {
+  Badge,
   Button,
   Tabs,
   TabsContent,
@@ -12,6 +13,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -38,7 +40,11 @@ import {
   setTripArchived,
 } from '@apps/waypoint/store/actions/tripActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
-import { selectTrips, selectTimelineEvents } from '@apps/waypoint/store/selectors';
+import {
+  getTripStatus,
+  selectTrips,
+  selectTimelineEvents,
+} from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
@@ -65,6 +71,7 @@ function Waypoint() {
   const pendingRequestsLoaded = useAppSelector(
     (state) => state.waypoint.pendingRequests.myRequestsLoaded,
   );
+  const now = useNow();
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
   const isSelectedTripAdmin =
@@ -172,6 +179,15 @@ function Waypoint() {
   const visibleTrips = trips.filter(
     (trip) => showArchived || !trip.isArchived,
   );
+  const activeTrips = visibleTrips.filter(
+    (trip) => getTripStatus(trip, now) === 'ACTIVE',
+  );
+  const upcomingTrips = visibleTrips.filter(
+    (trip) => getTripStatus(trip, now) === 'UPCOMING',
+  );
+  const pastTrips = visibleTrips.filter(
+    (trip) => getTripStatus(trip, now) === 'PAST',
+  );
 
   if (loading) {
     return <Loading />;
@@ -184,6 +200,41 @@ function Waypoint() {
   if (!tripsLoaded) {
     return <Loading />;
   }
+
+  const renderTripSection = (label: string, sectionTrips: TripSpace[]) => {
+    if (sectionTrips.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className='space-y-4'>
+        <h2 className='text-muted-foreground text-sm font-semibold tracking-wide uppercase'>
+          {label}
+        </h2>
+        <div className='grid items-start gap-4 sm:grid-cols-2'>
+          {sectionTrips.map((trip) => (
+            <TripCard
+              key={trip.id}
+              trip={trip}
+              currentUserId={user.uid}
+              now={now}
+              onOpen={setSelectedTripId}
+              onEdit={(tripToEdit) => {
+                setError(null);
+                setEditingTrip(tripToEdit);
+              }}
+              onToggleArchived={(tripToToggle) =>
+                void handleToggleArchived(tripToToggle)
+              }
+              onCopyInviteLink={(inviteLinkCode) =>
+                void handleCopyInviteLink(inviteLinkCode)
+              }
+            />
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   if (selectedTrip) {
     return (
@@ -205,7 +256,14 @@ function Waypoint() {
                 className='mb-4 h-48 w-full rounded-lg object-cover'
               />
             )}
-            <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
+            <div className='flex items-center gap-2'>
+              <h1 className='text-3xl font-semibold'>{selectedTrip.title}</h1>
+              {getTripStatus(selectedTrip, now) === 'ACTIVE' && (
+                <Badge variant='success' use='status'>
+                  Active
+                </Badge>
+              )}
+            </div>
             <p className='text-muted-foreground mt-1'>
               {formatDateTime(selectedTrip.startDate)} –{' '}
               {formatDateTime(selectedTrip.endDate)}
@@ -318,25 +376,10 @@ function Waypoint() {
             </Button>
           </div>
         ) : (
-          <div className='grid items-start gap-4 sm:grid-cols-2'>
-            {visibleTrips.map((trip) => (
-              <TripCard
-                key={trip.id}
-                trip={trip}
-                currentUserId={user.uid}
-                onOpen={setSelectedTripId}
-                onEdit={(tripToEdit) => {
-                  setError(null);
-                  setEditingTrip(tripToEdit);
-                }}
-                onToggleArchived={(tripToToggle) =>
-                  void handleToggleArchived(tripToToggle)
-                }
-                onCopyInviteLink={(inviteLinkCode) =>
-                  void handleCopyInviteLink(inviteLinkCode)
-                }
-              />
-            ))}
+          <div className='space-y-8'>
+            {renderTripSection('Active', activeTrips)}
+            {renderTripSection('Upcoming', upcomingTrips)}
+            {renderTripSection('Past', pastTrips)}
           </div>
         )}
         {error && <p className='text-destructive text-sm'>{error}</p>}
