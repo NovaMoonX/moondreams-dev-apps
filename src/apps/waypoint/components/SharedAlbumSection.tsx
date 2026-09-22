@@ -54,25 +54,25 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
 
   const description = shouldShowReminder
     ? trip.sharedAlbumUrl
-      ? "The day is nearly over. Add today's photos to the shared album."
-      : "The day is nearly over. Add a shared album link so everyone can upload today's photos."
+      ? "Add today's photos to the album so everyone can relive the day."
+      : "Add an album link so everyone can share today's photos."
     : trip.sharedAlbumUrl
-      ? "Keep the group's trip photos in one place."
+      ? "Keep everyone's trip photos in one place."
       : canSet
-        ? 'Add a Google Photos, Drive, or other album link for the group.'
-        : 'An Editor or Admin can add the shared album link.';
+        ? 'Add a link (Google Photos works great) to start capturing memories together.'
+        : "An Editor or Admin can start the shared album whenever they're ready.";
 
   return (
     <>
       <Callout
         variant={shouldShowReminder ? 'info' : 'base'}
         icon='📷'
-        title{}
+        title={<span className='font-bold'>Trip shared album</span>}
         className='text-sm'
         description={
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <span>{description}</span>
-            <div className='flex shrink-0 gap-2'>
+            <div className='flex shrink-0 gap-2 mr-1.5'>
               {trip.sharedAlbumUrl && (
                 <Button
                   href={trip.sharedAlbumUrl}
