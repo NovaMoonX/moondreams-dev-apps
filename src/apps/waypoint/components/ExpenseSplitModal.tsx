@@ -63,7 +63,7 @@ function ExpenseSplitModal({
     string,
     string
   > | null>(
-    expense?.splitAmounts
+    expense?.splitAmounts && expense.targetType !== 'EVERYONE_INCLUDING_FUTURE'
       ? Object.fromEntries(
           Object.entries(expense.splitAmounts).map(([uid, amount]) => [
             uid,
@@ -145,11 +145,12 @@ function ExpenseSplitModal({
         : targetType === 'EVERYONE_CURRENT'
           ? memberIds
           : specificMemberIds;
-    const splitAmounts = isCustomSplit
-      ? Object.fromEntries(
-          splitMemberIds.map((uid) => [uid, Number(displayAmounts[uid]) || 0]),
-        )
-      : null;
+    const splitAmounts =
+      isCustomSplit && targetType !== 'EVERYONE_INCLUDING_FUTURE'
+        ? Object.fromEntries(
+            splitMemberIds.map((uid) => [uid, Number(displayAmounts[uid]) || 0]),
+          )
+        : null;
 
     try {
       await onSubmit({ targetType, targetMemberIds, splitAmounts });
@@ -189,41 +190,48 @@ function ExpenseSplitModal({
             </div>
           </div>
         )}
-        {splitMemberIds.length > 0 && (
-          <div className='space-y-1.5'>
-            <div className='flex items-center justify-between'>
-              <Label>Split amounts</Label>
-              {isCustomSplit && (
-                <Button
-                  type='button'
-                  variant='link'
-                  size='sm'
-                  className='bg-transparent'
-                  onClick={() => setCustomSplitAmounts(null)}
-                >
-                  Reset to even split
-                </Button>
+        {targetType === 'EVERYONE_INCLUDING_FUTURE' ? (
+          <p className='text-muted-foreground text-sm'>
+            This will be split evenly between all members, including anyone
+            who joins the trip later.
+          </p>
+        ) : (
+          splitMemberIds.length > 0 && (
+            <div className='space-y-1.5'>
+              <div className='flex items-center justify-between'>
+                <Label>Split amounts</Label>
+                {isCustomSplit && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='bg-transparent'
+                    onClick={() => setCustomSplitAmounts(null)}
+                  >
+                    Reset to even split
+                  </Button>
+                )}
+              </div>
+              <div className='space-y-2'>
+                {splitMemberIds.map((uid) => (
+                  <div key={uid} className='flex items-center gap-2'>
+                    <span className='text-sm flex-1'>{memberLabel(uid)}</span>
+                    <Input
+                      type='number'
+                      className='w-28'
+                      value={displayAmounts[uid] ?? ''}
+                      onChange={(event) => updateAmount(uid, event.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+              {isCustomSplit && !isAmountsValid && (
+                <p className='text-destructive text-sm'>
+                  Split amounts must add up to {amount}.
+                </p>
               )}
             </div>
-            <div className='space-y-2'>
-              {splitMemberIds.map((uid) => (
-                <div key={uid} className='flex items-center gap-2'>
-                  <span className='text-sm flex-1'>{memberLabel(uid)}</span>
-                  <Input
-                    type='number'
-                    className='w-28'
-                    value={displayAmounts[uid] ?? ''}
-                    onChange={(event) => updateAmount(uid, event.target.value)}
-                  />
-                </div>
-              ))}
-            </div>
-            {isCustomSplit && !isAmountsValid && (
-              <p className='text-destructive text-sm'>
-                Split amounts must add up to {amount}.
-              </p>
-            )}
-          </div>
+          )
         )}
         <div className='flex justify-end gap-2'>
           <Button type='button' variant='secondary' onClick={onClose}>
