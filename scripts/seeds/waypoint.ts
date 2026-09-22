@@ -131,6 +131,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     paidAmount: number | null;
     payerUid: string;
     status: 'PAID' | 'EXPECTED';
+    targetType?: 'EVERYONE_CURRENT' | 'EVERYONE_INCLUDING_FUTURE' | 'JUST_ME' | 'SPECIFIC_MEMBERS';
+    targetMemberIds?: string[];
+    splitAmounts?: Record<string, number> | null;
   }> = [
     {
       id: 'seed-expense-dinner',
@@ -198,6 +201,20 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       payerUid: taylor.uid,
       status: 'PAID',
     },
+    {
+      id: 'seed-expense-museum-tickets',
+      dayIndex: 1,
+      title: 'Museum tickets',
+      amount: 40,
+      amountMin: null,
+      amountMax: null,
+      paidAmount: null,
+      payerUid: alex.uid,
+      status: 'PAID',
+      targetType: 'SPECIFIC_MEMBERS',
+      targetMemberIds: expenseMemberIds,
+      splitAmounts: { [alex.uid]: 15, [taylor.uid]: 25 },
+    },
   ];
 
   for (const seedExpense of seedExpenses) {
@@ -213,9 +230,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       currency: 'USD',
       payerUid: seedExpense.payerUid,
       status: seedExpense.status,
-      targetType: 'EVERYONE_CURRENT',
-      targetMemberIds: expenseMemberIds,
-      splitAmounts: null,
+      targetType: seedExpense.targetType ?? 'EVERYONE_CURRENT',
+      targetMemberIds: seedExpense.targetMemberIds ?? expenseMemberIds,
+      splitAmounts: seedExpense.splitAmounts ?? null,
       paidMemberStatus: unpaidMemberStatus,
       createdBy: alex.uid,
       createdAt: context.now,
@@ -377,6 +394,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 17,
+    firestoreDocuments: 18,
   };
 }

@@ -1,18 +1,23 @@
 import { useState } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import AppToggle from '@/components/AppToggle';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
+import ExpenseSplitModal, {
+  type ExpenseSplitSubmitValues,
+} from '@apps/waypoint/components/ExpenseSplitModal';
 import MarkExpensePaidModal from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
   deleteExpense,
   markExpensePaid,
   updateExpense,
+  updateExpenseSplit,
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
@@ -20,10 +25,47 @@ import {
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
+import {
+  computeDuesSummary,
+  getResolvedExpenseAmount,
+  getSplitMemberIds,
+} from '@apps/waypoint/utils/splitCalculators';
 
 interface ExpensesSectionProps {
   trip: TripSpace;
   currentUserId: string;
+}
+
+function isCustomSplit(expense: TripExpense): boolean {
+  return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
+}
+
+function describeSplit(
+  expense: TripExpense,
+  memberIds: string[],
+  memberLabel: (uid: string) => string,
+): string {
+  const targetLabel = (() => {
+    switch (expense.targetType) {
+      case 'EVERYONE_CURRENT':
+        return 'Everyone';
+      case 'EVERYONE_INCLUDING_FUTURE':
+        return 'Everyone, including future members';
+      case 'JUST_ME':
+        return `Just ${memberLabel(expense.payerUid)}`;
+      case 'SPECIFIC_MEMBERS':
+        return expense.targetMemberIds.map(memberLabel).join(', ');
+    }
+  })();
+
+  const splitMemberCount = getSplitMemberIds(expense, memberIds).length;
+  if (splitMemberCount <= 1) {
+    return `Split · ${targetLabel}`;
+  }
+
+  return expense.splitAmounts !== null
+    ? `Split · ${targetLabel} (custom)`
+    : `Split · ${targetLabel} (even)`;
 }
 
 function formatTotal(min: number, max: number, currency: string) {
@@ -40,11 +82,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const expenses = useAppSelector(selectTripExpenses);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
   const [payerFilter, setPayerFilter] = useState<string[]>([]);
+  const [splitOnly, setSplitOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
+  const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
+  const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dayCount = Math.floor((trip.endDate - trip.startDate) / 86_400_000) + 1;
   const currency = trip.defaultCurrency ?? 'USD';
@@ -63,9 +109,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         : dayFilter.includes(String(expense.dayIndex)));
     const matchesPayer =
       payerFilter.length === 0 || payerFilter.includes(expense.payerUid);
-    return matchesDay && matchesPayer;
+    const matchesSplit = !splitOnly || isCustomSplit(expense);
+    const matchesSearch =
+      searchQuery.trim() === '' ||
+      expense.title.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    return matchesDay && matchesPayer && matchesSplit && matchesSearch;
   });
-  const hasActiveFilters = dayFilter.length > 0 || payerFilter.length > 0;
+  const hasActiveFilters =
+    dayFilter.length > 0 ||
+    payerFilter.length > 0 ||
+    splitOnly ||
+    searchQuery.trim() !== '';
   const toggleDayFilter = (value: string) => {
     setDayFilter((current) =>
       current.includes(value)
@@ -83,6 +137,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const clearFilters = () => {
     setDayFilter([]);
     setPayerFilter([]);
+    setSplitOnly(false);
+    setSearchQuery('');
   };
   const totals = computeExpenseTotals(filteredExpenses);
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
@@ -90,6 +146,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     { label: 'Expected (not yet paid)', total: totals.expected },
     { label: 'Total', total: totals.total },
   ];
+  const duesSummary = computeDuesSummary(expenses, memberIds);
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
@@ -170,6 +227,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     void handleMarkPaid(expense, null);
   };
 
+  const handleSplitSubmit = async (values: ExpenseSplitSubmitValues) => {
+    if (!splittingExpense) {
+      return;
+    }
+    setIsSplitSubmitting(true);
+    setError(null);
+    try {
+      await dispatch(
+        updateExpenseSplit({ expense: splittingExpense, ...values }),
+      ).unwrap();
+      setSplittingExpense(null);
+    } catch (splitError) {
+      setError(getErrorMessage(splitError, 'Unable to update this split.'));
+    } finally {
+      setIsSplitSubmitting(false);
+    }
+  };
+
   return (
     <section className='space-y-5 pt-4'>
       <div className='flex items-center justify-between gap-3'>
@@ -195,6 +270,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
         ))}
       </div>
+      <div className='border-border rounded-lg border p-3'>
+        <p className='text-sm font-medium'>Dues summary</p>
+        {duesSummary.debts.length === 0 ? (
+          <p className='text-muted-foreground mt-1 text-sm'>
+            Everyone&apos;s settled up.
+          </p>
+        ) : (
+          <ul className='mt-2 space-y-1'>
+            {duesSummary.debts.map((debt) => (
+              <li key={`${debt.from}-${debt.to}`} className='text-sm'>
+                {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
+                <span className='font-medium'>
+                  {formatTotal(debt.amount, debt.amount, currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div className='space-y-2'>
         <div className='flex items-center justify-between'>
           <span className='text-muted-foreground text-sm font-medium'>
@@ -213,6 +307,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </Button>
           )}
         </div>
+        <Input
+          type='search'
+          placeholder='Search expenses'
+          aria-label='Search expenses by title'
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+        <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
+          <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
+          Custom split only
+        </label>
         <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
           <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
             Days
@@ -299,7 +404,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </p>
       ) : (
         <ul className='divide-border divide-y'>
-          {filteredExpenses.map((expense) => (
+          {filteredExpenses.map((expense) => {
+            const splitDescription = describeSplit(expense, memberIds, memberLabel);
+
+            return (
             <li
               key={expense.id}
               className='flex flex-wrap items-center justify-between gap-3 py-3'
@@ -310,6 +418,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   {expense.status === 'PAID' ? 'Paid' : 'Expected'} ·{' '}
                   {memberLabel(expense.payerUid)}
                 </p>
+                <Badge variant='muted' outline className='mt-1'>
+                  {splitDescription}
+                </Badge>
               </div>
               <div className='flex items-center gap-3'>
                 <span className='font-medium'>
@@ -332,6 +443,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                     {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
                   </Button>
                 )}
+                {canAddExpenses &&
+                  getResolvedExpenseAmount(expense) !== null && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={() => setSplittingExpense(expense)}
+                    >
+                      Edit split
+                    </Button>
+                  )}
                 {canAddExpenses && (
                   <Button
                     type='button'
@@ -347,7 +469,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
@@ -375,6 +498,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }
         }}
         onClose={() => setPayingExpense(null)}
+      />
+      <ExpenseSplitModal
+        key={splittingExpense?.id ?? 'none'}
+        isOpen={splittingExpense !== null}
+        trip={trip}
+        expense={splittingExpense}
+        isSubmitting={isSplitSubmitting}
+        onSubmit={handleSplitSubmit}
+        onClose={() => setSplittingExpense(null)}
       />
     </section>
   );
