@@ -26,7 +26,7 @@ import {
   toggleChecklistItem,
   updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface ChecklistSectionProps {
   trip: TripSpace;
@@ -54,6 +54,7 @@ export default function ChecklistSection({
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const canEditExisting = canEditExistingItem(trip, currentUserId);
 
   const mayToggle = (item: ChecklistItem) =>
     canEdit || item.assignedToUids.includes(currentUserId);
@@ -129,7 +130,8 @@ export default function ChecklistSection({
       if (editingItem) {
         await dispatch(
           updateChecklistItem({
-            tripId: trip.id,
+            trip,
+            uid: currentUserId,
             itemId: editingItem.id,
             ...values,
           }),
@@ -154,7 +156,7 @@ export default function ChecklistSection({
     setIsSubmitting(true);
     try {
       await dispatch(
-        deleteChecklistItem({ tripId: trip.id, itemId: item.id }),
+        deleteChecklistItem({ trip, uid: currentUserId, itemId: item.id }),
       ).unwrap();
       setIsModalOpen(false);
       setEditingItem(null);
@@ -274,7 +276,7 @@ export default function ChecklistSection({
                             Everyone
                           </span>
                         )}
-                        {canEdit && (
+                        {canEditExisting && (
                           <Button
                             type='button'
                             size='sm'

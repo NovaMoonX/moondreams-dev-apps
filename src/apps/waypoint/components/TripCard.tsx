@@ -1,6 +1,6 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { formatDateTime } from '@/utils/formatUtils';
+import { formatDate } from '@/utils/formatUtils';
 import type { TripSpace } from '@apps/waypoint/types';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
@@ -40,8 +40,7 @@ function TripCard({
             {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
           </div>
           <p className='text-muted-foreground mt-2 text-sm'>
-            {formatDateTime(trip.startDate)} –{' '}
-            {formatDateTime(trip.endDate)}
+            {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
           </p>
         </div>
         <div className='flex shrink-0 gap-2'>

@@ -10,7 +10,7 @@ import { selectStays } from '@apps/waypoint/store/selectors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface StaysSectionProps {
   trip: TripSpace;
@@ -27,6 +27,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canAddStays = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const canEditExisting = canEditExistingItem(trip, currentUserId);
   const { confirm } = useActionModal();
   const { addToast } = useToast();
 
@@ -86,12 +87,11 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
             <StayCard
               key={stay.id}
               stay={stay}
-              canEdit={canAddStays}
+              canEdit={canEditExisting}
               onEdit={(selectedStay) => {
                 setEditingStay(selectedStay);
                 setIsModalOpen(true);
               }}
-              onDelete={(selectedStay) => void handleDelete(selectedStay)}
             />
           ))}
         </div>

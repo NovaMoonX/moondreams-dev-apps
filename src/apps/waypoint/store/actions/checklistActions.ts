@@ -5,7 +5,9 @@ import { db } from '@/lib/firebase/config';
 import type {
   ChecklistCategory,
   ChecklistItem,
+  TripSpace,
 } from '@apps/waypoint/types';
+import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 
 const CHECKLIST_COLLECTION = (tripId: string) =>
   collection(db, 'apps', 'waypoint', 'trips', tripId, 'checklist');
@@ -76,7 +78,8 @@ interface ToggleChecklistItemInput {
 }
 
 interface UpdateChecklistItemInput {
-  tripId: string;
+  trip: TripSpace;
+  uid: string;
   itemId: string;
   title: string;
   category: ChecklistCategory;
@@ -92,7 +95,8 @@ export const updateChecklistItem = createAsyncThunk<
   'waypoint/checklist/update',
   async (
     {
-      tripId,
+      trip,
+      uid,
       itemId,
       title,
       category,
@@ -101,6 +105,9 @@ export const updateChecklistItem = createAsyncThunk<
     },
     { rejectWithValue },
   ) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to edit checklist items.');
+    }
     const trimmedTitle = title.trim();
     const trimmedCustomLabel = customCategoryLabel?.trim() || null;
 
@@ -112,7 +119,7 @@ export const updateChecklistItem = createAsyncThunk<
     }
 
     await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId),
+      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'checklist', itemId),
       {
         title: trimmedTitle,
         category,
@@ -125,7 +132,8 @@ export const updateChecklistItem = createAsyncThunk<
 );
 
 interface DeleteChecklistItemInput {
-  tripId: string;
+  trip: TripSpace;
+  uid: string;
   itemId: string;
 }
 
@@ -135,9 +143,12 @@ export const deleteChecklistItem = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/checklist/delete',
-  async ({ tripId, itemId }) => {
+  async ({ trip, uid, itemId }, { rejectWithValue }) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to delete checklist items.');
+    }
     await deleteDoc(
-      doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId),
+      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'checklist', itemId),
     );
   },
 );

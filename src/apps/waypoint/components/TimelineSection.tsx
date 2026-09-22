@@ -22,7 +22,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
@@ -48,7 +48,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
     label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
     value: uid,
   }));
-  const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const canEdit = canEditExistingItem(trip, currentUserId);
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeTab === 'all' || activeStays.length === 0) {
       return null;
@@ -140,6 +140,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
             trip,
             eventId: editingEvent.id,
             event: { ...editingEvent, ...event },
+            previousEvent: editingEvent,
           }),
         ).unwrap();
       } else {
@@ -205,7 +206,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
             {renderEvents()}
           </TabsContent>
           {tabs.slice(1).map((tab, index) => (
-            <TabsContent key={tab.value} value={tab.value} className='pt-4'>
+            <TabsContent key={tab.value} value={tab.value} className='pt-4 space-y-2'>
               {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>

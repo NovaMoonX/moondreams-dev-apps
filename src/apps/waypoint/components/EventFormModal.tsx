@@ -157,6 +157,7 @@ function EventFormModal({
         eventDetails,
         notes: event?.notes ?? null,
         assignedMemberIds: draft.assignedMemberIds,
+        changeHistory: event?.changeHistory ?? [],
       });
       setStep(1);
       setError(null);

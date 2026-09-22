@@ -3,6 +3,7 @@ import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
+import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 
 type StayFields = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
 
@@ -92,7 +93,7 @@ export const updateStay = createAsyncThunk<
   UpdateStayInput,
   { rejectValue: string }
 >('waypoint/stays/update', async ({ uid, trip, stayId, stay }, { rejectWithValue }) => {
-  if (!canEditStays(uid, trip)) {
+  if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to edit stays.');
   }
   const validationError = validateStay(stay);
@@ -120,7 +121,7 @@ export const deleteStay = createAsyncThunk<
   DeleteStayInput,
   { rejectValue: string }
 >('waypoint/stays/delete', async ({ uid, trip, stayId }, { rejectWithValue }) => {
-  if (!canEditStays(uid, trip)) {
+  if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to delete stays.');
   }
   await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId));

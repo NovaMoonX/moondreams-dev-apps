@@ -9,10 +9,9 @@ interface StayCardProps {
   stay: Stay;
   canEdit: boolean;
   onEdit: (stay: Stay) => void;
-  onDelete: (stay: Stay) => void;
 }
 
-export function StayCard({ stay, canEdit, onEdit, onDelete }: StayCardProps) {
+export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   return (
     <article className='border-border bg-card rounded-lg border p-4'>
       <div className='flex items-start justify-between gap-3'>
@@ -37,14 +36,9 @@ export function StayCard({ stay, canEdit, onEdit, onDelete }: StayCardProps) {
             longitude={stay.longitude}
           />
           {canEdit && (
-            <>
-              <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
-                Edit
-              </Button>
-              <Button type='button' size='sm' variant='destructive' onClick={() => onDelete(stay)}>
-                Delete
-              </Button>
-            </>
+            <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
+              Modify
+            </Button>
           )}
         </div>
       </div>

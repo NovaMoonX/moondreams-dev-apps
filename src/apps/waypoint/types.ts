@@ -115,6 +115,19 @@ export type EventDetails =
   | ActivityEventDetails
   | FreeTimeEventDetails;
 
+export interface EventFieldChange {
+  field: 'startAt' | 'endAt' | 'locationName' | 'dayIndex' | 'endDayIndex';
+  previousValue: number | string;
+  changedBy: string;
+  changedAt: number;
+}
+
+export interface EventChangeSnapshot {
+  changes: EventFieldChange[];
+  latestChangedBy: string;
+  latestChangedAt: number;
+}
+
 export interface TimelineEvent {
   id: string;
   tripId: string;
@@ -131,6 +144,7 @@ export interface TimelineEvent {
   eventDetails: EventDetails | null;
   notes: string | null;
   assignedMemberIds: string[];
+  changeHistory: EventChangeSnapshot[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
