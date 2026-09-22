@@ -59,27 +59,37 @@ function SharedAlbumLinkCard({
   const handleClear = () => saveUrl('');
 
   return (
-    <section className='border-border bg-card rounded-lg border p-4'>
-      <div className='flex flex-wrap items-start justify-between gap-3'>
-        <div>
-          <h2 className='text-lg font-semibold'>Shared album</h2>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            Keep the group&apos;s trip photos in one place.
-          </p>
-        </div>
+    <div>
+      <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-sm'>
+        <span className='text-muted-foreground font-medium'>Shared album:</span>
+        {trip.sharedAlbumUrl ? (
+          <a
+            href={trip.sharedAlbumUrl}
+            target='_blank'
+            rel='noreferrer'
+            className='text-primary underline'
+          >
+            Open shared album
+          </a>
+        ) : (
+          <span className='text-muted-foreground'>
+            {canSet ? 'None yet' : 'None yet — ask an Editor or Admin'}
+          </span>
+        )}
         {!isEditing && canSet && (
           <Button
             type='button'
-            variant='secondary'
+            variant='link'
             size='sm'
+            className='h-auto p-0'
             onClick={() => setIsEditing(true)}
           >
             {trip.sharedAlbumUrl ? 'Change link' : 'Add link'}
           </Button>
         )}
       </div>
-      {isEditing ? (
-        <div className='mt-4 space-y-2'>
+      {isEditing && (
+        <div className='mt-2 space-y-2'>
           <Label htmlFor={`album-link-${trip.id}`}>Album URL</Label>
           <Input
             id={`album-link-${trip.id}`}
@@ -91,6 +101,7 @@ function SharedAlbumLinkCard({
           <div className='flex gap-2 pt-1'>
             <Button
               type='button'
+              size='sm'
               loading={isSaving}
               onClick={() => void handleSave()}
             >
@@ -99,6 +110,7 @@ function SharedAlbumLinkCard({
             <Button
               type='button'
               variant='secondary'
+              size='sm'
               disabled={isSaving}
               onClick={() => {
                 setUrl(trip.sharedAlbumUrl ?? '');
@@ -111,6 +123,7 @@ function SharedAlbumLinkCard({
               <Button
                 type='button'
                 variant='link'
+                size='sm'
                 disabled={isSaving}
                 onClick={() => void handleClear()}
               >
@@ -119,24 +132,8 @@ function SharedAlbumLinkCard({
             )}
           </div>
         </div>
-      ) : trip.sharedAlbumUrl ? (
-        <Button
-          className='mt-4'
-          href={trip.sharedAlbumUrl}
-          target='_blank'
-          rel='noreferrer'
-          variant='link'
-        >
-          Open shared album
-        </Button>
-      ) : (
-        <p className='text-muted-foreground mt-4 text-sm'>
-          {canSet
-            ? 'Add a Google Photos, Drive, or other album link for the group.'
-            : 'An Editor or Admin can add the shared album link.'}
-        </p>
       )}
-    </section>
+    </div>
   );
 }
 
