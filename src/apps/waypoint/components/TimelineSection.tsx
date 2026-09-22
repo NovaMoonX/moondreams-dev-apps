@@ -179,7 +179,7 @@ export function TimelineSection({
 
   return (
     <>
-      <section className='space-y-4 pt-4'>
+      <section className='space-y-4'>
         <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
           View by day
         </p>

@@ -2,7 +2,7 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
-import { formatCountdown, formatTime } from '@/utils/formatUtils';
+import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
@@ -37,13 +37,13 @@ function OverviewSection({ trip, onViewDay }: OverviewSectionProps) {
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
 
   return (
-    <div className='space-y-3'>
-      {activeEvent && <ActiveNowCard event={activeEvent} />}
+    <div className='space-y-4'>
+      {activeEvent && <ActiveNowCard event={activeEvent} now={now} />}
       {upNextEvent && <UpNextCard event={upNextEvent} now={now} />}
       <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
         <Button
           type='button'
-          variant='link'
+          variant='tertiary'
           size='sm'
           className='h-auto p-0 text-xs'
           onClick={() => onViewDay(todayIndex)}
@@ -53,7 +53,7 @@ function OverviewSection({ trip, onViewDay }: OverviewSectionProps) {
         {hasTomorrow && (
           <Button
             type='button'
-            variant='link'
+            variant='tertiary'
             size='sm'
             className='h-auto p-0 text-xs'
             onClick={() => onViewDay(todayIndex + 1)}
@@ -74,19 +74,25 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
   );
 }
 
-function ActiveNowCard({ event }: { event: TimelineEvent }) {
+function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
+  const duration = event.endAt !== null ? event.endAt - event.startAt : null;
+  const progress =
+    duration !== null && duration > 0
+      ? Math.min(1, Math.max(0, (now - event.startAt) / duration))
+      : null;
+
   return (
-    <article className='border-primary bg-card rounded-xl border-2 p-5 shadow-sm'>
+    <article className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border-2 p-5 shadow-sm'>
       <div className='flex items-start justify-between gap-3'>
         <div>
-          <p className='text-primary text-xs font-bold tracking-wide uppercase'>
+          <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
             Active Now
           </p>
           <div className='mt-2 flex flex-wrap items-center gap-2'>
             <EventTypeBadge event={event} />
             <span className='text-muted-foreground text-sm'>
               {formatTime(event.startAt)}
-              {event.endAt ? ` – ${formatTime(event.endAt)}` : ''}
+              {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
             </span>
           </div>
           <h3 className='mt-2 text-xl font-bold'>{event.title}</h3>
@@ -98,13 +104,26 @@ function ActiveNowCard({ event }: { event: TimelineEvent }) {
         </div>
         <MapNavigationButton {...event} />
       </div>
+      {progress !== null && (
+        <div className='mt-4'>
+          <div className='bg-emerald-500/20 h-1 overflow-hidden rounded-full'>
+            <div
+              className='bg-emerald-500 h-full transition-[width]'
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+          <p className='text-muted-foreground mt-1 text-xs'>
+            {formatDuration((event.endAt as number) - now)} left
+          </p>
+        </div>
+      )}
     </article>
   );
 }
 
 function UpNextCard({ event, now }: { event: TimelineEvent; now: number }) {
   return (
-    <div className='flex items-start justify-between gap-3 px-1'>
+    <div className='border-border flex items-start justify-between gap-3 border-l-2 py-1 pl-4 pr-5'>
       <div>
         <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
           Up Next

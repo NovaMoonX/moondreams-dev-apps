@@ -89,17 +89,19 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TabsTrigger value='checklist'>Checklist</TabsTrigger>
           </TabsList>
           {sectionTab !== '' && (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='mt-2 h-auto p-0 text-xs'
-              onClick={() => setSectionTab('')}
-            >
-              Collapse view
-            </Button>
+            <div className='mt-4 flex justify-center'>
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0 text-xs'
+                onClick={() => setSectionTab('')}
+              >
+                Collapse view
+              </Button>
+            </div>
           )}
-          <TabsContent value='overview' className='pt-4'>
+          <TabsContent value='overview' className='pt-2'>
             <TimelineSection
               trip={trip}
               events={events}
