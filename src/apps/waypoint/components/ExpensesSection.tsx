@@ -7,12 +7,16 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
+import ExpenseSplitModal, {
+  type ExpenseSplitSubmitValues,
+} from '@apps/waypoint/components/ExpenseSplitModal';
 import MarkExpensePaidModal from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
   deleteExpense,
   markExpensePaid,
   updateExpense,
+  updateExpenseSplit,
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
@@ -20,6 +24,7 @@ import {
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
+import { computeDuesSummary } from '@apps/waypoint/utils/splitCalculators';
 
 interface ExpensesSectionProps {
   trip: TripSpace;
@@ -45,6 +50,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
+  const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
+  const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dayCount = Math.floor((trip.endDate - trip.startDate) / 86_400_000) + 1;
   const currency = trip.defaultCurrency ?? 'USD';
@@ -90,6 +97,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     { label: 'Expected (not yet paid)', total: totals.expected },
     { label: 'Total', total: totals.total },
   ];
+  const duesSummary = computeDuesSummary(expenses, memberIds);
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
@@ -170,6 +178,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     void handleMarkPaid(expense, null);
   };
 
+  const handleSplitSubmit = async (values: ExpenseSplitSubmitValues) => {
+    if (!splittingExpense) {
+      return;
+    }
+    setIsSplitSubmitting(true);
+    setError(null);
+    try {
+      await dispatch(
+        updateExpenseSplit({ expense: splittingExpense, ...values }),
+      ).unwrap();
+      setSplittingExpense(null);
+    } catch (splitError) {
+      setError(getErrorMessage(splitError, 'Unable to update this split.'));
+    } finally {
+      setIsSplitSubmitting(false);
+    }
+  };
+
   return (
     <section className='space-y-5 pt-4'>
       <div className='flex items-center justify-between gap-3'>
@@ -194,6 +220,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
           </div>
         ))}
+      </div>
+      <div className='border-border rounded-lg border p-3'>
+        <p className='text-sm font-medium'>Dues summary</p>
+        {duesSummary.debts.length === 0 ? (
+          <p className='text-muted-foreground mt-1 text-sm'>
+            Everyone&apos;s settled up.
+          </p>
+        ) : (
+          <ul className='mt-2 space-y-1'>
+            {duesSummary.debts.map((debt) => (
+              <li key={`${debt.from}-${debt.to}`} className='text-sm'>
+                {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
+                <span className='font-medium'>
+                  {formatTotal(debt.amount, debt.amount, currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div className='space-y-2'>
         <div className='flex items-center justify-between'>
@@ -332,6 +377,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                     {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
                   </Button>
                 )}
+                {canAddExpenses &&
+                  (expense.amount !== null ||
+                    (expense.status === 'PAID' && expense.paidAmount !== null)) && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={() => setSplittingExpense(expense)}
+                    >
+                      Split
+                    </Button>
+                  )}
                 {canAddExpenses && (
                   <Button
                     type='button'
@@ -375,6 +432,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }
         }}
         onClose={() => setPayingExpense(null)}
+      />
+      <ExpenseSplitModal
+        key={splittingExpense?.id ?? 'none'}
+        isOpen={splittingExpense !== null}
+        trip={trip}
+        expense={splittingExpense}
+        isSubmitting={isSplitSubmitting}
+        onSubmit={handleSplitSubmit}
+        onClose={() => setSplittingExpense(null)}
       />
     </section>
   );
