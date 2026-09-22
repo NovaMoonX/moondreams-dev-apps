@@ -8,6 +8,8 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,
@@ -241,24 +243,29 @@ export function StayFormModal({
             />
           </div>
         </div>
-        <div className='flex justify-end gap-2'>
-          {stay && onDelete && (
-            <Button type='button' variant='destructive' onClick={() => void onDelete()}>
-              Delete
-            </Button>
-          )}
-          <Button type='button' variant='secondary' onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type='button'
-            loading={isSubmitting}
-            disabled={isSubmitting || !isFormComplete}
-            onClick={() => void handleSubmit()}
-          >
-            {isSubmitting ? 'Saving…' : stay ? 'Save changes' : 'Add stay'}
-          </Button>
-        </div>
+        <ModalFooterActions
+          leftActions={
+            stay &&
+            onDelete && (
+              <DeleteIconButton onClick={() => void onDelete()} disabled={isSubmitting} />
+            )
+          }
+          rightActions={
+            <>
+              <Button type='button' variant='secondary' onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type='button'
+                loading={isSubmitting}
+                disabled={isSubmitting || !isFormComplete}
+                onClick={() => void handleSubmit()}
+              >
+                {isSubmitting ? 'Saving…' : stay ? 'Save changes' : 'Add stay'}
+              </Button>
+            </>
+          }
+        />
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
     </Modal>
