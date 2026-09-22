@@ -2,7 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { TripExpense, ExpenseStatus } from '@apps/waypoint/types';
+import type { ExpenseStatus, ExpenseTargetType, TripExpense } from '@apps/waypoint/types';
 
 interface CreateExpenseInput {
   uid: string;
@@ -130,6 +130,36 @@ export const updateExpense = createAsyncThunk<
     payerUid: input.payerUid,
     dayIndex: input.dayIndex,
     paidAmount: input.expense.amount === null ? input.paidAmount : null,
+    lastEditedAt: Date.now(),
+  };
+
+  await updateDoc(
+    doc(db, 'apps', 'waypoint', 'trips', input.expense.tripId, 'expenses', input.expense.id),
+    changes,
+  );
+  return { ...input.expense, ...changes };
+});
+
+interface UpdateExpenseSplitInput {
+  expense: TripExpense;
+  targetType: ExpenseTargetType;
+  targetMemberIds: string[];
+  splitAmounts: Record<string, number> | null;
+}
+
+export const updateExpenseSplit = createAsyncThunk<
+  TripExpense,
+  UpdateExpenseSplitInput,
+  { rejectValue: string }
+>('waypoint/expenses/updateSplit', async (input, { rejectWithValue }) => {
+  if (input.targetType === 'SPECIFIC_MEMBERS' && input.targetMemberIds.length === 0) {
+    return rejectWithValue('Select at least one member.');
+  }
+
+  const changes = {
+    targetType: input.targetType,
+    targetMemberIds: input.targetMemberIds,
+    splitAmounts: input.splitAmounts,
     lastEditedAt: Date.now(),
   };
 
