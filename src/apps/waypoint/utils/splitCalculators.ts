@@ -2,6 +2,16 @@ import type { TripExpense } from '@apps/waypoint/types';
 
 const EPSILON = 0.005;
 
+export function getResolvedExpenseAmount(
+  expense: Pick<TripExpense, 'amount' | 'paidAmount' | 'status'>,
+): number | null {
+  if (expense.amount !== null) {
+    return expense.amount;
+  }
+
+  return expense.status === 'PAID' ? expense.paidAmount : null;
+}
+
 export function getSplitMemberIds(
   expense: Pick<TripExpense, 'targetType' | 'targetMemberIds' | 'payerUid'>,
   currentMemberIds: string[],
@@ -59,7 +69,12 @@ export function computeDuesSummary(
   };
 
   for (const expense of expenses) {
-    if (expense.status !== 'PAID' || expense.amount === null) {
+    if (expense.status !== 'PAID') {
+      continue;
+    }
+
+    const resolvedAmount = getResolvedExpenseAmount(expense);
+    if (resolvedAmount === null) {
       continue;
     }
 
@@ -68,8 +83,8 @@ export function computeDuesSummary(
       continue;
     }
 
-    const shares = expense.splitAmounts ?? computeEvenSplit(memberIds, expense.amount);
-    addBalance(expense.payerUid, expense.amount);
+    const shares = expense.splitAmounts ?? computeEvenSplit(memberIds, resolvedAmount);
+    addBalance(expense.payerUid, resolvedAmount);
     for (const uid of memberIds) {
       addBalance(uid, -(shares[uid] ?? 0));
     }

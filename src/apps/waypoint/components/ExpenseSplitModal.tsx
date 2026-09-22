@@ -11,7 +11,10 @@ import {
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { computeEvenSplit } from '@apps/waypoint/utils/splitCalculators';
+import {
+  computeEvenSplit,
+  getResolvedExpenseAmount,
+} from '@apps/waypoint/utils/splitCalculators';
 import type { ExpenseTargetType, TripExpense, TripSpace } from '@apps/waypoint/types';
 
 export interface ExpenseSplitSubmitValues {
@@ -87,9 +90,7 @@ function ExpenseSplitModal({
     }
   }, [expense, targetType, specificMemberIds, memberIds]);
 
-  const amount = expense
-    ? (expense.amount ?? (expense.status === 'PAID' ? expense.paidAmount : null) ?? 0)
-    : 0;
+  const amount = expense ? (getResolvedExpenseAmount(expense) ?? 0) : 0;
   const evenSplit = useMemo(
     () => computeEvenSplit(splitMemberIds, amount),
     [splitMemberIds, amount],

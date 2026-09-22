@@ -25,7 +25,10 @@ import {
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
-import { computeDuesSummary } from '@apps/waypoint/utils/splitCalculators';
+import {
+  computeDuesSummary,
+  getResolvedExpenseAmount,
+} from '@apps/waypoint/utils/splitCalculators';
 
 interface ExpensesSectionProps {
   trip: TripSpace;
@@ -308,7 +311,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
         />
-        <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+        <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
           <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
           Split only
         </label>
@@ -440,8 +443,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   </Button>
                 )}
                 {canAddExpenses &&
-                  (expense.amount !== null ||
-                    (expense.status === 'PAID' && expense.paidAmount !== null)) && (
+                  getResolvedExpenseAmount(expense) !== null && (
                     <Button
                       type='button'
                       variant='secondary'
