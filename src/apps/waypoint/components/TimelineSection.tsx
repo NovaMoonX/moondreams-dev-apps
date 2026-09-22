@@ -206,7 +206,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
             {renderEvents()}
           </TabsContent>
           {tabs.slice(1).map((tab, index) => (
-            <TabsContent key={tab.value} value={tab.value} className='pt-4'>
+            <TabsContent key={tab.value} value={tab.value} className='pt-4 space-y-2'>
               {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>
