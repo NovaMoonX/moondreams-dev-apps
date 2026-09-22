@@ -31,6 +31,32 @@ interface ExpensesSectionProps {
   currentUserId: string;
 }
 
+function describeSplit(
+  expense: TripExpense,
+  memberLabel: (uid: string) => string,
+): string | null {
+  if (expense.targetType === 'EVERYONE_CURRENT' && expense.splitAmounts === null) {
+    return null;
+  }
+
+  const targetLabel = (() => {
+    switch (expense.targetType) {
+      case 'EVERYONE_CURRENT':
+        return 'Everyone';
+      case 'EVERYONE_INCLUDING_FUTURE':
+        return 'Everyone, including future members';
+      case 'JUST_ME':
+        return `Just ${memberLabel(expense.payerUid)}`;
+      case 'SPECIFIC_MEMBERS':
+        return expense.targetMemberIds.map(memberLabel).join(', ');
+    }
+  })();
+
+  return expense.splitAmounts !== null
+    ? `Split · ${targetLabel} (custom)`
+    : `Split · ${targetLabel}`;
+}
+
 function formatTotal(min: number, max: number, currency: string) {
   const formatter = new Intl.NumberFormat(undefined, {
     style: 'currency',
@@ -344,7 +370,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </p>
       ) : (
         <ul className='divide-border divide-y'>
-          {filteredExpenses.map((expense) => (
+          {filteredExpenses.map((expense) => {
+            const splitDescription = describeSplit(expense, memberLabel);
+
+            return (
             <li
               key={expense.id}
               className='flex flex-wrap items-center justify-between gap-3 py-3'
@@ -355,6 +384,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   {expense.status === 'PAID' ? 'Paid' : 'Expected'} ·{' '}
                   {memberLabel(expense.payerUid)}
                 </p>
+                {splitDescription && (
+                  <Badge variant='muted' outline className='mt-1'>
+                    {splitDescription}
+                  </Badge>
+                )}
               </div>
               <div className='flex items-center gap-3'>
                 <span className='font-medium'>
@@ -404,7 +438,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
