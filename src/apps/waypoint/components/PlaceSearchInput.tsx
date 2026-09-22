@@ -19,18 +19,17 @@ const MIN_QUERY_LENGTH = 3;
 interface PlaceSearchInputProps {
   bias?: PlaceSelectionBias;
   onSelect: (result: PlaceSelectionResult) => void;
-  /** Fires once, after `onSelect`, when the free photo scrape (of the place's Maps
-   * page — see the cost note in placesApi.ts) finishes or fails. `placeId` lets the
-   * caller ignore a stale resolution if the user has since picked a different
-   * place. */
+  /** Fires once, after `onSelect`, when the free photo scrape of the place's Maps
+   * page finishes or fails. `placeId` lets the caller ignore a stale resolution if
+   * the user has since picked a different place. */
   onPhotoResolved?: (placeId: string, photoUrl: string | null) => void;
 }
 
 /**
- * Google Places (New) type-ahead. Typing is free (a session token ties the
+ * Google Places (New) type-ahead. Typing is free — a session token ties the
  * keystrokes to the Details call that follows a pick, so they aren't billed on
- * their own) — see the cost notes in placesApi.ts. Hidden entirely when no API key
- * is configured, so the event/stay forms still work without one.
+ * their own. Hidden entirely when no API key is configured, so the event/stay
+ * forms still work without one.
  */
 function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputProps) {
   const [query, setQuery] = useState('');

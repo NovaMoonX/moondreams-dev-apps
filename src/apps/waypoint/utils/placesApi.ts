@@ -2,17 +2,14 @@ import type { PlaceRef } from '@apps/waypoint/types';
 
 /**
  * Thin client for Google Places API (New), called directly from the browser with a
- * restricted API key (HTTP referrer + API restricted to Places API (New) — see the
- * GCP console setup in the PR description). No Firebase Functions round trip, so
- * type-ahead stays fast.
+ * restricted API key. No Cloud Functions round trip, so type-ahead stays fast.
  *
- * Cost discipline (see plan): Autocomplete requests inside a session that ends in a
- * Details call aren't billed on their own, so a session token must be created per
- * search and reused for every keystroke plus the final Details call. Details is
- * requested at the Essentials field tier only (`formattedAddress,location,types`) —
- * no `displayName`/`googleMapsUri` (Pro) and no `photos` (Photo SKU, billed
- * separately). The photo itself comes from a free scrape of the Maps page in
- * `linkMetadataApi.ts`, not from the Places Photo endpoint.
+ * Autocomplete requests inside a session that ends in a Details call aren't
+ * billed on their own, so a session token must be created per search and reused
+ * for every keystroke plus the final Details call. Details is requested at the
+ * Essentials field tier only (`formattedAddress,location,types`) — no
+ * `displayName`/`googleMapsUri` (Pro) and no `photos` (a separately billed SKU).
+ * The photo itself comes from a free scrape of the place's Maps page instead.
  */
 
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;

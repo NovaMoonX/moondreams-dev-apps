@@ -132,7 +132,7 @@ export const deleteStay = createAsyncThunk<
   return stayId;
 });
 
-/** See patchEventPlacePhoto in eventActions.ts — same self-heal refresh, for stays. */
+/** Same self-heal photo refresh as events, for stays. */
 export async function patchStayPlacePhoto(
   tripId: string,
   stayId: string,

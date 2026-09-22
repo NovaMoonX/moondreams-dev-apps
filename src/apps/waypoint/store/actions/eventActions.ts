@@ -161,9 +161,9 @@ export const deleteEvent = createAsyncThunk<
   return eventId;
 });
 
-/** Patches just the scraped photo after a self-heal refresh (see EnrichedImage).
- * Not a thunk: the live Firestore listener already keeps Redux in sync, and this
- * is a low-stakes background write that shouldn't need loading/error UI state. */
+/** Patches just the scraped photo after a broken-image self-heal refresh. Not a
+ * thunk: the live Firestore listener already keeps Redux in sync, and this is a
+ * low-stakes background write that shouldn't need loading/error UI state. */
 export async function patchEventPlacePhoto(
   tripId: string,
   eventId: string,

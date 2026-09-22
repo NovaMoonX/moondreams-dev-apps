@@ -25,7 +25,7 @@ interface EnrichedImageProps {
  * When the broken image belongs to a Places pick (rather than an attached link),
  * and the viewer can edit, it retries the scrape at most once per place per
  * browser session, and only if the stored photo hasn't been refreshed in the last
- * 7 days — see the "Refresh only when truly necessary" cost rule in the plan. */
+ * 7 days — keeping the retry rare, since it costs a real (if unbilled) fetch. */
 function EnrichedImage({ src, alt, className, refreshFrom }: EnrichedImageProps) {
   const [isHidden, setIsHidden] = useState(false);
 

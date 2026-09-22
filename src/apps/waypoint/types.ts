@@ -44,7 +44,7 @@ export interface TripJoinRequest {
 
 /** A Google Places (New) pick, resolved once at selection time and stored on the
  * event/stay doc. Only `placeId` is safe to keep indefinitely per Google's terms —
- * see src/apps/waypoint/utils/placesApi.ts for the refresh policy on the rest. */
+ * the rest is refreshed on a cooldown rather than treated as permanent. */
 export interface PlaceRef {
   placeId: string;
   mapsUrl: string;
@@ -53,8 +53,8 @@ export interface PlaceRef {
   photoRefreshedAt: number | null;
 }
 
-/** Metadata scraped from an attached URL (a booking/listing link, or a Google Maps
- * link) by the fetchLinkMetadata cloud function. See functions/src/apps/waypoint. */
+/** Metadata scraped from an attached URL — a booking/listing link, or a Google
+ * Maps link used as a free photo source for a Places pick. */
 export interface LinkPreview {
   title: string | null;
   description: string | null;

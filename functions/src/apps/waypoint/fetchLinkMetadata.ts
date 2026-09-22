@@ -4,15 +4,13 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 /**
  * Reads a booking/listing link (or a Google Maps link) and returns whatever
- * preview metadata we can find — most importantly an image, so the timeline and
- * Active Now card have something to show. Also doubles as the free photo source
- * for a Places pick: the client passes the place's Maps URL back through here
- * right after selection (see src/apps/waypoint/utils/placesApi.ts) instead of
- * paying for the Places Photo SKU.
+ * preview metadata we can find — most importantly an image. Also doubles as the
+ * free photo source for a Places pick: the client passes the place's Maps URL
+ * back through here right after selection, instead of paying for the billed
+ * Places Photo SKU.
  *
- * Fetch once, store on the doc, refresh only on failure — see the "Refresh only
- * when truly necessary" section of the plan. This function never runs on a
- * schedule and never runs on render.
+ * Fetch once, store on the doc, refresh only on failure. This function never
+ * runs on a schedule and never runs on render.
  */
 
 const MAX_REDIRECTS = 3;
@@ -266,7 +264,7 @@ function parseMetadata(html: string, finalUrl: string): LinkMetadataResult {
 
   if (mapsPlace) {
     // A Maps place photo lives on googleusercontent.com; a plain address instead
-    // gets a static-map placeholder image, which we deliberately drop — see plan.
+    // gets a static-map placeholder image, which we deliberately drop.
     imageUrl = imageUrl && imageUrl.includes('googleusercontent.com') ? imageUrl : null;
   } else if (imageUrl && !imageUrl.startsWith('https://')) {
     imageUrl = null; // keep https images only
