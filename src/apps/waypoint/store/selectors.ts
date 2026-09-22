@@ -1,5 +1,5 @@
 import type { RootState } from '@/store';
-import type { Stay, TripExpense } from '@apps/waypoint/types';
+import type { EventStatus, Stay, TimelineEvent, TripExpense } from '@apps/waypoint/types';
 
 const REMINDER_WINDOW_MS = 2 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -113,3 +113,41 @@ export const selectActiveStaysForDay =
 export const selectEventsByDay =
   (dayIndex: number) => (state: RootState) =>
     state.waypoint.events.items.filter((event) => event.dayIndex === dayIndex);
+
+/** Event Active Status Machine: UPCOMING -> now >= startAt -> ACTIVE -> now >= endAt -> COMPLETED. An event without an endAt stays ACTIVE once started. */
+export function getEventStatus(event: TimelineEvent, now: number): EventStatus {
+  if (now < event.startAt) {
+    return 'UPCOMING';
+  }
+  if (event.endAt !== null && now >= event.endAt) {
+    return 'COMPLETED';
+  }
+  return 'ACTIVE';
+}
+
+// Among simultaneously active events, the one that started most recently is treated as "the" active event.
+export const selectActiveEvent =
+  (now: number) => (state: RootState): TimelineEvent | null => {
+    const activeEvents = state.waypoint.events.items.filter(
+      (event) => getEventStatus(event, now) === 'ACTIVE',
+    );
+    if (activeEvents.length === 0) {
+      return null;
+    }
+    return activeEvents.reduce((latest, event) =>
+      event.startAt > latest.startAt ? event : latest,
+    );
+  };
+
+export const selectUpNextEvent =
+  (now: number) => (state: RootState): TimelineEvent | null => {
+    const upcomingEvents = state.waypoint.events.items.filter(
+      (event) => getEventStatus(event, now) === 'UPCOMING',
+    );
+    if (upcomingEvents.length === 0) {
+      return null;
+    }
+    return upcomingEvents.reduce((soonest, event) =>
+      event.startAt < soonest.startAt ? event : soonest,
+    );
+  };
