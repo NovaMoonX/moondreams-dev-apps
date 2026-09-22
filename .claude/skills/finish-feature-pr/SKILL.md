@@ -128,6 +128,17 @@ regularly gets the shape right but the UX wrong:
   in this codebase, not a hypothetical.
 - Deletes go through `useActionModal().confirm(...)` with `destructive:
   true`, not a bare `window.confirm` or no confirmation at all.
+- **A form modal's delete action belongs in the footer as an icon-only
+  trash button on the bottom-left, never a "Delete" text button mixed in
+  with Cancel/Save on the right.** Use the shared `DeleteIconButton`
+  (`apps/waypoint/components/DeleteIconButton.tsx`, mirrored in
+  `apps/nine-lives`) as `leftActions` of the shared `ModalFooterActions`
+  (`leftActions`/`rightActions` props — `rightActions` holds Cancel then
+  the primary submit button), not a `variant='destructive'` text `Button`
+  stacked into the same `flex justify-end` row as Cancel/Save.
+  `ChecklistItemFormModal.tsx` and `ExpenseFormModal.tsx` are the reference
+  shape. Grep the diff for `variant='destructive'` on a text `Button` inside
+  a form modal's footer to catch this.
 - Use `AppToggle` (`@/components/AppToggle`), never the raw `Toggle` from
   Dreamer UI — grep the diff for `Toggle` imported from
   `@moondreamsdev/dreamer-ui/components`.

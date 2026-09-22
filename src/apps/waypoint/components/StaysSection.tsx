@@ -1,10 +1,11 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import StayCard from '@apps/waypoint/components/StayCard';
 import StayFormModal from '@apps/waypoint/components/StayFormModal';
-import { createStay } from '@apps/waypoint/store/actions/stayActions';
+import { createStay, deleteStay, updateStay } from '@apps/waypoint/store/actions/stayActions';
 import { selectStays } from '@apps/waypoint/store/selectors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -22,20 +23,52 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
   const dispatch = useAppDispatch();
   const stays = useAppSelector(selectStays);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingStay, setEditingStay] = useState<Stay | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canAddStays = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const { confirm } = useActionModal();
+  const { addToast } = useToast();
 
   const handleSubmit = async (stay: StayValues) => {
     setIsSubmitting(true);
     setError(null);
     try {
-      await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();
+      if (editingStay) {
+        await dispatch(
+          updateStay({ uid: currentUserId, trip, stayId: editingStay.id, stay }),
+        ).unwrap();
+      } else {
+        await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();
+      }
       setIsModalOpen(false);
+      setEditingStay(undefined);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to add this stay.'));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (stay: Stay) => {
+    const confirmed = await confirm({
+      title: 'Delete stay',
+      message: `Delete "${stay.name}"? This action cannot be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await dispatch(deleteStay({ uid: currentUserId, trip, stayId: stay.id })).unwrap();
+      setIsModalOpen(false);
+      setEditingStay(undefined);
+    } catch (deleteError) {
+      addToast({
+        title: 'Unable to delete stay',
+        description: getErrorMessage(deleteError, 'Please try again.'),
+        type: 'error',
+      });
     }
   };
 
@@ -49,17 +82,33 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
         <p className='text-muted-foreground text-sm'>No stays planned yet.</p>
       ) : (
         <div className='space-y-3'>
-          {stays.map((stay) => <StayCard key={stay.id} stay={stay} />)}
+          {stays.map((stay) => (
+            <StayCard
+              key={stay.id}
+              stay={stay}
+              canEdit={canAddStays}
+              onEdit={(selectedStay) => {
+                setEditingStay(selectedStay);
+                setIsModalOpen(true);
+              }}
+              onDelete={(selectedStay) => void handleDelete(selectedStay)}
+            />
+          ))}
         </div>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <StayFormModal
-        key={isModalOpen ? 'stay-form-open' : 'stay-form-closed'}
+        key={`${editingStay?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
         trip={trip}
+        stay={editingStay}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
-        onClose={() => setIsModalOpen(false)}
+        onDelete={editingStay ? () => handleDelete(editingStay) : undefined}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingStay(undefined);
+        }}
       />
     </section>
   );

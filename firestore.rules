@@ -1746,16 +1746,21 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripSubcollectionEditor()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name',
+            'address',
+            'latitude',
+            'longitude',
             'checkInAt',
             'checkOutAt',
+            'checkInTimezone',
             'plannedArrivalAt',
-            'plannedDepartureAt'
+            'plannedDepartureAt',
+            'confirmationCode',
+            'notes',
+            'lastEditedAt'
           ])
-        && isTimestampNumber(request.resource.data.checkInAt)
-        && isTimestampNumber(request.resource.data.checkOutAt)
-        && isTimestampNumber(request.resource.data.plannedArrivalAt)
-        && isTimestampNumber(request.resource.data.plannedDepartureAt);
-      allow delete: if false;
+        && isStayShapeValid();
+      allow delete: if isTripSubcollectionEditor();
     }
 
     match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {

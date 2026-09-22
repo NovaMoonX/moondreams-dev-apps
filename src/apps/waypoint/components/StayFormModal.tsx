@@ -8,6 +8,8 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,
@@ -24,8 +26,10 @@ type StayValues = Omit<
 interface StayFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
+  stay?: Stay;
   isSubmitting?: boolean;
   onSubmit: (stay: StayValues) => Promise<void> | void;
+  onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -37,28 +41,38 @@ interface StayDraft {
   checkOutDate: string;
   checkOutTime: string;
   checkInTimezone: string;
+  plannedArrivalDate: string;
+  plannedArrivalTime: string;
+  plannedDepartureDate: string;
+  plannedDepartureTime: string;
 }
 
-function getInitialDraft(trip: TripSpace): StayDraft {
+function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
   return {
-    name: '',
-    address: '',
-    checkInDate: toLocalDateInputValue(trip.startDate),
-    checkInTime: '15:00',
-    checkOutDate: toLocalDateInputValue(trip.endDate),
-    checkOutTime: '11:00',
-    checkInTimezone: '',
+    name: stay?.name ?? '',
+    address: stay?.address ?? '',
+    checkInDate: toLocalDateInputValue(stay?.checkInAt ?? trip.startDate),
+    checkInTime: stay ? new Date(stay.checkInAt).toTimeString().slice(0, 5) : '15:00',
+    checkOutDate: toLocalDateInputValue(stay?.checkOutAt ?? trip.endDate),
+    checkOutTime: stay ? new Date(stay.checkOutAt).toTimeString().slice(0, 5) : '11:00',
+    checkInTimezone: stay?.checkInTimezone ?? '',
+    plannedArrivalDate: toLocalDateInputValue(stay?.plannedArrivalAt ?? trip.startDate),
+    plannedArrivalTime: stay ? new Date(stay.plannedArrivalAt).toTimeString().slice(0, 5) : '15:00',
+    plannedDepartureDate: toLocalDateInputValue(stay?.plannedDepartureAt ?? trip.endDate),
+    plannedDepartureTime: stay ? new Date(stay.plannedDepartureAt).toTimeString().slice(0, 5) : '11:00',
   };
 }
 
 export function StayFormModal({
   isOpen,
   trip,
+  stay,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: StayFormModalProps) {
-  const [draft, setDraft] = useState(() => getInitialDraft(trip));
+  const [draft, setDraft] = useState(() => getInitialDraft(trip, stay));
   const [error, setError] = useState<string | null>(null);
   const [showTimezoneField, setShowTimezoneField] = useState(false);
   const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
@@ -73,12 +87,23 @@ export function StayFormModal({
     draft.checkOutDate,
     draft.checkOutTime,
   );
+  const draftPlannedArrivalAt = fromLocalDateAndTimeInputValues(
+    draft.plannedArrivalDate,
+    draft.plannedArrivalTime,
+  );
+  const draftPlannedDepartureAt = fromLocalDateAndTimeInputValues(
+    draft.plannedDepartureDate,
+    draft.plannedDepartureTime,
+  );
   const isFormComplete =
     draft.name.trim() !== '' &&
     draft.address.trim() !== '' &&
     draftCheckInAt !== undefined &&
     draftCheckOutAt !== undefined &&
-    draftCheckOutAt > draftCheckInAt;
+    draftCheckOutAt > draftCheckInAt &&
+    draftPlannedArrivalAt !== undefined &&
+    draftPlannedDepartureAt !== undefined &&
+    draftPlannedDepartureAt > draftPlannedArrivalAt;
 
   const handleSubmit = async () => {
     if (!draft.name.trim() || !draft.address.trim()) {
@@ -97,7 +122,10 @@ export function StayFormModal({
     if (
       checkInAt === undefined ||
       checkOutAt === undefined ||
-      checkOutAt <= checkInAt
+      checkOutAt <= checkInAt ||
+      draftPlannedArrivalAt === undefined ||
+      draftPlannedDepartureAt === undefined ||
+      draftPlannedDepartureAt <= draftPlannedArrivalAt
     ) {
       setError('Choose valid check-in and check-out times.');
       return;
@@ -112,8 +140,8 @@ export function StayFormModal({
         checkInAt,
         checkOutAt,
         checkInTimezone: draft.checkInTimezone,
-        plannedArrivalAt: checkInAt,
-        plannedDepartureAt: checkOutAt,
+        plannedArrivalAt: draftPlannedArrivalAt,
+        plannedDepartureAt: draftPlannedDepartureAt,
         confirmationCode: null,
         notes: null,
       });
@@ -191,19 +219,53 @@ export function StayFormModal({
             + Add timezone
           </Button>
         )}
-        <div className='flex justify-end gap-2'>
-          <Button type='button' variant='secondary' onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type='button'
-            loading={isSubmitting}
-            disabled={isSubmitting || !isFormComplete}
-            onClick={() => void handleSubmit()}
-          >
-            {isSubmitting ? 'Saving…' : 'Add stay'}
-          </Button>
+        <div className='grid gap-3 sm:grid-cols-2'>
+          <div className='space-y-1.5'>
+            <Label>Planned arrival</Label>
+            <Input
+              type='datetime-local'
+              value={`${draft.plannedArrivalDate}T${draft.plannedArrivalTime}`}
+              onChange={(event) => {
+                const [date, time] = event.target.value.split('T');
+                updateDraft({ plannedArrivalDate: date ?? '', plannedArrivalTime: time ?? '' });
+              }}
+            />
+          </div>
+          <div className='space-y-1.5'>
+            <Label>Planned departure</Label>
+            <Input
+              type='datetime-local'
+              value={`${draft.plannedDepartureDate}T${draft.plannedDepartureTime}`}
+              onChange={(event) => {
+                const [date, time] = event.target.value.split('T');
+                updateDraft({ plannedDepartureDate: date ?? '', plannedDepartureTime: time ?? '' });
+              }}
+            />
+          </div>
         </div>
+        <ModalFooterActions
+          leftActions={
+            stay &&
+            onDelete && (
+              <DeleteIconButton onClick={() => void onDelete()} disabled={isSubmitting} />
+            )
+          }
+          rightActions={
+            <>
+              <Button type='button' variant='secondary' onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type='button'
+                loading={isSubmitting}
+                disabled={isSubmitting || !isFormComplete}
+                onClick={() => void handleSubmit()}
+              >
+                {isSubmitting ? 'Saving…' : stay ? 'Save changes' : 'Add stay'}
+              </Button>
+            </>
+          }
+        />
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
     </Modal>
