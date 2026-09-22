@@ -7,8 +7,11 @@ import {
 
 const TRIP_ID = 'seed-waypoint-trip';
 const ARCHIVED_TRIP_ID = 'seed-waypoint-trip-archived';
+const ACTIVE_TRIP_ID = 'seed-waypoint-trip-active';
 const INVITE_CODE = 'PNW2026';
 const ARCHIVED_INVITE_CODE = 'PNW2025';
+const ACTIVE_INVITE_CODE = 'ONTHEGO';
+const DAY_MS = 86_400_000;
 
 export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -27,6 +30,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('trips')
     .doc(ARCHIVED_TRIP_ID);
+  const activeTripRef = context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('trips')
+    .doc(ACTIVE_TRIP_ID);
   const inviteCodeRef = context.firestore
     .collection('apps')
     .doc('waypoint')
@@ -37,6 +45,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc('waypoint')
     .collection('inviteCodes')
     .doc(ARCHIVED_INVITE_CODE);
+  const activeInviteCodeRef = context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('inviteCodes')
+    .doc(ACTIVE_INVITE_CODE);
   const pendingRequestRef = context.firestore
     .collection('apps')
     .doc('waypoint')
@@ -101,6 +114,39 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  const activeTripTitle = 'Olympic Peninsula Loop';
+  const activeTripStart = context.now - DAY_MS;
+  const activeTripEnd = context.now + 2 * DAY_MS;
+
+  await activeTripRef.set({
+    id: ACTIVE_TRIP_ID,
+    title: activeTripTitle,
+    coverImageUrl: null,
+    startDate: activeTripStart,
+    endDate: activeTripEnd,
+    defaultCurrency: null,
+    isArchived: false,
+    members: {
+      [alex.uid]: {
+        uid: alex.uid,
+        role: 'ADMIN',
+        joinedAt,
+      },
+      [taylor.uid]: {
+        uid: taylor.uid,
+        role: 'EDITOR',
+        joinedAt,
+      },
+    },
+    inviteCode: ACTIVE_INVITE_CODE,
+    sharedAlbumUrl: null,
+    sharedAlbumSetByUid: null,
+    sharedAlbumSetAt: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   await inviteCodeRef.set({
     tripId: TRIP_ID,
     title: tripTitle,
@@ -109,6 +155,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   await archivedInviteCodeRef.set({
     tripId: ARCHIVED_TRIP_ID,
     title: archivedTripTitle,
+  });
+
+  await activeInviteCodeRef.set({
+    tripId: ACTIVE_TRIP_ID,
+    title: activeTripTitle,
   });
 
   await pendingRequestRef.set({
@@ -300,20 +351,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     eventDetails: { settings: ['OUTDOOR'] },
     notes: null,
     assignedMemberIds: [alex.uid],
-    changeHistory: [
-      {
-        changes: [
-          {
-            field: 'startAt',
-            previousValue: Date.UTC(2026, 8, 26, 9),
-            changedBy: alex.uid,
-            changedAt: context.now - 3_600_000,
-          },
-        ],
-        latestChangedBy: alex.uid,
-        latestChangedAt: context.now - 3_600_000,
-      },
-    ],
+    changeHistory: [],
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -409,8 +447,125 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now - 1_800_000,
   });
 
+  const activeEventsCollection = activeTripRef.collection('events');
+  const activeStaysCollection = activeTripRef.collection('stays');
+  const activeChecklistCollection = activeTripRef.collection('checklist');
+
+  await activeEventsCollection.doc('active-trip-ferry').set({
+    id: 'active-trip-ferry',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'TRAVEL',
+    dayIndex: 0,
+    endDayIndex: 0,
+    title: 'Ferry to Bainbridge Island',
+    startAt: activeTripStart + 9 * 3_600_000,
+    endAt: activeTripStart + 11 * 3_600_000,
+    locationName: 'Bainbridge Island Ferry Terminal',
+    address: null,
+    latitude: 47.6238,
+    longitude: -122.5108,
+    eventDetails: { transitType: 'FERRY' },
+    notes: null,
+    assignedMemberIds: [alex.uid, taylor.uid],
+    changeHistory: [],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await activeEventsCollection.doc('active-trip-tidepools').set({
+    id: 'active-trip-tidepools',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'ACTIVITY',
+    dayIndex: 1,
+    endDayIndex: 1,
+    title: 'Tidepooling at Salt Creek',
+    startAt: activeTripStart + DAY_MS + 10 * 3_600_000,
+    endAt: activeTripStart + DAY_MS + 13 * 3_600_000,
+    locationName: 'Salt Creek Recreation Area',
+    address: null,
+    latitude: 48.1585,
+    longitude: -123.6928,
+    eventDetails: { settings: ['OUTDOOR'] },
+    notes: null,
+    assignedMemberIds: [alex.uid, taylor.uid],
+    changeHistory: [
+      {
+        changes: [
+          {
+            field: 'startAt',
+            previousValue: activeTripStart + DAY_MS + 9 * 3_600_000,
+            changedBy: alex.uid,
+            changedAt: context.now - 3_600_000,
+          },
+        ],
+        latestChangedBy: alex.uid,
+        latestChangedAt: context.now - 3_600_000,
+      },
+    ],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now - 3_600_000,
+  });
+
+  await activeEventsCollection.doc('active-trip-dinner').set({
+    id: 'active-trip-dinner',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'DINING',
+    dayIndex: 2,
+    endDayIndex: 2,
+    title: 'Dinner in Port Angeles',
+    startAt: activeTripStart + 2 * DAY_MS + 18 * 3_600_000,
+    endAt: null,
+    locationName: 'Port Angeles',
+    address: null,
+    latitude: 48.1181,
+    longitude: -123.4307,
+    eventDetails: { mealType: 'DINNER' },
+    notes: null,
+    assignedMemberIds: [],
+    changeHistory: [],
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await activeStaysCollection.doc('active-trip-lodge').set({
+    id: 'active-trip-lodge',
+    tripId: ACTIVE_TRIP_ID,
+    name: 'Lake Crescent Lodge',
+    address: '416 Lake Crescent Rd, Port Angeles, WA',
+    latitude: 48.0587,
+    longitude: -123.7853,
+    checkInAt: activeTripStart + 16 * 3_600_000,
+    checkOutAt: activeTripEnd,
+    checkInTimezone: 'America/Los_Angeles',
+    plannedArrivalAt: activeTripStart + 16 * 3_600_000,
+    plannedDepartureAt: activeTripEnd,
+    confirmationCode: null,
+    notes: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await activeChecklistCollection.doc('active-trip-tide-tables').set({
+    id: 'active-trip-tide-tables',
+    tripId: ACTIVE_TRIP_ID,
+    title: 'Check tide tables for Salt Creek',
+    category: 'LOGISTICS',
+    customCategoryLabel: null,
+    assignedToUids: [alex.uid],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 18,
+    firestoreDocuments: 25,
   };
 }

@@ -10,7 +10,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
-import { canEditExistingEvent } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
   uid: string;
@@ -113,7 +113,7 @@ export const updateEvent = createAsyncThunk<
 >(
   'waypoint/events/update',
   async ({ uid, trip, eventId, event, previousEvent }, { rejectWithValue }) => {
-    if (!canEditExistingEvent(trip, uid)) {
+    if (!canEditExistingItem(trip, uid)) {
       return rejectWithValue('You do not have permission to edit timeline events.');
     }
     if (!event.title.trim()) {
@@ -124,8 +124,7 @@ export const updateEvent = createAsyncThunk<
     }
 
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
-    const tripStarted = Date.now() >= trip.startDate;
-    const newSnapshot = tripStarted ? buildChangeSnapshot(previousEvent, event, uid) : null;
+    const newSnapshot = isTripActive(trip) ? buildChangeSnapshot(previousEvent, event, uid) : null;
     const updatedEvent: TimelineEvent = {
       ...event,
       id: eventId,
@@ -149,7 +148,7 @@ export const deleteEvent = createAsyncThunk<
   DeleteEventInput,
   { rejectValue: string }
 >('waypoint/events/delete', async ({ uid, trip, eventId }, { rejectWithValue }) => {
-  if (!canEditExistingEvent(trip, uid)) {
+  if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to delete timeline events.');
   }
 

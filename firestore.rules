@@ -23,6 +23,10 @@ service cloud.firestore {
       return value is string && value.size() > 0;
     }
 
+    function isTripActive(trip) {
+      return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate;
+    }
+
     // `dev` is only ever set by scripts/seeds/core.ts, which refuses to run
     // against anything but a local emulator — so it never appears on a
     // production token. Lets seeded users see every app locally.
@@ -1545,6 +1549,15 @@ service cloud.firestore {
           return hasChecklistRole('ADMIN') || hasChecklistRole('EDITOR');
         }
 
+        function isChecklistAdminOnlyWhileActive() {
+          let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+          return request.auth != null && request.auth.uid in trip.members && (
+            isTripActive(trip)
+              ? trip.members[request.auth.uid].role == 'ADMIN'
+              : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+          );
+        }
+
         function isChecklistShapeValid(data) {
           return data.keys().hasOnly([
               'id',
@@ -1608,11 +1621,11 @@ service cloud.firestore {
           && isChecklistShapeValid(request.resource.data)
           && request.resource.data.createdBy == request.auth.uid;
         allow update: if (
-          isChecklistEditor()
+          isChecklistAdminOnlyWhileActive()
           && isChecklistShapeValid(request.resource.data)
           && isChecklistImmutableFieldsValid()
         ) || isChecklistAssignedToggleValid();
-        allow delete: if isChecklistEditor();
+        allow delete: if isChecklistAdminOnlyWhileActive();
       }
     }
 
@@ -1627,12 +1640,12 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
-      function isTripAdminOnlyPostStart() {
+      function isTripAdminOnlyWhileActive() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return request.auth != null && request.auth.uid in trip.members && (
-          request.time.toMillis() < trip.startDate
-            ? trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
-            : trip.members[request.auth.uid].role == 'ADMIN'
+          isTripActive(trip)
+            ? trip.members[request.auth.uid].role == 'ADMIN'
+            : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
         );
       }
 
@@ -1691,10 +1704,10 @@ service cloud.firestore {
       allow create: if isTripSubcollectionEditor()
         && isEventShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isTripAdminOnlyPostStart()
+      allow update: if isTripAdminOnlyWhileActive()
         && isEventShapeValid()
         && isEventImmutableFieldsValid();
-      allow delete: if isTripAdminOnlyPostStart();
+      allow delete: if isTripAdminOnlyWhileActive();
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {
@@ -1706,6 +1719,15 @@ service cloud.firestore {
       function isTripSubcollectionEditor() {
         return isTripSubcollectionMember()
           && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      function isTripAdminOnlyWhileActive() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return request.auth != null && request.auth.uid in trip.members && (
+          isTripActive(trip)
+            ? trip.members[request.auth.uid].role == 'ADMIN'
+            : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+        );
       }
 
       function isStayShapeValid() {
@@ -1753,7 +1775,7 @@ service cloud.firestore {
       allow create: if isTripSubcollectionEditor()
         && isStayShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isTripSubcollectionEditor()
+      allow update: if isTripAdminOnlyWhileActive()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
             'address',
@@ -1769,7 +1791,7 @@ service cloud.firestore {
             'lastEditedAt'
           ])
         && isStayShapeValid();
-      allow delete: if isTripSubcollectionEditor();
+      allow delete: if isTripAdminOnlyWhileActive();
     }
 
     match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {

@@ -44,7 +44,12 @@ export function canRemoveMembers(
   return canChangeRole(trip, currentUserId, targetUserId);
 }
 
-export function canEditExistingEvent(trip: TripSpace, uid: string) {
-  const tripStarted = Date.now() >= trip.startDate;
-  return tripStarted ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
+export function isTripActive(trip: TripSpace, now = Date.now()) {
+  return now >= trip.startDate && now < trip.endDate;
+}
+
+/** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
+ * Admin-only while the trip is active — creating a new one stays open to Editors throughout. */
+export function canEditExistingItem(trip: TripSpace, uid: string) {
+  return isTripActive(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }

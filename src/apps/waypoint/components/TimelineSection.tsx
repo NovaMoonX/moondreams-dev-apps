@@ -22,7 +22,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
-import { canEditExistingEvent } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
@@ -48,7 +48,7 @@ export function TimelineSection({ trip, events, currentUserId }: TimelineSection
     label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
     value: uid,
   }));
-  const canEdit = canEditExistingEvent(trip, currentUserId);
+  const canEdit = canEditExistingItem(trip, currentUserId);
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeTab === 'all' || activeStays.length === 0) {
       return null;
