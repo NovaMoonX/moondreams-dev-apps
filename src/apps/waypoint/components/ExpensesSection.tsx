@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import AppToggle from '@/components/AppToggle';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -31,11 +32,15 @@ interface ExpensesSectionProps {
   currentUserId: string;
 }
 
+function isExpenseSplit(expense: TripExpense): boolean {
+  return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
+}
+
 function describeSplit(
   expense: TripExpense,
   memberLabel: (uid: string) => string,
 ): string | null {
-  if (expense.targetType === 'EVERYONE_CURRENT' && expense.splitAmounts === null) {
+  if (!isExpenseSplit(expense)) {
     return null;
   }
 
@@ -71,6 +76,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const expenses = useAppSelector(selectTripExpenses);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
   const [payerFilter, setPayerFilter] = useState<string[]>([]);
+  const [splitOnly, setSplitOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
@@ -96,9 +103,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         : dayFilter.includes(String(expense.dayIndex)));
     const matchesPayer =
       payerFilter.length === 0 || payerFilter.includes(expense.payerUid);
-    return matchesDay && matchesPayer;
+    const matchesSplit = !splitOnly || isExpenseSplit(expense);
+    const matchesSearch =
+      searchQuery.trim() === '' ||
+      expense.title.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    return matchesDay && matchesPayer && matchesSplit && matchesSearch;
   });
-  const hasActiveFilters = dayFilter.length > 0 || payerFilter.length > 0;
+  const hasActiveFilters =
+    dayFilter.length > 0 ||
+    payerFilter.length > 0 ||
+    splitOnly ||
+    searchQuery.trim() !== '';
   const toggleDayFilter = (value: string) => {
     setDayFilter((current) =>
       current.includes(value)
@@ -116,6 +131,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const clearFilters = () => {
     setDayFilter([]);
     setPayerFilter([]);
+    setSplitOnly(false);
+    setSearchQuery('');
   };
   const totals = computeExpenseTotals(filteredExpenses);
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
@@ -284,6 +301,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </Button>
           )}
         </div>
+        <Input
+          type='search'
+          placeholder='Search expenses'
+          aria-label='Search expenses by title'
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+        <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+          <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
+          Split only
+        </label>
         <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
           <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
             Days
