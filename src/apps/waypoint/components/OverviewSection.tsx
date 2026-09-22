@@ -1,16 +1,13 @@
-import { Badge, Callout } from '@moondreamsdev/dreamer-ui/components';
+import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { formatCountdown, formatTime } from '@/utils/formatUtils';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
-import SharedAlbumLinkCard from '@apps/waypoint/components/SharedAlbumLinkCard';
-import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import {
   getTripStatus,
   selectActiveEvent,
-  selectShouldShowAlbumReminder,
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -22,57 +19,15 @@ import {
 
 interface OverviewSectionProps {
   trip: TripSpace;
-  events: TimelineEvent[];
-  currentUserId: string;
 }
 
-function OverviewSection({
-  trip,
-  events,
-  currentUserId,
-}: OverviewSectionProps) {
+function OverviewSection({ trip }: OverviewSectionProps) {
   const now = useNow();
   const isLive = getTripStatus(trip, now) === 'ACTIVE';
   const activeEvent = useAppSelector(selectActiveEvent(now));
   const upNextEvent = useAppSelector(selectUpNextEvent(now));
-  const shouldShowReminder = useAppSelector((state) =>
-    selectShouldShowAlbumReminder(state, trip.id, currentUserId, now),
-  );
 
-  return (
-    <div className='space-y-4'>
-      {isLive && (
-        <TripHud now={now} activeEvent={activeEvent} upNextEvent={upNextEvent} />
-      )}
-      {shouldShowReminder && (
-        <Callout
-          variant='info'
-          title="Add today's photos"
-          description={
-            trip.sharedAlbumUrl
-              ? "The day is nearly over. Add today's photos to the shared album."
-              : "The day is nearly over. Add a shared album link so everyone can upload today's photos."
-          }
-        />
-      )}
-      <SharedAlbumLinkCard trip={trip} currentUserId={currentUserId} />
-      <TimelineSection
-        trip={trip}
-        events={events}
-        currentUserId={currentUserId}
-      />
-    </div>
-  );
-}
-
-interface TripHudProps {
-  now: number;
-  activeEvent: TimelineEvent | null;
-  upNextEvent: TimelineEvent | null;
-}
-
-function TripHud({ now, activeEvent, upNextEvent }: TripHudProps) {
-  if (!activeEvent && !upNextEvent) {
+  if (!isLive || (!activeEvent && !upNextEvent)) {
     return null;
   }
 

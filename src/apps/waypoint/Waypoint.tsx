@@ -29,7 +29,10 @@ import MembersSection from '@apps/waypoint/components/MembersSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
+import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
+import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
@@ -269,6 +272,10 @@ function Waypoint() {
               {formatDateTime(selectedTrip.endDate)}
             </p>
           </div>
+          <hr className='border-border' />
+          <SharedAlbumSection trip={selectedTrip} currentUserId={user.uid} />
+          <OverviewSection trip={selectedTrip} />
+          <hr className='border-border' />
           <Tabs defaultValue='overview' tabsWidth='full' variant='pills'>
             <TabsList>
               <TabsTrigger value='overview'>Timeline</TabsTrigger>
@@ -278,7 +285,7 @@ function Waypoint() {
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
             <TabsContent value='overview' className='pt-4'>
-              <OverviewSection
+              <TimelineSection
                 trip={selectedTrip}
                 events={timelineEvents}
                 currentUserId={user.uid}
@@ -298,6 +305,9 @@ function Waypoint() {
             </TabsContent>
           </Tabs>
         </div>
+        {getTripStatus(selectedTrip, now) === 'ACTIVE' && (
+          <TripProgressBar trip={selectedTrip} now={now} />
+        )}
       </div>
     );
   }
