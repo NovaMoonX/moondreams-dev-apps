@@ -9,6 +9,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { X } from 'lucide-react';
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -33,9 +34,11 @@ import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
+  DEFAULT_REMINDER_MINUTES_BEFORE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
+  REMINDER_MINUTES_BEFORE_OPTIONS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 import type {
@@ -83,13 +86,22 @@ const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(
 const transitTypeOptions = toSelectOptions(TRANSIT_TYPE_LABELS);
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
 const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
+const reminderOptions = [
+  { value: 'off', text: "Don't remind me" },
+  ...REMINDER_MINUTES_BEFORE_OPTIONS.map((minutes) => ({
+    value: String(minutes),
+    text: `${minutes} minutes before`,
+  })),
+];
 
 interface EventDraft {
   eventType: EventType;
   title: string;
   dayIndex: number;
   endDayIndex: number;
+  hasEndTime: boolean;
   time: string;
+  endTime: string;
   quickField: string;
   locationName: string;
   address: string;
@@ -99,6 +111,8 @@ interface EventDraft {
   linkUrl: string;
   linkPreview: LinkPreview | null;
   assignedMemberIds: string[];
+  reminderMinutesBefore: number;
+  reminderEnabled: boolean;
 }
 
 /** Only these event types carry a bookable link (dining reservations, activity
@@ -114,7 +128,9 @@ function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
     title: event?.title ?? '',
     dayIndex: event?.dayIndex ?? 0,
     endDayIndex: event?.endDayIndex ?? event?.dayIndex ?? 0,
+    hasEndTime: Boolean(event?.endAt),
     time: toLocalTimeInputValue(event?.startAt) || '09:00',
+    endTime: toLocalTimeInputValue(event?.endAt) || '',
     quickField:
       event?.eventType === 'TRAVEL' &&
       event.eventDetails &&
@@ -137,6 +153,9 @@ function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
     linkUrl: event?.linkUrl ?? '',
     linkPreview: event?.linkPreview ?? null,
     assignedMemberIds: event?.assignedMemberIds ?? [],
+    reminderMinutesBefore:
+      event?.reminderMinutesBefore ?? DEFAULT_REMINDER_MINUTES_BEFORE,
+    reminderEnabled: event?.reminderEnabled ?? true,
   };
 }
 
@@ -165,6 +184,10 @@ function EventFormModal({
       setError('Enter a title, day, and start time.');
       return;
     }
+    if (draft.hasEndTime && !draft.endTime) {
+      setError('Enter an end time, or remove the end time.');
+      return;
+    }
     setError(null);
     setStep(2);
   };
@@ -174,6 +197,17 @@ function EventFormModal({
     const startAt = fromLocalDateAndTimeInputValues(date, draft.time);
     if (startAt === undefined) {
       setError('Choose a valid start time.');
+      return;
+    }
+
+    const endAt = draft.hasEndTime
+      ? fromLocalDateAndTimeInputValues(
+          getDayInputValue(trip.startDate, draft.endDayIndex),
+          draft.endTime,
+        )
+      : undefined;
+    if (draft.hasEndTime && endAt === undefined) {
+      setError('Choose a valid end time.');
       return;
     }
 
@@ -192,10 +226,12 @@ function EventFormModal({
       await onSubmit({
         eventType: draft.eventType,
         dayIndex: draft.dayIndex,
-        endDayIndex: Math.max(draft.dayIndex, draft.endDayIndex),
+        endDayIndex: draft.hasEndTime
+          ? Math.max(draft.dayIndex, draft.endDayIndex)
+          : draft.dayIndex,
         title: draft.title,
         startAt,
-        endAt: event?.endAt ?? null,
+        endAt: draft.hasEndTime ? (endAt as number) : null,
         locationName: draft.locationName,
         address: draft.address,
         latitude: draft.latitude,
@@ -211,6 +247,9 @@ function EventFormModal({
         linkPreview: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
           ? draft.linkPreview
           : null,
+        reminderMinutesBefore: draft.reminderMinutesBefore,
+        reminderEnabled: draft.reminderEnabled,
+        reminderId: event?.reminderId ?? null,
       });
       setStep(1);
       setError(null);
@@ -292,19 +331,57 @@ function EventFormModal({
                 onChange={(event) => updateDraft({ time: event.target.value })}
               />
             </div>
-            <div className='space-y-1.5'>
-              <Label>End day</Label>
-              <Select
-                options={Array.from({ length: dayCount }, (_, index) => ({
-                  text: getDayLabel(trip.startDate, index),
-                  value: String(index),
-                }))}
-                value={String(draft.endDayIndex)}
-                onChange={(value) =>
-                  updateDraft({ endDayIndex: Number(value) })
-                }
-              />
-            </div>
+            {draft.hasEndTime ? (
+              <div className='space-y-1.5'>
+                <div className='flex items-center justify-between'>
+                  <Label>End day &amp; time</Label>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    aria-label='Remove end time'
+                    onClick={() =>
+                      updateDraft({
+                        hasEndTime: false,
+                        endDayIndex: draft.dayIndex,
+                        endTime: '',
+                      })
+                    }
+                  >
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  <Select
+                    options={Array.from({ length: dayCount }, (_, index) => ({
+                      text: getDayLabel(trip.startDate, index),
+                      value: String(index),
+                    }))}
+                    value={String(draft.endDayIndex)}
+                    onChange={(value) =>
+                      updateDraft({ endDayIndex: Number(value) })
+                    }
+                  />
+                  <Input
+                    type='time'
+                    value={draft.endTime}
+                    onChange={(event) =>
+                      updateDraft({ endTime: event.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0'
+                onClick={() => updateDraft({ hasEndTime: true })}
+              >
+                + Add end time
+              </Button>
+            )}
             <ModalFooterActions
               leftActions={
                 event &&
@@ -386,6 +463,18 @@ function EventFormModal({
                 onUseTitle={(title) => updateDraft({ title })}
               />
             )}
+            <div className='space-y-1.5'>
+              <Label>Reminder</Label>
+              <Select
+                options={reminderOptions}
+                value={draft.reminderEnabled ? String(draft.reminderMinutesBefore) : 'off'}
+                onChange={(value) =>
+                  value === 'off'
+                    ? updateDraft({ reminderEnabled: false })
+                    : updateDraft({ reminderEnabled: true, reminderMinutesBefore: Number(value) })
+                }
+              />
+            </div>
             <div className='space-y-2'>
               <Label>Attendees</Label>
               {memberOptions.map((member) => (

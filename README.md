@@ -96,6 +96,23 @@ The worker deploy step needs a `CLOUDFLARE_API_TOKEN` repo secret:
 
 The worker deploy step runs with `continue-on-error: true`, so if it fails, the Action shows a yellow warning on that step instead of failing the whole run — Firebase hosting/resources will have already deployed successfully by that point regardless.
 
+### New Cloud Functions & Cloud Run invoker access
+
+Firebase's 2nd-gen `onCall` functions get their public "allow unauthenticated invocations" IAM grant applied automatically only on a function's *first* deploy — later redeploys don't touch existing IAM policy. A function can land on a first deploy where that automatic grant silently fails (observed once, cause not fully confirmed — possibly a project/org policy blocking new `allUsers` bindings without revoking already-granted ones), leaving the function otherwise working but unreachable from the browser.
+
+**Symptom:** a browser console CORS error on the callable (e.g. "No 'Access-Control-Allow-Origin' header is present"), even though its `cors`/`region` config looks correct and matches a working function. Checking GCP Cloud Run request logs for that service shows the real cause: a `403` on the `OPTIONS` preflight with `"The request was not authenticated. Either allow unauthenticated invocations or set the proper Authorization header."`
+
+**Fix:** run this against the affected function's Cloud Run service (service name = the function name, lowercased — Cloud Run rejects mixed-case names):
+
+```bash
+gcloud run services update <lowercase-function-name> \
+  --no-invoker-iam-check \
+  --region="us-central1" \
+  --project="moondreams-dev-apps"
+```
+
+This is a one-time, per-function operational step — run it after first deploying a new callable function if you hit this symptom, not as part of every deploy. It's not part of the automated deploy workflow.
+
 ## PWAs & push notifications
 
 Every mini-app is installable as its own Progressive Web App — the browser tab's `<link rel="manifest">` is swapped at runtime (see `src/ui/Layout.tsx`) based on the current route, pointing at that app's own `public/manifest-<app-id>.json` (name, icons, `start_url`, theme colors). This is why there's a `manifest-nine-lives.json`, `manifest-waypoint.json`, etc. instead of one shared manifest — each one gives its app a distinct "Add to Home Screen" identity.

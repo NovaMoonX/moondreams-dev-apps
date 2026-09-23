@@ -1678,6 +1678,9 @@ service cloud.firestore {
             'place',
             'linkUrl',
             'linkPreview',
+            'reminderMinutesBefore',
+            'reminderEnabled',
+            'reminderId',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1709,6 +1712,12 @@ service cloud.firestore {
             && request.resource.data.linkUrl.matches('^https?://.*')
           ))
           && (request.resource.data.linkPreview == null || request.resource.data.linkPreview is map)
+          && request.resource.data.reminderMinutesBefore is int
+          && request.resource.data.reminderMinutesBefore >= 5
+          && request.resource.data.reminderMinutesBefore <= 60
+          && request.resource.data.reminderMinutesBefore % 5 == 0
+          && request.resource.data.reminderEnabled is bool
+          && (request.resource.data.reminderId == null || request.resource.data.reminderId is string)
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);

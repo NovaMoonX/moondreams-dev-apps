@@ -157,6 +157,14 @@ export interface TimelineEvent {
   /** Only meaningful for DINING and ACTIVITY events; other types leave this null. */
   linkUrl: string | null;
   linkPreview: LinkPreview | null;
+  /** Minutes before `startAt` to send a reminder. Always a real value (defaults to
+   * `DEFAULT_REMINDER_MINUTES_BEFORE`) — an event with no reminder configured yet
+   * reads as "default lead time, enabled" rather than "no reminder." */
+  reminderMinutesBefore: number;
+  /** Whether the reminder is active; `false` disables it without losing the chosen lead time. */
+  reminderEnabled: boolean;
+  /** Id of the currently-scheduled `reminders/{id}` doc, or `null` if none is scheduled. */
+  reminderId: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

@@ -7,6 +7,7 @@ import { APP_REGISTRY_PATH_MAP } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
+import { useReminderToasts } from '@hooks/useReminderToasts';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
@@ -81,6 +82,7 @@ function LocationSync() {
 function Layout() {
   const networkStatus = useNetworkStatus();
   const isBannerVisible = networkStatus !== null;
+  useReminderToasts();
 
   return (
     <div className='transition-colors duration-200'>

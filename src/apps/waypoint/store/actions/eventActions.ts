@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import type { RootState } from '@/store';
 import type {
   EventChangeSnapshot,
   EventDetails,
@@ -10,6 +11,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
+import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 import { canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
@@ -71,6 +73,36 @@ function buildChangeSnapshot(
   return { changes, latestChangedBy: uid, latestChangedAt: now };
 }
 
+async function resolveEventReminderId(
+  trip: TripSpace,
+  uid: string,
+  previousEvent: TimelineEvent,
+  nextEvent: Pick<
+    TimelineEvent,
+    'id' | 'title' | 'startAt' | 'reminderMinutesBefore' | 'reminderEnabled' | 'assignedMemberIds'
+  >,
+): Promise<string | null> {
+  const startChanged = previousEvent.startAt !== nextEvent.startAt;
+  const minutesChanged = previousEvent.reminderMinutesBefore !== nextEvent.reminderMinutesBefore;
+  const enabledChanged = previousEvent.reminderEnabled !== nextEvent.reminderEnabled;
+
+  if (previousEvent.reminderId && (startChanged || minutesChanged || enabledChanged)) {
+    await cancelEventReminder(previousEvent.reminderId);
+  }
+
+  if (!nextEvent.reminderEnabled) {
+    return null;
+  }
+
+  const shouldReschedule =
+    startChanged || minutesChanged || enabledChanged || !previousEvent.reminderId;
+  if (!shouldReschedule) {
+    return previousEvent.reminderId;
+  }
+
+  return scheduleEventReminder({ trip, uid, event: nextEvent });
+}
+
 export const createEvent = createAsyncThunk<
   TimelineEvent,
   CreateEventInput,
@@ -88,17 +120,31 @@ export const createEvent = createAsyncThunk<
 
   const eventRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'));
   const now = Date.now();
+  const trimmedTitle = event.title.trim();
+  const reminderId = await scheduleEventReminder({
+    trip,
+    uid,
+    event: {
+      id: eventRef.id,
+      title: trimmedTitle,
+      startAt: event.startAt,
+      reminderMinutesBefore: event.reminderMinutesBefore,
+      reminderEnabled: event.reminderEnabled,
+      assignedMemberIds: event.assignedMemberIds,
+    },
+  });
   const createdEvent: TimelineEvent = {
     ...event,
     id: eventRef.id,
     tripId: trip.id,
-    title: event.title.trim(),
+    title: trimmedTitle,
     locationName: event.locationName?.trim() || null,
     address: event.address?.trim() || null,
     linkUrl: event.linkUrl?.trim() || null,
     linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
     notes: null,
     changeHistory: [],
+    reminderId,
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -127,11 +173,20 @@ export const updateEvent = createAsyncThunk<
 
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
     const newSnapshot = isTripActive(trip) ? buildChangeSnapshot(previousEvent, event, uid) : null;
+    const trimmedTitle = event.title.trim();
+    const reminderId = await resolveEventReminderId(trip, uid, previousEvent, {
+      id: eventId,
+      title: trimmedTitle,
+      startAt: event.startAt,
+      reminderMinutesBefore: event.reminderMinutesBefore,
+      reminderEnabled: event.reminderEnabled,
+      assignedMemberIds: event.assignedMemberIds,
+    });
     const updatedEvent: TimelineEvent = {
       ...event,
       id: eventId,
       tripId: trip.id,
-      title: event.title.trim(),
+      title: trimmedTitle,
       locationName: event.locationName?.trim() || null,
       address: event.address?.trim() || null,
       linkUrl: event.linkUrl?.trim() || null,
@@ -139,6 +194,7 @@ export const updateEvent = createAsyncThunk<
       changeHistory: newSnapshot
         ? [...(previousEvent.changeHistory ?? []), newSnapshot]
         : (previousEvent.changeHistory ?? []),
+      reminderId,
       lastEditedAt: Date.now(),
     };
 
@@ -151,12 +207,20 @@ export const deleteEvent = createAsyncThunk<
   string,
   DeleteEventInput,
   { rejectValue: string }
->('waypoint/events/delete', async ({ uid, trip, eventId }, { rejectWithValue }) => {
-  if (!canEditExistingItem(trip, uid)) {
-    return rejectWithValue('You do not have permission to delete timeline events.');
-  }
+>(
+  'waypoint/events/delete',
+  async ({ uid, trip, eventId }, { getState, rejectWithValue }) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to delete timeline events.');
+    }
 
-  const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
-  await deleteDoc(eventRef);
-  return eventId;
-});
+    const current = (getState() as RootState).waypoint.events.items.find(
+      (event) => event.id === eventId,
+    );
+
+    const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
+    await deleteDoc(eventRef);
+    await cancelEventReminder(current?.reminderId ?? null);
+    return eventId;
+  },
+);

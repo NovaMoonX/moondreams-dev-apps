@@ -3,6 +3,8 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { Provider } from 'react-redux';
 import { RouterProvider } from 'react-router-dom';
 
+import AppToast from '@components/AppToast';
+import { TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 import { AppCatalogProvider } from '@contexts/AppCatalogContext';
 import { AuthProvider } from '@contexts/AuthContext';
 import { NetworkStatusProvider } from '@contexts/NetworkStatusContext';
@@ -40,7 +42,9 @@ function App() {
         client={queryClient}
         persistOptions={persistOptions}
       >
-        <DreamerUIProvider>
+        <DreamerUIProvider
+          toast={{ customTypes: TOAST_TYPE_STYLES, customComponent: AppToast }}
+        >
           <NetworkStatusProvider>
             <AuthProvider>
               <AppCatalogProvider>
