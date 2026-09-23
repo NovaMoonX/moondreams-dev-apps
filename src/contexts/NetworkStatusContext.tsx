@@ -126,7 +126,6 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     return () => clearInterval(interval);
   }, [phase, verifyConnection]);
 
-  // Auto-dismiss the transient "back online" success banner.
   useEffect(() => {
     if (phase !== 'reconnected') {
       return;
@@ -140,8 +139,7 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     return () => clearTimeout(timeout);
   }, [phase]);
 
-  // Best-effort slow-connection detection via the Network Information API
-  // (Chromium only) — silently unavailable elsewhere, so `isSlow` just stays false.
+  // Network Information API is Chromium-only; `isSlow` just stays false elsewhere.
   useEffect(() => {
     const connection = getConnection();
     if (!connection) {

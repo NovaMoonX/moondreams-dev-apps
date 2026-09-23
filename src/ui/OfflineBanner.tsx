@@ -32,7 +32,7 @@ const VARIANTS: Record<
   },
 };
 
-/** Fixed, full-width status bar shown above every mini-app while offline, reconnecting, or on a slow connection — and briefly on a successful reconnect. Always mounted; visibility is a transform so it never reflows the page or squishes its own text while sliding away. */
+/** Always mounted; visibility is a transform so sliding away never reflows or squishes the text. */
 function OfflineBanner() {
   const status = useNetworkStatus();
   const variant = VARIANTS[status ?? 'offline'];
