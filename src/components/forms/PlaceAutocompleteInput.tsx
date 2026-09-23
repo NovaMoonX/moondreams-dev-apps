@@ -17,6 +17,9 @@ interface PlaceAutocompleteInputProps {
   onChange: (value: string) => void;
   bias?: PlaceSelectionBias;
   onSelect: (result: PlaceSelectionResult) => void;
+  /** A one-click "search for this instead" shortcut under the input (e.g. the event's title),
+   * shown only when it differs from the current value. */
+  quickSearch?: { label: string; value: string };
 }
 
 /**
@@ -31,6 +34,7 @@ function PlaceAutocompleteInput({
   onChange,
   bias,
   onSelect,
+  quickSearch,
 }: PlaceAutocompleteInputProps) {
   const queryClient = useQueryClient();
   const [isTyping, setIsTyping] = useState(false);
@@ -39,6 +43,7 @@ function PlaceAutocompleteInput({
   const [selectError, setSelectError] = useState<string | null>(null);
   const [sessionToken, setSessionToken] = useState(createSessionToken);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const trimmedValue = value.trim();
   const debouncedValue = useDebouncedValue(trimmedValue, DEBOUNCE_MS.autocomplete);
   const isSearchEnabled = isPlacesSearchAvailable();
@@ -65,6 +70,16 @@ function PlaceAutocompleteInput({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const searchFor = (nextValue: string) => {
+    onChange(nextValue);
+    setIsTyping(true);
+    setIsOpen(true);
+    setSelectError(null);
+  };
+
+  const quickSearchValue = quickSearch?.value.trim() ?? '';
+  const showQuickSearch = Boolean(quickSearchValue) && quickSearchValue !== trimmedValue;
 
   const handleSelect = async (suggestion: PlaceSuggestion) => {
     setIsOpen(false);
@@ -95,16 +110,12 @@ function PlaceAutocompleteInput({
     <div ref={containerRef} className='relative space-y-1.5'>
       <Label>{label}</Label>
       <Input
+        ref={inputRef}
         placeholder={placeholder}
         value={value}
         disabled={isResolving}
         autoComplete='off'
-        onChange={(event) => {
-          onChange(event.target.value);
-          setIsTyping(true);
-          setIsOpen(true);
-          setSelectError(null);
-        }}
+        onChange={(event) => searchFor(event.target.value)}
         onFocus={() => suggestions.length > 0 && setIsOpen(true)}
       />
       {isOpen && (suggestions.length > 0 || isSearching) && (
@@ -135,6 +146,22 @@ function PlaceAutocompleteInput({
           <p className='text-muted-foreground border-border border-t px-3 py-1.5 text-right text-[10px]'>
             Powered by Google
           </p>
+        </div>
+      )}
+      {showQuickSearch && (
+        <div className='flex justify-end'>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='text-muted-foreground hover:text-foreground h-auto p-0'
+            onClick={() => {
+              searchFor(quickSearchValue);
+              inputRef.current?.focus();
+            }}
+          >
+            {quickSearch?.label}
+          </Button>
         </div>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
