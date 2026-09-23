@@ -10,13 +10,34 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import LinkAttachField from '@/components/forms/LinkAttachField';
+import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
+import type { LinkPreview } from '@/lib/linkMetadata/types';
+import { UNLINKED_PLACE } from '@/lib/places/placesApi';
+import type {
+  PlaceRef,
+  PlaceSelectionBias,
+  PlaceSelectionResult,
+} from '@/lib/places/types';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
+import {
+  getDayCount,
+  getDayInputValue,
+  getDayLabel,
+} from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import {
+  ACTIVITY_SETTING_LABELS,
+  EVENT_TYPE_EMOJIS,
+  EVENT_TYPE_LABELS,
+  MEAL_TYPE_LABELS,
+  TRANSIT_TYPE_LABELS,
+} from '@apps/waypoint/constants';
 import type {
   ActivitySetting,
   EventDetails,
@@ -26,36 +47,39 @@ import type {
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
-import {
-  ACTIVITY_SETTING_LABELS,
-  EVENT_TYPE_EMOJIS,
-  EVENT_TYPE_LABELS,
-  MEAL_TYPE_LABELS,
-  TRANSIT_TYPE_LABELS,
-} from '@apps/waypoint/constants';
-import { getDayCount, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
 
 interface EventFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
+  /** A rough center point (from an existing trip event/stay) to bias place search
+   * results toward, so "starbucks" finds the one near this trip first. */
+  placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
   onSubmit: (
-    event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
+    event: Omit<
+      TimelineEvent,
+      'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'
+    >,
   ) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
 function toSelectOptions<T extends string>(labels: Record<T, string>) {
-  return Object.entries(labels).map(([value, text]) => ({ value, text: text as string }));
+  return Object.entries(labels).map(([value, text]) => ({
+    value,
+    text: text as string,
+  }));
 }
 
-const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(([value, text]) => ({
-  value,
-  text: `${EVENT_TYPE_EMOJIS[value as EventType]} ${text}`,
-}));
+const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(
+  ([value, text]) => ({
+    value,
+    text: `${EVENT_TYPE_EMOJIS[value as EventType]} ${text}`,
+  }),
+);
 const transitTypeOptions = toSelectOptions(TRANSIT_TYPE_LABELS);
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
 const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
@@ -69,8 +93,20 @@ interface EventDraft {
   quickField: string;
   locationName: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
+  place: PlaceRef | null;
+  linkUrl: string;
+  linkPreview: LinkPreview | null;
   assignedMemberIds: string[];
 }
+
+/** Only these event types carry a bookable link (dining reservations, activity
+ * tickets); travel and free time don't have a natural "booking" to attach. */
+const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = [
+  'DINING',
+  'ACTIVITY',
+];
 
 function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
   return {
@@ -80,17 +116,26 @@ function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
     endDayIndex: event?.endDayIndex ?? event?.dayIndex ?? 0,
     time: toLocalTimeInputValue(event?.startAt) || '09:00',
     quickField:
-      event?.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
+      event?.eventType === 'TRAVEL' &&
+      event.eventDetails &&
+      'transitType' in event.eventDetails
         ? event.eventDetails.transitType
-        : event?.eventType === 'DINING' && event.eventDetails && 'mealType' in event.eventDetails
+        : event?.eventType === 'DINING' &&
+            event.eventDetails &&
+            'mealType' in event.eventDetails
           ? event.eventDetails.mealType
           : event?.eventType === 'ACTIVITY' &&
               event.eventDetails &&
               'settings' in event.eventDetails
-            ? event.eventDetails.settings[0] ?? 'INDOOR'
+            ? (event.eventDetails.settings[0] ?? 'INDOOR')
             : 'INDOOR',
     locationName: event?.locationName ?? '',
     address: event?.address ?? '',
+    latitude: event?.latitude ?? null,
+    longitude: event?.longitude ?? null,
+    place: event?.place ?? null,
+    linkUrl: event?.linkUrl ?? '',
+    linkPreview: event?.linkPreview ?? null,
     assignedMemberIds: event?.assignedMemberIds ?? [],
   };
 }
@@ -100,6 +145,7 @@ function EventFormModal({
   trip,
   memberOptions,
   event,
+  placeBias,
   isSubmitting = false,
   onSubmit,
   onDelete,
@@ -152,12 +198,19 @@ function EventFormModal({
         endAt: event?.endAt ?? null,
         locationName: draft.locationName,
         address: draft.address,
-        latitude: event?.latitude ?? null,
-        longitude: event?.longitude ?? null,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
         eventDetails,
         notes: event?.notes ?? null,
         assignedMemberIds: draft.assignedMemberIds,
         changeHistory: event?.changeHistory ?? [],
+        place: draft.place,
+        linkUrl: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
+          ? draft.linkUrl
+          : null,
+        linkPreview: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
+          ? draft.linkPreview
+          : null,
       });
       setStep(1);
       setError(null);
@@ -207,7 +260,9 @@ function EventFormModal({
               <Select
                 options={eventTypeOptions}
                 value={draft.eventType}
-                onChange={(value) => updateDraft({ eventType: value as EventType })}
+                onChange={(value) =>
+                  updateDraft({ eventType: value as EventType })
+                }
               />
             </div>
             <div className='space-y-1.5'>
@@ -245,13 +300,20 @@ function EventFormModal({
                   value: String(index),
                 }))}
                 value={String(draft.endDayIndex)}
-                onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
+                onChange={(value) =>
+                  updateDraft({ endDayIndex: Number(value) })
+                }
               />
             </div>
             <ModalFooterActions
               leftActions={
                 event &&
-                onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+                onDelete && (
+                  <DeleteIconButton
+                    onClick={() => void handleDelete()}
+                    disabled={isSubmitting}
+                  />
+                )
               }
               rightActions={
                 <>
@@ -277,33 +339,69 @@ function EventFormModal({
                 />
               </div>
             )}
-            <div className='space-y-1.5'>
-              <Label>Location</Label>
-              <Input
-                placeholder='Ichiran Shibuya'
-                value={draft.locationName}
-                onChange={(event) => updateDraft({ locationName: event.target.value })}
-              />
-            </div>
+            <PlaceAutocompleteInput
+              label='Location'
+              quickSearch={{ label: 'Search by title', value: draft.title }}
+              placeholder='Ichiran Shibuya'
+              value={draft.locationName}
+              onChange={(locationName) =>
+                updateDraft({ locationName, ...UNLINKED_PLACE })
+              }
+              bias={placeBias}
+              onSelect={(result: PlaceSelectionResult) =>
+                updateDraft({
+                  title: draft.title.trim() ? draft.title : result.name,
+                  locationName: result.name,
+                  address: result.address,
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                  place: result.place,
+                })
+              }
+            />
             <div className='space-y-1.5'>
               <Label>Address</Label>
               <Input
-                placeholder='Location address (optional)'
+                placeholder='Street address'
                 value={draft.address}
-                onChange={(event) => updateDraft({ address: event.target.value })}
+                onChange={(event) =>
+                  updateDraft({
+                    address: event.target.value,
+                    ...UNLINKED_PLACE,
+                  })
+                }
               />
             </div>
+            {LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) && (
+              <LinkAttachField
+                url={draft.linkUrl}
+                preview={draft.linkPreview}
+                label='Booking, reservation, or website link'
+                addLabel='+ Add booking or website link'
+                placeholder='https://…'
+                onChange={(linkUrl, linkPreview) =>
+                  updateDraft({ linkUrl, linkPreview })
+                }
+                currentTitle={draft.title}
+                onUseTitle={(title) => updateDraft({ title })}
+              />
+            )}
             <div className='space-y-2'>
-              <Label>Assignees</Label>
+              <Label>Attendees</Label>
               {memberOptions.map((member) => (
-                <label key={member.value} className='flex items-center gap-2 text-sm'>
+                <label
+                  key={member.value}
+                  className='flex items-center gap-2 text-sm'
+                >
                   <Checkbox
                     checked={draft.assignedMemberIds.includes(member.value)}
                     onCheckedChange={(checked) =>
                       updateDraft({
                         assignedMemberIds: checked
                           ? [...draft.assignedMemberIds, member.value]
-                          : draft.assignedMemberIds.filter((uid) => uid !== member.value),
+                          : draft.assignedMemberIds.filter(
+                              (uid) => uid !== member.value,
+                            ),
                       })
                     }
                   />
@@ -315,16 +413,31 @@ function EventFormModal({
               leftActions={
                 <>
                   {event && onDelete && (
-                    <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+                    <DeleteIconButton
+                      onClick={() => void handleDelete()}
+                      disabled={isSubmitting}
+                    />
                   )}
-                  <Button type='button' variant='secondary' onClick={() => setStep(1)}>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={() => setStep(1)}
+                  >
                     Back
                   </Button>
                 </>
               }
               rightActions={
-                <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
-                  {isSubmitting ? 'Saving…' : event ? 'Save changes' : 'Add event'}
+                <Button
+                  type='button'
+                  loading={isSubmitting}
+                  onClick={() => void handleSubmit()}
+                >
+                  {isSubmitting
+                    ? 'Saving…'
+                    : event
+                      ? 'Save changes'
+                      : 'Add event'}
                 </Button>
               }
             />

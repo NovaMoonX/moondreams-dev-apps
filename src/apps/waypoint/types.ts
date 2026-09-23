@@ -1,3 +1,6 @@
+import type { LinkPreview } from '@/lib/linkMetadata/types';
+import type { PlaceRef } from '@/lib/places/types';
+
 export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
 export type ExpenseTargetType =
   | 'EVERYONE_CURRENT'
@@ -56,6 +59,9 @@ export interface Stay {
   plannedDepartureAt: number;
   confirmationCode: string | null;
   notes: string | null;
+  place: PlaceRef | null;
+  linkUrl: string | null;
+  linkPreview: LinkPreview | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -147,6 +153,10 @@ export interface TimelineEvent {
   notes: string | null;
   assignedMemberIds: string[];
   changeHistory: EventChangeSnapshot[];
+  place: PlaceRef | null;
+  /** Only meaningful for DINING and ACTIVITY events; other types leave this null. */
+  linkUrl: string | null;
+  linkPreview: LinkPreview | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

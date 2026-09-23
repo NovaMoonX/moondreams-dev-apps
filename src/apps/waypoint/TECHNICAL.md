@@ -132,6 +132,9 @@ interface TimelineEvent {
   notes: string | null;
   assignedMemberIds: string[]; // []
   changeHistory: EventChangeSnapshot[]; // [] — every post-trip-start edit, appended, never overwritten
+  place: PlaceRef | null; // set by a Google Places pick — see "Enrichment: place search and link previews" below
+  linkUrl: string | null; // booking/listing link — DINING and ACTIVITY only; other event types leave this null
+  linkPreview: LinkPreview | null; // scraped from linkUrl by the fetchLinkMetadata cloud function
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -264,11 +267,47 @@ interface Stay {
   plannedDepartureAt: number; // defaults to checkOutAt at creation
   confirmationCode: string | null;
   notes: string | null;
+  place: PlaceRef | null;
+  linkUrl: string | null; // e.g. an Airbnb/Booking.com listing link
+  linkPreview: LinkPreview | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
 }
 ```
+
+#### Enrichment: place search and link previews
+
+Both `TimelineEvent` and `Stay` carry the same three enrichment fields:
+
+```typescript
+interface PlaceRef {
+  placeId: string; // the only field Google's terms allow storing indefinitely
+  mapsUrl: string;
+  primaryType: string | null;
+  photoUrl: string | null; // reserved for a future Places Photo lookup; currently always null
+  photoRefreshedAt: number | null;
+}
+
+interface LinkPreview {
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  siteName: string | null;
+  fetchedAt: number;
+}
+```
+
+**Cost discipline — fetch once, store.** A Places pick costs one Details (Essentials-tier)
+call; typing itself is free because a session token ties the keystrokes to that call.
+Picked places carry no photo: the Places Photo SKU is billed separately, and Google Maps
+pages only expose a place photo to allowlisted crawlers, so covers come from attached links'
+previews. Once stored, rendering never calls Google or the function again; a broken image
+just hides itself. These are app-agnostic, so other mini-apps can reuse them: the
+Places client lives at `src/lib/places/placesApi.ts`, the link-metadata client and the
+image component at `src/lib/linkMetadata/fetchLinkMetadata.ts` and
+`src/components/EnrichedImage.tsx`, and the Cloud Function at
+`functions/src/linkMetadata/fetchLinkMetadata.ts`.
 
 **On keeping these as timestamps, not strings:** the skill's Data Schema rule is explicit and repeated three times — "no excuse for a TDD to introduce a `string` date field." I kept `checkInAt`/`checkOutAt` as `number` rather than following the string suggestion, but added `checkInTimezone` to solve the actual underlying concern: a hotel's "3pm check-in" means 3pm *local to the property*, and a raw millisecond timestamp alone doesn't carry that — the timezone field is what lets it render correctly as local time without abandoning the convention. This is the "date + timezone" option floated as an alternative, applied without the string-typing part. Flagging this as a real judgment call rather than silently picking a side — happy to revisit if the intent was specifically to break from the timestamp convention here.
 

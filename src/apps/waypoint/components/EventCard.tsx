@@ -2,7 +2,10 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import EnrichedImage from '@/components/EnrichedImage';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatTime } from '@/utils/formatUtils';
+import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
 import {
   EVENT_TYPE_BADGE_CLASSES,
@@ -13,11 +16,13 @@ import {
 interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
+  showCover: boolean;
   onEdit: (event: TimelineEvent) => void;
 }
 
-export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
+export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps) {
   const details = event.eventDetails;
+  const imageUrl = showCover ? getDisplayImage(event) : null;
   const quickField =
     event.eventType === 'TRAVEL' && details && 'transitType' in details
       ? details.transitType
@@ -28,9 +33,16 @@ export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
           : null;
 
   return (
-    <article className='border-border bg-card rounded-lg border p-4'>
-      <div className='flex items-start justify-between gap-3'>
-        <div>
+    <article className='border-border bg-card overflow-hidden rounded-lg border'>
+      {imageUrl && (
+        <EnrichedImage
+          src={imageUrl}
+          alt=''
+          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+        />
+      )}
+      <div className='flex items-start justify-between gap-3 p-4'>
+        <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>
             <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
               {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
@@ -49,6 +61,11 @@ export function EventCard({ event, canEdit, onEdit }: EventCardProps) {
               {event.locationName}
               {event.address ? ` · ${event.address}` : ''}
             </p>
+          )}
+          {event.linkUrl && (
+            <div className='mt-1'>
+              <ExternalLinkText href={event.linkUrl} />
+            </div>
           )}
           <ChangeBadge changeHistory={event.changeHistory} />
         </div>

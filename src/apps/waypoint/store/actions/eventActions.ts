@@ -95,6 +95,8 @@ export const createEvent = createAsyncThunk<
     title: event.title.trim(),
     locationName: event.locationName?.trim() || null,
     address: event.address?.trim() || null,
+    linkUrl: event.linkUrl?.trim() || null,
+    linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
     notes: null,
     changeHistory: [],
     createdBy: uid,
@@ -132,6 +134,8 @@ export const updateEvent = createAsyncThunk<
       title: event.title.trim(),
       locationName: event.locationName?.trim() || null,
       address: event.address?.trim() || null,
+      linkUrl: event.linkUrl?.trim() || null,
+      linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
       changeHistory: newSnapshot
         ? [...(previousEvent.changeHistory ?? []), newSnapshot]
         : (previousEvent.changeHistory ?? []),

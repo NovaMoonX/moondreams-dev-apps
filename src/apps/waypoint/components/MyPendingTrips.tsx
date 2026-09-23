@@ -1,14 +1,14 @@
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useQueries } from '@tanstack/react-query';
 
-import { db } from '@/lib/firebase/config';
 import { useAppDispatch } from '@/store';
 import { formatDateTime, getErrorMessage } from '@/utils';
 import type { TripJoinRequest } from '@apps/waypoint/types';
 import { cancelJoinRequest } from '@apps/waypoint/store/actions/membershipActions';
+import { tripTitleQueryOptions } from '@apps/waypoint/queries/tripTitleQueries';
 
 interface MyPendingTripsProps {
   requests: TripJoinRequest[];
@@ -19,45 +19,13 @@ function MyPendingTrips({ requests, loading }: MyPendingTripsProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
-  const [tripTitles, setTripTitles] = useState<Record<string, string>>({});
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
-  const requestKey = requests.map((request) => request.tripId).join(',');
-
-  useEffect(() => {
-    if (requests.length === 0) {
-      return;
-    }
-
-    let isActive = true;
-
-    Promise.all(
-      requests.map(async (request) => {
-        const snapshot = await getDocs(
-          query(
-            collection(db, 'apps', 'waypoint', 'inviteCodes'),
-            where('tripId', '==', request.tripId),
-          ),
-        );
-        const title = snapshot.docs[0]?.data().title;
-
-        return [
-          request.tripId,
-          typeof title === 'string' ? title : `Trip ${request.tripId}`,
-        ] as const;
-      }),
-    )
-      .then((entries) => {
-        if (isActive) {
-          setTripTitles(Object.fromEntries(entries));
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      isActive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- requestKey is the request content signal
-  }, [requestKey]);
+  const titleQueries = useQueries({
+    queries: requests.map((request) => tripTitleQueryOptions(request.tripId)),
+  });
+  const tripTitles = Object.fromEntries(
+    requests.map((request, index) => [request.tripId, titleQueries[index]?.data ?? null]),
+  );
 
   const handleCancel = async (request: TripJoinRequest) => {
     const confirmed = await confirm({

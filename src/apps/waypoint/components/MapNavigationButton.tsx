@@ -17,12 +17,15 @@ export function MapNavigationButton({
   const canNavigate =
     Boolean(locationName || address) || (latitude !== null && longitude !== null);
 
+  if (!canNavigate) {
+    return null;
+  }
+
   return (
     <Button
       type='button'
       size='sm'
       variant='secondary'
-      disabled={!canNavigate}
       onClick={() => openMapNavigation({ locationName, address, latitude, longitude })}
     >
       Navigate

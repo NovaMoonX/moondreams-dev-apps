@@ -31,8 +31,7 @@ npm run build
 Create a `.env.local` at the repo root (gitignored) with:
 
 ```bash
-# Firebase project config — Firebase Console > Project Settings > General > Your apps.
-# Safe to commit-adjacent-share: this is the public web config, not a secret.
+# Firebase web config — Firebase Console > Project Settings > General > Your apps. Public by design.
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_DATABASE_URL=
@@ -41,27 +40,37 @@ VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 
-# Cloud Messaging Web Push certificate key — Firebase Console > Project Settings >
-# Cloud Messaging > Web configuration. Only needed to test push notifications locally.
+# Web Push key — Firebase Console > Project Settings > Cloud Messaging. Only for testing push locally.
 VITE_FIREBASE_VAPID_KEY=
 
-# App Check, required for Nine Lives' AI document ingestion (Firebase AI Logic enforces it).
-# Production: a reCAPTCHA v3 site key — Firebase Console > App Check > Apps > reCAPTCHA v3.
+# Places API (New) key for place search; search is hidden when unset. See "Google API keys" below.
+VITE_GOOGLE_PLACES_API_KEY=
+
+# App Check (required by Nine Lives' AI ingestion). Prod: reCAPTCHA v3 site key (Firebase Console > App Check).
 VITE_FIREBASE_APPCHECK_SITE_KEY=
-# Local/emulator dev: any fixed UUID, shared by the whole team and registered once in
-# Firebase Console > App Check > Apps > Manage debug tokens. Ask a teammate for the current
-# value rather than generating your own — a second registered token works too, but then
-# everyone's re-registering their own separately for no benefit.
+# Local: the team's shared debug-token UUID (registered under App Check > Manage debug tokens) — ask a teammate.
 VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=
 
-# Optional: overrides the Gemini model Nine Lives' document ingestion calls. Defaults to
-# gemini-2.5-flash-lite when unset.
+# Optional Gemini model override for Nine Lives ingestion (default gemini-2.5-flash-lite).
 VITE_FIREBASE_AI_MODEL=
 
-# true to point the app at the local Firebase Emulator Suite (see SEEDING.md) instead of
-# the live project. Leave unset/false to hit real Firebase.
+# true to use the local Firebase Emulator Suite (see SEEDING.md).
 VITE_USE_FIREBASE_EMULATORS=
 ```
+
+#### Google API keys
+
+- **Firebase web key / App Check:** no key restrictions needed — access is enforced by Security Rules and App Check.
+- **Places (`VITE_GOOGLE_PLACES_API_KEY`):** called straight from the browser, so the key is public; lock it down in Google Cloud Console > APIs & Services > Credentials. Use two keys:
+  - **Production** (GitHub secret `VITE_GOOGLE_PLACES_API_KEY`): API restriction = Places API (New) only; website restrictions:
+    ```text
+    https://apps.moondreams.dev/*
+    https://moondreams-dev-apps.web.app/*
+    https://moondreams-dev-apps.firebaseapp.com/*
+    ```
+  - **Local** (`.env.local`): Places API (New) only; website restriction `http://localhost:5173/*` (add `http://127.0.0.1:5173/*` if you open the app that way).
+  - Set a daily quota on Places API (New) and a billing budget alert.
+- Referrer patterns are literal prefixes: they need the trailing `/*` and don't accept regex, port wildcards (`:*`), or partial-label wildcards (`moondreams-dev-apps*.web.app`). The only way to cover PR preview channels (`moondreams-dev-apps--pr…web.app`) is `https://*.web.app/*`, which admits every Firebase site, so previews are left without place search. (The regex `cors` list in `functions/` is a different mechanism and is fine as-is.)
 
 > [!IMPORTANT]
 > This list must stay in sync with what the code actually reads. Whenever you add, rename, or

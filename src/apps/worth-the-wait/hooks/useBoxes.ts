@@ -3,7 +3,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
   onSnapshot,
   setDoc,
   updateDoc,
@@ -12,23 +11,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   encryptStringForSpace,
-  normalizeSpaceEncryption,
-  type SpaceEncryption,
 } from '../security';
+import { getSpaceEncryption } from '../queries/spaceEncryptionQueries';
 
 import type { Box, BoxDraft } from '../types';
 import { getDefaultBoxes, normalizeBox, BOX_DESCRIPTION_MAX_LENGTH } from '../utils/boxHelpers';
 
 const limitDescription = (description: string) => description.trim();
-
-async function getSpaceEncryption(
-  spaceId: string,
-): Promise<SpaceEncryption | null> {
-  const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
-  const spaceSnapshot = await getDoc(spaceRef);
-
-  return normalizeSpaceEncryption(spaceSnapshot.data()?.encryption ?? null);
-}
 
 export function useBoxes(spaceId: string, userUid?: string) {
   const [boxes, setBoxes] = useState<Box[]>([]);

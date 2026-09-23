@@ -1154,6 +1154,11 @@ Export the itinerary as a downloadable `.ics` file.
 
 ### Issue 34: Google Maps Link Parser & Metadata
 
+> **Status:** shipped ahead of the Idea Board (Issue 23), scoped to Places (New) type-ahead
+> search on `EventFormModal`/`StayFormModal` instead of a pasted-link parser — see
+> "Enrichment: place search and link previews" in TECHNICAL.md. Revisit for `IdeaFormModal`
+> once Issue 23 lands.
+
 **Prerequisites:** Issue 23
 
 **Target PR Size:** ~350 lines
@@ -1173,6 +1178,11 @@ Paste a Google Maps link into an idea and auto-extract place name/photo/address.
 ---
 
 ### Issue 35: General Booking Link Metadata
+
+> **Status:** shipped ahead of the Idea Board (Issue 25), scoped to `TimelineEvent`
+> (DINING/ACTIVITY) and `Stay` via `fetchLinkMetadata` instead of `IdeaCard` — see
+> "Enrichment: place search and link previews" in TECHNICAL.md. Revisit for `IdeaCard`
+> once Issue 25 lands.
 
 **Prerequisites:** Issue 25
 

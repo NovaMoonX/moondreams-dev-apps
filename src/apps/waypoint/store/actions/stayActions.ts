@@ -62,6 +62,8 @@ export const createStay = createAsyncThunk<
     plannedDepartureAt: stay.plannedDepartureAt,
     confirmationCode: stay.confirmationCode?.trim() || null,
     notes: stay.notes?.trim() || null,
+    linkUrl: stay.linkUrl?.trim() || null,
+    linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -111,6 +113,8 @@ export const updateStay = createAsyncThunk<
     checkInTimezone: stay.checkInTimezone?.trim() || null,
     confirmationCode: stay.confirmationCode?.trim() || null,
     notes: stay.notes?.trim() || null,
+    linkUrl: stay.linkUrl?.trim() || null,
+    linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
   };
   await setDoc(stayRef, { ...currentStay, lastEditedAt: Date.now() }, { merge: true });
   return stay;

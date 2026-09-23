@@ -8,6 +8,9 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import LinkAttachField from '@/components/forms/LinkAttachField';
+import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
+import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -17,6 +20,9 @@ import {
 import { getErrorMessage } from '@/utils/errorUtils';
 import { getTimezoneOptions } from '@/utils/timezoneUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
+import type { LinkPreview } from '@/lib/linkMetadata/types';
+import type { PlaceRef } from '@/lib/places/types';
+import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 
 type StayValues = Omit<
   Stay,
@@ -27,6 +33,7 @@ interface StayFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   stay?: Stay;
+  placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
   onSubmit: (stay: StayValues) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
@@ -36,6 +43,13 @@ interface StayFormModalProps {
 interface StayDraft {
   name: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
+  place: PlaceRef | null;
+  linkUrl: string;
+  linkPreview: LinkPreview | null;
+  confirmationCode: string;
+  notes: string;
   checkInDate: string;
   checkInTime: string;
   checkOutDate: string;
@@ -51,6 +65,13 @@ function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
   return {
     name: stay?.name ?? '',
     address: stay?.address ?? '',
+    latitude: stay?.latitude ?? null,
+    longitude: stay?.longitude ?? null,
+    place: stay?.place ?? null,
+    linkUrl: stay?.linkUrl ?? '',
+    linkPreview: stay?.linkPreview ?? null,
+    confirmationCode: stay?.confirmationCode ?? '',
+    notes: stay?.notes ?? '',
     checkInDate: toLocalDateInputValue(stay?.checkInAt ?? trip.startDate),
     checkInTime: stay ? new Date(stay.checkInAt).toTimeString().slice(0, 5) : '15:00',
     checkOutDate: toLocalDateInputValue(stay?.checkOutAt ?? trip.endDate),
@@ -67,6 +88,7 @@ export function StayFormModal({
   isOpen,
   trip,
   stay,
+  placeBias,
   isSubmitting = false,
   onSubmit,
   onDelete,
@@ -135,15 +157,18 @@ export function StayFormModal({
       await onSubmit({
         name: draft.name,
         address: draft.address,
-        latitude: null,
-        longitude: null,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
         checkInAt,
         checkOutAt,
         checkInTimezone: draft.checkInTimezone,
         plannedArrivalAt: draftPlannedArrivalAt,
         plannedDepartureAt: draftPlannedDepartureAt,
-        confirmationCode: null,
-        notes: null,
+        confirmationCode: draft.confirmationCode,
+        notes: draft.notes,
+        place: draft.place,
+        linkUrl: draft.linkUrl,
+        linkPreview: draft.linkPreview,
       });
       setError(null);
     } catch (submitError) {
@@ -154,22 +179,40 @@ export function StayFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-4'>
-        <div className='space-y-1.5'>
-          <Label>Stay name</Label>
-          <Input
-            value={draft.name}
-            placeholder='Shibuya Sky Hotel'
-            onChange={(event) => updateDraft({ name: event.target.value })}
-          />
-        </div>
+        <PlaceAutocompleteInput
+          label='Stay name'
+          placeholder='Shibuya Sky Hotel'
+          value={draft.name}
+          onChange={(name) => updateDraft({ name, ...UNLINKED_PLACE })}
+          bias={placeBias}
+          onSelect={(result: PlaceSelectionResult) =>
+            updateDraft({
+              name: result.name,
+              address: result.address,
+              latitude: result.latitude,
+              longitude: result.longitude,
+              place: result.place,
+            })
+          }
+        />
         <div className='space-y-1.5'>
           <Label>Address</Label>
           <Input
             value={draft.address}
             placeholder='Address'
-            onChange={(event) => updateDraft({ address: event.target.value })}
+            onChange={(event) => updateDraft({ address: event.target.value, ...UNLINKED_PLACE })}
           />
         </div>
+        <LinkAttachField
+          url={draft.linkUrl}
+          preview={draft.linkPreview}
+          label='Listing or website link'
+          addLabel='+ Add listing or website link'
+          placeholder='https://www.airbnb.com/rooms/… or the property website'
+          onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+          currentTitle={draft.name}
+          onUseTitle={(title) => updateDraft({ name: title })}
+        />
         <div className='grid gap-3 sm:grid-cols-2'>
           <div className='space-y-1.5'>
             <Label>Check-in</Label>

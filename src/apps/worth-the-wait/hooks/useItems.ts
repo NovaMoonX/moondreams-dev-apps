@@ -4,7 +4,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
   onSnapshot,
   setDoc,
   updateDoc,
@@ -13,20 +12,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   encryptStringForSpace,
-  normalizeSpaceEncryption,
-  type SpaceEncryption,
 } from '../security';
+import { getSpaceEncryption } from '../queries/spaceEncryptionQueries';
 import type { Item, ItemDraft } from '../types';
 import { normalizeItem } from '../utils/itemHelpers';
-
-async function getSpaceEncryption(
-  spaceId: string,
-): Promise<SpaceEncryption | null> {
-  const spaceRef = doc(db, 'apps', 'worth-the-wait', 'spaces', spaceId);
-  const snapshot = await getDoc(spaceRef);
-
-  return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
-}
 
 function createSpaceBoxIdsKey(spaceId: string, boxIds: string[]) {
   return `${spaceId}-${boxIds.join(',')}`;

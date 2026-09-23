@@ -178,6 +178,29 @@ regularly gets the shape right but the UX wrong:
   leaf component becomes a pure `useAppSelector` reader with no listener of
   its own — grep the diff for `onSnapshot(` outside `store/listeners/` to
   catch this.
+- **Every request/response call goes through TanStack Query.** This covers
+  third-party APIs, callables, and one-off `getDoc`/`getDocs` reads that
+  aren't live. Grep the diff for `fetch(`, `httpsCallable(` and
+  `getDoc`/`getDocs` outside `store/actions/` and `store/listeners/`. Any
+  hit that feeds UI through `useEffect` + `useState`, or that repeats the
+  same call with the same params, should become a `queryOptions` factory
+  in `src/lib/<feature>/<feature>Queries.ts` (shared) or
+  `src/apps/<app>/queries/<resource>Queries.ts` (never a bare `queries.ts`),
+  read with `useQuery`/`useQueries`, or called via
+  `queryClient.fetchQuery(...)` when imperative. Check that each key
+  includes every param that changes the result and nothing that doesn't
+  (e.g. a Places session token), and that `staleTime` fits how often the
+  data really changes. Writes and non-idempotent calls stay as they are.
+- **Every `useAppSelector` whose selector builds a new array or object
+  (`.filter`, `.map`, a spread, an object literal, a `[]` fallback) must
+  pass `shallowEqual` from `react-redux` as the second argument** — e.g.
+  `useAppSelector(selectStaysForDay(i), shallowEqual)` — or come from a
+  `createSelector`-memoized selector. Otherwise React Redux logs "Selector
+  unknown returned a different result when called with the same
+  parameters" and the component re-renders on every store change. Grep
+  the diff for `useAppSelector(` and open each selector it calls; one that
+  just returns a slice field or an existing item (`.find(...) ?? null`) is
+  fine as-is.
 - **A pending-request/invite feature that ships approve/decline but not a
   requester-side cancel/withdraw action is incomplete**, even if the
   original issue didn't call it out — `.github/copilot-instructions.md`'s

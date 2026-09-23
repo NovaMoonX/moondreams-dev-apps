@@ -6,11 +6,12 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import StayCard from '@apps/waypoint/components/StayCard';
 import StayFormModal from '@apps/waypoint/components/StayFormModal';
 import { createStay, deleteStay, updateStay } from '@apps/waypoint/store/actions/stayActions';
-import { selectStays } from '@apps/waypoint/store/selectors';
+import { selectStays, selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
 import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 
 interface StaysSectionProps {
   trip: TripSpace;
@@ -30,6 +31,8 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
   const canEditExisting = canEditExistingItem(trip, currentUserId);
   const { confirm } = useActionModal();
   const { addToast } = useToast();
+  const events = useAppSelector(selectTimelineEvents);
+  const placeBias = getPlaceBiasFromItems([...stays, ...events]);
 
   const handleSubmit = async (stay: StayValues) => {
     setIsSubmitting(true);
@@ -102,6 +105,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
         isOpen={isModalOpen}
         trip={trip}
         stay={editingStay}
+        placeBias={placeBias}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
         onDelete={editingStay ? () => handleDelete(editingStay) : undefined}
