@@ -31,7 +31,7 @@ import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
-import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
+import { selectActiveStaysForDay, selectStays } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
 interface TimelineSectionProps {
@@ -65,7 +65,8 @@ export function TimelineSection({
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
-  const placeBias = getPlaceBiasFromItems(events);
+  const stays = useAppSelector(selectStays);
+  const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
       return null;

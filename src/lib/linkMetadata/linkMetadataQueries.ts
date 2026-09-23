@@ -1,5 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 
+import { DAY_MS } from '@/lib/query/queryClient';
+
 import { fetchLinkMetadata } from './fetchLinkMetadata';
 
 export const linkMetadataQueryKeys = {
@@ -11,7 +13,8 @@ export function linkMetadataQueryOptions(url: string) {
   return queryOptions({
     queryKey: linkMetadataQueryKeys.byUrl(url),
     queryFn: () => fetchLinkMetadata(url),
-    staleTime: 60 * 60 * 1000,
+    staleTime: DAY_MS,
+    gcTime: DAY_MS,
     retry: false,
   });
 }
