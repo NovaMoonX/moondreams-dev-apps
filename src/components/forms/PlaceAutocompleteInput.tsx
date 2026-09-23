@@ -12,7 +12,11 @@ import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 3;
 
-interface PlaceSearchInputProps {
+interface PlaceAutocompleteInputProps {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
   bias?: PlaceSelectionBias;
   onSelect: (result: PlaceSelectionResult) => void;
   /** Fires once, after `onSelect`, when the free photo scrape of the place's Maps
@@ -22,34 +26,41 @@ interface PlaceSearchInputProps {
 }
 
 /**
- * Google Places (New) type-ahead. Typing is free — a session token ties the
- * keystrokes to the Details call that follows a pick, so they aren't billed on
- * their own. Hidden entirely when no API key is configured, so the surrounding
- * form still works without one.
+ * A name/location text field that also offers Google Places (New) suggestions as you type.
+ * Typing is free — a session token ties the keystrokes to the Details call that follows a
+ * pick. Without an API key it degrades to a plain input.
  */
-function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputProps) {
+function PlaceAutocompleteInput({
+  label,
+  placeholder,
+  value,
+  onChange,
+  bias,
+  onSelect,
+  onPhotoResolved,
+}: PlaceAutocompleteInputProps) {
   const queryClient = useQueryClient();
-  const [query, setQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [selectError, setSelectError] = useState<string | null>(null);
   const [sessionToken, setSessionToken] = useState(createSessionToken);
   const containerRef = useRef<HTMLDivElement>(null);
-  const debouncedQuery = useDebouncedValue(query.trim(), DEBOUNCE_MS);
+  const trimmedValue = value.trim();
+  const debouncedValue = useDebouncedValue(trimmedValue, DEBOUNCE_MS);
+  const isSearchEnabled = isPlacesSearchAvailable();
 
   const suggestionsQuery = useQuery({
-    ...placeAutocompleteQueryOptions(debouncedQuery, sessionToken, bias),
+    ...placeAutocompleteQueryOptions(debouncedValue, sessionToken, bias),
     enabled:
-      isPlacesSearchAvailable() &&
+      isSearchEnabled &&
       isTyping &&
-      debouncedQuery === query.trim() &&
-      debouncedQuery.length >= MIN_QUERY_LENGTH,
+      debouncedValue === trimmedValue &&
+      debouncedValue.length >= MIN_QUERY_LENGTH,
     placeholderData: keepPreviousData,
   });
-  const suggestions = isTyping && query.trim().length >= MIN_QUERY_LENGTH
-    ? (suggestionsQuery.data ?? [])
-    : [];
+  const suggestions =
+    isTyping && trimmedValue.length >= MIN_QUERY_LENGTH ? (suggestionsQuery.data ?? []) : [];
   const isSearching = suggestionsQuery.isFetching && suggestions.length === 0;
 
   useEffect(() => {
@@ -62,14 +73,9 @@ function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputP
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (!isPlacesSearchAvailable()) {
-    return null;
-  }
-
   const handleSelect = async (suggestion: PlaceSuggestion) => {
     setIsOpen(false);
     setIsTyping(false);
-    setQuery(suggestion.primaryText);
     setIsResolving(true);
     setSelectError(null);
     try {
@@ -103,17 +109,18 @@ function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputP
     }
   };
 
-  const error = selectError ?? (suggestionsQuery.isError ? 'Search failed. Try again.' : null);
+  const error = selectError ?? (suggestionsQuery.isError ? 'Place search failed.' : null);
 
   return (
     <div ref={containerRef} className='relative space-y-1.5'>
-      <Label>Search for a place</Label>
+      <Label>{label}</Label>
       <Input
-        placeholder='Search by name or address'
-        value={query}
+        placeholder={placeholder}
+        value={value}
         disabled={isResolving}
+        autoComplete='off'
         onChange={(event) => {
-          setQuery(event.target.value);
+          onChange(event.target.value);
           setIsTyping(true);
           setIsOpen(true);
           setSelectError(null);
@@ -155,4 +162,4 @@ function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputP
   );
 }
 
-export default PlaceSearchInput;
+export default PlaceAutocompleteInput;

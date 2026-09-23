@@ -9,7 +9,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
-import PlaceSearchInput from '@/components/forms/PlaceSearchInput';
+import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -178,11 +178,15 @@ export function StayFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-4'>
-        <PlaceSearchInput
+        <PlaceAutocompleteInput
+          label='Stay name'
+          placeholder='Shibuya Sky Hotel'
+          value={draft.name}
+          onChange={(name) => updateDraft({ name })}
           bias={placeBias}
           onSelect={(result: PlaceSelectionResult) =>
             updateDraft({
-              name: draft.name.trim() ? draft.name : result.name,
+              name: result.name,
               address: result.address,
               latitude: result.latitude,
               longitude: result.longitude,
@@ -197,14 +201,6 @@ export function StayFormModal({
             )
           }
         />
-        <div className='space-y-1.5'>
-          <Label>Stay name</Label>
-          <Input
-            value={draft.name}
-            placeholder='Shibuya Sky Hotel'
-            onChange={(event) => updateDraft({ name: event.target.value })}
-          />
-        </div>
         <div className='space-y-1.5'>
           <Label>Address</Label>
           <Input
@@ -226,7 +222,7 @@ export function StayFormModal({
         <LinkAttachField
           url={draft.linkUrl}
           preview={draft.linkPreview}
-          label='Listing or website link (optional)'
+          label='Listing or website link'
           placeholder='https://www.airbnb.com/rooms/… or the property website'
           onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
           currentTitle={draft.name}

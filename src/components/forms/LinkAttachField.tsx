@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,39 +21,52 @@ interface LinkAttachFieldProps {
   placeholder?: string;
 }
 
+const AUTO_FETCH_DELAY_MS = 800;
+
 function isValidHttpUrl(value: string) {
   try {
     const parsed = new URL(value);
-    return ['http:', 'https:'].includes(parsed.protocol);
+    return ['http:', 'https:'].includes(parsed.protocol) && /\.[a-z]{2,}$/i.test(parsed.hostname);
   } catch {
     return false;
   }
 }
 
-/** An app-agnostic URL field with an on-demand preview fetch. Fetched once when
- * the user attaches or changes the link, never on render. */
+/** An app-agnostic URL field that fetches a preview on its own once the text is a valid
+ * link — after a typing pause, on paste, or on blur. Never refetched on render. */
 function LinkAttachField({
   url,
   preview,
   onChange,
   onUseTitle,
   currentTitle,
-  label = 'Link (optional)',
+  label = 'Link',
   placeholder = 'https://…',
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const latestDraftRef = useRef(url.trim());
+  const autoFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const justPastedRef = useRef(false);
 
-  const runFetch = async (value: string) => {
+  useEffect(() => () => clearTimeout(autoFetchTimeoutRef.current), []);
+
+  // `commit` = the user is done with the field (paste/blur): keep the link even if no
+  // preview loads. A typing-pause fetch that fails may just be a half-typed URL, so it
+  // doesn't attach anything.
+  const runFetch = async (value: string, commit: boolean) => {
+    clearTimeout(autoFetchTimeoutRef.current);
     const trimmed = value.trim();
     if (!trimmed) {
-      onChange('', null);
+      setError(null);
       return;
     }
     if (!isValidHttpUrl(trimmed)) {
-      setError('Enter a valid http/https link.');
+      if (commit) {
+        setError('Enter a valid http/https link.');
+      }
       return;
     }
 
@@ -61,6 +74,9 @@ function LinkAttachField({
     setIsFetching(true);
     try {
       const result = await queryClient.fetchQuery(linkMetadataQueryOptions(trimmed));
+      if (latestDraftRef.current !== trimmed) {
+        return;
+      }
       onChange(trimmed, {
         title: result.title,
         description: result.description,
@@ -69,16 +85,40 @@ function LinkAttachField({
         fetchedAt: result.fetchedAt,
       });
     } catch (fetchError) {
-      // The link is still worth keeping even without a preview.
-      onChange(trimmed, null);
-      setError(getErrorMessage(fetchError, "Couldn't load a preview — link saved anyway."));
+      if (latestDraftRef.current !== trimmed) {
+        return;
+      }
+      if (commit) {
+        onChange(trimmed, null);
+        setError(getErrorMessage(fetchError, "Couldn't load a preview — link saved anyway."));
+      } else {
+        setError("Couldn't load a preview yet — keep typing, or leave the field to save the link.");
+      }
     } finally {
       setIsFetching(false);
     }
   };
 
+  const handleDraftChange = (value: string) => {
+    setDraftUrl(value);
+    latestDraftRef.current = value.trim();
+    setError(null);
+    clearTimeout(autoFetchTimeoutRef.current);
+    if (justPastedRef.current) {
+      justPastedRef.current = false;
+      void runFetch(value, true);
+      return;
+    }
+    if (isValidHttpUrl(value.trim())) {
+      autoFetchTimeoutRef.current = setTimeout(() => {
+        void runFetch(value, false);
+      }, AUTO_FETCH_DELAY_MS);
+    }
+  };
+
   const clearLink = () => {
     setDraftUrl('');
+    latestDraftRef.current = '';
     setError(null);
     onChange('', null);
   };
@@ -132,33 +172,21 @@ function LinkAttachField({
           </Button>
         </div>
       ) : (
-        <div className='flex gap-2'>
-          <div className='flex-1'>
-            <Input
-              type='url'
-              placeholder={placeholder}
-              value={draftUrl}
-              disabled={isFetching}
-              onChange={(event) => setDraftUrl(event.target.value)}
-              onBlur={() => {
-                if (draftUrl.trim()) {
-                  void runFetch(draftUrl);
-                }
-              }}
-            />
-          </div>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            loading={isFetching}
-            disabled={isFetching || !draftUrl.trim()}
-            onClick={() => void runFetch(draftUrl)}
-          >
-            Fetch preview
-          </Button>
-        </div>
+        <Input
+          type='url'
+          placeholder={placeholder}
+          value={draftUrl}
+          onChange={(event) => handleDraftChange(event.target.value)}
+          onPaste={() => {
+            justPastedRef.current = true;
+          }}
+          onBlur={() => {
+            justPastedRef.current = false;
+            void runFetch(draftUrl, true);
+          }}
+        />
       )}
+      {isFetching && <p className='text-muted-foreground text-xs'>Fetching preview…</p>}
       {error && <p className='text-muted-foreground text-xs'>{error}</p>}
     </div>
   );

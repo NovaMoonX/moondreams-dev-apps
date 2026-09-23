@@ -16,7 +16,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import LinkAttachField from '@/components/forms/LinkAttachField';
-import PlaceSearchInput from '@/components/forms/PlaceSearchInput';
+import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type {
@@ -305,7 +305,11 @@ function EventFormModal({
                 />
               </div>
             )}
-            <PlaceSearchInput
+            <PlaceAutocompleteInput
+              label='Location'
+              placeholder='Ichiran Shibuya'
+              value={draft.locationName}
+              onChange={(locationName) => updateDraft({ locationName })}
               bias={placeBias}
               onSelect={(result: PlaceSelectionResult) =>
                 updateDraft({
@@ -326,17 +330,9 @@ function EventFormModal({
               }
             />
             <div className='space-y-1.5'>
-              <Label>Location</Label>
-              <Input
-                placeholder='Ichiran Shibuya'
-                value={draft.locationName}
-                onChange={(event) => updateDraft({ locationName: event.target.value })}
-              />
-            </div>
-            <div className='space-y-1.5'>
               <Label>Address</Label>
               <Input
-                placeholder='Location address (optional)'
+                placeholder='Street address'
                 value={draft.address}
                 onChange={(event) => updateDraft({ address: event.target.value })}
               />
@@ -357,7 +353,7 @@ function EventFormModal({
               <LinkAttachField
                 url={draft.linkUrl}
                 preview={draft.linkPreview}
-                label='Booking, reservation, or website link (optional)'
+                label='Booking, reservation, or website link'
                 placeholder='https://…'
                 onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
                 currentTitle={draft.title}
