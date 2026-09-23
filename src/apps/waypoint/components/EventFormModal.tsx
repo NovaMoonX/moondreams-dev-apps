@@ -36,6 +36,7 @@ import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
   DEFAULT_REMINDER_MINUTES_BEFORE,
+  EVENT_ATTENDEE_TARGET_LABELS,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
@@ -44,6 +45,7 @@ import {
 } from '@apps/waypoint/constants';
 import type {
   ActivitySetting,
+  EventAttendeeTargetType,
   EventDetails,
   EventType,
   MealType,
@@ -87,6 +89,7 @@ const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(
 const transitTypeOptions = toSelectOptions(TRANSIT_TYPE_LABELS);
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
 const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
+const attendeeTargetOptions = toSelectOptions(EVENT_ATTENDEE_TARGET_LABELS);
 const reminderOptions = [
   { value: 'off', text: "Don't remind me" },
   ...REMINDER_MINUTES_BEFORE_OPTIONS.map((minutes) => ({
@@ -111,7 +114,11 @@ interface EventDraft {
   place: PlaceRef | null;
   linkUrl: string;
   linkPreview: LinkPreview | null;
+  attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
+  hasVenueHours: boolean;
+  venueOpenTime: string;
+  venueCloseTime: string;
   reminderMinutesBefore: number;
   reminderEnabled: boolean;
 }
@@ -153,7 +160,11 @@ function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
     place: event?.place ?? null,
     linkUrl: event?.linkUrl ?? '',
     linkPreview: event?.linkPreview ?? null,
+    attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
+    hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
+    venueOpenTime: event?.venueOpenTime ?? '',
+    venueCloseTime: event?.venueCloseTime ?? '',
     reminderMinutesBefore:
       event?.reminderMinutesBefore ?? DEFAULT_REMINDER_MINUTES_BEFORE,
     reminderEnabled: event?.reminderEnabled ?? true,
@@ -223,6 +234,13 @@ function EventFormModal({
       eventDetails = {};
     }
 
+    const assignedMemberIds =
+      draft.attendeeTargetType === 'SPECIFIC_MEMBERS'
+        ? draft.assignedMemberIds
+        : draft.attendeeTargetType === 'EVERYONE_CURRENT'
+          ? memberOptions.map((member) => member.value)
+          : [];
+
     try {
       await onSubmit({
         eventType: draft.eventType,
@@ -239,7 +257,10 @@ function EventFormModal({
         longitude: draft.longitude,
         eventDetails,
         notes: event?.notes ?? null,
-        assignedMemberIds: draft.assignedMemberIds,
+        attendeeTargetType: draft.attendeeTargetType,
+        assignedMemberIds,
+        venueOpenTime: draft.hasVenueHours ? draft.venueOpenTime || null : null,
+        venueCloseTime: draft.hasVenueHours ? draft.venueCloseTime || null : null,
         changeHistory: event?.changeHistory ?? [],
         place: draft.place,
         linkUrl: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
@@ -490,29 +511,86 @@ function EventFormModal({
                 </p>
               )}
             </div>
-            <div className='space-y-2'>
-              <Label>Attendees</Label>
-              {memberOptions.map((member) => (
-                <label
-                  key={member.value}
-                  className='flex items-center gap-2 text-sm'
-                >
-                  <Checkbox
-                    checked={draft.assignedMemberIds.includes(member.value)}
-                    onCheckedChange={(checked) =>
+            {draft.hasVenueHours ? (
+              <div className='space-y-1.5'>
+                <div className='flex items-center justify-between'>
+                  <Label>Venue hours</Label>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    aria-label='Remove venue hours'
+                    onClick={() =>
                       updateDraft({
-                        assignedMemberIds: checked
-                          ? [...draft.assignedMemberIds, member.value]
-                          : draft.assignedMemberIds.filter(
-                              (uid) => uid !== member.value,
-                            ),
+                        hasVenueHours: false,
+                        venueOpenTime: '',
+                        venueCloseTime: '',
                       })
                     }
+                  >
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  <Input
+                    type='time'
+                    aria-label='Opens at'
+                    value={draft.venueOpenTime}
+                    onChange={(event) => updateDraft({ venueOpenTime: event.target.value })}
                   />
-                  {member.label}
-                </label>
-              ))}
+                  <Input
+                    type='time'
+                    aria-label='Closes at'
+                    value={draft.venueCloseTime}
+                    onChange={(event) => updateDraft({ venueCloseTime: event.target.value })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0'
+                onClick={() => updateDraft({ hasVenueHours: true })}
+              >
+                + Add hours
+              </Button>
+            )}
+            <div className='space-y-1.5'>
+              <Label>Attendees</Label>
+              <Select
+                options={attendeeTargetOptions}
+                value={draft.attendeeTargetType}
+                onChange={(value) =>
+                  updateDraft({ attendeeTargetType: value as EventAttendeeTargetType })
+                }
+              />
             </div>
+            {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && (
+              <div className='space-y-2'>
+                {memberOptions.map((member) => (
+                  <label
+                    key={member.value}
+                    className='flex items-center gap-2 text-sm'
+                  >
+                    <Checkbox
+                      checked={draft.assignedMemberIds.includes(member.value)}
+                      onCheckedChange={(checked) =>
+                        updateDraft({
+                          assignedMemberIds: checked
+                            ? [...draft.assignedMemberIds, member.value]
+                            : draft.assignedMemberIds.filter(
+                                (uid) => uid !== member.value,
+                              ),
+                        })
+                      }
+                    />
+                    {member.label}
+                  </label>
+                ))}
+              </div>
+            )}
             <ModalFooterActions
               leftActions={
                 <>

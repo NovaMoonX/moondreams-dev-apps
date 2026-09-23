@@ -1,9 +1,12 @@
 import type {
   ActivitySetting,
   ChecklistCategory,
+  EventAttendeeTargetType,
   EventFieldChange,
   EventType,
+  ExpenseCategory,
   MealType,
+  StayType,
   TransitType,
   UserRole,
 } from '@apps/waypoint/types';
@@ -108,4 +111,42 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
   BOOKINGS: 'Bookings',
   LOGISTICS: 'Logistics',
   OTHER: 'Other',
+};
+
+export const EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
+  'FOOD',
+  'TRANSPORT',
+  'LODGING',
+  'ACTIVITIES',
+  'SHOPPING',
+  'OTHER',
+];
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  FOOD: 'Food',
+  TRANSPORT: 'Transport',
+  LODGING: 'Lodging',
+  ACTIVITIES: 'Activities',
+  SHOPPING: 'Shopping',
+  OTHER: 'Other',
+};
+
+export const STAY_TYPES: readonly StayType[] = [
+  'HOTEL',
+  'RENTAL',
+  'FRIEND_FAMILY',
+  'OTHER',
+];
+
+export const STAY_TYPE_LABELS: Record<StayType, string> = {
+  HOTEL: 'Hotel',
+  RENTAL: 'Rental (Airbnb, etc.)',
+  FRIEND_FAMILY: 'Friend or family',
+  OTHER: 'Other',
+};
+
+export const EVENT_ATTENDEE_TARGET_LABELS: Record<EventAttendeeTargetType, string> = {
+  EVERYONE_CURRENT: 'Everyone present',
+  EVERYONE_INCLUDING_FUTURE: 'Everyone, including future members',
+  SPECIFIC_MEMBERS: 'Specific members',
 };

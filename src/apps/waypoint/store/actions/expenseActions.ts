@@ -2,7 +2,12 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { ExpenseStatus, ExpenseTargetType, TripExpense } from '@apps/waypoint/types';
+import type {
+  ExpenseCategory,
+  ExpenseStatus,
+  ExpenseTargetType,
+  TripExpense,
+} from '@apps/waypoint/types';
 
 interface CreateExpenseInput {
   uid: string;
@@ -13,9 +18,13 @@ interface CreateExpenseInput {
   amountMin: number | null;
   amountMax: number | null;
   currency: string;
-  payerUid: string;
+  payerUid: string | null;
   status: ExpenseStatus;
   dayIndex: number | null;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
+  groupLabel: string | null;
 }
 
 export const createExpense = createAsyncThunk<
@@ -65,12 +74,17 @@ export const createExpense = createAsyncThunk<
     amountMax: input.amountMax,
     paidAmount: null,
     currency,
-    payerUid: input.payerUid,
+    payerUid: input.status === 'PAID' ? input.payerUid : null,
     status: input.status,
+    category: input.category,
+    customCategoryLabel:
+      input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
     targetType: 'EVERYONE_CURRENT',
     targetMemberIds: input.memberIds,
     splitAmounts: null,
     paidMemberStatus,
+    note: input.note?.trim() || null,
+    groupLabel: input.groupLabel?.trim() || null,
     createdBy: input.uid,
     createdAt: now,
     lastEditedAt: now,
@@ -86,9 +100,14 @@ interface UpdateExpenseInput {
   amount: number | null;
   amountMin: number | null;
   amountMax: number | null;
-  payerUid: string;
+  payerUid: string | null;
+  status: ExpenseStatus;
   dayIndex: number | null;
   paidAmount: number | null;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
+  groupLabel: string | null;
 }
 
 export const updateExpense = createAsyncThunk<
@@ -127,9 +146,15 @@ export const updateExpense = createAsyncThunk<
     amount: input.amount,
     amountMin: input.amountMin,
     amountMax: input.amountMax,
-    payerUid: input.payerUid,
+    payerUid: input.status === 'PAID' ? input.payerUid : null,
+    status: input.status,
     dayIndex: input.dayIndex,
     paidAmount: input.expense.amount === null ? input.paidAmount : null,
+    category: input.category,
+    customCategoryLabel:
+      input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
+    note: input.note?.trim() || null,
+    groupLabel: input.groupLabel?.trim() || null,
     lastEditedAt: Date.now(),
   };
 

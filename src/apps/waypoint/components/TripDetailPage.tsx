@@ -29,9 +29,10 @@ interface TripDetailPageProps {
   events: TimelineEvent[];
   currentUserId: string;
   onBack: () => void;
+  onEdit?: (trip: TripSpace) => void;
 }
 
-function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageProps) {
+function TripDetailPage({ trip, events, currentUserId, onBack, onEdit }: TripDetailPageProps) {
   const now = useNow();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
   // An active trip opens with nothing expanded — the live HUD above is the
@@ -72,6 +73,18 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           <div className='mt-3'>
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
           </div>
+          {onEdit && (
+            <div className='mt-4'>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => onEdit(trip)}
+              >
+                Edit trip
+              </Button>
+            </div>
+          )}
         </div>
         <OverviewSection trip={trip} onViewDay={handleViewDay} />
         <hr className='border-border' />

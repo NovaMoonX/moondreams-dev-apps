@@ -80,7 +80,7 @@ function ExpenseSplitModal({
 
     switch (targetType) {
       case 'JUST_ME':
-        return [expense.payerUid];
+        return expense.payerUid === null ? [] : [expense.payerUid];
       case 'EVERYONE_CURRENT':
       case 'EVERYONE_INCLUDING_FUTURE':
         return memberIds;

@@ -35,6 +35,7 @@ import {
   selectTimelineEvents,
 } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
+import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 function Waypoint() {
   const { user, loading } = useAuth();
@@ -238,6 +239,14 @@ function Waypoint() {
         events={timelineEvents}
         currentUserId={user.uid}
         onBack={() => setSelectedTripId(null)}
+        onEdit={
+          hasTripRole(selectedTrip, user.uid, ['ADMIN', 'EDITOR'])
+            ? (tripToEdit) => {
+                setError(null);
+                setEditingTrip(tripToEdit);
+              }
+            : undefined
+        }
       />
     );
   }

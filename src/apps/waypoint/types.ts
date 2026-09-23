@@ -8,12 +8,20 @@ export type ExpenseTargetType =
   | 'JUST_ME'
   | 'SPECIFIC_MEMBERS';
 export type ExpenseStatus = 'PAID' | 'EXPECTED';
+export type ExpenseCategory =
+  | 'FOOD'
+  | 'TRANSPORT'
+  | 'LODGING'
+  | 'ACTIVITIES'
+  | 'SHOPPING'
+  | 'OTHER';
 export type ChecklistCategory =
   | 'DOCUMENTS'
   | 'PACKING'
   | 'BOOKINGS'
   | 'LOGISTICS'
   | 'OTHER';
+export type StayType = 'HOTEL' | 'RENTAL' | 'FRIEND_FAMILY' | 'OTHER';
 
 export interface TripMember {
   uid: string;
@@ -49,6 +57,9 @@ export interface Stay {
   id: string;
   tripId: string;
   name: string;
+  stayType: StayType;
+  /** Comma-separated host name(s); only meaningful for FRIEND_FAMILY stays. */
+  hostNames: string | null;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -77,12 +88,20 @@ export interface TripExpense {
   amountMax: number | null;
   paidAmount: number | null;
   currency: string;
-  payerUid: string;
+  /** Who fronted the money. `null` means "paid by each person" — no single
+   * payer, so nobody is owed anything for this expense. */
+  payerUid: string | null;
   status: ExpenseStatus;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
   targetType: ExpenseTargetType;
   targetMemberIds: string[];
   splitAmounts: Record<string, number> | null;
   paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
+  note: string | null;
+  /** Free-text label shared by related expenses (e.g. itemized entries off one
+   * receipt) so their totals can be rolled up and displayed together. */
+  groupLabel: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -102,6 +121,10 @@ export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type ActivitySetting = 'INDOOR' | 'OUTDOOR';
 export type EventStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
 export type TripStatus = 'UPCOMING' | 'ACTIVE' | 'PAST';
+export type EventAttendeeTargetType =
+  | 'EVERYONE_CURRENT'
+  | 'EVERYONE_INCLUDING_FUTURE'
+  | 'SPECIFIC_MEMBERS';
 
 export interface TravelEventDetails {
   transitType: TransitType;
@@ -151,7 +174,14 @@ export interface TimelineEvent {
   longitude: number | null;
   eventDetails: EventDetails | null;
   notes: string | null;
+  /** Who this event is for. `SPECIFIC_MEMBERS`/`EVERYONE_CURRENT` snapshot their
+   * members into `assignedMemberIds`; `EVERYONE_INCLUDING_FUTURE` resolves dynamically
+   * against the trip's current members instead. */
+  attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
+  /** Venue open/close time for the event's day, as "HH:mm" — e.g. a museum's hours. */
+  venueOpenTime: string | null;
+  venueCloseTime: string | null;
   changeHistory: EventChangeSnapshot[];
   place: PlaceRef | null;
   /** Only meaningful for DINING and ACTIVITY events; other types leave this null. */
@@ -176,6 +206,9 @@ export interface ChecklistItem {
   title: string;
   category: ChecklistCategory;
   customCategoryLabel: string | null;
+  note: string | null;
+  /** Trip day this item should be done by; `null` means no specific day. */
+  completeByDayIndex: number | null;
   assignedToUids: string[];
   isCompleted: boolean;
   markedCompletedByUid: string | null;
