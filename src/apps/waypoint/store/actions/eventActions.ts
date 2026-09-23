@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -160,19 +160,3 @@ export const deleteEvent = createAsyncThunk<
   await deleteDoc(eventRef);
   return eventId;
 });
-
-/** Patches just the scraped photo after a broken-image self-heal refresh. Not a
- * thunk: the live Firestore listener already keeps Redux in sync, and this is a
- * low-stakes background write that shouldn't need loading/error UI state. */
-export async function patchEventPlacePhoto(
-  tripId: string,
-  eventId: string,
-  photoUrl: string | null,
-  photoRefreshedAt: number,
-) {
-  const eventRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'events', eventId);
-  await updateDoc(eventRef, {
-    'place.photoUrl': photoUrl,
-    'place.photoRefreshedAt': photoRefreshedAt,
-  });
-}

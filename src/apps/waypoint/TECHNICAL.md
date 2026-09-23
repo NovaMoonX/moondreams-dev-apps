@@ -285,7 +285,7 @@ interface PlaceRef {
   placeId: string; // the only field Google's terms allow storing indefinitely
   mapsUrl: string;
   primaryType: string | null;
-  photoUrl: string | null; // scraped from the Maps page's og:image — not the Places Photo SKU (see cost note)
+  photoUrl: string | null; // reserved for a future Places Photo lookup; currently always null
   photoRefreshedAt: number | null;
 }
 
@@ -298,14 +298,12 @@ interface LinkPreview {
 }
 ```
 
-**Cost discipline — fetch once, store, refresh only on failure.** A Places pick costs one
-Details (Essentials-tier) call; typing itself is free because a session token ties the
-keystrokes to that call. The photo is never fetched through the billed Places Photo SKU —
-instead the client calls `fetchLinkMetadata` with the place's Maps URL and keeps the
-`googleusercontent.com` image if the page has one (a static-map placeholder counts as "no
-photo"). Once stored, rendering never calls Google or the function again; a broken image
-retries the scrape at most once per place per browser session, and only if the stored photo
-is more than 7 days old. These are app-agnostic, so other mini-apps can reuse them: the
+**Cost discipline — fetch once, store.** A Places pick costs one Details (Essentials-tier)
+call; typing itself is free because a session token ties the keystrokes to that call.
+Picked places carry no photo: the Places Photo SKU is billed separately, and Google Maps
+pages only expose a place photo to allowlisted crawlers, so covers come from attached links'
+previews. Once stored, rendering never calls Google or the function again; a broken image
+just hides itself. These are app-agnostic, so other mini-apps can reuse them: the
 Places client lives at `src/lib/places/placesApi.ts`, the link-metadata client and the
 image component at `src/lib/linkMetadata/fetchLinkMetadata.ts` and
 `src/components/EnrichedImage.tsx`, and the Cloud Function at

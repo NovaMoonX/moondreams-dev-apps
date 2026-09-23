@@ -1,7 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
-import { patchStayPlacePhoto } from '@apps/waypoint/store/actions/stayActions';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatDateTime } from '@/utils/formatUtils';
@@ -25,16 +24,6 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
           src={imageUrl}
           alt=''
           className='w-28 shrink-0 object-cover sm:w-44'
-          refreshFrom={
-            stay.place
-              ? {
-                  place: stay.place,
-                  canEdit,
-                  onRefreshed: (photoUrl, photoRefreshedAt) =>
-                    void patchStayPlacePhoto(stay.tripId, stay.id, photoUrl, photoRefreshedAt),
-                }
-              : undefined
-          }
         />
       )}
       <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>

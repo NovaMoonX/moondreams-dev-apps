@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
+import { DEBOUNCE_MS, useDebouncedCallback } from '@/hooks/useDebounce';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
@@ -22,8 +23,6 @@ interface LinkAttachFieldProps {
   /** Text of the link-style button that reveals the field; hidden until clicked. */
   addLabel?: string;
 }
-
-const AUTO_FETCH_DELAY_MS = 800;
 
 function isValidHttpUrl(value: string) {
   try {
@@ -52,16 +51,12 @@ function LinkAttachField({
   const [error, setError] = useState<string | null>(null);
   const [isRevealed, setIsRevealed] = useState(false);
   const latestDraftRef = useRef(url.trim());
-  const autoFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const justPastedRef = useRef(false);
-
-  useEffect(() => () => clearTimeout(autoFetchTimeoutRef.current), []);
 
   // `commit` = the user is done with the field (paste/blur): keep the link even if no
   // preview loads. A typing-pause fetch that fails may just be a half-typed URL, so it
   // doesn't attach anything.
   const runFetch = async (value: string, commit: boolean) => {
-    clearTimeout(autoFetchTimeoutRef.current);
     const trimmed = value.trim();
     if (!trimmed) {
       setError(null);
@@ -103,20 +98,23 @@ function LinkAttachField({
     }
   };
 
+  const scheduleAutoFetch = useDebouncedCallback(
+    (value: string) => void runFetch(value, false),
+    DEBOUNCE_MS.linkDetection,
+  );
+
   const handleDraftChange = (value: string) => {
     setDraftUrl(value);
     latestDraftRef.current = value.trim();
     setError(null);
-    clearTimeout(autoFetchTimeoutRef.current);
+    scheduleAutoFetch.cancel();
     if (justPastedRef.current) {
       justPastedRef.current = false;
       void runFetch(value, true);
       return;
     }
     if (isValidHttpUrl(value.trim())) {
-      autoFetchTimeoutRef.current = setTimeout(() => {
-        void runFetch(value, false);
-      }, AUTO_FETCH_DELAY_MS);
+      scheduleAutoFetch.run(value);
     }
   };
 
@@ -202,6 +200,7 @@ function LinkAttachField({
           }}
           onBlur={() => {
             justPastedRef.current = false;
+            scheduleAutoFetch.cancel();
             void runFetch(draftUrl, true);
           }}
         />

@@ -7,7 +7,6 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
-import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
@@ -40,16 +39,6 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
           src={imageUrl}
           alt=''
           className='aspect-video w-full object-cover sm:aspect-[2/1]'
-          refreshFrom={
-            event.place
-              ? {
-                  place: event.place,
-                  canEdit,
-                  onRefreshed: (photoUrl, photoRefreshedAt) =>
-                    void patchEventPlacePhoto(event.tripId, event.id, photoUrl, photoRefreshedAt),
-                }
-              : undefined
-          }
         />
       )}
       <div className='flex items-start justify-between gap-3 p-4'>

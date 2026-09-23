@@ -10,14 +10,13 @@ import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '
  * for every keystroke plus the final Details call. Details is requested at the
  * Essentials field tier only (`formattedAddress,location,types`) — no
  * `displayName`/`googleMapsUri` (Pro) and no `photos` (a separately billed SKU).
- * The photo itself comes from a free scrape of the place's Maps page instead.
  */
 
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
 const PLACES_BASE_URL = 'https://places.googleapis.com/v1';
 
 /** Spread into a form draft when the user hand-edits a picked place's name or address, so
- * stale coordinates/photo from the earlier pick don't stay silently attached. */
+ * stale coordinates from the earlier pick don't stay silently attached. */
 export const UNLINKED_PLACE = { place: null, latitude: null, longitude: null } as const;
 
 export function isPlacesSearchAvailable() {

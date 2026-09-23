@@ -164,6 +164,7 @@ useEffect(() => {
 - **Invite/join flows: always use the flat, sibling `apps/{appId}/pendingRequests` collection pattern — never nested, never a `collectionGroup`. Ship the requester's own Remove/cancel action in the same PR as approve/decline, not as a later follow-up.**
 - **A pending (not-yet-approved) requester must never be treated as an active member for presence, avatars, or reads of a resource document that carries sensitive data.**
 - **Any Firestore `onSnapshot` belongs in `store/listeners/`, started once from a `useXSync` hook at the mini-app's top-level orchestrator (see `useNineLivesSync.ts` / `useWaypointSync.ts`) — never embedded inside a tab/panel/leaf component's own effect.**
+- **Debounce with `@/hooks/useDebounce` (`useDebouncedValue` / `useDebouncedCallback`) and its shared `DEBOUNCE_MS` presets — never a hand-rolled `setTimeout` debounce or a per-file delay constant.**
 - **Request/response calls (APIs, callables, one-off Firestore reads) use TanStack Query via a `queryOptions` factory in `lib/<feature>/<feature>Queries.ts` or `apps/<app>/queries/<resource>Queries.ts` — no hand-rolled fetch-in-useEffect caching.**
 - **A static option list (UI dropdown options, a role/status allowlist) used by more than one file is declared once, next to the type it constrains, and imported everywhere — never redeclared per file.**
 - **Array-driven hooks (`useUserInfo`, `usePresence`, or similar) must key their effect on the array's content, not its identity.**

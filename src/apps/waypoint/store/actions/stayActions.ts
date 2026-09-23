@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
@@ -131,17 +131,3 @@ export const deleteStay = createAsyncThunk<
   await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId));
   return stayId;
 });
-
-/** Same self-heal photo refresh as events, for stays. */
-export async function patchStayPlacePhoto(
-  tripId: string,
-  stayId: string,
-  photoUrl: string | null,
-  photoRefreshedAt: number,
-) {
-  const stayRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'stays', stayId);
-  await updateDoc(stayRef, {
-    'place.photoUrl': photoUrl,
-    'place.photoRefreshedAt': photoRefreshedAt,
-  });
-}

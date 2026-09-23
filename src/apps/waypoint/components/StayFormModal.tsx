@@ -194,13 +194,6 @@ export function StayFormModal({
               place: result.place,
             })
           }
-          onPhotoResolved={(placeId, photoUrl) =>
-            setDraft((current) =>
-              current.place?.placeId === placeId
-                ? { ...current, place: { ...current.place, photoUrl, photoRefreshedAt: Date.now() } }
-                : current,
-            )
-          }
         />
         <div className='space-y-1.5'>
           <Label>Address</Label>

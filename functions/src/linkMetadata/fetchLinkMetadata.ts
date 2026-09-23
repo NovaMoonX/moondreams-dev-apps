@@ -3,14 +3,10 @@ import { lookup } from 'node:dns/promises';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 /**
- * Reads a booking/listing link (or a Google Maps link) and returns whatever
- * preview metadata we can find — most importantly an image. Also doubles as the
- * free photo source for a Places pick: the client passes the place's Maps URL
- * back through here right after selection, instead of paying for the billed
- * Places Photo SKU.
- *
- * Fetch once, store on the doc, refresh only on failure. This function never
- * runs on a schedule and never runs on render.
+ * Reads a user-attached link (booking/listing page, a business's website, or a
+ * Google Maps link) and returns whatever preview metadata we can find — most
+ * importantly an image. Fetch once, store on the doc; this function never runs on
+ * a schedule and never runs on render.
  */
 
 const MAX_REDIRECTS = 3;

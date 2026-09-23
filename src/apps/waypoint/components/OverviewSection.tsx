@@ -9,14 +9,12 @@ import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
-import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
   selectActiveEvent,
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
@@ -25,16 +23,14 @@ import {
 
 interface OverviewSectionProps {
   trip: TripSpace;
-  currentUserId: string;
   onViewDay: (dayIndex: number) => void;
 }
 
-function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProps) {
+function OverviewSection({ trip, onViewDay }: OverviewSectionProps) {
   const now = useNow();
   const isLive = getTripStatus(trip, now) === 'ACTIVE';
   const activeEvent = useAppSelector(selectActiveEvent(now));
   const upNextEvent = useAppSelector(selectUpNextEvent(now));
-  const canEdit = canEditExistingItem(trip, currentUserId);
 
   if (!isLive) {
     return null;
@@ -45,8 +41,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
   return (
     <div className='space-y-4'>
-      {activeEvent && <ActiveNowCard event={activeEvent} now={now} canEdit={canEdit} />}
-      {upNextEvent && <UpNextCard event={upNextEvent} now={now} canEdit={canEdit} />}
+      {activeEvent && <ActiveNowCard event={activeEvent} now={now} />}
+      {upNextEvent && <UpNextCard event={upNextEvent} now={now} />}
       <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
         <Button
           type='button'
@@ -81,15 +77,7 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
   );
 }
 
-function ActiveNowCard({
-  event,
-  now,
-  canEdit,
-}: {
-  event: TimelineEvent;
-  now: number;
-  canEdit: boolean;
-}) {
+function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
   const duration = event.endAt !== null ? event.endAt - event.startAt : null;
   const progress =
     duration !== null && duration > 0
@@ -106,16 +94,6 @@ function ActiveNowCard({
           src={imageUrl}
           alt=''
           className='aspect-video w-full object-cover sm:aspect-[2/1]'
-          refreshFrom={
-            event.place
-              ? {
-                  place: event.place,
-                  canEdit,
-                  onRefreshed: (photoUrl, photoRefreshedAt) =>
-                    void patchEventPlacePhoto(event.tripId, event.id, photoUrl, photoRefreshedAt),
-                }
-              : undefined
-          }
         />
       )}
       <div className='p-5'>
@@ -165,15 +143,7 @@ function ActiveNowCard({
   );
 }
 
-function UpNextCard({
-  event,
-  now,
-  canEdit,
-}: {
-  event: TimelineEvent;
-  now: number;
-  canEdit: boolean;
-}) {
+function UpNextCard({ event, now }: { event: TimelineEvent; now: number }) {
   const imageUrl = getDisplayImage(event);
 
   return (
@@ -184,21 +154,6 @@ function UpNextCard({
             src={imageUrl}
             alt=''
             className='h-12 w-12 shrink-0 rounded object-cover'
-            refreshFrom={
-              event.place
-                ? {
-                    place: event.place,
-                    canEdit,
-                    onRefreshed: (photoUrl, photoRefreshedAt) =>
-                      void patchEventPlacePhoto(
-                        event.tripId,
-                        event.id,
-                        photoUrl,
-                        photoRefreshedAt,
-                      ),
-                  }
-                : undefined
-            }
           />
         )}
         <div>

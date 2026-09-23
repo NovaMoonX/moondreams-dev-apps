@@ -21,7 +21,6 @@ import {
   deleteEvent,
   updateEvent,
 } from '@apps/waypoint/store/actions/eventActions';
-import { patchStayPlacePhoto } from '@apps/waypoint/store/actions/stayActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
@@ -80,7 +79,6 @@ export function TimelineSection({
             <StayBanner
               key={stay.id}
               stay={stay}
-              canEdit={canEdit}
               showCover={showCovers}
             />
           ))}
@@ -271,15 +269,7 @@ export function TimelineSection({
   );
 }
 
-function StayBanner({
-  stay,
-  canEdit,
-  showCover,
-}: {
-  stay: Stay;
-  canEdit: boolean;
-  showCover: boolean;
-}) {
+function StayBanner({ stay, showCover }: { stay: Stay; showCover: boolean }) {
   const imageUrl = showCover ? getDisplayImage(stay) : null;
 
   return (
@@ -289,16 +279,6 @@ function StayBanner({
           src={imageUrl}
           alt=''
           className='w-28 shrink-0 object-cover sm:w-44'
-          refreshFrom={
-            stay.place
-              ? {
-                  place: stay.place,
-                  canEdit,
-                  onRefreshed: (photoUrl, photoRefreshedAt) =>
-                    void patchStayPlacePhoto(stay.tripId, stay.id, photoUrl, photoRefreshedAt),
-                }
-              : undefined
-          }
         />
       )}
       <div className='min-w-0 flex-1 px-4 py-3'>

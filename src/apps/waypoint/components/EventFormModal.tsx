@@ -322,14 +322,19 @@ function EventFormModal({
                   place: result.place,
                 })
               }
-              onPhotoResolved={(placeId, photoUrl) =>
-                setDraft((current) =>
-                  current.place?.placeId === placeId
-                    ? { ...current, place: { ...current.place, photoUrl, photoRefreshedAt: Date.now() } }
-                    : current,
-                )
-              }
             />
+            {draft.locationName.trim() && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='-mt-2 h-auto p-0'
+                disabled={draft.title.trim() === draft.locationName.trim()}
+                onClick={() => updateDraft({ title: draft.locationName.trim() })}
+              >
+                {draft.title.trim() === draft.locationName.trim() ? '✓ Title applied' : 'Use title'}
+              </Button>
+            )}
             <div className='space-y-1.5'>
               <Label>Address</Label>
               <Input

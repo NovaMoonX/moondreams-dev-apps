@@ -3,13 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
+import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { createSessionToken, isPlacesSearchAvailable } from '@/lib/places/placesApi';
 import { placeAutocompleteQueryOptions, placeDetailsQueryOptions } from '@/lib/places/placesQueries';
 import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '@/lib/places/types';
 
-const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 3;
 
 interface PlaceAutocompleteInputProps {
@@ -19,10 +17,6 @@ interface PlaceAutocompleteInputProps {
   onChange: (value: string) => void;
   bias?: PlaceSelectionBias;
   onSelect: (result: PlaceSelectionResult) => void;
-  /** Fires once, after `onSelect`, when the free photo scrape of the place's Maps
-   * page finishes or fails. `placeId` lets the caller ignore a stale resolution if
-   * the user has since picked a different place. */
-  onPhotoResolved?: (placeId: string, photoUrl: string | null) => void;
 }
 
 /**
@@ -37,7 +31,6 @@ function PlaceAutocompleteInput({
   onChange,
   bias,
   onSelect,
-  onPhotoResolved,
 }: PlaceAutocompleteInputProps) {
   const queryClient = useQueryClient();
   const [isTyping, setIsTyping] = useState(false);
@@ -47,7 +40,7 @@ function PlaceAutocompleteInput({
   const [sessionToken, setSessionToken] = useState(createSessionToken);
   const containerRef = useRef<HTMLDivElement>(null);
   const trimmedValue = value.trim();
-  const debouncedValue = useDebouncedValue(trimmedValue, DEBOUNCE_MS);
+  const debouncedValue = useDebouncedValue(trimmedValue, DEBOUNCE_MS.autocomplete);
   const isSearchEnabled = isPlacesSearchAvailable();
 
   const suggestionsQuery = useQuery({
@@ -84,19 +77,6 @@ function PlaceAutocompleteInput({
       );
       if (result) {
         onSelect(result);
-        // Free photo source (a scrape of the Maps page, not the billed Places
-        // Photo SKU) — fire-and-forget so the rest of the form is usable right
-        // away; a failure just leaves the place without a photo.
-        queryClient
-          .fetchQuery(linkMetadataQueryOptions(result.place.mapsUrl))
-          .then((metadata) => {
-            const photoUrl =
-              metadata.imageUrl && metadata.imageUrl.includes('googleusercontent.com')
-                ? metadata.imageUrl
-                : null;
-            onPhotoResolved?.(suggestion.placeId, photoUrl);
-          })
-          .catch(() => onPhotoResolved?.(suggestion.placeId, null));
       } else {
         setSelectError("Couldn't load that place. Try another result.");
       }

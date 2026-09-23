@@ -1,5 +1,4 @@
-/** Metadata scraped from a URL — a booking/listing link, a site a user attached
- * by hand, or a Google Maps link used as a free photo source for a Places pick. */
+/** Metadata scraped from a URL a user attached (booking/listing link, a business's website). */
 export interface LinkPreview {
   title: string | null;
   description: string | null;

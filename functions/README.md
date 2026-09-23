@@ -2,7 +2,7 @@
 
 This repository includes the server-side execution path for Worth the Wait. The callable function lives at `functions/src/apps/worth-the-wait/triggerBoxAction.ts` and is exported from `functions/src/index.ts`.
 
-The app-agnostic `fetchLinkMetadata` callable (`functions/src/linkMetadata/fetchLinkMetadata.ts`) reads any link's Open Graph metadata (title/description/image/site name) for any mini-app that wants a link preview, and doubles as the free photo source for a Google Places pick by reading the place's Maps page — see the cost notes in `src/lib/places/placesApi.ts`. It needs no secrets (no API key), but does an outbound fetch on the caller's behalf, so it resolves the target's DNS first and rejects private/loopback/link-local addresses (an SSRF guard), caps redirects at 3, times out at 6s, and reads at most 1MB.
+The app-agnostic `fetchLinkMetadata` callable (`functions/src/linkMetadata/fetchLinkMetadata.ts`) reads any link's Open Graph metadata (title/description/image/site name) for any mini-app that wants a link preview. It needs no secrets (no API key), but does an outbound fetch on the caller's behalf, so it resolves the target's DNS first and rejects private/loopback/link-local addresses (an SSRF guard), caps redirects at 3, times out at 6s, and reads at most 1MB.
 
 ## Local development
 
