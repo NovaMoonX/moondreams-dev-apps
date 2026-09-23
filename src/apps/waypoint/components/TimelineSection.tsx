@@ -72,15 +72,19 @@ export function TimelineSection({
     }
 
     return (
-      <div className='space-y-2'>
-        {activeStays.map((stay) => (
-          <StayBanner
-            key={stay.id}
-            stay={stay}
-            canEdit={canEdit}
-            showCover={showCovers}
-          />
-        ))}
+      <div className='space-y-3'>
+        {renderDivider('Stays')}
+        <div className='space-y-2'>
+          {activeStays.map((stay) => (
+            <StayBanner
+              key={stay.id}
+              stay={stay}
+              canEdit={canEdit}
+              showCover={showCovers}
+            />
+          ))}
+        </div>
+        {renderDivider('Activities')}
       </div>
     );
   };
@@ -108,12 +112,10 @@ export function TimelineSection({
     />
   );
 
-  const renderDayDivider = (groupDayIndex: number) => (
+  const renderDivider = (label: string) => (
     <div className='flex items-center gap-3'>
       <div className='border-border flex-1 border-t' />
-      <span className='text-muted-foreground text-sm font-medium'>
-        {getDayLabel(trip.startDate, groupDayIndex)}
-      </span>
+      <span className='text-muted-foreground text-sm font-medium'>{label}</span>
       <div className='border-border flex-1 border-t' />
     </div>
   );
@@ -145,7 +147,7 @@ export function TimelineSection({
       <div className='space-y-3'>
         {sortedDayIndices.map((groupDayIndex) => (
           <div key={groupDayIndex} className='space-y-3'>
-            {renderDayDivider(groupDayIndex)}
+            {renderDivider(getDayLabel(trip.startDate, groupDayIndex))}
             {(eventsByDay.get(groupDayIndex) ?? []).map(renderEventCard)}
           </div>
         ))}

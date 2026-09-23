@@ -45,6 +45,12 @@ VITE_FIREBASE_APP_ID=
 # Cloud Messaging > Web configuration. Only needed to test push notifications locally.
 VITE_FIREBASE_VAPID_KEY=
 
+# Google Maps Platform > Keys & Credential > API Keys. Powers place search (Places API (New),
+# called from the browser — see src/lib/places/placesApi.ts); search is hidden when unset.
+# Restrict it: HTTP referrers (apps.moondreams.dev, *.web.app, localhost), API = Places API
+# (New) only, plus a daily quota cap on Autocomplete + Place Details and a billing alert.
+VITE_GOOGLE_PLACES_API_KEY=
+
 # App Check, required for Nine Lives' AI document ingestion (Firebase AI Logic enforces it).
 # Production: a reCAPTCHA v3 site key — Firebase Console > App Check > Apps > reCAPTCHA v3.
 VITE_FIREBASE_APPCHECK_SITE_KEY=
@@ -61,14 +67,6 @@ VITE_FIREBASE_AI_MODEL=
 # true to point the app at the local Firebase Emulator Suite (see SEEDING.md) instead of
 # the live project. Leave unset/false to hit real Firebase.
 VITE_USE_FIREBASE_EMULATORS=
-
-# Waypoint place search (Places API (New), called directly from the browser — see
-# src/apps/waypoint/utils/placesApi.ts). Optional: place search is hidden when unset.
-# Create in Google Cloud Console > APIs & Services > Credentials, then restrict it:
-#   - Application restriction: HTTP referrers — apps.moondreams.dev, *.web.app, localhost.
-#   - API restriction: Places API (New) only.
-#   - Set a daily quota cap on Autocomplete + Place Details and a billing budget alert.
-VITE_GOOGLE_PLACES_API_KEY=
 ```
 
 > [!IMPORTANT]
