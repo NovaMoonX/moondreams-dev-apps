@@ -10,6 +10,7 @@ import {
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
+import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -182,7 +183,7 @@ export function StayFormModal({
           label='Stay name'
           placeholder='Shibuya Sky Hotel'
           value={draft.name}
-          onChange={(name) => updateDraft({ name })}
+          onChange={(name) => updateDraft({ name, ...UNLINKED_PLACE })}
           bias={placeBias}
           onSelect={(result: PlaceSelectionResult) =>
             updateDraft({
@@ -206,19 +207,9 @@ export function StayFormModal({
           <Input
             value={draft.address}
             placeholder='Address'
-            onChange={(event) => updateDraft({ address: event.target.value })}
+            onChange={(event) => updateDraft({ address: event.target.value, ...UNLINKED_PLACE })}
           />
         </div>
-        {draft.place && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            onClick={() => updateDraft({ place: null, latitude: null, longitude: null })}
-          >
-            Remove place
-          </Button>
-        )}
         <LinkAttachField
           url={draft.linkUrl}
           preview={draft.linkPreview}

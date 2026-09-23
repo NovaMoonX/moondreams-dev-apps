@@ -17,6 +17,7 @@ import {
 import { getErrorMessage } from '@/utils/errorUtils';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
+import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type {
@@ -309,7 +310,7 @@ function EventFormModal({
               label='Location'
               placeholder='Ichiran Shibuya'
               value={draft.locationName}
-              onChange={(locationName) => updateDraft({ locationName })}
+              onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
               bias={placeBias}
               onSelect={(result: PlaceSelectionResult) =>
                 updateDraft({
@@ -334,21 +335,9 @@ function EventFormModal({
               <Input
                 placeholder='Street address'
                 value={draft.address}
-                onChange={(event) => updateDraft({ address: event.target.value })}
+                onChange={(event) => updateDraft({ address: event.target.value, ...UNLINKED_PLACE })}
               />
             </div>
-            {draft.place && (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                onClick={() =>
-                  updateDraft({ place: null, latitude: null, longitude: null })
-                }
-              >
-                Remove place
-              </Button>
-            )}
             {LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) && (
               <LinkAttachField
                 url={draft.linkUrl}

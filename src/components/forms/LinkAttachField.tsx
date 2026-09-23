@@ -122,7 +122,7 @@ function LinkAttachField({
 
   const clearLink = () => {
     setDraftUrl('');
-    setIsRevealed(false);
+    setIsRevealed(true);
     latestDraftRef.current = '';
     setError(null);
     onChange('', null);

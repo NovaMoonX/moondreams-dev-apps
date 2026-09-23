@@ -16,6 +16,10 @@ import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
 const PLACES_BASE_URL = 'https://places.googleapis.com/v1';
 
+/** Spread into a form draft when the user hand-edits a picked place's name or address, so
+ * stale coordinates/photo from the earlier pick don't stay silently attached. */
+export const UNLINKED_PLACE = { place: null, latitude: null, longitude: null } as const;
+
 export function isPlacesSearchAvailable() {
   return Boolean(PLACES_API_KEY);
 }
