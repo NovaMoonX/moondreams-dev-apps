@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
+import { useQueryClient } from '@tanstack/react-query';
+
+import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
 import type { PlaceRef } from '@/lib/places/types';
 
 const REFRESH_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -27,6 +29,7 @@ interface EnrichedImageProps {
  * browser session, and only if the stored photo hasn't been refreshed in the last
  * 7 days — keeping the retry rare, since it costs a real (if unbilled) fetch. */
 function EnrichedImage({ src, alt, className, refreshFrom }: EnrichedImageProps) {
+  const queryClient = useQueryClient();
   const [isHidden, setIsHidden] = useState(false);
 
   if (isHidden) {
@@ -48,7 +51,9 @@ function EnrichedImage({ src, alt, className, refreshFrom }: EnrichedImageProps)
     }
     attemptedRefreshes.add(place.placeId);
 
-    fetchLinkMetadata(place.mapsUrl)
+    // staleTime 0: the cached result is what produced the now-broken URL.
+    queryClient
+      .fetchQuery({ ...linkMetadataQueryOptions(place.mapsUrl), staleTime: 0 })
       .then((result) => {
         const photoUrl =
           result.imageUrl && result.imageUrl.includes('googleusercontent.com')

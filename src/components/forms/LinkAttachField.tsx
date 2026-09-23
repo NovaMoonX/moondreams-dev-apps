@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
+import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 
 interface LinkAttachFieldProps {
@@ -40,6 +41,7 @@ function LinkAttachField({
   label = 'Link (optional)',
   placeholder = 'https://…',
 }: LinkAttachFieldProps) {
+  const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ function LinkAttachField({
     setError(null);
     setIsFetching(true);
     try {
-      const result = await fetchLinkMetadata(trimmed);
+      const result = await queryClient.fetchQuery(linkMetadataQueryOptions(trimmed));
       onChange(trimmed, {
         title: result.title,
         description: result.description,

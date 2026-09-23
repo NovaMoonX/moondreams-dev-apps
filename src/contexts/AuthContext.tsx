@@ -29,6 +29,7 @@ import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
+import { queryClient } from '@lib/query/queryClient';
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const dispatch = useAppDispatch();
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       if (previousUserId !== undefined && previousUserId !== nextUserId) {
         dispatch(resetAllState());
+        queryClient.clear();
       }
 
       previousUserIdRef.current = nextUserId;

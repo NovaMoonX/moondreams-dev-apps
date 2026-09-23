@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import {
-  autocomplete,
-  createSessionToken,
-  getPlaceForSelection,
-  isPlacesSearchAvailable,
-} from '@/lib/places/placesApi';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
+import { createSessionToken, isPlacesSearchAvailable } from '@/lib/places/placesApi';
+import { placeAutocompleteQueryOptions, placeDetailsQueryOptions } from '@/lib/places/placesQueries';
 import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '@/lib/places/types';
-import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 3;
@@ -30,15 +28,29 @@ interface PlaceSearchInputProps {
  * form still works without one.
  */
 function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputProps) {
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const sessionTokenRef = useRef<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [selectError, setSelectError] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState(createSessionToken);
   const containerRef = useRef<HTMLDivElement>(null);
+  const debouncedQuery = useDebouncedValue(query.trim(), DEBOUNCE_MS);
+
+  const suggestionsQuery = useQuery({
+    ...placeAutocompleteQueryOptions(debouncedQuery, sessionToken, bias),
+    enabled:
+      isPlacesSearchAvailable() &&
+      isTyping &&
+      debouncedQuery === query.trim() &&
+      debouncedQuery.length >= MIN_QUERY_LENGTH,
+    placeholderData: keepPreviousData,
+  });
+  const suggestions = isTyping && query.trim().length >= MIN_QUERY_LENGTH
+    ? (suggestionsQuery.data ?? [])
+    : [];
+  const isSearching = suggestionsQuery.isFetching && suggestions.length === 0;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -54,48 +66,23 @@ function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputP
     return null;
   }
 
-  const runSearch = (value: string) => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    if (value.trim().length < MIN_QUERY_LENGTH) {
-      setSuggestions([]);
-      setIsOpen(false);
-      return;
-    }
-
-    debounceRef.current = setTimeout(() => {
-      sessionTokenRef.current ??= createSessionToken();
-      setIsLoading(true);
-      setError(null);
-      autocomplete(value, sessionTokenRef.current, bias)
-        .then((results) => {
-          setSuggestions(results);
-          setIsOpen(true);
-        })
-        .catch(() => setError('Search failed. Try again.'))
-        .finally(() => setIsLoading(false));
-    }, DEBOUNCE_MS);
-  };
-
   const handleSelect = async (suggestion: PlaceSuggestion) => {
-    const sessionToken = sessionTokenRef.current ?? createSessionToken();
     setIsOpen(false);
+    setIsTyping(false);
     setQuery(suggestion.primaryText);
     setIsResolving(true);
-    setError(null);
+    setSelectError(null);
     try {
-      const result = await getPlaceForSelection(
-        suggestion.placeId,
-        suggestion.primaryText,
-        sessionToken,
+      const result = await queryClient.fetchQuery(
+        placeDetailsQueryOptions(suggestion.placeId, suggestion.primaryText, sessionToken),
       );
       if (result) {
         onSelect(result);
         // Free photo source (a scrape of the Maps page, not the billed Places
         // Photo SKU) — fire-and-forget so the rest of the form is usable right
         // away; a failure just leaves the place without a photo.
-        fetchLinkMetadata(result.place.mapsUrl)
+        queryClient
+          .fetchQuery(linkMetadataQueryOptions(result.place.mapsUrl))
           .then((metadata) => {
             const photoUrl =
               metadata.imageUrl && metadata.imageUrl.includes('googleusercontent.com')
@@ -105,16 +92,18 @@ function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputP
           })
           .catch(() => onPhotoResolved?.(suggestion.placeId, null));
       } else {
-        setError("Couldn't load that place. Try another result.");
+        setSelectError("Couldn't load that place. Try another result.");
       }
     } catch {
-      setError("Couldn't load that place. Try another result.");
+      setSelectError("Couldn't load that place. Try another result.");
     } finally {
       // A pick closes the session — the next search opens a new one.
-      sessionTokenRef.current = null;
+      setSessionToken(createSessionToken());
       setIsResolving(false);
     }
   };
+
+  const error = selectError ?? (suggestionsQuery.isError ? 'Search failed. Try again.' : null);
 
   return (
     <div ref={containerRef} className='relative space-y-1.5'>
@@ -125,30 +114,33 @@ function PlaceSearchInput({ bias, onSelect, onPhotoResolved }: PlaceSearchInputP
         disabled={isResolving}
         onChange={(event) => {
           setQuery(event.target.value);
-          runSearch(event.target.value);
+          setIsTyping(true);
+          setIsOpen(true);
+          setSelectError(null);
         }}
         onFocus={() => suggestions.length > 0 && setIsOpen(true)}
       />
-      {isOpen && (suggestions.length > 0 || isLoading) && (
+      {isOpen && (suggestions.length > 0 || isSearching) && (
         <div className='border-border bg-popover absolute z-10 mt-1 w-full rounded-md border shadow-md'>
-          {isLoading ? (
+          {isSearching ? (
             <p className='text-muted-foreground px-3 py-2 text-sm'>Searching…</p>
           ) : (
             <ul>
               {suggestions.map((suggestion) => (
                 <li key={suggestion.placeId}>
-                  <button
+                  <Button
                     type='button'
-                    className='hover:bg-accent w-full px-3 py-2 text-left text-sm'
+                    variant='tertiary'
+                    className='h-auto w-full flex-col items-start gap-0 rounded-none px-3 py-2 text-left font-normal'
                     onClick={() => void handleSelect(suggestion)}
                   >
-                    <span className='font-medium'>{suggestion.primaryText}</span>
+                    <span className='text-sm font-medium'>{suggestion.primaryText}</span>
                     {suggestion.secondaryText && (
-                      <span className='text-muted-foreground block text-xs'>
+                      <span className='text-muted-foreground text-xs'>
                         {suggestion.secondaryText}
                       </span>
                     )}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
