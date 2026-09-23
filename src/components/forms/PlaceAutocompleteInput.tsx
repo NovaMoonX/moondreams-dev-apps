@@ -42,7 +42,7 @@ function PlaceAutocompleteInput({
   const [isResolving, setIsResolving] = useState(false);
   const [selectError, setSelectError] = useState<string | null>(null);
   const [sessionToken, setSessionToken] = useState(createSessionToken);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedValue = value.trim();
   const debouncedValue = useDebouncedValue(trimmedValue, DEBOUNCE_MS.autocomplete);
@@ -63,7 +63,8 @@ function PlaceAutocompleteInput({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!inputRef.current?.contains(target) && !suggestionsRef.current?.contains(target)) {
         setIsOpen(false);
       }
     };
@@ -107,7 +108,7 @@ function PlaceAutocompleteInput({
   const error = selectError ?? (suggestionsQuery.isError ? 'Place search failed.' : null);
 
   return (
-    <div ref={containerRef} className='relative space-y-1.5'>
+    <div className='relative space-y-1.5'>
       <Label>{label}</Label>
       <Input
         ref={inputRef}
@@ -119,7 +120,10 @@ function PlaceAutocompleteInput({
         onFocus={() => suggestions.length > 0 && setIsOpen(true)}
       />
       {isOpen && (suggestions.length > 0 || isSearching) && (
-        <div className='border-border bg-popover absolute z-10 mt-1 w-full rounded-md border shadow-md'>
+        <div
+          ref={suggestionsRef}
+          className='border-border bg-popover absolute z-10 mt-1 w-full rounded-md border shadow-md'
+        >
           {isSearching ? (
             <p className='text-muted-foreground px-3 py-2 text-sm'>Searching…</p>
           ) : (
