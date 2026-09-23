@@ -45,6 +45,10 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - Repeated assertions go in helper functions. Never put a self-referential `get()`/`exists()` in a collection's own `allow read`; use `resource.data`. Split OR-ed read predicates into separate `allow read` statements.
 - Denials and atomicity are verified against the emulator (e.g. a raw REST or client-SDK write), not just by the absence of a UI button.
 
+## Cloud Functions
+
+- A newly-added `onCall` function can deploy without its public-invoker IAM grant (symptom: browser CORS error; GCP Cloud Run request logs show a 403 on the `OPTIONS` preflight). See README's [Deployment](README.md#new-cloud-functions--cloud-run-invoker-access) section for the `gcloud run services update --no-invoker-iam-check` fix.
+
 ## Nine Lives placement
 
 Nine Lives features are one of two shapes — check which the request actually asks for:

@@ -87,6 +87,13 @@ export const ACTIVITY_SETTING_LABELS: Record<ActivitySetting, string> = {
   OUTDOOR: 'Outdoor',
 };
 
+// 5-minute increments, 5-60 minutes before an event starts.
+export const REMINDER_MINUTES_BEFORE_OPTIONS: readonly number[] = [
+  5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
+];
+
+export const DEFAULT_REMINDER_MINUTES_BEFORE = 20;
+
 export const CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
   'DOCUMENTS',
   'PACKING',
