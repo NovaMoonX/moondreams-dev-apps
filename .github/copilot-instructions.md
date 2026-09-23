@@ -5,6 +5,7 @@
 ### Quick reference
 - Component syntax: `export function ComponentName` (or `function ComponentName` + `export default ComponentName`).
 - **No IIFEs: never write an anonymous function that is immediately invoked in place (`(() => { ... })()`). Arrow functions passed as arguments to another call (`.map()`, `onClick={() => ...}`, etc.) are fine and idiomatic — the rule is about self-invoking anonymous functions, not callbacks.**
+- **No loose `let` variables assigned across `if`/`else` branches, and no `for` loops that build up a result. Wrap the branching in a small function that returns the value (early returns), and build collections with `.reduce`/`.map`/`.filter`/`Object.fromEntries`. Keep related logic colocated and compact — see "Functions over loose variables" under Coding Styles.**
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check Dreamer UI first before building custom UI.
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
@@ -148,6 +149,7 @@ useEffect(() => {
 
 ### Critical reminders
 - **No IIFEs — never self-invoke an anonymous function (`(() => {...})()`). Arrow functions passed as arguments (`.map()`, `onClick={() => ...}`, `setState((current) => ...)`) are normal and fine. See "No IIFEs" under Coding Styles.**
+- **No loose `let` reassigned across branches and no accumulator `for` loops — use a returning function (early returns) and `.reduce`/`.map`/`.filter`/`Object.fromEntries`. See "Functions over loose variables" under Coding Styles.**
 - **Template literals with `${` in `className` are FORBIDDEN.**
 - **Always import and use `join` from `@moondreamsdev/dreamer-ui/utils`.**
 - **Before writing any conditional className, ask: “Am I using `join()`?”**
@@ -193,6 +195,42 @@ interface ButtonProps {
 
 // ✅ Use type only when an interface cannot express the shape
 type Status = 'idle' | 'loading' | 'success';
+```
+
+### Functions over loose variables
+- Don't declare a `let` and then assign it in each branch of an `if`/`else if`/`else` chain (or a `switch`) to feed a later `return`. Put the branching in a small function whose branches `return` the value directly (early returns), then call it once and destructure or use the result. This is what keeps a component's branches, their data, and their handlers colocated in one place instead of scattered across mutated variables.
+- Prefer expressions over statements for building values: `.reduce` over a `for` loop that pushes into or mutates an accumulator, `.map`/`.filter`/`.flatMap` over `for` + `push`, `Object.fromEntries` / `new Map(...)` / `new Set(...)` over manual insertion loops.
+- Default to `const`. A `let` is only acceptable when a value genuinely must be reassigned over time (a counter inside a closure, a retry loop's state) and no returning function or reduce expresses it more compactly.
+- Prefer compact, colocated code: keep a helper next to the single place that uses it (inside the component or the same file) rather than a separate file or abstraction, and don't split a short piece of logic across several one-use variables.
+
+```tsx
+// ❌ Bad: loose lets assigned per branch
+let title = "You've been invited";
+let actions = [];
+if (!invite.exists) {
+  title = 'Invite not found';
+  actions = [closeAction];
+} else if (membership) {
+  title = "You're already in";
+  actions = [closeAction, viewAction];
+}
+
+// ✅ Better: a returning function with early returns
+const getView = () => {
+  if (!invite.exists) return { title: 'Invite not found', actions: [closeAction] };
+  if (membership) return { title: "You're already in", actions: [closeAction, viewAction] };
+  return { title: "You've been invited", actions: [cancelAction, joinAction] };
+};
+const { title, actions } = getView();
+
+// ❌ Bad: for loop accumulating a map
+const byId: Record<string, Trip> = {};
+for (const trip of trips) {
+  byId[trip.id] = trip;
+}
+
+// ✅ Better
+const byId = trips.reduce<Record<string, Trip>>((acc, trip) => ({ ...acc, [trip.id]: trip }), {});
 ```
 
 ### No IIFEs (self-invoking anonymous functions)

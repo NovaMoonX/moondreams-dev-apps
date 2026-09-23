@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 
 import { useAuth } from '@hooks/useAuth';
 
-import Loading from '@/ui/Loading';
 import AppEntryFallback from '@/ui/AppEntryFallback';
+import AuthRequiredState from '@/ui/AuthRequiredState';
+import Loading from '@/ui/Loading';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MySpacePendingRequests from './components/MySpacePendingRequests';
 import PendingApprovalModal from './components/PendingApprovalModal';
@@ -21,7 +22,7 @@ import {
 } from './utils/generateCode';
 
 function WorthTheWait() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
 
   const navigate = useNavigate();
@@ -89,8 +90,12 @@ function WorthTheWait() {
   const finalSearchInviteCode =
     searchInviteCode?.length === SPACE_CODE_LENGTH ? searchInviteCode : null;
 
-  if (loading || boxesLoading || itemsLoading || memberUpdateLoading) {
+  if (authLoading || loading || boxesLoading || itemsLoading || memberUpdateLoading) {
     return <Loading />;
+  }
+
+  if (!user) {
+    return <AuthRequiredState message='Please sign in to use Worth the Wait.' />;
   }
 
   return (

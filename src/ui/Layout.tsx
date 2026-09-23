@@ -7,6 +7,7 @@ import { APP_REGISTRY_PATH_MAP } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
+import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
 import ThemeToggle from '@ui/ThemeToggle';
@@ -84,6 +85,7 @@ function Layout() {
   return (
     <div className='transition-colors duration-200'>
       <LocationSync />
+      <PostLoginRedirectHandler />
 
       <OfflineBanner />
 

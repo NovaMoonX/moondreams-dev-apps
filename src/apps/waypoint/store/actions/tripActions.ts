@@ -256,6 +256,11 @@ export const editTrip = createAsyncThunk<
       defaultCurrency,
       lastEditedAt,
     });
+    if (title !== trip.title && trip.inviteCode) {
+      tripBatch.update(doc(INVITE_CODE_COLLECTION, trip.inviteCode), {
+        title,
+      });
+    }
     await tripBatch.commit();
 
     const updatedTrip: TripSpace = {

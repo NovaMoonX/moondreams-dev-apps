@@ -1341,7 +1341,15 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.title == request.resource.data.title
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
-      allow update, delete: if false;
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
+        && request.resource.data.tripId == resource.data.tripId
+        && isNonEmptyString(request.resource.data.title)
+        && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId))
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.title == request.resource.data.title
+        && request.auth.uid in getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.members
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      allow delete: if false;
     }
 
     match /apps/waypoint/trips/{tripId} {

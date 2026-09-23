@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
+import { savePostLoginRedirect } from '@lib/postLoginRedirect';
 import Loading from '@ui/Loading';
 
 type ProtectedRouteProps = {
@@ -32,11 +33,11 @@ function ProtectedRoute({ appId, requireAdmin = false, children }: ProtectedRout
     const hasAccess = apps.some((app) => app.id === appId) || isAdmin;
 
     if (!hasAccess) {
-      return user ? (
-        <Navigate to='/unauthorized' replace />
-      ) : (
-        <Navigate to='/' state={{ from: location }} replace />
-      );
+      if (user) {
+        return <Navigate to='/unauthorized' replace />;
+      }
+      savePostLoginRedirect(location.pathname + location.search + location.hash);
+      return <Navigate to='/' replace />;
     }
   }
 
