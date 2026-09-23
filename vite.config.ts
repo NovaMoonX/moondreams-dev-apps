@@ -58,6 +58,26 @@ export default defineConfig({
           'firebase-messaging-sw-config.js',
           'firebase-messaging-sw-additions.js',
         ],
+        runtimeCaching: [
+          {
+            // Re-uploads overwrite the same path and keep the same download URL, so
+            // cache-first would pin a stale file; revalidate in the background instead.
+            urlPattern: ({ url }) =>
+              url.hostname === 'firebasestorage.googleapis.com' &&
+              url.searchParams.get('alt') === 'media',
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'firebase-storage-files',
+              // <img> loads are opaque (status 0) since they aren't CORS requests.
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: {
+                maxEntries: 150,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

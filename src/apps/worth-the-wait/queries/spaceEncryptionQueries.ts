@@ -21,6 +21,8 @@ export function spaceEncryptionQueryOptions(spaceId: string) {
       return normalizeSpaceEncryption(snapshot.data()?.encryption ?? null);
     },
     staleTime: Infinity,
+    // Key material: Firestore's own offline cache already covers it, so skip a second on-disk copy.
+    meta: { persist: false },
   });
 }
 
