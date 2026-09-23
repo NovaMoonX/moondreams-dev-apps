@@ -16,5 +16,6 @@ export function linkMetadataQueryOptions(url: string) {
     staleTime: DAY_MS,
     gcTime: DAY_MS,
     retry: false,
+    meta: { persist: true },
   });
 }

@@ -191,6 +191,14 @@ regularly gets the shape right but the UX wrong:
   includes every param that changes the result and nothing that doesn't
   (e.g. a Places session token), and that `staleTime` fits how often the
   data really changes. Writes and non-idempotent calls stay as they are.
+- **Query persistence is opt-in, and every `meta: { persist: true }` has
+  to earn its place.** Queries persist to IndexedDB only with that flag,
+  so a missing flag is safe. A wrong one is not. Grep the diff for
+  `persist: true` and remove it from any `queryOptions` whose `queryFn`
+  reads Firestore (`getDoc`/`getDocs`: Firestore's own cache already has
+  it on disk) or returns secrets, tokens or key material. A third-party
+  API or worker result that's safe to keep should carry it, so it stays
+  available offline.
 - **Every `useAppSelector` whose selector builds a new array or object
   (`.filter`, `.map`, a spread, an object literal, a `[]` fallback) must
   pass `shallowEqual` from `react-redux` as the second argument** — e.g.

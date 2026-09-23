@@ -30,7 +30,14 @@ export const queryPersister = createAsyncStoragePersister({
   key: 'moondreams-query-cache',
 });
 
-/** Opt a query out of disk persistence with `meta: { persist: false }`. */
+declare module '@tanstack/react-query' {
+  interface Register {
+    queryMeta: { persist?: boolean };
+  }
+}
+
+// Opt-in so a forgotten flag only costs offline availability, never writes
+// Firestore-backed or sensitive data to disk a second time.
 export function shouldPersistQuery(query: Query) {
-  return defaultShouldDehydrateQuery(query) && query.meta?.persist !== false;
+  return defaultShouldDehydrateQuery(query) && query.meta?.persist === true;
 }
