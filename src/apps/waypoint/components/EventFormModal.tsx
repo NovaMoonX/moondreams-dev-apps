@@ -30,6 +30,7 @@ import {
   getDayLabel,
 } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -275,6 +276,15 @@ function EventFormModal({
     await onDelete();
   };
 
+  const draftStartAt = fromLocalDateAndTimeInputValues(
+    getDayInputValue(trip.startDate, draft.dayIndex),
+    draft.time,
+  );
+  const reminderAt =
+    draft.reminderEnabled && draftStartAt !== undefined
+      ? draftStartAt - draft.reminderMinutesBefore * 60_000
+      : null;
+
   const quickLabel =
     draft.eventType === 'TRAVEL'
       ? 'Transit type'
@@ -474,6 +484,11 @@ function EventFormModal({
                     : updateDraft({ reminderEnabled: true, reminderMinutesBefore: Number(value) })
                 }
               />
+              {reminderAt !== null && (
+                <p className='text-muted-foreground text-xs'>
+                  Will remind at {formatTime(reminderAt)}
+                </p>
+              )}
             </div>
             <div className='space-y-2'>
               <Label>Attendees</Label>

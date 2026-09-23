@@ -89,14 +89,14 @@ function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
 
   return (
     <article className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden rounded-xl border-2 shadow-sm'>
-      {imageUrl && (
-        <EnrichedImage
-          src={imageUrl}
-          alt=''
-          className='aspect-video w-full object-cover sm:aspect-[2/1]'
-        />
-      )}
       <div className='p-5'>
+        {imageUrl && (
+          <EnrichedImage
+            src={imageUrl}
+            alt=''
+            className='mb-4 aspect-video w-full rounded-lg object-cover sm:aspect-[2/1]'
+          />
+        )}
         <div className='flex items-start justify-between gap-3'>
           <div className='min-w-0'>
             <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
