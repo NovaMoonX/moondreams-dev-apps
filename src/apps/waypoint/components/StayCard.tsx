@@ -19,12 +19,12 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   const imageUrl = getDisplayImage(stay);
 
   return (
-    <article className='border-border bg-card overflow-hidden rounded-lg border'>
+    <article className='border-border bg-card flex overflow-hidden rounded-lg border'>
       {imageUrl && (
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+          className='w-28 shrink-0 object-cover sm:w-44'
           refreshFrom={
             stay.place
               ? {
@@ -37,7 +37,7 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
           }
         />
       )}
-      <div className='flex items-start justify-between gap-3 p-4'>
+      <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
         <div className='min-w-0'>
           <h3 className='font-semibold'>{stay.name}</h3>
           <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
