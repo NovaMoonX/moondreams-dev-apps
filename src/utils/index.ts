@@ -8,4 +8,5 @@ export * from './formatUtils';
 export * from './formFactoryHelpers';
 export * from './inviteCodeUtils';
 export * from './mapUrlUtils';
+export * from './stringUtils';
 export * from './timezoneUtils';
