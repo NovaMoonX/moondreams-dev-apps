@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import { AppCatalogProvider } from '@contexts/AppCatalogContext';
 import { AuthProvider } from '@contexts/AuthContext';
+import { NetworkStatusProvider } from '@contexts/NetworkStatusContext';
 import { useReminderSync } from '@hooks/useReminderSync';
 import { queryClient } from '@lib/query/queryClient';
 import { router } from '@routes/AppRoutes';
@@ -23,11 +24,13 @@ function App() {
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
         <DreamerUIProvider>
-          <AuthProvider>
-            <AppCatalogProvider>
-              <AppShell />
-            </AppCatalogProvider>
-          </AuthProvider>
+          <NetworkStatusProvider>
+            <AuthProvider>
+              <AppCatalogProvider>
+                <AppShell />
+              </AppCatalogProvider>
+            </AuthProvider>
+          </NetworkStatusProvider>
         </DreamerUIProvider>
       </QueryClientProvider>
     </Provider>
