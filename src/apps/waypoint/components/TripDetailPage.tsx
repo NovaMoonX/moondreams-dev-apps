@@ -11,7 +11,7 @@ import {
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useNow } from '@/hooks/useNow';
-import { formatDateTime } from '@/utils/formatUtils';
+import { formatDate } from '@/utils/formatUtils';
 
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
@@ -67,7 +67,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             )}
           </div>
           <p className='text-muted-foreground mt-1'>
-            {formatDateTime(trip.startDate)} – {formatDateTime(trip.endDate)}
+            {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
           </p>
           <div className='mt-3'>
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />

@@ -9,6 +9,7 @@ import {
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { shallowEqual } from 'react-redux';
 
 import AppToggle from '@/components/AppToggle';
 import EnrichedImage from '@/components/EnrichedImage';
@@ -56,7 +57,7 @@ export function TimelineSection({
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const memberIds = Object.keys(trip.members);
   const activeDayIndex = activeDayTab === 'all' ? 0 : Number(activeDayTab);
-  const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex));
+  const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex), shallowEqual);
   const members = useUserInfo(memberIds)?.map ?? {};
   const memberOptions = memberIds.map((uid) => ({
     label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
