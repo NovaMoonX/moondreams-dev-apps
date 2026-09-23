@@ -17,6 +17,7 @@ import NavButton from '@/ui/NavButton';
 
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import EditTripModal from '@apps/waypoint/components/EditTripModal';
+import JoinTripModal from '@apps/waypoint/components/JoinTripModal';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
@@ -40,15 +41,13 @@ function Waypoint() {
   const { confirm } = useActionModal();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<TripSpace | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteRequestSent, setInviteRequestSent] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const trips = useAppSelector(selectTrips);
   const timelineEvents = useAppSelector(selectTimelineEvents);
@@ -142,16 +141,23 @@ function Waypoint() {
     }
 
     setIsInviteSubmitting(true);
-    setInviteError(null);
 
     try {
       await dispatch(requestToJoinTrip({ uid: user.uid, inviteCode })).unwrap();
-      setInviteRequestSent(true);
-    } catch (requestError) {
-      setInviteError(getErrorMessage(requestError, 'Unable to request access.'));
     } finally {
       setIsInviteSubmitting(false);
     }
+  };
+
+  const handleCloseJoinModal = () => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('inviteCode');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  const handleViewInvitedTrip = (tripId: string) => {
+    setSelectedTripId(tripId);
+    handleCloseJoinModal();
   };
 
   const handleCopyInviteLink = async (tripInviteCode: string) => {
@@ -265,34 +271,6 @@ function Waypoint() {
           </div>
         </div>
 
-        {inviteCode && (
-          <section className='border-border bg-card rounded-lg border p-4'>
-            <h2 className='text-lg font-semibold'>You&apos;ve been invited</h2>
-            <p className='text-muted-foreground mt-1 text-sm'>
-              Request access to this Waypoint trip. An Admin will choose your
-              role before you can view it.
-            </p>
-            {inviteRequestSent ? (
-              <p className='text-muted-foreground mt-4 text-sm'>
-                Your request has been sent. You&apos;ll see it below while you
-                wait.
-              </p>
-            ) : (
-              <Button
-                type='button'
-                className='mt-4'
-                disabled={isInviteSubmitting}
-                onClick={handleRequestToJoin}
-              >
-                {isInviteSubmitting ? 'Requesting…' : 'Request to join'}
-              </Button>
-            )}
-            {inviteError && (
-              <p className='text-destructive mt-3 text-sm'>{inviteError}</p>
-            )}
-          </section>
-        )}
-
         <MyPendingTrips
           requests={pendingRequests}
           loading={!pendingRequestsLoaded}
@@ -333,6 +311,18 @@ function Waypoint() {
         onSubmit={handleEditTrip}
         onClose={() => setEditingTrip(null)}
       />
+      {inviteCode && (
+        <JoinTripModal
+          key={inviteCode}
+          inviteCode={inviteCode}
+          myTrips={trips}
+          pendingRequests={pendingRequests}
+          isSubmitting={isInviteSubmitting}
+          onRequestToJoin={handleRequestToJoin}
+          onViewTrip={handleViewInvitedTrip}
+          onClose={handleCloseJoinModal}
+        />
+      )}
     </div>
   );
 }

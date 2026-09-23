@@ -256,6 +256,14 @@ export const editTrip = createAsyncThunk<
       defaultCurrency,
       lastEditedAt,
     });
+    // Keep the invite code's denormalized title in sync so the join modal
+    // (which can't read the trip doc before the user is a member) reflects
+    // renames live.
+    if (title !== trip.title && trip.inviteCode) {
+      tripBatch.update(doc(INVITE_CODE_COLLECTION, trip.inviteCode), {
+        title,
+      });
+    }
     await tripBatch.commit();
 
     const updatedTrip: TripSpace = {

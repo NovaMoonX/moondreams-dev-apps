@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
+import { savePostLoginRedirect } from '@lib/postLoginRedirect';
 import Loading from '@ui/Loading';
 
 type ProtectedRouteProps = {
@@ -32,11 +33,15 @@ function ProtectedRoute({ appId, requireAdmin = false, children }: ProtectedRout
     const hasAccess = apps.some((app) => app.id === appId) || isAdmin;
 
     if (!hasAccess) {
-      return user ? (
-        <Navigate to='/unauthorized' replace />
-      ) : (
-        <Navigate to='/' state={{ from: location }} replace />
-      );
+      if (user) {
+        return <Navigate to='/unauthorized' replace />;
+      }
+
+      // Not signed in — remember where they were headed (e.g. a join link
+      // with an invite code in the query string) so they land back here
+      // instead of on the home page once they sign in.
+      savePostLoginRedirect(location.pathname + location.search + location.hash);
+      return <Navigate to='/' replace />;
     }
   }
 

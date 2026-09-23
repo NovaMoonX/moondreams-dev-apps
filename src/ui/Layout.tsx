@@ -4,6 +4,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { APP_REGISTRY_PATH_MAP } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
+import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import ThemeToggle from '@ui/ThemeToggle';
 import VersionBadge from '@ui/VersionBadge';
@@ -77,6 +78,7 @@ function Layout() {
   return (
     <div className='transition-colors duration-200'>
       <LocationSync />
+      <PostLoginRedirectHandler />
 
       {/* header */}
       <div className='pointer-events-none absolute inset-x-0 top-0 z-10 flex h-20 items-center gap-3 px-4 py-4 md:px-6'>
