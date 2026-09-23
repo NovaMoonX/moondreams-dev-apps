@@ -1,11 +1,12 @@
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { patchStayPlacePhoto } from '@apps/waypoint/store/actions/stayActions';
 import EnrichedImage from '@/components/EnrichedImage';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatDateTime } from '@/utils/formatUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
-import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
+import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { Stay } from '@apps/waypoint/types';
 
 interface StayCardProps {
@@ -16,65 +17,56 @@ interface StayCardProps {
 
 export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   const imageUrl = getDisplayImage(stay);
-  const linkHref = getDisplayLink(stay);
 
   return (
     <article className='border-border bg-card overflow-hidden rounded-lg border'>
-      <div className='flex items-start gap-3 p-4'>
-        {imageUrl && (
-          <EnrichedImage
-            src={imageUrl}
-            alt=''
-            className='h-16 w-16 shrink-0 rounded-md object-cover'
-            refreshFrom={
-              stay.place
-                ? {
-                    place: stay.place,
-                    canEdit,
-                    onRefreshed: (photoUrl, photoRefreshedAt) =>
-                      void patchStayPlacePhoto(stay.tripId, stay.id, photoUrl, photoRefreshedAt),
-                  }
-                : undefined
-            }
-          />
-        )}
-        <div className='flex flex-1 items-start justify-between gap-3'>
-          <div>
-            <Badge variant='base'>🏨 Stay</Badge>
-            <h3 className='mt-2 font-semibold'>{stay.name}</h3>
-            <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
-            <p className='text-muted-foreground mt-2 text-sm'>
-              {formatDateTime(stay.checkInAt)} – {formatDateTime(stay.checkOutAt)}
+      {imageUrl && (
+        <EnrichedImage
+          src={imageUrl}
+          alt=''
+          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+          refreshFrom={
+            stay.place
+              ? {
+                  place: stay.place,
+                  canEdit,
+                  onRefreshed: (photoUrl, photoRefreshedAt) =>
+                    void patchStayPlacePhoto(stay.tripId, stay.id, photoUrl, photoRefreshedAt),
+                }
+              : undefined
+          }
+        />
+      )}
+      <div className='flex items-start justify-between gap-3 p-4'>
+        <div className='min-w-0'>
+          <h3 className='font-semibold'>{stay.name}</h3>
+          <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
+          {stay.linkUrl && (
+            <div className='mt-1'>
+              <ExternalLinkText href={stay.linkUrl} />
+            </div>
+          )}
+          <p className='text-muted-foreground mt-2 text-sm'>
+            {formatDateTime(stay.checkInAt)} – {formatDateTime(stay.checkOutAt)}
+          </p>
+          {stay.checkInTimezone && (
+            <p className='text-muted-foreground mt-1 text-xs'>
+              {formatTimezoneLabel(stay.checkInTimezone)}
             </p>
-            {stay.checkInTimezone && (
-              <p className='text-muted-foreground mt-1 text-xs'>
-                {formatTimezoneLabel(stay.checkInTimezone)}
-              </p>
-            )}
-            {linkHref && (
-              <a
-                href={linkHref}
-                target='_blank'
-                rel='noreferrer'
-                className='text-primary mt-1 inline-block text-xs font-medium hover:underline'
-              >
-                View link
-              </a>
-            )}
-          </div>
-          <div className='flex shrink-0 gap-2'>
-            <MapNavigationButton
-              locationName={stay.name}
-              address={stay.address}
-              latitude={stay.latitude}
-              longitude={stay.longitude}
-            />
-            {canEdit && (
-              <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
-                Modify
-              </Button>
-            )}
-          </div>
+          )}
+        </div>
+        <div className='flex shrink-0 gap-2'>
+          <MapNavigationButton
+            locationName={stay.name}
+            address={stay.address}
+            latitude={stay.latitude}
+            longitude={stay.longitude}
+          />
+          {canEdit && (
+            <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
+              Modify
+            </Button>
+          )}
         </div>
       </div>
     </article>

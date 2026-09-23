@@ -9,12 +9,3 @@ export function getDisplayImage(item: {
 }): string | null {
   return item.linkPreview?.imageUrl ?? item.place?.photoUrl ?? null;
 }
-
-/** The best link to send someone to learn more about this item: the attached
- * booking/listing link if there is one, otherwise the place's Google Maps page. */
-export function getDisplayLink(item: {
-  place?: PlaceRef | null;
-  linkUrl?: string | null;
-}): string | null {
-  return item.linkUrl ?? item.place?.mapsUrl ?? null;
-}

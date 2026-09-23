@@ -3,9 +3,10 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import EnrichedImage from '@/components/EnrichedImage';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
-import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
+import { getDisplayImage } from '@/utils/enrichmentUtils';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
@@ -94,10 +95,9 @@ function ActiveNowCard({
     duration !== null && duration > 0
       ? Math.min(1, Math.max(0, (now - event.startAt) / duration))
       : null;
-  // The hero image ignores the Timeline's "Show rich content" toggle — Active Now
-  // is the one place we always want it as prominent as possible.
+  // Ignores the Timeline's "Show covers" toggle — Active Now is the one place the
+  // cover should always be as prominent as possible.
   const imageUrl = getDisplayImage(event);
-  const linkHref = getDisplayLink(event);
 
   return (
     <article className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden rounded-xl border-2 shadow-sm'>
@@ -105,7 +105,7 @@ function ActiveNowCard({
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='h-48 w-full object-cover'
+          className='aspect-video w-full object-cover sm:aspect-[2/1]'
           refreshFrom={
             event.place
               ? {
@@ -120,7 +120,7 @@ function ActiveNowCard({
       )}
       <div className='p-5'>
         <div className='flex items-start justify-between gap-3'>
-          <div>
+          <div className='min-w-0'>
             <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
               Active Now
             </p>
@@ -139,15 +139,10 @@ function ActiveNowCard({
                 {event.address}
               </p>
             )}
-            {linkHref && (
-              <a
-                href={linkHref}
-                target='_blank'
-                rel='noreferrer'
-                className='text-primary mt-1 inline-block text-xs font-medium hover:underline'
-              >
-                View link
-              </a>
+            {event.linkUrl && (
+              <div className='mt-1'>
+                <ExternalLinkText href={event.linkUrl} />
+              </div>
             )}
           </div>
           <MapNavigationButton {...event} />

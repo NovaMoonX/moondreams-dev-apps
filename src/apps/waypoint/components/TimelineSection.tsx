@@ -12,6 +12,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AppToggle from '@/components/AppToggle';
 import EnrichedImage from '@/components/EnrichedImage';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import {
@@ -27,7 +28,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
-import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
+import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import { selectActiveStaysForDay } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
@@ -62,10 +63,7 @@ export function TimelineSection({
     value: uid,
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
-  const [showRichContent, setShowRichContent] = useLocalStoragePreference(
-    'waypoint:richContent',
-    true,
-  );
+  const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const placeBias = getPlaceBiasFromItems(events);
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
@@ -79,7 +77,7 @@ export function TimelineSection({
             key={stay.id}
             stay={stay}
             canEdit={canEdit}
-            showRichContent={showRichContent}
+            showCover={showCovers}
           />
         ))}
       </div>
@@ -101,7 +99,7 @@ export function TimelineSection({
       key={event.id}
       event={event}
       canEdit={canEdit}
-      showRichContent={showRichContent}
+      showCover={showCovers}
       onEdit={(selectedEvent) => {
         setEditingEvent(selectedEvent);
         setIsFormOpen(true);
@@ -234,10 +232,10 @@ export function TimelineSection({
           <label className='text-muted-foreground mt-3 flex items-center gap-2 text-sm'>
             <AppToggle
               size='sm'
-              checked={showRichContent}
-              onCheckedChange={setShowRichContent}
+              checked={showCovers}
+              onCheckedChange={setShowCovers}
             />
-            Show rich content
+            Show covers
           </label>
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
@@ -272,22 +270,21 @@ export function TimelineSection({
 function StayBanner({
   stay,
   canEdit,
-  showRichContent,
+  showCover,
 }: {
   stay: Stay;
   canEdit: boolean;
-  showRichContent: boolean;
+  showCover: boolean;
 }) {
-  const imageUrl = showRichContent ? getDisplayImage(stay) : null;
-  const linkHref = showRichContent ? getDisplayLink(stay) : null;
+  const imageUrl = showCover ? getDisplayImage(stay) : null;
 
   return (
-    <div className='border-border bg-card flex items-center gap-3 overflow-hidden rounded-lg border'>
+    <div className='border-border bg-card flex overflow-hidden rounded-lg border'>
       {imageUrl && (
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='h-16 w-16 shrink-0 object-cover'
+          className='w-28 shrink-0 object-cover sm:w-44'
           refreshFrom={
             stay.place
               ? {
@@ -306,15 +303,10 @@ function StayBanner({
         </p>
         <p className='mt-1 font-semibold'>{stay.name}</p>
         <p className='text-muted-foreground text-sm'>{stay.address}</p>
-        {linkHref && (
-          <a
-            href={linkHref}
-            target='_blank'
-            rel='noreferrer'
-            className='text-primary text-xs font-medium hover:underline'
-          >
-            View link
-          </a>
+        {stay.linkUrl && (
+          <div className='mt-1'>
+            <ExternalLinkText href={stay.linkUrl} />
+          </div>
         )}
       </div>
     </div>

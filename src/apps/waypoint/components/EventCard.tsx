@@ -3,8 +3,9 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import EnrichedImage from '@/components/EnrichedImage';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatTime } from '@/utils/formatUtils';
-import { getDisplayImage, getDisplayLink } from '@/utils/enrichmentUtils';
+import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
 import { patchEventPlacePhoto } from '@apps/waypoint/store/actions/eventActions';
 import {
@@ -16,14 +17,13 @@ import {
 interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
-  showRichContent: boolean;
+  showCover: boolean;
   onEdit: (event: TimelineEvent) => void;
 }
 
-export function EventCard({ event, canEdit, showRichContent, onEdit }: EventCardProps) {
+export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps) {
   const details = event.eventDetails;
-  const imageUrl = showRichContent ? getDisplayImage(event) : null;
-  const linkHref = showRichContent ? getDisplayLink(event) : null;
+  const imageUrl = showCover ? getDisplayImage(event) : null;
   const quickField =
     event.eventType === 'TRAVEL' && details && 'transitType' in details
       ? details.transitType
@@ -39,7 +39,7 @@ export function EventCard({ event, canEdit, showRichContent, onEdit }: EventCard
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='h-36 w-full object-cover'
+          className='aspect-video w-full object-cover sm:aspect-[2/1]'
           refreshFrom={
             event.place
               ? {
@@ -53,7 +53,7 @@ export function EventCard({ event, canEdit, showRichContent, onEdit }: EventCard
         />
       )}
       <div className='flex items-start justify-between gap-3 p-4'>
-        <div>
+        <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>
             <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
               {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
@@ -73,26 +73,19 @@ export function EventCard({ event, canEdit, showRichContent, onEdit }: EventCard
               {event.address ? ` · ${event.address}` : ''}
             </p>
           )}
+          {event.linkUrl && (
+            <div className='mt-1'>
+              <ExternalLinkText href={event.linkUrl} />
+            </div>
+          )}
           <ChangeBadge changeHistory={event.changeHistory} />
         </div>
-        <div className='flex shrink-0 flex-col items-end gap-2'>
-          <div className='flex gap-2'>
-            <MapNavigationButton {...event} />
-            {canEdit && (
-              <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
-                Modify
-              </Button>
-            )}
-          </div>
-          {linkHref && (
-            <a
-              href={linkHref}
-              target='_blank'
-              rel='noreferrer'
-              className='text-primary text-xs font-medium hover:underline'
-            >
-              View link
-            </a>
+        <div className='flex shrink-0 gap-2'>
+          <MapNavigationButton {...event} />
+          {canEdit && (
+            <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
+              Modify
+            </Button>
           )}
         </div>
       </div>
