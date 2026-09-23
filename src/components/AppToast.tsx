@@ -3,7 +3,7 @@ import { useRef, useState, type PointerEvent } from 'react';
 import type { ToastData } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
+import { TOAST_APP_LABELS, TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80;
 const CLICK_MOVEMENT_THRESHOLD_PX = 5;
@@ -20,6 +20,7 @@ interface AppToastProps extends Omit<ToastData, 'type'> {
 function AppToast({ id, title, description, type, action, onRemove }: AppToastProps) {
   const style = TOAST_TYPE_STYLES[type ?? 'info'] ?? TOAST_TYPE_STYLES.info;
   const isReminder = type === 'reminder';
+  const appLabel = TOAST_APP_LABELS.get(id);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -77,6 +78,11 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
     >
       {style.icon && <div className='mt-0.5 shrink-0'>{style.icon}</div>}
       <div className='min-w-0 flex-1'>
+        {appLabel && (
+          <div className='text-xs leading-4 font-bold tracking-wide uppercase opacity-60'>
+            {appLabel}
+          </div>
+        )}
         <div className='text-sm leading-5 font-medium'>{title}</div>
         {description && <div className='mt-1 text-sm leading-5 opacity-90'>{description}</div>}
       </div>

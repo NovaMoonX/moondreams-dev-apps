@@ -56,6 +56,9 @@ VITE_FIREBASE_AI_MODEL=
 
 # true to use the local Firebase Emulator Suite (see SEEDING.md).
 VITE_USE_FIREBASE_EMULATORS=
+
+# Dev only: true to always show a sample reminder toast on load (stays until dismissed) for tweaking its design.
+VITE_FORCE_REMINDER_TOAST=
 ```
 
 #### Google API keys

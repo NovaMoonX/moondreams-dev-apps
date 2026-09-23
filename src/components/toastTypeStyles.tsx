@@ -24,3 +24,6 @@ export const TOAST_TYPE_STYLES: Record<string, ToastTypeStyle> = {
     icon: <Bell className='h-5 w-5' />,
   },
 };
+
+// `ToastData` has no slot for extra fields, so the toast's source app is passed alongside by id.
+export const TOAST_APP_LABELS = new Map<string, string>();

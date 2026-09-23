@@ -649,8 +649,23 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  await context.firestore.collection('reminders').doc('seed-waypoint-reminder-alex').set({
+    id: 'seed-waypoint-reminder-alex',
+    appId: 'waypoint',
+    targetUids: [alex.uid],
+    title: 'Lunch at Salt Creek',
+    body: 'Starting in 20 minutes.',
+    scheduledFor: context.now + 15_000,
+    status: 'pending',
+    channels: ['push'],
+    relatedEntityPath: `apps/waypoint/trips/${ACTIVE_TRIP_ID}/events/active-trip-lunch`,
+    recurrence: 'none',
+    createdBy: alex.uid,
+    createdAt: context.now,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 26,
+    firestoreDocuments: 27,
   };
 }
