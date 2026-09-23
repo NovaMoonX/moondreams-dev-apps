@@ -1,5 +1,6 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CheckCircle2, LoaderCircle, WifiOff, WifiZero } from 'lucide-react';
+import { useState } from 'react';
 
 import { useNetworkStatus, type NetworkBannerState } from '@hooks/useNetworkStatus';
 
@@ -35,7 +36,12 @@ const VARIANTS: Record<
 /** Always mounted; visibility is a transform so sliding away never reflows or squishes the text. */
 function OfflineBanner() {
   const status = useNetworkStatus();
-  const variant = VARIANTS[status ?? 'offline'];
+  // Keeps the last shown variant while sliding out, so a cleared status doesn't repaint it.
+  const [shownVariant, setShownVariant] = useState<Variant>(status ?? 'offline');
+  if (status && status !== shownVariant) {
+    setShownVariant(status);
+  }
+  const variant = VARIANTS[shownVariant];
   const Icon = variant.icon;
 
   return (
