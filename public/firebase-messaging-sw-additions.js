@@ -7,18 +7,24 @@ importScripts(
   'https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging-compat.js',
 );
 
-if (self.__FIREBASE_CONFIG__) {
-  firebase.initializeApp(self.__FIREBASE_CONFIG__);
+// A throw here aborts the rest of the worker's setup (precache and runtime caching),
+// so a missing or broken config must only disable push, never offline support.
+if (self.__FIREBASE_CONFIG__?.projectId) {
+  try {
+    firebase.initializeApp(self.__FIREBASE_CONFIG__);
 
-  const messaging = firebase.messaging();
+    const messaging = firebase.messaging();
 
-  messaging.onBackgroundMessage((payload) => {
-    const { title, body } = payload.notification ?? {};
+    messaging.onBackgroundMessage((payload) => {
+      const { title, body } = payload.notification ?? {};
 
-    if (!title) {
-      return;
-    }
+      if (!title) {
+        return;
+      }
 
-    self.registration.showNotification(title, { body });
-  });
+      self.registration.showNotification(title, { body });
+    });
+  } catch (error) {
+    console.error('Firebase Messaging setup failed; push notifications disabled.', error);
+  }
 }

@@ -1341,10 +1341,6 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.title == request.resource.data.title
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
-      // Lets an editor/admin's trip rename (a title-only update, committed in
-      // the same batch as the trip update) keep this denormalized title in
-      // sync, so a join modal can show the current trip name without read
-      // access to the trip doc itself.
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
         && request.resource.data.tripId == resource.data.tripId

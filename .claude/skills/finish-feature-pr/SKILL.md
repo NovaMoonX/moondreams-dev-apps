@@ -11,7 +11,7 @@ features bolted onto the wrong UI location, missing seed data, and rules that
 don't match the final data model. This skill is the checklist for taking one
 of those branches to an actually-mergeable state — not just "compiles."
 
-Run every step below. Don't skip validation because the diff "looks right."
+Run every step below. Don't skip validation because the diff "looks right." Coding standards live in `CLAUDE.md` at the repo root — read it first.
 
 This skill is also triggered automatically once a feature branch is pushed
 and has a clean working tree, via a Stop hook
@@ -95,214 +95,46 @@ rest of step 0.
 
 ## 2. Fix entry points and placement
 
-Nine Lives features are either:
-- **Household-level sections** rendered directly in `NineLives.tsx`, each
-  wrapped in `DetailsDisclosure` (see `ClinicsSection.tsx`, `ExpensesSection.tsx`)
-  and using a household-scoped Firestore collection
-  (`apps/nine-lives/households/{householdId}/{collection}/{id}`), synced via
-  `useNineLivesSync.ts`.
-- **Cat-scoped tabs** inside `CatDetailsModal.tsx`, backed by a
-  `households/{householdId}/cats/{catId}/{collection}` subcollection, synced
-  via `useCatDetailSync.ts`.
+Confirm the feature is wired into a screen a user can actually reach, at the
+location the request specified — a component that exists but is never rendered
+doesn't satisfy a CRUD/browse requirement. For Nine Lives placement (household
+section vs cat-scoped tab, `catId` → `catIds`, migrating collections), follow
+"Nine Lives placement" in `CLAUDE.md`.
 
-Check what the user actually asked for. If a feature was implemented as a cat
-details tab but should be its own top-level section (this has happened with
-both Expenses and Health Records), migrating means:
+## 3. Audit against CLAUDE.md
 
-- Move the Firestore collection from per-cat to flat household-level (or
-  vice versa), updating every action/listener/selector that references it.
-- If the entity should attach to multiple cats, change `catId: string` to
-  `catIds: string[]` on the type, and thread that through actions (create
-  dedupes with `Array.from(new Set(...))`), the form (a `FormFactories.checkboxGroup`
-  field, first in the form, options built from `selectCatsByHousehold`), the
-  list view (resolve cat names for display), and the Firestore rule (`catIds
-  is list && catIds.size() > 0` instead of an `== catId` identity check).
-- Remove the old tab/trigger from `CatDetailsModal.tsx` and wire the new
-  section into `NineLives.tsx` at the position the user specified (read the
-  existing section order — Visits, Expenses, Vet Clinics are the established
-  anchors to place something "under" or "at the bottom").
+`CLAUDE.md` (repo root) is the single source of truth for coding style and
+norms, and it imports `.github/copilot-instructions.md`. Read it before this
+step and audit the whole diff against it — don't rely on memory of the rules.
+This checklist names the sections to walk; the rules themselves live there:
 
-## 3. Audit CRUD + UX against established conventions
-
-Don't just confirm Create/Read/Update/Delete all technically exist — check
-they match this codebase's established patterns, since the coding agent
-regularly gets the shape right but the UX wrong:
-
-- Submit buttons disable until required fields are valid, rather than
-  showing required-field asterisks (check `onDataChange` + `isValid` state
-  in sibling form modals for the current convention).
-- **Modal/section titles avoid CRUD terminology** — a plain noun for the
-  thing being edited ("Expense", "Visit", "New cat"), not the database verb
-  ("Add Expense", "Edit Visit", "Create Clinic"); the same title applies
-  whether the modal is creating or editing. See `.github/copilot-instructions.md`'s
-  "Avoid CRUD terminology in headers" section — the verb still belongs on
-  the primary action button and on a destructive confirm dialog's title,
-  since there the reader needs it to understand the consequence of
-  clicking.
-- Optional secondary fields use a "+ Add X" reveal-link, not "(optional)" in
-  the label.
-- A modal component that's always-mounted (visibility via an `isOpen` prop)
-  needs `key={editingX?.id ?? 'new'}` at its call site or its internal
-  `useState` goes stale across edit targets — this is a real, recurring bug
-  in this codebase, not a hypothetical.
-- Deletes go through `useActionModal().confirm(...)` with `destructive:
-  true`, not a bare `window.confirm` or no confirmation at all.
-- **A form modal's delete action belongs in the footer as an icon-only
-  trash button on the bottom-left, never a "Delete" text button mixed in
-  with Cancel/Save on the right.** Use the shared `DeleteIconButton`
-  (`apps/waypoint/components/DeleteIconButton.tsx`, mirrored in
-  `apps/nine-lives`) as `leftActions` of the shared `ModalFooterActions`
-  (`leftActions`/`rightActions` props — `rightActions` holds Cancel then
-  the primary submit button), not a `variant='destructive'` text `Button`
-  stacked into the same `flex justify-end` row as Cancel/Save.
-  `ChecklistItemFormModal.tsx` and `ExpenseFormModal.tsx` are the reference
-  shape. Grep the diff for `variant='destructive'` on a text `Button` inside
-  a form modal's footer to catch this.
-- Use `AppToggle` (`@/components/AppToggle`), never the raw `Toggle` from
-  Dreamer UI — grep the diff for `Toggle` imported from
-  `@moondreamsdev/dreamer-ui/components`.
-- Use a `Toggle`, not a `Checkbox`, for any control whose change takes effect
-  immediately (a live filter, a "show archived" switch); keep `Checkbox` for
-  form-staged values and to-do-style completion marks.
-- **Any Firestore listener the coding agent wrote directly inside a leaf
-  component's `useEffect` — a tab, a panel inside a modal, anything that
-  isn't the mini-app's single top-level orchestrator — is a bug, not a
-  style preference.** That component mounts/unmounts every time its tab or
-  panel opens and closes, so the listener tears down and resubscribes on
-  every one of those instead of once per actual key change. Move it into
-  `store/listeners/` as a plain `startXListener(key, onChange)` function,
-  dispatched from a `useXSync` hook called once at the top-level page
-  (`useNineLivesSync.ts` is the reference shape: one effect for data scoped
-  to the signed-in user, a second for data scoped to whichever resource is
-  currently open, each keyed only on the id it actually depends on). The
-  leaf component becomes a pure `useAppSelector` reader with no listener of
-  its own — grep the diff for `onSnapshot(` outside `store/listeners/` to
-  catch this.
-- **Every request/response call goes through TanStack Query.** This covers
-  third-party APIs, callables, and one-off `getDoc`/`getDocs` reads that
-  aren't live. Grep the diff for `fetch(`, `httpsCallable(` and
-  `getDoc`/`getDocs` outside `store/actions/` and `store/listeners/`. Any
-  hit that feeds UI through `useEffect` + `useState`, or that repeats the
-  same call with the same params, should become a `queryOptions` factory
-  in `src/lib/<feature>/<feature>Queries.ts` (shared) or
-  `src/apps/<app>/queries/<resource>Queries.ts` (never a bare `queries.ts`),
-  read with `useQuery`/`useQueries`, or called via
-  `queryClient.fetchQuery(...)` when imperative. Check that each key
-  includes every param that changes the result and nothing that doesn't
-  (e.g. a Places session token), and that `staleTime` fits how often the
-  data really changes. Writes and non-idempotent calls stay as they are.
-- **Every `useAppSelector` whose selector builds a new array or object
-  (`.filter`, `.map`, a spread, an object literal, a `[]` fallback) must
-  pass `shallowEqual` from `react-redux` as the second argument** — e.g.
-  `useAppSelector(selectStaysForDay(i), shallowEqual)` — or come from a
-  `createSelector`-memoized selector. Otherwise React Redux logs "Selector
-  unknown returned a different result when called with the same
-  parameters" and the component re-renders on every store change. Grep
-  the diff for `useAppSelector(` and open each selector it calls; one that
-  just returns a slice field or an existing item (`.find(...) ?? null`) is
-  fine as-is.
-- **A pending-request/invite feature that ships approve/decline but not a
-  requester-side cancel/withdraw action is incomplete**, even if the
-  original issue didn't call it out — `.github/copilot-instructions.md`'s
-  Invite/join/pending-request pattern requires both sides in the same PR.
-  Add the Remove/cancel action (delete the requester's own doc, confirm
-  destructive) rather than leaving it for a follow-up issue.
-- **A static option list (UI dropdown options, a role/status allowlist)
-  declared separately in more than one file is a duplication bug.** Grep for
-  the option values (e.g. `'EDITOR'`, `'COMMENTER'`) across the feature's
-  files; if more than one file hand-writes the same list, hoist it once next
-  to the type it constrains — but in a sibling `constants.ts`, not `types.ts`
-  itself (`types.ts` holds type/interface declarations only; runtime values
-  belong in `constants.ts` — `src/apps/waypoint/constants.ts` is the
-  reference shape) — and have every consumer import and derive from it.
-- **An action thunk that reads a document, derives a new value for a field
-  another action can also mutate concurrently (a shared map like `members`,
-  a counter — anything read-modify-written rather than replaced outright),
-  and writes it back must do the read and the write inside one
-  `runTransaction`, not a `getDoc`/Redux-cache read followed by a separate
-  `setDoc`/`updateDoc`/`writeBatch`.** The read-then-write shape loses
-  silently under concurrency: two admins changing two different members'
-  roles near-simultaneously can each read the same stale map, and the
-  second write overwrites the first's change with no error surfaced to
-  either user. `src/apps/waypoint/store/actions/membershipActions.ts`'s
-  `changeRole`/`removeMember`/`approveJoinRequest` are the reference shape —
-  always `transaction.get()` the document fresh inside the transaction,
-  never from a Redux-cached copy read before the transaction started. Skip
-  this for a thunk that only assigns literal caller-supplied values to
-  disjoint scalar fields (e.g. editing a title or toggling an archived
-  flag) — nothing is derived from the field's prior value, so there's
-  nothing for a race to lose.
-- **Audit every comment in the diff — the coding agent's and any you add
-  yourself while working this session — not just the code.** Default is
-  zero comments. A comment describing what code does (restating a
-  param/field name in prose, explaining what a function call or pattern
-  accomplishes) is noise, even when accurate and short, as long as a
-  reader who knows the language/platform can infer that from the code
-  itself. A comment earns its place only when the *process* doesn't make
-  sense on its own even to that reader — a hidden constraint, a workaround
-  for a specific bug, a non-obvious invariant, a reason the approach isn't
-  the one a reader would expect. That bar is rarely cleared. Delete
-  anything that doesn't clear it, cap what survives at 3 lines, and strip
-  any mention of a specific app/file/function name from what's left (see
-  the comment-necessity memory). Do this pass on every file touched this
-  session, not just the ones inherited from the coding agent or the ones
-  with an obvious CRUD/UX issue — re-check it right before wrap-up, since a
-  fix added late in the session is easy to skip.
+- **Code style** — functions over loose `let`/`for` accumulators, comment
+  audit (do it on every file touched this session, including your own edits,
+  and re-check right before wrap-up), no IIFEs, no setState-in-effect, Dreamer
+  UI components, `AppToggle`, toggle-vs-checkbox.
+- **Forms, modals, and CRUD conventions** — noun titles, submit disabling,
+  reveal links, `key` on modals, confirm dialogs, delete icon placement,
+  requester-side cancel on pending-request features, single-declaration
+  option lists.
+- **State, data, and performance** — listeners in `store/listeners/`,
+  TanStack Query, `persist: true` audit, `shallowEqual`, transactions for
+  read-modify-write. Grep the diff for `onSnapshot(`, `fetch(`,
+  `httpsCallable(`, `getDoc`/`getDocs`, `persist: true`, `useAppSelector(`,
+  `variant='destructive'`, `Toggle`, `let `, and `for (` to catch violations.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
-- `firestore.rules`: identity check matches the collection's actual path
-  (flat household-level docs check `householdId`, not a removed `catId`
-  path segment). Shape validation covers every field on the type, using this
-  repo's `T | null` convention (never `undefined`) — see the memory on this.
-  Immutable-fields check only truly immutable fields (id, householdId,
-  createdBy, createdAt, file metadata) — don't accidentally lock a field the
-  UI needs to let users edit (e.g. a stop/resume date).
-- `storage.rules`: file paths mirror wherever the Firestore doc actually
-  lives now — if you flattened a collection from per-cat to household-level,
-  flatten the matching Storage path too.
-- `firestore.indexes.json`: remove indexes for queries that no longer exist
-  (e.g. a `collectionGroup` index left over after reverting to a per-cat
-  listener); add any new composite index a new query actually needs.
-- Never introduce a global `match /{path=**}/X` rule for something that's
-  properly scoped under an app path — that's a known anti-pattern flagged in
-  this repo before. Prefer a body-check (`resource.data.householdId ==
-  householdId`) over a global collectionGroup match unless there's a real,
-  currently-implemented cross-cat/cross-household query that needs it.
+Walk "Firestore and Storage rules" in `CLAUDE.md` against every rule, index,
+and Storage path the diff touches or should have touched.
 
 ## 5. Validate
 
-- `npx tsc -b --force` (or `npm run build`) — **not** `tsc --noEmit -p .`,
-  which silently checks nothing against this repo's solution-style root
-  `tsconfig.json`. Fix every error this surfaces; don't assume a looser
-  check that passed earlier means the code is clean.
-- Update `scripts/seeds/nineLives.ts` to cover the feature: at least one
-  multi-attachment example if the entity supports multiple cats, matching
-  the batch-write loop pattern used by sibling collections (`expenses`,
-  `visits`). Update the `firestoreDocuments` count at the bottom of the seed
-  function.
-- Run the app against the local Firebase Emulator Suite and actually drive
-  the feature end-to-end (add/edit/delete, filters, totals) via a throwaway
-  Playwright script signed in as the "Taylor" dev fixture — see the `run`
-  skill's driving guidance. Delete the script when done. A passing typecheck
-  is not evidence the feature works; only driving it is.
-- **This same pass must also re-drive every pre-existing feature that
-  touches a file this session's merge/edits changed — not just the PR's own
-  feature.** If step 1 found conflicts in `firestore.rules`, drive the
-  other features gated by the rules you touched (a sibling `allow update`
-  branch, a different collection's rule sharing a helper function) to
-  confirm they still behave the same as before the merge — seed whatever
-  data state that requires (a second trip, a second household member, a
-  pending request alongside an existing member) rather than skipping the
-  check because the seed data doesn't happen to cover it yet. Treat "the
-  new feature works" and "nothing else regressed" as two separate things to
-  verify, not one — a change that visibly adds the new behavior can still
-  silently narrow or drop an existing `allow` clause it was merged next to.
-  For anything hard to reach through the UI (a security-rule denial, an
-  atomicity/race guarantee), verify it directly against the rules/Firestore
-  emulator instead of only trusting what renders on screen — e.g. a raw
-  REST write against the emulator to confirm a write is actually rejected,
-  not just that no button for it exists in the UI.
+Follow "Validation" in `CLAUDE.md`: `npx tsc -b --force` and `npx eslint .`,
+update the mini-app seed, drive the feature end-to-end in a real browser
+against the emulators, re-drive every pre-existing feature that touches a
+changed file (seed whatever state that needs), and verify rule denials and
+atomicity directly against the emulator. Delete throwaway scripts; leave the
+dev server and emulators running and finish with `npm run seed:reset`.
 
 ## 6. Wrap up
 
@@ -314,18 +146,7 @@ regularly gets the shape right but the UX wrong:
   step 1's sync only covers what existed when the session started. Do not
   skip this because step 1 already ran once — treat every push in this
   skill as needing a fresh sync first, not just the first one.
-- **Bump `SITE_VERSION` in `src/lib/app/app.constants.ts` — check this
-  before every commit in this skill, not just the first.** It's a
-  site-wide, single-source version bumped on every PR that changes app
-  code or behavior; this is a checklist item per
-  `.github/copilot-instructions.md`'s Critical reminders, not optional.
-  `grep SITE_VERSION src/lib/app/app.constants.ts` to see the current
-  value first. Patch (`1.0.x`) for a fix or small tweak; minor (`1.x.0`)
-  for a feature — finishing an in-progress feature PR (which is what this
-  skill does) is a minor bump, even when the individual commit is "just"
-  a bug fix or refactor on top of it. If this skill produces more than one
-  commit on the branch, bump once, in the first commit that changes app
-  code — don't re-bump per commit.
+- **Bump `SITE_VERSION`** per "Release hygiene" in `CLAUDE.md` — check before every commit in this skill and compare against `origin/main` first (finishing a feature PR is a minor bump; bump once per PR).
 - Commit with a message describing the actual end state, not the original
   PR title if it no longer matches.
 - Push to the PR's branch.

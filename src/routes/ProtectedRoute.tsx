@@ -36,10 +36,6 @@ function ProtectedRoute({ appId, requireAdmin = false, children }: ProtectedRout
       if (user) {
         return <Navigate to='/unauthorized' replace />;
       }
-
-      // Not signed in — remember where they were headed (e.g. a join link
-      // with an invite code in the query string) so they land back here
-      // instead of on the home page once they sign in.
       savePostLoginRedirect(location.pathname + location.search + location.hash);
       return <Navigate to='/' replace />;
     }

@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import { APP_REGISTRY_PATH_MAP } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
+import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
+import OfflineBanner from '@ui/OfflineBanner';
 import ThemeToggle from '@ui/ThemeToggle';
 import VersionBadge from '@ui/VersionBadge';
 
@@ -75,13 +79,23 @@ function LocationSync() {
 }
 
 function Layout() {
+  const networkStatus = useNetworkStatus();
+  const isBannerVisible = networkStatus !== null;
+
   return (
     <div className='transition-colors duration-200'>
       <LocationSync />
       <PostLoginRedirectHandler />
 
-      {/* header */}
-      <div className='pointer-events-none absolute inset-x-0 top-0 z-10 flex h-20 items-center gap-3 px-4 py-4 md:px-6'>
+      <OfflineBanner />
+
+      {/* header — shifted down while the offline banner occupies the top of the screen */}
+      <div
+        className={join(
+          'pointer-events-none absolute inset-x-0 z-10 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 md:px-6',
+          isBannerVisible ? 'top-9' : 'top-0',
+        )}
+      >
         <div className='pointer-events-auto flex flex-1 items-center justify-start'>
           <ThemeToggle className='flex items-center' />
         </div>

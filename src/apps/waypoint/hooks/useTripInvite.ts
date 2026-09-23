@@ -5,7 +5,6 @@ import { db } from '@/lib/firebase/config';
 
 export interface TripInviteState {
   loading: boolean;
-  /** False once the listener has resolved and found no matching invite code. */
   exists: boolean;
   tripId: string | null;
   title: string | null;
@@ -18,15 +17,6 @@ const INITIAL_STATE: TripInviteState = {
   title: null,
 };
 
-/**
- * Live view of an invite code's `{ tripId, title }` doc, so a join modal can
- * show the trip's current name and keep it in sync if an editor renames the
- * trip while the modal is open, without needing read access to the trip
- * itself (invite codes are readable by any signed-in user; trips aren't).
- *
- * Callers should remount (e.g. `key={inviteCode}`) rather than change
- * `inviteCode` on an already-mounted instance.
- */
 export function useTripInvite(inviteCode: string): TripInviteState {
   const [state, setState] = useState<TripInviteState>(INITIAL_STATE);
 

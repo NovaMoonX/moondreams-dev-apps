@@ -33,6 +33,7 @@ export function placeAutocompleteQueryOptions(
     queryFn: () => autocomplete(normalizeString(input), sessionToken, roundBias(bias) ?? undefined),
     staleTime: DAY_MS,
     gcTime: DAY_MS,
+    meta: { persist: true },
   });
 }
 
@@ -42,5 +43,6 @@ export function placeDetailsQueryOptions(placeId: string, name: string, sessionT
     queryFn: () => getPlaceForSelection(placeId, name, sessionToken),
     staleTime: DAY_MS,
     gcTime: DAY_MS,
+    meta: { persist: true },
   });
 }
