@@ -19,6 +19,8 @@ interface LinkAttachFieldProps {
    * free (e.g. a business's own website) — callers can relabel it accordingly. */
   label?: string;
   placeholder?: string;
+  /** Text of the link-style button that reveals the field; hidden until clicked. */
+  addLabel?: string;
 }
 
 const AUTO_FETCH_DELAY_MS = 800;
@@ -42,11 +44,13 @@ function LinkAttachField({
   currentTitle,
   label = 'Link',
   placeholder = 'https://…',
+  addLabel = '+ Add link',
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRevealed, setIsRevealed] = useState(false);
   const latestDraftRef = useRef(url.trim());
   const autoFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const justPastedRef = useRef(false);
@@ -118,6 +122,7 @@ function LinkAttachField({
 
   const clearLink = () => {
     setDraftUrl('');
+    setIsRevealed(false);
     latestDraftRef.current = '';
     setError(null);
     onChange('', null);
@@ -126,6 +131,20 @@ function LinkAttachField({
   const attachedUrl = url.trim();
   const isTitleApplied =
     Boolean(preview?.title) && currentTitle?.trim() === preview?.title?.trim();
+
+  if (!attachedUrl && !isRevealed && !draftUrl) {
+    return (
+      <Button
+        type='button'
+        variant='link'
+        size='sm'
+        className='h-auto p-0'
+        onClick={() => setIsRevealed(true)}
+      >
+        {addLabel}
+      </Button>
+    );
+  }
 
   return (
     <div className='space-y-1.5'>
@@ -174,6 +193,7 @@ function LinkAttachField({
       ) : (
         <Input
           type='url'
+          autoFocus
           placeholder={placeholder}
           value={draftUrl}
           onChange={(event) => handleDraftChange(event.target.value)}

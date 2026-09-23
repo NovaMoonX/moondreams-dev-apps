@@ -354,6 +354,7 @@ function EventFormModal({
                 url={draft.linkUrl}
                 preview={draft.linkPreview}
                 label='Booking, reservation, or website link'
+                addLabel='+ Add booking or website link'
                 placeholder='https://…'
                 onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
                 currentTitle={draft.title}

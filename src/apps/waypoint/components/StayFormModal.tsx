@@ -223,6 +223,7 @@ export function StayFormModal({
           url={draft.linkUrl}
           preview={draft.linkPreview}
           label='Listing or website link'
+          addLabel='+ Add listing or website link'
           placeholder='https://www.airbnb.com/rooms/… or the property website'
           onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
           currentTitle={draft.name}
