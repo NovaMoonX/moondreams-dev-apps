@@ -16,17 +16,23 @@ import { qrcode } from 'vite-plugin-qrcode';
 // imported script can call `firebase.initializeApp` without needing its own
 // env injection at runtime.
 function firebaseMessagingSwConfig(): Plugin {
+  // Vite's resolved env merges .env files with process.env, so local builds get the config too.
+  let env: Record<string, string> = {};
+
   return {
     name: 'firebase-messaging-sw-config',
+    configResolved(resolvedConfig) {
+      env = resolvedConfig.env;
+    },
     writeBundle(options) {
       const outDir = options.dir ?? 'dist';
       const config = {
-        apiKey: process.env.VITE_FIREBASE_API_KEY,
-        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.VITE_FIREBASE_APP_ID,
+        apiKey: env.VITE_FIREBASE_API_KEY,
+        authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: env.VITE_FIREBASE_APP_ID,
       };
 
       fs.writeFileSync(
