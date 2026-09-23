@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { X } from 'lucide-react';
 
+import ExternalLinkText from '@/components/ExternalLinkText';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { fetchLinkMetadata } from '@/lib/linkMetadata/fetchLinkMetadata';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
@@ -11,6 +13,7 @@ interface LinkAttachFieldProps {
   preview: LinkPreview | null;
   onChange: (url: string, preview: LinkPreview | null) => void;
   onUseTitle?: (title: string) => void;
+  currentTitle?: string;
   /** Also doubles as a manual fallback for site details Places doesn't give for
    * free (e.g. a business's own website) — callers can relabel it accordingly. */
   label?: string;
@@ -33,6 +36,7 @@ function LinkAttachField({
   preview,
   onChange,
   onUseTitle,
+  currentTitle,
   label = 'Link (optional)',
   placeholder = 'https://…',
 }: LinkAttachFieldProps) {
@@ -71,39 +75,22 @@ function LinkAttachField({
     }
   };
 
+  const clearLink = () => {
+    setDraftUrl('');
+    setError(null);
+    onChange('', null);
+  };
+
+  const attachedUrl = url.trim();
+  const isTitleApplied =
+    Boolean(preview?.title) && currentTitle?.trim() === preview?.title?.trim();
+
   return (
     <div className='space-y-1.5'>
       <Label>{label}</Label>
-      <div className='flex gap-2'>
-        <div className='flex-1'>
-          <Input
-            type='url'
-            placeholder={placeholder}
-            value={draftUrl}
-            disabled={isFetching}
-            onChange={(event) => setDraftUrl(event.target.value)}
-            onBlur={() => {
-              if (draftUrl.trim() !== url.trim()) {
-                void runFetch(draftUrl);
-              }
-            }}
-          />
-        </div>
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          loading={isFetching}
-          disabled={isFetching || !draftUrl.trim()}
-          onClick={() => void runFetch(draftUrl)}
-        >
-          {preview ? 'Refresh' : 'Fetch preview'}
-        </Button>
-      </div>
-      {error && <p className='text-muted-foreground text-xs'>{error}</p>}
-      {preview && (preview.title || preview.imageUrl) && (
+      {attachedUrl ? (
         <div className='border-border bg-card flex items-center gap-3 rounded-md border p-2'>
-          {preview.imageUrl && (
+          {preview?.imageUrl && (
             <img
               src={preview.imageUrl}
               alt=''
@@ -116,24 +103,61 @@ function LinkAttachField({
             />
           )}
           <div className='min-w-0 flex-1'>
-            {preview.title && <p className='truncate text-sm font-medium'>{preview.title}</p>}
-            {preview.siteName && (
-              <p className='text-muted-foreground truncate text-xs'>{preview.siteName}</p>
-            )}
+            {preview?.title && <p className='truncate text-sm font-medium'>{preview.title}</p>}
+            <ExternalLinkText href={attachedUrl} className='text-xs' />
           </div>
-          {onUseTitle && preview.title && (
+          {onUseTitle && preview?.title && (
             <Button
               type='button'
               variant='link'
               size='sm'
               className='shrink-0'
+              disabled={isTitleApplied}
               onClick={() => onUseTitle(preview.title as string)}
             >
-              Use title
+              {isTitleApplied ? '✓ Title applied' : 'Use title'}
             </Button>
           )}
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label='Remove link'
+            className='shrink-0'
+            onClick={clearLink}
+          >
+            <X className='h-4 w-4' />
+          </Button>
+        </div>
+      ) : (
+        <div className='flex gap-2'>
+          <div className='flex-1'>
+            <Input
+              type='url'
+              placeholder={placeholder}
+              value={draftUrl}
+              disabled={isFetching}
+              onChange={(event) => setDraftUrl(event.target.value)}
+              onBlur={() => {
+                if (draftUrl.trim()) {
+                  void runFetch(draftUrl);
+                }
+              }}
+            />
+          </div>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            loading={isFetching}
+            disabled={isFetching || !draftUrl.trim()}
+            onClick={() => void runFetch(draftUrl)}
+          >
+            Fetch preview
+          </Button>
         </div>
       )}
+      {error && <p className='text-muted-foreground text-xs'>{error}</p>}
     </div>
   );
 }

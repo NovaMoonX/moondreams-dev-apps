@@ -360,13 +360,12 @@ function EventFormModal({
                 label='Booking, reservation, or website link (optional)'
                 placeholder='https://…'
                 onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
-                onUseTitle={(title) =>
-                  !draft.title.trim() && updateDraft({ title })
-                }
+                currentTitle={draft.title}
+                onUseTitle={(title) => updateDraft({ title })}
               />
             )}
             <div className='space-y-2'>
-              <Label>Assignees</Label>
+              <Label>Attendees</Label>
               {memberOptions.map((member) => (
                 <label key={member.value} className='flex items-center gap-2 text-sm'>
                   <Checkbox

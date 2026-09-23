@@ -229,7 +229,8 @@ export function StayFormModal({
           label='Listing or website link (optional)'
           placeholder='https://www.airbnb.com/rooms/… or the property website'
           onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
-          onUseTitle={(title) => !draft.name.trim() && updateDraft({ name: title })}
+          currentTitle={draft.name}
+          onUseTitle={(title) => updateDraft({ name: title })}
         />
         <div className='grid gap-3 sm:grid-cols-2'>
           <div className='space-y-1.5'>
