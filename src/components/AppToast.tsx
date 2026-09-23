@@ -14,12 +14,9 @@ interface AppToastProps extends Omit<ToastData, 'type'> {
   type?: string;
 }
 
-/** The app-wide toast renderer, wired in as Dreamer UI's `ToastProvider` `customComponent` —
- * every toast in the app (CRUD feedback and reminder notifications alike) renders through
- * this, styled with the app's own surface tokens instead of Dreamer's defaults, and
- * swipeable in any direction. `onRemove` is the provider's real `removeToast`, and
- * auto-dismiss (via `duration`) is already handled by Dreamer UI's wrapper before this
- * component ever renders. */
+/** Renders every toast app-wide, not just reminders — passed as `ToastProvider`'s
+ * `customComponent`. `onRemove` is already the real removal function, and auto-dismiss
+ * via `duration` is already handled upstream before this ever renders. */
 function AppToast({ id, title, description, type, action, onRemove }: AppToastProps) {
   const style = TOAST_TYPE_STYLES[type ?? 'info'] ?? TOAST_TYPE_STYLES.info;
   const isReminder = type === 'reminder';
