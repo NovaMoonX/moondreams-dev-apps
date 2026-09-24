@@ -207,11 +207,9 @@ export const editTrip = createAsyncThunk<
         data: Record<string, unknown>;
       }[] = [];
 
-      // A document missing one of these (rather than holding an explicit
-      // `null`) fails the security rules' shape check on any write — even
-      // one that never touches the field — since the rule can't tell "no
-      // value" from "no key". Backfilling them here heals such a document
-      // the next time its trip's dates shift.
+      // A missing (rather than explicit null) field fails the rules' shape
+      // check on any write, even one that never touches it; backfill heals
+      // such a document the next time its trip's dates shift.
       const backfillIfMissing = (
         updates: Record<string, unknown>,
         data: Record<string, unknown>,
@@ -239,10 +237,9 @@ export const editTrip = createAsyncThunk<
           }
           backfillIfMissing(updates, data, ['place', 'linkUrl', 'linkPreview']);
 
-          // A reminder's `scheduledFor` can't be patched directly (Firestore
-          // rules only allow a reminder to move to `cancelled`), so a shifted
-          // event gets a fresh one at the new time instead of a stale one
-          // that still fires against the old date.
+          // Rules only allow a reminder to move to `cancelled`, not be
+          // rescheduled, so a shifted event gets a fresh one instead of a
+          // stale one that still fires against the old date.
           if (data.reminderEnabled && data.reminderId && shiftedStartAt !== null) {
             await cancelEventReminder(data.reminderId);
             updates.reminderId = await scheduleEventReminder({
