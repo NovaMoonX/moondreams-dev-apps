@@ -19,13 +19,28 @@ export function getSplitMemberIds(
   switch (expense.targetType) {
     case 'JUST_ME':
       return expense.payerUid === null ? [] : [expense.payerUid];
+    case 'EVERYONE_CURRENT':
     case 'EVERYONE_INCLUDING_FUTURE':
       return currentMemberIds;
-    case 'EVERYONE_CURRENT':
     case 'SPECIFIC_MEMBERS':
     default:
       return expense.targetMemberIds;
   }
+}
+
+export function getActiveSplitAmounts(
+  expense: Pick<TripExpense, 'splitAmounts' | 'targetType' | 'targetMemberIds' | 'payerUid'>,
+  currentMemberIds: string[],
+): Record<string, number> | null {
+  const { splitAmounts } = expense;
+  if (splitAmounts === null) {
+    return null;
+  }
+
+  const coversSplit = getSplitMemberIds(expense, currentMemberIds).every(
+    (uid) => uid in splitAmounts,
+  );
+  return coversSplit ? splitAmounts : null;
 }
 
 export function getPerPersonMultiplier(
@@ -115,7 +130,9 @@ export function computeDuesSummary(
       continue;
     }
 
-    const shares = expense.splitAmounts ?? computeEvenSplit(memberIds, resolvedAmount);
+    const shares =
+      getActiveSplitAmounts(expense, currentMemberIds) ??
+      computeEvenSplit(memberIds, resolvedAmount);
     addBalance(expense.payerUid, resolvedAmount);
     for (const uid of memberIds) {
       addBalance(uid, -(shares[uid] ?? 0));

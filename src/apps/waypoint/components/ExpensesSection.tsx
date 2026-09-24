@@ -38,6 +38,7 @@ import {
 import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
+  getActiveSplitAmounts,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
@@ -49,8 +50,11 @@ interface ExpensesSectionProps {
   currentUserId: string;
 }
 
-function isCustomSplit(expense: TripExpense): boolean {
-  return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
+function isCustomSplit(expense: TripExpense, memberIds: string[]): boolean {
+  return (
+    !['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE'].includes(expense.targetType) ||
+    getActiveSplitAmounts(expense, memberIds) !== null
+  );
 }
 
 function getSortAmount(expense: TripExpense, memberIds: string[]): number {
@@ -76,16 +80,12 @@ function getDisplayRange(expense: TripExpense): { min: number; max: number } {
 
 function getSplitTargetLabel(
   expense: TripExpense,
-  memberIds: string[],
   memberLabel: (uid: string) => string,
 ): string {
   switch (expense.targetType) {
     case 'EVERYONE_CURRENT':
-      return memberIds.every((uid) => expense.targetMemberIds.includes(uid))
-        ? 'Everyone'
-        : `Everyone when added (${expense.targetMemberIds.length})`;
     case 'EVERYONE_INCLUDING_FUTURE':
-      return 'Everyone, including future members';
+      return 'Everyone';
     case 'JUST_ME':
       return expense.payerUid ? `Just ${memberLabel(expense.payerUid)}` : 'Just the payer';
     case 'SPECIFIC_MEMBERS':
@@ -98,13 +98,13 @@ function describeSplit(
   memberIds: string[],
   memberLabel: (uid: string) => string,
 ): string {
-  const targetLabel = getSplitTargetLabel(expense, memberIds, memberLabel);
+  const targetLabel = getSplitTargetLabel(expense, memberLabel);
   const splitMemberCount = getSplitMemberIds(expense, memberIds).length;
   if (splitMemberCount <= 1) {
     return `Split · ${targetLabel}`;
   }
 
-  return expense.splitAmounts !== null
+  return getActiveSplitAmounts(expense, memberIds) !== null
     ? `Split · ${targetLabel} (custom)`
     : `Split · ${targetLabel} (even)`;
 }
@@ -193,7 +193,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const matchesCategory =
       categoryFilter.length === 0 || categoryFilter.includes(getExpenseCategoryKey(expense));
     const matchesRanged = !rangedOnly || expense.amount === null;
-    const matchesSplit = !splitOnly || isCustomSplit(expense);
+    const matchesSplit = !splitOnly || isCustomSplit(expense, memberIds);
     const matchesSearch =
       searchQuery.trim() === '' ||
       expense.title.toLowerCase().includes(searchQuery.trim().toLowerCase());

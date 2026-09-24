@@ -13,6 +13,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   computeEvenSplit,
+  getActiveSplitAmounts,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   scaleAmount,
@@ -35,8 +36,7 @@ interface ExpenseSplitModalProps {
 }
 
 const targetTypeOptions: { value: ExpenseTargetType; text: string }[] = [
-  { value: 'EVERYONE_CURRENT', text: 'Everyone (current members)' },
-  { value: 'EVERYONE_INCLUDING_FUTURE', text: 'Everyone, including future members' },
+  { value: 'EVERYONE_CURRENT', text: 'Everyone on the trip' },
   { value: 'JUST_ME', text: 'Just me' },
   { value: 'SPECIFIC_MEMBERS', text: 'Specific members' },
 ];
@@ -51,12 +51,15 @@ function ExpenseSplitModal({
 }: ExpenseSplitModalProps) {
   const [error, setError] = useState<string | null>(null);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
+  const activeSplitAmounts = expense ? getActiveSplitAmounts(expense, memberIds) : null;
   const memberInfo = useUserInfo(memberIds);
   const memberLabel = (uid: string) =>
     memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid;
 
   const [targetType, setTargetType] = useState<ExpenseTargetType>(
-    expense?.targetType ?? 'EVERYONE_CURRENT',
+    !expense || expense.targetType === 'EVERYONE_INCLUDING_FUTURE'
+      ? 'EVERYONE_CURRENT'
+      : expense.targetType,
   );
   const [specificMemberIds, setSpecificMemberIds] = useState<string[]>(
     expense?.targetType === 'SPECIFIC_MEMBERS' ? expense.targetMemberIds : [],
@@ -65,9 +68,9 @@ function ExpenseSplitModal({
     string,
     string
   > | null>(
-    expense?.splitAmounts && expense.targetType !== 'EVERYONE_INCLUDING_FUTURE'
+    activeSplitAmounts
       ? Object.fromEntries(
-          Object.entries(expense.splitAmounts).map(([uid, amount]) => [
+          Object.entries(activeSplitAmounts).map(([uid, amount]) => [
             uid,
             String(amount),
           ]),
@@ -84,7 +87,6 @@ function ExpenseSplitModal({
       case 'JUST_ME':
         return expense.payerUid === null ? [] : [expense.payerUid];
       case 'EVERYONE_CURRENT':
-      case 'EVERYONE_INCLUDING_FUTURE':
         return memberIds;
       case 'SPECIFIC_MEMBERS':
       default:
@@ -146,13 +148,13 @@ function ExpenseSplitModal({
 
     setError(null);
     const targetMemberIds =
-      targetType === 'EVERYONE_INCLUDING_FUTURE' || targetType === 'JUST_ME'
+      targetType === 'JUST_ME'
         ? []
         : targetType === 'EVERYONE_CURRENT'
           ? memberIds
           : specificMemberIds;
     const splitAmounts =
-      isCustomSplit && targetType !== 'EVERYONE_INCLUDING_FUTURE'
+      isCustomSplit
         ? Object.fromEntries(
             splitMemberIds.map((uid) => [uid, Number(displayAmounts[uid]) || 0]),
           )
@@ -203,48 +205,41 @@ function ExpenseSplitModal({
             </div>
           </div>
         )}
-        {targetType === 'EVERYONE_INCLUDING_FUTURE' ? (
-          <p className='text-muted-foreground text-sm'>
-            This will be split evenly between all members, including anyone
-            who joins the trip later.
-          </p>
-        ) : (
-          splitMemberIds.length > 0 && (
-            <div className='space-y-1.5'>
-              <div className='flex items-center justify-between'>
-                <Label>Split amounts</Label>
-                {isCustomSplit && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className='bg-transparent'
-                    onClick={() => setCustomSplitAmounts(null)}
-                  >
-                    Reset to even split
-                  </Button>
-                )}
-              </div>
-              <div className='space-y-2'>
-                {splitMemberIds.map((uid) => (
-                  <div key={uid} className='flex items-center gap-2'>
-                    <span className='text-sm flex-1'>{memberLabel(uid)}</span>
-                    <Input
-                      type='number'
-                      className='w-28'
-                      value={displayAmounts[uid] ?? ''}
-                      onChange={(event) => updateAmount(uid, event.target.value)}
-                    />
-                  </div>
-                ))}
-              </div>
-              {isCustomSplit && !isAmountsValid && (
-                <p className='text-destructive text-sm'>
-                  Split amounts must add up to {amount}.
-                </p>
+        {splitMemberIds.length > 0 && (
+          <div className='space-y-1.5'>
+            <div className='flex items-center justify-between'>
+              <Label>Split amounts</Label>
+              {isCustomSplit && (
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='bg-transparent'
+                  onClick={() => setCustomSplitAmounts(null)}
+                >
+                  Reset to even split
+                </Button>
               )}
             </div>
-          )
+            <div className='space-y-2'>
+              {splitMemberIds.map((uid) => (
+                <div key={uid} className='flex items-center gap-2'>
+                  <span className='text-sm flex-1'>{memberLabel(uid)}</span>
+                  <Input
+                    type='number'
+                    className='w-28'
+                    value={displayAmounts[uid] ?? ''}
+                    onChange={(event) => updateAmount(uid, event.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+            {isCustomSplit && !isAmountsValid && (
+              <p className='text-destructive text-sm'>
+                Split amounts must add up to {amount}.
+              </p>
+            )}
+          </div>
         )}
         <div className='flex justify-end gap-2'>
           <Button type='button' variant='secondary' onClick={onClose}>
