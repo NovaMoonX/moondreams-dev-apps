@@ -1,27 +1,29 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import {
   Button,
+  Checkbox,
   Form,
+  FormCustomFieldProps,
   FormFactories,
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import ImageUploadField from '@/components/forms/ImageUploadField';
 import { useImageUpload } from '@/hooks/useImageUpload';
+import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
-import { createDateInputField } from '@/utils/formFactoryHelpers';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
-import { useAppSelector } from '@/store';
+import { createDateInputField } from '@/utils/formFactoryHelpers';
 
+import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import {
   selectStays,
   selectTimelineEvents,
   selectTripExpenses,
 } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
-import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 
 interface EditTripFormData {
   title: string;
@@ -39,7 +41,7 @@ interface EditTripModalProps {
   onClose: () => void;
 }
 
-const { checkbox, custom, input } = FormFactories;
+const { custom, input } = FormFactories;
 const DAY_MS = 86_400_000;
 
 function EditTripModal({
@@ -55,12 +57,109 @@ function EditTripModal({
   const events = useAppSelector(selectTimelineEvents);
   const stays = useAppSelector(selectStays);
   const expenses = useAppSelector(selectTripExpenses);
-  const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
+  const checklistItems = useAppSelector(
+    (state) => state.waypoint.checklist.items,
+  );
+
+  const initialData: EditTripFormData = useMemo(() => {
+    return {
+      title: trip?.title ?? '',
+      startDate: toDateInputValue(trip?.startDate),
+      endDate: toDateInputValue(trip?.endDate),
+      coverImageFile: null,
+      shiftDates: true,
+    };
+  }, [trip]);
+
+  const currentData = useMemo(
+    () => formData ?? initialData,
+    [formData, initialData],
+  );
+
+  const wouldRequireDataShift = useMemo(() => {
+    if (!trip || !formData) {
+      return false;
+    }
+
+    if (formData.startDate !== initialData.startDate) {
+      return true;
+    }
+
+    if (formData.endDate < initialData.endDate) {
+      return true;
+    }
+
+    return false;
+  }, [trip, formData, initialData]);
+
   const hasDatedItems =
     events.length > 0 ||
     stays.length > 0 ||
     expenses.some((expense) => expense.dayIndex !== null) ||
     checklistItems.some((item) => item.completeByDayIndex !== null);
+
+  const wouldPlaceItemsOutOfRange = useCallback(() => {
+    if (!trip) {
+      return false;
+    }
+
+    const newStartDate = fromDateInputValue(currentData.startDate);
+    const newEndDate = fromDateInputValue(currentData.endDate);
+
+    const deltaDays =
+      newStartDate !== undefined
+        ? Math.round((newStartDate - trip.startDate) / DAY_MS)
+        : 0;
+    const newDayCount =
+      newStartDate !== undefined && newEndDate !== undefined
+        ? getDayCount(newStartDate, newEndDate)
+        : null;
+
+    const isOutOfRange = (dayIndex: number) =>
+      newDayCount === null || dayIndex < 0 || dayIndex >= newDayCount;
+    const willOrphanItems =
+      newDayCount !== null &&
+      newStartDate !== undefined &&
+      newEndDate !== undefined &&
+      (currentData.shiftDates
+        ? events.some((event) => isOutOfRange(event.endDayIndex)) ||
+          expenses.some(
+            (expense) =>
+              expense.dayIndex !== null && isOutOfRange(expense.dayIndex),
+          ) ||
+          checklistItems.some(
+            (item) =>
+              item.completeByDayIndex !== null &&
+              isOutOfRange(item.completeByDayIndex),
+          ) ||
+          stays.some((stay) => {
+            const shiftedCheckIn =
+              stay.checkInAt + (newStartDate - trip.startDate);
+            const shiftedCheckOut =
+              stay.checkOutAt + (newStartDate - trip.startDate);
+            return (
+              shiftedCheckIn < newStartDate ||
+              shiftedCheckOut > newEndDate + DAY_MS
+            );
+          })
+        : events.some((event) => isOutOfRange(event.endDayIndex - deltaDays)) ||
+          expenses.some(
+            (expense) =>
+              expense.dayIndex !== null &&
+              isOutOfRange(expense.dayIndex - deltaDays),
+          ) ||
+          checklistItems.some(
+            (item) =>
+              item.completeByDayIndex !== null &&
+              isOutOfRange(item.completeByDayIndex - deltaDays),
+          ) ||
+          stays.some(
+            (stay) =>
+              stay.checkInAt < newStartDate ||
+              stay.checkOutAt > newEndDate + DAY_MS,
+          ));
+    return willOrphanItems;
+  }, [events, stays, expenses, checklistItems, trip, currentData]);
 
   const fields = useMemo(
     () => [
@@ -80,12 +179,55 @@ function EditTripModal({
         label: 'Estimated end date',
         variant: 'outline',
       }),
-      ...(hasDatedItems
+      ...(hasDatedItems && wouldRequireDataShift
         ? [
-            checkbox({
+            custom({
               name: 'shiftDates',
               label: 'Dated items',
-              text: 'Shift every event, stay, expense, and checklist date to match',
+              renderComponent: ({
+                value,
+                onValueChange,
+              }: FormCustomFieldProps) => {
+                const checkedValue = Boolean(value);
+                return (
+                  <div className='space-y-1 pl-1'>
+                    <label className='flex items-center gap-2'>
+                      <Checkbox
+                        checked={checkedValue}
+                        onCheckedChange={(checked) => onValueChange(checked)}
+                      />
+                      Shift every event, stay, expense, and checklist date to
+                      match
+                    </label>
+
+                    <div className='pl-7 space-2'>
+                      {checkedValue && (
+                        <p className='text-muted-foreground mb-3 text-sm'>
+                          Moving the start date will shift every event, stay,
+                          expense, and checklist due date on this trip by the
+                          same amount.
+                        </p>
+                      )}
+                      {!checkedValue && (
+                        <p className='text-warning mb-3 text-sm'>
+                          Events, expenses, and checklist items will keep their
+                          exact date and time — only their day number will
+                          update to match the new dates. <b>Note: </b>This can
+                          take longer to process than shifting everything
+                          together.
+                        </p>
+                      )}
+                      {wouldPlaceItemsOutOfRange() && (
+                        <p className='text-destructive mb-3 text-sm'>
+                          These dates are shorter than before — some events,
+                          stays, expenses, or checklist items fall outside the
+                          new range and will lose their day.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              },
             }),
           ]
         : []),
@@ -125,76 +267,24 @@ function EditTripModal({
         ),
       }),
     ],
-    [coverUpload, isSubmitting, hasDatedItems],
+    [
+      coverUpload,
+      isSubmitting,
+      hasDatedItems,
+      wouldRequireDataShift,
+      initialData,
+      wouldPlaceItemsOutOfRange,
+    ],
   );
 
   if (!trip) {
     return null;
   }
 
-  const initialData: EditTripFormData = {
-    title: trip.title,
-    startDate: toDateInputValue(trip.startDate),
-    endDate: toDateInputValue(trip.endDate),
-    coverImageFile: null,
-    shiftDates: true,
-  };
-  const currentData = formData ?? initialData;
   const isFormComplete =
     currentData.title.trim() !== '' &&
     fromDateInputValue(currentData.startDate) !== undefined &&
     fromDateInputValue(currentData.endDate) !== undefined;
-
-  const newStartDate = fromDateInputValue(currentData.startDate);
-  const newEndDate = fromDateInputValue(currentData.endDate);
-  const startDateChanged =
-    newStartDate !== undefined && newStartDate !== trip.startDate;
-  const deltaDays =
-    newStartDate !== undefined
-      ? Math.round((newStartDate - trip.startDate) / DAY_MS)
-      : 0;
-  const newDayCount =
-    newStartDate !== undefined && newEndDate !== undefined
-      ? getDayCount(newStartDate, newEndDate)
-      : null;
-
-  const willShiftDates = hasDatedItems && currentData.shiftDates && startDateChanged;
-  const willKeepDates = hasDatedItems && !currentData.shiftDates && startDateChanged;
-
-  const isOutOfRange = (dayIndex: number) =>
-    newDayCount === null || dayIndex < 0 || dayIndex >= newDayCount;
-  const willOrphanItems =
-    newDayCount !== null &&
-    newStartDate !== undefined &&
-    newEndDate !== undefined &&
-    (currentData.shiftDates
-      ? events.some((event) => isOutOfRange(event.endDayIndex)) ||
-        expenses.some(
-          (expense) => expense.dayIndex !== null && isOutOfRange(expense.dayIndex),
-        ) ||
-        checklistItems.some(
-          (item) =>
-            item.completeByDayIndex !== null && isOutOfRange(item.completeByDayIndex),
-        ) ||
-        stays.some((stay) => {
-          const shiftedCheckIn = stay.checkInAt + (newStartDate - trip.startDate);
-          const shiftedCheckOut = stay.checkOutAt + (newStartDate - trip.startDate);
-          return shiftedCheckIn < newStartDate || shiftedCheckOut > newEndDate + DAY_MS;
-        })
-      : events.some((event) => isOutOfRange(event.endDayIndex - deltaDays)) ||
-        expenses.some(
-          (expense) =>
-            expense.dayIndex !== null && isOutOfRange(expense.dayIndex - deltaDays),
-        ) ||
-        checklistItems.some(
-          (item) =>
-            item.completeByDayIndex !== null &&
-            isOutOfRange(item.completeByDayIndex - deltaDays),
-        ) ||
-        stays.some(
-          (stay) =>
-            stay.checkInAt < newStartDate || stay.checkOutAt > newEndDate + DAY_MS,
-        ));
 
   const handleSubmit = async (data: EditTripFormData) => {
     const title = data.title.trim();
@@ -215,7 +305,8 @@ function EditTripModal({
         endDate,
         coverImageUrl: trip.coverImageUrl,
         coverImageFile: coverUpload.file,
-        coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
+        coverImageRemoved:
+          coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
         defaultCurrency: trip.defaultCurrency,
         shiftDates: data.shiftDates,
       });
@@ -231,25 +322,6 @@ function EditTripModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Trip details'>
-      {willShiftDates && (
-        <p className='text-muted-foreground mb-3 text-sm'>
-          Moving the start date will shift every event, stay, expense, and checklist due
-          date on this trip by the same amount.
-        </p>
-      )}
-      {willKeepDates && (
-        <p className='text-muted-foreground mb-3 text-sm'>
-          Events, expenses, and checklist items will keep their exact date and time —
-          only their day number will update to match the new dates. This can take
-          longer to process than shifting everything together.
-        </p>
-      )}
-      {willOrphanItems && (
-        <p className='text-destructive mb-3 text-sm'>
-          These dates are shorter than before — some events, stays, expenses, or
-          checklist items fall outside the new range and will lose their day.
-        </p>
-      )}
       <Form
         key={trip.id}
         id='waypoint-edit-trip'
