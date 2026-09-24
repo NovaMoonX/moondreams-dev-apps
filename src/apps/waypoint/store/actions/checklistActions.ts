@@ -18,6 +18,8 @@ interface CreateChecklistItemInput {
   title: string;
   category: ChecklistCategory;
   customCategoryLabel: string | null;
+  note: string | null;
+  completeByDayIndex: number | null;
   assignedToUids: string[];
 }
 
@@ -34,6 +36,8 @@ export const createChecklistItem = createAsyncThunk<
       title,
       category,
       customCategoryLabel,
+      note,
+      completeByDayIndex,
       assignedToUids,
     },
     { rejectWithValue },
@@ -56,6 +60,8 @@ export const createChecklistItem = createAsyncThunk<
       title: trimmedTitle,
       category,
       customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
+      note: note?.trim() || null,
+      completeByDayIndex,
       assignedToUids: [...new Set(assignedToUids)],
       isCompleted: false,
       markedCompletedByUid: null,
@@ -84,6 +90,8 @@ interface UpdateChecklistItemInput {
   title: string;
   category: ChecklistCategory;
   customCategoryLabel: string | null;
+  note: string | null;
+  completeByDayIndex: number | null;
   assignedToUids: string[];
 }
 
@@ -101,6 +109,8 @@ export const updateChecklistItem = createAsyncThunk<
       title,
       category,
       customCategoryLabel,
+      note,
+      completeByDayIndex,
       assignedToUids,
     },
     { rejectWithValue },
@@ -124,6 +134,8 @@ export const updateChecklistItem = createAsyncThunk<
         title: trimmedTitle,
         category,
         customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
+        note: note?.trim() || null,
+        completeByDayIndex,
         assignedToUids: [...new Set(assignedToUids)],
         lastEditedAt: Date.now(),
       },

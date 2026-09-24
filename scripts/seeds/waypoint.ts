@@ -180,8 +180,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     amountMin: number | null;
     amountMax: number | null;
     paidAmount: number | null;
-    payerUid: string;
+    payerUid: string | null;
     status: 'PAID' | 'EXPECTED';
+    category: 'FOOD' | 'TRANSPORT' | 'LODGING' | 'ACTIVITIES' | 'SHOPPING' | 'OTHER';
+    note?: string | null;
+    groupLabel?: string | null;
     targetType?: 'EVERYONE_CURRENT' | 'EVERYONE_INCLUDING_FUTURE' | 'JUST_ME' | 'SPECIFIC_MEMBERS';
     targetMemberIds?: string[];
     splitAmounts?: Record<string, number> | null;
@@ -194,8 +197,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amountMin: 80,
       amountMax: 120,
       paidAmount: null,
-      payerUid: alex.uid,
+      payerUid: null,
       status: 'EXPECTED',
+      category: 'FOOD',
     },
     {
       id: 'seed-expense-parking',
@@ -205,8 +209,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amountMin: null,
       amountMax: null,
       paidAmount: null,
-      payerUid: taylor.uid,
+      // Paid by each person separately — showcases the "no single payer" case.
+      payerUid: null,
       status: 'PAID',
+      category: 'TRANSPORT',
     },
     {
       id: 'seed-expense-hike-permits',
@@ -218,6 +224,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       paidAmount: null,
       payerUid: alex.uid,
       status: 'PAID',
+      category: 'ACTIVITIES',
     },
     {
       id: 'seed-expense-ferry',
@@ -227,8 +234,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       amountMin: 30,
       amountMax: 45,
       paidAmount: null,
-      payerUid: taylor.uid,
+      payerUid: null,
       status: 'EXPECTED',
+      category: 'TRANSPORT',
     },
     {
       id: 'seed-expense-souvenirs',
@@ -240,6 +248,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       paidAmount: null,
       payerUid: alex.uid,
       status: 'PAID',
+      category: 'SHOPPING',
     },
     {
       id: 'seed-expense-rental-car',
@@ -251,6 +260,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       paidAmount: 175,
       payerUid: taylor.uid,
       status: 'PAID',
+      category: 'TRANSPORT',
     },
     {
       id: 'seed-expense-museum-tickets',
@@ -262,9 +272,25 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       paidAmount: null,
       payerUid: alex.uid,
       status: 'PAID',
+      category: 'ACTIVITIES',
+      note: 'Tickets are non-refundable.',
+      groupLabel: 'Pike Place museum visit',
       targetType: 'SPECIFIC_MEMBERS',
       targetMemberIds: expenseMemberIds,
       splitAmounts: { [alex.uid]: 15, [taylor.uid]: 25 },
+    },
+    {
+      id: 'seed-expense-museum-giftshop',
+      dayIndex: 1,
+      title: 'Museum gift shop',
+      amount: 10,
+      amountMin: null,
+      amountMax: null,
+      paidAmount: null,
+      payerUid: alex.uid,
+      status: 'PAID',
+      category: 'SHOPPING',
+      groupLabel: 'Pike Place museum visit',
     },
   ];
 
@@ -281,10 +307,14 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       currency: 'USD',
       payerUid: seedExpense.payerUid,
       status: seedExpense.status,
+      category: seedExpense.category,
+      customCategoryLabel: null,
       targetType: seedExpense.targetType ?? 'EVERYONE_CURRENT',
       targetMemberIds: seedExpense.targetMemberIds ?? expenseMemberIds,
       splitAmounts: seedExpense.splitAmounts ?? null,
       paidMemberStatus: unpaidMemberStatus,
+      note: seedExpense.note ?? null,
+      groupLabel: seedExpense.groupLabel ?? null,
       createdBy: alex.uid,
       createdAt: context.now,
       lastEditedAt: context.now,
@@ -306,7 +336,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -122.3088,
     eventDetails: { transitType: 'FLIGHT' },
     notes: null,
+    attendeeTargetType: 'SPECIFIC_MEMBERS',
     assignedMemberIds: [alex.uid, taylor.uid],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [],
     reminderMinutesBefore: 20,
     reminderEnabled: true,
@@ -331,7 +364,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -122.3425,
     eventDetails: { mealType: 'DINNER' },
     notes: null,
+    attendeeTargetType: 'EVERYONE_CURRENT',
     assignedMemberIds: [alex.uid, taylor.uid],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [],
     place: null,
     linkUrl: 'https://www.pikeplacemarket.org/',
@@ -365,7 +401,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -122.4183,
     eventDetails: { settings: ['OUTDOOR'] },
     notes: null,
+    attendeeTargetType: 'SPECIFIC_MEMBERS',
     assignedMemberIds: [alex.uid],
+    // Showcases the optional venue hours field — the park's posted open/close times.
+    venueOpenTime: '06:00',
+    venueCloseTime: '22:00',
     changeHistory: [],
     place: {
       placeId: 'ChIJVVVVVVVVVVVVVVVVVVVVVVU',
@@ -399,7 +439,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: null,
     eventDetails: {},
     notes: null,
+    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: [],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [],
     reminderMinutesBefore: 20,
     reminderEnabled: true,
@@ -413,6 +456,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-seattle',
     tripId: TRIP_ID,
     name: 'Pike Place Suites',
+    stayType: 'RENTAL',
     address: 'Seattle, WA',
     latitude: 47.6097,
     longitude: -122.3425,
@@ -441,6 +485,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-portland',
     tripId: TRIP_ID,
     name: 'Pearl District Hotel',
+    stayType: 'HOTEL',
     address: 'Portland, OR',
     latitude: 45.5231,
     longitude: -122.6765,
@@ -462,6 +507,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     title: 'Confirm passport expiration dates',
     category: 'DOCUMENTS',
     customCategoryLabel: null,
+    note: 'Needs at least 6 months of validity left.',
+    completeByDayIndex: 0,
     assignedToUids: [alex.uid],
     isCompleted: false,
     markedCompletedByUid: null,
@@ -477,6 +524,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     title: 'Book the first-night dinner',
     category: 'BOOKINGS',
     customCategoryLabel: null,
+    note: null,
+    completeByDayIndex: 0,
     assignedToUids: [alex.uid, taylor.uid],
     isCompleted: true,
     markedCompletedByUid: alex.uid,
@@ -505,7 +554,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -122.5108,
     eventDetails: { transitType: 'FERRY' },
     notes: null,
+    attendeeTargetType: 'SPECIFIC_MEMBERS',
     assignedMemberIds: [alex.uid, taylor.uid],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [],
     reminderMinutesBefore: 20,
     reminderEnabled: true,
@@ -533,7 +585,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -123.6928,
     eventDetails: { mealType: 'LUNCH' },
     notes: null,
+    attendeeTargetType: 'SPECIFIC_MEMBERS',
     assignedMemberIds: [alex.uid, taylor.uid],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [],
     place: {
       placeId: 'ChIJWWWWWWWWWWWWWWWWWWWWWWW',
@@ -567,7 +622,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -123.6928,
     eventDetails: { settings: ['OUTDOOR'] },
     notes: null,
+    attendeeTargetType: 'SPECIFIC_MEMBERS',
     assignedMemberIds: [alex.uid, taylor.uid],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [
       {
         changes: [
@@ -605,7 +663,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     longitude: -123.4307,
     eventDetails: { mealType: 'DINNER' },
     notes: null,
+    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: [],
+    venueOpenTime: null,
+    venueCloseTime: null,
     changeHistory: [],
     reminderMinutesBefore: 20,
     reminderEnabled: true,
@@ -619,6 +680,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'active-trip-lodge',
     tripId: ACTIVE_TRIP_ID,
     name: 'Lake Crescent Lodge',
+    stayType: 'HOTEL',
     address: '416 Lake Crescent Rd, Port Angeles, WA',
     latitude: 48.0587,
     longitude: -123.7853,
@@ -628,7 +690,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     plannedArrivalAt: activeTripStart + 16 * 3_600_000,
     plannedDepartureAt: activeTripEnd,
     confirmationCode: null,
-    notes: null,
+    notes: 'Front desk closes at 10pm — call ahead for a late arrival.',
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -640,6 +702,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     title: 'Check tide tables for Salt Creek',
     category: 'LOGISTICS',
     customCategoryLabel: null,
+    note: null,
+    completeByDayIndex: 1,
     assignedToUids: [alex.uid],
     isCompleted: false,
     markedCompletedByUid: null,
@@ -666,6 +730,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 27,
+    firestoreDocuments: 28,
   };
 }

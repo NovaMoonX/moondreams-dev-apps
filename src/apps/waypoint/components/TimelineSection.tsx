@@ -28,6 +28,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
+import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import { selectActiveStaysForDay, selectStays } from '@apps/waypoint/store/selectors';
@@ -64,8 +65,12 @@ export function TimelineSection({
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
+  const [attendingOnly, setAttendingOnly] = useState(false);
   const stays = useAppSelector(selectStays);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
+  const attendanceFilteredEvents = attendingOnly
+    ? events.filter((event) => getEventAttendeeIds(event, memberIds).includes(currentUserId))
+    : events;
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
       return null;
@@ -122,8 +127,8 @@ export function TimelineSection({
   const renderEvents = (dayIndex?: number) => {
     const visibleEvents = [...(
       dayIndex === undefined
-        ? events
-        : events.filter((event) => event.dayIndex === dayIndex)
+        ? attendanceFilteredEvents
+        : attendanceFilteredEvents.filter((event) => event.dayIndex === dayIndex)
     )].sort((a, b) => a.startAt - b.startAt);
 
     if (visibleEvents.length === 0) {
@@ -231,14 +236,24 @@ export function TimelineSection({
           >
             + Add Event
           </Button>
-          <label className='text-muted-foreground mt-3 flex items-center gap-2 text-sm'>
-            <AppToggle
-              size='sm'
-              checked={showCovers}
-              onCheckedChange={setShowCovers}
-            />
-            Show covers
-          </label>
+          <div className='mt-3 flex flex-wrap items-center gap-4'>
+            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <AppToggle
+                size='sm'
+                checked={showCovers}
+                onCheckedChange={setShowCovers}
+              />
+              Show covers
+            </label>
+            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <AppToggle
+                size='sm'
+                checked={attendingOnly}
+                onCheckedChange={setAttendingOnly}
+              />
+              Only events I&apos;m attending
+            </label>
+          </div>
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>

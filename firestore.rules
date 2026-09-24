@@ -1573,6 +1573,8 @@ service cloud.firestore {
               'title',
               'category',
               'customCategoryLabel',
+              'note',
+              'completeByDayIndex',
               'assignedToUids',
               'isCompleted',
               'markedCompletedByUid',
@@ -1587,6 +1589,8 @@ service cloud.firestore {
             && data.category in ['DOCUMENTS', 'PACKING', 'BOOKINGS', 'LOGISTICS', 'OTHER']
             && (data.customCategoryLabel == null || isNonEmptyString(data.customCategoryLabel))
             && (data.category != 'OTHER' || isNonEmptyString(data.customCategoryLabel))
+            && (data.note == null || data.note is string)
+            && (data.completeByDayIndex == null || data.completeByDayIndex is int)
             && data.assignedToUids is list
             && data.isCompleted is bool
             && (data.markedCompletedByUid == null || data.markedCompletedByUid is string)
@@ -1673,7 +1677,10 @@ service cloud.firestore {
             'longitude',
             'eventDetails',
             'notes',
+            'attendeeTargetType',
             'assignedMemberIds',
+            'venueOpenTime',
+            'venueCloseTime',
             'changeHistory',
             'place',
             'linkUrl',
@@ -1701,7 +1708,12 @@ service cloud.firestore {
           && (request.resource.data.longitude == null || request.resource.data.longitude is number)
           && (request.resource.data.eventDetails == null || request.resource.data.eventDetails is map)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
+          && request.resource.data.attendeeTargetType in [
+            'EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE', 'SPECIFIC_MEMBERS'
+          ]
           && request.resource.data.assignedMemberIds is list
+          && (request.resource.data.venueOpenTime == null || isNonEmptyString(request.resource.data.venueOpenTime))
+          && (request.resource.data.venueCloseTime == null || isNonEmptyString(request.resource.data.venueCloseTime))
           && (request.resource.data.place == null || (
             request.resource.data.place is map
             && request.resource.data.place.placeId is string
@@ -1765,6 +1777,7 @@ service cloud.firestore {
             'id',
             'tripId',
             'name',
+            'stayType',
             'address',
             'latitude',
             'longitude',
@@ -1785,6 +1798,7 @@ service cloud.firestore {
           && request.resource.data.id == stayId
           && request.resource.data.tripId == tripId
           && isNonEmptyString(request.resource.data.name)
+          && request.resource.data.stayType in ['HOTEL', 'RENTAL', 'FRIEND_FAMILY', 'OTHER']
           && isNonEmptyString(request.resource.data.address)
           && (request.resource.data.latitude == null || request.resource.data.latitude is number)
           && (request.resource.data.longitude == null || request.resource.data.longitude is number)
@@ -1821,6 +1835,7 @@ service cloud.firestore {
       allow update: if isTripAdminOnlyWhileActive()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
+            'stayType',
             'address',
             'latitude',
             'longitude',
@@ -1854,8 +1869,9 @@ service cloud.firestore {
       function isTripExpenseValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
-            'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'targetType',
-            'targetMemberIds', 'splitAmounts', 'paidMemberStatus',
+            'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'category',
+            'customCategoryLabel', 'targetType', 'targetMemberIds', 'splitAmounts',
+            'paidMemberStatus', 'note', 'groupLabel',
             'createdBy', 'createdAt', 'lastEditedAt'
           ])
           && data.id == expenseId
@@ -1870,15 +1886,21 @@ service cloud.firestore {
               && data.amountMax >= data.amountMin))
           && (data.paidAmount == null || (data.paidAmount is number && data.amount == null))
           && isNonEmptyString(data.currency)
-          && data.payerUid is string
-          && data.payerUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
+          && (data.payerUid == null || (
+            data.payerUid is string
+            && data.payerUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
+          ))
           && data.status in ['PAID', 'EXPECTED']
+          && data.category in ['FOOD', 'TRANSPORT', 'LODGING', 'ACTIVITIES', 'SHOPPING', 'OTHER']
+          && (data.customCategoryLabel == null || isNonEmptyString(data.customCategoryLabel))
           && data.targetType in [
             'EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE', 'JUST_ME', 'SPECIFIC_MEMBERS'
           ]
           && data.targetMemberIds is list
           && (data.splitAmounts == null || data.splitAmounts is map)
           && data.paidMemberStatus is map
+          && (data.note == null || data.note is string)
+          && (data.groupLabel == null || isNonEmptyString(data.groupLabel))
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);

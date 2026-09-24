@@ -7,12 +7,14 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { Badge } from '@moondreamsdev/dreamer-ui/components';
+
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
-import FormSection from '@/ui/FormSection';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
 import { CHECKLIST_CATEGORY_LABELS } from '@apps/waypoint/constants';
 import type {
@@ -33,11 +35,15 @@ interface ChecklistSectionProps {
   currentUserId: string;
 }
 
-interface ChecklistGroup {
-  key: string;
-  label: string;
-  category: ChecklistCategory;
+interface ChecklistDayGroup {
+  dayIndex: number | null;
   items: ChecklistItem[];
+}
+
+function getChecklistCategoryLabel(item: ChecklistItem): string {
+  return item.category === 'OTHER' && item.customCategoryLabel
+    ? item.customCategoryLabel
+    : CHECKLIST_CATEGORY_LABELS[item.category];
 }
 
 export default function ChecklistSection({
@@ -66,31 +72,23 @@ export default function ChecklistSection({
         : items,
     [assignedToMeOnly, currentUserId, items],
   );
-  const groups = useMemo(() => {
-    const grouped = new Map<string, ChecklistGroup>();
-
-    visibleItems.forEach((item) => {
-      const label =
-        item.category === 'OTHER'
-          ? item.customCategoryLabel || CHECKLIST_CATEGORY_LABELS.OTHER
-          : CHECKLIST_CATEGORY_LABELS[item.category];
-      const key = `${item.category}:${label}`;
-      const group = grouped.get(key);
-
-      if (group) {
-        group.items.push(item);
-      } else {
-        grouped.set(key, {
-          key,
-          label,
-          category: item.category,
-          items: [item],
-        });
-      }
-    });
-
-    return [...grouped.values()];
-  }, [visibleItems]);
+  const dayGroups: ChecklistDayGroup[] = useMemo(
+    () =>
+      Array.from(
+        visibleItems
+          .reduce<Map<number | null, ChecklistItem[]>>((byDay, item) => {
+            byDay.set(item.completeByDayIndex, [
+              ...(byDay.get(item.completeByDayIndex) ?? []),
+              item,
+            ]);
+            return byDay;
+          }, new Map())
+          .entries(),
+      )
+        .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a - b))
+        .map(([dayIndex, dayItems]) => ({ dayIndex, items: dayItems })),
+    [visibleItems],
+  );
 
   const completedCount = items.filter((item) => item.isCompleted).length;
   const completionPercent =
@@ -123,6 +121,8 @@ export default function ChecklistSection({
     title: string;
     category: ChecklistCategory;
     customCategoryLabel: string | null;
+    completeByDayIndex: number | null;
+    note: string | null;
     assignedToUids: string[];
   }) => {
     setIsSubmitting(true);
@@ -213,22 +213,25 @@ export default function ChecklistSection({
         Assigned to me
       </label>
 
-      {groups.length === 0 ? (
+      {dayGroups.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
           {items.length === 0
             ? 'No checklist items yet.'
             : 'No items match this filter.'}
         </p>
       ) : (
-        <div className='space-y-3'>
-          {groups.map((group) => (
-            <FormSection
-              key={group.key}
-              label={`${group.label} (${group.items.length})`}
-              defaultOpen
-            >
+        <div className='space-y-4'>
+          {dayGroups.map(({ dayIndex, items: dayItems }) => (
+            <div key={dayIndex ?? 'no-day'} className='space-y-2'>
+              <div className='flex items-center gap-3'>
+                <div className='border-border flex-1 border-t' />
+                <span className='text-muted-foreground text-sm font-medium'>
+                  {dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex)}
+                </span>
+                <div className='border-border flex-1 border-t' />
+              </div>
               <ul className='divide-border divide-y'>
-                {group.items.map((item) => {
+                {dayItems.map((item) => {
                   const assignedUsers = item.assignedToUids
                     .map((uid) => members[uid])
                     .filter(Boolean);
@@ -256,15 +259,25 @@ export default function ChecklistSection({
                             />
                           </span>
                         </Tooltip>
-                        <span
-                          className={
-                            item.isCompleted
-                              ? 'text-muted-foreground line-through'
-                              : 'font-medium'
-                          }
-                        >
-                          {item.title}
-                        </span>
+                        <div className='min-w-0'>
+                          <div className='flex flex-wrap items-center gap-2'>
+                            <span
+                              className={
+                                item.isCompleted
+                                  ? 'text-muted-foreground line-through'
+                                  : 'font-medium'
+                              }
+                            >
+                              {item.title}
+                            </span>
+                            <Badge variant='muted' outline>
+                              {getChecklistCategoryLabel(item)}
+                            </Badge>
+                          </div>
+                          {item.note && (
+                            <p className='text-muted-foreground mt-1 text-sm italic'>{item.note}</p>
+                          )}
+                        </div>
                       </div>
                       <div className='flex shrink-0 items-center gap-1'>
                         {assignedUsers.length > 0 ? (
@@ -294,14 +307,15 @@ export default function ChecklistSection({
                   );
                 })}
               </ul>
-            </FormSection>
+            </div>
           ))}
         </div>
       )}
 
       <ChecklistItemFormModal
-        key={editingItem?.id ?? 'new'}
+        key={`${editingItem?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
+        trip={trip}
         item={editingItem}
         memberOptions={memberIds.map((uid) => ({
           label:

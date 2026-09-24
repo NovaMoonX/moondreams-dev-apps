@@ -21,7 +21,6 @@ interface EditTripFormData {
   startDate: string;
   endDate: string;
   coverImageFile: File | null;
-  defaultCurrency: string;
 }
 
 interface EditTripModalProps {
@@ -98,12 +97,6 @@ function EditTripModal({
           </div>
         ),
       }),
-      input({
-        name: 'defaultCurrency',
-        label: 'Default currency',
-        placeholder: 'USD',
-        variant: 'outline',
-      }),
     ],
     [coverUpload, isSubmitting],
   );
@@ -117,7 +110,6 @@ function EditTripModal({
     startDate: toDateInputValue(trip.startDate),
     endDate: toDateInputValue(trip.endDate),
     coverImageFile: null,
-    defaultCurrency: trip.defaultCurrency ?? '',
   };
   const currentData = formData ?? initialData;
   const isFormComplete =
@@ -145,7 +137,7 @@ function EditTripModal({
         coverImageUrl: trip.coverImageUrl,
         coverImageFile: coverUpload.file,
         coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
-        defaultCurrency: data.defaultCurrency.trim() || null,
+        defaultCurrency: trip.defaultCurrency,
       });
     } catch (submitError) {
       setError(

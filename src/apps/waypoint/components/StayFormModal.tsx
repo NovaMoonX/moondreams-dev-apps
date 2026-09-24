@@ -6,6 +6,7 @@ import {
   Label,
   Modal,
   Select,
+  Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
@@ -19,7 +20,8 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { getTimezoneOptions } from '@/utils/timezoneUtils';
-import type { Stay, TripSpace } from '@apps/waypoint/types';
+import { STAY_TYPES, STAY_TYPE_OPTION_LABELS } from '@apps/waypoint/constants';
+import type { Stay, StayType, TripSpace } from '@apps/waypoint/types';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import type { PlaceRef } from '@/lib/places/types';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
@@ -42,6 +44,7 @@ interface StayFormModalProps {
 
 interface StayDraft {
   name: string;
+  stayType: StayType;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -64,6 +67,7 @@ interface StayDraft {
 function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
   return {
     name: stay?.name ?? '',
+    stayType: stay?.stayType ?? 'HOTEL',
     address: stay?.address ?? '',
     latitude: stay?.latitude ?? null,
     longitude: stay?.longitude ?? null,
@@ -97,6 +101,7 @@ export function StayFormModal({
   const [draft, setDraft] = useState(() => getInitialDraft(trip, stay));
   const [error, setError] = useState<string | null>(null);
   const [showTimezoneField, setShowTimezoneField] = useState(false);
+  const [showNotesField, setShowNotesField] = useState(Boolean(stay?.notes));
   const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -156,6 +161,7 @@ export function StayFormModal({
     try {
       await onSubmit({
         name: draft.name,
+        stayType: draft.stayType,
         address: draft.address,
         latitude: draft.latitude,
         longitude: draft.longitude,
@@ -201,6 +207,17 @@ export function StayFormModal({
             value={draft.address}
             placeholder='Address'
             onChange={(event) => updateDraft({ address: event.target.value, ...UNLINKED_PLACE })}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Stay type</Label>
+          <Select
+            options={STAY_TYPES.map((stayType) => ({
+              value: stayType,
+              text: STAY_TYPE_OPTION_LABELS[stayType],
+            }))}
+            value={draft.stayType}
+            onChange={(value) => updateDraft({ stayType: value as StayType })}
           />
         </div>
         <LinkAttachField
@@ -286,6 +303,27 @@ export function StayFormModal({
             />
           </div>
         </div>
+        {showNotesField ? (
+          <div className='space-y-1.5'>
+            <Label>Notes</Label>
+            <Textarea
+              rows={3}
+              value={draft.notes}
+              variant='outline'
+              placeholder='Gate code, host contact, parking instructions…'
+              onChange={(event) => updateDraft({ notes: event.target.value })}
+            />
+          </div>
+        ) : (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            onClick={() => setShowNotesField(true)}
+          >
+            + Add notes
+          </Button>
+        )}
         <ModalFooterActions
           leftActions={
             stay &&

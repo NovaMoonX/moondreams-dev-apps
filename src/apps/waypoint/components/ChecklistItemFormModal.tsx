@@ -5,27 +5,32 @@ import {
   Form,
   FormFactories,
   Modal,
+  Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
-import type { ChecklistCategory, ChecklistItem } from '@apps/waypoint/types';
+import type { ChecklistCategory, ChecklistItem, TripSpace } from '@apps/waypoint/types';
 
 interface ChecklistFormData {
   title: string;
   category: ChecklistCategory;
   customCategoryLabel: string;
+  completeByDayIndex: string;
+  note: string;
   assignedToUids: string[];
 }
 
 interface ChecklistItemFormModalProps {
   isOpen: boolean;
+  trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   item?: ChecklistItem | null;
   isSubmitting?: boolean;
@@ -33,23 +38,33 @@ interface ChecklistItemFormModalProps {
     title: string;
     category: ChecklistCategory;
     customCategoryLabel: string | null;
+    completeByDayIndex: number | null;
+    note: string | null;
     assignedToUids: string[];
   }) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
-const { input, select, checkboxGroup } = FormFactories;
+const { custom, input, select, checkboxGroup } = FormFactories;
 
-const INITIAL_FORM_DATA: ChecklistFormData = {
-  title: '',
-  category: 'DOCUMENTS',
-  customCategoryLabel: '',
-  assignedToUids: [],
-};
+function getInitialFormData(item?: ChecklistItem | null): ChecklistFormData {
+  return {
+    title: item?.title ?? '',
+    category: item?.category ?? 'DOCUMENTS',
+    customCategoryLabel: item?.customCategoryLabel ?? '',
+    completeByDayIndex:
+      item?.completeByDayIndex === null || item?.completeByDayIndex === undefined
+        ? ''
+        : String(item.completeByDayIndex),
+    note: item?.note ?? '',
+    assignedToUids: item?.assignedToUids ?? [],
+  };
+}
 
 export default function ChecklistItemFormModal({
   isOpen,
+  trip,
   memberOptions,
   item = null,
   isSubmitting = false,
@@ -58,20 +73,25 @@ export default function ChecklistItemFormModal({
   onClose,
 }: ChecklistItemFormModalProps) {
   const { confirm } = useActionModal();
-  const initialData: ChecklistFormData = item
-    ? {
-        title: item.title,
-        category: item.category,
-        customCategoryLabel: item.customCategoryLabel ?? '',
-        assignedToUids: item.assignedToUids,
-      }
-    : INITIAL_FORM_DATA;
+  const initialData = useMemo(() => getInitialFormData(item), [item]);
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
+  const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));
 
   const isFormComplete =
     formData.title.trim() !== '' &&
     (formData.category !== 'OTHER' || formData.customCategoryLabel.trim() !== '');
+
+  const dayOptions = useMemo(
+    () => [
+      { value: '', label: 'No specific day' },
+      ...Array.from({ length: getDayCount(trip.startDate, trip.endDate) }, (_, index) => ({
+        value: String(index),
+        label: getDayLabel(trip.startDate, index),
+      })),
+    ],
+    [trip.startDate, trip.endDate],
+  );
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
@@ -80,7 +100,6 @@ export default function ChecklistItemFormModal({
         label: 'Task',
         placeholder: 'Confirm passport expiration dates',
         variant: 'outline',
-        required: true,
       }),
       select({
         name: 'category',
@@ -89,7 +108,6 @@ export default function ChecklistItemFormModal({
           label: CHECKLIST_CATEGORY_LABELS[category],
           value: category,
         })),
-        required: true,
       }),
     ];
 
@@ -100,10 +118,17 @@ export default function ChecklistItemFormModal({
           label: 'Custom category label',
           placeholder: 'Health & safety',
           variant: 'outline',
-          required: true,
-        }),
+          }),
       );
     }
+
+    nextFields.push(
+      select({
+        name: 'completeByDayIndex',
+        label: 'Complete by',
+        options: dayOptions,
+      }),
+    );
 
     nextFields.push(
       checkboxGroup({
@@ -114,8 +139,35 @@ export default function ChecklistItemFormModal({
       }),
     );
 
+    nextFields.push(
+      custom({
+        name: 'note',
+        label: 'Note',
+        renderComponent: (props) =>
+          showNoteField ? (
+            <Textarea
+              rows={2}
+              value={props.value as string}
+              onChange={(event) => props.onValueChange(event.target.value)}
+              variant='outline'
+              placeholder='Anything worth remembering about this task'
+            />
+          ) : (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto p-0'
+              onClick={() => setShowNoteField(true)}
+            >
+              + Add note
+            </Button>
+          ),
+      }),
+    );
+
     return nextFields;
-  }, [formData.category, memberOptions]);
+  }, [dayOptions, formData.category, memberOptions, showNoteField]);
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();
@@ -133,6 +185,8 @@ export default function ChecklistItemFormModal({
         title,
         category: data.category,
         customCategoryLabel,
+        completeByDayIndex: data.completeByDayIndex === '' ? null : Number(data.completeByDayIndex),
+        note: data.note.trim() || null,
         assignedToUids: data.assignedToUids,
       });
     } catch (submitError) {

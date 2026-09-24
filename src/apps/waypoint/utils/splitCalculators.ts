@@ -18,7 +18,7 @@ export function getSplitMemberIds(
 ): string[] {
   switch (expense.targetType) {
     case 'JUST_ME':
-      return [expense.payerUid];
+      return expense.payerUid === null ? [] : [expense.payerUid];
     case 'EVERYONE_INCLUDING_FUTURE':
       return currentMemberIds;
     case 'EVERYONE_CURRENT':
@@ -69,7 +69,8 @@ export function computeDuesSummary(
   };
 
   for (const expense of expenses) {
-    if (expense.status !== 'PAID') {
+    // A null payer means everyone paid their own share directly — nothing to settle.
+    if (expense.status !== 'PAID' || expense.payerUid === null) {
       continue;
     }
 

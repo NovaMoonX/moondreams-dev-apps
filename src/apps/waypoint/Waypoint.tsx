@@ -35,6 +35,7 @@ import {
   selectTimelineEvents,
 } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
+import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 function Waypoint() {
   const { user, loading } = useAuth();
@@ -131,7 +132,11 @@ function Waypoint() {
         }),
       ).unwrap();
     } catch (archiveError) {
-      setError(getErrorMessage(archiveError, 'Unable to update this trip.'));
+      addToast({
+        title: 'Unable to update this trip',
+        description: getErrorMessage(archiveError, 'Please try again.'),
+        type: 'error',
+      });
     }
   };
 
@@ -210,16 +215,8 @@ function Waypoint() {
             <TripCard
               key={trip.id}
               trip={trip}
-              currentUserId={user.uid}
               now={now}
               onOpen={setSelectedTripId}
-              onEdit={(tripToEdit) => {
-                setError(null);
-                setEditingTrip(tripToEdit);
-              }}
-              onToggleArchived={(tripToToggle) =>
-                void handleToggleArchived(tripToToggle)
-              }
               onCopyInviteLink={(inviteLinkCode) =>
                 void handleCopyInviteLink(inviteLinkCode)
               }
@@ -230,15 +227,42 @@ function Waypoint() {
     );
   };
 
+  const editTripModal = (
+    <EditTripModal
+      key={`edit-trip-${editingTrip?.id ?? 'none'}`}
+      isOpen={editingTrip !== null}
+      trip={editingTrip}
+      isSubmitting={isSubmitting}
+      onSubmit={handleEditTrip}
+      onClose={() => setEditingTrip(null)}
+    />
+  );
+
   if (selectedTrip) {
     return (
-      <TripDetailPage
-        key={selectedTrip.id}
-        trip={selectedTrip}
-        events={timelineEvents}
-        currentUserId={user.uid}
-        onBack={() => setSelectedTripId(null)}
-      />
+      <>
+        <TripDetailPage
+          key={selectedTrip.id}
+          trip={selectedTrip}
+          events={timelineEvents}
+          currentUserId={user.uid}
+          onBack={() => setSelectedTripId(null)}
+          onEdit={
+            hasTripRole(selectedTrip, user.uid, ['ADMIN', 'EDITOR'])
+              ? (tripToEdit) => {
+                  setError(null);
+                  setEditingTrip(tripToEdit);
+                }
+              : undefined
+          }
+          onToggleArchived={
+            hasTripRole(selectedTrip, user.uid, 'ADMIN')
+              ? (tripToToggle) => void handleToggleArchived(tripToToggle)
+              : undefined
+          }
+        />
+        {editTripModal}
+      </>
     );
   }
 
@@ -303,14 +327,7 @@ function Waypoint() {
         onSubmit={handleCreateTrip}
         onClose={() => setIsCreateModalOpen(false)}
       />
-      <EditTripModal
-        key={editingTrip?.id ?? 'waypoint-no-edit'}
-        isOpen={editingTrip !== null}
-        trip={editingTrip}
-        isSubmitting={isSubmitting}
-        onSubmit={handleEditTrip}
-        onClose={() => setEditingTrip(null)}
-      />
+      {editTripModal}
       {inviteCode && (
         <JoinTripModal
           key={inviteCode}

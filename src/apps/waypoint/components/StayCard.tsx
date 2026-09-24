@@ -1,4 +1,4 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import EnrichedImage from '@/components/EnrichedImage';
@@ -6,6 +6,7 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatDateTime } from '@/utils/formatUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
+import { STAY_TYPE_LABELS } from '@apps/waypoint/constants';
 import type { Stay } from '@apps/waypoint/types';
 
 interface StayCardProps {
@@ -28,8 +29,14 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
       )}
       <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
         <div className='min-w-0'>
-          <h3 className='font-semibold'>{stay.name}</h3>
+          <div className='flex flex-wrap items-center gap-2'>
+            <h3 className='font-semibold'>{stay.name}</h3>
+            <Badge variant='muted' outline>
+              {STAY_TYPE_LABELS[stay.stayType]}
+            </Badge>
+          </div>
           <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
+          {stay.notes && <p className='text-muted-foreground mt-1 text-sm italic'>{stay.notes}</p>}
           {stay.linkUrl && (
             <div className='mt-1'>
               <ExternalLinkText href={stay.linkUrl} />

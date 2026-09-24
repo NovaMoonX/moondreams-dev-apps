@@ -62,6 +62,11 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
               {event.address ? ` · ${event.address}` : ''}
             </p>
           )}
+          {(event.venueOpenTime || event.venueCloseTime) && (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              Open {event.venueOpenTime ?? '?'} – {event.venueCloseTime ?? '?'}
+            </p>
+          )}
           {event.linkUrl && (
             <div className='mt-1'>
               <ExternalLinkText href={event.linkUrl} />
