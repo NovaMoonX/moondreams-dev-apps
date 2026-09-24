@@ -31,13 +31,13 @@ export function LocationLink({
       variant='link'
       size='sm'
       className={join(
-        'text-primary h-auto min-h-0 justify-start gap-1 p-0! text-left text-sm font-normal whitespace-normal',
+        'text-primary h-auto min-h-0 items-start! justify-start gap-1 p-0! text-left text-sm font-normal whitespace-normal',
         className,
       )}
       onClick={(event) => event.stopPropagation()}
     >
-      <MapPin className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-      <span>{label}</span>
+      <MapPin className='mt-0.75 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+      <span className='text-pretty'>{label}</span>
     </Button>
   );
 }

@@ -7,6 +7,7 @@ import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
+import EventNotesField from '@apps/waypoint/components/EventNotesField';
 import EnrichedImage from '@/components/EnrichedImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
@@ -24,6 +25,7 @@ interface EventCardProps {
   canEdit: boolean;
   showCover: boolean;
   onEdit: (event: TimelineEvent) => void;
+  onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
 
 function getQuickField(event: TimelineEvent): string | null {
@@ -44,9 +46,11 @@ interface EventDetailLinesProps {
   event: TimelineEvent;
   showTitle: boolean;
   showNotes: boolean;
+  canEdit: boolean;
+  onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
 
-function EventDetailLines({ event, showTitle, showNotes }: EventDetailLinesProps) {
+function EventDetailLines({ event, showTitle, showNotes, canEdit, onSaveNotes }: EventDetailLinesProps) {
   const quickField = getQuickField(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
 
@@ -75,15 +79,21 @@ function EventDetailLines({ event, showTitle, showNotes }: EventDetailLinesProps
           <ExternalLinkText href={event.linkUrl} />
         </div>
       )}
-      {showNotes && event.notes && (
-        <p className='text-sm whitespace-pre-line'>{event.notes}</p>
+      {showNotes && (
+        <EventNotesField
+          key={event.id}
+          notes={event.notes}
+          canEdit={canEdit}
+          onSave={(notes) => onSaveNotes(event, notes)}
+          variant='link'
+        />
       )}
       <ChangeBadge changeHistory={event.changeHistory} />
     </>
   );
 }
 
-export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps) {
+export function EventCard({ event, canEdit, showCover, onEdit, onSaveNotes }: EventCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
@@ -120,7 +130,13 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
         )}
         <div className='flex items-start justify-between gap-3 p-4'>
           <div className='min-w-0 space-y-1'>
-            <EventDetailLines event={event} showTitle showNotes={false} />
+            <EventDetailLines
+              event={event}
+              showTitle
+              showNotes={false}
+              canEdit={canEdit}
+              onSaveNotes={onSaveNotes}
+            />
           </div>
           {!isSmallScreen && (
             <div className='flex shrink-0 gap-2'>
@@ -133,6 +149,17 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
             </div>
           )}
         </div>
+        {!isSmallScreen && (event.notes || canEdit) && (
+          <div className='-mt-2 px-4 pb-3'>
+            <EventNotesField
+              key={event.id}
+              notes={event.notes}
+              canEdit={canEdit}
+              onSave={(notes) => onSaveNotes(event, notes)}
+              variant='subtle'
+            />
+          </div>
+        )}
       </article>
       {isSmallScreen && (
         <PlaceDetailsDrawer
@@ -144,7 +171,13 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
           linkUrl={event.linkUrl}
           onEdit={canEdit ? () => onEdit(event) : null}
         >
-          <EventDetailLines event={event} showTitle={false} showNotes />
+          <EventDetailLines
+            event={event}
+            showTitle={false}
+            showNotes
+            canEdit={canEdit}
+            onSaveNotes={onSaveNotes}
+          />
         </PlaceDetailsDrawer>
       )}
     </>

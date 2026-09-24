@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -11,6 +11,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
+import { DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 import { canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
@@ -202,6 +203,55 @@ export const updateEvent = createAsyncThunk<
     return updatedEvent;
   },
 );
+
+// The rule validates the whole merged document, so an event saved before these
+// fields existed needs them written alongside any partial update.
+function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
+  const defaults: Partial<TimelineEvent> = {
+    endDayIndex: event.dayIndex,
+    eventDetails: null,
+    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+    assignedMemberIds: [],
+    venueOpenTime: null,
+    venueCloseTime: null,
+    changeHistory: [],
+    place: null,
+    linkUrl: null,
+    linkPreview: null,
+    reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
+    reminderEnabled: true,
+    reminderId: null,
+  };
+  const missing = Object.fromEntries(
+    Object.entries(defaults).filter(([key]) => !(key in event)),
+  ) as Partial<TimelineEvent>;
+  return missing;
+}
+
+interface UpdateEventNotesInput {
+  uid: string;
+  trip: TripSpace;
+  event: TimelineEvent;
+  notes: string;
+}
+
+export const updateEventNotes = createAsyncThunk<
+  TimelineEvent,
+  UpdateEventNotesInput,
+  { rejectValue: string }
+>('waypoint/events/updateNotes', async ({ uid, trip, event, notes }, { rejectWithValue }) => {
+  if (!canEditExistingItem(trip, uid)) {
+    return rejectWithValue('You do not have permission to edit this event.');
+  }
+
+  const changes = {
+    ...getMissingEventFields(event),
+    notes: notes.trim() || null,
+    lastEditedAt: Date.now(),
+  };
+  await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), changes);
+  return { ...event, ...changes };
+});
 
 export const deleteEvent = createAsyncThunk<
   string,
