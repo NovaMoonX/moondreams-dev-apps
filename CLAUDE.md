@@ -15,6 +15,7 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - **No IIFEs.** Arrow callbacks passed to `.map()`, `onClick=`, `setState()` are fine.
 - **Never `setState` synchronously in a `useEffect` body** (or during render to mirror props). Derive during render, or set state only inside async/subscription callbacks.
 - **Firestore fields are `T | null`**, required keys, explicit `null` — never optional `?:` or `undefined`.
+- **Date-only vs. instant.** A date picked with no time (`fromDateInputValue`) is UTC midnight: display it with `formatDateUTC`/`getDayLabel`, never `formatDate`/`formatDateTime`/local getters, and treat a date-only end date as covering its whole day (`endDate + 1 day`) when comparing an instant against it. An instant (`startAt`, `createdAt`) displays in local time. Full rule in `copilot-instructions.md` ("Know which of the two kinds of time value a field is").
 - **Copy is product-forward**: warm, friendly user-facing text (subtext, empty states, descriptions), not spec-literal.
 - **Dreamer UI first.** No raw `<button>`/`<input>`/`<select>`/`<textarea>`. Use `AppToggle` (`@/components/AppToggle`), never Dreamer UI's raw `Toggle`. Use a toggle for anything that takes effect immediately (live filter, "show archived"); use `Checkbox` only for form-staged values and to-do-style completion marks.
 
@@ -62,6 +63,7 @@ Migrating between them means moving the collection path and updating every actio
 
 - **Typecheck with `npx tsc -b --force` (or `npm run build`)** — `tsc --noEmit -p .` checks nothing in this solution-style repo. Also run `npx eslint .`.
 - **Drive the change in a real browser** against the local Emulator Suite, signed in through the dev fixture switcher, with a throwaway Playwright script (delete it when done). A passing typecheck is not evidence a feature works. Also re-drive every pre-existing feature that touches a file you changed, and treat "the new feature works" and "nothing regressed" as separate checks.
+- **Anything that shows or compares a date runs in a timezone behind UTC** — create the Playwright page with `timezoneId: 'America/Los_Angeles'`. Cloud sandboxes and CI run in UTC, where a date-only value formatted in local time looks correct; the off-by-one only appears west of UTC. Check that the displayed date matches the date picker's value.
 - **Leave the dev server and emulators running** after browser validation; finish with `npm run seed:reset` so data is back to the seeded baseline.
 - **Update the mini-app seed** (`scripts/seeds/<app>.ts`) when a feature adds an entity or state worth seeding, including its `firestoreDocuments` count.
 

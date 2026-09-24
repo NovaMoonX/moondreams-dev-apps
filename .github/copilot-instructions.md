@@ -67,6 +67,11 @@ src/
 - Treat time fields as real timestamps in milliseconds as numbers, not plain strings or JS date strings in app state.
 - Use `Date.now()` for new timestamp values unless a real server-generated timestamp is required.
 - Keep app-side type shapes and Firestore data contracts aligned so `createdAt`, `updatedAt`, and request timestamps use consistent millisecond-number semantics in the client.
+- **Know which of the two kinds of time value a field is, and never mix their helpers.** Getting this wrong shows every viewer west of UTC the *previous* day — and it's invisible in UTC-based dev/CI environments.
+  - **Date-only** — a calendar day picked with no time (a trip's `startDate`/`endDate`, a vaccination's `administeredAt`, an expense's `incurredAt`). Stored as **UTC midnight** of that day: write with `fromDateInputValue`, read into a picker with `toDateInputValue`, display with `formatDateUTC` (or `getDayLabel` for a trip's "Day N"). Never display one with `formatDate`, `formatDateTime`, a bare `toLocaleDateString()`, or local getters (`getDate()`/`getMonth()`/`getFullYear()`) — any local-timezone read of a UTC-midnight value lands on the day before for anyone behind UTC. A formatter that must read one passes `timeZone: 'UTC'` / uses the `getUTC*` getters.
+  - **Instant** — a real moment in time (`createdAt`, an event's `startAt`, a stay's `checkInAt`, `Date.now()`). Write from a date + time picker with `fromLocalDateAndTimeInputValues`, read back with `toLocalDateInputValue`/`toLocalTimeInputValue`, display with `formatDate`/`formatDateTime`/`formatTime` (local time is correct here).
+  - **A date-only end date is the *start* of its day.** When comparing an instant against it ("does this stay's checkout fall inside the trip?"), the exclusive upper bound is `endDate + 86_400_000`, not `endDate` — otherwise anything later that same day reads as out of range.
+  - **Day math on date-only values** (`getDayIndex`, `getDayCount`, a `dayIndex` offset) stays in whole UTC days from the UTC-midnight anchor; don't route it through local `Date` getters.
 - Do not add string-based or Firestore `Timestamp`-style values unless the feature truly requires them.
 - Keep Firestore rules and app state lifecycle logic aligned when creating or updating lifecycle-related fields such as `createdBy`, `members`, `pendingRequests`, or invite codes.
 - In Firestore rules, place repeated field assertions in helper functions instead of duplicating long inline checks inside `allow` expressions.
@@ -161,6 +166,7 @@ useEffect(() => {
 - **A "Custom"/"Other" follow-up input only renders once that option is selected, never unconditionally.**
 - **Large forms: keep only essential fields always visible; put optional/secondary fields in an Accordion or Disclosure.**
 - **Use `formatDateTime` from `src/utils/formatUtils.ts` for shared timestamp display formatting.**
+- **Date-only values (anything written with `fromDateInputValue`) are UTC midnight — display them with `formatDateUTC`/`getDayLabel`, never `formatDate`/`formatDateTime`/local getters, and bound an instant against a date-only end date with `endDate + 1 day`. Grep the diff for `formatDate(` and `toLocaleDateString(` on any such field.**
 - **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
 - **Invite/join flows: always use the flat, sibling `apps/{appId}/pendingRequests` collection pattern — never nested, never a `collectionGroup`. Ship the requester's own Remove/cancel action in the same PR as approve/decline, not as a later follow-up.**

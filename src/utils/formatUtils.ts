@@ -28,7 +28,8 @@ export function formatClockTime(hhmm: string) {
   return formatted;
 }
 
-/** Date only, no time-of-day — for things nothing in the app ever asks a time for (vaccinations, preventives, weight, expenses). */
+/** The calendar day of an instant (a real moment, e.g. `createdAt`) in the viewer's timezone.
+ * A date-only picker value (`fromDateInputValue`) needs `formatDateUTC` instead. */
 export function formatDate(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getFullYear() === new Date().getFullYear();
