@@ -208,15 +208,17 @@ export const deleteExpense = createAsyncThunk<
 
 interface MarkExpensePaidInput {
   expense: TripExpense;
+  payerUid: string | null;
   paidAmount: number | null;
 }
 
 export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
-  async ({ expense, paidAmount }) => {
+  async ({ expense, payerUid, paidAmount }) => {
     const updatedExpense: TripExpense = {
       ...expense,
       status: 'PAID',
+      payerUid,
       paidAmount: expense.amount === null ? paidAmount : null,
       lastEditedAt: Date.now(),
     };

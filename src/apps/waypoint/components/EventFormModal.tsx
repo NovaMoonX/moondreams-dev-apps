@@ -466,6 +466,7 @@ function EventFormModal({
                   place: result.place,
                 })
               }
+              className='mb-0' // overwrite space-y-4
             />
             <div className='space-y-1.5'>
               <Label>Address</Label>
@@ -514,7 +515,7 @@ function EventFormModal({
             {draft.hasVenueHours ? (
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
-                  <Label>Venue hours</Label>
+                  <Label>Business hours</Label>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -554,7 +555,7 @@ function EventFormModal({
                 className='h-auto p-0'
                 onClick={() => updateDraft({ hasVenueHours: true })}
               >
-                + Add hours
+                + Add business hours
               </Button>
             )}
             <div className='space-y-1.5'>

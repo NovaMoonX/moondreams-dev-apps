@@ -5,6 +5,7 @@ import type {
   EventFieldChange,
   EventType,
   ExpenseCategory,
+  ExpenseSortBy,
   MealType,
   StayType,
   TransitType,
@@ -113,13 +114,22 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
   OTHER: 'Other',
 };
 
-export const EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
+// OTHER is the storage bucket for user-added categories (named by
+// customCategoryLabel), so it's never offered as a preset choice.
+export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
   'FOOD',
   'TRANSPORT',
   'LODGING',
   'ACTIVITIES',
   'SHOPPING',
-  'OTHER',
+];
+
+export const ADD_NEW_OPTION = '__add_new__';
+
+export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
+  { value: 'day', text: 'Day' },
+  { value: 'amount-desc', text: 'Amount (high to low)' },
+  { value: 'amount-asc', text: 'Amount (low to high)' },
 ];
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -140,9 +150,14 @@ export const STAY_TYPES: readonly StayType[] = [
 
 export const STAY_TYPE_LABELS: Record<StayType, string> = {
   HOTEL: 'Hotel',
-  RENTAL: 'Rental (Airbnb, etc.)',
+  RENTAL: 'Rental',
   FRIEND_FAMILY: 'Friend or family',
   OTHER: 'Other',
+};
+
+export const STAY_TYPE_OPTION_LABELS: Record<StayType, string> = {
+  ...STAY_TYPE_LABELS,
+  RENTAL: 'Rental (e.g., Airbnb)',
 };
 
 export const EVENT_ATTENDEE_TARGET_LABELS: Record<EventAttendeeTargetType, string> = {

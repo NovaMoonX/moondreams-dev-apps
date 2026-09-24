@@ -231,23 +231,37 @@ function Waypoint() {
     );
   };
 
+  const editTripModal = (
+    <EditTripModal
+      key={`edit-trip-${editingTrip?.id ?? 'none'}`}
+      isOpen={editingTrip !== null}
+      trip={editingTrip}
+      isSubmitting={isSubmitting}
+      onSubmit={handleEditTrip}
+      onClose={() => setEditingTrip(null)}
+    />
+  );
+
   if (selectedTrip) {
     return (
-      <TripDetailPage
-        key={selectedTrip.id}
-        trip={selectedTrip}
-        events={timelineEvents}
-        currentUserId={user.uid}
-        onBack={() => setSelectedTripId(null)}
-        onEdit={
-          hasTripRole(selectedTrip, user.uid, ['ADMIN', 'EDITOR'])
-            ? (tripToEdit) => {
-                setError(null);
-                setEditingTrip(tripToEdit);
-              }
-            : undefined
-        }
-      />
+      <>
+        <TripDetailPage
+          key={selectedTrip.id}
+          trip={selectedTrip}
+          events={timelineEvents}
+          currentUserId={user.uid}
+          onBack={() => setSelectedTripId(null)}
+          onEdit={
+            hasTripRole(selectedTrip, user.uid, ['ADMIN', 'EDITOR'])
+              ? (tripToEdit) => {
+                  setError(null);
+                  setEditingTrip(tripToEdit);
+                }
+              : undefined
+          }
+        />
+        {editTripModal}
+      </>
     );
   }
 
@@ -312,14 +326,7 @@ function Waypoint() {
         onSubmit={handleCreateTrip}
         onClose={() => setIsCreateModalOpen(false)}
       />
-      <EditTripModal
-        key={editingTrip?.id ?? 'waypoint-no-edit'}
-        isOpen={editingTrip !== null}
-        trip={editingTrip}
-        isSubmitting={isSubmitting}
-        onSubmit={handleEditTrip}
-        onClose={() => setEditingTrip(null)}
-      />
+      {editTripModal}
       {inviteCode && (
         <JoinTripModal
           key={inviteCode}

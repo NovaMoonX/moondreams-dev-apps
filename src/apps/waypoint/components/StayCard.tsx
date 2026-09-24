@@ -36,9 +36,6 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
             </Badge>
           </div>
           <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
-          {stay.stayType === 'FRIEND_FAMILY' && stay.hostNames && (
-            <p className='text-muted-foreground mt-1 text-sm'>Hosted by {stay.hostNames}</p>
-          )}
           {stay.notes && <p className='text-muted-foreground mt-1 text-sm italic'>{stay.notes}</p>}
           {stay.linkUrl && (
             <div className='mt-1'>

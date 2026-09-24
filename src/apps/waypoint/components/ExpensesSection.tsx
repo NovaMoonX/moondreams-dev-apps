@@ -1,19 +1,22 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button, Input, Tabs } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Drawer, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from '@apps/waypoint/constants';
+import { EXPENSE_SORT_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
 } from '@apps/waypoint/components/ExpenseSplitModal';
-import MarkExpensePaidModal from '@apps/waypoint/components/MarkExpensePaidModal';
+import MarkExpensePaidModal, {
+  type MarkExpensePaidValues,
+} from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
   deleteExpense,
@@ -26,7 +29,12 @@ import {
   selectTripExpenses,
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
-import type { ExpenseCategory, ExpenseStatus, TripExpense, TripSpace } from '@apps/waypoint/types';
+import type { ExpenseSortBy, ExpenseStatus, TripExpense, TripSpace } from '@apps/waypoint/types';
+import {
+  getExpenseCategoryKey,
+  getExpenseCategoryKeyLabel,
+  getExpenseCategoryKeys,
+} from '@apps/waypoint/utils/expenseCategories';
 import {
   computeDuesSummary,
   getResolvedExpenseAmount,
@@ -38,16 +46,8 @@ interface ExpensesSectionProps {
   currentUserId: string;
 }
 
-type SortBy = 'day' | 'amount';
-
 function isCustomSplit(expense: TripExpense): boolean {
   return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
-}
-
-function getExpenseCategoryLabel(expense: TripExpense): string {
-  return expense.category === 'OTHER' && expense.customCategoryLabel
-    ? expense.customCategoryLabel
-    : EXPENSE_CATEGORY_LABELS[expense.category];
 }
 
 function getSortAmount(expense: TripExpense): number {
@@ -126,11 +126,12 @@ function clusterByGroup(items: TripExpense[]): ExpenseCluster[] {
 function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const expenses = useAppSelector(selectTripExpenses);
-  const [sortBy, setSortBy] = useState<SortBy>('day');
+  const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
   const [payerFilter, setPayerFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<ExpenseStatus[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [rangedOnly, setRangedOnly] = useState(false);
   const [splitOnly, setSplitOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,7 +144,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
-  const currency = trip.defaultCurrency ?? 'USD';
+  const currency = 'USD';
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
   const canAddExpenses = ['ADMIN', 'EDITOR'].includes(
@@ -162,6 +163,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ).sort(),
     [expenses],
   );
+  const categoryKeys = useMemo(() => getExpenseCategoryKeys(expenses), [expenses]);
   const filteredExpenses = expenses.filter((expense) => {
     const matchesDay =
       dayFilter.length === 0 ||
@@ -173,7 +175,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       (expense.payerUid !== null && payerFilter.includes(expense.payerUid));
     const matchesStatus = statusFilter.length === 0 || statusFilter.includes(expense.status);
     const matchesCategory =
-      categoryFilter.length === 0 || categoryFilter.includes(expense.category);
+      categoryFilter.length === 0 || categoryFilter.includes(getExpenseCategoryKey(expense));
     const matchesRanged = !rangedOnly || expense.amount === null;
     const matchesSplit = !splitOnly || isCustomSplit(expense);
     const matchesSearch =
@@ -189,14 +191,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       matchesSearch
     );
   });
-  const hasActiveFilters =
-    dayFilter.length > 0 ||
-    payerFilter.length > 0 ||
-    statusFilter.length > 0 ||
-    categoryFilter.length > 0 ||
-    rangedOnly ||
-    splitOnly ||
-    searchQuery.trim() !== '';
+  const activeFilterCount =
+    dayFilter.length +
+    payerFilter.length +
+    statusFilter.length +
+    categoryFilter.length +
+    Number(rangedOnly) +
+    Number(splitOnly);
   const toggleFilterValue = <T,>(current: T[], value: T): T[] =>
     current.includes(value) ? current.filter((filterValue) => filterValue !== value) : [...current, value];
   const clearFilters = () => {
@@ -206,7 +207,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setCategoryFilter([]);
     setRangedOnly(false);
     setSplitOnly(false);
-    setSearchQuery('');
   };
   const totals = computeExpenseTotals(filteredExpenses);
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
@@ -217,9 +217,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const duesSummary = computeDuesSummary(expenses, memberIds);
 
   const sortedExpenses =
-    sortBy === 'amount'
-      ? [...filteredExpenses].sort((a, b) => getSortAmount(b) - getSortAmount(a))
-      : filteredExpenses;
+    sortBy === 'day'
+      ? filteredExpenses
+      : [...filteredExpenses].sort((a, b) =>
+          sortBy === 'amount-desc'
+            ? getSortAmount(b) - getSortAmount(a)
+            : getSortAmount(a) - getSortAmount(b),
+        );
 
   const dayGroups =
     sortBy === 'day'
@@ -297,26 +301,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
   };
 
-  const handleMarkPaid = async (expense: TripExpense, paidAmount: number | null) => {
+  const handleMarkPaid = async (expense: TripExpense, values: MarkExpensePaidValues) => {
     setMarkingPaidId(expense.id);
     setError(null);
     try {
-      await dispatch(markExpensePaid({ expense, paidAmount })).unwrap();
+      await dispatch(markExpensePaid({ expense, ...values })).unwrap();
       setPayingExpense(null);
     } catch (markError) {
       setError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
     } finally {
       setMarkingPaidId(null);
     }
-  };
-
-  const handleMarkPaidClick = (expense: TripExpense) => {
-    if (expense.amount === null) {
-      setPayingExpense(expense);
-      return;
-    }
-
-    void handleMarkPaid(expense, null);
   };
 
   const handleSplitSubmit = async (values: ExpenseSplitSubmitValues) => {
@@ -355,7 +350,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </p>
           <div className='mt-1 flex flex-wrap gap-1'>
             <Badge variant='muted' outline>
-              {getExpenseCategoryLabel(expense)}
+              {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))}
             </Badge>
             <Badge variant='muted' outline>
               {splitDescription}
@@ -379,7 +374,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               variant='secondary'
               size='sm'
               disabled={markingPaidId === expense.id}
-              onClick={() => handleMarkPaidClick(expense)}
+              onClick={() => setPayingExpense(expense)}
             >
               {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
             </Button>
@@ -435,6 +430,37 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       );
     });
 
+  const renderChipGroup = (
+    label: string,
+    options: { value: string; label: string }[],
+    selected: string[],
+    onToggle: (value: string) => void,
+  ) => (
+    <div className='space-y-2'>
+      <p className='text-muted-foreground text-sm font-medium'>{label}</p>
+      <div role='group' aria-label={`Filter by ${label.toLowerCase()}`} className='flex flex-wrap gap-2'>
+        {options.map((option) => {
+          const isSelected = selected.includes(option.value);
+
+          return (
+            <Button
+              key={option.value}
+              type='button'
+              variant='base'
+              size='sm'
+              aria-pressed={isSelected}
+              onClick={() => onToggle(option.value)}
+            >
+              <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
+                {option.label}
+              </Badge>
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const renderDivider = (label: string) => (
     <div className='flex items-center gap-3'>
       <div className='border-border flex-1 border-t' />
@@ -487,183 +513,108 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </ul>
         )}
       </div>
-      <div className='flex items-center gap-3'>
-        <span className='text-muted-foreground text-sm font-medium'>Sort by</span>
-        <Tabs
+      <div className='flex items-center gap-2'>
+        <div className='min-w-0 flex-1'>
+          <Input
+            type='search'
+            placeholder='Search expenses'
+            aria-label='Search expenses by title'
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className='h-10'
+          />
+        </div>
+        <Select
+          className='w-44 shrink-0'
+          options={EXPENSE_SORT_OPTIONS}
           value={sortBy}
-          onValueChange={(value) => setSortBy(value as SortBy)}
-          tabsList={[
-            { value: 'day', label: 'Day' },
-            { value: 'amount', label: 'Amount' },
-          ]}
-          variant='pills'
+          onChange={(value) => setSortBy(value as ExpenseSortBy)}
         />
+        <Button
+          type='button'
+          variant='tertiary'
+          size='icon'
+          aria-label={
+            activeFilterCount > 0 ? `Filters (${activeFilterCount} applied)` : 'Filters'
+          }
+          className='relative shrink-0'
+          onClick={() => setIsFilterDrawerOpen(true)}
+        >
+          <ListFilter className='h-4 w-4' />
+          {activeFilterCount > 0 && (
+            <span className='bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold'>
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
       </div>
-      <div className='space-y-2'>
-        <div className='flex items-center justify-between'>
-          <span className='text-muted-foreground text-sm font-medium'>
-            Filter by
-          </span>
-          {hasActiveFilters && (
+      <Drawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        title='Filters'
+        footer={
+          <div className='flex items-center justify-between gap-2'>
             <Button
               type='button'
               variant='link'
               size='sm'
+              disabled={activeFilterCount === 0}
               onClick={clearFilters}
-              aria-label='Clear filters'
-              className='bg-transparent'
             >
-              Clear
+              Clear all
             </Button>
+            <Button type='button' onClick={() => setIsFilterDrawerOpen(false)}>
+              Show {filteredExpenses.length} {filteredExpenses.length === 1 ? 'expense' : 'expenses'}
+            </Button>
+          </div>
+        }
+      >
+        <div className='space-y-5'>
+          <div className='flex flex-col gap-3'>
+            <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
+              <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
+              Custom split only
+            </label>
+            <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
+              <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
+              Estimated range only
+            </label>
+          </div>
+          {renderChipGroup(
+            'Status',
+            (['PAID', 'EXPECTED'] as const).map((status) => ({
+              value: status,
+              label: status === 'PAID' ? 'Paid' : 'Expecting',
+            })),
+            statusFilter,
+            (value) => setStatusFilter((current) => toggleFilterValue(current, value as ExpenseStatus)),
+          )}
+          {renderChipGroup(
+            'Category',
+            categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
+            categoryFilter,
+            (value) => setCategoryFilter((current) => toggleFilterValue(current, value)),
+          )}
+          {renderChipGroup(
+            'Day',
+            [
+              ...Array.from({ length: dayCount }, (_, index) => ({
+                value: String(index),
+                label: `Day ${index + 1}`,
+              })),
+              { value: 'other', label: 'No specific day' },
+            ],
+            dayFilter,
+            (value) => setDayFilter((current) => toggleFilterValue(current, value)),
+          )}
+          {renderChipGroup(
+            'Paid by',
+            memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) })),
+            payerFilter,
+            (value) => setPayerFilter((current) => toggleFilterValue(current, value)),
           )}
         </div>
-        <Input
-          type='search'
-          placeholder='Search expenses'
-          aria-label='Search expenses by title'
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-        />
-        <div className='flex flex-wrap items-center gap-4'>
-          <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
-            <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
-            Custom split only
-          </label>
-          <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
-            <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
-            Estimated range only
-          </label>
-        </div>
-        <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
-          <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
-            Status
-          </span>
-          <div role='group' aria-label='Filter by status' className='flex flex-wrap gap-2'>
-            {(['PAID', 'EXPECTED'] as const).map((status) => {
-              const isSelected = statusFilter.includes(status);
-
-              return (
-                <Button
-                  key={status}
-                  type='button'
-                  variant='base'
-                  size='sm'
-                  aria-pressed={isSelected}
-                  onClick={() => setStatusFilter((current) => toggleFilterValue(current, status))}
-                >
-                  <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
-                    {status === 'PAID' ? 'Paid' : 'Expecting'}
-                  </Badge>
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-        <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
-          <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
-            Category
-          </span>
-          <div role='group' aria-label='Filter by category' className='flex flex-wrap gap-2'>
-            {EXPENSE_CATEGORIES.map((category) => {
-              const isSelected = categoryFilter.includes(category);
-
-              return (
-                <Button
-                  key={category}
-                  type='button'
-                  variant='base'
-                  size='sm'
-                  aria-pressed={isSelected}
-                  onClick={() => setCategoryFilter((current) => toggleFilterValue(current, category))}
-                >
-                  <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
-                    {EXPENSE_CATEGORY_LABELS[category]}
-                  </Badge>
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-        <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
-          <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
-            Days
-          </span>
-          <div
-            role='group'
-            aria-label='Filter by day'
-            className='flex flex-wrap gap-2'
-          >
-            {Array.from({ length: dayCount }, (_, index) => {
-              const value = String(index);
-              const isSelected = dayFilter.includes(value);
-
-              return (
-                <Button
-                  key={value}
-                  type='button'
-                  variant='base'
-                  size='sm'
-                  aria-pressed={isSelected}
-                  onClick={() => setDayFilter((current) => toggleFilterValue(current, value))}
-                >
-                  <Badge
-                    variant={isSelected ? 'primary' : 'muted'}
-                    outline={!isSelected}
-                  >
-                    Day {index + 1}
-                  </Badge>
-                </Button>
-              );
-            })}
-            <Button
-              type='button'
-              variant='base'
-              size='sm'
-              aria-pressed={dayFilter.includes('other')}
-              onClick={() => setDayFilter((current) => toggleFilterValue(current, 'other'))}
-            >
-              <Badge
-                variant={dayFilter.includes('other') ? 'primary' : 'muted'}
-                outline={!dayFilter.includes('other')}
-              >
-                No specific day
-              </Badge>
-            </Button>
-          </div>
-        </div>
-        <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2'>
-          <span className='text-muted-foreground text-sm sm:w-16 sm:shrink-0'>
-            Member
-          </span>
-          <div
-            role='group'
-            aria-label='Filter by person'
-            className='flex flex-wrap items-center gap-2'
-          >
-            {memberIds.map((uid) => {
-              const isSelected = payerFilter.includes(uid);
-
-              return (
-                <Button
-                  key={uid}
-                  type='button'
-                  variant='base'
-                  size='sm'
-                  aria-pressed={isSelected}
-                  onClick={() => setPayerFilter((current) => toggleFilterValue(current, uid))}
-                >
-                  <Badge
-                    variant={isSelected ? 'primary' : 'muted'}
-                    outline={!isSelected}
-                  >
-                    {memberLabel(uid)}
-                  </Badge>
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      </Drawer>
       {filteredExpenses.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
           No expenses for this selection.
@@ -686,6 +637,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={isModalOpen}
         trip={trip}
         initialExpense={editingExpense ?? undefined}
+        categoryKeys={categoryKeys}
         existingGroupLabels={existingGroupLabels}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
@@ -696,12 +648,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }}
       />
       <MarkExpensePaidModal
+        key={`paying-${payingExpense?.id ?? 'none'}`}
         isOpen={payingExpense !== null}
+        trip={trip}
         expense={payingExpense}
         isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
-        onSubmit={(paidAmount) => {
+        onSubmit={(values) => {
           if (payingExpense) {
-            void handleMarkPaid(payingExpense, paidAmount);
+            void handleMarkPaid(payingExpense, values);
           }
         }}
         onClose={() => setPayingExpense(null)}

@@ -7,6 +7,7 @@ import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { createSessionToken, isPlacesSearchAvailable } from '@/lib/places/placesApi';
 import { placeAutocompleteQueryOptions, placeDetailsQueryOptions } from '@/lib/places/placesQueries';
 import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '@/lib/places/types';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 const MIN_QUERY_LENGTH = 3;
 
@@ -20,6 +21,7 @@ interface PlaceAutocompleteInputProps {
   /** A one-click "search for this instead" shortcut under the input (e.g. the event's title),
    * shown only when it differs from the current value. */
   quickSearch?: { label: string; value: string };
+  className?: string;
 }
 
 /**
@@ -35,6 +37,7 @@ function PlaceAutocompleteInput({
   bias,
   onSelect,
   quickSearch,
+  className,
 }: PlaceAutocompleteInputProps) {
   const queryClient = useQueryClient();
   const [isTyping, setIsTyping] = useState(false);
@@ -108,7 +111,7 @@ function PlaceAutocompleteInput({
   const error = selectError ?? (suggestionsQuery.isError ? 'Place search failed.' : null);
 
   return (
-    <div className='relative space-y-1.5'>
+    <div className={join('relative space-y-1.5', className)}>
       <Label>{label}</Label>
       <Input
         ref={inputRef}

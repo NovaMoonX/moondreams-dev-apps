@@ -6,43 +6,56 @@ import {
   FormFactories,
   Input,
   Modal,
+  Select,
   Tabs,
   Textarea,
-  Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { InfoCircled } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
+import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
-import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from '@apps/waypoint/constants';
+import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,
   ExpenseStatus,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
+import {
+  getExpenseCategoryKey,
+  getExpenseCategoryKeyLabel,
+  parseExpenseCategoryKey,
+  toCustomCategoryKey,
+} from '@apps/waypoint/utils/expenseCategories';
 
 const PAID_BY_EACH_PERSON = '';
 
+interface ChoiceValue {
+  choice: string;
+  newLabel: string;
+}
+
+interface AmountRange {
+  min: string;
+  max: string;
+}
+
 interface ExpenseFormData {
   title: string;
-  category: ExpenseCategory;
-  customCategoryLabel: string;
+  category: ChoiceValue;
   amountMode: 'amount' | 'range';
   amount: string;
-  amountMin: string;
-  amountMax: string;
-  currency: string;
+  amountRange: AmountRange;
   payerUid: string;
   status: ExpenseStatus;
   dayIndex: string;
   paidAmount: string;
   note: string;
-  groupLabel: string;
+  group: ChoiceValue;
 }
 
 export interface ExpenseSubmitValues {
@@ -65,6 +78,7 @@ interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   initialExpense?: TripExpense;
+  categoryKeys: string[];
   existingGroupLabels: string[];
   isSubmitting?: boolean;
   onSubmit: (values: ExpenseSubmitValues) => Promise<void> | void;
@@ -74,20 +88,31 @@ interface ExpenseFormModalProps {
 
 const { custom, input, radio, select } = FormFactories;
 
-function getDayCount(trip: TripSpace) {
-  return Math.floor((trip.endDate - trip.startDate) / 86_400_000) + 1;
+function parseAmount(value: string): number | null {
+  const parsed = Number(value);
+  return value.trim() === '' || !Number.isFinite(parsed) ? null : parsed;
 }
 
-function getInitialFormData(trip: TripSpace, initialExpense?: TripExpense): ExpenseFormData {
+function resolveChoice({ choice, newLabel }: ChoiceValue): string | null {
+  if (choice === ADD_NEW_OPTION || choice === '') {
+    return newLabel.trim() || null;
+  }
+  return choice;
+}
+
+function getInitialFormData(initialExpense?: TripExpense): ExpenseFormData {
   return {
     title: initialExpense?.title ?? '',
-    category: initialExpense?.category ?? 'OTHER',
-    customCategoryLabel: initialExpense?.customCategoryLabel ?? '',
+    category: {
+      choice: initialExpense ? getExpenseCategoryKey(initialExpense) : '',
+      newLabel: '',
+    },
     amountMode: initialExpense?.amount === null ? 'range' : 'amount',
     amount: initialExpense?.amount === null ? '' : String(initialExpense?.amount ?? ''),
-    amountMin: String(initialExpense?.amountMin ?? ''),
-    amountMax: String(initialExpense?.amountMax ?? ''),
-    currency: initialExpense?.currency ?? trip.defaultCurrency ?? 'USD',
+    amountRange: {
+      min: String(initialExpense?.amountMin ?? ''),
+      max: String(initialExpense?.amountMax ?? ''),
+    },
     payerUid: initialExpense?.payerUid ?? PAID_BY_EACH_PERSON,
     status: initialExpense?.status ?? 'EXPECTED',
     dayIndex:
@@ -96,7 +121,7 @@ function getInitialFormData(trip: TripSpace, initialExpense?: TripExpense): Expe
         : String(initialExpense.dayIndex),
     paidAmount: String(initialExpense?.paidAmount ?? ''),
     note: initialExpense?.note ?? '',
-    groupLabel: initialExpense?.groupLabel ?? '',
+    group: { choice: initialExpense?.groupLabel ?? '', newLabel: '' },
   };
 }
 
@@ -104,6 +129,7 @@ function ExpenseFormModal({
   isOpen,
   trip,
   initialExpense,
+  categoryKeys,
   existingGroupLabels,
   isSubmitting = false,
   onSubmit,
@@ -116,54 +142,48 @@ function ExpenseFormModal({
     initialExpense?.amount === null ? 'range' : 'amount',
   );
   const [formData, setFormData] = useState<ExpenseFormData>(() =>
-    getInitialFormData(trip, initialExpense),
-  );
-  const [showCurrencyField, setShowCurrencyField] = useState(
-    Boolean(initialExpense?.currency && initialExpense.currency !== (trip.defaultCurrency ?? 'USD')),
+    getInitialFormData(initialExpense),
   );
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
   const isEditing = Boolean(initialExpense);
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
-  const parsedAmount = Number(formData.amount);
-  const parsedAmountMin = Number(formData.amountMin);
-  const parsedAmountMax = Number(formData.amountMax);
+  const rangeMin = parseAmount(formData.amountRange.min);
+  const rangeMax = parseAmount(formData.amountRange.max);
   const isFormComplete =
     formData.title.trim() !== '' &&
-    (formData.category !== 'OTHER' || formData.customCategoryLabel.trim() !== '') &&
+    resolveChoice(formData.category) !== null &&
     (mode === 'amount'
-      ? formData.amount.trim() !== '' && Number.isFinite(parsedAmount)
-      : formData.amountMin.trim() !== '' &&
-        formData.amountMax.trim() !== '' &&
-        Number.isFinite(parsedAmountMin) &&
-        Number.isFinite(parsedAmountMax) &&
-        parsedAmountMax >= parsedAmountMin) &&
-    formData.currency.trim() !== '';
+      ? parseAmount(formData.amount) !== null
+      : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin);
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
-      ...Array.from({ length: getDayCount(trip) }, (_, index) => ({
+      ...Array.from({ length: getDayCount(trip.startDate, trip.endDate) }, (_, index) => ({
         value: String(index),
-        label: `Day ${index + 1}`,
+        label: getDayLabel(trip.startDate, index),
       })),
     ],
-    [trip],
-  );
-  const memberOptions = useMemo(
-    () =>
-      memberIds.map((uid) => ({
-        value: uid,
-        label:
-          memberInfo?.map[uid]?.displayName ||
-          memberInfo?.map[uid]?.email ||
-          (uid === trip.createdBy ? `${uid} (trip creator)` : uid),
-      })),
-    [memberIds, memberInfo, trip],
+    [trip.startDate, trip.endDate],
   );
   const payerOptions = useMemo(
-    () => [{ value: PAID_BY_EACH_PERSON, label: 'Paid by each person' }, ...memberOptions],
-    [memberOptions],
+    () => [
+      { value: PAID_BY_EACH_PERSON, label: 'Paid by each person' },
+      ...memberIds.map((uid) => ({
+        value: uid,
+        label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
+      })),
+    ],
+    [memberIds, memberInfo],
+  );
+  const categoryOptions = useMemo(
+    () => categoryKeys.map((key) => ({ value: key, text: getExpenseCategoryKeyLabel(key) })),
+    [categoryKeys],
+  );
+  const groupOptions = useMemo(
+    () => existingGroupLabels.map((label) => ({ value: label, text: label })),
+    [existingGroupLabels],
   );
 
   const fields = useMemo(() => {
@@ -174,28 +194,19 @@ function ExpenseFormModal({
         placeholder: 'Dinner reservation',
         variant: 'outline',
       }),
-      select({
+      custom({
         name: 'category',
         label: 'Category',
-        options: EXPENSE_CATEGORIES.map((category) => ({
-          value: category,
-          label: EXPENSE_CATEGORY_LABELS[category],
-        })),
+        renderComponent: (props) => (
+          <ChoiceField
+            value={props.value as ChoiceValue}
+            onValueChange={props.onValueChange as (value: ChoiceValue) => void}
+            options={categoryOptions}
+            placeholder='Choose a category'
+            newPlaceholder='Souvenirs'
+          />
+        ),
       }),
-    ];
-
-    if (formData.category === 'OTHER') {
-      nextFields.push(
-        input({
-          name: 'customCategoryLabel',
-          label: 'Custom category label',
-          placeholder: 'Souvenirs',
-          variant: 'outline',
-        }),
-      );
-    }
-
-    nextFields.push(
       custom({
         name: 'amountMode',
         label: 'Amount type',
@@ -215,36 +226,42 @@ function ExpenseFormModal({
           />
         ),
       }),
-    );
-
-    if (mode === 'amount') {
-      nextFields.push(
-        input({
-          name: 'amount',
-          label: 'Amount',
-          type: 'number',
-          placeholder: '0.00',
-          variant: 'outline',
-        }),
-      );
-    } else {
-      nextFields.push(
-        input({
-          name: 'amountMin',
-          label: 'Minimum amount',
-          type: 'number',
-          placeholder: '0.00',
-          variant: 'outline',
-        }),
-        input({
-          name: 'amountMax',
-          label: 'Maximum amount',
-          type: 'number',
-          placeholder: '0.00',
-          variant: 'outline',
-        }),
-      );
-    }
+      mode === 'amount'
+        ? input({
+            name: 'amount',
+            label: 'Amount',
+            type: 'number',
+            placeholder: '0.00',
+            variant: 'outline',
+          })
+        : custom({
+            name: 'amountRange',
+            label: 'Estimated range',
+            renderComponent: (props) => {
+              const range = props.value as AmountRange;
+              return (
+                <div className='grid grid-cols-2 gap-3'>
+                  <Input
+                    type='number'
+                    aria-label='Minimum amount'
+                    placeholder='Min'
+                    variant='outline'
+                    value={range.min}
+                    onChange={(event) => props.onValueChange({ ...range, min: event.target.value })}
+                  />
+                  <Input
+                    type='number'
+                    aria-label='Maximum amount'
+                    placeholder='Max'
+                    variant='outline'
+                    value={range.max}
+                    onChange={(event) => props.onValueChange({ ...range, max: event.target.value })}
+                  />
+                </div>
+              );
+            },
+          }),
+    ];
 
     if (isEditing && mode === 'range' && initialExpense?.status === 'PAID') {
       nextFields.push(
@@ -270,73 +287,35 @@ function ExpenseFormModal({
     );
 
     if (formData.status === 'PAID') {
-      nextFields.push(
-        select({
-          name: 'payerUid',
-          label: 'Paid by',
-          options: payerOptions,
-        }),
-      );
+      nextFields.push(select({ name: 'payerUid', label: 'Paid by', options: payerOptions }));
     }
 
-    if (!isEditing) {
+    nextFields.push(select({ name: 'dayIndex', label: 'Trip day', options: dayOptions }));
+
+    if (showGroupField) {
       nextFields.push(
         custom({
-          name: 'currency',
-          label: 'Currency',
-          renderComponent: (props) =>
-            showCurrencyField ? (
-              <Input
-                value={props.value as string}
-                placeholder='USD'
-                variant='outline'
-                onChange={(event) => props.onValueChange(event.target.value)}
-              />
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => setShowCurrencyField(true)}
-              >
-                + Use a different currency
-              </Button>
-            ),
+          name: 'group',
+          label: 'Group',
+          renderComponent: (props) => (
+            <ChoiceField
+              value={props.value as ChoiceValue}
+              onValueChange={props.onValueChange as (value: ChoiceValue) => void}
+              options={groupOptions}
+              placeholder='Choose a group'
+              newPlaceholder='Dinner at Ichiran'
+            />
+          ),
         }),
       );
     }
 
-    nextFields.push(
-      select({
-        name: 'dayIndex',
-        label: 'Trip day',
-        options: dayOptions,
-      }),
-    );
-
-    nextFields.push(
-      custom({
-        name: 'groupLabel',
-        label: 'Group',
-        renderComponent: (props) => (
-          <GroupField
-            value={props.value as string}
-            onValueChange={props.onValueChange as (value: string) => void}
-            isVisible={showGroupField}
-            onReveal={() => setShowGroupField(true)}
-            suggestions={existingGroupLabels}
-          />
-        ),
-      }),
-    );
-
-    nextFields.push(
-      custom({
-        name: 'note',
-        label: 'Note',
-        renderComponent: (props) =>
-          showNoteField ? (
+    if (showNoteField) {
+      nextFields.push(
+        custom({
+          name: 'note',
+          label: 'Note',
+          renderComponent: (props) => (
             <Textarea
               rows={2}
               value={props.value as string}
@@ -344,59 +323,48 @@ function ExpenseFormModal({
               variant='outline'
               placeholder='Anything worth remembering about this expense'
             />
-          ) : (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-auto p-0'
-              onClick={() => setShowNoteField(true)}
-            >
-              + Add note
-            </Button>
           ),
-      }),
-    );
+        }),
+      );
+    }
 
     return nextFields;
   }, [
+    categoryOptions,
     dayOptions,
-    existingGroupLabels,
-    formData.category,
     formData.status,
+    groupOptions,
     initialExpense?.status,
     isEditing,
     mode,
     payerOptions,
-    showCurrencyField,
     showGroupField,
     showNoteField,
   ]);
 
   const handleSubmit = async (data: ExpenseFormData) => {
-    const parseAmount = (value: string) => {
-      const parsed = Number(value);
-      return value.trim() === '' || !Number.isFinite(parsed) ? null : parsed;
-    };
     const amount = mode === 'amount' ? parseAmount(data.amount) : null;
-    const amountMin = mode === 'range' ? parseAmount(data.amountMin) : null;
-    const amountMax = mode === 'range' ? parseAmount(data.amountMax) : null;
+    const amountMin = mode === 'range' ? parseAmount(data.amountRange.min) : null;
+    const amountMax = mode === 'range' ? parseAmount(data.amountRange.max) : null;
     const paidAmount =
       isEditing && mode === 'range' && initialExpense?.status === 'PAID'
         ? parseAmount(data.paidAmount)
         : null;
-    const customCategoryLabel =
-      data.category === 'OTHER' ? data.customCategoryLabel.trim() : null;
+    const categoryChoice = resolveChoice(data.category);
 
     if (
       !data.title.trim() ||
+      categoryChoice === null ||
       (mode === 'amount' && amount === null) ||
-      (mode === 'range' && (amountMin === null || amountMax === null)) ||
-      (data.category === 'OTHER' && !customCategoryLabel)
+      (mode === 'range' && (amountMin === null || amountMax === null))
     ) {
-      setError('Enter a title, a valid amount, and a category.');
+      setError('Enter a title, a category, and a valid amount.');
       return;
     }
+
+    const categoryKey =
+      data.category.choice === ADD_NEW_OPTION ? toCustomCategoryKey(categoryChoice) : categoryChoice;
+    const { category, customCategoryLabel } = parseExpenseCategoryKey(categoryKey);
 
     setError(null);
     try {
@@ -408,15 +376,15 @@ function ExpenseFormModal({
         payerUid: data.status === 'PAID' && data.payerUid !== '' ? data.payerUid : null,
         status: data.status,
         dayIndex: data.dayIndex === '' ? null : Number(data.dayIndex),
-        currency: showCurrencyField ? data.currency : (trip.defaultCurrency ?? 'USD'),
+        currency: 'USD',
         paidAmount,
-        category: data.category,
+        category,
         customCategoryLabel,
-        note: data.note.trim() || null,
-        groupLabel: data.groupLabel.trim() || null,
+        note: showNoteField ? data.note.trim() || null : null,
+        groupLabel: showGroupField ? resolveChoice(data.group) : null,
       });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to add this expense.'));
+      setError(getErrorMessage(submitError, 'Unable to save this expense.'));
     }
   };
 
@@ -448,34 +416,62 @@ function ExpenseFormModal({
         onDataChange={(data) => setFormData(data as ExpenseFormData)}
         onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
         submitButton={
-          <ModalFooterActions
-            leftActions={
-              isEditing &&
-              onDelete && (
-                <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
-              )
-            }
-            rightActions={
-              <>
-                <Button type='button' variant='secondary' onClick={onClose}>
-                  Cancel
-                </Button>
-                <Button
-                  type='submit'
-                  loading={isSubmitting}
-                  disabled={isSubmitting || !isFormComplete}
-                >
-                  {isSubmitting
-                    ? isEditing
-                      ? 'Saving…'
-                      : 'Adding…'
-                    : isEditing
-                      ? 'Save changes'
-                      : 'Add expense'}
-                </Button>
-              </>
-            }
-          />
+          <div className='col-span-full space-y-4'>
+            {(!showGroupField || !showNoteField) && (
+              <div className='flex flex-wrap gap-x-4 gap-y-1'>
+                {!showGroupField && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='h-auto p-0'
+                    onClick={() => setShowGroupField(true)}
+                  >
+                    + Add to a group
+                  </Button>
+                )}
+                {!showNoteField && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='h-auto p-0'
+                    onClick={() => setShowNoteField(true)}
+                  >
+                    + Add note
+                  </Button>
+                )}
+              </div>
+            )}
+            <ModalFooterActions
+              leftActions={
+                isEditing &&
+                onDelete && (
+                  <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+                )
+              }
+              rightActions={
+                <>
+                  <Button type='button' variant='secondary' onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type='submit'
+                    loading={isSubmitting}
+                    disabled={isSubmitting || !isFormComplete}
+                  >
+                    {isSubmitting
+                      ? isEditing
+                        ? 'Saving…'
+                        : 'Adding…'
+                      : isEditing
+                        ? 'Save changes'
+                        : 'Add expense'}
+                  </Button>
+                </>
+              }
+            />
+          </div>
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
@@ -483,56 +479,39 @@ function ExpenseFormModal({
   );
 }
 
-function GroupField({
+function ChoiceField({
   value,
   onValueChange,
-  isVisible,
-  onReveal,
-  suggestions,
+  options,
+  placeholder,
+  newPlaceholder,
 }: {
-  value: string;
-  onValueChange: (value: string) => void;
-  isVisible: boolean;
-  onReveal: () => void;
-  suggestions: string[];
+  value: ChoiceValue;
+  onValueChange: (value: ChoiceValue) => void;
+  options: { value: string; text: string }[];
+  placeholder: string;
+  newPlaceholder: string;
 }) {
-  if (!isVisible) {
-    return (
-      <Button type='button' variant='link' size='sm' className='h-auto p-0' onClick={onReveal}>
-        + Add to a group
-      </Button>
-    );
-  }
+  const isAddingNew = options.length === 0 || value.choice === ADD_NEW_OPTION;
 
   return (
-    <div className='space-y-1.5'>
-      <div className='flex items-center gap-1.5'>
-        <span className='text-sm font-medium'>Group</span>
-        <Tooltip
-          message={
-            <div className='max-w-56 text-xs'>
-              Group related expenses — like itemized entries off one receipt — so
-              their totals roll up together. Use the same name to add another
-              expense to this group.
-            </div>
-          }
-          placement='top'
-        >
-          <InfoCircled className='text-muted-foreground h-3.5 w-3.5 cursor-help' />
-        </Tooltip>
-      </div>
-      <Input
-        list='waypoint-expense-group-suggestions'
-        value={value}
-        placeholder='Dinner at Ichiran'
-        variant='outline'
-        onChange={(event) => onValueChange(event.target.value)}
-      />
-      <datalist id='waypoint-expense-group-suggestions'>
-        {suggestions.map((label) => (
-          <option key={label} value={label} />
-        ))}
-      </datalist>
+    <div className='space-y-2'>
+      {options.length > 0 && (
+        <Select
+          options={[...options, { value: ADD_NEW_OPTION, text: 'Add new…' }]}
+          value={value.choice}
+          placeholder={placeholder}
+          onChange={(choice) => onValueChange({ ...value, choice })}
+        />
+      )}
+      {isAddingNew && (
+        <Input
+          value={value.newLabel}
+          placeholder={newPlaceholder}
+          variant='outline'
+          onChange={(event) => onValueChange({ ...value, newLabel: event.target.value })}
+        />
+      )}
     </div>
   );
 }

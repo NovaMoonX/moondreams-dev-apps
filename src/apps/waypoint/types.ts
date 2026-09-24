@@ -8,6 +8,7 @@ export type ExpenseTargetType =
   | 'JUST_ME'
   | 'SPECIFIC_MEMBERS';
 export type ExpenseStatus = 'PAID' | 'EXPECTED';
+export type ExpenseSortBy = 'day' | 'amount-desc' | 'amount-asc';
 export type ExpenseCategory =
   | 'FOOD'
   | 'TRANSPORT'
@@ -58,8 +59,6 @@ export interface Stay {
   tripId: string;
   name: string;
   stayType: StayType;
-  /** Comma-separated host name(s); only meaningful for FRIEND_FAMILY stays. */
-  hostNames: string | null;
   address: string;
   latitude: number | null;
   longitude: number | null;

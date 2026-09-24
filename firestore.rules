@@ -1778,7 +1778,6 @@ service cloud.firestore {
             'tripId',
             'name',
             'stayType',
-            'hostNames',
             'address',
             'latitude',
             'longitude',
@@ -1800,7 +1799,6 @@ service cloud.firestore {
           && request.resource.data.tripId == tripId
           && isNonEmptyString(request.resource.data.name)
           && request.resource.data.stayType in ['HOTEL', 'RENTAL', 'FRIEND_FAMILY', 'OTHER']
-          && (request.resource.data.hostNames == null || isNonEmptyString(request.resource.data.hostNames))
           && isNonEmptyString(request.resource.data.address)
           && (request.resource.data.latitude == null || request.resource.data.latitude is number)
           && (request.resource.data.longitude == null || request.resource.data.longitude is number)
@@ -1838,7 +1836,6 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
             'stayType',
-            'hostNames',
             'address',
             'latitude',
             'longitude',

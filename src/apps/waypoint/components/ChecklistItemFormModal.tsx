@@ -100,7 +100,6 @@ export default function ChecklistItemFormModal({
         label: 'Task',
         placeholder: 'Confirm passport expiration dates',
         variant: 'outline',
-        required: true,
       }),
       select({
         name: 'category',
@@ -109,7 +108,6 @@ export default function ChecklistItemFormModal({
           label: CHECKLIST_CATEGORY_LABELS[category],
           value: category,
         })),
-        required: true,
       }),
     ];
 
@@ -120,8 +118,7 @@ export default function ChecklistItemFormModal({
           label: 'Custom category label',
           placeholder: 'Health & safety',
           variant: 'outline',
-          required: true,
-        }),
+          }),
       );
     }
 

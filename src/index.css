@@ -38,6 +38,19 @@ html {
   overflow-x: hidden;
 }
 
+/* Dreamer UI's modal/drawer/panel don't lock page scroll themselves. Popovers
+   also use role=dialog but stay mounted while hidden, so only match the
+   fixed full-screen overlays, and not a drawer/panel mid close-animation. */
+html:has(
+    [role='dialog'][aria-modal='true'].fixed:not([data-drawer-open='false']):not([data-panel-open='false'])
+  ),
+html:has(
+    [role='dialog'][aria-modal='true'].fixed:not([data-drawer-open='false']):not([data-panel-open='false'])
+  )
+  > body {
+  overflow: hidden;
+}
+
 /* Smooth height transitions for when keyboard appears on mobile */
 html, body {
   transition: height 0.3s ease;

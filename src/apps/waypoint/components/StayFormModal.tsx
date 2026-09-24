@@ -20,7 +20,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { getTimezoneOptions } from '@/utils/timezoneUtils';
-import { STAY_TYPES, STAY_TYPE_LABELS } from '@apps/waypoint/constants';
+import { STAY_TYPES, STAY_TYPE_OPTION_LABELS } from '@apps/waypoint/constants';
 import type { Stay, StayType, TripSpace } from '@apps/waypoint/types';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import type { PlaceRef } from '@/lib/places/types';
@@ -45,7 +45,6 @@ interface StayFormModalProps {
 interface StayDraft {
   name: string;
   stayType: StayType;
-  hostNames: string;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -69,7 +68,6 @@ function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
   return {
     name: stay?.name ?? '',
     stayType: stay?.stayType ?? 'HOTEL',
-    hostNames: stay?.hostNames ?? '',
     address: stay?.address ?? '',
     latitude: stay?.latitude ?? null,
     longitude: stay?.longitude ?? null,
@@ -164,7 +162,6 @@ export function StayFormModal({
       await onSubmit({
         name: draft.name,
         stayType: draft.stayType,
-        hostNames: draft.hostNames,
         address: draft.address,
         latitude: draft.latitude,
         longitude: draft.longitude,
@@ -217,22 +214,12 @@ export function StayFormModal({
           <Select
             options={STAY_TYPES.map((stayType) => ({
               value: stayType,
-              text: STAY_TYPE_LABELS[stayType],
+              text: STAY_TYPE_OPTION_LABELS[stayType],
             }))}
             value={draft.stayType}
             onChange={(value) => updateDraft({ stayType: value as StayType })}
           />
         </div>
-        {draft.stayType === 'FRIEND_FAMILY' && (
-          <div className='space-y-1.5'>
-            <Label>Host name(s)</Label>
-            <Input
-              value={draft.hostNames}
-              placeholder='Jamie, Alex'
-              onChange={(event) => updateDraft({ hostNames: event.target.value })}
-            />
-          </div>
-        )}
         <LinkAttachField
           url={draft.linkUrl}
           preview={draft.linkPreview}
