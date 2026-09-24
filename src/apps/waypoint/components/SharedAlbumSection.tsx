@@ -66,48 +66,55 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
 
   return (
     <>
-      <div className='bg-muted/40 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg px-3 py-2.5 text-sm'>
-        <div className='flex min-w-0 items-start gap-2'>
-          <span aria-hidden>📷</span>
+      <div className='bg-muted/40 flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm'>
+        <span aria-hidden>📷</span>
+        <div className='flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-2'>
           <div className='min-w-0'>
             <p className='font-medium'>Shared album</p>
             <p
               className={join(
-                shouldShowReminder ? 'text-foreground' : 'text-muted-foreground',
+                shouldShowReminder
+                  ? 'text-foreground'
+                  : 'text-muted-foreground',
               )}
             >
               {description}
             </p>
           </div>
-        </div>
-        <div className='flex shrink-0 items-center gap-3'>
-          {trip.sharedAlbumUrl && canSet && (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-auto p-0'
-              onClick={() => setIsModalOpen(true)}
-            >
-              Change link
-            </Button>
-          )}
-          {trip.sharedAlbumUrl ? (
-            <Button href={trip.sharedAlbumUrl} target='_blank' rel='noreferrer' size='sm'>
-              Open album <ExternalLink className='h-3.5 w-3.5' />
-            </Button>
-          ) : (
-            canSet && (
+          <div className='flex shrink-0 items-center gap-3'>
+            {trip.sharedAlbumUrl && canSet && (
               <Button
                 type='button'
-                variant='secondary'
+                variant='link'
                 size='sm'
+                className='h-auto p-0'
                 onClick={() => setIsModalOpen(true)}
               >
-                Add link
+                Change link
               </Button>
-            )
-          )}
+            )}
+            {trip.sharedAlbumUrl ? (
+              <Button
+                href={trip.sharedAlbumUrl}
+                target='_blank'
+                rel='noreferrer'
+                size='sm'
+              >
+                Open album <ExternalLink className='h-3.5 w-3.5' />
+              </Button>
+            ) : (
+              canSet && (
+                <Button
+                  type='button'
+                  variant='primary'
+                  size='sm'
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  Add link
+                </Button>
+              )
+            )}
+          </div>
         </div>
       </div>
       <SharedAlbumLinkModal
