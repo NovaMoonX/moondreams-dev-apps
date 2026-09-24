@@ -118,10 +118,12 @@ function CheckInStayCard({ stay }: { stay: Stay }) {
               Confirmation <span className='text-foreground font-medium'>{stay.confirmationCode}</span>
             </p>
           )}
-          <div className='mt-1 flex flex-wrap items-center gap-x-4 gap-y-1'>
-            <StayNotesButton stay={stay} />
-            {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
-          </div>
+          {(stay.linkUrl || stay.notes) && (
+            <div className='mt-1 flex flex-wrap items-center gap-x-4 gap-y-1'>
+              <StayNotesButton stay={stay} />
+              {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
+            </div>
+          )}
         </div>
         <MapNavigationButton
           locationName={stay.name}
