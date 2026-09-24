@@ -1,6 +1,4 @@
-import { useState } from 'react';
-
-import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
@@ -12,6 +10,7 @@ import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
 import {
   getTripStatus,
   selectActiveEvent,
@@ -91,7 +90,6 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
 }
 
 function CheckInStayCard({ stay }: { stay: Stay }) {
-  const [isNotesOpen, setIsNotesOpen] = useState(false);
   const imageUrl = getDisplayImage(stay);
 
   return (
@@ -121,18 +119,8 @@ function CheckInStayCard({ stay }: { stay: Stay }) {
             </p>
           )}
           <div className='mt-1 flex flex-wrap items-center gap-x-4 gap-y-1'>
+            <StayNotesButton stay={stay} />
             {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
-            {stay.notes && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                className='h-auto p-0 text-sm'
-                onClick={() => setIsNotesOpen(true)}
-              >
-                View notes
-              </Button>
-            )}
           </div>
         </div>
         <MapNavigationButton
@@ -142,11 +130,6 @@ function CheckInStayCard({ stay }: { stay: Stay }) {
           longitude={stay.longitude}
         />
       </div>
-      {stay.notes && (
-        <Modal isOpen={isNotesOpen} onClose={() => setIsNotesOpen(false)} title={stay.name}>
-          <p className='text-sm whitespace-pre-line'>{stay.notes}</p>
-        </Modal>
-      )}
     </article>
   );
 }

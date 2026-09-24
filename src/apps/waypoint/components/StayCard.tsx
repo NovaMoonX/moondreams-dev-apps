@@ -1,6 +1,7 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatDateTime } from '@/utils/formatUtils';
@@ -36,12 +37,6 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
             </Badge>
           </div>
           <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
-          {stay.notes && <p className='text-muted-foreground mt-1 text-sm italic'>{stay.notes}</p>}
-          {stay.linkUrl && (
-            <div className='mt-1'>
-              <ExternalLinkText href={stay.linkUrl} />
-            </div>
-          )}
           <p className='text-muted-foreground mt-2 text-sm'>
             {formatDateTime(stay.checkInAt)} - {formatDateTime(stay.checkOutAt)}
           </p>
@@ -49,6 +44,12 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
             <p className='text-muted-foreground mt-1 text-xs'>
               {formatTimezoneLabel(stay.checkInTimezone)}
             </p>
+          )}
+          {(stay.linkUrl || stay.notes) && (
+            <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-1'>
+              <StayNotesButton stay={stay} />
+              {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
+            </div>
           )}
         </div>
         <div className='flex shrink-0 gap-2'>
