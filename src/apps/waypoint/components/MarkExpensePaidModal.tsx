@@ -5,6 +5,10 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
+import {
+  getPerPersonMultiplier,
+  getSplitMemberIds,
+} from '@apps/waypoint/utils/splitCalculators';
 
 const PAID_BY_EACH_PERSON = '';
 
@@ -44,6 +48,10 @@ function MarkExpensePaidModal({
     paidAmount: '',
   };
   const isRange = expense?.amount === null;
+  const isPerPerson = expense?.isPerPerson ?? false;
+  const headcount = expense
+    ? getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds))
+    : 1;
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
@@ -64,7 +72,7 @@ function MarkExpensePaidModal({
       nextFields.push(
         input({
           name: 'paidAmount',
-          label: 'Amount paid',
+          label: isPerPerson ? 'Amount paid per person' : 'Amount paid',
           type: 'number',
           placeholder: 'Leave blank to keep the estimated range',
           variant: 'outline',
@@ -73,7 +81,7 @@ function MarkExpensePaidModal({
     }
 
     return nextFields;
-  }, [isRange, memberIds, memberInfo]);
+  }, [isPerPerson, isRange, memberIds, memberInfo]);
 
   const handleSubmit = async (data: MarkExpensePaidFormData) => {
     const trimmed = data.paidAmount.trim();
@@ -88,8 +96,10 @@ function MarkExpensePaidModal({
     <Modal isOpen={isOpen} onClose={onClose} title='Paid'>
       {isRange && (
         <p className='text-muted-foreground mb-4 text-sm'>
-          {expense?.title} was estimated as a range. Enter what was actually paid, or
-          leave it blank to keep the estimate.
+          {expense?.title} was estimated as a range. Enter what was actually paid
+          {isPerPerson &&
+            ` per person — we'll multiply it by ${headcount} ${headcount === 1 ? 'person' : 'people'}`}
+          , or leave it blank to keep the estimate.
         </p>
       )}
       <Form

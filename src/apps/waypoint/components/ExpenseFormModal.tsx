@@ -275,7 +275,7 @@ function ExpenseFormModal({
       nextFields.push(
         input({
           name: 'paidAmount',
-          label: 'Paid amount',
+          label: formData.isPerPerson ? 'Paid amount per person' : 'Paid amount',
           type: 'number',
           placeholder: '0.00',
           variant: 'outline',

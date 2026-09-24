@@ -76,11 +76,14 @@ function getDisplayRange(expense: TripExpense): { min: number; max: number } {
 
 function getSplitTargetLabel(
   expense: TripExpense,
+  memberIds: string[],
   memberLabel: (uid: string) => string,
 ): string {
   switch (expense.targetType) {
     case 'EVERYONE_CURRENT':
-      return 'Everyone';
+      return memberIds.every((uid) => expense.targetMemberIds.includes(uid))
+        ? 'Everyone'
+        : `Everyone when added (${expense.targetMemberIds.length})`;
     case 'EVERYONE_INCLUDING_FUTURE':
       return 'Everyone, including future members';
     case 'JUST_ME':
@@ -95,7 +98,7 @@ function describeSplit(
   memberIds: string[],
   memberLabel: (uid: string) => string,
 ): string {
-  const targetLabel = getSplitTargetLabel(expense, memberLabel);
+  const targetLabel = getSplitTargetLabel(expense, memberIds, memberLabel);
   const splitMemberCount = getSplitMemberIds(expense, memberIds).length;
   if (splitMemberCount <= 1) {
     return `Split · ${targetLabel}`;
@@ -358,8 +361,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
 
     return (
-      <li key={expense.id} className='flex flex-wrap items-center justify-between gap-3 py-3'>
-        <div className='min-w-0'>
+      <li
+        key={expense.id}
+        className='grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3'
+      >
+        <div className='col-span-2 min-w-0 sm:col-span-1'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
             {expense.status === 'PAID' ? 'Paid' : 'Expected'} · {payerLine}
@@ -368,67 +374,67 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <Badge variant='muted' outline>
               {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))}
             </Badge>
-            <Badge variant='muted' outline>
-              {splitDescription}
-            </Badge>
+            {expense.status === 'PAID' && (
+              <Badge variant='muted' outline>
+                {splitDescription}
+              </Badge>
+            )}
           </div>
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
-        <div className='flex w-full items-center justify-between gap-3 sm:w-auto'>
-          <div>
-            <p className='font-medium'>
-              {formatTotal(displayRange.min, displayRange.max, expense.currency)}
-              {expense.isPerPerson && (
-                <span className='text-muted-foreground text-sm font-normal'> per person</span>
-              )}
-            </p>
+        <div className='col-start-1 whitespace-nowrap'>
+          <p className='font-medium'>
+            {formatTotal(displayRange.min, displayRange.max, expense.currency)}
             {expense.isPerPerson && (
-              <p className='text-muted-foreground text-xs'>
-                {formatTotal(
-                  scaleAmount(displayRange.min, multiplier),
-                  scaleAmount(displayRange.max, multiplier),
-                  expense.currency,
-                )}{' '}
-                total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
-              </p>
+              <span className='text-muted-foreground text-sm font-normal'> per person</span>
             )}
-          </div>
-          <div className='flex flex-wrap items-center justify-end gap-2'>
-            {canAddExpenses && expense.status === 'EXPECTED' && (
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                disabled={markingPaidId === expense.id}
-                onClick={() => setPayingExpense(expense)}
-              >
-                {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
-              </Button>
-            )}
-            {canAddExpenses && getResolvedExpenseAmount(expense) !== null && (
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                onClick={() => setSplittingExpense(expense)}
-              >
-                Edit split
-              </Button>
-            )}
-            {canAddExpenses && (
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                onClick={() => {
-                  setEditingExpense(expense);
-                  setIsModalOpen(true);
-                }}
-              >
-                Modify
-              </Button>
-            )}
-          </div>
+          </p>
+          {expense.isPerPerson && (
+            <p className='text-muted-foreground text-xs'>
+              {formatTotal(
+                scaleAmount(displayRange.min, multiplier),
+                scaleAmount(displayRange.max, multiplier),
+                expense.currency,
+              )}{' '}
+              total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
+            </p>
+          )}
+        </div>
+        <div className='flex flex-wrap items-center justify-end gap-2 sm:col-start-2 sm:row-span-2 sm:row-start-1'>
+          {canAddExpenses && expense.status === 'EXPECTED' && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              disabled={markingPaidId === expense.id}
+              onClick={() => setPayingExpense(expense)}
+            >
+              {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
+            </Button>
+          )}
+          {canAddExpenses && getResolvedExpenseAmount(expense) !== null && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={() => setSplittingExpense(expense)}
+            >
+              Edit split
+            </Button>
+          )}
+          {canAddExpenses && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={() => {
+                setEditingExpense(expense);
+                setIsModalOpen(true);
+              }}
+            >
+              Modify
+            </Button>
+          )}
         </div>
       </li>
     );
