@@ -643,7 +643,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           aria-label={
             activeFilterCount > 0 ? `Filters (${activeFilterCount} applied)` : 'Filters'
           }
-          className='relative shrink-0'
+          className='relative shrink-0 mx-1 sm:mx-0'
           onClick={() => setIsFilterDrawerOpen(true)}
         >
           <ListFilter className='h-4 w-4' />
