@@ -437,6 +437,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <EllipsisDropdown
               ariaLabel={`Actions for ${expense.title}`}
               disabled={markingPaidId === expense.id}
+              variant='tertiary'
               items={[
                 ...(expense.status === 'EXPECTED'
                   ? [
