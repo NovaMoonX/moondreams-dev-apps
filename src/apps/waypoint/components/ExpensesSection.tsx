@@ -463,7 +463,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const renderClusters = (items: TripExpense[]) =>
-    clusterByGroup(items).map((cluster) => {
+    clusterByGroup(items).map((cluster, index) => {
       if (cluster.groupLabel === null) {
         return renderExpenseRow(cluster.items[0]);
       }
@@ -471,7 +471,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       const groupTotals = computeExpenseTotals(cluster.items, memberIds);
 
       return (
-        <li key={`group-${cluster.groupLabel}`} className='border-border rounded-lg border py-1'>
+        <li key={`group-${cluster.groupLabel}-${index}`} className='border-border rounded-lg border py-1'>
           <div className='flex items-center justify-between px-3 py-2'>
             <span className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
               {cluster.groupLabel}
