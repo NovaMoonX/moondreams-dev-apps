@@ -28,7 +28,8 @@ export function formatClockTime(hhmm: string) {
   return formatted;
 }
 
-/** Date only, no time-of-day — for things nothing in the app ever asks a time for (vaccinations, preventives, weight, expenses). */
+/** The calendar day of an instant (a real moment, e.g. `createdAt`) in the viewer's timezone.
+ * A date-only picker value (`fromDateInputValue`) needs `formatDateUTC` instead. */
 export function formatDate(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getFullYear() === new Date().getFullYear();
@@ -37,6 +38,20 @@ export function formatDate(timestamp: number) {
     ...(isCurrentYear ? {} : { year: 'numeric' }),
     month: 'long',
     day: 'numeric',
+  });
+}
+
+/** Like `formatDate`, but reads UTC fields — for a `fromDateInputValue` timestamp
+ * (e.g. a trip's `startDate`/`endDate`), where local fields shift the day for viewers behind UTC. */
+export function formatDateUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
   });
 }
 

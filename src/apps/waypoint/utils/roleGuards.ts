@@ -29,6 +29,7 @@ export function canChangeRole(
   targetUserId: string,
 ) {
   return (
+    !isTripDateShiftLocked(trip) &&
     currentUserId !== targetUserId &&
     targetUserId !== trip.createdBy &&
     isTripAdmin(trip, currentUserId) &&
@@ -48,8 +49,18 @@ export function isTripActive(trip: TripSpace, now = Date.now()) {
   return now >= trip.startDate && now < trip.endDate;
 }
 
+/** A date-shift Cloud Function is re-dating this trip's events/stays/expenses/
+ * checklist — everything about the trip is read-only until it finishes. */
+export function isTripDateShiftLocked(trip: TripSpace) {
+  return trip.dateShiftStatus === 'PENDING';
+}
+
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
  * Admin-only while the trip is active — creating a new one stays open to Editors throughout. */
 export function canEditExistingItem(trip: TripSpace, uid: string) {
+  if (isTripDateShiftLocked(trip)) {
+    return false;
+  }
+
   return isTripActive(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }

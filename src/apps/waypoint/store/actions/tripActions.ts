@@ -1,16 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  collection,
-  doc,
-  type DocumentReference,
-  getDocs,
-  updateDoc,
-  writeBatch,
-} from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
+import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
-import { db } from '@/lib/firebase/config';
+import { db, functions } from '@/lib/firebase/config';
 import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
+import { getErrorMessage } from '@/utils/errorUtils';
 import type { TripSpace } from '@apps/waypoint/types';
 import {
   createTripSpace,
@@ -45,6 +41,9 @@ export interface EditTripValues {
   coverImageFile: File | null;
   coverImageRemoved: boolean;
   defaultCurrency: string | null;
+  /** Only meaningful when the trip's dates are actually changing and it has
+   * dated items — see `EditTripModal`'s shift checkbox. */
+  shiftDates: boolean;
 }
 
 interface EditTripInput {
@@ -131,26 +130,32 @@ export const createTrip = createAsyncThunk<
   },
 );
 
-function getShiftedTimestamp(value: unknown, delta: number) {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value + delta
-    : null;
+interface ShiftTripDatesResponse {
+  tripId: string;
+  lastEditedAt: number;
 }
 
-// Firestore caps a single batch at 500 writes; trips with hundreds of
-// events/stays can exceed that, so timestamp-shift updates are committed in
-// chunks rather than one batch.
-const FIRESTORE_BATCH_LIMIT = 450;
+// The function's own errors carry copy written for people, but anything it
+// didn't throw deliberately (a crash, a timeout, an unreachable function)
+// reaches the client as code `functions/internal` with the message "internal".
+const SHIFT_TRIP_DATES_READABLE_CODES = [
+  'functions/unauthenticated',
+  'functions/permission-denied',
+  'functions/not-found',
+  'functions/failed-precondition',
+  'functions/invalid-argument',
+];
 
-async function commitInChunks(
-  updates: { ref: DocumentReference; data: Record<string, number> }[],
-) {
-  for (let i = 0; i < updates.length; i += FIRESTORE_BATCH_LIMIT) {
-    const chunk = updates.slice(i, i + FIRESTORE_BATCH_LIMIT);
-    const chunkBatch = writeBatch(db);
-    chunk.forEach(({ ref, data }) => chunkBatch.update(ref, data));
-    await chunkBatch.commit();
+function getShiftTripDatesErrorMessage(error: unknown) {
+  const code = error instanceof FirebaseError ? error.code : null;
+  if (code === 'functions/unavailable' || code === 'functions/deadline-exceeded') {
+    return "We couldn't reach the server to update your trip's dates. Check your connection and try again.";
   }
+  if (code && SHIFT_TRIP_DATES_READABLE_CODES.includes(code)) {
+    return getErrorMessage(error, "We couldn't update your trip's dates.");
+  }
+
+  return "Something went wrong while updating your trip's dates. Give it another try in a moment — if it keeps happening, let us know.";
 }
 
 export const editTrip = createAsyncThunk<
@@ -181,7 +186,10 @@ export const editTrip = createAsyncThunk<
       return rejectWithValue('You do not have permission to edit this trip.');
     }
 
-    const dateDelta = values.startDate - trip.startDate;
+    if (trip.dateShiftStatus === 'PENDING') {
+      return rejectWithValue("This trip's dates are already being updated.");
+    }
+
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, trip.id);
     const lastEditedAt = Date.now();
 
@@ -195,73 +203,53 @@ export const editTrip = createAsyncThunk<
       await deleteFile(getTripCoverStoragePath(trip.id));
     }
 
-    if (dateDelta !== 0) {
-      const [eventsSnapshot, staysSnapshot] = await Promise.all([
-        getDocs(collection(tripRef, 'events')),
-        getDocs(collection(tripRef, 'stays')),
-      ]);
+    const datesChanged =
+      values.startDate !== trip.startDate || values.endDate !== trip.endDate;
 
-      const timestampUpdates: {
-        ref: DocumentReference;
-        data: Record<string, number>;
-      }[] = [];
-
-      eventsSnapshot.docs.forEach((eventSnapshot) => {
-        const data = eventSnapshot.data();
-        const updates: Record<string, number> = {};
-        const shiftedStartAt = getShiftedTimestamp(data.startAt, dateDelta);
-        const shiftedEndAt = getShiftedTimestamp(data.endAt, dateDelta);
-
-        if (shiftedStartAt !== null) {
-          updates.startAt = shiftedStartAt;
-        }
-        if (shiftedEndAt !== null) {
-          updates.endAt = shiftedEndAt;
-        }
-        if (Object.keys(updates).length > 0) {
-          timestampUpdates.push({ ref: eventSnapshot.ref, data: updates });
-        }
-      });
-
-      staysSnapshot.docs.forEach((staySnapshot) => {
-        const data = staySnapshot.data();
-        const updates: Record<string, number> = {};
-
-        for (const field of [
-          'checkInAt',
-          'checkOutAt',
-          'plannedArrivalAt',
-          'plannedDepartureAt',
-        ]) {
-          const shiftedValue = getShiftedTimestamp(data[field], dateDelta);
-          if (shiftedValue !== null) {
-            updates[field] = shiftedValue;
-          }
-        }
-
-        if (Object.keys(updates).length > 0) {
-          timestampUpdates.push({ ref: staySnapshot.ref, data: updates });
-        }
-      });
-
-      await commitInChunks(timestampUpdates);
-    }
-
-    const tripBatch = writeBatch(db);
-    tripBatch.update(tripRef, {
-      title,
-      startDate: values.startDate,
-      endDate: values.endDate,
-      coverImageUrl,
-      defaultCurrency,
-      lastEditedAt,
-    });
-    if (title !== trip.title && trip.inviteCode) {
-      tripBatch.update(doc(INVITE_CODE_COLLECTION, trip.inviteCode), {
+    // Re-dating every event/stay/expense/checklist item can touch far more
+    // documents than a client should write one at a time, so that work runs
+    // server-side, where it can't time out the caller.
+    if (datesChanged) {
+      try {
+        const shiftTripDates = httpsCallable<
+          {
+            tripId: string;
+            title: string;
+            startDate: number;
+            endDate: number;
+            coverImageUrl: string | null;
+            defaultCurrency: string | null;
+            shiftDates: boolean;
+          },
+          ShiftTripDatesResponse
+        >(functions, 'shiftTripDates');
+        await shiftTripDates({
+          tripId: trip.id,
+          title,
+          startDate: values.startDate,
+          endDate: values.endDate,
+          coverImageUrl,
+          defaultCurrency,
+          shiftDates: values.shiftDates,
+        });
+      } catch (error) {
+        return rejectWithValue(getShiftTripDatesErrorMessage(error));
+      }
+    } else {
+      const tripBatch = writeBatch(db);
+      tripBatch.update(tripRef, {
         title,
+        coverImageUrl,
+        defaultCurrency,
+        lastEditedAt,
       });
+      if (title !== trip.title && trip.inviteCode) {
+        tripBatch.update(doc(INVITE_CODE_COLLECTION, trip.inviteCode), {
+          title,
+        });
+      }
+      await tripBatch.commit();
     }
-    await tripBatch.commit();
 
     const updatedTrip: TripSpace = {
       ...trip,

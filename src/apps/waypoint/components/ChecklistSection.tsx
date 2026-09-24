@@ -28,7 +28,11 @@ import {
   toggleChecklistItem,
   updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
-import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import {
+  canEditExistingItem,
+  hasTripRole,
+  isTripDateShiftLocked,
+} from '@apps/waypoint/utils/roleGuards';
 
 interface ChecklistSectionProps {
   trip: TripSpace;
@@ -43,7 +47,7 @@ interface ChecklistDayGroup {
 function getChecklistCategoryLabel(item: ChecklistItem): string {
   return item.category === 'OTHER' && item.customCategoryLabel
     ? item.customCategoryLabel
-    : CHECKLIST_CATEGORY_LABELS[item.category];
+    : (CHECKLIST_CATEGORY_LABELS[item.category] ?? CHECKLIST_CATEGORY_LABELS.OTHER);
 }
 
 export default function ChecklistSection({
@@ -59,11 +63,13 @@ export default function ChecklistSection({
   const items = useAppSelector((state) => state.waypoint.checklist.items);
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
-  const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const canEdit =
+    !isTripDateShiftLocked(trip) && hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditExisting = canEditExistingItem(trip, currentUserId);
 
   const mayToggle = (item: ChecklistItem) =>
-    canEdit || item.assignedToUids.includes(currentUserId);
+    !isTripDateShiftLocked(trip) &&
+    (canEdit || item.assignedToUids.includes(currentUserId));
 
   const visibleItems = useMemo(
     () =>
