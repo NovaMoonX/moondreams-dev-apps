@@ -1,10 +1,18 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button, Drawer, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Badge,
+  Button,
+  Drawer,
+  DropdownMenuFactories,
+  Input,
+  Select,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
@@ -52,6 +60,8 @@ import {
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
+
+const { option } = DropdownMenuFactories;
 
 interface ExpensesSectionProps {
   trip: TripSpace;
@@ -385,9 +395,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     return (
       <li
         key={expense.id}
-        className='grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3'
+        className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'
       >
-        <div className='col-span-2 min-w-0 sm:col-span-1'>
+        <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
             {expense.status === 'PAID' ? 'Paid' : 'Expected'} · {payerLine}
@@ -422,42 +432,51 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
           )}
         </div>
-        <div className='flex flex-wrap items-center justify-end gap-2 sm:col-start-2 sm:row-span-2 sm:row-start-1'>
-          {canAddExpenses && expense.status === 'EXPECTED' && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
+        {canAddExpenses && (
+          <div className='col-start-2 row-start-1 self-start'>
+            <EllipsisDropdown
+              ariaLabel={`Actions for ${expense.title}`}
               disabled={markingPaidId === expense.id}
-              onClick={() => setPayingExpense(expense)}
-            >
-              {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
-            </Button>
-          )}
-          {canAddExpenses && getResolvedExpenseAmount(expense) !== null && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => setSplittingExpense(expense)}
-            >
-              Edit split
-            </Button>
-          )}
-          {canAddExpenses && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => {
+              items={[
+                ...(expense.status === 'EXPECTED'
+                  ? [
+                      option({
+                        label: 'Mark paid',
+                        value: 'mark-paid',
+                        description: 'Record who covered it and what it cost.',
+                      }),
+                    ]
+                  : []),
+                ...(getResolvedExpenseAmount(expense) !== null
+                  ? [
+                      option({
+                        label: 'Edit split',
+                        value: 'edit-split',
+                        description: 'Choose who shares it and how much each owes.',
+                      }),
+                    ]
+                  : []),
+                option({
+                  label: 'Modify',
+                  value: 'modify',
+                  description: 'Change the details, or delete this expense.',
+                }),
+              ]}
+              onItemSelect={(value) => {
+                if (value === 'mark-paid') {
+                  setPayingExpense(expense);
+                  return;
+                }
+                if (value === 'edit-split') {
+                  setSplittingExpense(expense);
+                  return;
+                }
                 setEditingExpense(expense);
                 setIsModalOpen(true);
               }}
-            >
-              Modify
-            </Button>
-          )}
-        </div>
+            />
+          </div>
+        )}
       </li>
     );
   };
