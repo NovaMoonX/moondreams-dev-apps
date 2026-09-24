@@ -56,24 +56,28 @@ function getSortAmount(expense: TripExpense): number {
   );
 }
 
+function getSplitTargetLabel(
+  expense: TripExpense,
+  memberLabel: (uid: string) => string,
+): string {
+  switch (expense.targetType) {
+    case 'EVERYONE_CURRENT':
+      return 'Everyone';
+    case 'EVERYONE_INCLUDING_FUTURE':
+      return 'Everyone, including future members';
+    case 'JUST_ME':
+      return expense.payerUid ? `Just ${memberLabel(expense.payerUid)}` : 'Just the payer';
+    case 'SPECIFIC_MEMBERS':
+      return expense.targetMemberIds.map(memberLabel).join(', ');
+  }
+}
+
 function describeSplit(
   expense: TripExpense,
   memberIds: string[],
   memberLabel: (uid: string) => string,
 ): string {
-  const targetLabel = (() => {
-    switch (expense.targetType) {
-      case 'EVERYONE_CURRENT':
-        return 'Everyone';
-      case 'EVERYONE_INCLUDING_FUTURE':
-        return 'Everyone, including future members';
-      case 'JUST_ME':
-        return expense.payerUid ? `Just ${memberLabel(expense.payerUid)}` : 'Just the payer';
-      case 'SPECIFIC_MEMBERS':
-        return expense.targetMemberIds.map(memberLabel).join(', ');
-    }
-  })();
-
+  const targetLabel = getSplitTargetLabel(expense, memberLabel);
   const splitMemberCount = getSplitMemberIds(expense, memberIds).length;
   if (splitMemberCount <= 1) {
     return `Split · ${targetLabel}`;
@@ -100,29 +104,23 @@ interface ExpenseCluster {
 
 /** Clusters consecutive-or-not expenses that share a `groupLabel` (e.g. itemized
  * entries off one receipt) so they can be rendered together with a subtotal,
- * while un-grouped expenses stay standalone in their original order. */
+ * while un-grouped expenses stay standalone in their original order. A Map key
+ * (falling back to the item's own id when there's no group) collapses same-label
+ * items while preserving first-occurrence order for everything else. */
 function clusterByGroup(items: TripExpense[]): ExpenseCluster[] {
-  const clusters: ExpenseCluster[] = [];
-  const clusterByLabel = new Map<string, ExpenseCluster>();
-
-  for (const item of items) {
-    if (item.groupLabel === null) {
-      clusters.push({ groupLabel: null, items: [item] });
-      continue;
-    }
-
-    const existing = clusterByLabel.get(item.groupLabel);
-    if (existing) {
-      existing.items.push(item);
-      continue;
-    }
-
-    const cluster: ExpenseCluster = { groupLabel: item.groupLabel, items: [item] };
-    clusterByLabel.set(item.groupLabel, cluster);
-    clusters.push(cluster);
-  }
-
-  return clusters;
+  return Array.from(
+    items
+      .reduce((clusters, item) => {
+        const key = item.groupLabel ?? `__single-${item.id}`;
+        const existing = clusters.get(key);
+        clusters.set(key, {
+          groupLabel: item.groupLabel,
+          items: [...(existing?.items ?? []), item],
+        });
+        return clusters;
+      }, new Map<string, ExpenseCluster>())
+      .values(),
+  );
 }
 
 function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
