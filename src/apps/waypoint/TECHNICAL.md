@@ -349,6 +349,7 @@ interface TripExpense {
   amountMin: number | null; // for an estimate/range instead of a known figure (e.g. "$10-$30")
   amountMax: number | null;
   currency: string;
+  isPerPerson: boolean; // amount fields are per person; totals, dues, and the split multiply by the split's headcount
   payerUid: string;
   status: ExpenseStatus; // PAID or EXPECTED/upcoming
   targetType: ExpenseTargetType; // defaults to EVERYONE_CURRENT on Add; changeable via the separate Split action

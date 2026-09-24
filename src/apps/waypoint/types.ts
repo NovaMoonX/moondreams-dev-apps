@@ -93,6 +93,8 @@ export interface TripExpense {
   amountMax: number | null;
   paidAmount: number | null;
   currency: string;
+  /** When true, the amount fields are per person and scale by the split's headcount. */
+  isPerPerson: boolean;
   /** Who fronted the money. `null` means "paid by each person" — no single
    * payer, so nobody is owed anything for this expense. */
   payerUid: string | null;

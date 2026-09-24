@@ -28,6 +28,37 @@ export function getSplitMemberIds(
   }
 }
 
+export function getPerPersonMultiplier(
+  expense: Pick<TripExpense, 'isPerPerson'>,
+  splitMemberIds: string[],
+): number {
+  return expense.isPerPerson ? Math.max(1, splitMemberIds.length) : 1;
+}
+
+export function scaleAmount(amount: number, multiplier: number): number {
+  const scaled = Math.round(amount * multiplier * 100) / 100;
+  return scaled;
+}
+
+export function getExpenseTotalAmount(
+  expense: Pick<
+    TripExpense,
+    'amount' | 'paidAmount' | 'status' | 'isPerPerson' | 'targetType' | 'targetMemberIds' | 'payerUid'
+  >,
+  currentMemberIds: string[],
+): number | null {
+  const amount = getResolvedExpenseAmount(expense);
+  if (amount === null) {
+    return null;
+  }
+
+  const total = scaleAmount(
+    amount,
+    getPerPersonMultiplier(expense, getSplitMemberIds(expense, currentMemberIds)),
+  );
+  return total;
+}
+
 export function computeEvenSplit(
   memberIds: string[],
   amount: number,
@@ -74,7 +105,7 @@ export function computeDuesSummary(
       continue;
     }
 
-    const resolvedAmount = getResolvedExpenseAmount(expense);
+    const resolvedAmount = getExpenseTotalAmount(expense, currentMemberIds);
     if (resolvedAmount === null) {
       continue;
     }

@@ -50,6 +50,7 @@ interface ExpenseFormData {
   amountMode: 'amount' | 'range';
   amount: string;
   amountRange: AmountRange;
+  isPerPerson: boolean;
   payerUid: string;
   status: ExpenseStatus;
   dayIndex: string;
@@ -72,6 +73,7 @@ export interface ExpenseSubmitValues {
   customCategoryLabel: string | null;
   note: string | null;
   groupLabel: string | null;
+  isPerPerson: boolean;
 }
 
 interface ExpenseFormModalProps {
@@ -86,7 +88,7 @@ interface ExpenseFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input, radio, select } = FormFactories;
+const { checkbox, custom, input, radio, select } = FormFactories;
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
@@ -113,6 +115,7 @@ function getInitialFormData(initialExpense?: TripExpense): ExpenseFormData {
       min: String(initialExpense?.amountMin ?? ''),
       max: String(initialExpense?.amountMax ?? ''),
     },
+    isPerPerson: initialExpense?.isPerPerson ?? false,
     payerUid: initialExpense?.payerUid ?? PAID_BY_EACH_PERSON,
     status: initialExpense?.status ?? 'EXPECTED',
     dayIndex:
@@ -229,14 +232,14 @@ function ExpenseFormModal({
       mode === 'amount'
         ? input({
             name: 'amount',
-            label: 'Amount',
+            label: formData.isPerPerson ? 'Amount per person' : 'Amount',
             type: 'number',
             placeholder: '0.00',
             variant: 'outline',
           })
         : custom({
             name: 'amountRange',
-            label: 'Estimated range',
+            label: formData.isPerPerson ? 'Estimated range per person' : 'Estimated range',
             renderComponent: (props) => {
               const range = props.value as AmountRange;
               return (
@@ -261,6 +264,11 @@ function ExpenseFormModal({
               );
             },
           }),
+      checkbox({
+        name: 'isPerPerson',
+        label: '',
+        text: 'Per person — multiplied by everyone in the split',
+      }),
     ];
 
     if (isEditing && mode === 'range' && initialExpense?.status === 'PAID') {
@@ -332,6 +340,7 @@ function ExpenseFormModal({
   }, [
     categoryOptions,
     dayOptions,
+    formData.isPerPerson,
     formData.status,
     groupOptions,
     initialExpense?.status,
@@ -382,6 +391,7 @@ function ExpenseFormModal({
         customCategoryLabel,
         note: showNoteField ? data.note.trim() || null : null,
         groupLabel: showGroupField ? resolveChoice(data.group) : null,
+        isPerPerson: data.isPerPerson,
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this expense.'));

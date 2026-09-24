@@ -3,8 +3,8 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import type { TripExpense } from '@apps/waypoint/types';
 
-// Expenses written before category/note/grouping existed lack those keys, and
-// an absent groupLabel reads as undefined rather than the null the UI relies on.
+// Expenses written before these fields existed lack the keys, and an absent
+// groupLabel reads as undefined rather than the null the UI relies on.
 function normalizeExpense(id: string, data: Partial<TripExpense>): TripExpense {
   const expense = {
     ...data,
@@ -13,6 +13,7 @@ function normalizeExpense(id: string, data: Partial<TripExpense>): TripExpense {
     customCategoryLabel: data.customCategoryLabel ?? null,
     note: data.note ?? null,
     groupLabel: data.groupLabel ?? null,
+    isPerPerson: data.isPerPerson ?? false,
   } as TripExpense;
   return expense;
 }

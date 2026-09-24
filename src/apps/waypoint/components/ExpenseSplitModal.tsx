@@ -13,7 +13,9 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   computeEvenSplit,
+  getPerPersonMultiplier,
   getResolvedExpenseAmount,
+  scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
 import type { ExpenseTargetType, TripExpense, TripSpace } from '@apps/waypoint/types';
 
@@ -90,11 +92,15 @@ function ExpenseSplitModal({
     }
   }, [expense, targetType, specificMemberIds, memberIds]);
 
-  const amount = expense ? (getResolvedExpenseAmount(expense) ?? 0) : 0;
-  const evenSplit = useMemo(
-    () => computeEvenSplit(splitMemberIds, amount),
-    [splitMemberIds, amount],
-  );
+  const unitAmount = expense ? (getResolvedExpenseAmount(expense) ?? 0) : 0;
+  const multiplier = expense ? getPerPersonMultiplier(expense, splitMemberIds) : 1;
+  const amount = scaleAmount(unitAmount, multiplier);
+  const formatAmount = (value: number) =>
+    new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: expense?.currency ?? 'USD',
+    }).format(value);
+  const evenSplit = computeEvenSplit(splitMemberIds, amount);
   const isCustomSplit = customSplitAmounts !== null;
   const displayAmounts =
     customSplitAmounts ??
@@ -166,6 +172,13 @@ function ExpenseSplitModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Split'>
       <div className='space-y-4'>
+        {expense.isPerPerson && (
+          <p className='text-muted-foreground text-sm'>
+            {formatAmount(unitAmount)} per person × {multiplier}{' '}
+            {multiplier === 1 ? 'person' : 'people'} ={' '}
+            <span className='text-foreground font-medium'>{formatAmount(amount)}</span>
+          </p>
+        )}
         <div className='space-y-1.5'>
           <Label>Split with</Label>
           <Select

@@ -1,4 +1,9 @@
 import type { RootState } from '@/store';
+import {
+  getPerPersonMultiplier,
+  getSplitMemberIds,
+  scaleAmount,
+} from '@apps/waypoint/utils/splitCalculators';
 import type {
   EventStatus,
   Stay,
@@ -67,28 +72,36 @@ export interface TripExpenseTotals {
   total: ExpenseTotal;
 }
 
-function getExpenseValue(expense: TripExpense): ExpenseTotal {
+function getExpenseValue(expense: TripExpense, memberIds: string[]): ExpenseTotal {
+  const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
+
   if (expense.amount !== null) {
-    return { min: expense.amount, max: expense.amount };
+    const amount = scaleAmount(expense.amount, multiplier);
+    return { min: amount, max: amount };
   }
 
   if (expense.status === 'PAID' && expense.paidAmount !== null) {
-    return { min: expense.paidAmount, max: expense.paidAmount };
+    const paidAmount = scaleAmount(expense.paidAmount, multiplier);
+    return { min: paidAmount, max: paidAmount };
   }
 
-  return {
-    min: expense.amountMin ?? 0,
-    max: expense.amountMax ?? expense.amountMin ?? 0,
+  const range = {
+    min: scaleAmount(expense.amountMin ?? 0, multiplier),
+    max: scaleAmount(expense.amountMax ?? expense.amountMin ?? 0, multiplier),
   };
+  return range;
 }
 
-function addExpenseValue(total: ExpenseTotal, expense: TripExpense) {
-  const value = getExpenseValue(expense);
+function addExpenseValue(total: ExpenseTotal, expense: TripExpense, memberIds: string[]) {
+  const value = getExpenseValue(expense, memberIds);
   total.min += value.min;
   total.max += value.max;
 }
 
-export function computeExpenseTotals(expenses: TripExpense[]): TripExpenseTotals {
+export function computeExpenseTotals(
+  expenses: TripExpense[],
+  memberIds: string[],
+): TripExpenseTotals {
   const totals: TripExpenseTotals = {
     paid: { min: 0, max: 0 },
     expected: { min: 0, max: 0 },
@@ -96,15 +109,23 @@ export function computeExpenseTotals(expenses: TripExpense[]): TripExpenseTotals
   };
 
   for (const expense of expenses) {
-    addExpenseValue(totals.total, expense);
-    addExpenseValue(expense.status === 'PAID' ? totals.paid : totals.expected, expense);
+    addExpenseValue(totals.total, expense, memberIds);
+    addExpenseValue(expense.status === 'PAID' ? totals.paid : totals.expected, expense, memberIds);
   }
 
   return totals;
 }
 
-export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals =>
-  computeExpenseTotals(state.waypoint.expenses.items);
+export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals => {
+  const trip = state.waypoint.trip.items.find(
+    (item) => item.id === state.waypoint.expenses.tripId,
+  );
+  const totals = computeExpenseTotals(
+    state.waypoint.expenses.items,
+    trip ? Object.keys(trip.members) : [],
+  );
+  return totals;
+};
 
 export const selectTimelineEvents = (state: RootState) => state.waypoint.events.items;
 

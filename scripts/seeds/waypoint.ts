@@ -188,10 +188,24 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     category: 'FOOD' | 'TRANSPORT' | 'LODGING' | 'ACTIVITIES' | 'SHOPPING' | 'OTHER';
     note?: string | null;
     groupLabel?: string | null;
+    isPerPerson?: boolean;
     targetType?: 'EVERYONE_CURRENT' | 'EVERYONE_INCLUDING_FUTURE' | 'JUST_ME' | 'SPECIFIC_MEMBERS';
     targetMemberIds?: string[];
     splitAmounts?: Record<string, number> | null;
   }> = [
+    {
+      id: 'seed-expense-breakfast',
+      dayIndex: 2,
+      title: 'Breakfast pastries',
+      amount: 9,
+      amountMin: null,
+      amountMax: null,
+      paidAmount: null,
+      payerUid: null,
+      status: 'EXPECTED',
+      category: 'FOOD',
+      isPerPerson: true,
+    },
     {
       id: 'seed-expense-dinner',
       dayIndex: 1,
@@ -318,6 +332,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       paidMemberStatus: unpaidMemberStatus,
       note: seedExpense.note ?? null,
       groupLabel: seedExpense.groupLabel ?? null,
+      isPerPerson: seedExpense.isPerPerson ?? false,
       createdBy: alex.uid,
       createdAt: context.now,
       lastEditedAt: context.now,
@@ -778,6 +793,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 29,
+    firestoreDocuments: 30,
   };
 }

@@ -38,8 +38,10 @@ import {
 import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
+  getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
+  scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
 
 interface ExpensesSectionProps {
@@ -51,10 +53,25 @@ function isCustomSplit(expense: TripExpense): boolean {
   return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
 }
 
-function getSortAmount(expense: TripExpense): number {
-  return (
-    getResolvedExpenseAmount(expense) ?? expense.amountMax ?? expense.amountMin ?? 0
+function getSortAmount(expense: TripExpense, memberIds: string[]): number {
+  const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
+  const amount = scaleAmount(
+    getResolvedExpenseAmount(expense) ?? expense.amountMax ?? expense.amountMin ?? 0,
+    multiplier,
   );
+  return amount;
+}
+
+function getDisplayRange(expense: TripExpense): { min: number; max: number } {
+  if (expense.status === 'PAID' && expense.paidAmount !== null) {
+    return { min: expense.paidAmount, max: expense.paidAmount };
+  }
+
+  const range = {
+    min: expense.amount ?? expense.amountMin ?? 0,
+    max: expense.amount ?? expense.amountMax ?? expense.amountMin ?? 0,
+  };
+  return range;
 }
 
 function getSplitTargetLabel(
@@ -204,7 +221,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setRangedOnly(false);
     setSplitOnly(false);
   };
-  const totals = computeExpenseTotals(filteredExpenses);
+  const totals = computeExpenseTotals(filteredExpenses, memberIds);
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
     { label: 'Paid so far', total: totals.paid },
     { label: 'Expected (not yet paid)', total: totals.expected },
@@ -217,8 +234,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ? filteredExpenses
       : [...filteredExpenses].sort((a, b) =>
           sortBy === 'amount-desc'
-            ? getSortAmount(b) - getSortAmount(a)
-            : getSortAmount(a) - getSortAmount(b),
+            ? getSortAmount(b, memberIds) - getSortAmount(a, memberIds)
+            : getSortAmount(a, memberIds) - getSortAmount(b, memberIds),
         );
 
   const dayGroups =
@@ -255,6 +272,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             customCategoryLabel: values.customCategoryLabel,
             note: values.note,
             groupLabel: values.groupLabel,
+            isPerPerson: values.isPerPerson,
           }),
         ).unwrap();
       } else {
@@ -336,6 +354,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           ? memberLabel(expense.payerUid)
           : 'Paid by each person'
         : 'Not yet paid';
+    const displayRange = getDisplayRange(expense);
+    const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
 
     return (
       <li key={expense.id} className='flex flex-wrap items-center justify-between gap-3 py-3'>
@@ -355,15 +375,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
         <div className='flex w-full items-center justify-between gap-3 sm:w-auto'>
-          <span className='font-medium'>
-            {expense.status === 'PAID' && expense.paidAmount !== null
-              ? formatTotal(expense.paidAmount, expense.paidAmount, expense.currency)
-              : formatTotal(
-                  expense.amount ?? expense.amountMin ?? 0,
-                  expense.amount ?? expense.amountMax ?? expense.amountMin ?? 0,
+          <div>
+            <p className='font-medium'>
+              {formatTotal(displayRange.min, displayRange.max, expense.currency)}
+              {expense.isPerPerson && (
+                <span className='text-muted-foreground text-sm font-normal'> per person</span>
+              )}
+            </p>
+            {expense.isPerPerson && (
+              <p className='text-muted-foreground text-xs'>
+                {formatTotal(
+                  scaleAmount(displayRange.min, multiplier),
+                  scaleAmount(displayRange.max, multiplier),
                   expense.currency,
-                )}
-          </span>
+                )}{' '}
+                total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
+              </p>
+            )}
+          </div>
           <div className='flex flex-wrap items-center justify-end gap-2'>
             {canAddExpenses && expense.status === 'EXPECTED' && (
               <Button
@@ -411,7 +440,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         return renderExpenseRow(cluster.items[0]);
       }
 
-      const groupTotals = computeExpenseTotals(cluster.items);
+      const groupTotals = computeExpenseTotals(cluster.items, memberIds);
 
       return (
         <li key={`group-${cluster.groupLabel}`} className='border-border rounded-lg border py-1'>
