@@ -80,7 +80,7 @@ function TripDetailPage({
                 {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
               </div>
               <p className='text-muted-foreground mt-1'>
-                {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
+                {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
               </p>
             </div>
             {(onEdit || onToggleArchived) && (

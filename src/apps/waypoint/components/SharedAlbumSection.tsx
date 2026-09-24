@@ -109,6 +109,7 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
                   variant='primary'
                   size='sm'
                   onClick={() => setIsModalOpen(true)}
+                  className='mr-1'
                 >
                   Add link
                 </Button>

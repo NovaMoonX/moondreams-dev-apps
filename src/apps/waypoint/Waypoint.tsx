@@ -49,7 +49,6 @@ function Waypoint() {
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
-  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const trips = useAppSelector(selectTrips);
   const timelineEvents = useAppSelector(selectTimelineEvents);
   const tripsLoaded = useAppSelector((state) => state.waypoint.trip.loaded);
@@ -61,7 +60,9 @@ function Waypoint() {
   );
   const now = useNow();
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
+  const selectedTripId = searchParams.get('trip');
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
+  const isSelectedTripMissing = Boolean(selectedTripId) && !selectedTrip;
   const isSelectedTripAdmin =
     selectedTrip?.members[user?.uid ?? '']?.role === 'ADMIN';
 
@@ -154,6 +155,16 @@ function Waypoint() {
     }
   };
 
+  const setSelectedTripId = (tripId: string | null) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (tripId) {
+      nextSearchParams.set('trip', tripId);
+    } else {
+      nextSearchParams.delete('trip');
+    }
+    setSearchParams(nextSearchParams);
+  };
+
   const handleCloseJoinModal = () => {
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('inviteCode');
@@ -161,8 +172,10 @@ function Waypoint() {
   };
 
   const handleViewInvitedTrip = (tripId: string) => {
-    setSelectedTripId(tripId);
-    handleCloseJoinModal();
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('inviteCode');
+    nextSearchParams.set('trip', tripId);
+    setSearchParams(nextSearchParams, { replace: true });
   };
 
   const handleCopyInviteLink = async (tripInviteCode: string) => {
@@ -294,6 +307,17 @@ function Waypoint() {
             </Button>
           </div>
         </div>
+
+        {isSelectedTripMissing && (
+          <div className='border-border flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between'>
+            <p className='text-muted-foreground text-sm'>
+              We couldn't find that trip. It may have been removed, or you might not be a member yet.
+            </p>
+            <Button size='sm' variant='secondary' onClick={() => setSelectedTripId(null)}>
+              Dismiss
+            </Button>
+          </div>
+        )}
 
         <MyPendingTrips
           requests={pendingRequests}

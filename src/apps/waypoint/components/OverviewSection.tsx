@@ -6,19 +6,23 @@ import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
+import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
 import {
   getTripStatus,
   selectActiveEvent,
+  selectStays,
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
-import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
+  STAY_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 
 interface OverviewSectionProps {
@@ -31,6 +35,7 @@ function OverviewSection({ trip, onViewDay }: OverviewSectionProps) {
   const isLive = getTripStatus(trip, now) === 'ACTIVE';
   const activeEvent = useAppSelector(selectActiveEvent(now));
   const upNextEvent = useAppSelector(selectUpNextEvent(now));
+  const stays = useAppSelector(selectStays);
 
   if (!isLive) {
     return null;
@@ -38,9 +43,16 @@ function OverviewSection({ trip, onViewDay }: OverviewSectionProps) {
 
   const todayIndex = getDayIndex(trip.startDate, now);
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
+  const todayStart = trip.startDate + todayIndex * 86_400_000;
+  const checkInStays = stays.filter(
+    (stay) => stay.checkInAt >= todayStart && stay.checkInAt < todayStart + 86_400_000,
+  );
 
   return (
     <div className='space-y-4'>
+      {checkInStays.map((stay) => (
+        <CheckInStayCard key={stay.id} stay={stay} />
+      ))}
       {activeEvent && <ActiveNowCard event={activeEvent} now={now} />}
       {upNextEvent && <UpNextCard event={upNextEvent} now={now} />}
       <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
@@ -77,6 +89,53 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
   );
 }
 
+function CheckInStayCard({ stay }: { stay: Stay }) {
+  const imageUrl = getDisplayImage(stay);
+
+  return (
+    <article className='border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 flex overflow-hidden rounded-xl border border-2'>
+      {imageUrl && (
+        <EnrichedImage src={imageUrl} alt='' className='w-24 shrink-0 object-cover sm:w-36' />
+      )}
+      <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
+        <div className='min-w-0'>
+          <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
+            Checking in today
+          </p>
+          <div className='mt-2 flex flex-wrap items-center gap-2'>
+            <h3 className='font-semibold'>{stay.name}</h3>
+            <Badge variant='muted' outline>
+              {STAY_TYPE_LABELS[stay.stayType]}
+            </Badge>
+          </div>
+          <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
+          <p className='text-muted-foreground mt-1 text-sm'>
+            Check-in at {formatTime(stay.checkInAt)}
+            {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
+          </p>
+          {stay.confirmationCode && (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              Confirmation <span className='text-foreground font-medium'>{stay.confirmationCode}</span>
+            </p>
+          )}
+          {(stay.linkUrl || stay.notes) && (
+            <div className='mt-1 flex flex-wrap items-center gap-x-4 gap-y-1'>
+              <StayNotesButton stay={stay} />
+              {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
+            </div>
+          )}
+        </div>
+        <MapNavigationButton
+          locationName={stay.name}
+          address={stay.address}
+          latitude={stay.latitude}
+          longitude={stay.longitude}
+        />
+      </div>
+    </article>
+  );
+}
+
 function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
   const duration = event.endAt !== null ? event.endAt - event.startAt : null;
   const progress =
@@ -93,7 +152,7 @@ function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+          className='aspect-video w-full object-cover sm:aspect-2/1'
         />
       )}
       <div className='p-5'>

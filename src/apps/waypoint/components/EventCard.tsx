@@ -4,7 +4,7 @@ import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import { formatTime } from '@/utils/formatUtils';
+import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
 import {
@@ -38,7 +38,7 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+          className='aspect-video w-full object-cover sm:aspect-2/1'
         />
       )}
       <div className='flex items-start justify-between gap-3 p-4'>
@@ -49,7 +49,7 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
             </Badge>
             <span className='text-muted-foreground text-sm'>
               {formatTime(event.startAt)}
-              {event.endAt ? ` – ${formatTime(event.endAt)}` : ''}
+              {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
             </span>
           </div>
           <h3 className='mt-2 font-semibold'>{event.title}</h3>
@@ -64,7 +64,8 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
           )}
           {(event.venueOpenTime || event.venueCloseTime) && (
             <p className='text-muted-foreground mt-1 text-sm'>
-              Open {event.venueOpenTime ?? '?'} – {event.venueCloseTime ?? '?'}
+              Open {event.venueOpenTime ? formatClockTime(event.venueOpenTime) : '?'} -{' '}
+              {event.venueCloseTime ? formatClockTime(event.venueCloseTime) : '?'}
             </p>
           )}
           {event.linkUrl && (

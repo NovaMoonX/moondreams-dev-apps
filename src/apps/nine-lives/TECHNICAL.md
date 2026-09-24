@@ -791,7 +791,7 @@ export const selectHouseholdDueDatesTimeline = (
 ): HouseholdDueDateItem[] => { /* merges upcoming/past visits + vaccination expiresAt, sorted */ };
 ```
 
-The UI groups this into buckets like "This month," "Next 3 months," "Beyond," and "Past" (shown grayed out) — similar to a printed vet visit summary that shows both what's already happened and what's scheduled months out, not just what's imminent. This only reads existing `visits`/`vaccinations`/`preventives` slice data and ships without any dependency on the push notification work below — it's a Core MVP–tier feature, not a Beyond-tier one.
+The UI groups this into buckets like "This month," "Next 3 months," "Beyond," and "Past" (shown grayed out) — similar to a printed vet visit summary that shows both what's already happened and what's scheduled months out, not just what's imminent. This only reads existing `visits`/`vaccinations`/`preventives` slice data and ships without any dependency on the push notification work below — it's a Core MVP-tier feature, not a Beyond-tier one.
 
 ### Reminder lifecycle (push notifications specifically — Beyond MVP)
 
@@ -1045,7 +1045,7 @@ functions/src/notifications/
 └── sendDueReminders.ts        # scheduled Cloud Function, queries reminders, sends via FCM, marks sent
 ```
 
-Mini-app–scoped state and components:
+Mini-app-scoped state and components:
 
 ```
 src/apps/nine-lives/

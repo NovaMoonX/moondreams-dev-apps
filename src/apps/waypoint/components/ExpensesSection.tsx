@@ -94,7 +94,7 @@ function formatTotal(min: number, max: number, currency: string) {
     currency,
   });
   const minimum = formatter.format(min);
-  return min === max ? minimum : `${minimum}–${formatter.format(max)}`;
+  return min === max ? minimum : `${minimum}-${formatter.format(max)}`;
 }
 
 interface ExpenseCluster {

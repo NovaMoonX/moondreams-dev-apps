@@ -22,6 +22,12 @@ export function formatTime(timestamp: number) {
   });
 }
 
+export function formatClockTime(hhmm: string) {
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  const formatted = formatTime(new Date(2000, 0, 1, hours, minutes).getTime());
+  return formatted;
+}
+
 /** Date only, no time-of-day — for things nothing in the app ever asks a time for (vaccinations, preventives, weight, expenses). */
 export function formatDate(timestamp: number) {
   const date = new Date(timestamp);
