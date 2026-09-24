@@ -7,7 +7,7 @@ import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
-import EventNotesField from '@apps/waypoint/components/EventNotesField';
+import NotesField from '@apps/waypoint/components/NotesField';
 import EnrichedImage from '@/components/EnrichedImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
@@ -19,6 +19,8 @@ import {
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
+
+const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet…';
 
 interface EventCardProps {
   event: TimelineEvent;
@@ -80,12 +82,13 @@ function EventDetailLines({ event, showTitle, showNotes, canEdit, onSaveNotes }:
         </div>
       )}
       {showNotes && (
-        <EventNotesField
+        <NotesField
           key={event.id}
           notes={event.notes}
           canEdit={canEdit}
           onSave={(notes) => onSaveNotes(event, notes)}
           variant='link'
+          placeholder={EVENT_NOTES_PLACEHOLDER}
         />
       )}
       <ChangeBadge changeHistory={event.changeHistory} />
@@ -151,12 +154,13 @@ export function EventCard({ event, canEdit, showCover, onEdit, onSaveNotes }: Ev
         </div>
         {!isSmallScreen && (event.notes || canEdit) && (
           <div className='-mt-2 px-4 pb-3'>
-            <EventNotesField
+            <NotesField
               key={event.id}
               notes={event.notes}
               canEdit={canEdit}
               onSave={(notes) => onSaveNotes(event, notes)}
               variant='subtle'
+              placeholder={EVENT_NOTES_PLACEHOLDER}
             />
           </div>
         )}

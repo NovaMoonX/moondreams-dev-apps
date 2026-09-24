@@ -5,14 +5,15 @@ import { Pencil } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 
-interface EventNotesFieldProps {
+interface NotesFieldProps {
   notes: string | null;
   canEdit: boolean;
   onSave: (notes: string) => Promise<void>;
   variant: 'link' | 'subtle';
+  placeholder: string;
 }
 
-export function EventNotesField({ notes, canEdit, onSave, variant }: EventNotesFieldProps) {
+export function NotesField({ notes, canEdit, onSave, variant, placeholder }: NotesFieldProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +44,12 @@ export function EventNotesField({ notes, canEdit, onSave, variant }: EventNotesF
       {isEditing ? (
         <>
           <Textarea
-            rows={3}
+            rows={2}
             autoFocus
             value={draft}
-            variant='outline'
-            placeholder='Reservation name, what to bring, where to meet…'
+            variant='left-line'
+            className='text-xs!'
+            placeholder={placeholder}
             onChange={(changeEvent) => setDraft(changeEvent.target.value)}
           />
           <div className='flex justify-end gap-2'>
@@ -111,4 +113,4 @@ export function EventNotesField({ notes, canEdit, onSave, variant }: EventNotesF
   );
 }
 
-export default EventNotesField;
+export default NotesField;

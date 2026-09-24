@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
@@ -118,6 +118,50 @@ export const updateStay = createAsyncThunk<
   };
   await setDoc(stayRef, { ...currentStay, lastEditedAt: Date.now() }, { merge: true });
   return stay;
+});
+
+// The rule validates the whole merged document, so a stay saved before these
+// fields existed needs them written alongside any partial update.
+function getMissingStayFields(stay: Stay): Partial<Stay> {
+  const defaults: Partial<Stay> = {
+    stayType: 'OTHER',
+    checkInTimezone: null,
+    plannedArrivalAt: stay.checkInAt,
+    plannedDepartureAt: stay.checkOutAt,
+    confirmationCode: null,
+    place: null,
+    linkUrl: null,
+    linkPreview: null,
+  };
+  const missing = Object.fromEntries(
+    Object.entries(defaults).filter(([key]) => !(key in stay)),
+  ) as Partial<Stay>;
+  return missing;
+}
+
+interface UpdateStayNotesInput {
+  uid: string;
+  trip: TripSpace;
+  stay: Stay;
+  notes: string;
+}
+
+export const updateStayNotes = createAsyncThunk<
+  Stay,
+  UpdateStayNotesInput,
+  { rejectValue: string }
+>('waypoint/stays/updateNotes', async ({ uid, trip, stay, notes }, { rejectWithValue }) => {
+  if (!canEditExistingItem(trip, uid)) {
+    return rejectWithValue('You do not have permission to edit this stay.');
+  }
+
+  const changes = {
+    ...getMissingStayFields(stay),
+    notes: notes.trim() || null,
+    lastEditedAt: Date.now(),
+  };
+  await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stay.id), changes);
+  return { ...stay, ...changes };
 });
 
 export const deleteStay = createAsyncThunk<

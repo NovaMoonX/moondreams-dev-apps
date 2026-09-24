@@ -5,7 +5,12 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import StayCard from '@apps/waypoint/components/StayCard';
 import StayFormModal from '@apps/waypoint/components/StayFormModal';
-import { createStay, deleteStay, updateStay } from '@apps/waypoint/store/actions/stayActions';
+import {
+  createStay,
+  deleteStay,
+  updateStay,
+  updateStayNotes,
+} from '@apps/waypoint/store/actions/stayActions';
 import { selectStays, selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -99,6 +104,11 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
               onEdit={(selectedStay) => {
                 setEditingStay(selectedStay);
                 setIsModalOpen(true);
+              }}
+              onSaveNotes={async (selectedStay, notes) => {
+                await dispatch(
+                  updateStayNotes({ uid: currentUserId, trip, stay: selectedStay, notes }),
+                ).unwrap();
               }}
             />
           ))}

@@ -490,7 +490,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     plannedArrivalAt: Date.UTC(2026, 8, 25, 15),
     plannedDepartureAt: Date.UTC(2026, 8, 27, 11),
     confirmationCode: null,
-    notes: null,
+    notes: 'Door code is 4821. Parking is in the garage off Western Ave.',
     place: null,
     linkUrl: 'https://www.airbnb.com/rooms/00000000',
     linkPreview: {

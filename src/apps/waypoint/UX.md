@@ -314,7 +314,7 @@ block-beta
 | MapNavigationButton | Timeline, Stays, Overview | 1-tap native map deep link — built on DreamerUI's `Button` with an icon; on small screens only Active Now / Up Next show it on the card |
 | LocationLink | Timeline, Stays, Overview | the location text itself as the same map deep link, so directions are one tap even without a button |
 | PlaceDetailsDrawer | Timeline, Stays (small screens) | tapping an event/stay card opens its full details in a DreamerUI `Drawer` with large Navigate / Visit site / Modify actions; larger screens keep the details and buttons on the card |
-| EventNotesField | Timeline cards, PlaceDetailsDrawer | an event's note as its own entry outside the event form — muted left-bar text, with a subtle pencil button on larger cards and an "+ Add note" link in the drawer; editable by whoever can edit the event |
+| NotesField | Timeline & Stays cards, PlaceDetailsDrawer | an event's or stay's note as its own entry outside the event/stay form — muted left-bar text, with a subtle pencil button on larger cards and an "+ Add note" link in the drawer; editable by whoever can edit the event |
 | ChangeBadge | Timeline, Overview | flags an edited event, expands to full history — built on DreamerUI's `Badge`/`Tooltip` |
 | Avatar stack | Events, header, presence | overlapping member avatars — composed from the repo's existing central `UserAvatar.tsx`, not a new component |
 | `Modal` (DreamerUI) | every `*FormModal` | consistent header / body / footer — DreamerUI's existing component, not a custom shell |

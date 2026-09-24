@@ -6,7 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
-import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
+import NotesField from '@apps/waypoint/components/NotesField';
 import EnrichedImage from '@/components/EnrichedImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
@@ -20,7 +20,10 @@ interface StayCardProps {
   stay: Stay;
   canEdit: boolean;
   onEdit: (stay: Stay) => void;
+  onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
+
+const STAY_NOTES_PLACEHOLDER = 'Gate code, host contact, parking instructions…';
 
 function getStayLocation(stay: Stay) {
   const location = {
@@ -36,10 +39,11 @@ interface StayDetailLinesProps {
   stay: Stay;
   showTitle: boolean;
   showExtras: boolean;
-  showNotesButton: boolean;
+  canEdit: boolean;
+  onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
 
-function StayDetailLines({ stay, showTitle, showExtras, showNotesButton }: StayDetailLinesProps) {
+function StayDetailLines({ stay, showTitle, showExtras, canEdit, onSaveNotes }: StayDetailLinesProps) {
   return (
     <>
       <div className='flex flex-wrap items-center gap-2'>
@@ -55,13 +59,9 @@ function StayDetailLines({ stay, showTitle, showExtras, showNotesButton }: StayD
       {stay.checkInTimezone && (
         <p className='text-muted-foreground text-xs'>{formatTimezoneLabel(stay.checkInTimezone)}</p>
       )}
-      {(stay.linkUrl || (showNotesButton && stay.notes)) && (
-        <div
-          className='flex flex-wrap items-center gap-x-4 gap-y-1'
-          onClick={(clickEvent) => clickEvent.stopPropagation()}
-        >
-          {showNotesButton && <StayNotesButton stay={stay} />}
-          {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
+      {stay.linkUrl && (
+        <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+          <ExternalLinkText href={stay.linkUrl} />
         </div>
       )}
       {showExtras && stay.confirmationCode && (
@@ -70,12 +70,21 @@ function StayDetailLines({ stay, showTitle, showExtras, showNotesButton }: StayD
           <span className='font-medium'>{stay.confirmationCode}</span>
         </p>
       )}
-      {showExtras && stay.notes && <p className='text-sm whitespace-pre-line'>{stay.notes}</p>}
+      {showExtras && (
+        <NotesField
+          key={stay.id}
+          notes={stay.notes}
+          canEdit={canEdit}
+          onSave={(notes) => onSaveNotes(stay, notes)}
+          variant='link'
+          placeholder={STAY_NOTES_PLACEHOLDER}
+        />
+      )}
     </>
   );
 }
 
-export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
+export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = getDisplayImage(stay);
@@ -112,7 +121,13 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
         )}
         <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
           <div className='min-w-0 space-y-1'>
-            <StayDetailLines stay={stay} showTitle showExtras={false} showNotesButton={!isSmallScreen} />
+            <StayDetailLines
+              stay={stay}
+              showTitle
+              showExtras={false}
+              canEdit={canEdit}
+              onSaveNotes={onSaveNotes}
+            />
           </div>
           {!isSmallScreen && (
             <div className='flex shrink-0 gap-2'>
@@ -125,6 +140,18 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
             </div>
           )}
         </div>
+        {!isSmallScreen && (stay.notes || canEdit) && (
+          <div className='-mt-2 px-4 pb-3'>
+            <NotesField
+              key={stay.id}
+              notes={stay.notes}
+              canEdit={canEdit}
+              onSave={(notes) => onSaveNotes(stay, notes)}
+              variant='subtle'
+              placeholder={STAY_NOTES_PLACEHOLDER}
+            />
+          </div>
+        )}
       </article>
       {isSmallScreen && (
         <PlaceDetailsDrawer
@@ -136,7 +163,13 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
           linkUrl={stay.linkUrl}
           onEdit={canEdit ? () => onEdit(stay) : null}
         >
-          <StayDetailLines stay={stay} showTitle={false} showExtras showNotesButton={false} />
+          <StayDetailLines
+            stay={stay}
+            showTitle={false}
+            showExtras
+            canEdit={canEdit}
+            onSaveNotes={onSaveNotes}
+          />
         </PlaceDetailsDrawer>
       )}
     </>

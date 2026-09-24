@@ -6,7 +6,6 @@ import {
   Label,
   Modal,
   Select,
-  Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
@@ -52,7 +51,6 @@ interface StayDraft {
   linkUrl: string;
   linkPreview: LinkPreview | null;
   confirmationCode: string;
-  notes: string;
   checkInDate: string;
   checkInTime: string;
   checkOutDate: string;
@@ -75,7 +73,6 @@ function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
     linkUrl: stay?.linkUrl ?? '',
     linkPreview: stay?.linkPreview ?? null,
     confirmationCode: stay?.confirmationCode ?? '',
-    notes: stay?.notes ?? '',
     checkInDate: toLocalDateInputValue(stay?.checkInAt ?? trip.startDate),
     checkInTime: stay ? new Date(stay.checkInAt).toTimeString().slice(0, 5) : '15:00',
     checkOutDate: toLocalDateInputValue(stay?.checkOutAt ?? trip.endDate),
@@ -101,7 +98,6 @@ export function StayFormModal({
   const [draft, setDraft] = useState(() => getInitialDraft(trip, stay));
   const [error, setError] = useState<string | null>(null);
   const [showTimezoneField, setShowTimezoneField] = useState(false);
-  const [showNotesField, setShowNotesField] = useState(Boolean(stay?.notes));
   const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -171,7 +167,7 @@ export function StayFormModal({
         plannedArrivalAt: draftPlannedArrivalAt,
         plannedDepartureAt: draftPlannedDepartureAt,
         confirmationCode: draft.confirmationCode,
-        notes: draft.notes,
+        notes: stay?.notes ?? null,
         place: draft.place,
         linkUrl: draft.linkUrl,
         linkPreview: draft.linkPreview,
@@ -303,27 +299,6 @@ export function StayFormModal({
             />
           </div>
         </div>
-        {showNotesField ? (
-          <div className='space-y-1.5'>
-            <Label>Notes</Label>
-            <Textarea
-              rows={3}
-              value={draft.notes}
-              variant='outline'
-              placeholder='Gate code, host contact, parking instructions…'
-              onChange={(event) => updateDraft({ notes: event.target.value })}
-            />
-          </div>
-        ) : (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            onClick={() => setShowNotesField(true)}
-          >
-            + Add notes
-          </Button>
-        )}
         <ModalFooterActions
           leftActions={
             stay &&
