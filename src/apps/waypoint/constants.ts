@@ -6,6 +6,7 @@ import type {
   EventType,
   ExpenseCategory,
   ExpenseSortBy,
+  ExpenseTotalsView,
   MealType,
   StayType,
   TransitType,
@@ -130,6 +131,11 @@ export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
   { value: 'day', text: 'Day' },
   { value: 'amount-desc', text: 'Amount (high to low)' },
   { value: 'amount-asc', text: 'Amount (low to high)' },
+];
+
+export const EXPENSE_TOTALS_VIEW_OPTIONS: { value: ExpenseTotalsView; label: string }[] = [
+  { value: 'per-person', label: 'Per person' },
+  { value: 'group', label: 'Group' },
 ];
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
