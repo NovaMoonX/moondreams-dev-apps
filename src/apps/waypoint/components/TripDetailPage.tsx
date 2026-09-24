@@ -8,10 +8,12 @@ import {
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
-import { Archive, ArchiveRestore, Pencil } from 'lucide-react';
+import { Archive, ArchiveRestore, Link, Pencil } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import { formatDate } from '@/utils/formatUtils';
 
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
@@ -43,6 +45,7 @@ function TripDetailPage({
   onToggleArchived,
 }: TripDetailPageProps) {
   const now = useNow();
+  const { addToast } = useToast();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
   // An active trip opens with nothing expanded — the live HUD above is the
   // point; a non-active trip keeps the old behavior of opening to Timeline.
@@ -52,6 +55,24 @@ function TripDetailPage({
   const handleViewDay = (dayIndex: number) => {
     setSectionTab('overview');
     setDayTab(String(dayIndex));
+  };
+
+  const handleCopyTripLink = async () => {
+    const copied = await copyToClipboard(
+      `${window.location.origin}/waypoint?trip=${trip.id}`,
+    );
+    addToast(
+      copied
+        ? {
+            title: 'Trip link copied',
+            description: 'Anyone on this trip can use it to jump right in.',
+          }
+        : {
+            title: 'Unable to copy the link',
+            description: 'Please try again.',
+            type: 'error',
+          },
+    );
   };
 
   return (
@@ -83,42 +104,53 @@ function TripDetailPage({
                 {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
               </p>
             </div>
-            {(onEdit || onToggleArchived) && (
-              <div className='flex shrink-0 flex-col gap-1.5 sm:flex-row sm:gap-2'>
-                {onEdit && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    aria-label='Edit trip'
-                    className='px-2 sm:px-3'
-                    onClick={() => onEdit(trip)}
-                  >
-                    <Pencil className='h-4 w-4 sm:hidden' />
-                    <span className='hidden sm:inline'>Edit</span>
-                  </Button>
-                )}
-                {onToggleArchived && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    aria-label={trip.isArchived ? 'Unarchive trip' : 'Archive trip'}
-                    className='px-2 sm:px-3'
-                    onClick={() => onToggleArchived(trip)}
-                  >
-                    {trip.isArchived ? (
-                      <ArchiveRestore className='h-4 w-4 sm:hidden' />
-                    ) : (
-                      <Archive className='h-4 w-4 sm:hidden' />
-                    )}
-                    <span className='hidden sm:inline'>
-                      {trip.isArchived ? 'Unarchive' : 'Archive'}
-                    </span>
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className='flex shrink-0 flex-col gap-1.5 sm:flex-row sm:gap-2'>
+              {onEdit && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  aria-label='Edit trip'
+                  className='px-2 sm:px-3'
+                  onClick={() => onEdit(trip)}
+                >
+                  <Pencil className='h-4 w-4 sm:hidden' />
+                  <span className='hidden sm:inline'>Edit</span>
+                </Button>
+              )}
+              {onToggleArchived && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  aria-label={
+                    trip.isArchived ? 'Unarchive trip' : 'Archive trip'
+                  }
+                  className='px-2 sm:px-3'
+                  onClick={() => onToggleArchived(trip)}
+                >
+                  {trip.isArchived ? (
+                    <ArchiveRestore className='h-4 w-4 sm:hidden' />
+                  ) : (
+                    <Archive className='h-4 w-4 sm:hidden' />
+                  )}
+                  <span className='hidden sm:inline'>
+                    {trip.isArchived ? 'Unarchive' : 'Archive'}
+                  </span>
+                </Button>
+              )}
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                aria-label='Copy trip link'
+                title='Copy trip link'
+                className='px-2'
+                onClick={() => void handleCopyTripLink()}
+              >
+                <Link className='h-4 w-4' />
+              </Button>
+            </div>
           </div>
           <div className='mt-3'>
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
