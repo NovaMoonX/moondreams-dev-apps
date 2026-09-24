@@ -86,6 +86,8 @@ Merges to `main` trigger [`.github/workflows/firebase-hosting-merge.yml`](.githu
 1. Builds the app and deploys Firebase resources (hosting, rules, indexes, functions) via `npm run fb:deploy:smart`, using the `FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS` and `VITE_FIREBASE_*` repo secrets.
 2. Deploys the Cloudflare Worker (`cloudflare-worker.js`, the PWA OG-tag injector) via `npm run cf:worker` (`wrangler deploy`) — but **only if that push changed `cloudflare-worker.js` or `wrangler.toml`**, checked with a `git diff` against the previous commit SHA.
 
+The worker rewrites link-preview tags per mini-app from `APP_REGISTRY`. An app's `params` list gives query-param-specific copy (e.g. Waypoint's `inviteCode`, then `trip`); the first valid param in list order wins, and the app's default title/description is the fallback.
+
 ### Cloudflare Worker secret setup
 
 The worker deploy step needs a `CLOUDFLARE_API_TOKEN` repo secret:
