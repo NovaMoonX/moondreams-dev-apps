@@ -185,6 +185,10 @@ export const updateExpenseSplit = createAsyncThunk<
     targetType: input.targetType,
     targetMemberIds: input.targetMemberIds,
     splitAmounts: input.splitAmounts,
+    category: input.expense.category,
+    customCategoryLabel: input.expense.customCategoryLabel,
+    note: input.expense.note,
+    groupLabel: input.expense.groupLabel,
     lastEditedAt: Date.now(),
   };
 

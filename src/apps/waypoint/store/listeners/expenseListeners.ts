@@ -3,6 +3,20 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import type { TripExpense } from '@apps/waypoint/types';
 
+// Expenses written before category/note/grouping existed lack those keys, and
+// an absent groupLabel reads as undefined rather than the null the UI relies on.
+function normalizeExpense(id: string, data: Partial<TripExpense>): TripExpense {
+  const expense = {
+    ...data,
+    id,
+    category: data.category ?? 'OTHER',
+    customCategoryLabel: data.customCategoryLabel ?? null,
+    note: data.note ?? null,
+    groupLabel: data.groupLabel ?? null,
+  } as TripExpense;
+  return expense;
+}
+
 export function startTripExpensesListener(
   tripId: string | null,
   onChange: (expenses: TripExpense[]) => void,
@@ -15,10 +29,9 @@ export function startTripExpensesListener(
   return onSnapshot(
     collection(db, 'apps', 'waypoint', 'trips', tripId, 'expenses'),
     (snapshot) => {
-      const expenses = snapshot.docs.map((expenseSnapshot) => {
-        const data = expenseSnapshot.data() as Omit<TripExpense, 'id'>;
-        return { id: expenseSnapshot.id, ...data };
-      });
+      const expenses = snapshot.docs.map((expenseSnapshot) =>
+        normalizeExpense(expenseSnapshot.id, expenseSnapshot.data() as Partial<TripExpense>),
+      );
       onChange(expenses);
     },
     () => onChange([]),

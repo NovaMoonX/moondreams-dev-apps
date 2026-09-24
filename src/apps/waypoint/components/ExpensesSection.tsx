@@ -354,7 +354,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
-        <div className='flex items-center gap-3'>
+        <div className='flex w-full items-center justify-between gap-3 sm:w-auto'>
           <span className='font-medium'>
             {expense.status === 'PAID' && expense.paidAmount !== null
               ? formatTotal(expense.paidAmount, expense.paidAmount, expense.currency)
@@ -364,40 +364,42 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   expense.currency,
                 )}
           </span>
-          {canAddExpenses && expense.status === 'EXPECTED' && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              disabled={markingPaidId === expense.id}
-              onClick={() => setPayingExpense(expense)}
-            >
-              {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
-            </Button>
-          )}
-          {canAddExpenses && getResolvedExpenseAmount(expense) !== null && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => setSplittingExpense(expense)}
-            >
-              Edit split
-            </Button>
-          )}
-          {canAddExpenses && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => {
-                setEditingExpense(expense);
-                setIsModalOpen(true);
-              }}
-            >
-              Modify
-            </Button>
-          )}
+          <div className='flex flex-wrap items-center justify-end gap-2'>
+            {canAddExpenses && expense.status === 'EXPECTED' && (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                disabled={markingPaidId === expense.id}
+                onClick={() => setPayingExpense(expense)}
+              >
+                {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
+              </Button>
+            )}
+            {canAddExpenses && getResolvedExpenseAmount(expense) !== null && (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => setSplittingExpense(expense)}
+              >
+                Edit split
+              </Button>
+            )}
+            {canAddExpenses && (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => {
+                  setEditingExpense(expense);
+                  setIsModalOpen(true);
+                }}
+              >
+                Modify
+              </Button>
+            )}
+          </div>
         </div>
       </li>
     );
