@@ -1,3 +1,9 @@
+const SITE_NAME = 'Moondreams Dev Apps';
+
+const hasInviteCode = (value) => value?.trim().length === 6;
+const isPresent = (value) => Boolean(value?.trim());
+
+// `params` is checked in order and the first valid match wins, so list the most specific link first.
 const APP_REGISTRY = [
   {
     id: 'worth-the-wait',
@@ -8,14 +14,15 @@ const APP_REGISTRY = [
       'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
     image:
       'https://moondreams-dev-apps.web.app/banners/by-app/banner-worth-the-wait.png',
-    params: {
-      inviteCode: {
-        isValid: (value) => value && value.length === 6,
+    params: [
+      {
+        name: 'inviteCode',
+        isValid: hasInviteCode,
         title: "You've been invited to join a private space on Worth the Wait",
         description:
           "You've been invited to join a private space on Worth the Wait. Accept this invitation to join the space and share your thoughts, feelings, hopes, and desires until we're ready to explore them together.",
       },
-    },
+    ],
   },
   {
     id: 'nine-lives',
@@ -36,8 +43,46 @@ const APP_REGISTRY = [
       'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
     image:
       'https://moondreams-dev-apps.web.app/banners/by-app/banner-waypoint.png',
+    params: [
+      {
+        name: 'inviteCode',
+        isValid: hasInviteCode,
+        title: "You're invited to plan a trip together on Waypoint",
+        description:
+          "Someone saved you a seat on their trip. Request to join and, once you're approved, you'll see the itinerary, stays, and shared expenses all in one place.",
+      },
+      {
+        name: 'trip',
+        isValid: isPresent,
+        title: 'A trip on Waypoint',
+        description:
+          "Open the trip to catch up on the itinerary, today's plans, stays, and shared expenses. Trip members can jump right in.",
+      },
+    ],
   },
 ];
+
+function getAppMeta(url) {
+  const app = APP_REGISTRY.find((entry) => url.pathname.startsWith(entry.path));
+  if (!app) {
+    return null;
+  }
+
+  const match = (app.params ?? []).find(({ name, isValid }) =>
+    isValid(url.searchParams.get(name)),
+  );
+  if (!match) {
+    return app;
+  }
+
+  const meta = {
+    ...app,
+    title: match.title,
+    description: match.description,
+    siteName: SITE_NAME,
+  };
+  return meta;
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -53,23 +98,7 @@ export default {
     // Fetch the standard index.html response from Firebase Hosting
     const response = await fetch(request);
 
-    // Match the route path
-    const appMeta = APP_REGISTRY.find((app) =>
-      url.pathname.startsWith(app.path),
-    );
-
-    if (appMeta && appMeta.params) {
-      // Check for query parameters and validate them
-      const searchParams = new URLSearchParams(url.search);
-      for (const [param, config] of Object.entries(appMeta.params)) {
-        const value = searchParams.get(param);
-        if (config.isValid && config.isValid(value)) {
-          appMeta.title = config.title;
-          appMeta.description = config.description;
-          appMeta.siteName = 'Moondreams Dev Apps';
-        }
-      }
-    }
+    const appMeta = getAppMeta(url);
 
     // If it's a social bot and we have custom meta for this route, rewrite the HTML tags
     if (appMeta && isBot) {
