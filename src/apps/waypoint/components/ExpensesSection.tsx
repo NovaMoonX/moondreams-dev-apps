@@ -619,8 +619,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </ul>
         )}
       </div>
-      <div className='flex items-center gap-2'>
-        <div className='min-w-0 flex-1'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <Input
             type='search'
             placeholder='Search expenses'
@@ -631,7 +631,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           />
         </div>
         <Select
-          className='w-44 shrink-0'
+          className='min-w-0 flex-1 sm:w-44 sm:flex-none'
           options={EXPENSE_SORT_OPTIONS}
           value={sortBy}
           onChange={(value) => setSortBy(value as ExpenseSortBy)}
