@@ -94,9 +94,32 @@ function parseInput(data: unknown): ShiftTripDatesInput {
   };
 }
 
-/** Re-dates a trip after its start/end date changes, with the Admin SDK: it
- * can't time out the caller, and it can reschedule a reminder directly where
- * a client write could only ever cancel one. */
+/**
+ * Re-dates a trip's items after its start/end date changes. Called for every
+ * date change; the trip document's own new dates are written last.
+ *
+ * Only some items are purely relative to the trip's start:
+ *   - expenses (`dayIndex`) and checklist items (`completeByDayIndex`) store
+ *     just a day number, nullable ("no specific day");
+ *   - events store a required `dayIndex` AND an absolute `startAt`/`endAt`
+ *     (what the clock times, reminders, "Active now" and sorting read);
+ *   - stays store only absolute `checkInAt`/`checkOutAt`, no day number.
+ *
+ * shiftDates = true ("Day 1 stays Day 1"): day numbers are left alone, so
+ * expenses/checklist need no writes. Event and stay timestamps move by the
+ * start-date delta, and each event's pending reminder is rescheduled. Items
+ * now past the new last day keep an out-of-range day number (the modal warns).
+ *
+ * shiftDates = false ("keep exact dates"): timestamps are left alone and day
+ * numbers are recomputed against the new start. Expenses/checklist outside
+ * the new range become null; events are clamped into range, since their
+ * `dayIndex` can't be null. Stays have no day number, so nothing changes.
+ *
+ * Either way, events/stays missing `place`/`linkUrl`/`linkPreview` get them
+ * backfilled to null so the rules' shape check can't block the next write.
+ * `trip.dateShiftStatus` is 'PENDING' for the duration, which makes the
+ * trip read-only in firestore.rules; this Admin SDK code bypasses that.
+ */
 export const shiftTripDates = onCall(
   {
     region: 'us-central1',

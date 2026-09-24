@@ -19,6 +19,7 @@ interface StayCardProps {
 export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   const imageUrl = getDisplayImage(stay);
 
+  console.log('stay.stayType', stay.stayType); // REMOVE
   return (
     <article className='border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row'>
       {imageUrl && (
@@ -33,7 +34,7 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
           <div className='flex flex-wrap items-center gap-2'>
             <h3 className='font-semibold'>{stay.name}</h3>
             <Badge variant='muted' outline>
-              {STAY_TYPE_LABELS[stay.stayType]}
+              {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
             </Badge>
           </div>
           <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
