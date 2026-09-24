@@ -490,16 +490,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       const groupTotals = computeExpenseTotals(cluster.items, memberIds);
 
       return (
-        <li key={`group-${cluster.groupLabel}-${index}`} className='border-border rounded-lg border py-1'>
-          <div className='flex items-center justify-between px-3 py-2'>
-            <span className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              {cluster.groupLabel}
-            </span>
-            <span className='text-muted-foreground text-xs font-medium'>
+        <li key={`group-${cluster.groupLabel}-${index}`} className='py-3'>
+          <div className='grid grid-cols-[1fr_auto] gap-x-3'>
+            <div className='min-w-0'>
+              <p className='font-medium'>{cluster.groupLabel}</p>
+              <p className='text-muted-foreground text-sm'>
+                {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
+              </p>
+            </div>
+            <p className='font-medium whitespace-nowrap'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
-            </span>
+            </p>
           </div>
-          <ul className='divide-border divide-y px-3'>{cluster.items.map(renderExpenseRow)}</ul>
+          <ul className='divide-border border-border mt-1 ml-1 divide-y border-l pl-3'>
+            {cluster.items.map(renderExpenseRow)}
+          </ul>
         </li>
       );
     });
