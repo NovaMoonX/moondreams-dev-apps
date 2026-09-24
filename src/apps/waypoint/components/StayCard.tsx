@@ -54,7 +54,7 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
         </div>
         <div className='flex shrink-0 justify-end gap-2 sm:justify-start'>
           <MapNavigationButton
-            locationName={stay.stayType === 'HOTEL' ? stay.name : null} // Only include the name for hotels
+            locationName={stay.stayType === 'HOTEL' ? stay.name : null}
             address={stay.address}
             latitude={stay.latitude}
             longitude={stay.longitude}
