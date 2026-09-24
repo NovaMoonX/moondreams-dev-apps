@@ -349,10 +349,11 @@ interface TripExpense {
   amountMin: number | null; // for an estimate/range instead of a known figure (e.g. "$10-$30")
   amountMax: number | null;
   currency: string;
+  isPerPerson: boolean; // amount fields are per person; totals, dues, and the split multiply by the split's headcount
   payerUid: string;
   status: ExpenseStatus; // PAID or EXPECTED/upcoming
   targetType: ExpenseTargetType; // defaults to EVERYONE_CURRENT on Add; changeable via the separate Split action
-  targetMemberIds: string[]; // snapshot for EVERYONE_CURRENT/SPECIFIC_MEMBERS; [] for EVERYONE_INCLUDING_FUTURE (computed live from trip.members) and JUST_ME (implied as [payerUid])
+  targetMemberIds: string[]; // snapshot for EVERYONE_CURRENT (informational only; "Everyone" resolves against current members) and SPECIFIC_MEMBERS; [] for EVERYONE_INCLUDING_FUTURE (computed live from trip.members) and JUST_ME (implied as [payerUid])
   splitAmounts: Record<string, number> | null; // per-member override once adjusted away from the auto-suggested even split; null = still even
   paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
   createdBy: string;
@@ -521,7 +522,7 @@ While the function runs, `trip.dateShiftStatus` is `'PENDING'` — `firestore.ru
 
 Client-side (`splitCalculators.ts`) over the already-loaded expenses, with two qualifications the earlier draft didn't have:
 - **Only `status: 'PAID'` expenses with a resolved `amount` feed the dues calculation.** An `EXPECTED`/range expense contributes to the Expected and Total figures on the Expenses screen, but not to "who owes whom" yet — it doesn't have a final, splittable number until it's actually paid.
-- **`EVERYONE_INCLUDING_FUTURE` expenses compute their share against the trip's *current* `members` at calculation time**, not a stored snapshot — since that's the entire point of the option. `EVERYONE_CURRENT` and `SPECIFIC_MEMBERS` use the stored `targetMemberIds` snapshot instead. `splitAmounts`, when set, overrides the even split per member; otherwise it's a plain even division across whichever member set applies.
+- **"Everyone" expenses (`EVERYONE_CURRENT`, and the legacy `EVERYONE_INCLUDING_FUTURE`) compute their share against the trip's *current* `members` at calculation time**, not the stored `targetMemberIds` snapshot, so someone who joins later is included even in already-paid dues. The Split modal offers a single "Everyone on the trip" option. `SPECIFIC_MEMBERS` uses the stored `targetMemberIds`. `splitAmounts`, when set, overrides the even split per member, but only while it covers everyone in the split; once a new member is missing from it, the split falls back to an even division across whichever member set applies.
 
 **6. Total Expenses Rollup (derived, not stored)**
 

@@ -1891,7 +1891,7 @@ service cloud.firestore {
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
             'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'category',
             'customCategoryLabel', 'targetType', 'targetMemberIds', 'splitAmounts',
-            'paidMemberStatus', 'note', 'groupLabel',
+            'paidMemberStatus', 'note', 'groupLabel', 'isPerPerson',
             'createdBy', 'createdAt', 'lastEditedAt'
           ])
           && data.id == expenseId
@@ -1921,6 +1921,7 @@ service cloud.firestore {
           && data.paidMemberStatus is map
           && (data.note == null || data.note is string)
           && (data.groupLabel == null || isNonEmptyString(data.groupLabel))
+          && data.get('isPerPerson', false) is bool
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);

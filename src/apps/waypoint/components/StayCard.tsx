@@ -19,7 +19,6 @@ interface StayCardProps {
 export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   const imageUrl = getDisplayImage(stay);
 
-  console.log('stay.stayType', stay.stayType); // REMOVE
   return (
     <article className='border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row'>
       {imageUrl && (
@@ -55,7 +54,7 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
         </div>
         <div className='flex shrink-0 justify-end gap-2 sm:justify-start'>
           <MapNavigationButton
-            locationName={stay.name}
+            locationName={stay.stayType === 'HOTEL' ? stay.name : null}
             address={stay.address}
             latitude={stay.latitude}
             longitude={stay.longitude}

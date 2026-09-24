@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Badge, Button, Drawer, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
@@ -8,7 +9,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { EXPENSE_SORT_OPTIONS } from '@apps/waypoint/constants';
+import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
@@ -29,7 +30,13 @@ import {
   selectTripExpenses,
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
-import type { ExpenseSortBy, ExpenseStatus, TripExpense, TripSpace } from '@apps/waypoint/types';
+import type {
+  ExpenseSortBy,
+  ExpenseStatus,
+  ExpenseTotalsView,
+  TripExpense,
+  TripSpace,
+} from '@apps/waypoint/types';
 import {
   getExpenseCategoryKey,
   getExpenseCategoryKeyLabel,
@@ -38,8 +45,12 @@ import {
 import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
+  getActiveSplitAmounts,
+  getDebtExpenses,
+  getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
+  scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
 
 interface ExpensesSectionProps {
@@ -47,14 +58,32 @@ interface ExpensesSectionProps {
   currentUserId: string;
 }
 
-function isCustomSplit(expense: TripExpense): boolean {
-  return expense.targetType !== 'EVERYONE_CURRENT' || expense.splitAmounts !== null;
+function isCustomSplit(expense: TripExpense, memberIds: string[]): boolean {
+  return (
+    !['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE'].includes(expense.targetType) ||
+    getActiveSplitAmounts(expense, memberIds) !== null
+  );
 }
 
-function getSortAmount(expense: TripExpense): number {
-  return (
-    getResolvedExpenseAmount(expense) ?? expense.amountMax ?? expense.amountMin ?? 0
+function getSortAmount(expense: TripExpense, memberIds: string[]): number {
+  const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
+  const amount = scaleAmount(
+    getResolvedExpenseAmount(expense) ?? expense.amountMax ?? expense.amountMin ?? 0,
+    multiplier,
   );
+  return amount;
+}
+
+function getDisplayRange(expense: TripExpense): { min: number; max: number } {
+  if (expense.status === 'PAID' && expense.paidAmount !== null) {
+    return { min: expense.paidAmount, max: expense.paidAmount };
+  }
+
+  const range = {
+    min: expense.amount ?? expense.amountMin ?? 0,
+    max: expense.amount ?? expense.amountMax ?? expense.amountMin ?? 0,
+  };
+  return range;
 }
 
 function getSplitTargetLabel(
@@ -63,9 +92,8 @@ function getSplitTargetLabel(
 ): string {
   switch (expense.targetType) {
     case 'EVERYONE_CURRENT':
-      return 'Everyone';
     case 'EVERYONE_INCLUDING_FUTURE':
-      return 'Everyone, including future members';
+      return 'Everyone';
     case 'JUST_ME':
       return expense.payerUid ? `Just ${memberLabel(expense.payerUid)}` : 'Just the payer';
     case 'SPECIFIC_MEMBERS':
@@ -84,7 +112,7 @@ function describeSplit(
     return `Split · ${targetLabel}`;
   }
 
-  return expense.splitAmounts !== null
+  return getActiveSplitAmounts(expense, memberIds) !== null
     ? `Split · ${targetLabel} (custom)`
     : `Split · ${targetLabel} (even)`;
 }
@@ -123,6 +151,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const expenses = useAppSelector(selectTripExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
+  const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
   const [payerFilter, setPayerFilter] = useState<string[]>([]);
@@ -173,7 +202,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const matchesCategory =
       categoryFilter.length === 0 || categoryFilter.includes(getExpenseCategoryKey(expense));
     const matchesRanged = !rangedOnly || expense.amount === null;
-    const matchesSplit = !splitOnly || isCustomSplit(expense);
+    const matchesSplit = !splitOnly || isCustomSplit(expense, memberIds);
     const matchesSearch =
       searchQuery.trim() === '' ||
       expense.title.toLowerCase().includes(searchQuery.trim().toLowerCase());
@@ -204,11 +233,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setRangedOnly(false);
     setSplitOnly(false);
   };
-  const totals = computeExpenseTotals(filteredExpenses);
+  const toTotalsView = (total: TripExpenseTotals['total']): TripExpenseTotals['total'] => {
+    if (totalsView === 'group') {
+      return total;
+    }
+
+    const headcount = Math.max(1, memberIds.length);
+    const perPerson = {
+      min: scaleAmount(total.min, 1 / headcount),
+      max: scaleAmount(total.max, 1 / headcount),
+    };
+    return perPerson;
+  };
+  const totals = computeExpenseTotals(expenses, memberIds);
+  const filteredTotal = toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
-    { label: 'Paid so far', total: totals.paid },
-    { label: 'Expected (not yet paid)', total: totals.expected },
-    { label: 'Total', total: totals.total },
+    { label: 'Paid', total: toTotalsView(totals.paid) },
+    { label: 'Expected', total: toTotalsView(totals.expected) },
+    { label: 'Total', total: toTotalsView(totals.total) },
   ];
   const duesSummary = computeDuesSummary(expenses, memberIds);
 
@@ -217,8 +259,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ? filteredExpenses
       : [...filteredExpenses].sort((a, b) =>
           sortBy === 'amount-desc'
-            ? getSortAmount(b) - getSortAmount(a)
-            : getSortAmount(a) - getSortAmount(b),
+            ? getSortAmount(b, memberIds) - getSortAmount(a, memberIds)
+            : getSortAmount(a, memberIds) - getSortAmount(b, memberIds),
         );
 
   const dayGroups =
@@ -255,6 +297,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             customCategoryLabel: values.customCategoryLabel,
             note: values.note,
             groupLabel: values.groupLabel,
+            isPerPerson: values.isPerPerson,
           }),
         ).unwrap();
       } else {
@@ -336,10 +379,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           ? memberLabel(expense.payerUid)
           : 'Paid by each person'
         : 'Not yet paid';
+    const displayRange = getDisplayRange(expense);
+    const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
 
     return (
-      <li key={expense.id} className='flex flex-wrap items-center justify-between gap-3 py-3'>
-        <div className='min-w-0'>
+      <li
+        key={expense.id}
+        className='grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3'
+      >
+        <div className='col-span-2 min-w-0 sm:col-span-1'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
             {expense.status === 'PAID' ? 'Paid' : 'Expected'} · {payerLine}
@@ -348,22 +396,33 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <Badge variant='muted' outline>
               {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))}
             </Badge>
-            <Badge variant='muted' outline>
-              {splitDescription}
-            </Badge>
+            {expense.status === 'PAID' && (
+              <Badge variant='muted' outline>
+                {splitDescription}
+              </Badge>
+            )}
           </div>
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
-        <div className='flex items-center gap-3'>
-          <span className='font-medium'>
-            {expense.status === 'PAID' && expense.paidAmount !== null
-              ? formatTotal(expense.paidAmount, expense.paidAmount, expense.currency)
-              : formatTotal(
-                  expense.amount ?? expense.amountMin ?? 0,
-                  expense.amount ?? expense.amountMax ?? expense.amountMin ?? 0,
-                  expense.currency,
-                )}
-          </span>
+        <div className='col-start-1 whitespace-nowrap'>
+          <p className='font-medium'>
+            {formatTotal(displayRange.min, displayRange.max, expense.currency)}
+            {expense.isPerPerson && (
+              <span className='text-muted-foreground text-sm font-normal'> per person</span>
+            )}
+          </p>
+          {expense.isPerPerson && (
+            <p className='text-muted-foreground text-xs'>
+              {formatTotal(
+                scaleAmount(displayRange.min, multiplier),
+                scaleAmount(displayRange.max, multiplier),
+                expense.currency,
+              )}{' '}
+              total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
+            </p>
+          )}
+        </div>
+        <div className='flex flex-wrap items-center justify-end gap-2 sm:col-start-2 sm:row-span-2 sm:row-start-1'>
           {canAddExpenses && expense.status === 'EXPECTED' && (
             <Button
               type='button'
@@ -404,15 +463,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const renderClusters = (items: TripExpense[]) =>
-    clusterByGroup(items).map((cluster) => {
+    clusterByGroup(items).map((cluster, index) => {
       if (cluster.groupLabel === null) {
         return renderExpenseRow(cluster.items[0]);
       }
 
-      const groupTotals = computeExpenseTotals(cluster.items);
+      const groupTotals = computeExpenseTotals(cluster.items, memberIds);
 
       return (
-        <li key={`group-${cluster.groupLabel}`} className='border-border rounded-lg border py-1'>
+        <li key={`group-${cluster.groupLabel}-${index}`} className='border-border rounded-lg border py-1'>
           <div className='flex items-center justify-between px-3 py-2'>
             <span className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
               {cluster.groupLabel}
@@ -483,7 +542,27 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       <div className='grid gap-3 sm:grid-cols-3'>
         {totalCards.map(({ label, total }) => (
           <div key={label} className='border-border rounded-lg border p-3'>
-            <p className='text-muted-foreground text-sm'>{label}</p>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <p className='text-muted-foreground text-sm'>{label}</p>
+              <div className='border-border flex items-center gap-1 rounded-md border p-0.5'>
+                {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type='button'
+                    variant={totalsView === option.value ? 'primary' : 'secondary'}
+                    size='sm'
+                    aria-pressed={totalsView === option.value}
+                    className={join(
+                      'h-6 px-2 text-xs',
+                      totalsView !== option.value && 'bg-transparent',
+                    )}
+                    onClick={() => setTotalsView(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <p className='mt-1 text-lg font-semibold'>
               {formatTotal(total.min, total.max, currency)}
             </p>
@@ -498,14 +577,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </p>
         ) : (
           <ul className='mt-2 space-y-1'>
-            {duesSummary.debts.map((debt) => (
-              <li key={`${debt.from}-${debt.to}`} className='text-sm'>
-                {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
-                <span className='font-medium'>
-                  {formatTotal(debt.amount, debt.amount, currency)}
-                </span>
-              </li>
-            ))}
+            {duesSummary.debts.map((debt) => {
+              const debtItems = getDebtExpenses(debt, expenses, memberIds)
+                .map((expense) => expense.title)
+                .join(', ');
+
+              return (
+                <li key={`${debt.from}-${debt.to}`} className='text-sm'>
+                  {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
+                  <span className='font-medium'>
+                    {formatTotal(debt.amount, debt.amount, currency)}
+                  </span>
+                  {debtItems && <span className='text-muted-foreground'> ({debtItems})</span>}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -615,17 +701,31 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <p className='text-muted-foreground text-sm'>
           No expenses for this selection.
         </p>
-      ) : dayGroups ? (
-        <div className='space-y-3'>
-          {dayGroups.map(({ dayIndex, items }) => (
-            <div key={dayIndex ?? 'no-day'} className='space-y-3'>
-              {renderDivider(dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex))}
-              <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
-            </div>
-          ))}
-        </div>
       ) : (
-        <ul className='divide-border divide-y'>{renderClusters(sortedExpenses)}</ul>
+        <div className='space-y-3'>
+          <div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
+            <p className='text-sm font-medium whitespace-nowrap'>
+              {filteredExpenses.length === expenses.length ? 'All expenses' : 'Filtered expenses'}{' '}
+              <span className='text-muted-foreground font-normal'>({filteredExpenses.length})</span>
+            </p>
+            <p className='text-sm font-semibold whitespace-nowrap'>
+              {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
+              {totalsView === 'per-person' && (
+                <span className='text-muted-foreground font-normal'> per person</span>
+              )}
+            </p>
+          </div>
+          {dayGroups ? (
+            dayGroups.map(({ dayIndex, items }) => (
+              <div key={dayIndex ?? 'no-day'} className='space-y-3'>
+                {renderDivider(dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex))}
+                <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
+              </div>
+            ))
+          ) : (
+            <ul className='divide-border divide-y'>{renderClusters(sortedExpenses)}</ul>
+          )}
+        </div>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <ExpenseFormModal

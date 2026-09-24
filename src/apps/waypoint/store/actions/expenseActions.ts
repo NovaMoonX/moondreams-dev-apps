@@ -25,6 +25,7 @@ interface CreateExpenseInput {
   customCategoryLabel: string | null;
   note: string | null;
   groupLabel: string | null;
+  isPerPerson: boolean;
 }
 
 export const createExpense = createAsyncThunk<
@@ -74,6 +75,7 @@ export const createExpense = createAsyncThunk<
     amountMax: input.amountMax,
     paidAmount: null,
     currency,
+    isPerPerson: input.isPerPerson,
     payerUid: input.status === 'PAID' ? input.payerUid : null,
     status: input.status,
     category: input.category,
@@ -108,6 +110,7 @@ interface UpdateExpenseInput {
   customCategoryLabel: string | null;
   note: string | null;
   groupLabel: string | null;
+  isPerPerson: boolean;
 }
 
 export const updateExpense = createAsyncThunk<
@@ -155,6 +158,7 @@ export const updateExpense = createAsyncThunk<
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
     note: input.note?.trim() || null,
     groupLabel: input.groupLabel?.trim() || null,
+    isPerPerson: input.isPerPerson,
     lastEditedAt: Date.now(),
   };
 
@@ -185,6 +189,11 @@ export const updateExpenseSplit = createAsyncThunk<
     targetType: input.targetType,
     targetMemberIds: input.targetMemberIds,
     splitAmounts: input.splitAmounts,
+    category: input.expense.category,
+    customCategoryLabel: input.expense.customCategoryLabel,
+    note: input.expense.note,
+    groupLabel: input.expense.groupLabel,
+    isPerPerson: input.expense.isPerPerson,
     lastEditedAt: Date.now(),
   };
 
