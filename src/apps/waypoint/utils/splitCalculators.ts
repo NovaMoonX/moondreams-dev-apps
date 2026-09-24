@@ -105,41 +105,68 @@ export interface DuesSummary {
   debts: SimplifiedDebt[];
 }
 
+interface ExpenseShares {
+  payerUid: string;
+  total: number;
+  shares: Record<string, number>;
+  memberIds: string[];
+}
+
+function getExpenseShares(
+  expense: TripExpense,
+  currentMemberIds: string[],
+): ExpenseShares | null {
+  // A null payer means everyone paid their own share directly — nothing to settle.
+  if (expense.status !== 'PAID' || expense.payerUid === null) {
+    return null;
+  }
+
+  const total = getExpenseTotalAmount(expense, currentMemberIds);
+  const memberIds = getSplitMemberIds(expense, currentMemberIds);
+  if (total === null || memberIds.length === 0) {
+    return null;
+  }
+
+  const shares =
+    getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(memberIds, total);
+  const result = { payerUid: expense.payerUid, total, shares, memberIds };
+  return result;
+}
+
 export function computeDuesSummary(
   expenses: TripExpense[],
   currentMemberIds: string[],
 ): DuesSummary {
-  const balances: Record<string, number> = {};
-  const addBalance = (uid: string, delta: number) => {
-    balances[uid] = (balances[uid] ?? 0) + delta;
-  };
-
-  for (const expense of expenses) {
-    // A null payer means everyone paid their own share directly — nothing to settle.
-    if (expense.status !== 'PAID' || expense.payerUid === null) {
-      continue;
-    }
-
-    const resolvedAmount = getExpenseTotalAmount(expense, currentMemberIds);
-    if (resolvedAmount === null) {
-      continue;
-    }
-
-    const memberIds = getSplitMemberIds(expense, currentMemberIds);
-    if (memberIds.length === 0) {
-      continue;
-    }
-
-    const shares =
-      getActiveSplitAmounts(expense, currentMemberIds) ??
-      computeEvenSplit(memberIds, resolvedAmount);
-    addBalance(expense.payerUid, resolvedAmount);
-    for (const uid of memberIds) {
-      addBalance(uid, -(shares[uid] ?? 0));
-    }
-  }
+  const balances = expenses
+    .map((expense) => getExpenseShares(expense, currentMemberIds))
+    .filter((entry): entry is ExpenseShares => entry !== null)
+    .reduce<Record<string, number>>((acc, { payerUid, total, shares, memberIds }) => {
+      const withPayer = { ...acc, [payerUid]: (acc[payerUid] ?? 0) + total };
+      return memberIds.reduce(
+        (next, uid) => ({ ...next, [uid]: (next[uid] ?? 0) - (shares[uid] ?? 0) }),
+        withPayer,
+      );
+    }, {});
 
   return { balances, debts: simplifyDebts(balances) };
+}
+
+export function getDebtExpenses(
+  debt: Pick<SimplifiedDebt, 'from' | 'to'>,
+  expenses: TripExpense[],
+  currentMemberIds: string[],
+): TripExpense[] {
+  const debtExpenses = expenses.filter((expense) => {
+    const entry = getExpenseShares(expense, currentMemberIds);
+    if (!entry) {
+      return false;
+    }
+
+    const owes = (payer: string, other: string) =>
+      entry.payerUid === payer && (entry.shares[other] ?? 0) > EPSILON;
+    return owes(debt.to, debt.from) || owes(debt.from, debt.to);
+  });
+  return debtExpenses;
 }
 
 function simplifyDebts(balances: Record<string, number>): SimplifiedDebt[] {

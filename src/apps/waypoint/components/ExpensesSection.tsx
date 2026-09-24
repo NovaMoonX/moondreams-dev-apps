@@ -39,6 +39,7 @@ import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
   getActiveSplitAmounts,
+  getDebtExpenses,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
@@ -535,14 +536,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </p>
         ) : (
           <ul className='mt-2 space-y-1'>
-            {duesSummary.debts.map((debt) => (
-              <li key={`${debt.from}-${debt.to}`} className='text-sm'>
-                {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
-                <span className='font-medium'>
-                  {formatTotal(debt.amount, debt.amount, currency)}
-                </span>
-              </li>
-            ))}
+            {duesSummary.debts.map((debt) => {
+              const debtItems = getDebtExpenses(debt, expenses, memberIds)
+                .map((expense) => expense.title)
+                .join(', ');
+
+              return (
+                <li key={`${debt.from}-${debt.to}`} className='text-sm'>
+                  {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
+                  <span className='font-medium'>
+                    {formatTotal(debt.amount, debt.amount, currency)}
+                  </span>
+                  {debtItems && <span className='text-muted-foreground'> ({debtItems})</span>}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
