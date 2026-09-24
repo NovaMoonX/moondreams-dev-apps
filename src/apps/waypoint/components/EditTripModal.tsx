@@ -10,9 +10,16 @@ import {
 import ImageUploadField from '@/components/forms/ImageUploadField';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
+import { getDayCount } from '@/utils/dateRangeUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+import { useAppSelector } from '@/store';
 
+import {
+  selectStays,
+  selectTimelineEvents,
+  selectTripExpenses,
+} from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 
@@ -43,6 +50,10 @@ function EditTripModal({
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<EditTripFormData | null>(null);
   const coverUpload = useImageUpload(trip?.coverImageUrl ?? null);
+  const events = useAppSelector(selectTimelineEvents);
+  const stays = useAppSelector(selectStays);
+  const expenses = useAppSelector(selectTripExpenses);
+  const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
 
   const fields = useMemo(
     () => [
@@ -117,6 +128,38 @@ function EditTripModal({
     fromDateInputValue(currentData.startDate) !== undefined &&
     fromDateInputValue(currentData.endDate) !== undefined;
 
+  const hasDatedItems =
+    events.length > 0 ||
+    stays.length > 0 ||
+    expenses.length > 0 ||
+    checklistItems.length > 0;
+  const newStartDate = fromDateInputValue(currentData.startDate);
+  const newEndDate = fromDateInputValue(currentData.endDate);
+  const willShiftDates =
+    hasDatedItems && newStartDate !== undefined && newStartDate !== trip.startDate;
+  const newDayCount =
+    newStartDate !== undefined && newEndDate !== undefined
+      ? getDayCount(newStartDate, newEndDate)
+      : null;
+  const dateDelta = newStartDate !== undefined ? newStartDate - trip.startDate : 0;
+  const willOrphanItems =
+    newDayCount !== null &&
+    newStartDate !== undefined &&
+    newEndDate !== undefined &&
+    (events.some((event) => event.endDayIndex >= newDayCount) ||
+      expenses.some(
+        (expense) => expense.dayIndex !== null && expense.dayIndex >= newDayCount,
+      ) ||
+      checklistItems.some(
+        (item) =>
+          item.completeByDayIndex !== null && item.completeByDayIndex >= newDayCount,
+      ) ||
+      stays.some((stay) => {
+        const shiftedCheckIn = stay.checkInAt + dateDelta;
+        const shiftedCheckOut = stay.checkOutAt + dateDelta;
+        return shiftedCheckIn < newStartDate || shiftedCheckOut > newEndDate;
+      }));
+
   const handleSubmit = async (data: EditTripFormData) => {
     const title = data.title.trim();
     const startDate = fromDateInputValue(data.startDate);
@@ -151,6 +194,18 @@ function EditTripModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Trip details'>
+      {willShiftDates && (
+        <p className='text-muted-foreground mb-3 text-sm'>
+          Moving the start date will shift every event, stay, expense, and checklist due
+          date on this trip by the same amount.
+        </p>
+      )}
+      {willOrphanItems && (
+        <p className='text-destructive mb-3 text-sm'>
+          These dates are shorter than before — some events, stays, expenses, or
+          checklist items fall outside the new range and will lose their day.
+        </p>
+      )}
       <Form
         key={trip.id}
         id='waypoint-edit-trip'

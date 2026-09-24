@@ -18,6 +18,7 @@ import {
   validateTripDates,
 } from '@apps/waypoint/security';
 import { upsertTrip } from '@apps/waypoint/store/slices/tripSlice';
+import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 
 export const WAYPOINT_CODE_LENGTH = 6;
 export const getTripCoverStoragePath = (tripId: string) =>
@@ -143,7 +144,7 @@ function getShiftedTimestamp(value: unknown, delta: number) {
 const FIRESTORE_BATCH_LIMIT = 450;
 
 async function commitInChunks(
-  updates: { ref: DocumentReference; data: Record<string, number> }[],
+  updates: { ref: DocumentReference; data: Record<string, unknown> }[],
 ) {
   for (let i = 0; i < updates.length; i += FIRESTORE_BATCH_LIMIT) {
     const chunk = updates.slice(i, i + FIRESTORE_BATCH_LIMIT);
@@ -203,29 +204,70 @@ export const editTrip = createAsyncThunk<
 
       const timestampUpdates: {
         ref: DocumentReference;
-        data: Record<string, number>;
+        data: Record<string, unknown>;
       }[] = [];
 
-      eventsSnapshot.docs.forEach((eventSnapshot) => {
-        const data = eventSnapshot.data();
-        const updates: Record<string, number> = {};
-        const shiftedStartAt = getShiftedTimestamp(data.startAt, dateDelta);
-        const shiftedEndAt = getShiftedTimestamp(data.endAt, dateDelta);
+      // A document missing one of these (rather than holding an explicit
+      // `null`) fails the security rules' shape check on any write — even
+      // one that never touches the field — since the rule can't tell "no
+      // value" from "no key". Backfilling them here heals such a document
+      // the next time its trip's dates shift.
+      const backfillIfMissing = (
+        updates: Record<string, unknown>,
+        data: Record<string, unknown>,
+        fields: readonly string[],
+      ) => {
+        fields.forEach((field) => {
+          if (!(field in data)) {
+            updates[field] = null;
+          }
+        });
+      };
 
-        if (shiftedStartAt !== null) {
-          updates.startAt = shiftedStartAt;
-        }
-        if (shiftedEndAt !== null) {
-          updates.endAt = shiftedEndAt;
-        }
-        if (Object.keys(updates).length > 0) {
-          timestampUpdates.push({ ref: eventSnapshot.ref, data: updates });
-        }
-      });
+      await Promise.all(
+        eventsSnapshot.docs.map(async (eventSnapshot) => {
+          const data = eventSnapshot.data();
+          const updates: Record<string, unknown> = {};
+          const shiftedStartAt = getShiftedTimestamp(data.startAt, dateDelta);
+          const shiftedEndAt = getShiftedTimestamp(data.endAt, dateDelta);
+
+          if (shiftedStartAt !== null) {
+            updates.startAt = shiftedStartAt;
+          }
+          if (shiftedEndAt !== null) {
+            updates.endAt = shiftedEndAt;
+          }
+          backfillIfMissing(updates, data, ['place', 'linkUrl', 'linkPreview']);
+
+          // A reminder's `scheduledFor` can't be patched directly (Firestore
+          // rules only allow a reminder to move to `cancelled`), so a shifted
+          // event gets a fresh one at the new time instead of a stale one
+          // that still fires against the old date.
+          if (data.reminderEnabled && data.reminderId && shiftedStartAt !== null) {
+            await cancelEventReminder(data.reminderId);
+            updates.reminderId = await scheduleEventReminder({
+              trip,
+              uid,
+              event: {
+                id: eventSnapshot.id,
+                title: data.title,
+                startAt: shiftedStartAt,
+                reminderMinutesBefore: data.reminderMinutesBefore,
+                reminderEnabled: true,
+                assignedMemberIds: data.assignedMemberIds ?? [],
+              },
+            });
+          }
+
+          if (Object.keys(updates).length > 0) {
+            timestampUpdates.push({ ref: eventSnapshot.ref, data: updates });
+          }
+        }),
+      );
 
       staysSnapshot.docs.forEach((staySnapshot) => {
         const data = staySnapshot.data();
-        const updates: Record<string, number> = {};
+        const updates: Record<string, unknown> = {};
 
         for (const field of [
           'checkInAt',
@@ -238,6 +280,7 @@ export const editTrip = createAsyncThunk<
             updates[field] = shiftedValue;
           }
         }
+        backfillIfMissing(updates, data, ['place', 'linkUrl', 'linkPreview']);
 
         if (Object.keys(updates).length > 0) {
           timestampUpdates.push({ ref: staySnapshot.ref, data: updates });

@@ -14,7 +14,7 @@ import { Archive, ArchiveRestore, Link, Pencil } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
-import { formatDate } from '@/utils/formatUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
@@ -101,7 +101,7 @@ function TripDetailPage({
                 {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
               </div>
               <p className='text-muted-foreground mt-1'>
-                {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
+                {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
               </p>
             </div>
             <div className='flex shrink-0 flex-col gap-1.5 sm:flex-row sm:gap-2'>

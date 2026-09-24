@@ -40,6 +40,25 @@ export function formatDate(timestamp: number) {
   });
 }
 
+/**
+ * Like `formatDate`, but reads the calendar day from UTC fields instead of
+ * the viewer's local timezone. Use for a timestamp produced by
+ * `fromDateInputValue` (UTC midnight of the picked day, e.g. a trip's
+ * `startDate`/`endDate`) — formatting that value with local fields can
+ * shift it a day off from what the date picker shows for viewers behind UTC.
+ */
+export function formatDateUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** Minutes-granularity duration string, e.g. "45m" or "2h 5m", for a span of milliseconds. */
 export function formatDuration(ms: number) {
   const totalMinutes = Math.max(0, Math.round(ms / 60_000));

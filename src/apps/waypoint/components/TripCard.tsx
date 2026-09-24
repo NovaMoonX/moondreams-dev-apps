@@ -1,6 +1,6 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { formatDate } from '@/utils/formatUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
@@ -39,7 +39,7 @@ function TripCard({
           {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
         </div>
         <p className='text-muted-foreground mt-2 text-sm'>
-          {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
+          {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
         </p>
       </div>
 
