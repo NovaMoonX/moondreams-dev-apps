@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Settings2 } from 'lucide-react';
 
-import { useAppDispatch, useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import SharedAlbumLinkModal from '@apps/waypoint/components/SharedAlbumLinkModal';
@@ -36,7 +36,9 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
   const handleSave = async (url: string) => {
     setIsSaving(true);
     try {
-      await dispatch(setSharedAlbumLink({ uid: currentUserId, trip, url })).unwrap();
+      await dispatch(
+        setSharedAlbumLink({ uid: currentUserId, trip, url }),
+      ).unwrap();
       setIsModalOpen(false);
       addToast({
         title: url.trim()
@@ -81,7 +83,7 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
               {description}
             </p>
           </div>
-          <div className='flex shrink-0 items-center gap-3'>
+          <div className='flex shrink-0 flex-row-reverse items-center gap-1 sm:flex-row sm:gap-3'>
             {trip.sharedAlbumUrl && canSet && (
               <Button
                 type='button'
@@ -90,7 +92,8 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
                 className='h-auto p-0'
                 onClick={() => setIsModalOpen(true)}
               >
-                Change link
+                <span className='hidden sm:inline'>Change</span>
+                <Settings2 className='h-3.5 w-3.5 sm:hidden' />
               </Button>
             )}
             {trip.sharedAlbumUrl ? (

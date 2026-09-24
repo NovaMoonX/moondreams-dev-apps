@@ -20,6 +20,7 @@ import {
   createEvent,
   deleteEvent,
   updateEvent,
+  updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -112,6 +113,11 @@ export function TimelineSection({
       onEdit={(selectedEvent) => {
         setEditingEvent(selectedEvent);
         setIsFormOpen(true);
+      }}
+      onSaveNotes={async (selectedEvent, notes) => {
+        await dispatch(
+          updateEventNotes({ uid: currentUserId, trip, event: selectedEvent, notes }),
+        ).unwrap();
       }}
     />
   );

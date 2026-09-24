@@ -311,7 +311,10 @@ block-beta
 |---|---|---|
 | `Card` (DreamerUI) | Trips, Events, Ideas, Expenses, Stays | the one bordered-container pattern, reused everywhere — DreamerUI already provides this, not a custom build |
 | RoleBadge | Members, header | Admin / Editor / Commenter / Viewer pill — built on DreamerUI's `Badge`, not from scratch |
-| MapNavigationButton | Timeline, Stays, Overview | 1-tap native map deep link — built on DreamerUI's `Button` with an icon |
+| MapNavigationButton | Timeline, Stays, Overview | 1-tap native map deep link — built on DreamerUI's `Button` with an icon; on small screens only Active Now / Up Next show it on the card |
+| LocationLink | Timeline, Stays, Overview | the location text itself as the same map deep link, so directions are one tap even without a button |
+| PlaceDetailsDrawer | Timeline, Stays (small screens) | tapping an event/stay card opens its full details in a DreamerUI `Drawer` with large Navigate / Visit site / Modify actions; larger screens keep the details and buttons on the card |
+| NotesField | Timeline & Stays cards, PlaceDetailsDrawer | an event's or stay's note as its own entry outside the event/stay form — muted left-bar text, with a subtle pencil button on larger cards and an "+ Add note" link in the drawer; editable by whoever can edit the event |
 | ChangeBadge | Timeline, Overview | flags an edited event, expands to full history — built on DreamerUI's `Badge`/`Tooltip` |
 | Avatar stack | Events, header, presence | overlapping member avatars — composed from the repo's existing central `UserAvatar.tsx`, not a new component |
 | `Modal` (DreamerUI) | every `*FormModal` | consistent header / body / footer — DreamerUI's existing component, not a custom shell |
@@ -370,7 +373,7 @@ flowchart LR
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Tap Navigate on an event/stay] --> B{Has lat/long?}
+    A[Tap Navigate or the location on an event/stay] --> B{Has lat/long?}
     B -->|Yes| C[Deep link with coordinates]
     B -->|No| D[Deep link with address/location text]
     C --> E{Platform}

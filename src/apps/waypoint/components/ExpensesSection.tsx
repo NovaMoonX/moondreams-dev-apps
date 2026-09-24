@@ -1,10 +1,18 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button, Drawer, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Badge,
+  Button,
+  Drawer,
+  DropdownMenuFactories,
+  Input,
+  Select,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
@@ -52,6 +60,8 @@ import {
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
+
+const { option } = DropdownMenuFactories;
 
 interface ExpensesSectionProps {
   trip: TripSpace;
@@ -385,9 +395,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     return (
       <li
         key={expense.id}
-        className='grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3'
+        className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'
       >
-        <div className='col-span-2 min-w-0 sm:col-span-1'>
+        <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
             {expense.status === 'PAID' ? 'Paid' : 'Expected'} · {payerLine}
@@ -422,42 +432,52 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
           )}
         </div>
-        <div className='flex flex-wrap items-center justify-end gap-2 sm:col-start-2 sm:row-span-2 sm:row-start-1'>
-          {canAddExpenses && expense.status === 'EXPECTED' && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
+        {canAddExpenses && (
+          <div className='col-start-2 row-start-1 self-start'>
+            <EllipsisDropdown
+              ariaLabel={`Actions for ${expense.title}`}
               disabled={markingPaidId === expense.id}
-              onClick={() => setPayingExpense(expense)}
-            >
-              {markingPaidId === expense.id ? 'Marking…' : 'Mark paid'}
-            </Button>
-          )}
-          {canAddExpenses && getResolvedExpenseAmount(expense) !== null && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => setSplittingExpense(expense)}
-            >
-              Edit split
-            </Button>
-          )}
-          {canAddExpenses && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => {
+              variant='tertiary'
+              items={[
+                ...(expense.status === 'EXPECTED'
+                  ? [
+                      option({
+                        label: 'Mark paid',
+                        value: 'mark-paid',
+                        description: 'Record who covered it and what it cost.',
+                      }),
+                    ]
+                  : []),
+                ...(getResolvedExpenseAmount(expense) !== null
+                  ? [
+                      option({
+                        label: 'Edit split',
+                        value: 'edit-split',
+                        description: 'Choose who shares it and how much each owes.',
+                      }),
+                    ]
+                  : []),
+                option({
+                  label: 'Modify',
+                  value: 'modify',
+                  description: 'Change the details, or delete this expense.',
+                }),
+              ]}
+              onItemSelect={(value) => {
+                if (value === 'mark-paid') {
+                  setPayingExpense(expense);
+                  return;
+                }
+                if (value === 'edit-split') {
+                  setSplittingExpense(expense);
+                  return;
+                }
                 setEditingExpense(expense);
                 setIsModalOpen(true);
               }}
-            >
-              Modify
-            </Button>
-          )}
-        </div>
+            />
+          </div>
+        )}
       </li>
     );
   };
@@ -471,16 +491,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       const groupTotals = computeExpenseTotals(cluster.items, memberIds);
 
       return (
-        <li key={`group-${cluster.groupLabel}-${index}`} className='border-border rounded-lg border py-1'>
-          <div className='flex items-center justify-between px-3 py-2'>
-            <span className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              {cluster.groupLabel}
-            </span>
-            <span className='text-muted-foreground text-xs font-medium'>
+        <li key={`group-${cluster.groupLabel}-${index}`} className='py-3'>
+          <div className='grid grid-cols-[1fr_auto] gap-x-3'>
+            <div className='min-w-0'>
+              <p className='font-medium'>{cluster.groupLabel}</p>
+              <p className='text-muted-foreground text-sm'>
+                {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
+              </p>
+            </div>
+            <p className='font-medium whitespace-nowrap'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
-            </span>
+            </p>
           </div>
-          <ul className='divide-border divide-y px-3'>{cluster.items.map(renderExpenseRow)}</ul>
+          <ul className='divide-border border-border mt-1 ml-1 divide-y border-l pl-3'>
+            {cluster.items.map(renderExpenseRow)}
+          </ul>
         </li>
       );
     });
@@ -595,8 +620,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </ul>
         )}
       </div>
-      <div className='flex items-center gap-2'>
-        <div className='min-w-0 flex-1'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <Input
             type='search'
             placeholder='Search expenses'
@@ -607,7 +632,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           />
         </div>
         <Select
-          className='w-44 shrink-0'
+          className='min-w-0 flex-1 sm:w-44 sm:flex-none'
           options={EXPENSE_SORT_OPTIONS}
           value={sortBy}
           onChange={(value) => setSortBy(value as ExpenseSortBy)}
@@ -619,7 +644,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           aria-label={
             activeFilterCount > 0 ? `Filters (${activeFilterCount} applied)` : 'Filters'
           }
-          className='relative shrink-0'
+          className='relative shrink-0 mx-1 sm:mx-0'
           onClick={() => setIsFilterDrawerOpen(true)}
         >
           <ListFilter className='h-4 w-4' />

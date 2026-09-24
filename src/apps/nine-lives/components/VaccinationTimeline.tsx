@@ -1,7 +1,10 @@
-import { Button, DropdownMenu, DropdownMenuFactories, Pagination } from '@moondreamsdev/dreamer-ui/components';
-import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
+import {
+  DropdownMenuFactories,
+  Pagination,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { formatDateTime } from '@/utils/formatUtils';
 import type { Vaccination } from '@apps/nine-lives/types';
 import { usePagination } from '@apps/nine-lives/utils/usePagination';
@@ -35,7 +38,8 @@ function VaccinationTimeline({
   const sortedVaccinations = [...vaccinations].sort(
     (left, right) => right.lastAdministeredAt - left.lastAdministeredAt,
   );
-  const { page, pageCount, setPage, pagedItems, shouldPaginate } = usePagination(sortedVaccinations, PAGE_SIZE);
+  const { page, pageCount, setPage, pagedItems, shouldPaginate } =
+    usePagination(sortedVaccinations, PAGE_SIZE);
 
   if (sortedVaccinations.length === 0) {
     return (
@@ -48,8 +52,12 @@ function VaccinationTimeline({
 
   const menuItems = [
     ...(onEdit ? [option({ label: 'Edit', value: 'edit' })] : []),
-    ...(onLogDose ? [option({ label: 'Mark administered today', value: 'log-dose' })] : []),
-    ...(onViewHistory ? [option({ label: 'View history', value: 'view-history' })] : []),
+    ...(onLogDose
+      ? [option({ label: 'Mark administered today', value: 'log-dose' })]
+      : []),
+    ...(onViewHistory
+      ? [option({ label: 'View history', value: 'view-history' })]
+      : []),
   ];
 
   return (
@@ -63,14 +71,16 @@ function VaccinationTimeline({
             <div
               key={vaccination.id}
               className={join(
-                'flex items-start justify-between gap-3 py-2 pl-3 first:pt-0 -ml-3',
-                vaccination.id === activeRecordId && 'border-l-2 border-l-primary bg-primary/5',
+                '-ml-3 flex items-start justify-between gap-3 py-2 pl-3 first:pt-0',
+                vaccination.id === activeRecordId &&
+                  'border-l-primary bg-primary/5 border-l-2',
               )}
             >
               <div className='min-w-0'>
                 <strong className='text-sm'>{vaccination.name}</strong>
                 <div className='text-muted-foreground text-sm'>
-                  Last administered: {formatDateTime(vaccination.lastAdministeredAt)}
+                  Last administered:{' '}
+                  {formatDateTime(vaccination.lastAdministeredAt)}
                 </div>
                 {vaccination.expiresAt ? (
                   <div className='text-primary text-sm font-medium'>
@@ -78,11 +88,13 @@ function VaccinationTimeline({
                   </div>
                 ) : null}
                 {latestDose?.lotNumber ? (
-                  <div className='text-muted-foreground text-sm'>Lot: {latestDose.lotNumber}</div>
+                  <div className='text-muted-foreground text-sm'>
+                    Lot: {latestDose.lotNumber}
+                  </div>
                 ) : null}
               </div>
               {!readOnly && menuItems.length > 0 && (
-                <DropdownMenu
+                <EllipsisDropdown
                   items={menuItems}
                   onItemSelect={(value) => {
                     if (value === 'edit') {
@@ -93,23 +105,7 @@ function VaccinationTimeline({
                       onViewHistory?.(vaccination);
                     }
                   }}
-                  placement='bottom'
-                  alignment='end'
-                  offset={8}
-                  trigger={
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      className='h-8 w-8 p-0'
-                      aria-label={`Open actions for ${vaccination.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                    >
-                      <DotsVertical className='h-4 w-4' />
-                    </Button>
-                  }
+                  ariaLabel={`Open actions for ${vaccination.name}`}
                 />
               )}
             </div>
@@ -119,7 +115,13 @@ function VaccinationTimeline({
 
       {shouldPaginate && (
         <div className='mt-3 flex justify-center'>
-          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} size='sm' showFirstLast={pageCount >= 5} />
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            size='sm'
+            showFirstLast={pageCount >= 5}
+          />
         </div>
       )}
     </div>

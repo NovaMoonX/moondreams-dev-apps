@@ -1,18 +1,17 @@
 import {
   Badge,
   Button,
-  DropdownMenu,
   DropdownMenuFactories,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import {
-  DotsVertical,
   EyeClosed,
   EyeOpened,
   InfoCircled,
 } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { formatDateTime } from '@/utils';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import type { Item } from '../types';
@@ -179,7 +178,12 @@ function ItemCard({
 
         <div className='flex items-center gap-2'>
           {isEditing && (
-            <Badge variant='muted' role='button' onClick={onFocusTextarea} className='cursor-pointer hover:text-foreground! transition'>
+            <Badge
+              variant='muted'
+              role='button'
+              onClick={onFocusTextarea}
+              className='hover:text-foreground! cursor-pointer transition'
+            >
               Editing
             </Badge>
           )}
@@ -205,28 +209,13 @@ function ItemCard({
           ) : null}
 
           {isOwnItem && (onDelete || onReveal || onEdit) ? (
-            <DropdownMenu
+            <EllipsisDropdown
               items={menuItems}
               onItemSelect={async (value) => {
                 await handleMenuSelect(value);
               }}
               placement={itemPos === 0 ? 'bottom' : 'top'}
-              alignment='end'
-              offset={8}
-              trigger={
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  className='h-8 w-8 p-0'
-                  aria-label={`Open actions for item ${item.id}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  <DotsVertical className='h-4 w-4' />
-                </Button>
-              }
+              ariaLabel={`Open actions for item "${item.content.slice(0, 20)}"`}
             />
           ) : null}
         </div>

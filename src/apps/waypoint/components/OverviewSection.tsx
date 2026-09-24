@@ -9,6 +9,7 @@ import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
+import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
 import {
@@ -170,11 +171,11 @@ function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
             </div>
             <h3 className='mt-2 text-xl font-bold'>{event.title}</h3>
             {(event.locationName || event.address) && (
-              <p className='text-muted-foreground mt-1 text-sm'>
-                {event.locationName}
-                {event.locationName && event.address ? ' · ' : ''}
-                {event.address}
-              </p>
+              <LocationLink
+                {...event}
+                label={[event.locationName, event.address].filter(Boolean).join(' · ')}
+                className='mt-1'
+              />
             )}
             {event.linkUrl && (
               <div className='mt-1'>

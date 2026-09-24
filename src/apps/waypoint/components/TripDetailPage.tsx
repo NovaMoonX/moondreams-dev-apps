@@ -10,7 +10,13 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
-import { Archive, ArchiveRestore, Link, LoaderCircle, Pencil } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  Link,
+  LoaderCircle,
+  Pencil,
+} from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
@@ -50,7 +56,9 @@ function TripDetailPage({
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
   // An active trip opens with nothing expanded — the live HUD above is the
   // point; a non-active trip keeps the old behavior of opening to Timeline.
-  const [sectionTab, setSectionTab] = useState(() => (isActive ? '' : 'overview'));
+  const [sectionTab, setSectionTab] = useState(() =>
+    isActive ? '' : 'overview',
+  );
   const [dayTab, setDayTab] = useState('all');
 
   const handleViewDay = (dayIndex: number) => {
@@ -90,8 +98,8 @@ function TripDetailPage({
               className='mb-4 h-48 w-full rounded-lg object-cover'
             />
           )}
-          <div className='flex items-start justify-between gap-3'>
-            <div className='min-w-0'>
+          <div className='flex flex-wrap items-start justify-between gap-3'>
+            <div className='w-full min-w-0 sm:w-auto'>
               <div className='flex flex-wrap items-center gap-2'>
                 <h1 className='text-3xl font-semibold'>{trip.title}</h1>
                 {isActive && (
@@ -105,52 +113,87 @@ function TripDetailPage({
                 {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
               </p>
             </div>
-            <div className='flex shrink-0 flex-col gap-1.5 sm:flex-row sm:gap-2'>
+            <div className='flex shrink-0 gap-1.5 sm:gap-2'>
               {onEdit && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  aria-label='Edit trip'
-                  className='px-2 sm:px-3'
-                  onClick={() => onEdit(trip)}
-                >
-                  <Pencil className='h-4 w-4 sm:hidden' />
-                  <span className='hidden sm:inline'>Edit</span>
-                </Button>
+                <>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    aria-label='Edit trip'
+                    className='px-2 sm:hidden'
+                    onClick={() => onEdit(trip)}
+                  >
+                    <Pencil className='h-4 w-4' />
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    aria-label='Edit trip'
+                    className='hidden! px-3 sm:inline-flex!'
+                    onClick={() => onEdit(trip)}
+                  >
+                    <span>Edit</span>
+                  </Button>
+                </>
               )}
               {onToggleArchived && (
+                <>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    aria-label={
+                      trip.isArchived ? 'Unarchive trip' : 'Archive trip'
+                    }
+                    className='px-2 sm:hidden'
+                    onClick={() => onToggleArchived(trip)}
+                  >
+                    {trip.isArchived ? (
+                      <ArchiveRestore className='h-4 w-4' />
+                    ) : (
+                      <Archive className='h-4 w-4' />
+                    )}
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    aria-label={
+                      trip.isArchived ? 'Unarchive trip' : 'Archive trip'
+                    }
+                    className='hidden! px-3 sm:inline-flex!'
+                    onClick={() => onToggleArchived(trip)}
+                  >
+                    {trip.isArchived ? 'Unarchive' : 'Archive'}
+                  </Button>
+                </>
+              )}
+              <>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  aria-label='Copy trip link'
+                  title='Copy trip link'
+                  className='px-2 sm:hidden!'
+                  onClick={() => void handleCopyTripLink()}
+                >
+                  <Link className='h-4 w-4' />
+                </Button>
                 <Button
                   type='button'
                   variant='secondary'
                   size='sm'
-                  aria-label={
-                    trip.isArchived ? 'Unarchive trip' : 'Archive trip'
-                  }
-                  className='px-2 sm:px-3'
-                  onClick={() => onToggleArchived(trip)}
+                  aria-label='Copy trip link'
+                  title='Copy trip link'
+                  className='px-2 hidden! sm:inline-flex!'
+                  onClick={() => void handleCopyTripLink()}
                 >
-                  {trip.isArchived ? (
-                    <ArchiveRestore className='h-4 w-4 sm:hidden' />
-                  ) : (
-                    <Archive className='h-4 w-4 sm:hidden' />
-                  )}
-                  <span className='hidden sm:inline'>
-                    {trip.isArchived ? 'Unarchive' : 'Archive'}
-                  </span>
+                  <Link className='h-4 w-4' />
                 </Button>
-              )}
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                aria-label='Copy trip link'
-                title='Copy trip link'
-                className='px-2'
-                onClick={() => void handleCopyTripLink()}
-              >
-                <Link className='h-4 w-4' />
-              </Button>
+              </>
             </div>
           </div>
           <div className='mt-3'>
@@ -161,8 +204,8 @@ function TripDetailPage({
           <div className='bg-warning/15 text-warning border-warning flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm'>
             <LoaderCircle className='h-4 w-4 shrink-0 animate-spin' />
             <span>
-              This trip&apos;s dates are being updated — editing is paused until it
-              finishes. This can take a minute.
+              This trip&apos;s dates are being updated — editing is paused until
+              it finishes. This can take a minute.
             </span>
           </div>
         )}
