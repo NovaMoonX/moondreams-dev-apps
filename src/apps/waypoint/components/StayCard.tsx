@@ -19,7 +19,6 @@ interface StayCardProps {
 export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   const imageUrl = getDisplayImage(stay);
 
-  console.log('stay.stayType', stay.stayType); // REMOVE
   return (
     <article className='border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row'>
       {imageUrl && (
