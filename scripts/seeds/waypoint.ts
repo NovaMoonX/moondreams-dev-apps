@@ -330,7 +330,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     title: 'Flight to Seattle',
     startAt: Date.UTC(2026, 8, 25, 9),
     endAt: Date.UTC(2026, 8, 25, 11, 30),
-    locationName: 'Seattle–Tacoma International Airport',
+    locationName: 'Seattle-Tacoma International Airport',
     address: null,
     latitude: 47.4502,
     longitude: -122.3088,

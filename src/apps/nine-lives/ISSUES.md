@@ -24,11 +24,11 @@
 * `src/App.tsx`
 * `src/contexts/AuthContext.tsx`
 
-**Context:** Read `src/apps/nine-lives/TECHNICAL.md`'s "Client State Management (Redux Toolkit)" section in full before starting — this issue implements exactly what's described there (store shape, `resetAllState`, the optimistic slice factory, the listener utility). This is the one issue in the roadmap that isn't Nine Lives–specific, so treat the TDD as the spec even though the code lives outside `src/apps/nine-lives/`.
+**Context:** Read `src/apps/nine-lives/TECHNICAL.md`'s "Client State Management (Redux Toolkit)" section in full before starting — this issue implements exactly what's described there (store shape, `resetAllState`, the optimistic slice factory, the listener utility). This is the one issue in the roadmap that isn't Nine Lives-specific, so treat the TDD as the spec even though the code lives outside `src/apps/nine-lives/`.
 
 #### Description
 
-Introduce Redux Toolkit to the repo for the first time. Pure infrastructure — no Nine Lives–specific code — since every later issue builds on it, including the final cross-app alignment issue in this roadmap.
+Introduce Redux Toolkit to the repo for the first time. Pure infrastructure — no Nine Lives-specific code — since every later issue builds on it, including the final cross-app alignment issue in this roadmap.
 
 #### Possible Approach
 
@@ -44,7 +44,7 @@ Introduce Redux Toolkit to the repo for the first time. Pure infrastructure — 
 
 - [ ] Redux DevTools shows the store with `user` populated correctly after sign-in.
 - [ ] Switching accounts via `DevAccountSwitcher` clears any previously-loaded user-scoped state via `resetAllState`.
-- [ ] `createOptimisticCollectionSlice` and `createFirestoreCollectionListener` have no Nine Lives–specific imports or assumptions.
+- [ ] `createOptimisticCollectionSlice` and `createFirestoreCollectionListener` have no Nine Lives-specific imports or assumptions.
 
 ### Issue 2: App Registration, Manifest, Branding & Cloudflare OG Worker Integration
 
@@ -141,7 +141,7 @@ Create the `Household` document (auto-created, pre-filled as "{Name}'s household
 
 #### Description
 
-Full cat profile CRUD: preset breed/insurance-provider options (each with a custom-entry fallback), and key-date tracking (adoption date plus arbitrary custom dates). Personality traits and diet reuse the same combobox pattern this issue establishes but are their own Next Steps–tier issues (15 and 16) — the `Cat` type already carries both fields; this issue just doesn't build UI for them yet.
+Full cat profile CRUD: preset breed/insurance-provider options (each with a custom-entry fallback), and key-date tracking (adoption date plus arbitrary custom dates). Personality traits and diet reuse the same combobox pattern this issue establishes but are their own Next Steps-tier issues (15 and 16) — the `Cat` type already carries both fields; this issue just doesn't build UI for them yet.
 
 #### Possible Approach
 
@@ -517,7 +517,7 @@ Ties several earlier issues together into the household dashboard: emergency-con
 
 #### Description
 
-Seed the shared reference collections (`conditionLibrary`, `vaccineLibrary`, `glossary`, `resources`) from a public data source, plus a demo household/cats for local development, following the existing `scripts/seeds/worthTheWait.ts` pattern. Because this can be built in parallel with several other MVP issues, revisit it once Issues 4–12 land to confirm the demo data still reflects every field introduced since (diet and personality traits included, once Issues 15/16 exist) — per the Security Rules Design Criteria, seed data is expected to be kept current as part of whichever issue changes the schema, but a final pass here catches anything missed.
+Seed the shared reference collections (`conditionLibrary`, `vaccineLibrary`, `glossary`, `resources`) from a public data source, plus a demo household/cats for local development, following the existing `scripts/seeds/worthTheWait.ts` pattern. Because this can be built in parallel with several other MVP issues, revisit it once Issues 4-12 land to confirm the demo data still reflects every field introduced since (diet and personality traits included, once Issues 15/16 exist) — per the Security Rules Design Criteria, seed data is expected to be kept current as part of whichever issue changes the schema, but a final pass here catches anything missed.
 
 #### Possible Approach
 
@@ -658,7 +658,7 @@ Build the reminder system as shared infrastructure any mini-app can call — del
 
 - [x] A manually-created `Reminder` with `scheduledFor` in the past triggers a push notification within one scheduled run.
 - [x] The `reminders` slice reflects only reminders where the signed-in user is in `targetUids`.
-- [x] `scheduleReminder()` is callable without any Nine Lives–specific imports.
+- [x] `scheduleReminder()` is callable without any Nine Lives-specific imports.
 
 ### Issue 18: Wire Nine Lives to the Reminder System
 
@@ -722,7 +722,7 @@ Connects Nine Lives to the central reminder infrastructure built in Issue 17: sc
 
 #### Description
 
-Not a Nine Lives feature — this is the follow-up alignment work flagged from the start of this planning process: bringing Worth the Wait onto the same Redux Toolkit patterns Nine Lives established, so the whole repo shares one state management approach instead of two. Sequenced last because it depends only on the foundational Issue 1, not on anything Nine Lives–specific, and doesn't block any Nine Lives feature from shipping.
+Not a Nine Lives feature — this is the follow-up alignment work flagged from the start of this planning process: bringing Worth the Wait onto the same Redux Toolkit patterns Nine Lives established, so the whole repo shares one state management approach instead of two. Sequenced last because it depends only on the foundational Issue 1, not on anything Nine Lives-specific, and doesn't block any Nine Lives feature from shipping.
 
 #### Possible Approach
 

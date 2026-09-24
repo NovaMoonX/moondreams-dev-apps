@@ -43,7 +43,7 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
             </div>
           )}
           <p className='text-muted-foreground mt-2 text-sm'>
-            {formatDateTime(stay.checkInAt)} – {formatDateTime(stay.checkOutAt)}
+            {formatDateTime(stay.checkInAt)} - {formatDateTime(stay.checkOutAt)}
           </p>
           {stay.checkInTimezone && (
             <p className='text-muted-foreground mt-1 text-xs'>

@@ -91,4 +91,4 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 - **Data**: Firestore, namespaced under `apps/nine-lives/...`, household-scoped for owned data and globally shared for reference content (condition library, glossary, resources, vaccine reference list)
 - **Files**: Firebase Storage for health-record uploads and photos
 - **Document ingestion**: Firebase AI Logic uses App Check. Production builds require `VITE_FIREBASE_APPCHECK_SITE_KEY`. Local emulator builds enable the App Check debug token; set `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` to a fixed UUID in `.env.local` so the whole team shares one token registered once in Firebase Console > App Check > Manage debug tokens, instead of every browser generating (and needing to separately register) its own.
-- **Notifications**: Firebase Cloud Messaging, via shared cross-app infrastructure rather than a Nine Lives–specific implementation
+- **Notifications**: Firebase Cloud Messaging, via shared cross-app infrastructure rather than a Nine Lives-specific implementation

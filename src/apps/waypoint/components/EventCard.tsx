@@ -49,7 +49,7 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
             </Badge>
             <span className='text-muted-foreground text-sm'>
               {formatTime(event.startAt)}
-              {event.endAt ? ` – ${formatTime(event.endAt)}` : ''}
+              {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
             </span>
           </div>
           <h3 className='mt-2 font-semibold'>{event.title}</h3>
@@ -64,7 +64,7 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
           )}
           {(event.venueOpenTime || event.venueCloseTime) && (
             <p className='text-muted-foreground mt-1 text-sm'>
-              Open {event.venueOpenTime ? formatClockTime(event.venueOpenTime) : '?'} –{' '}
+              Open {event.venueOpenTime ? formatClockTime(event.venueOpenTime) : '?'} -{' '}
               {event.venueCloseTime ? formatClockTime(event.venueCloseTime) : '?'}
             </p>
           )}
