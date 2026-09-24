@@ -32,8 +32,6 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
           ? details.settings.join(' / ')
           : null;
 
-  console.log('event', event); // REMOVE
-
   return (
     <article className='border-border bg-card overflow-hidden rounded-lg border'>
       {imageUrl && (
@@ -44,7 +42,7 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
         />
       )}
       <div className='flex items-start justify-end sm:justify-between gap-3 p-4 flex-wrap'>
-        <div className='min-w-0'>
+        <div className='min-w-0 w-full sm:w-auto '>
           <div className='flex flex-wrap items-center gap-2'>
             <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
               {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
