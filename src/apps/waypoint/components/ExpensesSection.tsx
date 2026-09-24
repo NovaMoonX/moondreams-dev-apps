@@ -248,8 +248,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const totals = computeExpenseTotals(expenses, memberIds);
   const filteredTotal = toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
   const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
-    { label: 'Paid so far', total: toTotalsView(totals.paid) },
-    { label: 'Expected (not yet paid)', total: toTotalsView(totals.expected) },
+    { label: 'Paid', total: toTotalsView(totals.paid) },
+    { label: 'Expected', total: toTotalsView(totals.expected) },
     { label: 'Total', total: toTotalsView(totals.total) },
   ];
   const duesSummary = computeDuesSummary(expenses, memberIds);
