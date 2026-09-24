@@ -102,11 +102,6 @@ interface ExpenseCluster {
   items: TripExpense[];
 }
 
-/** Clusters consecutive-or-not expenses that share a `groupLabel` (e.g. itemized
- * entries off one receipt) so they can be rendered together with a subtotal,
- * while un-grouped expenses stay standalone in their original order. A Map key
- * (falling back to the item's own id when there's no group) collapses same-label
- * items while preserving first-occurrence order for everything else. */
 function clusterByGroup(items: TripExpense[]): ExpenseCluster[] {
   return Array.from(
     items

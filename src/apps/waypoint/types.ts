@@ -98,8 +98,6 @@ export interface TripExpense {
   splitAmounts: Record<string, number> | null;
   paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
   note: string | null;
-  /** Free-text label shared by related expenses (e.g. itemized entries off one
-   * receipt) so their totals can be rolled up and displayed together. */
   groupLabel: string | null;
   createdBy: string;
   createdAt: number;
@@ -206,7 +204,6 @@ export interface ChecklistItem {
   category: ChecklistCategory;
   customCategoryLabel: string | null;
   note: string | null;
-  /** Trip day this item should be done by; `null` means no specific day. */
   completeByDayIndex: number | null;
   assignedToUids: string[];
   isCompleted: boolean;
