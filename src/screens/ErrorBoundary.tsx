@@ -1,7 +1,8 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Link, useRouteError } from 'react-router-dom';
+import { Link, useLocation, useRouteError } from 'react-router-dom';
 
 import { useAuth } from '@hooks/useAuth';
+import { APP_REGISTRY_PATH_MAP } from '../lib/app/app.registry';
 
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
@@ -14,6 +15,7 @@ function getErrorDetails(error: unknown) {
 function ErrorBoundary() {
   const error = useRouteError();
   const { isAdmin } = useAuth();
+  const { pathname } = useLocation()
   const { message, stack } = getErrorDetails(error);
   const showDetails = import.meta.env.DEV || isAdmin;
 
@@ -21,7 +23,7 @@ function ErrorBoundary() {
     <div className='page flex items-center justify-center px-4 py-12'>
       <div className='w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-center shadow-sm'>
         <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-          Error
+            {pathname === '/' ? 'Home' : APP_REGISTRY_PATH_MAP[pathname]?.name ?? 'Unknown'}
         </p>
         <h1 className='text-foreground mt-4 text-3xl font-semibold tracking-tight'>
           Uh oh, something went wrong.
@@ -32,7 +34,7 @@ function ErrorBoundary() {
         </p>
         {showDetails && (
           <div className='border-destructive/30 bg-destructive/5 mt-6 rounded-lg border p-4 text-left'>
-            <p className='text-destructive text-sm font-medium break-words'>{message}</p>
+            <p className='text-destructive text-sm font-medium wrap-break-word'>{message}</p>
             {stack && (
               <pre className='text-foreground/60 mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap'>
                 {stack}
