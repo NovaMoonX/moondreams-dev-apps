@@ -38,7 +38,7 @@ export function EventCard({ event, canEdit, showCover, onEdit }: EventCardProps)
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+          className='aspect-video w-full object-cover sm:aspect-2/1'
         />
       )}
       <div className='flex items-start justify-between gap-3 p-4'>

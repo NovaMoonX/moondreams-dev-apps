@@ -93,7 +93,7 @@ function ActiveNowCard({ event, now }: { event: TimelineEvent; now: number }) {
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='aspect-video w-full object-cover sm:aspect-[2/1]'
+          className='aspect-video w-full object-cover sm:aspect-2/1'
         />
       )}
       <div className='p-5'>
