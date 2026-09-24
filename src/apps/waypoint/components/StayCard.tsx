@@ -20,15 +20,15 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
   const imageUrl = getDisplayImage(stay);
 
   return (
-    <article className='border-border bg-card flex overflow-hidden rounded-lg border'>
+    <article className='border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row'>
       {imageUrl && (
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='w-28 shrink-0 object-cover sm:w-44'
+          className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0'
         />
       )}
-      <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
+      <div className='flex min-w-0 flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between'>
         <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>
             <h3 className='font-semibold'>{stay.name}</h3>
@@ -52,7 +52,7 @@ export function StayCard({ stay, canEdit, onEdit }: StayCardProps) {
             </div>
           )}
         </div>
-        <div className='flex shrink-0 gap-2'>
+        <div className='flex shrink-0 justify-end gap-2 sm:justify-start'>
           <MapNavigationButton
             locationName={stay.name}
             address={stay.address}
