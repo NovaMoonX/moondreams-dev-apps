@@ -58,7 +58,7 @@ function ImageUploadField({
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
           >
-            Change photo
+            {previewUrl ? 'Change photo' : 'Upload photo'}
           </Button>
           {previewUrl && (
             <Button
