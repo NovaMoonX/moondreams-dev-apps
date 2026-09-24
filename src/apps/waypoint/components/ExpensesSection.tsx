@@ -35,6 +35,7 @@ import {
   getExpenseCategoryKeyLabel,
   getExpenseCategoryKeys,
 } from '@apps/waypoint/utils/expenseCategories';
+import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
   getResolvedExpenseAmount,
@@ -142,9 +143,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const currency = 'USD';
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
-  const canAddExpenses = ['ADMIN', 'EDITOR'].includes(
-    trip.members[currentUserId]?.role ?? '',
-  );
+  const canAddExpenses =
+    !isTripDateShiftLocked(trip) &&
+    ['ADMIN', 'EDITOR'].includes(trip.members[currentUserId]?.role ?? '');
   const memberLabel = (uid: string) =>
     memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid;
   const existingGroupLabels = useMemo(

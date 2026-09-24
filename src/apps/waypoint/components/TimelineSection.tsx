@@ -27,7 +27,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
-import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem, isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
@@ -229,6 +229,7 @@ export function TimelineSection({
           <Button
             type='button'
             className='mt-4 w-full'
+            disabled={isTripDateShiftLocked(trip)}
             onClick={() => {
               setEditingEvent(undefined);
               setIsFormOpen(true);

@@ -32,6 +32,7 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    dateShiftStatus: 'IDLE',
     createdBy: values.createdBy,
     createdAt: values.createdAt,
     lastEditedAt: values.createdAt,

@@ -3,24 +3,33 @@ import type { ExpenseCategory, TripExpense } from '@apps/waypoint/types';
 
 const CUSTOM_PREFIX = 'custom:';
 
+// A document from before `category` was a required field (or otherwise malformed)
+// reads back with it missing or invalid — fall back to 'OTHER' instead of letting
+// that propagate into a key string other code assumes is always one of these.
+function normalizeCategory(category: unknown): ExpenseCategory {
+  return typeof category === 'string' && category in EXPENSE_CATEGORY_LABELS
+    ? (category as ExpenseCategory)
+    : 'OTHER';
+}
+
 export function getExpenseCategoryKey(
   expense: Pick<TripExpense, 'category' | 'customCategoryLabel'>,
 ): string {
-  return expense.category === 'OTHER' && expense.customCategoryLabel
+  const category = normalizeCategory(expense.category);
+  return category === 'OTHER' && expense.customCategoryLabel
     ? `${CUSTOM_PREFIX}${expense.customCategoryLabel}`
-    : expense.category;
+    : category;
 }
 
 export function parseExpenseCategoryKey(key: string): {
   category: ExpenseCategory;
   customCategoryLabel: string | null;
 } {
-  if (key.startsWith(CUSTOM_PREFIX)) {
+  if (typeof key === 'string' && key.startsWith(CUSTOM_PREFIX)) {
     return { category: 'OTHER', customCategoryLabel: key.slice(CUSTOM_PREFIX.length) };
   }
 
-  const category = key as ExpenseCategory;
-  return { category, customCategoryLabel: null };
+  return { category: normalizeCategory(key), customCategoryLabel: null };
 }
 
 export function getExpenseCategoryKeyLabel(key: string): string {

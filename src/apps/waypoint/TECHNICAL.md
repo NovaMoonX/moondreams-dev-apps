@@ -48,6 +48,7 @@ interface TripSpace {
   sharedAlbumUrl: string | null; // e.g. a Google Photos/Drive folder link — Waypoint never stores photos itself
   sharedAlbumSetByUid: string | null;
   sharedAlbumSetAt: number | null;
+  dateShiftStatus: 'IDLE' | 'PENDING'; // 'PENDING' while shiftTripDates is re-dating the trip — see 4a below
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -510,7 +511,11 @@ Combined with the write rule below, every entry in `changeHistory` was necessari
 
 **4a. Changing Trip Dates**
 
-Since `startDate`/`endDate` are only ever estimates at creation, shifting them later has to be safe by design, not just possible. Moving `trip.startDate` forward or back by some delta is a batched operation that shifts every existing event's `startAt`/`endAt` and every stay's `checkInAt`/`checkOutAt`/`plannedArrivalAt`/`plannedDepartureAt` by that same delta — preserving each item's `dayIndex` and its position relative to everything else on the trip, rather than leaving absolute timestamps fixed and letting `dayIndex` silently drift out of sync with them. A trip-dates change is a single atomic batch across every affected subcollection, not a field update on `TripSpace` alone.
+Since `startDate`/`endDate` are only ever estimates at creation, shifting them later has to be safe by design, not just possible. When the trip has any dated items and the dates actually change, the client doesn't touch the affected subcollections itself — it calls the `shiftTripDates` callable, which does the work with the Admin SDK (so it isn't bound by per-document rules or client-side timeouts) and can reschedule a reminder directly, something a client write can only ever cancel.
+
+The edit form offers a **"shift dated items" checkbox**, checked by default: checked, every event's `startAt`/`endAt` and every stay's `checkInAt`/`checkOutAt`/`plannedArrivalAt`/`plannedDepartureAt` shifts by the same delta as `trip.startDate`, preserving each item's `dayIndex` and its position relative to everything else (stays have no `dayIndex`, so this is the only path that keeps them aligned with the trip). Unchecked, events/expenses/checklist items keep their exact absolute date and time and have their `dayIndex`/`completeByDayIndex` recomputed against the new range instead (clamped for events, since `dayIndex` is required; set to `null` — "no specific day" — for expenses/checklist that now fall outside it); stays are left untouched either way, since nothing about them is relative.
+
+While the function runs, `trip.dateShiftStatus` is `'PENDING'` — `firestore.rules` denies every write to the trip document and its subcollections until it flips back to `'IDLE'` (or the function fails and resets it), and the client mirrors that lock by hiding every edit entry point and showing a banner. This is what makes the two-phase "shift, then reassign" work safely: nothing else can write to the trip mid-shift.
 
 **5. Dues / Settle-Up Calculation**
 
@@ -579,7 +584,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 
 - **`trips/{tripId}`**: read allowed if `request.auth.uid` is a key in `members` — nothing else, no pending-related exception (see Criterion #8). Changing a role and removing a member are security-critical transitions restricted to `ADMIN`.
 - **`pendingRequests/{requestId}`**: see the full rules block in the Data Schema section above — three-branch read (path-based self-check, "my requests" query safety, "requests for my trip" query safety), create requires the caller's own uid plus a real, not-yet-joined trip, delete restricted to the requester or a trip Admin, update always denied.
-- **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` specifically**: updating/deleting an *existing* event once `now >= trip.startDate` is `ADMIN`-only (creating new ones stays open to `EDITOR`s).
+- **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` specifically**: updating/deleting an *existing* event once `now >= trip.startDate` is `ADMIN`-only (creating new ones stays open to `EDITOR`s). Every write to any of these, and to `trips/{tripId}` itself, additionally requires `trip.dateShiftStatus != 'PENDING'` — see "Changing Trip Dates" above.
 - **`comments/{commentId}`**: posting is covered by the general membership rule; approving/declining a proposal is a dedicated narrow rule restricted to `ADMIN`/`EDITOR` (or `ADMIN`-only post-trip-start for event-targeted proposals, per State Machine #2).
 - **`ideas/{ideaId}`**: creating and reading open to any trip member (#1 — not a planning-permission surface). Voting is narrow: a member can only add/remove *their own* uid from `voterUids` (#5). Setting `convertedToEntityId` follows the same permission as creating the resulting entity.
 - **`stayCriteria/{criterionId}`**: reading open to any member; write follows the same `EDITOR`/`ADMIN` rule as the departure checklist.

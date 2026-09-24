@@ -35,7 +35,7 @@ import {
   selectTimelineEvents,
 } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { hasTripRole, isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 
 function Waypoint() {
   const { user, loading } = useAuth();
@@ -261,6 +261,7 @@ function Waypoint() {
           currentUserId={user.uid}
           onBack={() => setSelectedTripId(null)}
           onEdit={
+            !isTripDateShiftLocked(selectedTrip) &&
             hasTripRole(selectedTrip, user.uid, ['ADMIN', 'EDITOR'])
               ? (tripToEdit) => {
                   setError(null);
@@ -269,6 +270,7 @@ function Waypoint() {
               : undefined
           }
           onToggleArchived={
+            !isTripDateShiftLocked(selectedTrip) &&
             hasTripRole(selectedTrip, user.uid, 'ADMIN')
               ? (tripToToggle) => void handleToggleArchived(tripToToggle)
               : undefined

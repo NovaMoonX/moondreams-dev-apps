@@ -10,7 +10,11 @@ import { selectStays, selectTimelineEvents } from '@apps/waypoint/store/selector
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
-import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import {
+  canEditExistingItem,
+  hasTripRole,
+  isTripDateShiftLocked,
+} from '@apps/waypoint/utils/roleGuards';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 
 interface StaysSectionProps {
@@ -27,7 +31,8 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
   const [editingStay, setEditingStay] = useState<Stay | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canAddStays = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const canAddStays =
+    !isTripDateShiftLocked(trip) && hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditExisting = canEditExistingItem(trip, currentUserId);
   const { confirm } = useActionModal();
   const { addToast } = useToast();

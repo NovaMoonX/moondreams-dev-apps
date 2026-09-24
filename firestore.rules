@@ -27,6 +27,13 @@ service cloud.firestore {
       return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate;
     }
 
+    // A trip's own writes and every subcollection under it are read-only while a
+    // date-shift Cloud Function is re-dating its events/stays/expenses/checklist —
+    // the function itself writes with the Admin SDK, which bypasses these rules.
+    function isTripDateShiftIdle(trip) {
+      return !('dateShiftStatus' in trip) || trip.dateShiftStatus != 'PENDING';
+    }
+
     // `dev` is only ever set by scripts/seeds/core.ts, which refuses to run
     // against anything but a local emulator — so it never appears on a
     // production token. Lets seeded users see every app locally.
@@ -1377,6 +1384,7 @@ service cloud.firestore {
             'sharedAlbumUrl',
             'sharedAlbumSetByUid',
             'sharedAlbumSetAt',
+            'dateShiftStatus',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1400,6 +1408,7 @@ service cloud.firestore {
           && (!('sharedAlbumSetAt' in data)
             || data.sharedAlbumSetAt == null
             || isTimestampNumber(data.sharedAlbumSetAt))
+          && (!('dateShiftStatus' in data) || data.dateShiftStatus in ['IDLE', 'PENDING'])
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);
@@ -1528,7 +1537,7 @@ service cloud.firestore {
 
       allow read: if isTripMember();
       allow create: if isTripCreateValid();
-      allow update: if isTripMember() && (
+      allow update: if isTripMember() && isTripDateShiftIdle(resource.data) && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
          || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
@@ -1553,13 +1562,17 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role == role;
         }
 
+        function isChecklistTripIdle() {
+          return isTripDateShiftIdle(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data);
+        }
+
         function isChecklistEditor() {
-          return hasChecklistRole('ADMIN') || hasChecklistRole('EDITOR');
+          return (hasChecklistRole('ADMIN') || hasChecklistRole('EDITOR')) && isChecklistTripIdle();
         }
 
         function isChecklistAdminOnlyWhileActive() {
           let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-          return request.auth != null && request.auth.uid in trip.members && (
+          return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
             isTripActive(trip)
               ? trip.members[request.auth.uid].role == 'ADMIN'
               : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
@@ -1610,6 +1623,7 @@ service cloud.firestore {
 
         function isChecklistAssignedToggleValid() {
           return isChecklistMember()
+            && isChecklistTripIdle()
             && request.auth.uid in resource.data.assignedToUids
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'isCompleted',
@@ -1648,13 +1662,15 @@ service cloud.firestore {
       }
 
       function isTripSubcollectionEditor() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripSubcollectionMember()
-          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+          && isTripDateShiftIdle(trip)
+          && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
       function isTripAdminOnlyWhileActive() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-        return request.auth != null && request.auth.uid in trip.members && (
+        return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
             : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
@@ -1759,13 +1775,15 @@ service cloud.firestore {
       }
 
       function isTripSubcollectionEditor() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripSubcollectionMember()
-          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+          && isTripDateShiftIdle(trip)
+          && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
       function isTripAdminOnlyWhileActive() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-        return request.auth != null && request.auth.uid in trip.members && (
+        return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
             : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
@@ -1862,8 +1880,10 @@ service cloud.firestore {
       }
 
       function isTripExpenseEditor() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripExpenseMember()
-          && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+          && isTripDateShiftIdle(trip)
+          && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
       function isTripExpenseValid(data) {
@@ -1918,6 +1938,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt;
       allow update: if isTripExpenseMember()
+        && isTripDateShiftIdle(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data)
         && resource.data.paidMemberStatus.keys().hasAll([request.auth.uid])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
         && request.resource.data.paidMemberStatus.diff(resource.data.paidMemberStatus)

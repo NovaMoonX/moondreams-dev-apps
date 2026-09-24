@@ -30,6 +30,8 @@ export interface TripMember {
   joinedAt: number;
 }
 
+export type TripDateShiftStatus = 'IDLE' | 'PENDING';
+
 export interface TripSpace {
   id: string;
   title: string;
@@ -43,6 +45,10 @@ export interface TripSpace {
   sharedAlbumUrl: string | null;
   sharedAlbumSetByUid: string | null;
   sharedAlbumSetAt: number | null;
+  /** `PENDING` while a Cloud Function is re-dating every event/stay/expense/checklist
+   * item after a date change — the trip and everything under it is read-only until
+   * it goes back to `IDLE`, so two shifts (or a shift and an edit) can't race. */
+  dateShiftStatus: TripDateShiftStatus;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

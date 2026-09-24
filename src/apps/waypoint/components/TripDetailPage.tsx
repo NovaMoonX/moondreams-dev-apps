@@ -10,7 +10,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
-import { Archive, ArchiveRestore, Link, Pencil } from 'lucide-react';
+import { Archive, ArchiveRestore, Link, LoaderCircle, Pencil } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
@@ -26,6 +26,7 @@ import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 
 interface TripDetailPageProps {
   trip: TripSpace;
@@ -156,6 +157,15 @@ function TripDetailPage({
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
           </div>
         </div>
+        {isTripDateShiftLocked(trip) && (
+          <div className='bg-warning/15 text-warning border-warning flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm'>
+            <LoaderCircle className='h-4 w-4 shrink-0 animate-spin' />
+            <span>
+              This trip&apos;s dates are being updated — editing is paused until it
+              finishes. This can take a minute.
+            </span>
+          </div>
+        )}
         <OverviewSection trip={trip} onViewDay={handleViewDay} />
         <hr className='border-border' />
         <Tabs
