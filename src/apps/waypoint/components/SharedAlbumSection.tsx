@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
-import { Button, Callout } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ExternalLink } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
@@ -64,40 +66,50 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
 
   return (
     <>
-      <Callout
-        variant={shouldShowReminder ? 'info' : 'base'}
-        icon='📷'
-        title={<span className='font-bold'>Trip shared album</span>}
-        className='text-sm'
-        description={
-          <div className='flex flex-wrap items-center justify-between gap-3'>
-            <span>{description}</span>
-            <div className='flex shrink-0 gap-2 mr-1.5 mb-1 sm:mb-0'>
-              {trip.sharedAlbumUrl && (
-                <Button
-                  href={trip.sharedAlbumUrl}
-                  target='_blank'
-                  rel='noreferrer'
-                  variant='secondary'
-                  size='sm'
-                >
-                  Open album
-                </Button>
+      <div className='bg-muted/40 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg px-3 py-2.5 text-sm'>
+        <div className='flex min-w-0 items-start gap-2'>
+          <span aria-hidden>📷</span>
+          <div className='min-w-0'>
+            <p className='font-medium'>Shared album</p>
+            <p
+              className={join(
+                shouldShowReminder ? 'text-foreground' : 'text-muted-foreground',
               )}
-              {canSet && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  {trip.sharedAlbumUrl ? 'Change link' : 'Add link'}
-                </Button>
-              )}
-            </div>
+            >
+              {description}
+            </p>
           </div>
-        }
-      />
+        </div>
+        <div className='flex shrink-0 items-center gap-3'>
+          {trip.sharedAlbumUrl && canSet && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto p-0'
+              onClick={() => setIsModalOpen(true)}
+            >
+              Change link
+            </Button>
+          )}
+          {trip.sharedAlbumUrl ? (
+            <Button href={trip.sharedAlbumUrl} target='_blank' rel='noreferrer' size='sm'>
+              Open album <ExternalLink className='h-3.5 w-3.5' />
+            </Button>
+          ) : (
+            canSet && (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => setIsModalOpen(true)}
+              >
+                Add link
+              </Button>
+            )
+          )}
+        </div>
+      </div>
       <SharedAlbumLinkModal
         key={isModalOpen ? 'open' : 'closed'}
         isOpen={isModalOpen}
