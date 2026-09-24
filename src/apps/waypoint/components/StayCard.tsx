@@ -119,39 +119,41 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
             className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0'
           />
         )}
-        <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
-          <div className='min-w-0 space-y-1'>
-            <StayDetailLines
-              stay={stay}
-              showTitle
-              showExtras={false}
-              canEdit={canEdit}
-              onSaveNotes={onSaveNotes}
-            />
+        <div className='flex min-w-0 flex-1 flex-col'>
+          <div className='flex min-w-0 items-start justify-between gap-3 p-4'>
+            <div className='min-w-0 space-y-1'>
+              <StayDetailLines
+                stay={stay}
+                showTitle
+                showExtras={false}
+                canEdit={canEdit}
+                onSaveNotes={onSaveNotes}
+              />
+            </div>
+            {!isSmallScreen && (
+              <div className='flex shrink-0 gap-2'>
+                <MapNavigationButton {...getStayLocation(stay)} />
+                {canEdit && (
+                  <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
+                    Modify
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-          {!isSmallScreen && (
-            <div className='flex shrink-0 gap-2'>
-              <MapNavigationButton {...getStayLocation(stay)} />
-              {canEdit && (
-                <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
-                  Modify
-                </Button>
-              )}
+          {!isSmallScreen && (stay.notes || canEdit) && (
+            <div className='-mt-2 px-4 pb-3'>
+              <NotesField
+                key={stay.id}
+                notes={stay.notes}
+                canEdit={canEdit}
+                onSave={(notes) => onSaveNotes(stay, notes)}
+                variant='subtle'
+                placeholder={STAY_NOTES_PLACEHOLDER}
+              />
             </div>
           )}
         </div>
-        {!isSmallScreen && (stay.notes || canEdit) && (
-          <div className='-mt-2 px-4 pb-3'>
-            <NotesField
-              key={stay.id}
-              notes={stay.notes}
-              canEdit={canEdit}
-              onSave={(notes) => onSaveNotes(stay, notes)}
-              variant='subtle'
-              placeholder={STAY_NOTES_PLACEHOLDER}
-            />
-          </div>
-        )}
       </article>
       {isSmallScreen && (
         <PlaceDetailsDrawer
