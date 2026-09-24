@@ -6,6 +6,7 @@ import {
   Form,
   FormCustomFieldProps,
   FormFactories,
+  Input,
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
@@ -53,6 +54,10 @@ function EditTripModal({
 }: EditTripModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<EditTripFormData | null>(null);
+  const [formSeed, setFormSeed] = useState<{
+    version: number;
+    data: EditTripFormData | null;
+  }>({ version: 0, data: null });
   const coverUpload = useImageUpload(trip?.coverImageUrl ?? null);
   const events = useAppSelector(selectTimelineEvents);
   const stays = useAppSelector(selectStays);
@@ -161,6 +166,12 @@ function EditTripModal({
     return willOrphanItems;
   }, [events, stays, expenses, checklistItems, trip, currentData]);
 
+  const isStartDateChanging = currentData.startDate !== initialData.startDate;
+  const hasDatesChanged = trip
+    ? currentData.startDate !== initialData.startDate ||
+      currentData.endDate !== initialData.endDate
+    : false;
+
   const fields = useMemo(
     () => [
       input({
@@ -174,10 +185,46 @@ function EditTripModal({
         label: 'Estimated start date',
         variant: 'outline',
       }),
-      createDateInputField({
+      custom({
         name: 'endDate',
         label: 'Estimated end date',
-        variant: 'outline',
+        renderComponent: ({ onValueChange }: FormCustomFieldProps) => {
+          return (
+            <div className='flex flex-col items-end'>
+              <Input
+                type='date'
+                variant='outline'
+                value={currentData?.endDate}
+                onChange={(e) => onValueChange(e.target.value)}
+                className='input input-outline'
+              />
+              {hasDatesChanged && (
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='text-muted-foreground hover:text-foreground'
+                  onClick={() => {
+                    // The Form owns its field values, so reverting them means
+                    // remounting it with a new seed, not just updating our copy.
+                    const reverted = {
+                      ...currentData,
+                      startDate: initialData.startDate,
+                      endDate: initialData.endDate,
+                    };
+                    setFormData(reverted);
+                    setFormSeed((seed) => ({
+                      version: seed.version + 1,
+                      data: reverted,
+                    }));
+                  }}
+                >
+                  Go back to original dates
+                </Button>
+              )}
+            </div>
+          );
+        },
       }),
       ...(hasDatedItems && wouldRequireDataShift
         ? [
@@ -200,12 +247,18 @@ function EditTripModal({
                       match
                     </label>
 
-                    <div className='pl-7 space-2'>
-                      {checkedValue && (
+                    <div className='space-2 pl-7'>
+                      {checkedValue && isStartDateChanging && (
                         <p className='text-muted-foreground mb-3 text-sm'>
                           Moving the start date will shift every event, stay,
                           expense, and checklist due date on this trip by the
                           same amount.
+                        </p>
+                      )}
+                      {checkedValue && !isStartDateChanging && (
+                        <p className='text-muted-foreground mb-3 text-sm'>
+                          The start date isn&apos;t changing, so everything
+                          keeps its current day and time.
                         </p>
                       )}
                       {!checkedValue && (
@@ -272,8 +325,11 @@ function EditTripModal({
       isSubmitting,
       hasDatedItems,
       wouldRequireDataShift,
+      hasDatesChanged,
+      isStartDateChanging,
       initialData,
       wouldPlaceItemsOutOfRange,
+      currentData
     ],
   );
 
@@ -323,10 +379,10 @@ function EditTripModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Trip details'>
       <Form
-        key={trip.id}
+        key={`${trip.id}-${formSeed.version}`}
         id='waypoint-edit-trip'
         form={fields}
-        initialData={initialData}
+        initialData={formSeed.data ?? initialData}
         columns={1}
         spacing='normal'
         onDataChange={(data) => setFormData(data as EditTripFormData)}

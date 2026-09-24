@@ -79,7 +79,7 @@ function parseInput(data: unknown): ShiftTripDatesInput {
   ) {
     throw new HttpsError(
       'invalid-argument',
-      'Provide a trip id, a title, and a valid start/end date.',
+      'Enter a trip title and an end date on or after the start date.',
     );
   }
 
@@ -118,7 +118,7 @@ export const shiftTripDates = onCall(
     const tripSnapshot = await tripRef.get();
 
     if (!tripSnapshot.exists) {
-      throw new HttpsError('not-found', `Trip ${input.tripId} does not exist.`);
+      throw new HttpsError('not-found', "We couldn't find this trip — it may have been deleted.");
     }
 
     const trip = tripSnapshot.data()!;
@@ -270,7 +270,7 @@ export const shiftTripDates = onCall(
         throw error;
       }
       console.error('shiftTripDates failed', error);
-      throw new HttpsError('internal', 'Could not update this trip.');
+      throw new HttpsError('internal', "Something went wrong while updating your trip's dates.");
     }
   },
 );

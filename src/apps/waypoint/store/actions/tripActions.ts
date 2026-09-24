@@ -1,4 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import { FirebaseError } from 'firebase/app';
 import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
@@ -134,6 +135,29 @@ interface ShiftTripDatesResponse {
   lastEditedAt: number;
 }
 
+// The function's own errors carry copy written for people, but anything it
+// didn't throw deliberately (a crash, a timeout, an unreachable function)
+// reaches the client as code `functions/internal` with the message "internal".
+const SHIFT_TRIP_DATES_READABLE_CODES = [
+  'functions/unauthenticated',
+  'functions/permission-denied',
+  'functions/not-found',
+  'functions/failed-precondition',
+  'functions/invalid-argument',
+];
+
+function getShiftTripDatesErrorMessage(error: unknown) {
+  const code = error instanceof FirebaseError ? error.code : null;
+  if (code === 'functions/unavailable' || code === 'functions/deadline-exceeded') {
+    return "We couldn't reach the server to update your trip's dates. Check your connection and try again.";
+  }
+  if (code && SHIFT_TRIP_DATES_READABLE_CODES.includes(code)) {
+    return getErrorMessage(error, "We couldn't update your trip's dates.");
+  }
+
+  return "Something went wrong while updating your trip's dates. Give it another try in a moment — if it keeps happening, let us know.";
+}
+
 export const editTrip = createAsyncThunk<
   TripSpace,
   EditTripInput,
@@ -209,9 +233,7 @@ export const editTrip = createAsyncThunk<
           shiftDates: values.shiftDates,
         });
       } catch (error) {
-        return rejectWithValue(
-          getErrorMessage(error, 'Unable to update this trip.'),
-        );
+        return rejectWithValue(getShiftTripDatesErrorMessage(error));
       }
     } else {
       const tripBatch = writeBatch(db);

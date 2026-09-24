@@ -121,6 +121,11 @@ This checklist names the sections to walk; the rules themselves live there:
   read-modify-write. Grep the diff for `onSnapshot(`, `fetch(`,
   `httpsCallable(`, `getDoc`/`getDocs`, `persist: true`, `useAppSelector(`,
   `variant='destructive'`, `Toggle`, `let `, and `for (` to catch violations.
+- **Dates** — grep the diff for `formatDate(`, `formatDateTime(`,
+  `toLocaleDateString(`, and local getters (`getDate()`, `getMonth()`,
+  `getFullYear()`) applied to a date-only field (anything written with
+  `fromDateInputValue`); those need `formatDateUTC`/`getDayLabel`/`getUTC*`.
+  Check any instant-vs-end-date comparison uses `endDate + 1 day`.
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
