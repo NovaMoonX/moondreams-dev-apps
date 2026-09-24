@@ -9,6 +9,7 @@ import {
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
+import { Archive, ArchiveRestore, Pencil } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { formatDate } from '@/utils/formatUtils';
@@ -30,9 +31,17 @@ interface TripDetailPageProps {
   currentUserId: string;
   onBack: () => void;
   onEdit?: (trip: TripSpace) => void;
+  onToggleArchived?: (trip: TripSpace) => void;
 }
 
-function TripDetailPage({ trip, events, currentUserId, onBack, onEdit }: TripDetailPageProps) {
+function TripDetailPage({
+  trip,
+  events,
+  currentUserId,
+  onBack,
+  onEdit,
+  onToggleArchived,
+}: TripDetailPageProps) {
   const now = useNow();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
   // An active trip opens with nothing expanded — the live HUD above is the
@@ -59,32 +68,61 @@ function TripDetailPage({ trip, events, currentUserId, onBack, onEdit }: TripDet
               className='mb-4 h-48 w-full rounded-lg object-cover'
             />
           )}
-          <div className='flex items-center gap-2'>
-            <h1 className='text-3xl font-semibold'>{trip.title}</h1>
-            {isActive && (
-              <Badge variant='success' use='status'>
-                Active
-              </Badge>
+          <div className='flex items-start justify-between gap-3'>
+            <div className='min-w-0'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <h1 className='text-3xl font-semibold'>{trip.title}</h1>
+                {isActive && (
+                  <Badge variant='success' use='status'>
+                    Active
+                  </Badge>
+                )}
+                {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
+              </div>
+              <p className='text-muted-foreground mt-1'>
+                {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
+              </p>
+            </div>
+            {(onEdit || onToggleArchived) && (
+              <div className='flex shrink-0 flex-col gap-1.5 sm:flex-row sm:gap-2'>
+                {onEdit && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    aria-label='Edit trip'
+                    className='px-2 sm:px-3'
+                    onClick={() => onEdit(trip)}
+                  >
+                    <Pencil className='h-4 w-4 sm:hidden' />
+                    <span className='hidden sm:inline'>Edit</span>
+                  </Button>
+                )}
+                {onToggleArchived && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    aria-label={trip.isArchived ? 'Unarchive trip' : 'Archive trip'}
+                    className='px-2 sm:px-3'
+                    onClick={() => onToggleArchived(trip)}
+                  >
+                    {trip.isArchived ? (
+                      <ArchiveRestore className='h-4 w-4 sm:hidden' />
+                    ) : (
+                      <Archive className='h-4 w-4 sm:hidden' />
+                    )}
+                    <span className='hidden sm:inline'>
+                      {trip.isArchived ? 'Unarchive' : 'Archive'}
+                    </span>
+                  </Button>
+                )}
+              </div>
             )}
           </div>
-          <p className='text-muted-foreground mt-1'>
-            {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
-          </p>
           <div className='mt-3'>
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
           </div>
-          {onEdit && (
-            <div className='mt-4'>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                onClick={() => onEdit(trip)}
-              >
-                Edit trip
-              </Button>
-            </div>
-          )}
         </div>
         <OverviewSection trip={trip} onViewDay={handleViewDay} />
         <hr className='border-border' />

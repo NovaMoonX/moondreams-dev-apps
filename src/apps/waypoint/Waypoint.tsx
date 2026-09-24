@@ -132,7 +132,11 @@ function Waypoint() {
         }),
       ).unwrap();
     } catch (archiveError) {
-      setError(getErrorMessage(archiveError, 'Unable to update this trip.'));
+      addToast({
+        title: 'Unable to update this trip',
+        description: getErrorMessage(archiveError, 'Please try again.'),
+        type: 'error',
+      });
     }
   };
 
@@ -211,16 +215,8 @@ function Waypoint() {
             <TripCard
               key={trip.id}
               trip={trip}
-              currentUserId={user.uid}
               now={now}
               onOpen={setSelectedTripId}
-              onEdit={(tripToEdit) => {
-                setError(null);
-                setEditingTrip(tripToEdit);
-              }}
-              onToggleArchived={(tripToToggle) =>
-                void handleToggleArchived(tripToToggle)
-              }
               onCopyInviteLink={(inviteLinkCode) =>
                 void handleCopyInviteLink(inviteLinkCode)
               }
@@ -257,6 +253,11 @@ function Waypoint() {
                   setError(null);
                   setEditingTrip(tripToEdit);
                 }
+              : undefined
+          }
+          onToggleArchived={
+            hasTripRole(selectedTrip, user.uid, 'ADMIN')
+              ? (tripToToggle) => void handleToggleArchived(tripToToggle)
               : undefined
           }
         />
