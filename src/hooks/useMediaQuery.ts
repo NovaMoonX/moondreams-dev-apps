@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react';
 
-/** Tailwind v4's default screens, in px. A new key here becomes available to every caller. */
+/** Mirrors Tailwind v4's default screens (px); keep in sync if the theme adds or changes one. */
 export const BREAKPOINTS = {
   sm: 640,
   md: 768,
