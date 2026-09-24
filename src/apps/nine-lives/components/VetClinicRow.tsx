@@ -1,10 +1,16 @@
-import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  DropdownMenuFactories,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import type { Doctor, VetClinic } from '@apps/nine-lives/types';
-import { getClinicContactMenuItems, handleClinicContactAction } from '@apps/nine-lives/utils/clinicContactMenu';
+import {
+  getClinicContactMenuItems,
+  handleClinicContactAction,
+} from '@apps/nine-lives/utils/clinicContactMenu';
 
 interface VetClinicRowProps {
   clinic: VetClinic;
@@ -30,7 +36,9 @@ function VetClinicRow({
   const clinicContactItems = getClinicContactMenuItems(clinic);
 
   const clinicMenuItems = [
-    ...(clinicContactItems.length > 0 ? [group(clinicContactItems, 'Contact')] : []),
+    ...(clinicContactItems.length > 0
+      ? [group(clinicContactItems, 'Contact')]
+      : []),
     group(
       [
         option({
@@ -97,7 +105,7 @@ function VetClinicRow({
           )}
         </div>
 
-        <DropdownMenu
+        <EllipsisDropdown
           items={clinicMenuItems}
           onItemSelect={async (value) => {
             if (await handleClinicContactAction(value, clinic, addToast)) {
@@ -127,34 +135,23 @@ function VetClinicRow({
               }
             }
           }}
-          placement='bottom'
-          alignment='end'
-          offset={8}
-          trigger={
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              className='h-8 w-8 p-0'
-              aria-label={`Open actions for clinic ${clinic.name}`}
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              <DotsVertical className='h-4 w-4' />
-            </Button>
-          }
+          ariaLabel={`Open actions for clinic ${clinic.name}`}
         />
       </div>
 
       {doctors.length > 0 && (
         <div className='border-border mt-3 space-y-2 border-l-2 pl-3'>
           {doctors.map((doctor) => (
-            <div key={doctor.id} className='flex items-start justify-between gap-3'>
+            <div
+              key={doctor.id}
+              className='flex items-start justify-between gap-3'
+            >
               <div>
                 <p className='text-sm font-medium'>{doctor.name}</p>
                 {doctor.notes && (
-                  <p className='text-muted-foreground text-sm'>{doctor.notes}</p>
+                  <p className='text-muted-foreground text-sm'>
+                    {doctor.notes}
+                  </p>
                 )}
               </div>
               <Button

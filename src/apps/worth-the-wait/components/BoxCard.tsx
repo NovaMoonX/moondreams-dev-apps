@@ -1,15 +1,12 @@
 import {
   Badge,
-  Button,
-  DropdownMenu,
   DropdownMenuFactories,
-  Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { DotsVertical } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useAuth } from '@/hooks/useAuth';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
@@ -168,49 +165,22 @@ function BoxCard() {
                 </Badge>
               )}
               {canManageCustomBox ? (
-                <DropdownMenu
+                <EllipsisDropdown
                   items={menuItems}
                   onItemSelect={(value) => {
                     isManagedActionInProgress.current = true;
                     void handleMenuSelect(value);
                   }}
                   placement='top'
-                  alignment='end'
-                  offset={8}
-                  trigger={
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      className='h-9 w-9 shrink-0 p-0'
-                      aria-label={`Open actions for ${box.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                    >
-                      <DotsVertical className='h-4 w-4' />
-                    </Button>
-                  }
+                  ariaLabel={`Open actions for ${box.name}`}
                 />
               ) : !box.isDefault ? (
-                <Tooltip
-                  message='Only the person who created this box can edit or delete it.'
-                  placement='left'
-                >
-                  <span>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      className='h-9 w-9 shrink-0 p-0'
-                      aria-label={`Open actions for ${box.name}`}
-                      disabled={true}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <DotsVertical className='h-4 w-4' />
-                    </Button>
-                  </span>
-                </Tooltip>
+                <EllipsisDropdown
+                  disabled={true}
+                  disabledMessage='Only the person who created this box can edit or delete it.'
+                  disabledTooltipPlacement='left'
+                  ariaLabel={`Open actions for ${box.name}`}
+                />
               ) : null}
             </div>
           </div>
