@@ -581,7 +581,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
               </p>
             </div>
-            <p className='font-medium whitespace-nowrap'>
+            <p className='pr-2 font-medium whitespace-nowrap'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
             </p>
           </div>
