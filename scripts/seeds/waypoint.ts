@@ -12,6 +12,7 @@ const INVITE_CODE = 'PNW2026';
 const ARCHIVED_INVITE_CODE = 'PNW2025';
 const ACTIVE_INVITE_CODE = 'ONTHEGO';
 const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
 
 export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -19,6 +20,17 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const taylor = FIXTURE_USERS.nineLivesCaretaker;
   const joinedAt = context.now - 86_400_000;
   const tripTitle = 'Pacific Northwest Weekend';
+  // Kept relative to `context.now` (unlike the archived trip, which is meant to stay in
+  // the past) so this trip is always upcoming, regardless of when the seed runs.
+  const upcomingAnchor = new Date(context.now + 14 * DAY_MS);
+  const upcomingTripStart = Date.UTC(
+    upcomingAnchor.getUTCFullYear(),
+    upcomingAnchor.getUTCMonth(),
+    upcomingAnchor.getUTCDate(),
+  );
+  const upcomingTripEnd = upcomingTripStart + 3 * DAY_MS;
+  const atUpcomingTripHour = (dayOffset: number, hour: number, minute = 0) =>
+    upcomingTripStart + dayOffset * DAY_MS + hour * HOUR_MS + minute * 60_000;
   const archivedTripTitle = 'Last Year’s Coast Trip';
   const tripRef = context.firestore
     .collection('apps')
@@ -65,8 +77,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     title: tripTitle,
     coverImageUrl:
       'https://images.rawpixel.com/image_800/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvZmwyNzkwOTU5NzA1Ni1pbWFnZS1rdXFtcjRxNi5qcGc.jpg',
-    startDate: Date.UTC(2026, 8, 25),
-    endDate: Date.UTC(2026, 8, 28),
+    startDate: upcomingTripStart,
+    endDate: upcomingTripEnd,
     defaultCurrency: null,
     isArchived: false,
     members: {
@@ -346,8 +358,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     dayIndex: 0,
     endDayIndex: 0,
     title: 'Flight to Seattle',
-    startAt: Date.UTC(2026, 8, 25, 9),
-    endAt: Date.UTC(2026, 8, 25, 11, 30),
+    startAt: atUpcomingTripHour(0, 9),
+    endAt: atUpcomingTripHour(0, 11, 30),
     locationName: 'Seattle-Tacoma International Airport',
     address: null,
     latitude: 47.4502,
@@ -379,7 +391,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     dayIndex: 0,
     endDayIndex: 0,
     title: 'Dinner at Pike Place',
-    startAt: Date.UTC(2026, 8, 25, 19),
+    startAt: atUpcomingTripHour(0, 19),
     endAt: null,
     locationName: 'Pike Place Market',
     address: 'Seattle, WA',
@@ -418,8 +430,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     dayIndex: 1,
     endDayIndex: 1,
     title: 'Discovery Park hike',
-    startAt: Date.UTC(2026, 8, 26, 10),
-    endAt: Date.UTC(2026, 8, 26, 13),
+    startAt: atUpcomingTripHour(1, 10),
+    endAt: atUpcomingTripHour(1, 13),
     locationName: 'Discovery Park',
     address: '3801 Discovery Park Blvd, Seattle, WA',
     latitude: 47.6613,
@@ -458,7 +470,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     dayIndex: 2,
     endDayIndex: 2,
     title: 'Free time downtown',
-    startAt: Date.UTC(2026, 8, 27, 14),
+    startAt: atUpcomingTripHour(2, 14),
     endAt: null,
     locationName: null,
     address: null,
@@ -492,11 +504,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: 'Seattle, WA',
     latitude: 47.6097,
     longitude: -122.3425,
-    checkInAt: Date.UTC(2026, 8, 25, 15),
-    checkOutAt: Date.UTC(2026, 8, 27, 11),
+    checkInAt: atUpcomingTripHour(0, 15),
+    checkOutAt: atUpcomingTripHour(2, 11),
     checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: Date.UTC(2026, 8, 25, 15),
-    plannedDepartureAt: Date.UTC(2026, 8, 27, 11),
+    plannedArrivalAt: atUpcomingTripHour(0, 15),
+    plannedDepartureAt: atUpcomingTripHour(2, 11),
     confirmationCode: null,
     notes: 'Door code is 4821. Parking is in the garage off Western Ave.',
     place: null,
@@ -521,11 +533,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: 'Portland, OR',
     latitude: 45.5231,
     longitude: -122.6765,
-    checkInAt: Date.UTC(2026, 8, 27, 15),
-    checkOutAt: Date.UTC(2026, 8, 28, 11),
+    checkInAt: atUpcomingTripHour(2, 15),
+    checkOutAt: atUpcomingTripHour(3, 11),
     checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: Date.UTC(2026, 8, 27, 15),
-    plannedDepartureAt: Date.UTC(2026, 8, 28, 11),
+    plannedArrivalAt: atUpcomingTripHour(2, 15),
+    plannedDepartureAt: atUpcomingTripHour(3, 11),
     confirmationCode: null,
     notes: null,
     place: null,
