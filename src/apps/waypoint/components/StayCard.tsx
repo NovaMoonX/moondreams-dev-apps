@@ -35,15 +35,23 @@ function getStayLocation(stay: Stay) {
   return location;
 }
 
-interface StayDetailLinesProps {
+export interface StayDetailLinesProps {
   stay: Stay;
   showTitle: boolean;
   showExtras: boolean;
+  showNotesIndicator?: boolean;
   canEdit: boolean;
   onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
 
-function StayDetailLines({ stay, showTitle, showExtras, canEdit, onSaveNotes }: StayDetailLinesProps) {
+export function StayDetailLines({
+  stay,
+  showTitle,
+  showExtras,
+  showNotesIndicator,
+  canEdit,
+  onSaveNotes,
+}: StayDetailLinesProps) {
   return (
     <>
       <div className='flex flex-wrap items-center gap-2'>
@@ -51,6 +59,14 @@ function StayDetailLines({ stay, showTitle, showExtras, canEdit, onSaveNotes }: 
         <Badge variant='muted' outline>
           {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
         </Badge>
+        {showNotesIndicator && stay.notes && (
+          <span
+            className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
+            role='img'
+            aria-label='Has notes'
+            title='Has notes'
+          />
+        )}
       </div>
       <LocationLink {...getStayLocation(stay)} label={stay.address} />
       <p className='text-muted-foreground text-sm'>
@@ -126,6 +142,7 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
                 stay={stay}
                 showTitle
                 showExtras={false}
+                showNotesIndicator={isSmallScreen}
                 canEdit={canEdit}
                 onSaveNotes={onSaveNotes}
               />

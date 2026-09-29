@@ -7,15 +7,15 @@ interface ModalFooterActionsProps {
 
 /**
  * Shared modal footer layout: left (secondary/destructive) and right (cancel/submit) action
- * groups. On narrow viewports this reads top-to-bottom as one cohesive stack (left group, then
- * right group, both left-aligned with matching spacing) instead of two misaligned rows — the
- * `sm:justify-end` on the right group only kicks in once there's room for a single row.
+ * groups, side by side on one row at every width. Relies on button labels staying short
+ * ("Save"/"Add", not "Save changes"/"Add event") — a footer that needs longer labels to be
+ * clear belongs in a wider layout, not a wrapped stack here.
  */
 function ModalFooterActions({ leftActions, rightActions }: ModalFooterActionsProps) {
   return (
-    <div className='col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3'>
-      <div className='flex flex-wrap items-center gap-2'>{leftActions}</div>
-      <div className='flex flex-wrap items-center gap-2 sm:justify-end'>{rightActions}</div>
+    <div className='col-span-full flex flex-row items-center justify-between gap-2'>
+      <div className='flex items-center gap-2'>{leftActions}</div>
+      <div className='flex items-center justify-end gap-2'>{rightActions}</div>
     </div>
   );
 }

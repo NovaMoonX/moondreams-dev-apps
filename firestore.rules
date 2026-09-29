@@ -1704,6 +1704,8 @@ service cloud.firestore {
             'reminderMinutesBefore',
             'reminderEnabled',
             'reminderId',
+            'isArchived',
+            'seenBy',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -1746,6 +1748,8 @@ service cloud.firestore {
           && request.resource.data.reminderMinutesBefore % 5 == 0
           && request.resource.data.reminderEnabled is bool
           && (request.resource.data.reminderId == null || request.resource.data.reminderId is string)
+          && request.resource.data.isArchived is bool
+          && request.resource.data.seenBy is map
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);
@@ -1758,14 +1762,143 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
+      // Every trip member (not just editors/admins) can mark an event "seen" for
+      // themselves — but only their own key, never anyone else's.
+      function isEventSeenByUpdateValid() {
+        return isTripSubcollectionMember()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
+          && request.resource.data.seenBy is map
+          && request.resource.data.seenBy.diff(resource.data.get('seenBy', {})).affectedKeys().hasOnly([request.auth.uid])
+          && isTimestampNumber(request.resource.data.seenBy[request.auth.uid]);
+      }
+
       allow read: if isTripSubcollectionMember();
       allow create: if isTripSubcollectionEditor()
         && isEventShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isTripAdminOnlyWhileActive()
+      allow update: if (
+        isTripAdminOnlyWhileActive()
         && isEventShapeValid()
-        && isEventImmutableFieldsValid();
+        && isEventImmutableFieldsValid()
+      ) || isEventSeenByUpdateValid();
       allow delete: if isTripAdminOnlyWhileActive();
+    }
+
+    match /apps/waypoint/trips/{tripId}/eventSuggestions/{suggestionId} {
+      function isTripSubcollectionMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      function isTripAdminMember() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
+      }
+
+      function isSuggestionShapeValid() {
+        return request.resource.data.keys().hasOnly([
+            'id',
+            'tripId',
+            'eventId',
+            'suggestedTitle',
+            'suggestedStartAt',
+            'suggestedEndAt',
+            'suggestedLocationName',
+            'suggestedAddress',
+            'suggestedLatitude',
+            'suggestedLongitude',
+            'suggestedPlace',
+            'note',
+            'upvotedBy',
+            'createdBy',
+            'createdAt'
+          ])
+          && request.resource.data.id == suggestionId
+          && request.resource.data.tripId == tripId
+          && isNonEmptyString(request.resource.data.eventId)
+          && isNonEmptyString(request.resource.data.suggestedTitle)
+          && isTimestampNumber(request.resource.data.suggestedStartAt)
+          && (request.resource.data.suggestedEndAt == null || isTimestampNumber(request.resource.data.suggestedEndAt))
+          && (request.resource.data.suggestedLocationName == null || request.resource.data.suggestedLocationName is string)
+          && (request.resource.data.suggestedAddress == null || request.resource.data.suggestedAddress is string)
+          && (request.resource.data.suggestedLatitude == null || request.resource.data.suggestedLatitude is number)
+          && (request.resource.data.suggestedLongitude == null || request.resource.data.suggestedLongitude is number)
+          && (request.resource.data.suggestedPlace == null || request.resource.data.suggestedPlace is map)
+          && (request.resource.data.note == null || request.resource.data.note is string)
+          && request.resource.data.upvotedBy is list
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      // Any trip member can upvote/un-upvote — but only their own uid, never anyone else's.
+      function isSuggestionUpvoteUpdateValid() {
+        let added = request.resource.data.upvotedBy.removeAll(resource.data.upvotedBy);
+        let removed = resource.data.upvotedBy.removeAll(request.resource.data.upvotedBy);
+        return isTripSubcollectionMember()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotedBy'])
+          && request.resource.data.upvotedBy is list
+          && added.removeAll([request.auth.uid]).size() == 0
+          && removed.removeAll([request.auth.uid]).size() == 0
+          && (added.size() + removed.size()) <= 1;
+      }
+
+      allow read: if isTripSubcollectionMember();
+      allow create: if isTripSubcollectionMember()
+        && isSuggestionShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isSuggestionUpvoteUpdateValid();
+      allow delete: if isTripAdminMember();
+    }
+
+    match /apps/waypoint/trips/{tripId}/announcements/{announcementId} {
+      function isTripSubcollectionMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      function isTripAdminMember() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
+      }
+
+      function isAnnouncementShapeValid() {
+        return request.resource.data.keys().hasOnly([
+            'id',
+            'tripId',
+            'severity',
+            'title',
+            'body',
+            'expiresAt',
+            'dismissedBy',
+            'createdBy',
+            'createdAt'
+          ])
+          && request.resource.data.id == announcementId
+          && request.resource.data.tripId == tripId
+          && request.resource.data.severity in ['INFO', 'HEADS_UP', 'URGENT']
+          && isNonEmptyString(request.resource.data.title)
+          && isNonEmptyString(request.resource.data.body)
+          && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
+          && request.resource.data.dismissedBy is map
+          && request.resource.data.createdBy is string
+          && isTimestampNumber(request.resource.data.createdAt);
+      }
+
+      // Any trip member can dismiss an announcement — but only their own key, never anyone else's.
+      function isAnnouncementDismissUpdateValid() {
+        return isTripSubcollectionMember()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dismissedBy'])
+          && request.resource.data.dismissedBy is map
+          && request.resource.data.dismissedBy.diff(resource.data.dismissedBy).affectedKeys().hasOnly([request.auth.uid])
+          && isTimestampNumber(request.resource.data.dismissedBy[request.auth.uid]);
+      }
+
+      allow read: if isTripSubcollectionMember();
+      allow create: if isTripAdminMember()
+        && isAnnouncementShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAnnouncementDismissUpdateValid();
+      allow delete: if isTripAdminMember();
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {

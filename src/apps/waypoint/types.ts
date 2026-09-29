@@ -201,9 +201,53 @@ export interface TimelineEvent {
   reminderEnabled: boolean;
   /** Id of the currently-scheduled `reminders/{id}` doc, or `null` if none is scheduled. */
   reminderId: string | null;
+  /** Superseded by an accepted suggestion, or manually archived once the trip is live —
+   * excluded from the default Timeline view. */
+  isArchived: boolean;
+  /** uid -> ms timestamp of when that member last viewed this event, used to flag
+   * unseen post-start creations/edits in the Overview section. */
+  seenBy: Record<string, number>;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
+}
+
+/** A proposed replacement for an existing timeline event — any member can propose or upvote
+ * one; approving one (admin-only) archives the source event and creates a new event from
+ * these fields. Everything not overridden here (event type, attendees, reminders, notes) is
+ * carried over from the source event, since this models "the same event, moved/renamed." */
+export interface EventSuggestion {
+  id: string;
+  tripId: string;
+  eventId: string;
+  suggestedTitle: string;
+  suggestedStartAt: number;
+  suggestedEndAt: number | null;
+  suggestedLocationName: string | null;
+  suggestedAddress: string | null;
+  suggestedLatitude: number | null;
+  suggestedLongitude: number | null;
+  suggestedPlace: PlaceRef | null;
+  note: string | null;
+  upvotedBy: string[];
+  createdBy: string;
+  createdAt: number;
+}
+
+export type AnnouncementSeverity = 'INFO' | 'HEADS_UP' | 'URGENT';
+
+export interface Announcement {
+  id: string;
+  tripId: string;
+  severity: AnnouncementSeverity;
+  title: string;
+  body: string;
+  expiresAt: number | null;
+  /** uid -> ms timestamp of when that member dismissed this announcement for themselves —
+   * it stays live for everyone else until it expires or an admin deletes it. */
+  dismissedBy: Record<string, number>;
+  createdBy: string;
+  createdAt: number;
 }
 
 export interface ChecklistItem {

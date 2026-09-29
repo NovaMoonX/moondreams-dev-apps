@@ -15,13 +15,17 @@ import {
   ArchiveRestore,
   Link,
   LoaderCircle,
+  Megaphone,
   Pencil,
 } from 'lucide-react';
 
+import { useAppDispatch } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
 
+import AnnouncementFormModal from '@apps/waypoint/components/AnnouncementFormModal';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import MembersSection from '@apps/waypoint/components/MembersSection';
@@ -30,9 +34,10 @@ import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
+import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
+import { isTripAdmin, isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 
 interface TripDetailPageProps {
   trip: TripSpace;
@@ -52,6 +57,7 @@ function TripDetailPage({
   onToggleArchived,
 }: TripDetailPageProps) {
   const now = useNow();
+  const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
   // An active trip opens with nothing expanded — the live HUD above is the
@@ -60,10 +66,30 @@ function TripDetailPage({
     isActive ? '' : 'overview',
   );
   const [dayTab, setDayTab] = useState('all');
+  const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
+  const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
 
   const handleViewDay = (dayIndex: number) => {
     setSectionTab('overview');
     setDayTab(String(dayIndex));
+  };
+
+  const handlePostAnnouncement = async (
+    fields: Omit<Parameters<typeof createAnnouncement>[0], 'uid' | 'trip'>,
+  ) => {
+    setIsSubmittingAnnouncement(true);
+    try {
+      await dispatch(createAnnouncement({ uid: currentUserId, trip, ...fields })).unwrap();
+      setIsAnnouncementFormOpen(false);
+    } catch (announcementError) {
+      addToast({
+        title: 'Unable to post this announcement',
+        description: getErrorMessage(announcementError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSubmittingAnnouncement(false);
+    }
   };
 
   const handleCopyTripLink = async () => {
@@ -138,6 +164,31 @@ function TripDetailPage({
                   </Button>
                 </>
               )}
+              {isTripAdmin(trip, currentUserId) && (
+                <>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    aria-label='Post announcement'
+                    title='Post announcement'
+                    className='px-2 sm:hidden'
+                    onClick={() => setIsAnnouncementFormOpen(true)}
+                  >
+                    <Megaphone className='h-4 w-4' />
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    aria-label='Post announcement'
+                    className='hidden! px-3 sm:inline-flex!'
+                    onClick={() => setIsAnnouncementFormOpen(true)}
+                  >
+                    Announcement
+                  </Button>
+                </>
+              )}
               {onToggleArchived && (
                 <>
                   <Button
@@ -209,7 +260,7 @@ function TripDetailPage({
             </span>
           </div>
         )}
-        <OverviewSection trip={trip} onViewDay={handleViewDay} />
+        <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
         <hr className='border-border' />
         <Tabs
           value={sectionTab}
@@ -261,6 +312,13 @@ function TripDetailPage({
         </Tabs>
       </div>
       {isActive && <TripProgressBar trip={trip} now={now} />}
+      <AnnouncementFormModal
+        key={isAnnouncementFormOpen ? 'open' : 'closed'}
+        isOpen={isAnnouncementFormOpen}
+        isSubmitting={isSubmittingAnnouncement}
+        onSubmit={handlePostAnnouncement}
+        onClose={() => setIsAnnouncementFormOpen(false)}
+      />
     </div>
   );
 }

@@ -484,8 +484,10 @@ Ephemeral by design, mirroring the existing `/presence/{userId}` pattern: no his
 **1. Event Active Status Machine**
 
 ```
-[UPCOMING] ---> now >= startAt ---> [ACTIVE] ---> now >= endAt ---> [COMPLETED]
+[UPCOMING] ---> now >= startAt ---> [ACTIVE] ---> now >= impliedEndAt ---> [COMPLETED]
 ```
+
+`impliedEndAt` is `endAt` when set, otherwise the end of the event's own local calendar day (`getEndOfLocalDay(startAt)`) — an event with no end time doesn't stay "Active Now" forever. Among several simultaneously `ACTIVE` events, Overview's Active Now card shows whichever started most recently.
 
 **2. Proposal Approval State Machine**
 
@@ -563,6 +565,18 @@ A client-side `groupBy` on `ideaDetails.location` over the already-loaded ideas 
               assignments (past checklist/expense/comment records) are left as-is — only future access is revoked
 ```
 
+**13a. Event Archive, Activity Tracking, and Suggested Replacements**
+
+`TimelineEvent` additionally carries `isArchived: boolean` and `seenBy: Record<uid, number>`. Archiving mirrors the trip-level pattern (`isArchived`/`setTripArchived`) — an Admin-only toggle, only offered once `isTripActive(trip)`, that excludes the event from the default Timeline view without deleting it. `seenBy` tracks, per member, when they last viewed an event; a member writes only their own key, through a Firestore transaction (not a plain `updateDoc`) since it's a genuinely multi-writer map — the same reasoning `runTransaction`-based writes elsewhere in this doc apply to `members`.
+
+An event is "unseen activity" for a member when its `createdAt` (if `>= trip.startDate`, i.e. created post-start) or its latest `changeHistory` entry's `latestChangedAt` is newer than that member's `seenBy` entry. Overview surfaces these under a "Recent updates" list; opening an event's details marks it seen.
+
+A separate, flat trip subcollection, `apps/waypoint/trips/{tripId}/eventSuggestions/{id}`, lets any member propose a replacement (new title/time/location) for an existing event and upvote others' suggestions (own-uid-only array membership). Approving one — Admin-only — archives the source event, creates a new `TimelineEvent` from the suggested fields (carrying over everything not overridden: event type, attendees, reminders, notes), and deletes the suggestion, in one batch.
+
+**13b. Admin Announcements**
+
+`apps/waypoint/trips/{tripId}/announcements/{id}`: `severity` (`INFO`/`HEADS_UP`/`URGENT`), `title`, `body`, an optional `expiresAt`, and `dismissedBy: Record<uid, number>` (own-key-only, transactional, same shape/reasoning as `seenBy` above). Create/update/delete is Admin-only — the one subcollection in this schema where `EDITOR` doesn't suffice for create. "Live" for a given member is `!expired && uid not in dismissedBy`; Overview stacks every live announcement at the top, each opening a detail modal with a Dismiss action.
+
 No member — Admin included — can change their own role; it always has to be a different Admin, which also means the trip creator can never self-demote.
 
 **14. Auto-Generated Transit Leg (Next Steps tier, not MVP)**
@@ -597,7 +611,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 ## Client State Management (Redux Toolkit)
 
 - **Central vs. app-scoped**: if no earlier mini app has introduced `src/store/` yet, Waypoint's Phase 4 roadmap includes the one-time central store foundation issue. Otherwise, Waypoint builds directly on it.
-- **Typed per-app state**: `WaypointState` composes `trip`, `events`, `stays`, `checklist`, `expenses`, `comments`, `ideas`, `stayCriteria`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
+- **Typed per-app state**: `WaypointState` composes `trip`, `expenses`, `events`, `eventSuggestions`, `announcements`, `checklist`, `stays`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
 - **Member display info is never in Waypoint's own state.** `TripMember` only carries `uid`/`role`/`joinedAt`; any component rendering a member's name or avatar resolves it via the existing central `useUserInfo(uid)` hook.
 - **`resetAllState`**: dispatched on UID change, including via `DevAccountSwitcher`.
 - **Multi-doc atomic mutations get their own actions**: `proposalActions.ts` (approve/decline), `membershipActions.ts` (approve/decline pending request, change role, remove member — all Admin-only, atomic per State Machine #13), `ideaActions.ts` (convert idea → event or stay).

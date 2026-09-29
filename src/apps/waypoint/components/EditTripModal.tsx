@@ -399,7 +399,7 @@ function EditTripModal({
               loading={isSubmitting}
               disabled={isSubmitting || !isFormComplete}
             >
-              {isSubmitting ? 'Saving…' : 'Save changes'}
+              {isSubmitting ? 'Saving…' : 'Save'}
             </Button>
           </div>
         }

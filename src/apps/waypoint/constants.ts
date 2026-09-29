@@ -1,5 +1,6 @@
 import type {
   ActivitySetting,
+  AnnouncementSeverity,
   ChecklistCategory,
   EventAttendeeTargetType,
   EventFieldChange,
@@ -59,6 +60,18 @@ export const EVENT_TYPE_BADGE_CLASSES: Record<EventType, string> = {
     'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
   FREE_TIME:
     'bg-violet-200 text-violet-900 dark:bg-violet-900 dark:text-violet-100',
+};
+
+export const ANNOUNCEMENT_SEVERITY_LABELS: Record<AnnouncementSeverity, string> = {
+  INFO: 'Info',
+  HEADS_UP: 'Heads up',
+  URGENT: 'Urgent',
+};
+
+export const ANNOUNCEMENT_SEVERITY_BADGE_CLASSES: Record<AnnouncementSeverity, string> = {
+  INFO: 'bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-100',
+  HEADS_UP: 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
+  URGENT: 'bg-red-200 text-red-900 dark:bg-red-900 dark:text-red-100',
 };
 
 export const EVENT_FIELD_LABELS: Record<EventFieldChange['field'], string> = {

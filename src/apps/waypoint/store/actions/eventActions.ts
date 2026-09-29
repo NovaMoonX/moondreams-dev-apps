@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -146,6 +146,8 @@ export const createEvent = createAsyncThunk<
     notes: null,
     changeHistory: [],
     reminderId,
+    isArchived: false,
+    seenBy: { [uid]: now },
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -221,6 +223,8 @@ function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
     reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
   };
   const missing = Object.fromEntries(
     Object.entries(defaults).filter(([key]) => !(key in event)),
@@ -252,6 +256,57 @@ export const updateEventNotes = createAsyncThunk<
   await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), changes);
   return { ...event, ...changes };
 });
+
+interface SetEventArchivedInput {
+  uid: string;
+  trip: TripSpace;
+  event: TimelineEvent;
+  isArchived: boolean;
+}
+
+export const setEventArchived = createAsyncThunk<
+  { eventId: string; isArchived: boolean },
+  SetEventArchivedInput,
+  { rejectValue: string }
+>(
+  'waypoint/events/setArchived',
+  async ({ uid, trip, event, isArchived }, { rejectWithValue }) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to archive this event.');
+    }
+
+    await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), {
+      ...getMissingEventFields(event),
+      isArchived,
+      lastEditedAt: Date.now(),
+    });
+    return { eventId: event.id, isArchived };
+  },
+);
+
+interface MarkEventSeenInput {
+  uid: string;
+  trip: TripSpace;
+  eventId: string;
+}
+
+// Written by every trip member independently (each to their own key), so — unlike a plain
+// updateDoc — this must read-modify-write inside a transaction to avoid one member's mark
+// clobbering another's concurrent one.
+export const markEventSeen = createAsyncThunk<void, MarkEventSeenInput, { rejectValue: string }>(
+  'waypoint/events/markSeen',
+  async ({ uid, trip, eventId }) => {
+    const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(eventRef);
+      if (!snapshot.exists()) {
+        return;
+      }
+      const seenBy = (snapshot.data().seenBy ?? {}) as Record<string, number>;
+      transaction.update(eventRef, { seenBy: { ...seenBy, [uid]: Date.now() } });
+    });
+  },
+);
 
 export const deleteEvent = createAsyncThunk<
   string,

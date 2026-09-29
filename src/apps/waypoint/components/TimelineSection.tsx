@@ -8,7 +8,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { shallowEqual } from 'react-redux';
 
 import AppToggle from '@/components/AppToggle';
@@ -16,9 +16,11 @@ import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
+import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import {
   createEvent,
   deleteEvent,
+  setEventArchived,
   updateEvent,
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
@@ -28,7 +30,11 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
-import { canEditExistingItem, isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
+import {
+  canEditExistingItem,
+  isTripActive,
+  isTripDateShiftLocked,
+} from '@apps/waypoint/utils/roleGuards';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
@@ -55,6 +61,7 @@ export function TimelineSection({
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const memberIds = Object.keys(trip.members);
   const activeDayIndex = activeDayTab === 'all' ? 0 : Number(activeDayTab);
@@ -67,11 +74,41 @@ export function TimelineSection({
   const canEdit = canEditExistingItem(trip, currentUserId);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const stays = useAppSelector(selectStays);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
-  const attendanceFilteredEvents = attendingOnly
-    ? events.filter((event) => getEventAttendeeIds(event, memberIds).includes(currentUserId))
-    : events;
+  const attendanceFilteredEvents = events
+    .filter((event) => showArchived || !event.isArchived)
+    .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId));
+
+  const handleToggleArchived = async (event: TimelineEvent) => {
+    if (!event.isArchived) {
+      const confirmed = await confirm({
+        title: 'Archive event',
+        message: 'Archive this event? It will stay available under Show archived and can be restored later.',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    try {
+      await dispatch(
+        setEventArchived({
+          uid: currentUserId,
+          trip,
+          event,
+          isArchived: !event.isArchived,
+        }),
+      ).unwrap();
+    } catch (archiveError) {
+      addToast({
+        title: 'Unable to update this event',
+        description: getErrorMessage(archiveError, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
   const renderStayBanners = (dayIndex: number) => {
     if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
       return null;
@@ -105,21 +142,25 @@ export function TimelineSection({
   );
 
   const renderEventCard = (event: TimelineEvent) => (
-    <EventCard
-      key={event.id}
-      event={event}
-      canEdit={canEdit}
-      showCover={showCovers}
-      onEdit={(selectedEvent) => {
-        setEditingEvent(selectedEvent);
-        setIsFormOpen(true);
-      }}
-      onSaveNotes={async (selectedEvent, notes) => {
-        await dispatch(
-          updateEventNotes({ uid: currentUserId, trip, event: selectedEvent, notes }),
-        ).unwrap();
-      }}
-    />
+    <div key={event.id} className='space-y-2'>
+      <EventCard
+        event={event}
+        canEdit={canEdit}
+        showCover={showCovers}
+        showArchiveToggle={isTripActive(trip)}
+        onEdit={(selectedEvent) => {
+          setEditingEvent(selectedEvent);
+          setIsFormOpen(true);
+        }}
+        onSaveNotes={async (selectedEvent, notes) => {
+          await dispatch(
+            updateEventNotes({ uid: currentUserId, trip, event: selectedEvent, notes }),
+          ).unwrap();
+        }}
+        onToggleArchived={(selectedEvent) => void handleToggleArchived(selectedEvent)}
+      />
+      <EventSuggestionsList trip={trip} event={event} currentUserId={currentUserId} />
+    </div>
   );
 
   const renderDivider = (label: string) => (
@@ -259,6 +300,14 @@ export function TimelineSection({
                 onCheckedChange={setAttendingOnly}
               />
               Only events I&apos;m attending
+            </label>
+            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <AppToggle
+                size='sm'
+                checked={showArchived}
+                onCheckedChange={setShowArchived}
+              />
+              Show archived
             </label>
           </div>
           <TabsContent value='all' className='pt-4'>

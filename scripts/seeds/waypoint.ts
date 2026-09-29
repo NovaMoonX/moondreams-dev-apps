@@ -365,6 +365,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -402,6 +404,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -440,6 +444,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -471,6 +477,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -592,6 +600,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -632,6 +642,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -676,6 +688,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now - 3_600_000,
@@ -707,6 +721,43 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     reminderMinutesBefore: 20,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    seenBy: {},
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  // Demonstrates the archived state — superseded plans stay available under "Show archived"
+  // instead of being deleted outright.
+  await activeEventsCollection.doc('active-trip-old-museum').set({
+    id: 'active-trip-old-museum',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'ACTIVITY',
+    dayIndex: 2,
+    endDayIndex: 2,
+    title: 'Feiro Marine Life Center',
+    startAt: activeTripStart + 2 * DAY_MS + 14 * 3_600_000,
+    endAt: activeTripStart + 2 * DAY_MS + 16 * 3_600_000,
+    locationName: 'Feiro Marine Life Center',
+    address: 'Port Angeles, WA',
+    latitude: 48.1226,
+    longitude: -123.4307,
+    eventDetails: { settings: ['INDOOR'] },
+    notes: null,
+    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+    assignedMemberIds: [],
+    venueOpenTime: null,
+    venueCloseTime: null,
+    changeHistory: [],
+    place: null,
+    linkUrl: null,
+    linkPreview: null,
+    reminderMinutesBefore: 20,
+    reminderEnabled: true,
+    reminderId: null,
+    isArchived: true,
+    seenBy: {},
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -776,6 +827,52 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  const activeAnnouncementsCollection = activeTripRef.collection('announcements');
+  const activeEventSuggestionsCollection = activeTripRef.collection('eventSuggestions');
+
+  await activeAnnouncementsCollection.doc('active-trip-road-closure').set({
+    id: 'active-trip-road-closure',
+    tripId: ACTIVE_TRIP_ID,
+    severity: 'URGENT',
+    title: 'Highway 101 closure near Forks',
+    body: 'A rockslide has closed 101 north of Forks. Add ~45 minutes and take the detour through Sappho if you are heading to Kalaloch today.',
+    expiresAt: activeTripEnd,
+    dismissedBy: {},
+    createdBy: alex.uid,
+    createdAt: context.now - 3_600_000,
+  });
+
+  await activeAnnouncementsCollection.doc('active-trip-welcome').set({
+    id: 'active-trip-welcome',
+    tripId: ACTIVE_TRIP_ID,
+    severity: 'INFO',
+    title: 'Welcome to the loop!',
+    body: "Itinerary's live — check Overview each morning for the day's plan. Ping the group chat if anything needs to shift.",
+    expiresAt: null,
+    // Shows the per-member dismiss in action — Taylor has already seen this one.
+    dismissedBy: { [taylor.uid]: context.now - 7_200_000 },
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+  });
+
+  await activeEventSuggestionsCollection.doc('active-trip-dinner-suggestion').set({
+    id: 'active-trip-dinner-suggestion',
+    tripId: ACTIVE_TRIP_ID,
+    eventId: 'active-trip-dinner',
+    suggestedTitle: 'Dinner at Downriggers',
+    suggestedStartAt: activeTripStart + 2 * DAY_MS + 18 * 3_600_000,
+    suggestedEndAt: null,
+    suggestedLocationName: 'Downriggers on the Waterfront',
+    suggestedAddress: '115 E Railroad Ave, Port Angeles, WA',
+    suggestedLatitude: 48.1215,
+    suggestedLongitude: -123.4307,
+    suggestedPlace: null,
+    note: 'Better views and they take reservations — the original spot is walk-in only.',
+    upvotedBy: [taylor.uid],
+    createdBy: taylor.uid,
+    createdAt: context.now - 1_800_000,
+  });
+
   await context.firestore.collection('reminders').doc('seed-waypoint-reminder-alex').set({
     id: 'seed-waypoint-reminder-alex',
     appId: 'waypoint',
@@ -793,6 +890,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 30,
+    firestoreDocuments: 34,
   };
 }

@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Archive, ArchiveRestore } from 'lucide-react';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import LocationLink from '@apps/waypoint/components/LocationLink';
@@ -26,8 +27,11 @@ interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
   showCover: boolean;
+  /** Only true once the trip is live — archiving an event is a post-start-only action. */
+  showArchiveToggle: boolean;
   onEdit: (event: TimelineEvent) => void;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
+  onToggleArchived: (event: TimelineEvent) => void;
 }
 
 function getQuickField(event: TimelineEvent): string | null {
@@ -44,15 +48,23 @@ function getQuickField(event: TimelineEvent): string | null {
   return null;
 }
 
-interface EventDetailLinesProps {
+export interface EventDetailLinesProps {
   event: TimelineEvent;
   showTitle: boolean;
   showNotes: boolean;
+  showNotesIndicator?: boolean;
   canEdit: boolean;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
 
-function EventDetailLines({ event, showTitle, showNotes, canEdit, onSaveNotes }: EventDetailLinesProps) {
+export function EventDetailLines({
+  event,
+  showTitle,
+  showNotes,
+  showNotesIndicator,
+  canEdit,
+  onSaveNotes,
+}: EventDetailLinesProps) {
   const quickField = getQuickField(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
 
@@ -62,10 +74,19 @@ function EventDetailLines({ event, showTitle, showNotes, canEdit, onSaveNotes }:
         <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
           {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
         </Badge>
+        {event.isArchived && <Badge variant='muted'>Archived</Badge>}
         <span className='text-muted-foreground text-sm'>
           {formatTime(event.startAt)}
           {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
         </span>
+        {showNotesIndicator && event.notes && (
+          <span
+            className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
+            role='img'
+            aria-label='Has notes'
+            title='Has notes'
+          />
+        )}
       </div>
       {showTitle && <h3 className='pt-1 font-semibold'>{event.title}</h3>}
       {quickField && <p className='text-muted-foreground text-sm'>{quickField}</p>}
@@ -91,12 +112,22 @@ function EventDetailLines({ event, showTitle, showNotes, canEdit, onSaveNotes }:
           placeholder={EVENT_NOTES_PLACEHOLDER}
         />
       )}
-      <ChangeBadge changeHistory={event.changeHistory} />
+      <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+        <ChangeBadge changeHistory={event.changeHistory} />
+      </div>
     </>
   );
 }
 
-export function EventCard({ event, canEdit, showCover, onEdit, onSaveNotes }: EventCardProps) {
+export function EventCard({
+  event,
+  canEdit,
+  showCover,
+  showArchiveToggle,
+  onEdit,
+  onSaveNotes,
+  onToggleArchived,
+}: EventCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
@@ -137,6 +168,7 @@ export function EventCard({ event, canEdit, showCover, onEdit, onSaveNotes }: Ev
               event={event}
               showTitle
               showNotes={false}
+              showNotesIndicator={isSmallScreen}
               canEdit={canEdit}
               onSaveNotes={onSaveNotes}
             />
@@ -144,6 +176,21 @@ export function EventCard({ event, canEdit, showCover, onEdit, onSaveNotes }: Ev
           {!isSmallScreen && (
             <div className='flex shrink-0 gap-2'>
               <MapNavigationButton {...event} />
+              {canEdit && showArchiveToggle && (
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='secondary'
+                  aria-label={event.isArchived ? 'Unarchive event' : 'Archive event'}
+                  onClick={() => onToggleArchived(event)}
+                >
+                  {event.isArchived ? (
+                    <ArchiveRestore className='h-4 w-4' />
+                  ) : (
+                    <Archive className='h-4 w-4' />
+                  )}
+                </Button>
+              )}
               {canEdit && (
                 <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
                   Modify
@@ -174,6 +221,8 @@ export function EventCard({ event, canEdit, showCover, onEdit, onSaveNotes }: Ev
           location={event}
           linkUrl={event.linkUrl}
           onEdit={canEdit ? () => onEdit(event) : null}
+          archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
+          onArchive={canEdit && showArchiveToggle ? () => onToggleArchived(event) : null}
         >
           <EventDetailLines
             event={event}

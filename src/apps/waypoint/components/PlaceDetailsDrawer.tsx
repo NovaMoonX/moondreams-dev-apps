@@ -14,6 +14,8 @@ interface PlaceDetailsDrawerProps {
   location: Pick<TimelineEvent, 'locationName' | 'address' | 'latitude' | 'longitude'>;
   linkUrl: string | null;
   onEdit: (() => void) | null;
+  archiveLabel?: string | null;
+  onArchive?: (() => void) | null;
   children: ReactNode;
 }
 
@@ -25,6 +27,8 @@ export function PlaceDetailsDrawer({
   location,
   linkUrl,
   onEdit,
+  archiveLabel,
+  onArchive,
   children,
 }: PlaceDetailsDrawerProps) {
   const canNavigate = getMapNavigationUrl(location) !== null;
@@ -58,6 +62,19 @@ export function PlaceDetailsDrawer({
               }}
             >
               Modify
+            </Button>
+          )}
+          {onArchive && (
+            <Button
+              type='button'
+              size='lg'
+              variant='secondary'
+              onClick={() => {
+                onClose();
+                onArchive();
+              }}
+            >
+              {archiveLabel}
             </Button>
           )}
         </div>
