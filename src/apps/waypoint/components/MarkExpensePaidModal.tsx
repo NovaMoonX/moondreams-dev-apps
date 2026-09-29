@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
@@ -20,6 +20,7 @@ interface MarkExpensePaidFormData {
 export interface MarkExpensePaidValues {
   payerUid: string | null;
   paidAmount: number | null;
+  knownAmount: number | null;
 }
 
 interface MarkExpensePaidModalProps {
@@ -52,6 +53,15 @@ function MarkExpensePaidModal({
   const headcount = expense
     ? getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds))
     : 1;
+  // A paid expense is usually a known amount by now, so converting the range to one is the
+  // default path — "keep the estimate" is the opt-out, not the other way around.
+  const [keepAsRange, setKeepAsRange] = useState(false);
+  const [formData, setFormData] = useState(initialData);
+  const [error, setError] = useState<string | null>(null);
+  const parsedAmount = Number(formData.paidAmount.trim());
+  const isValidAmount =
+    formData.paidAmount.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount >= 0;
+  const isFormComplete = !isRange || keepAsRange || isValidAmount;
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
@@ -74,21 +84,26 @@ function MarkExpensePaidModal({
           name: 'paidAmount',
           label: isPerPerson ? 'Amount paid per person' : 'Amount paid',
           type: 'number',
-          placeholder: 'Leave blank to keep the estimated range',
+          placeholder: keepAsRange ? 'Leave blank to keep the estimated range' : '0.00',
           variant: 'outline',
         }),
       );
     }
 
     return nextFields;
-  }, [isPerPerson, isRange, memberIds, memberInfo]);
+  }, [isPerPerson, isRange, keepAsRange, memberIds, memberInfo]);
 
   const handleSubmit = async (data: MarkExpensePaidFormData) => {
-    const trimmed = data.paidAmount.trim();
-    const parsed = trimmed === '' ? null : Number(trimmed);
+    if (!isFormComplete) {
+      setError('Enter the amount paid, or choose to keep this as an estimated range.');
+      return;
+    }
+
+    setError(null);
     await onSubmit({
       payerUid: data.payerUid === PAID_BY_EACH_PERSON ? null : data.payerUid,
-      paidAmount: isRange && parsed !== null && Number.isFinite(parsed) ? parsed : null,
+      paidAmount: isRange && keepAsRange && isValidAmount ? parsedAmount : null,
+      knownAmount: isRange && !keepAsRange && isValidAmount ? parsedAmount : null,
     });
   };
 
@@ -96,10 +111,12 @@ function MarkExpensePaidModal({
     <Modal isOpen={isOpen} onClose={onClose} title='Paid'>
       {isRange && (
         <p className='text-muted-foreground mb-4 text-sm'>
-          {expense?.title} was estimated as a range. Enter what was actually paid
+          {expense?.title} was estimated as a range.{' '}
+          {keepAsRange
+            ? 'Enter what was actually paid, or leave it blank to keep the estimate.'
+            : "Enter what was actually paid and we'll replace the estimate with it."}
           {isPerPerson &&
-            ` per person — we'll multiply it by ${headcount} ${headcount === 1 ? 'person' : 'people'}`}
-          , or leave it blank to keep the estimate.
+            ` We'll multiply it by ${headcount} ${headcount === 1 ? 'person' : 'people'}.`}
         </p>
       )}
       <Form
@@ -108,15 +125,30 @@ function MarkExpensePaidModal({
         initialData={initialData}
         columns={1}
         spacing='normal'
+        onDataChange={(data) => setFormData(data as MarkExpensePaidFormData)}
         onSubmit={(data) => void handleSubmit(data as MarkExpensePaidFormData)}
         submitButton={
-          <div className='flex justify-end gap-2'>
-            <Button type='button' variant='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type='submit' loading={isSubmitting} disabled={isSubmitting}>
-              {isSubmitting ? 'Marking…' : 'Mark paid'}
-            </Button>
+          <div className='col-span-full space-y-3'>
+            {isRange && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0'
+                onClick={() => setKeepAsRange((current) => !current)}
+              >
+                {keepAsRange ? 'Enter a known amount instead' : 'Keep as an estimated range instead'}
+              </Button>
+            )}
+            {error && <p className='text-destructive text-sm'>{error}</p>}
+            <div className='flex justify-end gap-2'>
+              <Button type='button' variant='secondary' onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
+                {isSubmitting ? 'Marking…' : 'Mark paid'}
+              </Button>
+            </div>
           </div>
         }
       />

@@ -27,7 +27,7 @@ interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
   showCover: boolean;
-  /** Only true once the trip is live — archiving an event is a post-start-only action. */
+  /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
   showArchiveToggle: boolean;
   onEdit: (event: TimelineEvent) => void;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;

@@ -218,17 +218,25 @@ export const deleteExpense = createAsyncThunk<
 interface MarkExpensePaidInput {
   expense: TripExpense;
   payerUid: string | null;
+  /** Only meaningful when keeping the expense as an estimated range — a paid-amount override
+   * shown alongside the range instead of replacing it. */
   paidAmount: number | null;
+  /** Only meaningful for a range expense — converts it to a known-amount expense, clearing
+   * amountMin/amountMax. This is the default path from the mark-paid modal. */
+  knownAmount: number | null;
 }
 
 export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
-  async ({ expense, payerUid, paidAmount }) => {
+  async ({ expense, payerUid, paidAmount, knownAmount }) => {
     const updatedExpense: TripExpense = {
       ...expense,
       status: 'PAID',
       payerUid,
-      paidAmount: expense.amount === null ? paidAmount : null,
+      amount: knownAmount ?? expense.amount,
+      amountMin: knownAmount !== null ? null : expense.amountMin,
+      amountMax: knownAmount !== null ? null : expense.amountMax,
+      paidAmount: knownAmount === null && expense.amount === null ? paidAmount : null,
       lastEditedAt: Date.now(),
     };
 

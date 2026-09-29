@@ -49,6 +49,11 @@ export function isTripActive(trip: TripSpace, now = Date.now()) {
   return now >= trip.startDate && now < trip.endDate;
 }
 
+/** True once the trip has started, whether it's still ongoing or already over. */
+export function hasTripStarted(trip: TripSpace, now = Date.now()) {
+  return now >= trip.startDate;
+}
+
 /** A date-shift Cloud Function is re-dating this trip's events/stays/expenses/
  * checklist — everything about the trip is read-only until it finishes. */
 export function isTripDateShiftLocked(trip: TripSpace) {

@@ -32,7 +32,7 @@ import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import {
   canEditExistingItem,
-  isTripActive,
+  hasTripStarted,
   isTripDateShiftLocked,
 } from '@apps/waypoint/utils/roleGuards';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
@@ -147,7 +147,7 @@ export function TimelineSection({
         event={event}
         canEdit={canEdit}
         showCover={showCovers}
-        showArchiveToggle={isTripActive(trip)}
+        showArchiveToggle={hasTripStarted(trip)}
         onEdit={(selectedEvent) => {
           setEditingEvent(selectedEvent);
           setIsFormOpen(true);
