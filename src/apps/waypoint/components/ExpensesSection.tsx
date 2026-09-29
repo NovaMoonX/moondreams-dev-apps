@@ -53,17 +53,16 @@ import {
 } from '@apps/waypoint/utils/expenseCategories';
 import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
-  computeDuesSummary,
   computeEvenSplit,
-  computeRepaidSummary,
+  computePairSettlements,
   getActiveSplitAmounts,
-  getDebtExpenses,
   getExpenseTotalAmount,
   getPerPersonMultiplier,
-  getRepaidExpenses,
   getResolvedExpenseAmount,
   getSplitMemberIds,
+  isPairSettled,
   scaleAmount,
+  type DirectionalOwed,
 } from '@apps/waypoint/utils/splitCalculators';
 
 const { option } = DropdownMenuFactories;
@@ -310,8 +309,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     { label: 'Expected', total: toTotalsView(totals.expected) },
     { label: 'Total', total: toTotalsView(totals.total) },
   ];
-  const duesSummary = computeDuesSummary(expenses, memberIds);
-  const repaidSummary = computeRepaidSummary(expenses, memberIds);
+  const pairSettlements = computePairSettlements(expenses, memberIds);
 
   const sortedExpenses =
     sortBy === 'day'
@@ -444,25 +442,31 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const repaidNames = (splitBreakdown?.shares ?? [])
       .filter((share) => share.isPaid)
       .map((share) => memberLabel(share.uid));
-    const renderRepaidLink = (share: SplitShare | undefined) => {
+    const renderRepaidControl = (share: SplitShare | undefined) => {
       if (!share) {
         return null;
       }
 
+      const toggle = () =>
+        void dispatch(
+          toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+        );
+
+      if (!share.isPaid) {
+        return (
+          <Button type='button' variant='link' className='shrink-0 text-xs' onClick={toggle}>
+            Mark as repaid
+          </Button>
+        );
+      }
+
       return (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-auto shrink-0 p-0 text-xs'
-          onClick={() =>
-            void dispatch(
-              toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId: expense.id }),
-            )
-          }
-        >
-          {share.isPaid ? `${memberLabel(currentUserId)} repaid` : 'Mark as repaid'}
-        </Button>
+        <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
+          <span className='text-muted-foreground text-xs'>You repaid this</span>
+          <Button type='button' variant='link' className='text-xs' onClick={toggle}>
+            Undo
+          </Button>
+        </span>
       );
     };
 
@@ -488,7 +492,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
-        <div className='col-start-1'>
+        <div className='col-span-2'>
           <p className='whitespace-nowrap font-medium'>
             {formatTotal(displayRange.min, displayRange.max, expense.currency)}
             {expense.isPerPerson && (
@@ -507,22 +511,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
           {splitBreakdown && (
             <div className='mt-0.5 space-y-1'>
-              {splitBreakdown.perPersonLabel ? (
-                <div className='flex items-baseline justify-between gap-2'>
-                  <p className='text-muted-foreground whitespace-nowrap text-xs'>
-                    {splitBreakdown.perPersonLabel}
-                  </p>
-                  {renderRepaidLink(
+              {splitBreakdown.perPersonLabel !== null ? (
+                <div className='flex items-baseline justify-end gap-2'>
+                  {/* Redundant with the "total for N people" line above for a per-person rate. */}
+                  {!expense.isPerPerson && (
+                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                      {splitBreakdown.perPersonLabel}
+                    </p>
+                  )}
+                  {renderRepaidControl(
                     splitBreakdown.shares.find((share) => share.uid === currentUserId),
                   )}
                 </div>
               ) : (
                 splitBreakdown.shares.map((share) => (
-                  <div key={share.uid} className='flex items-baseline justify-between gap-2'>
-                    <p className='text-muted-foreground whitespace-nowrap text-xs'>
+                  <div key={share.uid} className='flex items-baseline justify-end gap-2'>
+                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
                       {memberLabel(share.uid)} {share.amountLabel}
                     </p>
-                    {share.uid === currentUserId && renderRepaidLink(share)}
+                    {share.uid === currentUserId && renderRepaidControl(share)}
                   </div>
                 ))
               )}
@@ -698,43 +705,75 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       </div>
       <div className='border-border rounded-lg border p-3'>
         <p className='text-sm font-medium'>Dues summary</p>
-        {duesSummary.debts.length === 0 ? (
+        {pairSettlements.length === 0 ? (
           <p className='text-muted-foreground mt-1 text-sm'>
             Everyone&apos;s settled up.
           </p>
         ) : (
-          <ul className='mt-2 space-y-1'>
-            {duesSummary.debts.map((debt) => {
-              const debtItems = getDebtExpenses(debt, expenses, memberIds)
+          <ul className='mt-2 space-y-2'>
+            {pairSettlements.map((settlement) => {
+              const { personA, personB, netAmount, aOwesB, bOwesA } = settlement;
+              const settled = isPairSettled(settlement);
+              const isCircular = aOwesB.total > 0.005 && bOwesA.total > 0.005;
+              const hasRepaidHistory = aOwesB.repaid > 0.005 || bOwesA.repaid > 0.005;
+              const showBreakdown = isCircular || hasRepaidHistory;
+              const debtorUid = netAmount >= 0 ? personA : personB;
+              const creditorUid = netAmount >= 0 ? personB : personA;
+              const netDisplay = Math.abs(netAmount);
+              const simpleItems = (netAmount >= 0 ? aOwesB : bOwesA).remainingExpenses
                 .map((expense) => expense.title)
                 .join(', ');
 
-              return (
-                <li key={`${debt.from}-${debt.to}`} className='text-sm'>
-                  {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
-                  <span className='font-medium'>
-                    {formatTotal(debt.amount, debt.amount, currency)}
-                  </span>
-                  {debtItems && <span className='text-muted-foreground'> ({debtItems})</span>}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {repaidSummary.length > 0 && (
-          <ul className='border-border mt-2 space-y-1 border-t pt-2'>
-            {repaidSummary.map((repaid) => {
-              const repaidItems = getRepaidExpenses(repaid, expenses, memberIds)
-                .map((expense) => expense.title)
-                .join(', ');
+              const renderDirection = (fromUid: string, toUid: string, owed: DirectionalOwed) => {
+                if (owed.total <= 0.005) {
+                  return null;
+                }
+
+                const stillOwed = owed.remainingExpenses.map((expense) => expense.title).join(', ');
+                const alreadyRepaid = owed.repaidExpenses.map((expense) => expense.title).join(', ');
+
+                return (
+                  <li key={`${fromUid}-${toUid}`} className='text-muted-foreground text-xs'>
+                    {memberLabel(fromUid)} owes {memberLabel(toUid)}{' '}
+                    <span className='font-medium'>{formatTotal(owed.total, owed.total, currency)}</span>
+                    {' total'}
+                    {owed.repaid > 0.005 && (
+                      <>
+                        {' — '}
+                        {formatTotal(owed.remaining, owed.remaining, currency)} still owed
+                      </>
+                    )}
+                    {stillOwed && <span> · Still owed: {stillOwed}</span>}
+                    {alreadyRepaid && <span> · Already repaid: {alreadyRepaid}</span>}
+                  </li>
+                );
+              };
 
               return (
-                <li key={`${repaid.from}-${repaid.to}`} className='text-muted-foreground text-sm'>
-                  {memberLabel(repaid.from)} repaid {memberLabel(repaid.to)}{' '}
-                  <span className='font-medium'>
-                    {formatTotal(repaid.amount, repaid.amount, currency)}
-                  </span>
-                  {repaidItems && <span> ({repaidItems})</span>}
+                <li key={`${personA}-${personB}`}>
+                  {settled ? (
+                    <p className='text-muted-foreground text-sm'>
+                      {memberLabel(personA)} and {memberLabel(personB)} are settled up
+                      {hasRepaidHistory && ' (fully repaid)'}
+                    </p>
+                  ) : (
+                    <p className='text-sm'>
+                      {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}{' '}
+                      <span className='font-medium'>
+                        {formatTotal(netDisplay, netDisplay, currency)}
+                      </span>{' '}
+                      net
+                      {!showBreakdown && simpleItems && (
+                        <span className='text-muted-foreground'> ({simpleItems})</span>
+                      )}
+                    </p>
+                  )}
+                  {showBreakdown && (
+                    <ul className='border-border mt-1 ml-3 space-y-0.5 border-l pl-2'>
+                      {renderDirection(personA, personB, aOwesB)}
+                      {renderDirection(personB, personA, bOwesA)}
+                    </ul>
+                  )}
                 </li>
               );
             })}

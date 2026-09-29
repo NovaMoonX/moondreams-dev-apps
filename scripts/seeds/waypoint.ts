@@ -280,6 +280,9 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       category: 'SHOPPING',
     },
     {
+      // Taylor pays here while Alex pays most other expenses in this trip — the two directions
+      // are intentionally circular (each owes the other), exercising the Dues summary's
+      // full-breakdown-with-net-highlighted rendering for that case.
       id: 'seed-expense-rental-car',
       dayIndex: 0,
       title: 'Rental car',

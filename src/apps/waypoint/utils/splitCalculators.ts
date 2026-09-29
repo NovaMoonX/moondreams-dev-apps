@@ -94,191 +94,94 @@ export function computeEvenSplit(
   );
 }
 
-export interface SimplifiedDebt {
-  from: string;
-  to: string;
-  amount: number;
-}
-
-export interface DuesSummary {
-  balances: Record<string, number>;
-  debts: SimplifiedDebt[];
-}
-
-interface ExpenseShares {
-  payerUid: string;
+export interface DirectionalOwed {
   total: number;
-  shares: Record<string, number>;
-  memberIds: string[];
+  repaid: number;
+  remaining: number;
+  remainingExpenses: TripExpense[];
+  repaidExpenses: TripExpense[];
 }
 
-function getExpenseShares(
-  expense: TripExpense,
-  currentMemberIds: string[],
-): ExpenseShares | null {
-  // A null payer means everyone paid their own share directly — nothing to settle.
-  if (expense.status !== 'PAID' || expense.payerUid === null) {
-    return null;
-  }
-
-  const total = getExpenseTotalAmount(expense, currentMemberIds);
-  const allMemberIds = getSplitMemberIds(expense, currentMemberIds);
-  if (total === null || allMemberIds.length === 0) {
-    return null;
-  }
-
-  const shares =
-    getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(allMemberIds, total);
-  // A debtor who's marked their share repaid is settled — drop them (and their amount) from
-  // what's still outstanding. The payer is never "repaid" for their own share, so always keep them.
-  const isRepaid = (uid: string) =>
-    uid !== expense.payerUid && (expense.paidMemberStatus[uid]?.isPaid ?? false);
-  const memberIds = allMemberIds.filter((uid) => !isRepaid(uid));
-  const repaidAmount = allMemberIds
-    .filter(isRepaid)
-    .reduce((sum, uid) => sum + (shares[uid] ?? 0), 0);
-
-  if (memberIds.every((uid) => uid === expense.payerUid)) {
-    return null;
-  }
-
-  const result = {
-    payerUid: expense.payerUid,
-    total: total - repaidAmount,
-    shares,
-    memberIds,
-  };
-  return result;
+export interface PairSettlement {
+  personA: string;
+  personB: string;
+  /** Positive: personA owes personB net. Negative: personB owes personA net. ~0: settled net. */
+  netAmount: number;
+  aOwesB: DirectionalOwed;
+  bOwesA: DirectionalOwed;
 }
 
-export function computeDuesSummary(
+function pairKey(a: string, b: string): string {
+  return [a, b].sort().join('|');
+}
+
+// Every expense creditorUid paid where debtorUid owes a share, split into what's already
+// been marked repaid and what's still outstanding — this is the raw, un-netted relationship
+// between exactly these two people, so a circular pair (A owes B on one expense, B owes A on
+// another) shows both sides instead of only the minimized net difference.
+function getOwedInDirection(
+  debtorUid: string,
+  creditorUid: string,
   expenses: TripExpense[],
   currentMemberIds: string[],
-): DuesSummary {
-  const balances = expenses
-    .map((expense) => getExpenseShares(expense, currentMemberIds))
-    .filter((entry): entry is ExpenseShares => entry !== null)
-    .reduce<Record<string, number>>((acc, { payerUid, total, shares, memberIds }) => {
-      const withPayer = { ...acc, [payerUid]: (acc[payerUid] ?? 0) + total };
-      return memberIds.reduce(
-        (next, uid) => ({ ...next, [uid]: (next[uid] ?? 0) - (shares[uid] ?? 0) }),
-        withPayer,
-      );
-    }, {});
+): DirectionalOwed {
+  return expenses.reduce<DirectionalOwed>(
+    (acc, expense) => {
+      if (expense.status !== 'PAID' || expense.payerUid !== creditorUid) {
+        return acc;
+      }
 
-  return { balances, debts: simplifyDebts(balances) };
+      const splitMemberIds = getSplitMemberIds(expense, currentMemberIds);
+      const total = getExpenseTotalAmount(expense, currentMemberIds);
+      if (!splitMemberIds.includes(debtorUid) || total === null) {
+        return acc;
+      }
+
+      const amounts = getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(splitMemberIds, total);
+      const share = amounts[debtorUid] ?? 0;
+      const isRepaid = expense.paidMemberStatus[debtorUid]?.isPaid ?? false;
+      return {
+        total: acc.total + share,
+        repaid: acc.repaid + (isRepaid ? share : 0),
+        remaining: acc.remaining + (isRepaid ? 0 : share),
+        remainingExpenses: isRepaid ? acc.remainingExpenses : [...acc.remainingExpenses, expense],
+        repaidExpenses: isRepaid ? [...acc.repaidExpenses, expense] : acc.repaidExpenses,
+      };
+    },
+    { total: 0, repaid: 0, remaining: 0, remainingExpenses: [], repaidExpenses: [] },
+  );
 }
 
-export function getDebtExpenses(
-  debt: Pick<SimplifiedDebt, 'from' | 'to'>,
+export function computePairSettlements(
   expenses: TripExpense[],
   currentMemberIds: string[],
-): TripExpense[] {
-  const debtExpenses = expenses.filter((expense) => {
-    const entry = getExpenseShares(expense, currentMemberIds);
-    if (!entry) {
-      return false;
-    }
-
-    const owes = (payer: string, other: string) =>
-      entry.payerUid === payer && entry.memberIds.includes(other) && (entry.shares[other] ?? 0) > EPSILON;
-    return owes(debt.to, debt.from) || owes(debt.from, debt.to);
-  });
-  return debtExpenses;
-}
-
-export interface RepaidTotal {
-  from: string;
-  to: string;
-  amount: number;
-}
-
-// Unlike outstanding debts, a repayment is a real-world event between one specific debtor
-// and payer — it isn't netted/simplified across other pairs the way computeDuesSummary does.
-export function computeRepaidSummary(
-  expenses: TripExpense[],
-  currentMemberIds: string[],
-): RepaidTotal[] {
-  const totals = expenses.reduce<Record<string, number>>((acc, expense) => {
+): PairSettlement[] {
+  const pairKeys = new Set<string>();
+  expenses.forEach((expense) => {
     if (expense.status !== 'PAID' || expense.payerUid === null) {
-      return acc;
+      return;
     }
+    getSplitMemberIds(expense, currentMemberIds).forEach((uid) => {
+      if (uid !== expense.payerUid) {
+        pairKeys.add(pairKey(uid, expense.payerUid as string));
+      }
+    });
+  });
 
-    const total = getExpenseTotalAmount(expense, currentMemberIds);
-    const memberIds = getSplitMemberIds(expense, currentMemberIds);
-    if (total === null || memberIds.length === 0) {
-      return acc;
-    }
-
-    const shares = getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(memberIds, total);
-    const repaidDebtorIds = memberIds.filter(
-      (uid) => uid !== expense.payerUid && (expense.paidMemberStatus[uid]?.isPaid ?? false),
-    );
-    return repaidDebtorIds.reduce((next, uid) => {
-      const key = `${uid}→${expense.payerUid}`;
-      return { ...next, [key]: (next[key] ?? 0) + (shares[uid] ?? 0) };
-    }, acc);
-  }, {});
-
-  return Object.entries(totals).map(([key, amount]) => {
-    const [from, to] = key.split('→');
-    return { from, to, amount: Math.round(amount * 100) / 100 };
+  return Array.from(pairKeys).map((key) => {
+    const [personA, personB] = key.split('|');
+    const aOwesB = getOwedInDirection(personA, personB, expenses, currentMemberIds);
+    const bOwesA = getOwedInDirection(personB, personA, expenses, currentMemberIds);
+    return {
+      personA,
+      personB,
+      netAmount: Math.round((aOwesB.remaining - bOwesA.remaining) * 100) / 100,
+      aOwesB,
+      bOwesA,
+    };
   });
 }
 
-export function getRepaidExpenses(
-  repaidTotal: Pick<RepaidTotal, 'from' | 'to'>,
-  expenses: TripExpense[],
-  currentMemberIds: string[],
-): TripExpense[] {
-  return expenses.filter((expense) => {
-    if (expense.status !== 'PAID' || expense.payerUid !== repaidTotal.to) {
-      return false;
-    }
-
-    return (
-      getSplitMemberIds(expense, currentMemberIds).includes(repaidTotal.from) &&
-      (expense.paidMemberStatus[repaidTotal.from]?.isPaid ?? false)
-    );
-  });
-}
-
-function simplifyDebts(balances: Record<string, number>): SimplifiedDebt[] {
-  const creditors = Object.entries(balances)
-    .filter(([, amount]) => amount > EPSILON)
-    .map(([uid, amount]) => ({ uid, amount }))
-    .sort((a, b) => b.amount - a.amount);
-  const debtors = Object.entries(balances)
-    .filter(([, amount]) => amount < -EPSILON)
-    .map(([uid, amount]) => ({ uid, amount: -amount }))
-    .sort((a, b) => b.amount - a.amount);
-
-  const debts: SimplifiedDebt[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < debtors.length && j < creditors.length) {
-    const debtor = debtors[i];
-    const creditor = creditors[j];
-    const amount = Math.min(debtor.amount, creditor.amount);
-
-    if (amount > EPSILON) {
-      debts.push({
-        from: debtor.uid,
-        to: creditor.uid,
-        amount: Math.round(amount * 100) / 100,
-      });
-    }
-
-    debtor.amount -= amount;
-    creditor.amount -= amount;
-
-    if (debtor.amount <= EPSILON) {
-      i++;
-    }
-    if (creditor.amount <= EPSILON) {
-      j++;
-    }
-  }
-
-  return debts;
+export function isPairSettled(settlement: PairSettlement): boolean {
+  return Math.abs(settlement.netAmount) <= EPSILON;
 }
