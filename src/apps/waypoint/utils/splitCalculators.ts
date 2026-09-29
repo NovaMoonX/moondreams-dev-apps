@@ -122,14 +122,32 @@ function getExpenseShares(
   }
 
   const total = getExpenseTotalAmount(expense, currentMemberIds);
-  const memberIds = getSplitMemberIds(expense, currentMemberIds);
-  if (total === null || memberIds.length === 0) {
+  const allMemberIds = getSplitMemberIds(expense, currentMemberIds);
+  if (total === null || allMemberIds.length === 0) {
     return null;
   }
 
   const shares =
-    getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(memberIds, total);
-  const result = { payerUid: expense.payerUid, total, shares, memberIds };
+    getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(allMemberIds, total);
+  // A debtor who's marked their share repaid is settled — drop them (and their amount) from
+  // what's still outstanding. The payer is never "repaid" for their own share, so always keep them.
+  const isRepaid = (uid: string) =>
+    uid !== expense.payerUid && (expense.paidMemberStatus[uid]?.isPaid ?? false);
+  const memberIds = allMemberIds.filter((uid) => !isRepaid(uid));
+  const repaidAmount = allMemberIds
+    .filter(isRepaid)
+    .reduce((sum, uid) => sum + (shares[uid] ?? 0), 0);
+
+  if (memberIds.every((uid) => uid === expense.payerUid)) {
+    return null;
+  }
+
+  const result = {
+    payerUid: expense.payerUid,
+    total: total - repaidAmount,
+    shares,
+    memberIds,
+  };
   return result;
 }
 
@@ -163,7 +181,7 @@ export function getDebtExpenses(
     }
 
     const owes = (payer: string, other: string) =>
-      entry.payerUid === payer && (entry.shares[other] ?? 0) > EPSILON;
+      entry.payerUid === payer && entry.memberIds.includes(other) && (entry.shares[other] ?? 0) > EPSILON;
     return owes(debt.to, debt.from) || owes(debt.from, debt.to);
   });
   return debtExpenses;

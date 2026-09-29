@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -245,5 +245,34 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
       updatedExpense,
     );
     return updatedExpense;
+  },
+);
+
+interface ToggleExpenseRepaidInput {
+  uid: string;
+  tripId: string;
+  expenseId: string;
+}
+
+// Each debtor toggles only their own key, so — like markEventSeen — this must
+// read-modify-write inside a transaction to avoid clobbering a concurrent toggle.
+export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInput>(
+  'waypoint/expenses/toggleRepaid',
+  async ({ uid, tripId, expenseId }) => {
+    const expenseRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        return;
+      }
+      const paidMemberStatus = snapshot.data().paidMemberStatus as TripExpense['paidMemberStatus'];
+      const wasPaid = paidMemberStatus[uid]?.isPaid ?? false;
+      transaction.update(expenseRef, {
+        paidMemberStatus: {
+          ...paidMemberStatus,
+          [uid]: { isPaid: !wasPaid, paidAt: wasPaid ? null : Date.now() },
+        },
+      });
+    });
   },
 );

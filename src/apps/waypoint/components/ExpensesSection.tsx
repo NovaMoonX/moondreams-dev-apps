@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import {
   Badge,
   Button,
+  Checkbox,
   Drawer,
   DropdownMenuFactories,
   Input,
@@ -30,6 +31,7 @@ import {
   createExpense,
   deleteExpense,
   markExpensePaid,
+  toggleExpenseRepaid,
   updateExpense,
   updateExpenseSplit,
 } from '@apps/waypoint/store/actions/expenseActions';
@@ -138,11 +140,20 @@ function formatTotal(min: number, max: number, currency: string) {
   return min === max ? minimum : `${minimum}-${formatter.format(max)}`;
 }
 
-function getSplitBreakdown(
-  expense: TripExpense,
-  memberIds: string[],
-  memberLabel: (uid: string) => string,
-): string | null {
+interface SplitShare {
+  uid: string;
+  amountLabel: string;
+  isPaid: boolean;
+}
+
+interface SplitBreakdown {
+  /** Set only for an even split — one shared "$X per person" line instead of naming everyone. */
+  perPersonLabel: string | null;
+  /** Every debtor (payer excluded — they don't owe themselves). */
+  shares: SplitShare[];
+}
+
+function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBreakdown | null {
   const splitMemberIds = getSplitMemberIds(expense, memberIds);
   const total = getExpenseTotalAmount(expense, memberIds);
   if (expense.status !== 'PAID' || splitMemberIds.length <= 1 || total === null) {
@@ -150,14 +161,26 @@ function getSplitBreakdown(
   }
 
   const customAmounts = getActiveSplitAmounts(expense, memberIds);
-  if (customAmounts !== null) {
-    return splitMemberIds
-      .map((uid) => `${memberLabel(uid)} ${formatTotal(customAmounts[uid] ?? 0, customAmounts[uid] ?? 0, expense.currency)}`)
-      .join(' · ');
-  }
+  const amounts = customAmounts ?? computeEvenSplit(splitMemberIds, total);
+  // A null payer means everyone already paid their own share directly — no one owes
+  // anyone, so there's nothing to mark repaid.
+  const shares =
+    expense.payerUid === null
+      ? []
+      : splitMemberIds
+          .filter((uid) => uid !== expense.payerUid)
+          .map((uid) => ({
+            uid,
+            amountLabel: formatTotal(amounts[uid] ?? 0, amounts[uid] ?? 0, expense.currency),
+            isPaid: expense.paidMemberStatus[uid]?.isPaid ?? false,
+          }));
 
-  const perPersonAmount = computeEvenSplit(splitMemberIds, total)[splitMemberIds[0]] ?? 0;
-  return `${formatTotal(perPersonAmount, perPersonAmount, expense.currency)} per person`;
+  const perPersonLabel =
+    customAmounts === null
+      ? `${formatTotal(amounts[splitMemberIds[0]] ?? 0, amounts[splitMemberIds[0]] ?? 0, expense.currency)} per person`
+      : null;
+
+  return { perPersonLabel, shares };
 }
 
 interface ExpenseCluster {
@@ -415,7 +438,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         : 'Not yet paid';
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
-    const splitBreakdown = getSplitBreakdown(expense, memberIds, memberLabel);
+    const splitBreakdown = getSplitBreakdown(expense, memberIds);
 
     return (
       <li
@@ -457,7 +480,38 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
           )}
           {splitBreakdown && (
-            <p className='text-muted-foreground mt-0.5 text-xs'>{splitBreakdown}</p>
+            <div className='mt-0.5 space-y-1'>
+              {splitBreakdown.perPersonLabel && (
+                <p className='text-muted-foreground whitespace-nowrap text-xs'>
+                  {splitBreakdown.perPersonLabel}
+                </p>
+              )}
+              <div className='flex flex-wrap justify-end gap-x-3 gap-y-1'>
+                {splitBreakdown.shares.map((share) => (
+                  <label
+                    key={share.uid}
+                    className='text-muted-foreground inline-flex items-center gap-1.5 text-xs whitespace-nowrap'
+                  >
+                    <Checkbox
+                      checked={share.isPaid}
+                      disabled={share.uid !== currentUserId}
+                      onCheckedChange={() =>
+                        void dispatch(
+                          toggleExpenseRepaid({
+                            uid: currentUserId,
+                            tripId: trip.id,
+                            expenseId: expense.id,
+                          }),
+                        )
+                      }
+                    />
+                    {splitBreakdown.perPersonLabel
+                      ? memberLabel(share.uid)
+                      : `${memberLabel(share.uid)} ${share.amountLabel}`}
+                  </label>
+                ))}
+              </div>
+            </div>
           )}
         </div>
         {canAddExpenses && (
