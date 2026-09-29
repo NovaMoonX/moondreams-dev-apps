@@ -58,7 +58,6 @@ function getStayLocation(stay: Stay) {
   };
 }
 
-/** Shared click/keyboard-activation props for an Overview card that opens a read-only details drawer. */
 function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
   return {
     role: 'button' as const,
