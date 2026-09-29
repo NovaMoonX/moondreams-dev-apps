@@ -53,8 +53,10 @@ import {
 import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
+  computeEvenSplit,
   getActiveSplitAmounts,
   getDebtExpenses,
+  getExpenseTotalAmount,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
@@ -134,6 +136,28 @@ function formatTotal(min: number, max: number, currency: string) {
   });
   const minimum = formatter.format(min);
   return min === max ? minimum : `${minimum}-${formatter.format(max)}`;
+}
+
+function getSplitBreakdown(
+  expense: TripExpense,
+  memberIds: string[],
+  memberLabel: (uid: string) => string,
+): string | null {
+  const splitMemberIds = getSplitMemberIds(expense, memberIds);
+  const total = getExpenseTotalAmount(expense, memberIds);
+  if (expense.status !== 'PAID' || splitMemberIds.length <= 1 || total === null) {
+    return null;
+  }
+
+  const customAmounts = getActiveSplitAmounts(expense, memberIds);
+  if (customAmounts !== null) {
+    return splitMemberIds
+      .map((uid) => `${memberLabel(uid)} ${formatTotal(customAmounts[uid] ?? 0, customAmounts[uid] ?? 0, expense.currency)}`)
+      .join(' · ');
+  }
+
+  const perPersonAmount = computeEvenSplit(splitMemberIds, total)[splitMemberIds[0]] ?? 0;
+  return `${formatTotal(perPersonAmount, perPersonAmount, expense.currency)} per person`;
 }
 
 interface ExpenseCluster {
@@ -391,6 +415,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         : 'Not yet paid';
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
+    const splitBreakdown = getSplitBreakdown(expense, memberIds, memberLabel);
 
     return (
       <li
@@ -414,15 +439,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
-        <div className='col-start-1 whitespace-nowrap'>
-          <p className='font-medium'>
+        <div className='col-start-1'>
+          <p className='whitespace-nowrap font-medium'>
             {formatTotal(displayRange.min, displayRange.max, expense.currency)}
             {expense.isPerPerson && (
               <span className='text-muted-foreground text-sm font-normal'> per person</span>
             )}
           </p>
           {expense.isPerPerson && (
-            <p className='text-muted-foreground text-xs'>
+            <p className='text-muted-foreground whitespace-nowrap text-xs'>
               {formatTotal(
                 scaleAmount(displayRange.min, multiplier),
                 scaleAmount(displayRange.max, multiplier),
@@ -430,6 +455,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               )}{' '}
               total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
             </p>
+          )}
+          {splitBreakdown && (
+            <p className='text-muted-foreground mt-0.5 text-xs'>{splitBreakdown}</p>
           )}
         </div>
         {canAddExpenses && (
