@@ -187,6 +187,62 @@ export function getDebtExpenses(
   return debtExpenses;
 }
 
+export interface RepaidTotal {
+  from: string;
+  to: string;
+  amount: number;
+}
+
+// Unlike outstanding debts, a repayment is a real-world event between one specific debtor
+// and payer — it isn't netted/simplified across other pairs the way computeDuesSummary does.
+export function computeRepaidSummary(
+  expenses: TripExpense[],
+  currentMemberIds: string[],
+): RepaidTotal[] {
+  const totals = expenses.reduce<Record<string, number>>((acc, expense) => {
+    if (expense.status !== 'PAID' || expense.payerUid === null) {
+      return acc;
+    }
+
+    const total = getExpenseTotalAmount(expense, currentMemberIds);
+    const memberIds = getSplitMemberIds(expense, currentMemberIds);
+    if (total === null || memberIds.length === 0) {
+      return acc;
+    }
+
+    const shares = getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(memberIds, total);
+    const repaidDebtorIds = memberIds.filter(
+      (uid) => uid !== expense.payerUid && (expense.paidMemberStatus[uid]?.isPaid ?? false),
+    );
+    return repaidDebtorIds.reduce((next, uid) => {
+      const key = `${uid}→${expense.payerUid}`;
+      return { ...next, [key]: (next[key] ?? 0) + (shares[uid] ?? 0) };
+    }, acc);
+  }, {});
+
+  return Object.entries(totals).map(([key, amount]) => {
+    const [from, to] = key.split('→');
+    return { from, to, amount: Math.round(amount * 100) / 100 };
+  });
+}
+
+export function getRepaidExpenses(
+  repaidTotal: Pick<RepaidTotal, 'from' | 'to'>,
+  expenses: TripExpense[],
+  currentMemberIds: string[],
+): TripExpense[] {
+  return expenses.filter((expense) => {
+    if (expense.status !== 'PAID' || expense.payerUid !== repaidTotal.to) {
+      return false;
+    }
+
+    return (
+      getSplitMemberIds(expense, currentMemberIds).includes(repaidTotal.from) &&
+      (expense.paidMemberStatus[repaidTotal.from]?.isPaid ?? false)
+    );
+  });
+}
+
 function simplifyDebts(balances: Record<string, number>): SimplifiedDebt[] {
   const creditors = Object.entries(balances)
     .filter(([, amount]) => amount > EPSILON)

@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import {
   Badge,
   Button,
-  Checkbox,
   Drawer,
   DropdownMenuFactories,
   Input,
@@ -56,10 +55,12 @@ import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeDuesSummary,
   computeEvenSplit,
+  computeRepaidSummary,
   getActiveSplitAmounts,
   getDebtExpenses,
   getExpenseTotalAmount,
   getPerPersonMultiplier,
+  getRepaidExpenses,
   getResolvedExpenseAmount,
   getSplitMemberIds,
   scaleAmount,
@@ -310,6 +311,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     { label: 'Total', total: toTotalsView(totals.total) },
   ];
   const duesSummary = computeDuesSummary(expenses, memberIds);
+  const repaidSummary = computeRepaidSummary(expenses, memberIds);
 
   const sortedExpenses =
     sortBy === 'day'
@@ -439,6 +441,30 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
     const splitBreakdown = getSplitBreakdown(expense, memberIds);
+    const repaidNames = (splitBreakdown?.shares ?? [])
+      .filter((share) => share.isPaid)
+      .map((share) => memberLabel(share.uid));
+    const renderRepaidLink = (share: SplitShare | undefined) => {
+      if (!share) {
+        return null;
+      }
+
+      return (
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className='h-auto shrink-0 p-0 text-xs'
+          onClick={() =>
+            void dispatch(
+              toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+            )
+          }
+        >
+          {share.isPaid ? `${memberLabel(currentUserId)} repaid` : 'Mark as repaid'}
+        </Button>
+      );
+    };
 
     return (
       <li
@@ -481,36 +507,30 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
           {splitBreakdown && (
             <div className='mt-0.5 space-y-1'>
-              {splitBreakdown.perPersonLabel && (
-                <p className='text-muted-foreground whitespace-nowrap text-xs'>
-                  {splitBreakdown.perPersonLabel}
+              {splitBreakdown.perPersonLabel ? (
+                <div className='flex items-baseline justify-between gap-2'>
+                  <p className='text-muted-foreground whitespace-nowrap text-xs'>
+                    {splitBreakdown.perPersonLabel}
+                  </p>
+                  {renderRepaidLink(
+                    splitBreakdown.shares.find((share) => share.uid === currentUserId),
+                  )}
+                </div>
+              ) : (
+                splitBreakdown.shares.map((share) => (
+                  <div key={share.uid} className='flex items-baseline justify-between gap-2'>
+                    <p className='text-muted-foreground whitespace-nowrap text-xs'>
+                      {memberLabel(share.uid)} {share.amountLabel}
+                    </p>
+                    {share.uid === currentUserId && renderRepaidLink(share)}
+                  </div>
+                ))
+              )}
+              {expense.payerUid === currentUserId && repaidNames.length > 0 && (
+                <p className='text-muted-foreground text-right text-xs'>
+                  Repaid so far: {repaidNames.join(', ')}
                 </p>
               )}
-              <div className='flex flex-wrap justify-end gap-x-3 gap-y-1'>
-                {splitBreakdown.shares.map((share) => (
-                  <label
-                    key={share.uid}
-                    className='text-muted-foreground inline-flex items-center gap-1.5 text-xs whitespace-nowrap'
-                  >
-                    <Checkbox
-                      checked={share.isPaid}
-                      disabled={share.uid !== currentUserId}
-                      onCheckedChange={() =>
-                        void dispatch(
-                          toggleExpenseRepaid({
-                            uid: currentUserId,
-                            tripId: trip.id,
-                            expenseId: expense.id,
-                          }),
-                        )
-                      }
-                    />
-                    {splitBreakdown.perPersonLabel
-                      ? memberLabel(share.uid)
-                      : `${memberLabel(share.uid)} ${share.amountLabel}`}
-                  </label>
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -696,6 +716,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                     {formatTotal(debt.amount, debt.amount, currency)}
                   </span>
                   {debtItems && <span className='text-muted-foreground'> ({debtItems})</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {repaidSummary.length > 0 && (
+          <ul className='border-border mt-2 space-y-1 border-t pt-2'>
+            {repaidSummary.map((repaid) => {
+              const repaidItems = getRepaidExpenses(repaid, expenses, memberIds)
+                .map((expense) => expense.title)
+                .join(', ');
+
+              return (
+                <li key={`${repaid.from}-${repaid.to}`} className='text-muted-foreground text-sm'>
+                  {memberLabel(repaid.from)} repaid {memberLabel(repaid.to)}{' '}
+                  <span className='font-medium'>
+                    {formatTotal(repaid.amount, repaid.amount, currency)}
+                  </span>
+                  {repaidItems && <span> ({repaidItems})</span>}
                 </li>
               );
             })}
