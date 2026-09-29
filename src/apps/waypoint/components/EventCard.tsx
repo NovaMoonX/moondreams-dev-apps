@@ -26,6 +26,9 @@ const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet�
 interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
+  /** An archived event's only action is unarchiving, and only an admin may do it — everyone
+   * else, including editors who could otherwise modify it, sees it fully read-only. */
+  canUnarchive: boolean;
   showCover: boolean;
   /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
   showArchiveToggle: boolean;
@@ -76,7 +79,11 @@ export function EventDetailLines({
         <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
           {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
         </Badge>
-        {event.isArchived && <Badge variant='muted'>Archived</Badge>}
+        {event.isArchived && (
+          <Badge variant='muted' outline className='items-center gap-1'>
+            <Archive className='h-3 w-3' /> Archived
+          </Badge>
+        )}
         <span className='text-muted-foreground text-sm'>
           {formatTime(event.startAt)}
           {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
@@ -124,12 +131,16 @@ export function EventDetailLines({
 export function EventCard({
   event,
   canEdit,
+  canUnarchive,
   showCover,
   showArchiveToggle,
   onEdit,
   onSaveNotes,
   onToggleArchived,
 }: EventCardProps) {
+  // An archived event is read-only for everyone but an admin, who may only unarchive it.
+  const canModify = canEdit && !event.isArchived;
+  const canToggleArchive = event.isArchived ? canUnarchive : canEdit;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -156,6 +167,7 @@ export function EventCard({
         className={join(
           'border-border bg-card overflow-hidden rounded-lg border',
           isSmallScreen && 'cursor-pointer',
+          event.isArchived && 'opacity-60',
         )}
       >
         {imageUrl && (
@@ -172,14 +184,14 @@ export function EventCard({
               showTitle
               showNotes={false}
               showNotesIndicator={isSmallScreen}
-              canEdit={canEdit}
+              canEdit={canModify}
               onSaveNotes={onSaveNotes}
             />
           </div>
           {!isSmallScreen && (
             <div className='flex shrink-0 gap-2'>
-              <MapNavigationButton {...event} />
-              {canEdit && showArchiveToggle && (
+              {!event.isArchived && <MapNavigationButton {...event} />}
+              {canToggleArchive && showArchiveToggle && (
                 <Button
                   type='button'
                   size='sm'
@@ -194,7 +206,7 @@ export function EventCard({
                   )}
                 </Button>
               )}
-              {canEdit && (
+              {canModify && (
                 <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
                   Modify
                 </Button>
@@ -202,12 +214,12 @@ export function EventCard({
             </div>
           )}
         </div>
-        {!isSmallScreen && (event.notes || canEdit) && (
+        {!isSmallScreen && (event.notes || canModify) && (
           <div className='-mt-2 px-4 pb-3'>
             <NotesField
               key={event.id}
               notes={event.notes}
-              canEdit={canEdit}
+              canEdit={canModify}
               onSave={(notes) => onSaveNotes(event, notes)}
               variant='subtle'
               placeholder={EVENT_NOTES_PLACEHOLDER}
@@ -223,15 +235,15 @@ export function EventCard({
           imageUrl={getDisplayImage(event)}
           location={event}
           linkUrl={event.linkUrl}
-          onEdit={canEdit ? () => onEdit(event, closeDrawer) : null}
+          onEdit={canModify ? () => onEdit(event, closeDrawer) : null}
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
-          onArchive={canEdit && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
+          onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >
           <EventDetailLines
             event={event}
             showTitle={false}
             showNotes
-            canEdit={canEdit}
+            canEdit={canModify}
             onSaveNotes={onSaveNotes}
           />
         </PlaceDetailsDrawer>

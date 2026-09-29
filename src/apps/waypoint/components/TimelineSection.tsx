@@ -34,6 +34,7 @@ import {
   canCreateItem,
   canEditExistingItem,
   hasTripStarted,
+  isTripAdmin,
   isTripDateShiftLocked,
 } from '@apps/waypoint/utils/roleGuards';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
@@ -152,6 +153,7 @@ export function TimelineSection({
       <EventCard
         event={event}
         canEdit={canEdit}
+        canUnarchive={isTripAdmin(trip, currentUserId)}
         showCover={showCovers}
         showArchiveToggle={hasTripStarted(trip)}
         onEdit={(selectedEvent, onSuccess) => {

@@ -188,6 +188,7 @@ function Waypoint() {
     });
   };
 
+  const hasArchivedTrips = trips.some((trip) => trip.isArchived);
   const visibleTrips = trips.filter(
     (trip) => showArchived || !trip.isArchived,
   );
@@ -296,14 +297,16 @@ function Waypoint() {
             </p>
           </div>
           <div className='flex items-center gap-3 justify-center'>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showArchived}
-                onCheckedChange={setShowArchived}
-              />
-              Show archived
-            </label>
+            {hasArchivedTrips && (
+              <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+                <AppToggle
+                  size='sm'
+                  checked={showArchived}
+                  onCheckedChange={setShowArchived}
+                />
+                Show archived
+              </label>
+            )}
             <Button onClick={() => setIsCreateModalOpen(true)}>
               Create trip
             </Button>
