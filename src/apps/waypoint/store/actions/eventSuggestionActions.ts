@@ -61,13 +61,63 @@ export const createEventSuggestion = createAsyncThunk<
       suggestedLongitude: fields.suggestedLongitude,
       suggestedPlace: fields.suggestedPlace,
       note: fields.note?.trim() || null,
-      upvotedBy: [],
+      upvotedBy: [uid],
       createdBy: uid,
       createdAt: Date.now(),
     };
 
     await setDoc(suggestionRef, suggestion);
     return suggestion;
+  },
+);
+
+interface UpdateEventSuggestionInput {
+  uid: string;
+  trip: TripSpace;
+  suggestion: EventSuggestion;
+  suggestedTitle: string;
+  suggestedStartAt: number;
+  suggestedEndAt: number | null;
+  suggestedLocationName: string | null;
+  suggestedAddress: string | null;
+  suggestedLatitude: number | null;
+  suggestedLongitude: number | null;
+  suggestedPlace: EventSuggestion['suggestedPlace'];
+  note: string | null;
+}
+
+export const updateEventSuggestion = createAsyncThunk<
+  EventSuggestion,
+  UpdateEventSuggestionInput,
+  { rejectValue: string }
+>(
+  'waypoint/eventSuggestions/update',
+  async ({ uid, trip, suggestion, ...fields }, { rejectWithValue }) => {
+    if (suggestion.createdBy !== uid) {
+      return rejectWithValue('You can only edit your own suggestion.');
+    }
+    if (!fields.suggestedTitle.trim()) {
+      return rejectWithValue('Enter a title for the suggested replacement.');
+    }
+
+    const updatedSuggestion: EventSuggestion = {
+      ...suggestion,
+      suggestedTitle: fields.suggestedTitle.trim(),
+      suggestedStartAt: fields.suggestedStartAt,
+      suggestedEndAt: fields.suggestedEndAt,
+      suggestedLocationName: fields.suggestedLocationName?.trim() || null,
+      suggestedAddress: fields.suggestedAddress?.trim() || null,
+      suggestedLatitude: fields.suggestedLatitude,
+      suggestedLongitude: fields.suggestedLongitude,
+      suggestedPlace: fields.suggestedPlace,
+      note: fields.note?.trim() || null,
+    };
+
+    await setDoc(
+      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions', suggestion.id),
+      updatedSuggestion,
+    );
+    return updatedSuggestion;
   },
 );
 

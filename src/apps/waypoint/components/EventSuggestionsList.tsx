@@ -2,10 +2,12 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ThumbsUp } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
+import { useUserInfo } from '@/hooks/useUserInfo';
 import { formatDateTime } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EventSuggestionFormModal from '@apps/waypoint/components/EventSuggestionFormModal';
@@ -14,6 +16,7 @@ import {
   createEventSuggestion,
   declineEventSuggestion,
   toggleSuggestionUpvote,
+  updateEventSuggestion,
 } from '@apps/waypoint/store/actions/eventSuggestionActions';
 import { selectEventSuggestionsForEvent } from '@apps/waypoint/store/selectors';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -31,18 +34,23 @@ function SuggestionRow({
   suggestion,
   currentUserId,
   isAdmin,
+  onEdit,
 }: {
   trip: TripSpace;
   event: TimelineEvent;
   suggestion: EventSuggestion;
   currentUserId: string;
   isAdmin: boolean;
+  onEdit: (suggestion: EventSuggestion) => void;
 }) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isUpvoted = suggestion.upvotedBy.includes(currentUserId);
+  const isOwnSuggestion = suggestion.createdBy === currentUserId;
+  const suggesterInfo = useUserInfo([suggestion.createdBy])?.map[suggestion.createdBy];
+  const suggesterName = suggesterInfo?.displayName || suggesterInfo?.email || 'Someone';
 
   const handleUpvote = async () => {
     await dispatch(
@@ -106,19 +114,28 @@ function SuggestionRow({
         <p className='text-muted-foreground text-xs'>
           {formatDateTime(suggestion.suggestedStartAt)}
           {suggestion.suggestedLocationName ? ` · ${suggestion.suggestedLocationName}` : ''}
+          {' · '}Suggested by {suggesterName}
         </p>
-        {suggestion.note && <p className='text-muted-foreground mt-1 text-xs'>{suggestion.note}</p>}
+        {suggestion.note && (
+          <p className='text-muted-foreground/70 mt-1 text-xs italic'>{suggestion.note}</p>
+        )}
       </div>
       <div className='flex shrink-0 items-center gap-1.5'>
         <Button
           type='button'
           size='sm'
-          variant={isUpvoted ? 'secondary' : 'tertiary'}
+          variant='tertiary'
           aria-label={isUpvoted ? 'Remove upvote' : 'Upvote'}
           onClick={() => void handleUpvote()}
         >
-          <ThumbsUp className='h-3.5 w-3.5' /> {suggestion.upvotedBy.length}
+          <ThumbsUp className={join('h-3.5 w-3.5', isUpvoted && 'fill-current text-primary')} />{' '}
+          {suggestion.upvotedBy.length}
         </Button>
+        {isOwnSuggestion && (
+          <Button type='button' size='sm' variant='tertiary' onClick={() => onEdit(suggestion)}>
+            Edit
+          </Button>
+        )}
         {isAdmin && (
           <>
             <Button type='button' size='sm' variant='secondary' loading={isSubmitting} onClick={() => void handleDecline()}>
@@ -144,6 +161,7 @@ function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsLi
   const { addToast } = useToast();
   const suggestions = useAppSelector(selectEventSuggestionsForEvent(event.id), shallowEqual);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingSuggestion, setEditingSuggestion] = useState<EventSuggestion | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isAdmin = isTripAdmin(trip, currentUserId);
 
@@ -154,10 +172,17 @@ function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsLi
   const handleSuggest = async (fields: SuggestionFields) => {
     setIsSubmitting(true);
     try {
-      await dispatch(
-        createEventSuggestion({ uid: currentUserId, trip, eventId: event.id, ...fields }),
-      ).unwrap();
+      if (editingSuggestion) {
+        await dispatch(
+          updateEventSuggestion({ uid: currentUserId, trip, suggestion: editingSuggestion, ...fields }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          createEventSuggestion({ uid: currentUserId, trip, eventId: event.id, ...fields }),
+        ).unwrap();
+      }
       setIsFormOpen(false);
+      setEditingSuggestion(undefined);
     } catch (suggestError) {
       addToast({
         title: 'Unable to send this suggestion',
@@ -179,6 +204,10 @@ function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsLi
           suggestion={suggestion}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
+          onEdit={(selectedSuggestion) => {
+            setEditingSuggestion(selectedSuggestion);
+            setIsFormOpen(true);
+          }}
         />
       ))}
       <Button
@@ -186,18 +215,25 @@ function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsLi
         variant='tertiary'
         size='sm'
         className='h-auto p-0 text-xs'
-        onClick={() => setIsFormOpen(true)}
+        onClick={() => {
+          setEditingSuggestion(undefined);
+          setIsFormOpen(true);
+        }}
       >
         + Suggest a replacement
       </Button>
       <EventSuggestionFormModal
-        key={isFormOpen ? 'open' : 'closed'}
+        key={`${editingSuggestion?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}
         isOpen={isFormOpen}
         trip={trip}
         event={event}
+        suggestion={editingSuggestion}
         isSubmitting={isSubmitting}
         onSubmit={handleSuggest}
-        onClose={() => setIsFormOpen(false)}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingSuggestion(undefined);
+        }}
       />
     </div>
   );

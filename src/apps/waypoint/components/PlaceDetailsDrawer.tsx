@@ -56,10 +56,7 @@ export function PlaceDetailsDrawer({
               type='button'
               size='lg'
               variant='secondary'
-              onClick={() => {
-                onClose();
-                onEdit();
-              }}
+              onClick={() => onEdit()}
             >
               Modify
             </Button>
@@ -69,10 +66,7 @@ export function PlaceDetailsDrawer({
               type='button'
               size='lg'
               variant='secondary'
-              onClick={() => {
-                onClose();
-                onArchive();
-              }}
+              onClick={() => onArchive()}
             >
               {archiveLabel}
             </Button>

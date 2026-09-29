@@ -27,6 +27,12 @@ service cloud.firestore {
       return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate;
     }
 
+    // True once a trip has started, whether it's still ongoing or already over — used to
+    // narrow who can add brand-new events/stays once a trip's plan is actually underway.
+    function hasTripStarted(trip) {
+      return request.time.toMillis() >= trip.startDate;
+    }
+
     // A trip's own writes and every subcollection under it are read-only while a
     // date-shift Cloud Function is re-dating its events/stays/expenses/checklist —
     // the function itself writes with the Admin SDK, which bypasses these rules.
@@ -1668,6 +1674,19 @@ service cloud.firestore {
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
+      // Creating a brand-new event stays open to Editors before the trip starts, but
+      // narrows to Admin-only once it has — same rationale as editing an existing one.
+      function isTripCreateAllowed() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember()
+          && isTripDateShiftIdle(trip)
+          && (
+            hasTripStarted(trip)
+              ? trip.members[request.auth.uid].role == 'ADMIN'
+              : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+          );
+      }
+
       function isTripAdminOnlyWhileActive() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
@@ -1773,7 +1792,7 @@ service cloud.firestore {
       }
 
       allow read: if isTripSubcollectionMember();
-      allow create: if isTripSubcollectionEditor()
+      allow create: if isTripCreateAllowed()
         && isEventShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if (
@@ -1842,11 +1861,25 @@ service cloud.firestore {
           && (added.size() + removed.size()) <= 1;
       }
 
+      // The suggester can edit their own suggestion's content — everything except who made
+      // it, when, and who's upvoted it, which stay untouched across an edit.
+      function isSuggestionOwnerUpdateValid() {
+        return isTripSubcollectionMember()
+          && resource.data.createdBy == request.auth.uid
+          && isSuggestionShapeValid()
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.tripId == resource.data.tripId
+          && request.resource.data.eventId == resource.data.eventId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.upvotedBy == resource.data.upvotedBy;
+      }
+
       allow read: if isTripSubcollectionMember();
       allow create: if isTripSubcollectionMember()
         && isSuggestionShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isSuggestionUpvoteUpdateValid();
+      allow update: if isSuggestionUpvoteUpdateValid() || isSuggestionOwnerUpdateValid();
       allow delete: if isTripAdminMember();
     }
 
@@ -1912,6 +1945,19 @@ service cloud.firestore {
         return isTripSubcollectionMember()
           && isTripDateShiftIdle(trip)
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      // Creating a brand-new stay stays open to Editors before the trip starts, but
+      // narrows to Admin-only once it has — same rationale as editing an existing one.
+      function isTripCreateAllowed() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember()
+          && isTripDateShiftIdle(trip)
+          && (
+            hasTripStarted(trip)
+              ? trip.members[request.auth.uid].role == 'ADMIN'
+              : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+          );
       }
 
       function isTripAdminOnlyWhileActive() {
@@ -1980,7 +2026,7 @@ service cloud.firestore {
       }
 
       allow read: if isTripSubcollectionMember();
-      allow create: if isTripSubcollectionEditor()
+      allow create: if isTripCreateAllowed()
         && isStayShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripAdminOnlyWhileActive()

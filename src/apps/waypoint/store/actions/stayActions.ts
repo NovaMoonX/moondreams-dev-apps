@@ -3,7 +3,7 @@ import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestor
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
-import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
+import { canCreateItem, canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 
 type StayFields = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
 
@@ -26,16 +26,12 @@ interface DeleteStayInput {
   stayId: string;
 }
 
-function canEditStays(uid: string, trip: TripSpace) {
-  return ['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '');
-}
-
 export const createStay = createAsyncThunk<
   Stay,
   CreateStayInput,
   { rejectValue: string }
 >('waypoint/stays/create', async ({ uid, trip, stay }, { rejectWithValue }) => {
-  if (!canEditStays(uid, trip)) {
+  if (!canCreateItem(trip, uid)) {
     return rejectWithValue('You do not have permission to add stays.');
   }
   if (!stay.name.trim() || !stay.address.trim()) {

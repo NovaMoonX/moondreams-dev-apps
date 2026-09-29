@@ -13,7 +13,7 @@ import type {
 } from '@apps/waypoint/types';
 import { DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
-import { canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
+import { canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
   uid: string;
@@ -38,10 +38,6 @@ interface DeleteEventInput {
   uid: string;
   trip: TripSpace;
   eventId: string;
-}
-
-function canEditEvents(uid: string, trip: TripSpace) {
-  return ['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '');
 }
 
 const TRACKED_CHANGE_FIELDS = [
@@ -109,7 +105,7 @@ export const createEvent = createAsyncThunk<
   CreateEventInput,
   { rejectValue: string }
 >('waypoint/events/create', async ({ uid, trip, event }, { rejectWithValue }) => {
-  if (!canEditEvents(uid, trip)) {
+  if (!canCreateItem(trip, uid)) {
     return rejectWithValue('You do not have permission to add timeline events.');
   }
   if (!event.title.trim()) {

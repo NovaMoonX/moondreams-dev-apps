@@ -18,6 +18,7 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - **Date-only vs. instant.** A date picked with no time (`fromDateInputValue`) is UTC midnight: display it with `formatDateUTC`/`getDayLabel`, never `formatDate`/`formatDateTime`/local getters, and treat a date-only end date as covering its whole day (`endDate + 1 day`) when comparing an instant against it. An instant (`startAt`, `createdAt`) displays in local time. Full rule in `copilot-instructions.md` ("Know which of the two kinds of time value a field is").
 - **Copy is product-forward**: warm, friendly user-facing text (subtext, empty states, descriptions), not spec-literal.
 - **Dreamer UI first.** No raw `<button>`/`<input>`/`<select>`/`<textarea>`. Use `AppToggle` (`@/components/AppToggle`), never Dreamer UI's raw `Toggle`. Use a toggle for anything that takes effect immediately (live filter, "show archived"); use `Checkbox` only for form-staged values and to-do-style completion marks.
+- **A toggled icon-button state (liked, upvoted, saved, bookmarked) is shown by filling the icon, not by switching the button's `variant`.** Keep the button on one neutral `variant` (usually `tertiary`) and conditionally add `fill-current` plus a matching `text-*` color class to the icon itself, e.g. `className={join('h-3.5 w-3.5', isUpvoted && 'fill-current text-primary')}`. Reference: the upvote button in `EventSuggestionsList.tsx`.
 
 ## Forms, modals, and CRUD conventions
 

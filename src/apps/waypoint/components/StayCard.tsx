@@ -19,7 +19,9 @@ import type { Stay } from '@apps/waypoint/types';
 interface StayCardProps {
   stay: Stay;
   canEdit: boolean;
-  onEdit: (stay: Stay) => void;
+  /** `onSuccess`, when given, is the mobile details drawer's own close — call it only once
+   * the edit actually completes, not just because the edit modal was opened. */
+  onEdit: (stay: Stay, onSuccess?: () => void) => void;
   onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
 
@@ -102,6 +104,7 @@ export function StayDetailLines({
 
 export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = getDisplayImage(stay);
   const drawerTriggerProps = isSmallScreen
@@ -180,7 +183,7 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
           imageUrl={imageUrl}
           location={getStayLocation(stay)}
           linkUrl={stay.linkUrl}
-          onEdit={canEdit ? () => onEdit(stay) : null}
+          onEdit={canEdit ? () => onEdit(stay, closeDrawer) : null}
         >
           <StayDetailLines
             stay={stay}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -31,6 +31,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import {
+  canCreateItem,
   canEditExistingItem,
   hasTripStarted,
   isTripDateShiftLocked,
@@ -60,6 +61,9 @@ export function TimelineSection({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // The mobile details drawer's own close, threaded through from whichever EventCard
+  // opened the edit form — invoked only once that edit actually succeeds, never on cancel.
+  const editSuccessRef = useRef<(() => void) | undefined>(undefined);
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const dayCount = getDayCount(trip.startDate, trip.endDate);
@@ -72,6 +76,7 @@ export function TimelineSection({
     value: uid,
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
+  const canAddEvents = canCreateItem(trip, currentUserId);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -81,7 +86,7 @@ export function TimelineSection({
     .filter((event) => showArchived || !event.isArchived)
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId));
 
-  const handleToggleArchived = async (event: TimelineEvent) => {
+  const handleToggleArchived = async (event: TimelineEvent, onSuccess?: () => void) => {
     if (!event.isArchived) {
       const confirmed = await confirm({
         title: 'Archive event',
@@ -101,6 +106,7 @@ export function TimelineSection({
           isArchived: !event.isArchived,
         }),
       ).unwrap();
+      onSuccess?.();
     } catch (archiveError) {
       addToast({
         title: 'Unable to update this event',
@@ -148,16 +154,19 @@ export function TimelineSection({
         canEdit={canEdit}
         showCover={showCovers}
         showArchiveToggle={hasTripStarted(trip)}
-        onEdit={(selectedEvent) => {
+        onEdit={(selectedEvent, onSuccess) => {
           setEditingEvent(selectedEvent);
           setIsFormOpen(true);
+          editSuccessRef.current = onSuccess;
         }}
         onSaveNotes={async (selectedEvent, notes) => {
           await dispatch(
             updateEventNotes({ uid: currentUserId, trip, event: selectedEvent, notes }),
           ).unwrap();
         }}
-        onToggleArchived={(selectedEvent) => void handleToggleArchived(selectedEvent)}
+        onToggleArchived={(selectedEvent, onSuccess) =>
+          void handleToggleArchived(selectedEvent, onSuccess)
+        }
       />
       <EventSuggestionsList trip={trip} event={event} currentUserId={currentUserId} />
     </div>
@@ -206,6 +215,11 @@ export function TimelineSection({
     );
   };
 
+  const resolveEditSuccess = () => {
+    editSuccessRef.current?.();
+    editSuccessRef.current = undefined;
+  };
+
   const handleSubmit = async (
     event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
   ) => {
@@ -226,6 +240,7 @@ export function TimelineSection({
       }
       setIsFormOpen(false);
       setEditingEvent(undefined);
+      resolveEditSuccess();
     } finally {
       setIsSubmitting(false);
     }
@@ -237,6 +252,7 @@ export function TimelineSection({
       await dispatch(deleteEvent({ uid: currentUserId, trip, eventId: event.id })).unwrap();
       setIsFormOpen(false);
       setEditingEvent(undefined);
+      resolveEditSuccess();
     } catch (error) {
       addToast({
         title: 'Unable to delete event',
@@ -273,17 +289,19 @@ export function TimelineSection({
               </TabsTrigger>
             ))}
           </TabsList>
-          <Button
-            type='button'
-            className='mt-4 w-full'
-            disabled={isTripDateShiftLocked(trip)}
-            onClick={() => {
-              setEditingEvent(undefined);
-              setIsFormOpen(true);
-            }}
-          >
-            + Add Event
-          </Button>
+          {canAddEvents && (
+            <Button
+              type='button'
+              className='mt-4 w-full'
+              disabled={isTripDateShiftLocked(trip)}
+              onClick={() => {
+                setEditingEvent(undefined);
+                setIsFormOpen(true);
+              }}
+            >
+              + Add Event
+            </Button>
+          )}
           <div className='mt-3 flex flex-wrap items-center gap-4'>
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
               <AppToggle
@@ -334,6 +352,8 @@ export function TimelineSection({
         onClose={() => {
           setIsFormOpen(false);
           setEditingEvent(undefined);
+          // Canceling leaves the mobile drawer open, if it's the one that opened this modal.
+          editSuccessRef.current = undefined;
         }}
       />
     </>

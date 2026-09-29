@@ -29,9 +29,11 @@ interface EventCardProps {
   showCover: boolean;
   /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
   showArchiveToggle: boolean;
-  onEdit: (event: TimelineEvent) => void;
+  /** `onSuccess`, when given, is the mobile details drawer's own close — call it only once
+   * the edit actually completes, not just because the edit modal was opened. */
+  onEdit: (event: TimelineEvent, onSuccess?: () => void) => void;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
-  onToggleArchived: (event: TimelineEvent) => void;
+  onToggleArchived: (event: TimelineEvent, onSuccess?: () => void) => void;
 }
 
 function getQuickField(event: TimelineEvent): string | null {
@@ -129,6 +131,7 @@ export function EventCard({
   onToggleArchived,
 }: EventCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
   const drawerTriggerProps = isSmallScreen
@@ -220,9 +223,9 @@ export function EventCard({
           imageUrl={getDisplayImage(event)}
           location={event}
           linkUrl={event.linkUrl}
-          onEdit={canEdit ? () => onEdit(event) : null}
+          onEdit={canEdit ? () => onEdit(event, closeDrawer) : null}
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
-          onArchive={canEdit && showArchiveToggle ? () => onToggleArchived(event) : null}
+          onArchive={canEdit && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >
           <EventDetailLines
             event={event}

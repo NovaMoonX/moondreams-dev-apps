@@ -61,11 +61,22 @@ export function isTripDateShiftLocked(trip: TripSpace) {
 }
 
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
- * Admin-only while the trip is active — creating a new one stays open to Editors throughout. */
+ * Admin-only while the trip is active — creating a new one follows `canCreateItem` instead. */
 export function canEditExistingItem(trip: TripSpace, uid: string) {
   if (isTripDateShiftLocked(trip)) {
     return false;
   }
 
   return isTripActive(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
+}
+
+/** Creating a brand-new event/stay stays open to Editors before the trip starts, but
+ * narrows to Admin-only once it has — an already-underway plan needs one steward, same
+ * as editing an existing item. */
+export function canCreateItem(trip: TripSpace, uid: string) {
+  if (isTripDateShiftLocked(trip)) {
+    return false;
+  }
+
+  return hasTripStarted(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }

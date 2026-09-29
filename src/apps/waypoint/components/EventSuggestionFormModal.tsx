@@ -6,7 +6,7 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 import { fromLocalDateAndTimeInputValues, toLocalTimeInputValue } from '@/utils/dateInputUtils';
-import { getDayCount, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayIndex, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -15,6 +15,7 @@ interface EventSuggestionFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   event: TimelineEvent;
+  suggestion?: EventSuggestion;
   placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
   onSubmit: (fields: {
@@ -46,7 +47,28 @@ interface SuggestionDraft {
   note: string;
 }
 
-function getInitialDraft(event: TimelineEvent): SuggestionDraft {
+function getInitialDraft(
+  tripStartDate: number,
+  event: TimelineEvent,
+  suggestion?: EventSuggestion,
+): SuggestionDraft {
+  if (suggestion) {
+    return {
+      title: suggestion.suggestedTitle,
+      dayIndex: getDayIndex(tripStartDate, suggestion.suggestedStartAt),
+      time: toLocalTimeInputValue(suggestion.suggestedStartAt) || '09:00',
+      hasEndTime: Boolean(suggestion.suggestedEndAt),
+      endTime: toLocalTimeInputValue(suggestion.suggestedEndAt) || '',
+      locationName: suggestion.suggestedLocationName ?? '',
+      address: suggestion.suggestedAddress ?? '',
+      latitude: suggestion.suggestedLatitude,
+      longitude: suggestion.suggestedLongitude,
+      place: suggestion.suggestedPlace,
+      hasNote: Boolean(suggestion.note),
+      note: suggestion.note ?? '',
+    };
+  }
+
   return {
     title: event.title,
     dayIndex: event.dayIndex,
@@ -67,13 +89,16 @@ function EventSuggestionFormModal({
   isOpen,
   trip,
   event,
+  suggestion,
   placeBias,
   isSubmitting = false,
   onSubmit,
   onClose,
 }: EventSuggestionFormModalProps) {
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<SuggestionDraft>(() => getInitialDraft(event));
+  const [draft, setDraft] = useState<SuggestionDraft>(() =>
+    getInitialDraft(trip.startDate, event, suggestion),
+  );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const updateDraft = (changes: Partial<SuggestionDraft>) =>
@@ -221,7 +246,7 @@ function EventSuggestionFormModal({
                 Cancel
               </Button>
               <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
-                Suggest
+                {suggestion ? 'Save' : 'Suggest'}
               </Button>
             </>
           }
