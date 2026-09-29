@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import {
   Badge,
@@ -34,6 +35,7 @@ import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
+import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -59,12 +61,29 @@ function TripDetailPage({
   const now = useNow();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
+  const isValidSectionTab = (value: string | null): value is TripSectionTab =>
+    value !== null && TRIP_SECTION_TABS.includes(value as TripSectionTab);
+  const tabParam = searchParams.get('tab');
   // An active trip opens with nothing expanded — the live HUD above is the
   // point; a non-active trip keeps the old behavior of opening to Timeline.
-  const [sectionTab, setSectionTab] = useState(() =>
-    isActive ? '' : 'overview',
+  // A valid ?tab= in the URL takes priority over that default, so a shared
+  // or refreshed link reopens on the same section.
+  const [sectionTab, setSectionTabState] = useState(() =>
+    isValidSectionTab(tabParam) ? tabParam : isActive ? '' : 'overview',
   );
+
+  const setSectionTab = (value: string) => {
+    setSectionTabState(value);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (isValidSectionTab(value)) {
+      nextSearchParams.set('tab', value);
+    } else {
+      nextSearchParams.delete('tab');
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  };
   const [dayTab, setDayTab] = useState('all');
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
   const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);

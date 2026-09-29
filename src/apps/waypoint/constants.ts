@@ -184,3 +184,13 @@ export const EVENT_ATTENDEE_TARGET_LABELS: Record<EventAttendeeTargetType, strin
   EVERYONE_INCLUDING_FUTURE: 'Everyone, including future members',
   SPECIFIC_MEMBERS: 'Specific members',
 };
+
+export const TRIP_SECTION_TABS = [
+  'overview',
+  'members',
+  'expenses',
+  'stays',
+  'checklist',
+] as const;
+
+export type TripSectionTab = (typeof TRIP_SECTION_TABS)[number];
