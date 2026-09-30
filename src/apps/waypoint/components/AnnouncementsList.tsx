@@ -2,7 +2,6 @@ import { useState } from 'react';
 
 import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import { useAppDispatch } from '@/store';
@@ -22,18 +21,6 @@ interface AnnouncementsListProps {
   currentUserId: string;
   announcements: Announcement[];
 }
-
-const SEVERITY_RANK: Record<Announcement['severity'], number> = {
-  URGENT: 2,
-  HEADS_UP: 1,
-  INFO: 0,
-};
-
-const SEVERITY_CONTAINER_CLASSES: Record<Announcement['severity'], string> = {
-  URGENT: 'border-red-500/60 bg-red-50 dark:bg-red-950/30',
-  HEADS_UP: 'border-amber-500/60 bg-amber-50 dark:bg-amber-950/30',
-  INFO: 'border-sky-500/60 bg-sky-50 dark:bg-sky-950/30',
-};
 
 function AnnouncementsList({ trip, currentUserId, announcements }: AnnouncementsListProps) {
   const dispatch = useAppDispatch();
@@ -73,21 +60,8 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
     }
   };
 
-  const highestSeverity = announcements.reduce<Announcement['severity']>(
-    (highest, announcement) =>
-      SEVERITY_RANK[announcement.severity] > SEVERITY_RANK[highest]
-        ? announcement.severity
-        : highest,
-    'INFO',
-  );
-
   return (
-    <div
-      className={join(
-        'space-y-1 rounded-xl border p-2.5',
-        SEVERITY_CONTAINER_CLASSES[highestSeverity],
-      )}
-    >
+    <div className='border-border bg-muted/40 space-y-1 rounded-xl border p-2.5'>
       {announcements.map((announcement) => (
         <div
           key={announcement.id}
@@ -111,7 +85,7 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
             variant='tertiary'
             size='icon'
             aria-label={`Dismiss ${announcement.title}`}
-            className='size-6 shrink-0'
+            className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
             onClick={(event) => {
               event.stopPropagation();
               void handleDismiss(announcement);

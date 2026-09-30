@@ -248,14 +248,16 @@ function RecentUpdatesList({
         onClick={() => onOpenDetails(firstEvent)}
       >
         {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
-        {restEvents.length > 0 ? ` +${restEvents.length} more` : ''}
       </Button>
+      {restEvents.length > 0 && (
+        <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
+      )}
       <Button
         type='button'
         variant='tertiary'
         size='icon'
         aria-label='Dismiss all recent updates'
-        className='size-6 shrink-0'
+        className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
         onClick={onDismissAll}
       >
         <X className='h-3.5 w-3.5' />
