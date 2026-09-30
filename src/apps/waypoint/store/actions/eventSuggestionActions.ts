@@ -42,7 +42,7 @@ export const createEventSuggestion = createAsyncThunk<
       return rejectWithValue('You do not have permission to suggest changes to this trip.');
     }
     if (!fields.suggestedTitle.trim()) {
-      return rejectWithValue('Enter a title for the suggested replacement.');
+      return rejectWithValue('Enter a title for the suggested change.');
     }
 
     const suggestionRef = doc(
@@ -97,7 +97,7 @@ export const updateEventSuggestion = createAsyncThunk<
       return rejectWithValue('You can only edit your own suggestion.');
     }
     if (!fields.suggestedTitle.trim()) {
-      return rejectWithValue('Enter a title for the suggested replacement.');
+      return rejectWithValue('Enter a title for the suggested change.');
     }
 
     const updatedSuggestion: EventSuggestion = {
@@ -169,7 +169,7 @@ export const approveEventSuggestion = createAsyncThunk<
   'waypoint/eventSuggestions/approve',
   async ({ uid, trip, sourceEvent, suggestion }, { rejectWithValue }) => {
     if (!isTripAdmin(trip, uid)) {
-      return rejectWithValue('Only trip admins can approve suggested replacements.');
+      return rejectWithValue('Only trip admins can approve suggested changes.');
     }
 
     const newEventRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'));
@@ -242,7 +242,7 @@ export const declineEventSuggestion = createAsyncThunk<
   'waypoint/eventSuggestions/decline',
   async ({ uid, trip, suggestionId }, { rejectWithValue }) => {
     if (!isTripAdmin(trip, uid)) {
-      return rejectWithValue('Only trip admins can decline suggested replacements.');
+      return rejectWithValue('Only trip admins can decline suggested changes.');
     }
 
     await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions', suggestionId));

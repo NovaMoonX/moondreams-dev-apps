@@ -220,7 +220,7 @@ function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsLi
           setIsFormOpen(true);
         }}
       >
-        + Suggest a replacement
+        + Suggest a change
       </Button>
       <EventSuggestionFormModal
         key={`${editingSuggestion?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}

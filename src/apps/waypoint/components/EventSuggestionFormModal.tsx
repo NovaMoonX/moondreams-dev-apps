@@ -145,7 +145,7 @@ function EventSuggestionFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Suggested replacement'>
+    <Modal isOpen={isOpen} onClose={onClose} title='Suggested change'>
       <div className='space-y-4'>
         <div className='space-y-1.5'>
           <Label>Title</Label>
