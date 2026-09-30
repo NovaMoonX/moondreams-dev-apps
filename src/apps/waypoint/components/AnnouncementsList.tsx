@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { X } from 'lucide-react';
 
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -63,12 +64,12 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
   return (
     <div className='space-y-2'>
       {announcements.map((announcement) => (
-        <Button
+        <div
           key={announcement.id}
-          type='button'
-          variant='secondary'
+          role='button'
+          tabIndex={0}
           className={join(
-            'flex h-auto w-full items-center justify-start gap-2 rounded-lg border p-3 text-left',
+            'flex w-full items-center gap-2 rounded-lg border p-3 text-left cursor-pointer',
             announcement.severity === 'URGENT'
               ? 'border-red-500/60 bg-red-50 dark:bg-red-950/30'
               : announcement.severity === 'HEADS_UP'
@@ -76,12 +77,31 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
                 : 'border-sky-500/60 bg-sky-50 dark:bg-sky-950/30',
           )}
           onClick={() => setOpenAnnouncement(announcement)}
+          onKeyDown={(event) => {
+            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault();
+              setOpenAnnouncement(announcement);
+            }
+          }}
         >
           <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity]}>
             {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
           </Badge>
           <span className='min-w-0 flex-1 truncate text-sm font-medium'>{announcement.title}</span>
-        </Button>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label={`Dismiss ${announcement.title}`}
+            className='shrink-0'
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleDismiss(announcement);
+            }}
+          >
+            <X className='h-4 w-4' />
+          </Button>
+        </div>
       ))}
       <Modal
         isOpen={openAnnouncement !== null}
