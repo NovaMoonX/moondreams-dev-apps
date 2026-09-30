@@ -9,6 +9,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import {
@@ -131,8 +132,18 @@ function TripDetailPage({
 
   return (
     <div className='page'>
-      <div className='mx-auto max-w-4xl space-y-6 py-8'>
-        <Button type='button' variant='link' className='px-0' onClick={onBack}>
+      <div
+        className={join(
+          'mx-auto max-w-4xl',
+          isActive ? 'space-y-3 py-4 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
+        )}
+      >
+        <Button
+          type='button'
+          variant='link'
+          className={join('px-0', isActive && 'h-auto p-0')}
+          onClick={onBack}
+        >
           <ChevronLeft /> Back to My Trips
         </Button>
         <div>
@@ -140,7 +151,12 @@ function TripDetailPage({
             <img
               src={trip.coverImageUrl}
               alt={`${trip.title} cover`}
-              className='mb-4 h-48 w-full rounded-lg object-cover'
+              className={join(
+                'mb-4 w-full rounded-lg object-cover',
+                // Kept slim on an active trip — the live status below is the point,
+                // and every bit of vertical space matters on a mobile screen.
+                isActive ? 'h-20 sm:h-48' : 'h-48',
+              )}
             />
           )}
           <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -264,11 +280,16 @@ function TripDetailPage({
                   <Link className='h-4 w-4' />
                 </Button>
               </>
+              {isActive && (
+                <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
+              )}
             </div>
           </div>
-          <div className='mt-3'>
-            <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
-          </div>
+          {!isActive && (
+            <div className='mt-3'>
+              <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
+            </div>
+          )}
         </div>
         {isTripDateShiftLocked(trip) && (
           <div className='bg-warning/15 text-warning border-warning flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm'>

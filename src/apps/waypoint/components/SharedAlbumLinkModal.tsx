@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { ExternalLink } from 'lucide-react';
 
 interface SharedAlbumLinkModalProps {
   isOpen: boolean;
@@ -29,6 +30,17 @@ function SharedAlbumLinkModal({
       disableCloseOnOverlayClick={isSaving}
     >
       <div className='space-y-2'>
+        {currentUrl && (
+          <Button
+            href={currentUrl}
+            target='_blank'
+            rel='noreferrer'
+            variant='link'
+            className='h-auto p-0'
+          >
+            Open current album <ExternalLink className='h-3.5 w-3.5' />
+          </Button>
+        )}
         <Label htmlFor={`album-link-${tripId}`}>Album URL</Label>
         <Input
           id={`album-link-${tripId}`}

@@ -6,7 +6,6 @@ import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import EnrichedImage from '@/components/EnrichedImage';
-import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
 import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
@@ -16,10 +15,9 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import AnnouncementsList from '@apps/waypoint/components/AnnouncementsList';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
-import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
-import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
+import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
@@ -34,7 +32,6 @@ import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
-  STAY_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 
 type OverviewDetail = { type: 'event'; event: TimelineEvent } | { type: 'stay'; stay: Stay };
@@ -91,6 +88,11 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const todayIndex = getDayIndex(trip.startDate, now);
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
   const checkInStays = stays.filter((stay) => isSameLocalCalendarDay(stay.checkInAt, now));
+  // Nothing left today — no event running right now, and whatever's next (if
+  // anything) isn't until a later day.
+  const isDoneForToday =
+    !activeEvent &&
+    (!upNextEvent || getDayIndex(trip.startDate, upNextEvent.startAt) !== todayIndex);
 
   const openEventDetails = (event: TimelineEvent) => {
     setDetail({ type: 'event', event });
@@ -117,6 +119,9 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
       )}
       {upNextEvent && (
         <UpNextCard event={upNextEvent} now={now} onOpenDetails={() => openEventDetails(upNextEvent)} />
+      )}
+      {isDoneForToday && (
+        <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
       )}
       <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
         <Button
@@ -184,6 +189,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   );
 }
 
+const RECENT_UPDATES_VISIBLE_COUNT = 2;
+
 function RecentUpdatesList({
   trip,
   events,
@@ -193,13 +200,17 @@ function RecentUpdatesList({
   events: TimelineEvent[];
   onOpenDetails: (event: TimelineEvent) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleEvents = expanded ? events : events.slice(0, RECENT_UPDATES_VISIBLE_COUNT);
+  const hiddenCount = events.length - visibleEvents.length;
+
   return (
-    <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 space-y-1 rounded-xl border p-3'>
+    <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 rounded-xl border p-2.5'>
       <p className='text-amber-700 dark:text-amber-300 text-xs font-bold tracking-wide uppercase'>
         Recent updates
       </p>
-      <ul className='space-y-1'>
-        {events.map((event) => (
+      <ul className='space-y-0.5'>
+        {visibleEvents.map((event) => (
           <li key={event.id}>
             <Button
               type='button'
@@ -214,6 +225,17 @@ function RecentUpdatesList({
           </li>
         ))}
       </ul>
+      {hiddenCount > 0 && (
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className='text-muted-foreground mt-0.5 h-auto min-h-0 p-0! text-xs'
+          onClick={() => setExpanded(true)}
+        >
+          +{hiddenCount} more
+        </Button>
+      )}
     </div>
   );
 }
@@ -232,47 +254,20 @@ function CheckInStayCard({ stay, onOpenDetails }: { stay: Stay; onOpenDetails: (
   return (
     <article
       {...getOpenDetailsProps(stay.name, onOpenDetails)}
-      className='border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 flex cursor-pointer overflow-hidden rounded-xl border border-2'
+      className='border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 flex cursor-pointer items-center gap-3 rounded-xl border p-2.5'
     >
       {imageUrl && (
-        <EnrichedImage src={imageUrl} alt='' className='w-24 shrink-0 object-cover sm:w-36' />
+        <EnrichedImage src={imageUrl} alt='' className='h-12 w-12 shrink-0 rounded-lg object-cover' />
       )}
-      <div className='flex min-w-0 flex-1 items-start justify-between gap-3 p-4'>
-        <div className='min-w-0'>
-          <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
-            Checking in today
-          </p>
-          <div className='mt-2 flex flex-wrap items-center gap-2'>
-            <h3 className='font-semibold'>{stay.name}</h3>
-            <Badge variant='muted' outline>
-              {STAY_TYPE_LABELS[stay.stayType]}
-            </Badge>
-          </div>
-          <p className='text-muted-foreground mt-1 text-sm'>{stay.address}</p>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            Check-in at {formatTime(stay.checkInAt)}
-            {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
-          </p>
-          {stay.confirmationCode && (
-            <p className='text-muted-foreground mt-1 text-sm'>
-              Confirmation <span className='text-foreground font-medium'>{stay.confirmationCode}</span>
-            </p>
-          )}
-          {(stay.linkUrl || stay.notes) && (
-            <div className='mt-1 flex flex-wrap items-center gap-x-4 gap-y-1' onClick={stopPropagation}>
-              <StayNotesButton stay={stay} />
-              {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
-            </div>
-          )}
-        </div>
-        <div onClick={stopPropagation}>
-          <MapNavigationButton
-            locationName={stay.name}
-            address={stay.address}
-            latitude={stay.latitude}
-            longitude={stay.longitude}
-          />
-        </div>
+      <div className='min-w-0 flex-1'>
+        <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
+          Checking in today
+        </p>
+        <h3 className='truncate text-sm font-semibold'>{stay.name}</h3>
+        <p className='text-muted-foreground truncate text-xs'>
+          {formatTime(stay.checkInAt)}
+          {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
+        </p>
       </div>
     </article>
   );
@@ -292,62 +287,37 @@ function ActiveNowCard({
     duration !== null && duration > 0
       ? Math.min(1, Math.max(0, (now - event.startAt) / duration))
       : null;
-  // Ignores the Timeline's "Show covers" toggle — Active Now is the one place the
-  // cover should always be as prominent as possible.
   const imageUrl = getDisplayImage(event);
 
   return (
     <article
       {...getOpenDetailsProps(event.title, onOpenDetails)}
-      className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 cursor-pointer overflow-hidden rounded-xl border-2 shadow-sm'
+      className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3'
     >
       {imageUrl && (
-        <EnrichedImage
-          src={imageUrl}
-          alt=''
-          className='aspect-video w-full object-cover sm:aspect-2/1'
-        />
+        <EnrichedImage src={imageUrl} alt='' className='h-14 w-14 shrink-0 rounded-lg object-cover' />
       )}
-      <div className='p-5'>
-        <div className='flex items-start justify-between gap-3'>
-          <div className='min-w-0'>
-            <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
-              Active Now
-            </p>
-            <div className='mt-2 flex flex-wrap items-center gap-2'>
-              <EventTypeBadge event={event} />
-              <span className='text-muted-foreground text-sm'>
-                {formatTime(event.startAt)}
-                {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
-              </span>
-            </div>
-            <h3 className='mt-2 text-xl font-bold'>{event.title}</h3>
-            {(event.locationName || event.address) && (
-              <LocationLink
-                {...event}
-                label={[event.locationName, event.address].filter(Boolean).join(' · ')}
-                className='mt-1'
-              />
-            )}
-            {event.linkUrl && (
-              <div className='mt-1' onClick={stopPropagation}>
-                <ExternalLinkText href={event.linkUrl} />
-              </div>
-            )}
-          </div>
-          <div onClick={stopPropagation}>
-            <MapNavigationButton {...event} />
-          </div>
+      <div className='min-w-0 flex-1'>
+        <div className='flex flex-wrap items-center gap-2'>
+          <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
+            Active Now
+          </p>
+          <EventTypeBadge event={event} />
         </div>
+        <h3 className='truncate font-semibold'>{event.title}</h3>
+        <p className='text-muted-foreground truncate text-xs'>
+          {formatTime(event.startAt)}
+          {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
+        </p>
         {progress !== null && (
-          <div className='mt-4'>
+          <div className='mt-1.5'>
             <div className='bg-emerald-500/20 h-1 overflow-hidden rounded-full'>
               <div
                 className='bg-emerald-500 h-full transition-[width]'
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
-            <p className='text-muted-foreground mt-1 text-xs'>
+            <p className='text-muted-foreground mt-0.5 text-xs'>
               {formatDuration((event.endAt as number) - now)} left
             </p>
           </div>
