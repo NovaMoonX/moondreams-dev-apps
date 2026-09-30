@@ -23,6 +23,18 @@ interface AnnouncementsListProps {
   announcements: Announcement[];
 }
 
+const SEVERITY_RANK: Record<Announcement['severity'], number> = {
+  URGENT: 2,
+  HEADS_UP: 1,
+  INFO: 0,
+};
+
+const SEVERITY_CONTAINER_CLASSES: Record<Announcement['severity'], string> = {
+  URGENT: 'border-red-500/60 bg-red-50 dark:bg-red-950/30',
+  HEADS_UP: 'border-amber-500/60 bg-amber-50 dark:bg-amber-950/30',
+  INFO: 'border-sky-500/60 bg-sky-50 dark:bg-sky-950/30',
+};
+
 function AnnouncementsList({ trip, currentUserId, announcements }: AnnouncementsListProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -61,21 +73,27 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
     }
   };
 
+  const highestSeverity = announcements.reduce<Announcement['severity']>(
+    (highest, announcement) =>
+      SEVERITY_RANK[announcement.severity] > SEVERITY_RANK[highest]
+        ? announcement.severity
+        : highest,
+    'INFO',
+  );
+
   return (
-    <div className='space-y-1.5'>
+    <div
+      className={join(
+        'space-y-1 rounded-xl border p-2.5',
+        SEVERITY_CONTAINER_CLASSES[highestSeverity],
+      )}
+    >
       {announcements.map((announcement) => (
         <div
           key={announcement.id}
           role='button'
           tabIndex={0}
-          className={join(
-            'flex w-full items-center gap-2 rounded-lg border p-2.5 text-left cursor-pointer',
-            announcement.severity === 'URGENT'
-              ? 'border-red-500/60 bg-red-50 dark:bg-red-950/30'
-              : announcement.severity === 'HEADS_UP'
-                ? 'border-amber-500/60 bg-amber-50 dark:bg-amber-950/30'
-                : 'border-sky-500/60 bg-sky-50 dark:bg-sky-950/30',
-          )}
+          className='flex w-full items-center gap-2 text-left cursor-pointer'
           onClick={() => setOpenAnnouncement(announcement)}
           onKeyDown={(event) => {
             if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
@@ -93,13 +111,13 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
             variant='tertiary'
             size='icon'
             aria-label={`Dismiss ${announcement.title}`}
-            className='shrink-0'
+            className='size-6 shrink-0'
             onClick={(event) => {
               event.stopPropagation();
               void handleDismiss(announcement);
             }}
           >
-            <X className='h-4 w-4' />
+            <X className='h-3.5 w-3.5' />
           </Button>
         </div>
       ))}

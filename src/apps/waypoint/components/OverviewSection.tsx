@@ -108,7 +108,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   };
 
   return (
-    <div className='space-y-4'>
+    <div className='space-y-3'>
       {announcements.length > 0 && (
         <AnnouncementsList trip={trip} currentUserId={currentUserId} announcements={announcements} />
       )}
@@ -222,8 +222,6 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   );
 }
 
-const RECENT_UPDATES_VISIBLE_COUNT = 1;
-
 function RecentUpdatesList({
   trip,
   events,
@@ -235,54 +233,33 @@ function RecentUpdatesList({
   onOpenDetails: (event: TimelineEvent) => void;
   onDismissAll: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const visibleEvents = expanded ? events : events.slice(0, RECENT_UPDATES_VISIBLE_COUNT);
-  const hiddenCount = events.length - visibleEvents.length;
+  const [firstEvent, ...restEvents] = events;
 
   return (
-    <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 rounded-xl border p-2.5'>
-      <div className='flex items-center justify-between gap-2'>
-        <p className='text-amber-700 dark:text-amber-300 text-xs font-bold tracking-wide uppercase'>
-          Recent updates
-        </p>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label='Dismiss all recent updates'
-          className='size-5 shrink-0'
-          onClick={onDismissAll}
-        >
-          <X className='h-3.5 w-3.5' />
-        </Button>
-      </div>
-      <ul className='space-y-0.5'>
-        {visibleEvents.map((event) => (
-          <li key={event.id}>
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-auto min-h-0 p-0! text-sm'
-              onClick={() => onOpenDetails(event)}
-            >
-              {event.createdAt >= trip.startDate ? 'New: ' : 'Updated: '}
-              {event.title}
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {hiddenCount > 0 && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='text-muted-foreground mt-0.5 h-auto min-h-0 p-0! text-xs'
-          onClick={() => setExpanded(true)}
-        >
-          +{hiddenCount} more
-        </Button>
-      )}
+    <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 flex items-center gap-2 rounded-xl border p-2.5'>
+      <p className='text-amber-700 dark:text-amber-300 shrink-0 text-xs font-bold tracking-wide uppercase'>
+        Updates
+      </p>
+      <Button
+        type='button'
+        variant='link'
+        size='sm'
+        className='h-auto min-h-0 min-w-0 flex-1 justify-start truncate p-0! text-left text-sm'
+        onClick={() => onOpenDetails(firstEvent)}
+      >
+        {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
+        {restEvents.length > 0 ? ` +${restEvents.length} more` : ''}
+      </Button>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='icon'
+        aria-label='Dismiss all recent updates'
+        className='size-6 shrink-0'
+        onClick={onDismissAll}
+      >
+        <X className='h-3.5 w-3.5' />
+      </Button>
     </div>
   );
 }
@@ -345,7 +322,7 @@ function ActiveNowCard({
         <EnrichedImage
           src={imageUrl}
           alt=''
-          className='h-44 w-full object-cover sm:aspect-2/1 sm:h-auto'
+          className='h-36 w-full object-cover sm:aspect-2/1 sm:h-auto'
         />
       )}
       <div className='p-3.5'>
