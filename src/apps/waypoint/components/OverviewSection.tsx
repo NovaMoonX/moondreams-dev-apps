@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { X } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -15,6 +16,7 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import AnnouncementsList from '@apps/waypoint/components/AnnouncementsList';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
+import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
@@ -99,13 +101,24 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
   };
 
+  const dismissAllUnseen = () => {
+    unseenEvents.forEach((event) => {
+      void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
+    });
+  };
+
   return (
     <div className='space-y-4'>
       {announcements.length > 0 && (
         <AnnouncementsList trip={trip} currentUserId={currentUserId} announcements={announcements} />
       )}
       {unseenEvents.length > 0 && (
-        <RecentUpdatesList trip={trip} events={unseenEvents} onOpenDetails={openEventDetails} />
+        <RecentUpdatesList
+          trip={trip}
+          events={unseenEvents}
+          onOpenDetails={openEventDetails}
+          onDismissAll={dismissAllUnseen}
+        />
       )}
       {checkInStays.map((stay) => (
         <CheckInStayCard
@@ -123,7 +136,27 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
       {isDoneForToday && (
         <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
       )}
-      <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
+      <div className='grid grid-cols-2 gap-2 sm:hidden'>
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          onClick={() => onViewDay(todayIndex)}
+        >
+          Today&apos;s schedule
+        </Button>
+        {hasTomorrow && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => onViewDay(todayIndex + 1)}
+          >
+            Tomorrow&apos;s schedule
+          </Button>
+        )}
+      </div>
+      <div className='hidden flex-wrap gap-x-4 gap-y-1 pt-1 sm:flex'>
         <Button
           type='button'
           variant='tertiary'
@@ -189,16 +222,18 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   );
 }
 
-const RECENT_UPDATES_VISIBLE_COUNT = 2;
+const RECENT_UPDATES_VISIBLE_COUNT = 1;
 
 function RecentUpdatesList({
   trip,
   events,
   onOpenDetails,
+  onDismissAll,
 }: {
   trip: TripSpace;
   events: TimelineEvent[];
   onOpenDetails: (event: TimelineEvent) => void;
+  onDismissAll: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const visibleEvents = expanded ? events : events.slice(0, RECENT_UPDATES_VISIBLE_COUNT);
@@ -206,9 +241,21 @@ function RecentUpdatesList({
 
   return (
     <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 rounded-xl border p-2.5'>
-      <p className='text-amber-700 dark:text-amber-300 text-xs font-bold tracking-wide uppercase'>
-        Recent updates
-      </p>
+      <div className='flex items-center justify-between gap-2'>
+        <p className='text-amber-700 dark:text-amber-300 text-xs font-bold tracking-wide uppercase'>
+          Recent updates
+        </p>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='icon'
+          aria-label='Dismiss all recent updates'
+          className='size-5 shrink-0'
+          onClick={onDismissAll}
+        >
+          <X className='h-3.5 w-3.5' />
+        </Button>
+      </div>
       <ul className='space-y-0.5'>
         {visibleEvents.map((event) => (
           <li key={event.id}>
@@ -254,12 +301,12 @@ function CheckInStayCard({ stay, onOpenDetails }: { stay: Stay; onOpenDetails: (
   return (
     <article
       {...getOpenDetailsProps(stay.name, onOpenDetails)}
-      className='border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 flex cursor-pointer items-center gap-3 rounded-xl border p-2.5'
+      className='border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 flex cursor-pointer items-center gap-3 rounded-xl border p-3'
     >
       {imageUrl && (
         <EnrichedImage src={imageUrl} alt='' className='h-12 w-12 shrink-0 rounded-lg object-cover' />
       )}
-      <div className='min-w-0 flex-1'>
+      <div className='min-w-0 flex-1 space-y-0.5'>
         <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
           Checking in today
         </p>
@@ -292,25 +339,43 @@ function ActiveNowCard({
   return (
     <article
       {...getOpenDetailsProps(event.title, onOpenDetails)}
-      className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3'
+      className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 cursor-pointer overflow-hidden rounded-xl border-2 shadow-sm'
     >
       {imageUrl && (
-        <EnrichedImage src={imageUrl} alt='' className='h-14 w-14 shrink-0 rounded-lg object-cover' />
+        <EnrichedImage
+          src={imageUrl}
+          alt=''
+          className='h-44 w-full object-cover sm:aspect-2/1 sm:h-auto'
+        />
       )}
-      <div className='min-w-0 flex-1'>
-        <div className='flex flex-wrap items-center gap-2'>
-          <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
-            Active Now
-          </p>
-          <EventTypeBadge event={event} />
+      <div className='p-3.5'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
+                Active Now
+              </p>
+              <EventTypeBadge event={event} />
+            </div>
+            <h3 className='mt-1 truncate text-lg font-bold'>{event.title}</h3>
+            <p className='text-muted-foreground text-xs'>
+              {formatTime(event.startAt)}
+              {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
+            </p>
+            {(event.locationName || event.address) && (
+              <LocationLink
+                {...event}
+                label={[event.locationName, event.address].filter(Boolean).join(' · ')}
+                className='mt-1'
+              />
+            )}
+          </div>
+          <div onClick={stopPropagation}>
+            <MapNavigationButton {...event} />
+          </div>
         </div>
-        <h3 className='truncate font-semibold'>{event.title}</h3>
-        <p className='text-muted-foreground truncate text-xs'>
-          {formatTime(event.startAt)}
-          {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
-        </p>
         {progress !== null && (
-          <div className='mt-1.5'>
+          <div className='mt-2'>
             <div className='bg-emerald-500/20 h-1 overflow-hidden rounded-full'>
               <div
                 className='bg-emerald-500 h-full transition-[width]'

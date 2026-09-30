@@ -62,14 +62,14 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
   };
 
   return (
-    <div className='space-y-2'>
+    <div className='space-y-1.5'>
       {announcements.map((announcement) => (
         <div
           key={announcement.id}
           role='button'
           tabIndex={0}
           className={join(
-            'flex w-full items-center gap-2 rounded-lg border p-3 text-left cursor-pointer',
+            'flex w-full items-center gap-2 rounded-lg border p-2.5 text-left cursor-pointer',
             announcement.severity === 'URGENT'
               ? 'border-red-500/60 bg-red-50 dark:bg-red-950/30'
               : announcement.severity === 'HEADS_UP'

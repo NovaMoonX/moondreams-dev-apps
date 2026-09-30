@@ -135,7 +135,7 @@ function TripDetailPage({
       <div
         className={join(
           'mx-auto max-w-4xl',
-          isActive ? 'space-y-3 py-4 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
+          isActive ? 'space-y-2.5 py-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
         )}
       >
         <Button
@@ -159,10 +159,12 @@ function TripDetailPage({
               )}
             />
           )}
-          <div className='flex flex-wrap items-start justify-between gap-3'>
+          <div className={join('flex flex-wrap items-start justify-between', isActive ? 'gap-2' : 'gap-3')}>
             <div className='w-full min-w-0 sm:w-auto'>
               <div className='flex flex-wrap items-center gap-2'>
-                <h1 className='text-3xl font-semibold'>{trip.title}</h1>
+                <h1 className={join('font-semibold', isActive ? 'text-2xl' : 'text-3xl')}>
+                  {trip.title}
+                </h1>
                 {isActive && (
                   <Badge variant='success' use='status'>
                     Active

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Camera, ExternalLink, Settings2 } from 'lucide-react';
+import { ExternalLink, Images, Settings2 } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -79,7 +79,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           className='border-fuchsia-500/60 bg-fuchsia-50 dark:bg-fuchsia-950/30 flex h-auto w-full items-center justify-start gap-3 rounded-xl border p-3 text-left'
           onClick={() => setIsModalOpen(true)}
         >
-          <Camera className='text-fuchsia-700 dark:text-fuchsia-300 h-5 w-5 shrink-0' />
+          <Images className='text-fuchsia-700 dark:text-fuchsia-300 h-5 w-5 shrink-0' />
           <div className='min-w-0 flex-1'>
             <p className='text-fuchsia-700 dark:text-fuchsia-300 text-xs font-bold tracking-wide uppercase'>
               That&apos;s today&apos;s plan
@@ -116,7 +116,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           className='px-2'
           onClick={() => setIsModalOpen(true)}
         >
-          <Camera className='h-4 w-4' />
+          <Images className='h-4 w-4' />
         </Button>
         <SharedAlbumLinkModal
           key={isModalOpen ? 'open' : 'closed'}
