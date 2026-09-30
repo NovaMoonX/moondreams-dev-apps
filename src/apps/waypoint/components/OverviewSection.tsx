@@ -242,12 +242,14 @@ function RecentUpdatesList({
       </p>
       <Button
         type='button'
-        variant='link'
+        variant='tertiary'
         size='sm'
-        className='h-auto min-h-0 min-w-0 flex-1 justify-start truncate p-0! text-left text-sm'
+        className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
         onClick={() => onOpenDetails(firstEvent)}
       >
-        {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
+        <span className='block min-w-0 truncate text-sm underline underline-offset-2'>
+          {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
+        </span>
       </Button>
       {restEvents.length > 0 && (
         <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
