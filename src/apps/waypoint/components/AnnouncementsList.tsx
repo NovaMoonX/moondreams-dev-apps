@@ -86,7 +86,7 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
         className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
         onClick={() => setOpenAnnouncement(firstAnnouncement)}
       >
-        <span className='block min-w-0 truncate text-sm underline underline-offset-2'>
+        <span className='block min-w-0 truncate text-sm underline underline-offset-2 sm:no-underline'>
           {firstAnnouncement.title}
         </span>
       </Button>

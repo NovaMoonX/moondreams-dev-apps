@@ -276,30 +276,32 @@ function RecentUpdatesList({
       <p className='text-amber-700 dark:text-amber-300 hidden shrink-0 text-xs font-bold tracking-wide uppercase sm:inline'>
         Updates
       </p>
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
-        onClick={() => onOpenDetails(firstEvent)}
-      >
-        <span className='block min-w-0 truncate text-sm underline underline-offset-2'>
-          {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
-        </span>
-      </Button>
-      {restEvents.length > 0 && (
-        <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
-      )}
-      <Button
-        type='button'
-        variant='tertiary'
-        size='icon'
-        aria-label='Dismiss all recent updates'
-        className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
-        onClick={onDismissAll}
-      >
-        <X className='h-3.5 w-3.5' />
-      </Button>
+      <div className='flex min-w-0 items-center gap-2 sm:ml-auto'>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left sm:flex-initial'
+          onClick={() => onOpenDetails(firstEvent)}
+        >
+          <span className='block min-w-0 truncate text-sm underline underline-offset-2 sm:no-underline'>
+            {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
+          </span>
+        </Button>
+        {restEvents.length > 0 && (
+          <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
+        )}
+        <Button
+          type='button'
+          variant='tertiary'
+          size='icon'
+          aria-label='Dismiss all recent updates'
+          className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
+          onClick={onDismissAll}
+        >
+          <X className='h-3.5 w-3.5' />
+        </Button>
+      </div>
     </div>
   );
 }
