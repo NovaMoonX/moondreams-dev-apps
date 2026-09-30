@@ -113,16 +113,12 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     setDetail({ type: 'stay', stay });
   };
 
-  // Recent updates stays a single compact line at every width, so there's no
-  // room to surface details inline there — on `sm`+ it jumps to the event's
-  // day on the Timeline (where details are already inline) instead of a drawer.
-  const openRecentUpdate = (event: TimelineEvent) => {
+  // Below `sm`, tapping a recent update opens the drawer, same as the other
+  // cards. At `sm`+, its extra info (time, location) is shown right on the
+  // row instead — nothing to tap, so viewing one never marks it seen.
+  const openRecentUpdateDrawer = (event: TimelineEvent) => {
+    setDetail({ type: 'event', event });
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
-    if (isSmallScreen) {
-      setDetail({ type: 'event', event });
-    } else {
-      onViewDay(event.dayIndex ?? todayIndex);
-    }
   };
 
   const dismissAllUnseen = () => {
@@ -140,7 +136,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         <RecentUpdatesList
           trip={trip}
           events={unseenEvents}
-          onOpenDetails={openRecentUpdate}
+          isSmallScreen={isSmallScreen}
+          onOpenDetails={openRecentUpdateDrawer}
           onDismissAll={dismissAllUnseen}
         />
       )}
@@ -260,15 +257,19 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 function RecentUpdatesList({
   trip,
   events,
+  isSmallScreen,
   onOpenDetails,
   onDismissAll,
 }: {
   trip: TripSpace;
   events: TimelineEvent[];
+  isSmallScreen: boolean;
   onOpenDetails: (event: TimelineEvent) => void;
   onDismissAll: () => void;
 }) {
   const [firstEvent, ...restEvents] = events;
+  const label = (firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title;
+  const locationLabel = [firstEvent.locationName, firstEvent.address].filter(Boolean).join(' · ');
 
   return (
     <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 flex items-center gap-2 rounded-xl border p-2.5'>
@@ -276,32 +277,39 @@ function RecentUpdatesList({
       <p className='text-amber-700 dark:text-amber-300 hidden shrink-0 text-xs font-bold tracking-wide uppercase sm:inline'>
         Updates
       </p>
-      <div className='flex min-w-0 items-center gap-2 sm:ml-auto'>
+      {isSmallScreen ? (
         <Button
           type='button'
           variant='tertiary'
           size='sm'
-          className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left sm:flex-initial'
+          className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
           onClick={() => onOpenDetails(firstEvent)}
         >
-          <span className='block min-w-0 truncate text-sm underline underline-offset-2 sm:no-underline'>
-            {(firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title}
+          <span className='block min-w-0 truncate text-sm underline underline-offset-2'>{label}</span>
+        </Button>
+      ) : (
+        <div className='flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5'>
+          <span className='truncate text-sm font-medium'>{label}</span>
+          <span className='text-muted-foreground text-xs'>
+            {formatTime(firstEvent.startAt)}
+            {firstEvent.endAt ? ` - ${formatTime(firstEvent.endAt)}` : ''}
           </span>
-        </Button>
-        {restEvents.length > 0 && (
-          <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
-        )}
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label='Dismiss all recent updates'
-          className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
-          onClick={onDismissAll}
-        >
-          <X className='h-3.5 w-3.5' />
-        </Button>
-      </div>
+          {locationLabel && <LocationLink {...firstEvent} label={locationLabel} className='text-xs' />}
+        </div>
+      )}
+      {restEvents.length > 0 && (
+        <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
+      )}
+      <Button
+        type='button'
+        variant='tertiary'
+        size='icon'
+        aria-label='Dismiss all recent updates'
+        className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
+        onClick={onDismissAll}
+      >
+        <X className='h-3.5 w-3.5' />
+      </Button>
     </div>
   );
 }
