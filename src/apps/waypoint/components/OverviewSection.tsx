@@ -1,12 +1,15 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import EnrichedImage from '@/components/EnrichedImage';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
 import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
@@ -20,6 +23,7 @@ import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
+import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
@@ -82,6 +86,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const unseenEvents = useAppSelector(selectUnseenActivityEvents(trip, currentUserId), shallowEqual);
   const announcements = useAppSelector(selectLiveAnnouncements(currentUserId, now), shallowEqual);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
+  const isSmallScreen = useMediaQuery().isBelow('sm');
 
   if (!isLive) {
     return null;
@@ -96,9 +101,28 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     !activeEvent &&
     (!upNextEvent || getDayIndex(trip.startDate, upNextEvent.startAt) !== todayIndex);
 
-  const openEventDetails = (event: TimelineEvent) => {
+  // Below `sm`, Active Now/Up Next/Checking-in cards are too tight for the full
+  // details, so tapping opens the drawer — same split Timeline/EventCard use.
+  // At `sm`+, the cards show everything inline instead and are never clickable.
+  const openEventDrawer = (event: TimelineEvent) => {
     setDetail({ type: 'event', event });
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
+  };
+
+  const openStayDrawer = (stay: Stay) => {
+    setDetail({ type: 'stay', stay });
+  };
+
+  // Recent updates stays a single compact line at every width, so there's no
+  // room to surface details inline there — on `sm`+ it jumps to the event's
+  // day on the Timeline (where details are already inline) instead of a drawer.
+  const openRecentUpdate = (event: TimelineEvent) => {
+    void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
+    if (isSmallScreen) {
+      setDetail({ type: 'event', event });
+    } else {
+      onViewDay(event.dayIndex ?? todayIndex);
+    }
   };
 
   const dismissAllUnseen = () => {
@@ -116,7 +140,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         <RecentUpdatesList
           trip={trip}
           events={unseenEvents}
-          onOpenDetails={openEventDetails}
+          onOpenDetails={openRecentUpdate}
           onDismissAll={dismissAllUnseen}
         />
       )}
@@ -124,14 +148,25 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         <CheckInStayCard
           key={stay.id}
           stay={stay}
-          onOpenDetails={() => setDetail({ type: 'stay', stay })}
+          isSmallScreen={isSmallScreen}
+          onOpenDetails={() => openStayDrawer(stay)}
         />
       ))}
       {activeEvent && (
-        <ActiveNowCard event={activeEvent} now={now} onOpenDetails={() => openEventDetails(activeEvent)} />
+        <ActiveNowCard
+          event={activeEvent}
+          now={now}
+          isSmallScreen={isSmallScreen}
+          onOpenDetails={() => openEventDrawer(activeEvent)}
+        />
       )}
       {upNextEvent && (
-        <UpNextCard event={upNextEvent} now={now} onOpenDetails={() => openEventDetails(upNextEvent)} />
+        <UpNextCard
+          event={upNextEvent}
+          now={now}
+          isSmallScreen={isSmallScreen}
+          onOpenDetails={() => openEventDrawer(upNextEvent)}
+        />
       )}
       {isDoneForToday && (
         <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
@@ -276,27 +311,77 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
   );
 }
 
-function CheckInStayCard({ stay, onOpenDetails }: { stay: Stay; onOpenDetails: () => void }) {
+function CheckInStayCard({
+  stay,
+  isSmallScreen,
+  onOpenDetails,
+}: {
+  stay: Stay;
+  isSmallScreen: boolean;
+  onOpenDetails: () => void;
+}) {
   const imageUrl = getDisplayImage(stay);
+  const clickProps = isSmallScreen ? getOpenDetailsProps(stay.name, onOpenDetails) : {};
 
   return (
     <article
-      {...getOpenDetailsProps(stay.name, onOpenDetails)}
-      className='border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 flex cursor-pointer items-center gap-3 rounded-xl border p-3'
-    >
-      {imageUrl && (
-        <EnrichedImage src={imageUrl} alt='' className='h-12 w-12 shrink-0 rounded-lg object-cover' />
+      {...clickProps}
+      className={join(
+        'border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 rounded-xl border p-3',
+        isSmallScreen && 'cursor-pointer',
       )}
-      <div className='min-w-0 flex-1 space-y-0.5'>
-        <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
-          Checking in today
-        </p>
-        <h3 className='truncate text-sm font-semibold'>{stay.name}</h3>
-        <p className='text-muted-foreground truncate text-xs'>
-          {formatTime(stay.checkInAt)}
-          {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
-        </p>
+    >
+      <div className='flex items-start gap-3'>
+        {imageUrl && (
+          <EnrichedImage
+            src={imageUrl}
+            alt=''
+            className='h-12 w-12 shrink-0 rounded-lg object-cover sm:h-16 sm:w-16'
+          />
+        )}
+        <div className='min-w-0 flex-1 space-y-0.5'>
+          <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
+            Checking in today
+          </p>
+          <h3 className='truncate text-sm font-semibold sm:text-base'>{stay.name}</h3>
+          <p className='text-muted-foreground truncate text-xs'>
+            {formatTime(stay.checkInAt)}
+            {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
+          </p>
+        </div>
+        {!isSmallScreen && (
+          <MapNavigationButton
+            locationName={stay.name}
+            address={stay.address}
+            latitude={stay.latitude}
+            longitude={stay.longitude}
+          />
+        )}
       </div>
+      {!isSmallScreen && (
+        <div className='mt-2 space-y-1'>
+          <LocationLink
+            locationName={stay.stayType === 'HOTEL' ? stay.name : null}
+            address={stay.address}
+            latitude={stay.latitude}
+            longitude={stay.longitude}
+            label={stay.address}
+            className='text-xs'
+          />
+          {stay.confirmationCode && (
+            <p className='text-xs'>
+              <span className='text-muted-foreground'>Confirmation · </span>
+              <span className='font-medium'>{stay.confirmationCode}</span>
+            </p>
+          )}
+          {(stay.linkUrl || stay.notes) && (
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+              <StayNotesButton stay={stay} />
+              {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
+            </div>
+          )}
+        </div>
+      )}
     </article>
   );
 }
@@ -304,10 +389,12 @@ function CheckInStayCard({ stay, onOpenDetails }: { stay: Stay; onOpenDetails: (
 function ActiveNowCard({
   event,
   now,
+  isSmallScreen,
   onOpenDetails,
 }: {
   event: TimelineEvent;
   now: number;
+  isSmallScreen: boolean;
   onOpenDetails: () => void;
 }) {
   const duration = event.endAt !== null ? event.endAt - event.startAt : null;
@@ -316,11 +403,15 @@ function ActiveNowCard({
       ? Math.min(1, Math.max(0, (now - event.startAt) / duration))
       : null;
   const imageUrl = getDisplayImage(event);
+  const clickProps = isSmallScreen ? getOpenDetailsProps(event.title, onOpenDetails) : {};
 
   return (
     <article
-      {...getOpenDetailsProps(event.title, onOpenDetails)}
-      className='border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 cursor-pointer overflow-hidden rounded-xl border-2 shadow-sm'
+      {...clickProps}
+      className={join(
+        'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden rounded-xl border-2 shadow-sm',
+        isSmallScreen && 'cursor-pointer',
+      )}
     >
       {imageUrl && (
         <EnrichedImage
@@ -350,6 +441,11 @@ function ActiveNowCard({
                 className='mt-1'
               />
             )}
+            {!isSmallScreen && event.linkUrl && (
+              <div className='mt-1'>
+                <ExternalLinkText href={event.linkUrl} />
+              </div>
+            )}
           </div>
           <div onClick={stopPropagation}>
             <MapNavigationButton {...event} />
@@ -376,18 +472,25 @@ function ActiveNowCard({
 function UpNextCard({
   event,
   now,
+  isSmallScreen,
   onOpenDetails,
 }: {
   event: TimelineEvent;
   now: number;
+  isSmallScreen: boolean;
   onOpenDetails: () => void;
 }) {
   const imageUrl = getDisplayImage(event);
+  const clickProps = isSmallScreen ? getOpenDetailsProps(event.title, onOpenDetails) : {};
+  const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
 
   return (
     <div
-      {...getOpenDetailsProps(event.title, onOpenDetails)}
-      className='border-border flex cursor-pointer items-start justify-between gap-3 border-l-2 py-1 pl-4 pr-5'
+      {...clickProps}
+      className={join(
+        'border-border flex items-start justify-between gap-3 border-l-2 py-1 pl-4 pr-5',
+        isSmallScreen && 'cursor-pointer',
+      )}
     >
       <div className='flex items-start gap-3'>
         {imageUrl && (
@@ -408,8 +511,17 @@ function UpNextCard({
             </span>
           </div>
           <h4 className='mt-1 text-sm font-medium'>{event.title}</h4>
-          {event.locationName && (
-            <p className='text-muted-foreground text-xs'>{event.locationName}</p>
+          {isSmallScreen ? (
+            event.locationName && (
+              <p className='text-muted-foreground text-xs'>{event.locationName}</p>
+            )
+          ) : (
+            locationLabel && <LocationLink {...event} label={locationLabel} className='text-xs' />
+          )}
+          {!isSmallScreen && event.linkUrl && (
+            <div className='mt-1'>
+              <ExternalLinkText href={event.linkUrl} />
+            </div>
           )}
         </div>
       </div>

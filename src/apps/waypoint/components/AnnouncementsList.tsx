@@ -36,6 +36,14 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
     ).unwrap();
   };
 
+  const dismissAll = () => {
+    announcements.forEach((announcement) => {
+      void dispatch(
+        dismissAnnouncement({ uid: currentUserId, trip, announcementId: announcement.id }),
+      );
+    });
+  };
+
   const handleDelete = async (announcement: Announcement) => {
     const confirmed = await confirm({
       title: 'Delete announcement',
@@ -60,41 +68,37 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
     }
   };
 
+  const [firstAnnouncement, ...restAnnouncements] = announcements;
+
   return (
-    <div className='border-border bg-muted/40 space-y-1 rounded-xl border p-2.5'>
-      {announcements.map((announcement) => (
-        <div
-          key={announcement.id}
-          role='button'
-          tabIndex={0}
-          className='flex w-full items-center gap-2 text-left cursor-pointer'
-          onClick={() => setOpenAnnouncement(announcement)}
-          onKeyDown={(event) => {
-            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-              event.preventDefault();
-              setOpenAnnouncement(announcement);
-            }
-          }}
-        >
-          <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity]}>
-            {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
-          </Badge>
-          <span className='min-w-0 flex-1 truncate text-sm font-medium'>{announcement.title}</span>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='icon'
-            aria-label={`Dismiss ${announcement.title}`}
-            className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleDismiss(announcement);
-            }}
-          >
-            <X className='h-3.5 w-3.5' />
-          </Button>
-        </div>
-      ))}
+    <div className='border-border bg-muted/40 flex items-center gap-2 rounded-xl border p-2.5'>
+      <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[firstAnnouncement.severity]}>
+        {ANNOUNCEMENT_SEVERITY_LABELS[firstAnnouncement.severity]}
+      </Badge>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
+        onClick={() => setOpenAnnouncement(firstAnnouncement)}
+      >
+        <span className='block min-w-0 truncate text-sm underline underline-offset-2'>
+          {firstAnnouncement.title}
+        </span>
+      </Button>
+      {restAnnouncements.length > 0 && (
+        <span className='text-muted-foreground shrink-0 text-xs'>+{restAnnouncements.length} more</span>
+      )}
+      <Button
+        type='button'
+        variant='tertiary'
+        size='icon'
+        aria-label='Dismiss all announcements'
+        className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
+        onClick={dismissAll}
+      >
+        <X className='h-3.5 w-3.5' />
+      </Button>
       <Modal
         isOpen={openAnnouncement !== null}
         onClose={() => setOpenAnnouncement(null)}

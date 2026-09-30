@@ -283,15 +283,15 @@ function TripDetailPage({
                 </Button>
               </>
               {isActive && (
-                <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
+                <span className='sm:hidden'>
+                  <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
+                </span>
               )}
             </div>
           </div>
-          {!isActive && (
-            <div className='mt-3'>
-              <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
-            </div>
-          )}
+          <div className={join('mt-3', isActive && 'hidden sm:block')}>
+            <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
+          </div>
         </div>
         {isTripDateShiftLocked(trip) && (
           <div className='bg-warning/15 text-warning border-warning flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm'>
