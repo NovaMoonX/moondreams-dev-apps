@@ -121,16 +121,22 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
   };
 
-  const dismissAllUnseen = () => {
-    unseenEvents.forEach((event) => {
-      void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
-    });
+  // Dismisses just the one currently shown, not the whole queue — so someone
+  // can step through unseen events one at a time instead of losing all of
+  // them in a single click.
+  const dismissRecentUpdate = (event: TimelineEvent) => {
+    void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
   };
 
   return (
     <div className='space-y-3'>
       {announcements.length > 0 && (
-        <AnnouncementsList trip={trip} currentUserId={currentUserId} announcements={announcements} />
+        <AnnouncementsList
+          trip={trip}
+          currentUserId={currentUserId}
+          announcements={announcements}
+          isSmallScreen={isSmallScreen}
+        />
       )}
       {unseenEvents.length > 0 && (
         <RecentUpdatesList
@@ -138,7 +144,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           events={unseenEvents}
           isSmallScreen={isSmallScreen}
           onOpenDetails={openRecentUpdateDrawer}
-          onDismissAll={dismissAllUnseen}
+          onDismiss={dismissRecentUpdate}
         />
       )}
       {checkInStays.map((stay) => (
@@ -259,13 +265,13 @@ function RecentUpdatesList({
   events,
   isSmallScreen,
   onOpenDetails,
-  onDismissAll,
+  onDismiss,
 }: {
   trip: TripSpace;
   events: TimelineEvent[];
   isSmallScreen: boolean;
   onOpenDetails: (event: TimelineEvent) => void;
-  onDismissAll: () => void;
+  onDismiss: (event: TimelineEvent) => void;
 }) {
   const [firstEvent, ...restEvents] = events;
   const label = (firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title;
@@ -294,7 +300,9 @@ function RecentUpdatesList({
             {formatTime(firstEvent.startAt)}
             {firstEvent.endAt ? ` - ${formatTime(firstEvent.endAt)}` : ''}
           </span>
-          {locationLabel && <LocationLink {...firstEvent} label={locationLabel} className='text-xs' />}
+          {locationLabel && (
+            <span className='text-muted-foreground min-w-0 truncate text-xs'>{locationLabel}</span>
+          )}
         </div>
       )}
       {restEvents.length > 0 && (
@@ -304,9 +312,9 @@ function RecentUpdatesList({
         type='button'
         variant='tertiary'
         size='icon'
-        aria-label='Dismiss all recent updates'
+        aria-label={`Dismiss "${firstEvent.title}"`}
         className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
-        onClick={onDismissAll}
+        onClick={() => onDismiss(firstEvent)}
       >
         <X className='h-3.5 w-3.5' />
       </Button>

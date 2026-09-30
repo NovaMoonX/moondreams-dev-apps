@@ -20,9 +20,15 @@ interface AnnouncementsListProps {
   trip: TripSpace;
   currentUserId: string;
   announcements: Announcement[];
+  isSmallScreen: boolean;
 }
 
-function AnnouncementsList({ trip, currentUserId, announcements }: AnnouncementsListProps) {
+function AnnouncementsList({
+  trip,
+  currentUserId,
+  announcements,
+  isSmallScreen,
+}: AnnouncementsListProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -34,14 +40,6 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
     await dispatch(
       dismissAnnouncement({ uid: currentUserId, trip, announcementId: announcement.id }),
     ).unwrap();
-  };
-
-  const dismissAll = () => {
-    announcements.forEach((announcement) => {
-      void dispatch(
-        dismissAnnouncement({ uid: currentUserId, trip, announcementId: announcement.id }),
-      );
-    });
   };
 
   const handleDelete = async (announcement: Announcement) => {
@@ -79,17 +77,26 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
       <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[firstAnnouncement.severity]}>
         {ANNOUNCEMENT_SEVERITY_LABELS[firstAnnouncement.severity]}
       </Badge>
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
-        onClick={() => setOpenAnnouncement(firstAnnouncement)}
-      >
-        <span className='block min-w-0 truncate text-sm underline underline-offset-2 sm:no-underline'>
-          {firstAnnouncement.title}
-        </span>
-      </Button>
+      {isSmallScreen ? (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
+          onClick={() => setOpenAnnouncement(firstAnnouncement)}
+        >
+          <span className='block min-w-0 truncate text-sm underline underline-offset-2'>
+            {firstAnnouncement.title}
+          </span>
+        </Button>
+      ) : (
+        <div className='flex min-w-0 flex-1 items-center gap-x-3'>
+          <span className='shrink-0 truncate text-sm font-medium'>{firstAnnouncement.title}</span>
+          <span className='text-muted-foreground min-w-0 truncate text-xs'>
+            {firstAnnouncement.body}
+          </span>
+        </div>
+      )}
       {restAnnouncements.length > 0 && (
         <span className='text-muted-foreground shrink-0 text-xs'>+{restAnnouncements.length} more</span>
       )}
@@ -97,9 +104,9 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
         type='button'
         variant='tertiary'
         size='icon'
-        aria-label='Dismiss all announcements'
+        aria-label={`Dismiss "${firstAnnouncement.title}"`}
         className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
-        onClick={dismissAll}
+        onClick={() => void handleDismiss(firstAnnouncement)}
       >
         <X className='h-3.5 w-3.5' />
       </Button>
