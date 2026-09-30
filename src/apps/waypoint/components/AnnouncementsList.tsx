@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { X } from 'lucide-react';
+import { Megaphone, X } from 'lucide-react';
 
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -71,7 +71,11 @@ function AnnouncementsList({ trip, currentUserId, announcements }: Announcements
   const [firstAnnouncement, ...restAnnouncements] = announcements;
 
   return (
-    <div className='border-border bg-muted/40 flex items-center gap-2 rounded-xl border p-2.5'>
+    <div className='border-indigo-500/60 bg-indigo-50 dark:bg-indigo-950/30 flex items-center gap-2 rounded-xl border p-2.5'>
+      <Megaphone className='text-indigo-700 dark:text-indigo-300 h-4 w-4 shrink-0 sm:hidden' />
+      <p className='text-indigo-700 dark:text-indigo-300 hidden shrink-0 text-xs font-bold tracking-wide uppercase sm:inline'>
+        Announcements
+      </p>
       <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[firstAnnouncement.severity]}>
         {ANNOUNCEMENT_SEVERITY_LABELS[firstAnnouncement.severity]}
       </Badge>

@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { X } from 'lucide-react';
+import { History, X } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -272,7 +272,8 @@ function RecentUpdatesList({
 
   return (
     <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 flex items-center gap-2 rounded-xl border p-2.5'>
-      <p className='text-amber-700 dark:text-amber-300 shrink-0 text-xs font-bold tracking-wide uppercase'>
+      <History className='text-amber-700 dark:text-amber-300 h-4 w-4 shrink-0 sm:hidden' />
+      <p className='text-amber-700 dark:text-amber-300 hidden shrink-0 text-xs font-bold tracking-wide uppercase sm:inline'>
         Updates
       </p>
       <Button
