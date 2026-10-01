@@ -82,6 +82,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [searchParams, setSearchParams] = useSearchParams();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
+  const showProgress = getTripStatus(trip, now) !== 'UPCOMING';
   const isValidSectionTab = (value: string | null): value is TripSectionTab =>
     value !== null && TRIP_SECTION_TABS.includes(value as TripSectionTab);
   const tabParam = searchParams.get('tab');
@@ -548,11 +549,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           trip={trip}
           now={now}
           value={sectionTab}
-          showProgress={isActive}
+          showProgress={showProgress}
           onChange={setSectionTab}
         />
       ) : (
-        isActive && (
+        showProgress && (
           <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-10 border-t backdrop-blur'>
             <TripProgressBar trip={trip} now={now} />
           </div>

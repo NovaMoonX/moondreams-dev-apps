@@ -1,3 +1,4 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Flag } from 'lucide-react';
 
 import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
@@ -15,11 +16,12 @@ function TripProgressBar({ trip, now }: TripProgressBarProps) {
   const progress = Math.min(1, Math.max(0, elapsed));
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const currentDay = Math.min(dayCount, Math.max(1, getDayIndex(trip.startDate, now) + 1));
+  const isComplete = now >= trip.endDate;
 
   return (
     <div className='mx-auto flex max-w-4xl items-center gap-2.5 px-4 py-1.5'>
       <span className='text-muted-foreground text-[11px] font-medium whitespace-nowrap tabular-nums'>
-        Day {currentDay} of {dayCount}
+        {isComplete ? 'Trip complete' : `Day ${currentDay} of ${dayCount}`}
       </span>
       <div
         role='progressbar'
@@ -39,7 +41,13 @@ function TripProgressBar({ trip, now }: TripProgressBarProps) {
           style={{ left: `${progress * 100}%` }}
         />
       </div>
-      <Flag aria-hidden className='text-muted-foreground h-3.5 w-3.5 shrink-0' />
+      <Flag
+        aria-hidden
+        className={join(
+          'h-3.5 w-3.5 shrink-0',
+          isComplete ? 'fill-emerald-500 text-emerald-600' : 'text-muted-foreground',
+        )}
+      />
     </div>
   );
 }
