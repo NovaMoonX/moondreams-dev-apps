@@ -32,8 +32,12 @@ function DuesSummary({
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
   const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
 
-  const getDirection = ({ personA, personB, netAmount }: PairSettlement) =>
-    netAmount >= 0 ? { debtorUid: personA, creditorUid: personB } : { debtorUid: personB, creditorUid: personA };
+  const getDirection = ({ personA, personB, netAmount, aOwesB, bOwesA }: PairSettlement) => {
+    const aIsDebtor = Math.abs(netAmount) > EPSILON ? netAmount > 0 : aOwesB.total >= bOwesA.total;
+    return aIsDebtor
+      ? { debtorUid: personA, creditorUid: personB }
+      : { debtorUid: personB, creditorUid: personA };
+  };
 
   const renderStat = (label: string, value: string, emphasized = false) => (
     <div>
@@ -133,16 +137,12 @@ function DuesSummary({
       <div className='space-y-4'>
         <div className='border-border flex items-center justify-between gap-3 rounded-full border px-4 py-2.5'>
           <p className='min-w-0 text-sm leading-tight font-medium'>
-            {isPairSettled(settlement)
-              ? `${memberLabel(personA)} and ${memberLabel(personB)} are settled up`
-              : `${memberLabel(debtorUid)} owes ${memberLabel(creditorUid)}`}
+            {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
           </p>
-          {!isPairSettled(settlement) && (
-            <p className='shrink-0 text-base font-semibold tabular-nums'>
-              {formatAmount(Math.abs(netAmount))}
-              <span className='text-muted-foreground ml-1 text-xs font-normal'>net</span>
-            </p>
-          )}
+          <p className='shrink-0 text-base font-semibold tabular-nums'>
+            {formatAmount(Math.abs(netAmount))}
+            <span className='text-muted-foreground ml-1 text-xs font-normal'>net</span>
+          </p>
         </div>
         {renderDirection(personA, personB, aOwesB, showTotals)}
         {renderDirection(personB, personA, bOwesA, showTotals)}
@@ -154,7 +154,7 @@ function DuesSummary({
     <>
       <ul className='divide-border -mx-3 mt-1 divide-y'>
         {settlements.map((settlement) => {
-          const { personA, personB, netAmount } = settlement;
+          const { netAmount } = settlement;
           const settled = isPairSettled(settlement);
           const { debtorUid, creditorUid } = getDirection(settlement);
 
@@ -167,16 +167,17 @@ function DuesSummary({
                 className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left focus:outline-transparent!'
               >
                 <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
-                  {settled
-                    ? `${memberLabel(personA)} and ${memberLabel(personB)} are settled up`
-                    : `${memberLabel(debtorUid)} owes ${memberLabel(creditorUid)}`}
+                  {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
                 </span>
                 <span className='flex shrink-0 items-center gap-1'>
-                  {!settled && (
-                    <span className='text-sm font-semibold tabular-nums'>
-                      {formatAmount(Math.abs(netAmount))}
-                    </span>
-                  )}
+                  <span
+                    className={join(
+                      'text-sm tabular-nums',
+                      settled ? 'text-muted-foreground' : 'font-semibold',
+                    )}
+                  >
+                    {formatAmount(Math.abs(netAmount))}
+                  </span>
                   <ChevronRight className='text-muted-foreground h-4 w-4' />
                 </span>
               </Button>
