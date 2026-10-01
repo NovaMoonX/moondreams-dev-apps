@@ -296,7 +296,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
                       </div>
                       <p className='text-muted-foreground text-xs whitespace-pre-line'>{announcement.body}</p>
                       <p className='text-muted-foreground text-right text-xs'>
-                        — {getActorName(announcement.createdBy)}
+                        - {getActorName(announcement.createdBy)}
                       </p>
                     </div>
                     <div className='flex shrink-0 items-center gap-1'>
