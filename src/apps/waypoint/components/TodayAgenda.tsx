@@ -15,7 +15,7 @@ interface TodayAgendaProps {
   dayIndex: number;
   now: number;
   limit?: number;
-  onViewAll: () => void;
+  onViewAll?: () => void;
   onOpenEvent: (event: TimelineEvent) => void;
 }
 
@@ -36,15 +36,17 @@ function TodayAgenda({ title, dayIndex, now, limit, onViewAll, onOpenEvent }: To
         <h3 className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
           {title}
         </h3>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-auto p-0 text-xs'
-          onClick={onViewAll}
-        >
-          See all
-        </Button>
+        {onViewAll && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='h-auto p-0 text-xs'
+            onClick={onViewAll}
+          >
+            See all
+          </Button>
+        )}
       </div>
       <ul className='divide-border border-border divide-y rounded-xl border'>
         {events.map((event) => {

@@ -111,42 +111,44 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   };
 
   return (
-    <div className='space-y-3'>
-      {checkInStays.map((stay) => (
-        <CheckInStayCard
-          key={stay.id}
-          stay={stay}
-          now={now}
-          isSmallScreen={isSmallScreen}
-          onOpenDetails={() => openStayDrawer(stay)}
-        />
-      ))}
-      {activeEvent && (
-        <ActiveNowCard
-          event={activeEvent}
-          now={now}
-          isSmallScreen={isSmallScreen}
-          onOpenDetails={() => openEventDrawer(activeEvent)}
-        />
-      )}
-      {upNextEvent && (
-        <UpNextCard
-          event={upNextEvent}
-          now={now}
-          isSmallScreen={isSmallScreen}
-          onOpenDetails={() => openEventDrawer(upNextEvent)}
-        />
-      )}
-      {isDoneForToday && (
-        <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
-      )}
+    <div className='space-y-5 sm:space-y-3'>
+      <div className='space-y-3'>
+        {checkInStays.map((stay) => (
+          <CheckInStayCard
+            key={stay.id}
+            stay={stay}
+            now={now}
+            isSmallScreen={isSmallScreen}
+            onOpenDetails={() => openStayDrawer(stay)}
+          />
+        ))}
+        {activeEvent && (
+          <ActiveNowCard
+            event={activeEvent}
+            now={now}
+            isSmallScreen={isSmallScreen}
+            onOpenDetails={() => openEventDrawer(activeEvent)}
+          />
+        )}
+        {upNextEvent && (
+          <UpNextCard
+            event={upNextEvent}
+            now={now}
+            isSmallScreen={isSmallScreen}
+            onOpenDetails={() => openEventDrawer(upNextEvent)}
+          />
+        )}
+        {isDoneForToday && (
+          <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
+        )}
+      </div>
       {isSmallScreen && (
         <>
+          <hr className='border-border' />
           <TodayAgenda
             title='Today'
             dayIndex={todayIndex}
             now={now}
-            onViewAll={() => onViewDay(todayIndex)}
             onOpenEvent={openEventDrawer}
           />
           {hasTomorrow && (

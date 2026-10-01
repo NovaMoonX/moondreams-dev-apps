@@ -87,14 +87,12 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
             aria-hidden
             className='absolute inset-0 h-full w-full object-cover opacity-50'
           />
-          <div className='from-background via-background/90 absolute inset-0 bg-linear-to-r to-transparent' />
+          <div className='from-background via-background/90 absolute inset-0 bg-linear-to-r via-60% to-transparent' />
           <div className='relative flex min-w-0 flex-1 items-center gap-3 p-4'>
             <Images className='text-fuchsia-600/70 dark:text-fuchsia-300/70 h-5 w-5 shrink-0' />
             <div className='min-w-0 flex-1'>
-              <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
-                Catch any good moments today?
-              </p>
-              <p className='text-sm font-medium'>
+              <p className='text-sm font-medium'>Catch any good moments today?</p>
+              <p className='text-muted-foreground text-xs'>
                 {trip.sharedAlbumUrl
                   ? "Add today's photos to the shared album"
                   : 'Start a shared album for the trip'}

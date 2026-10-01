@@ -337,11 +337,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       <div
         className={join(
           'mx-auto max-w-4xl',
-          isActive ? 'space-y-2.5 py-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
+          isActive ? 'space-y-2.5 pt-6 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
           hasAppNav && 'pb-24',
         )}
       >
-        <div className={join('flex items-center justify-between', isSmallScreen && 'mb-3')}>
+        <div className={join('flex items-center justify-between', isSmallScreen && 'mb-5')}>
           <Button
             type='button'
             variant='link'
@@ -458,8 +458,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             </span>
           </div>
         )}
+        {hasAppNav && <hr className='border-border mt-5' />}
         {(!hasAppNav || sectionTab === '') && (
-          <div className='mt-4'>
+          <div className='mt-5 sm:mt-4'>
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
           </div>
         )}
