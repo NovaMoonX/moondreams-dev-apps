@@ -91,8 +91,6 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     isValidSectionTab(tabParam) ? tabParam : isActive ? '' : 'overview',
   );
 
-  // On a phone, an active trip behaves like an app: a bottom bar switches between whole
-  // screens (Today is the live HUD) instead of expanding sections beneath it.
   const hasAppNav = isActive && isSmallScreen;
 
   const setSectionTab = (value: string) => {

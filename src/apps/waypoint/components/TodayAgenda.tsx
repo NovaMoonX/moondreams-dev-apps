@@ -14,7 +14,6 @@ interface TodayAgendaProps {
   title: string;
   dayIndex: number;
   now: number;
-  /** Caps the list (e.g. a short "Tomorrow" preview); today's own agenda shows everything. */
   limit?: number;
   onViewAll: () => void;
   onOpenEvent: (event: TimelineEvent) => void;

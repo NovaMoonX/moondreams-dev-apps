@@ -5,7 +5,6 @@ import type { TripSpace } from '@apps/waypoint/types';
 interface TripProgressBarProps {
   trip: TripSpace;
   now: number;
-  /** Overrides the default pinned-to-the-viewport-bottom placement. */
   className?: string;
 }
 
