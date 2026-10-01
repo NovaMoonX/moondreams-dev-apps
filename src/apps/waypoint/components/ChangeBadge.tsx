@@ -45,15 +45,15 @@ export function ChangeBadge({ changeHistory }: ChangeBadgeProps) {
   return (
     <Disclosure
       label={
-        <Badge variant='muted' className='w-full justify-start sm:w-auto'>
+        <Badge variant='muted' className='w-full justify-start sm:w-auto py-1!'>
           Edited by {getEditorName(latest.latestChangedBy)} ·{' '}
           {formatDateTime(latest.latestChangedAt)}
         </Badge>
       }
-      className='mt-2 w-full sm:w-auto'
-      buttonClassName='w-full sm:w-auto rounded-full px-0 py-0 hover:bg-transparent'
+      className='mt-2 w-full sm:w-auto py-1'
+      buttonClassName='w-full sm:w-auto rounded-full px-0! py-0! hover:bg-transparent'
     >
-      <ul className='text-muted-foreground mt-2 space-y-2 text-sm'>
+      <ul className='text-muted-foreground mt-2 space-y-2 text-xs px-2'>
         {[...changeHistory].reverse().map((snapshot, snapshotIndex) => (
           <li key={snapshotIndex} className='space-y-1'>
             {snapshot.changes.map((change, changeIndex) => (
