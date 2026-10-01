@@ -17,6 +17,7 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
+import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import {
   createEvent,
   deleteEvent,
@@ -268,7 +269,24 @@ export function TimelineSection({
 
   return (
     <>
-      <section className='space-y-4'>
+      <section className='space-y-4 pt-4'>
+        <SectionHeader
+          title='Timeline'
+          action={
+            canAddEvents && (
+              <Button
+                type='button'
+                disabled={isTripDateShiftLocked(trip)}
+                onClick={() => {
+                  setEditingEvent(undefined);
+                  setIsFormOpen(true);
+                }}
+              >
+                Add event
+              </Button>
+            )
+          }
+        />
         <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
           View by day
         </p>
@@ -291,19 +309,6 @@ export function TimelineSection({
               </TabsTrigger>
             ))}
           </TabsList>
-          {canAddEvents && (
-            <Button
-              type='button'
-              className='mt-4 w-full'
-              disabled={isTripDateShiftLocked(trip)}
-              onClick={() => {
-                setEditingEvent(undefined);
-                setIsFormOpen(true);
-              }}
-            >
-              + Add Event
-            </Button>
-          )}
           <div className='mt-3 flex flex-wrap items-center gap-4'>
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
               <AppToggle

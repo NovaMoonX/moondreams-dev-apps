@@ -92,7 +92,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
             <Images className='text-fuchsia-600/70 dark:text-fuchsia-300/70 h-5 w-5 shrink-0' />
             <div className='min-w-0 flex-1'>
               <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
-                That&apos;s today&apos;s plan
+                Catch any good moments today?
               </p>
               <p className='text-sm font-medium'>
                 {trip.sharedAlbumUrl

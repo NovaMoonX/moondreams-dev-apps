@@ -492,7 +492,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               </Button>
             </div>
           )}
-          <TabsContent value='overview' className='pt-2'>
+          <TabsContent value='overview'>
             <TimelineSection
               trip={trip}
               events={events}

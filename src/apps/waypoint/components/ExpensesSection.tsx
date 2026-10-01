@@ -19,6 +19,7 @@ import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
+import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
@@ -660,19 +661,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   return (
     <section className='space-y-5 pt-4'>
-      <div className='flex items-center justify-between gap-3'>
-        <h2 className='text-xl font-semibold'>Expenses</h2>
-        {canAddExpenses && (
-          <Button
-            onClick={() => {
-              setEditingExpense(null);
-              setIsModalOpen(true);
-            }}
-          >
-            Add expense
-          </Button>
-        )}
-      </div>
+      <SectionHeader
+        title='Expenses'
+        action={
+          canAddExpenses && (
+            <Button
+              onClick={() => {
+                setEditingExpense(null);
+                setIsModalOpen(true);
+              }}
+            >
+              Add expense
+            </Button>
+          )
+        }
+      />
       <div className='grid gap-3 sm:grid-cols-3'>
         {totalCards.map(({ label, total }) => (
           <div key={label} className='border-border rounded-lg border p-3'>
