@@ -15,7 +15,6 @@ import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
-import AnnouncementsIndicator from '@apps/waypoint/components/AnnouncementsIndicator';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
 import LocationLink from '@apps/waypoint/components/LocationLink';
@@ -23,7 +22,6 @@ import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
-import UpdatesIndicator from '@apps/waypoint/components/UpdatesIndicator';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
@@ -111,10 +109,6 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
   return (
     <div className='space-y-3'>
-      <div className='flex items-center gap-2 sm:hidden'>
-        <AnnouncementsIndicator trip={trip} currentUserId={currentUserId} />
-        <UpdatesIndicator trip={trip} currentUserId={currentUserId} />
-      </div>
       {checkInStays.map((stay) => (
         <CheckInStayCard
           key={stay.id}

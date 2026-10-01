@@ -36,19 +36,18 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import AnnouncementFormModal from '@apps/waypoint/components/AnnouncementFormModal';
-import AnnouncementsIndicator from '@apps/waypoint/components/AnnouncementsIndicator';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import EditTripCoverModal from '@apps/waypoint/components/EditTripCoverModal';
 import EditTripDatesModal from '@apps/waypoint/components/EditTripDatesModal';
 import EditTripTitleModal from '@apps/waypoint/components/EditTripTitleModal';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import MembersSection from '@apps/waypoint/components/MembersSection';
+import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndicator';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
-import UpdatesIndicator from '@apps/waypoint/components/UpdatesIndicator';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
 import {
@@ -313,7 +312,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           isActive ? 'space-y-2.5 py-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
         )}
       >
-        <div className='flex items-center justify-between'>
+        <div className={join('flex items-center justify-between', isSmallScreen && 'mb-3')}>
           <Button
             type='button'
             variant='link'
@@ -326,6 +325,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </Button>
           {isSmallScreen && (
             <div className='flex shrink-0 items-center gap-1.5'>
+              {isActive && (
+                <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen />
+              )}
               {isActive && (
                 <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
               )}
@@ -394,14 +396,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 )}
               </div>
             </div>
-            <div className='flex shrink-0 items-center gap-1.5 sm:gap-2'>
-              {isActive && (
-                <div className='hidden items-center gap-1.5 sm:flex'>
-                  <AnnouncementsIndicator trip={trip} currentUserId={currentUserId} />
-                  <UpdatesIndicator trip={trip} currentUserId={currentUserId} />
-                </div>
-              )}
-              <div className='hidden items-center gap-1.5 sm:flex sm:gap-2'>
+            {!isSmallScreen && (
+              <div className='flex shrink-0 items-center gap-1.5 sm:gap-2'>
+                {isActive && (
+                  <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen={false} />
+                )}
                 <Button
                   type='button'
                   variant='tertiary'
@@ -415,7 +414,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 </Button>
                 <DropdownMenu items={actionItems} trigger={moreButtonTrigger} placement='bottom' alignment='end' />
               </div>
-            </div>
+            )}
           </div>
           <div className={join('mt-3', isActive && 'hidden sm:block')}>
             <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
