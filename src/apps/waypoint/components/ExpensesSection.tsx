@@ -676,9 +676,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )
         }
       />
-      <div className='grid gap-3 sm:grid-cols-3'>
+      <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
         {totalCards.map(({ label, total }) => (
-          <div key={label} className='border-border rounded-lg border p-3'>
+          <div
+            key={label}
+            className={join(
+              'border-border rounded-lg border p-3',
+              label === 'Total' && 'col-span-2 sm:col-span-1',
+            )}
+          >
             <div className='flex flex-wrap items-center justify-between gap-2'>
               <p className='text-muted-foreground text-sm'>{label}</p>
               <div className='border-border flex items-center gap-1 rounded-md border p-0.5'>

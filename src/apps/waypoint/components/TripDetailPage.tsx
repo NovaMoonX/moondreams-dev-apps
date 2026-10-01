@@ -48,6 +48,7 @@ import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
+import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
@@ -91,7 +92,10 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     isValidSectionTab(tabParam) ? tabParam : isActive ? '' : 'overview',
   );
 
-  const hasAppNav = isActive && isSmallScreen;
+  const hasAppNav = isSmallScreen;
+
+  const showHeaderExtras = !hasAppNav || sectionTab === '';
+  const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
   const setSectionTab = (value: string) => {
     setSectionTabState(value);
@@ -376,7 +380,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           )}
         </div>
         <div>
-          {trip.coverImageUrl && (
+          {trip.coverImageUrl && showHeaderExtras && (
             <img
               src={trip.coverImageUrl}
               alt={`${trip.title} cover`}
@@ -397,7 +401,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 )}
                 onClick={canEdit && !isSmallScreen ? () => setEditingField('title') : undefined}
               >
-                <h1 className={join('font-semibold', isActive ? 'text-2xl' : 'text-3xl')}>
+                <h1
+                  className={join(
+                    'font-semibold',
+                    isActive ? 'text-2xl' : 'text-3xl',
+                    !showHeaderExtras && 'text-xl',
+                  )}
+                >
                   {trip.title}
                 </h1>
                 {canEdit && !isSmallScreen && (
@@ -413,6 +423,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               <div
                 className={join(
                   'group mt-1 flex w-fit items-center gap-1.5',
+                  !showHeaderExtras && 'hidden',
                   canEdit && !isSmallScreen && 'cursor-pointer',
                 )}
                 onClick={canEdit && !isSmallScreen ? () => setEditingField('dates') : undefined}
@@ -445,9 +456,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               </div>
             )}
           </div>
-          <div className={join('mt-3', isActive && 'hidden sm:block')}>
-            <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
-          </div>
+          {showHeaderExtras && (
+            <div className={join('mt-3', isActive && 'hidden sm:block')}>
+              <SharedAlbumSection trip={trip} currentUserId={currentUserId} />
+            </div>
+          )}
         </div>
         {isTripDateShiftLocked(trip) && (
           <div className='bg-warning/15 text-warning border-warning flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm'>
@@ -459,10 +472,30 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </div>
         )}
         {hasAppNav && <hr className='border-border mt-5' />}
-        {(!hasAppNav || sectionTab === '') && (
+        {showOverviewHud && (
           <div className='mt-5 sm:mt-4'>
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
           </div>
+        )}
+        {hasAppNav && sectionTab === '' && (
+          <div className='mt-5'>
+            <TripEntryPoints
+              trip={trip}
+              currentUserId={currentUserId}
+              onOpen={(tab) => setSectionTab(tab)}
+            />
+          </div>
+        )}
+        {hasAppNav && (sectionTab === 'stays' || sectionTab === 'members') && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='-mb-4 h-auto p-0'
+            onClick={() => setSectionTab('')}
+          >
+            <ChevronLeft className='h-4 w-4' /> Overview
+          </Button>
         )}
         {!hasAppNav && <hr className='border-border mt-4' />}
         <Tabs
@@ -517,7 +550,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         </Tabs>
       </div>
       {hasAppNav ? (
-        <TripBottomNav trip={trip} now={now} value={sectionTab} onChange={setSectionTab} />
+        <TripBottomNav
+          trip={trip}
+          now={now}
+          value={sectionTab}
+          showProgress={isActive}
+          onChange={setSectionTab}
+        />
       ) : (
         isActive && <TripProgressBar trip={trip} now={now} />
       )}
