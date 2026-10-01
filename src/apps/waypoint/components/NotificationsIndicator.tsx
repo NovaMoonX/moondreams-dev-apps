@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Bell } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
@@ -172,10 +173,19 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
   const updateItems: UpdateItem[] = [
     ...unseenEvents.map((event): UpdateItem => ({ kind: 'event', data: event })),
     ...unseenStays.map((stay): UpdateItem => ({ kind: 'stay', data: stay })),
-  ].sort((a, b) => getUpdateItemLastActivityAt(b, trip) - getUpdateItemLastActivityAt(a, trip));
+  ]
+    // You already know about your own activity — it's not "new" to you.
+    .filter((item) => getUpdateItemActivity(item, trip).uid !== currentUserId)
+    .sort((a, b) => getUpdateItemLastActivityAt(b, trip) - getUpdateItemLastActivityAt(a, trip));
   const totalCount = announcements.length + updateItems.length;
-  const actorUids = Array.from(new Set(updateItems.map((item) => getUpdateItemActivity(item, trip).uid)));
+  const actorUids = Array.from(
+    new Set([
+      ...updateItems.map((item) => getUpdateItemActivity(item, trip).uid),
+      ...announcements.map((announcement) => announcement.createdBy),
+    ]),
+  );
   const actorsById = useUserInfo(actorUids)?.map ?? {};
+  const getActorName = (uid: string) => actorsById[uid]?.displayName || actorsById[uid]?.email || 'Someone';
 
   if (totalCount === 0) {
     return null;
@@ -194,7 +204,9 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
   };
 
   const dismissAllAnnouncements = () => {
-    announcements.forEach(dismissOneAnnouncement);
+    // The person who posted an announcement can't dismiss it for themselves — only
+    // delete it outright — so a bulk dismiss skips their own.
+    announcements.filter((announcement) => announcement.createdBy !== currentUserId).forEach(dismissOneAnnouncement);
   };
 
   const dismissAllUpdates = () => {
@@ -258,22 +270,36 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
         {announcements.length > 0 && (
           <div className='space-y-2'>
             {sectionHeading('Announcements', dismissAllAnnouncements)}
-            <div className='space-y-3'>
-              {announcements.map((announcement) => (
-                <div key={announcement.id} className='border-border bg-card space-y-2 rounded-lg border p-3'>
-                  <div className='flex items-start justify-between gap-2'>
-                    <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity]}>
-                      {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
-                    </Badge>
-                    <div className='flex items-center gap-1'>
+            <div className='divide-border divide-y'>
+              {announcements.map((announcement) => {
+                const isOwnAnnouncement = announcement.createdBy === currentUserId;
+                return (
+                  <div
+                    key={announcement.id}
+                    className='flex items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0'
+                  >
+                    <div className='min-w-0 space-y-1'>
+                      <div className='flex items-start gap-1.5'>
+                        <Badge
+                          variant='base'
+                          className={join('shrink-0', ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity])}
+                        >
+                          {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
+                        </Badge>
+                        <p className='min-w-0 flex-1 text-sm font-medium'>{announcement.title}</p>
+                      </div>
+                      <p className='text-muted-foreground text-xs whitespace-pre-line'>{announcement.body}</p>
+                      <p className='text-muted-foreground text-right text-xs'>{getActorName(announcement.createdBy)}</p>
+                    </div>
+                    <div className='flex shrink-0 items-center gap-1'>
                       {isAdmin && <DeleteIconButton onClick={() => void handleDeleteAnnouncement(announcement)} />}
-                      <DismissIconButton onClick={() => dismissOneAnnouncement(announcement)} />
+                      {!isOwnAnnouncement && (
+                        <DismissIconButton onClick={() => dismissOneAnnouncement(announcement)} />
+                      )}
                     </div>
                   </div>
-                  <p className='font-semibold'>{announcement.title}</p>
-                  <p className='text-sm whitespace-pre-line'>{announcement.body}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -283,7 +309,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
             <div className='divide-border divide-y'>
               {updateItems.map((item) => {
                 const activity = getUpdateItemActivity(item, trip);
-                const actorName = actorsById[activity.uid]?.displayName || actorsById[activity.uid]?.email || 'Someone';
+                const actorName = getActorName(activity.uid);
                 return (
                   <div
                     key={getUpdateItemKey(item)}
