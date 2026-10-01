@@ -31,10 +31,10 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import {
+  canArchiveEvent,
   canCreateItem,
   canEditExistingItem,
   hasTripStarted,
-  isTripAdmin,
   isTripDateShiftLocked,
 } from '@apps/waypoint/utils/roleGuards';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
@@ -153,7 +153,7 @@ export function TimelineSection({
       <EventCard
         event={event}
         canEdit={canEdit}
-        canUnarchive={isTripAdmin(trip, currentUserId)}
+        canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
         showArchiveToggle={hasTripStarted(trip)}
         onEdit={(selectedEvent, onSuccess) => {

@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { collection, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@/lib/firebase/config';
@@ -355,13 +355,16 @@ export const deleteTrip = createAsyncThunk<string, DeleteTripInput, { rejectValu
       return rejectWithValue('Only trip admins can delete this trip.');
     }
 
-    if (trip.coverImageUrl) {
-      await deleteFile(getTripCoverStoragePath(trip.id)).catch(() => {});
+    try {
+      const deleteTripCallable = httpsCallable<{ tripId: string }, { tripId: string }>(
+        functions,
+        'deleteTrip',
+      );
+      await deleteTripCallable({ tripId: trip.id });
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error, "We couldn't delete this trip. Please try again."));
     }
-    if (trip.inviteCode) {
-      await deleteDoc(doc(INVITE_CODE_COLLECTION, trip.inviteCode)).catch(() => {});
-    }
-    await deleteDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id));
+
     return trip.id;
   },
 );

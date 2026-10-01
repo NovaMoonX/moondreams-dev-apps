@@ -70,6 +70,12 @@ export function canEditExistingItem(trip: TripSpace, uid: string) {
   return isTripActive(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }
 
+/** Archiving or restoring an event is Admin-only whatever the trip's phase, since approving
+ * an event suggestion archives its source event even before the trip starts. */
+export function canArchiveEvent(trip: TripSpace, uid: string) {
+  return !isTripDateShiftLocked(trip) && isTripAdmin(trip, uid);
+}
+
 /** Creating a brand-new event/stay stays open to Editors before the trip starts, but
  * narrows to Admin-only once it has — an already-underway plan needs one steward, same
  * as editing an existing item. */

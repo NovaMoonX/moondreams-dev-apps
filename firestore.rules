@@ -1785,6 +1785,22 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
+      function isTripAdminMember() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
+      }
+
+      function isEventArchiveStateUnchanged() {
+        return request.resource.data.isArchived == resource.data.get('isArchived', false)
+          && request.resource.data.archivedBy == resource.data.get('archivedBy', null)
+          && request.resource.data.archivedAt == resource.data.get('archivedAt', null);
+      }
+
+      // Archiving or restoring an event is Admin-only, whatever the trip's phase.
+      function isEventArchiveChangeAllowed() {
+        return isEventArchiveStateUnchanged() || isTripAdminMember();
+      }
+
       // Every trip member (not just editors/admins) can mark an event "seen" for
       // themselves — but only their own key, never anyone else's.
       function isEventSeenByUpdateValid() {
@@ -1803,6 +1819,7 @@ service cloud.firestore {
         isTripAdminOnlyWhileActive()
         && isEventShapeValid()
         && isEventImmutableFieldsValid()
+        && isEventArchiveChangeAllowed()
       ) || isEventSeenByUpdateValid();
       allow delete: if isTripAdminOnlyWhileActive();
     }
@@ -1841,7 +1858,10 @@ service cloud.firestore {
           && isNonEmptyString(request.resource.data.eventId)
           && isNonEmptyString(request.resource.data.suggestedTitle)
           && isTimestampNumber(request.resource.data.suggestedStartAt)
-          && (request.resource.data.suggestedEndAt == null || isTimestampNumber(request.resource.data.suggestedEndAt))
+          && (request.resource.data.suggestedEndAt == null || (
+            isTimestampNumber(request.resource.data.suggestedEndAt)
+            && request.resource.data.suggestedEndAt > request.resource.data.suggestedStartAt
+          ))
           && (request.resource.data.suggestedLocationName == null || request.resource.data.suggestedLocationName is string)
           && (request.resource.data.suggestedAddress == null || request.resource.data.suggestedAddress is string)
           && (request.resource.data.suggestedLatitude == null || request.resource.data.suggestedLatitude is number)
@@ -1921,9 +1941,11 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.createdAt);
       }
 
-      // Any trip member can dismiss an announcement — but only their own key, never anyone else's.
+      // Any trip member except the announcement's own author can dismiss it — and only
+      // their own key, never anyone else's.
       function isAnnouncementDismissUpdateValid() {
         return isTripSubcollectionMember()
+          && resource.data.createdBy != request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dismissedBy'])
           && request.resource.data.dismissedBy is map
           && request.resource.data.dismissedBy.diff(resource.data.dismissedBy).affectedKeys().hasOnly([request.auth.uid])
@@ -2140,7 +2162,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
       allow update: if isTripExpenseMember()
         && isTripDateShiftIdle(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data)
-        && resource.data.paidMemberStatus.keys().hasAll([request.auth.uid])
+        && (resource.data.paidMemberStatus.keys().hasAll([request.auth.uid])
+          || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
         && request.resource.data.paidMemberStatus.diff(resource.data.paidMemberStatus)
           .affectedKeys().hasOnly([request.auth.uid])

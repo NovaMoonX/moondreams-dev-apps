@@ -10,3 +10,8 @@ type FormInputFactoryField = Parameters<typeof input>[0];
 export function createDateInputField(field: Omit<FormInputFactoryField, 'type'>) {
   return input({ ...field, type: 'date' } as unknown as FormInputFactoryField);
 }
+
+/** Same gap as `createDateInputField`, for a native `<input type="time">`. */
+export function createTimeInputField(field: Omit<FormInputFactoryField, 'type'>) {
+  return input({ ...field, type: 'time' } as unknown as FormInputFactoryField);
+}

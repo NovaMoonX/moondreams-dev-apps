@@ -26,9 +26,9 @@ const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet�
 interface EventCardProps {
   event: TimelineEvent;
   canEdit: boolean;
-  /** An archived event's only action is unarchiving, and only an admin may do it — everyone
-   * else, including editors who could otherwise modify it, sees it fully read-only. */
-  canUnarchive: boolean;
+  /** Only an admin may archive or restore an event — everyone else, including editors who
+   * could otherwise modify it, sees an archived event fully read-only. */
+  canArchive: boolean;
   showCover: boolean;
   /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
   showArchiveToggle: boolean;
@@ -135,7 +135,7 @@ export function EventDetailLines({
 export function EventCard({
   event,
   canEdit,
-  canUnarchive,
+  canArchive,
   showCover,
   showArchiveToggle,
   onEdit,
@@ -144,7 +144,7 @@ export function EventCard({
 }: EventCardProps) {
   // An archived event is read-only for everyone but an admin, who may only unarchive it.
   const canModify = canEdit && !event.isArchived;
-  const canToggleArchive = event.isArchived ? canUnarchive : canEdit;
+  const canToggleArchive = canArchive;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');

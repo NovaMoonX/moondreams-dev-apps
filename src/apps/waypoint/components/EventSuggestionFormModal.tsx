@@ -1,6 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { Button, Input, Label, Modal, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Form,
+  FormFactories,
+  Input,
+  Modal,
+  Textarea,
+} from '@moondreamsdev/dreamer-ui/components';
 
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
@@ -8,6 +15,7 @@ import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/type
 import { fromLocalDateAndTimeInputValues, toLocalTimeInputValue } from '@/utils/dateInputUtils';
 import { getDayCount, getDayIndex, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { createTimeInputField } from '@/utils/formFactoryHelpers';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 
@@ -32,57 +40,90 @@ interface EventSuggestionFormModalProps {
   onClose: () => void;
 }
 
-interface SuggestionDraft {
-  title: string;
-  dayIndex: number;
-  time: string;
-  hasEndTime: boolean;
-  endTime: string;
-  locationName: string;
+interface OptionalValue {
+  enabled: boolean;
+  value: string;
+}
+
+interface SuggestedLocation {
+  name: string;
   address: string;
   latitude: number | null;
   longitude: number | null;
   place: EventSuggestion['suggestedPlace'];
-  hasNote: boolean;
-  note: string;
 }
 
-function getInitialDraft(
+interface SuggestionFormData {
+  title: string;
+  dayIndex: string;
+  time: string;
+  endTime: OptionalValue;
+  location: SuggestedLocation;
+  note: OptionalValue;
+}
+
+const { custom, input, select } = FormFactories;
+
+function getInitialData(
   tripStartDate: number,
   event: TimelineEvent,
   suggestion?: EventSuggestion,
-): SuggestionDraft {
+): SuggestionFormData {
   if (suggestion) {
     return {
       title: suggestion.suggestedTitle,
-      dayIndex: getDayIndex(tripStartDate, suggestion.suggestedStartAt),
+      dayIndex: String(getDayIndex(tripStartDate, suggestion.suggestedStartAt)),
       time: toLocalTimeInputValue(suggestion.suggestedStartAt) || '09:00',
-      hasEndTime: Boolean(suggestion.suggestedEndAt),
-      endTime: toLocalTimeInputValue(suggestion.suggestedEndAt) || '',
-      locationName: suggestion.suggestedLocationName ?? '',
-      address: suggestion.suggestedAddress ?? '',
-      latitude: suggestion.suggestedLatitude,
-      longitude: suggestion.suggestedLongitude,
-      place: suggestion.suggestedPlace,
-      hasNote: Boolean(suggestion.note),
-      note: suggestion.note ?? '',
+      endTime: {
+        enabled: Boolean(suggestion.suggestedEndAt),
+        value: toLocalTimeInputValue(suggestion.suggestedEndAt) || '',
+      },
+      location: {
+        name: suggestion.suggestedLocationName ?? '',
+        address: suggestion.suggestedAddress ?? '',
+        latitude: suggestion.suggestedLatitude,
+        longitude: suggestion.suggestedLongitude,
+        place: suggestion.suggestedPlace,
+      },
+      note: { enabled: Boolean(suggestion.note), value: suggestion.note ?? '' },
     };
   }
 
   return {
     title: event.title,
-    dayIndex: event.dayIndex,
+    dayIndex: String(event.dayIndex),
     time: toLocalTimeInputValue(event.startAt) || '09:00',
-    hasEndTime: Boolean(event.endAt),
-    endTime: toLocalTimeInputValue(event.endAt) || '',
-    locationName: event.locationName ?? '',
-    address: event.address ?? '',
-    latitude: event.latitude,
-    longitude: event.longitude,
-    place: event.place,
-    hasNote: false,
-    note: '',
+    endTime: { enabled: Boolean(event.endAt), value: toLocalTimeInputValue(event.endAt) || '' },
+    location: {
+      name: event.locationName ?? '',
+      address: event.address ?? '',
+      latitude: event.latitude,
+      longitude: event.longitude,
+      place: event.place,
+    },
+    note: { enabled: false, value: '' },
   };
+}
+
+function parseTimes(tripStartDate: number, data: SuggestionFormData) {
+  const date = getDayInputValue(tripStartDate, Number(data.dayIndex));
+  const startAt = fromLocalDateAndTimeInputValues(date, data.time);
+  if (startAt === undefined) {
+    return { startAt: null, endAt: null, error: 'Choose a valid start time.' };
+  }
+  if (!data.endTime.enabled) {
+    return { startAt, endAt: null, error: null };
+  }
+
+  const endAt = fromLocalDateAndTimeInputValues(date, data.endTime.value);
+  if (endAt === undefined) {
+    return { startAt, endAt: null, error: 'Choose a valid end time, or remove it.' };
+  }
+  if (endAt <= startAt) {
+    return { startAt, endAt, error: 'The end time needs to be after the start time.' };
+  }
+
+  return { startAt, endAt, error: null };
 }
 
 function EventSuggestionFormModal({
@@ -95,163 +136,188 @@ function EventSuggestionFormModal({
   onSubmit,
   onClose,
 }: EventSuggestionFormModalProps) {
-  const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<SuggestionDraft>(() =>
-    getInitialDraft(trip.startDate, event, suggestion),
+  const initialData = useMemo(
+    () => getInitialData(trip.startDate, event, suggestion),
+    [trip.startDate, event, suggestion],
   );
+  const [formData, setFormData] = useState<SuggestionFormData>(initialData);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
-  const updateDraft = (changes: Partial<SuggestionDraft>) =>
-    setDraft((current) => ({ ...current, ...changes }));
+  const times = parseTimes(trip.startDate, formData);
+  const isFormComplete = formData.title.trim() !== '' && formData.time !== '' && times.error === null;
 
-  const handleSubmit = async () => {
-    if (!draft.title.trim() || !draft.time) {
-      setError('Enter a title, day, and start time.');
+  const fields = useMemo(
+    () => [
+      input({ name: 'title', label: 'Title', variant: 'outline' }),
+      select({
+        name: 'dayIndex',
+        label: 'Day',
+        options: Array.from({ length: dayCount }, (_, index) => ({
+          label: getDayLabel(trip.startDate, index),
+          value: String(index),
+        })),
+      }),
+      createTimeInputField({ name: 'time', label: 'Start time', variant: 'outline' }),
+      custom({
+        name: 'endTime',
+        label: 'End time',
+        renderComponent: (props) => {
+          const endTime = props.value as OptionalValue;
+
+          if (!endTime.enabled) {
+            return (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0 text-xs'
+                onClick={() => props.onValueChange({ enabled: true, value: '' })}
+              >
+                + Add end time
+              </Button>
+            );
+          }
+
+          return (
+            <div className='space-y-2'>
+              <Input
+                type='time'
+                variant='outline'
+                value={endTime.value}
+                onChange={(changeEvent) =>
+                  props.onValueChange({ enabled: true, value: changeEvent.target.value })
+                }
+              />
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0 text-xs'
+                onClick={() => props.onValueChange({ enabled: false, value: '' })}
+              >
+                Remove end time
+              </Button>
+            </div>
+          );
+        },
+      }),
+      custom({
+        name: 'location',
+        label: 'Location',
+        renderComponent: (props) => {
+          const location = props.value as SuggestedLocation;
+
+          return (
+            <PlaceAutocompleteInput
+              quickSearch={{ label: 'Search by title', value: formData.title }}
+              value={location.name}
+              onChange={(name) => props.onValueChange({ ...location, name, ...UNLINKED_PLACE })}
+              bias={placeBias}
+              onSelect={(result: PlaceSelectionResult) =>
+                props.onValueChange({
+                  name: result.name,
+                  address: result.address,
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                  place: result.place,
+                })
+              }
+              className='mb-0'
+            />
+          );
+        },
+      }),
+      custom({
+        name: 'note',
+        label: 'Note',
+        renderComponent: (props) => {
+          const note = props.value as OptionalValue;
+
+          return note.enabled ? (
+            <Textarea
+              rows={2}
+              variant='outline'
+              value={note.value}
+              onChange={(changeEvent) =>
+                props.onValueChange({ enabled: true, value: changeEvent.target.value })
+              }
+            />
+          ) : (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto p-0 text-xs'
+              onClick={() => props.onValueChange({ enabled: true, value: '' })}
+            >
+              + Add note
+            </Button>
+          );
+        },
+      }),
+    ],
+    [dayCount, trip.startDate, formData.title, placeBias],
+  );
+
+  const handleSubmit = async (data: SuggestionFormData) => {
+    const { startAt, endAt, error } = parseTimes(trip.startDate, data);
+    if (startAt === null || error) {
+      setSubmitError(error);
       return;
     }
 
-    const startAt = fromLocalDateAndTimeInputValues(
-      getDayInputValue(trip.startDate, draft.dayIndex),
-      draft.time,
-    );
-    if (startAt === undefined) {
-      setError('Choose a valid start time.');
-      return;
-    }
-    const endAt = draft.hasEndTime
-      ? fromLocalDateAndTimeInputValues(getDayInputValue(trip.startDate, draft.dayIndex), draft.endTime)
-      : undefined;
-    if (draft.hasEndTime && endAt === undefined) {
-      setError('Choose a valid end time, or remove it.');
-      return;
-    }
-
+    setSubmitError(null);
     try {
       await onSubmit({
-        suggestedTitle: draft.title,
+        suggestedTitle: data.title,
         suggestedStartAt: startAt,
-        suggestedEndAt: draft.hasEndTime ? (endAt as number) : null,
-        suggestedLocationName: draft.locationName || null,
-        suggestedAddress: draft.address || null,
-        suggestedLatitude: draft.latitude,
-        suggestedLongitude: draft.longitude,
-        suggestedPlace: draft.place,
-        note: draft.hasNote ? draft.note || null : null,
+        suggestedEndAt: endAt,
+        suggestedLocationName: data.location.name || null,
+        suggestedAddress: data.location.address || null,
+        suggestedLatitude: data.location.latitude,
+        suggestedLongitude: data.location.longitude,
+        suggestedPlace: data.location.place,
+        note: data.note.enabled ? data.note.value || null : null,
       });
-      setError(null);
-    } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to send this suggestion.'));
+    } catch (error) {
+      setSubmitError(getErrorMessage(error, 'Unable to send this suggestion.'));
     }
   };
 
+  const displayedError = submitError ?? (formData.endTime.enabled ? times.error : null);
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Suggested change'>
-      <div className='space-y-4'>
-        <div className='space-y-1.5'>
-          <Label>Title</Label>
-          <Input value={draft.title} onChange={(changeEvent) => updateDraft({ title: changeEvent.target.value })} />
-        </div>
-        <div className='space-y-1.5'>
-          <Label>Day</Label>
-          <Select
-            options={Array.from({ length: dayCount }, (_, index) => ({
-              text: getDayLabel(trip.startDate, index),
-              value: String(index),
-            }))}
-            value={String(draft.dayIndex)}
-            onChange={(value) => updateDraft({ dayIndex: Number(value) })}
+      <Form
+        id='waypoint-event-suggestion'
+        form={fields}
+        initialData={initialData}
+        columns={1}
+        onDataChange={(data) => setFormData(data as SuggestionFormData)}
+        onSubmit={(data) => {
+          void handleSubmit(data as SuggestionFormData);
+        }}
+        submitButton={
+          <ModalFooterActions
+            rightActions={
+              <>
+                <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button
+                  type='submit'
+                  loading={isSubmitting}
+                  disabled={isSubmitting || !isFormComplete}
+                >
+                  {suggestion ? 'Save' : 'Suggest'}
+                </Button>
+              </>
+            }
           />
-        </div>
-        <div className='space-y-1.5'>
-          <Label>Start time</Label>
-          <Input
-            type='time'
-            value={draft.time}
-            onChange={(changeEvent) => updateDraft({ time: changeEvent.target.value })}
-          />
-        </div>
-        {draft.hasEndTime ? (
-          <div className='space-y-1.5'>
-            <div className='flex items-center justify-between'>
-              <Label>End time</Label>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                className='h-auto p-0 text-xs'
-                onClick={() => updateDraft({ hasEndTime: false, endTime: '' })}
-              >
-                Remove
-              </Button>
-            </div>
-            <Input
-              type='time'
-              value={draft.endTime}
-              onChange={(changeEvent) => updateDraft({ endTime: changeEvent.target.value })}
-            />
-          </div>
-        ) : (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='h-auto p-0 text-xs'
-            onClick={() => updateDraft({ hasEndTime: true })}
-          >
-            + Add end time
-          </Button>
-        )}
-        <PlaceAutocompleteInput
-          label='Location'
-          quickSearch={{ label: 'Search by title', value: draft.title }}
-          value={draft.locationName}
-          onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
-          bias={placeBias}
-          onSelect={(result: PlaceSelectionResult) =>
-            updateDraft({
-              locationName: result.name,
-              address: result.address,
-              latitude: result.latitude,
-              longitude: result.longitude,
-              place: result.place,
-            })
-          }
-          className='mb-0'
-        />
-        {draft.hasNote ? (
-          <div className='space-y-1.5'>
-            <Label>Note</Label>
-            <Textarea
-              rows={2}
-              value={draft.note}
-              onChange={(changeEvent) => updateDraft({ note: changeEvent.target.value })}
-            />
-          </div>
-        ) : (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='h-auto p-0 text-xs'
-            onClick={() => updateDraft({ hasNote: true })}
-          >
-            + Add note
-          </Button>
-        )}
-        {error && <p className='text-destructive text-sm'>{error}</p>}
-        <ModalFooterActions
-          rightActions={
-            <>
-              <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button type='button' loading={isSubmitting} onClick={() => void handleSubmit()}>
-                {suggestion ? 'Save' : 'Suggest'}
-              </Button>
-            </>
-          }
-        />
-      </div>
+        }
+      />
+      {displayedError && <p className='text-destructive mt-3 text-sm'>{displayedError}</p>}
     </Modal>
   );
 }

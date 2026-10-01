@@ -13,7 +13,7 @@ import type {
 } from '@apps/waypoint/types';
 import { DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
-import { canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
+import { canArchiveEvent, canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
   uid: string;
@@ -271,7 +271,7 @@ export const setEventArchived = createAsyncThunk<
 >(
   'waypoint/events/setArchived',
   async ({ uid, trip, event, isArchived }, { rejectWithValue }) => {
-    if (!canEditExistingItem(trip, uid)) {
+    if (!canArchiveEvent(trip, uid)) {
       return rejectWithValue('You do not have permission to archive this event.');
     }
 

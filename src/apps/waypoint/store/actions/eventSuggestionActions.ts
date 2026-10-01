@@ -44,6 +44,9 @@ export const createEventSuggestion = createAsyncThunk<
     if (!fields.suggestedTitle.trim()) {
       return rejectWithValue('Enter a title for the suggested change.');
     }
+    if (fields.suggestedEndAt !== null && fields.suggestedEndAt <= fields.suggestedStartAt) {
+      return rejectWithValue('The suggested end time must be after the start time.');
+    }
 
     const suggestionRef = doc(
       collection(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions'),
@@ -100,8 +103,11 @@ export const updateEventSuggestion = createAsyncThunk<
       return rejectWithValue('Enter a title for the suggested change.');
     }
 
-    const updatedSuggestion: EventSuggestion = {
-      ...suggestion,
+    if (fields.suggestedEndAt !== null && fields.suggestedEndAt <= fields.suggestedStartAt) {
+      return rejectWithValue('The suggested end time must be after the start time.');
+    }
+
+    const changes = {
       suggestedTitle: fields.suggestedTitle.trim(),
       suggestedStartAt: fields.suggestedStartAt,
       suggestedEndAt: fields.suggestedEndAt,
@@ -113,11 +119,11 @@ export const updateEventSuggestion = createAsyncThunk<
       note: fields.note?.trim() || null,
     };
 
-    await setDoc(
+    await updateDoc(
       doc(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions', suggestion.id),
-      updatedSuggestion,
+      changes,
     );
-    return updatedSuggestion;
+    return { ...suggestion, ...changes };
   },
 );
 
@@ -209,6 +215,8 @@ export const approveEventSuggestion = createAsyncThunk<
       place: suggestion.suggestedPlace,
       reminderId,
       isArchived: false,
+      archivedBy: null,
+      archivedAt: null,
       seenBy: {},
       createdBy: uid,
       createdAt: now,
@@ -219,6 +227,8 @@ export const approveEventSuggestion = createAsyncThunk<
     batch.set(newEventRef, newEvent);
     batch.update(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', sourceEvent.id), {
       isArchived: true,
+      archivedBy: uid,
+      archivedAt: now,
       lastEditedAt: now,
     });
     batch.delete(

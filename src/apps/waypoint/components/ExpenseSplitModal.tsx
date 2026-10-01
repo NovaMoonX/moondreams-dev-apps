@@ -8,6 +8,7 @@ import {
   Modal,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -261,11 +262,10 @@ function ExpenseSplitModal({
             </div>
             {isCustomSplit && (
               <p
-                className={
-                  isAmountsValid
-                    ? 'text-muted-foreground text-sm'
-                    : 'text-destructive text-sm'
-                }
+                className={join(
+                  'text-sm',
+                  isAmountsValid ? 'text-muted-foreground' : 'text-destructive',
+                )}
               >
                 {Math.abs(remainder) < 0.01
                   ? 'Fully allocated'

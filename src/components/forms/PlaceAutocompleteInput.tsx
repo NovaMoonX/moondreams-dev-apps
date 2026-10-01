@@ -12,7 +12,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 const MIN_QUERY_LENGTH = 3;
 
 interface PlaceAutocompleteInputProps {
-  label: string;
+  /** Omit when a surrounding form field already renders the label. */
+  label?: string;
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
@@ -112,7 +113,7 @@ function PlaceAutocompleteInput({
 
   return (
     <div className={join('relative space-y-1.5', className)}>
-      <Label>{label}</Label>
+      {label && <Label>{label}</Label>}
       <Input
         ref={inputRef}
         placeholder={placeholder}

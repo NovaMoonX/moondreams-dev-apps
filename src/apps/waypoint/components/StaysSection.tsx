@@ -48,7 +48,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
     try {
       if (editingStay) {
         await dispatch(
-          updateStay({ uid: currentUserId, trip, stayId: editingStay.id, stay, previousStay: editingStay }),
+          updateStay({ uid: currentUserId, trip, stayId: editingStay.id, stay }),
         ).unwrap();
       } else {
         await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();

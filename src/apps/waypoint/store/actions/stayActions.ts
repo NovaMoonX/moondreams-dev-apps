@@ -18,7 +18,6 @@ interface UpdateStayInput {
   trip: TripSpace;
   stayId: string;
   stay: StayFields;
-  previousStay: Stay;
 }
 
 const TRACKED_STAY_CHANGE_FIELDS = ['checkInAt', 'checkOutAt'] as const;
@@ -117,7 +116,7 @@ export const updateStay = createAsyncThunk<
   StayFields,
   UpdateStayInput,
   { rejectValue: string }
->('waypoint/stays/update', async ({ uid, trip, stayId, stay, previousStay }, { rejectWithValue }) => {
+>('waypoint/stays/update', async ({ uid, trip, stayId, stay }, { rejectWithValue }) => {
   if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to edit stays.');
   }
@@ -127,7 +126,6 @@ export const updateStay = createAsyncThunk<
   }
 
   const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
-  const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(previousStay, stay, uid) : null;
   const currentStay = {
     ...stay,
     id: stayId,
@@ -139,11 +137,21 @@ export const updateStay = createAsyncThunk<
     notes: stay.notes?.trim() || null,
     linkUrl: stay.linkUrl?.trim() || null,
     linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
-    changeHistory: newSnapshot
-      ? [...(previousStay.changeHistory ?? []), newSnapshot]
-      : (previousStay.changeHistory ?? []),
   };
-  await setDoc(stayRef, { ...currentStay, lastEditedAt: Date.now() }, { merge: true });
+
+  // The history is read-modify-written, so it's appended to the stay as it is now, not as
+  // the edit modal saw it — otherwise two near-simultaneous admin saves drop one record.
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(stayRef);
+    if (!snapshot.exists()) {
+      throw new Error('This stay no longer exists.');
+    }
+
+    const previousStay = snapshot.data() as Stay;
+    const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(previousStay, stay, uid) : null;
+    const changeHistory = [...(previousStay.changeHistory ?? []), ...(newSnapshot ? [newSnapshot] : [])];
+    transaction.set(stayRef, { ...currentStay, changeHistory, lastEditedAt: Date.now() }, { merge: true });
+  });
   return stay;
 });
 
