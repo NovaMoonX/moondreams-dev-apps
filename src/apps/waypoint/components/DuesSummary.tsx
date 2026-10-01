@@ -1,5 +1,8 @@
+import { useState } from 'react';
+
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, Circle } from 'lucide-react';
+import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import {
   isPairSettled,
@@ -11,17 +14,76 @@ const EPSILON = 0.005;
 
 interface DuesSummaryProps {
   settlements: PairSettlement[];
+  currentUserId: string;
   memberLabel: (uid: string) => string;
   formatAmount: (amount: number) => string;
+  onToggleRepaid: (expenseId: string) => void;
 }
 
-function DuesSummary({ settlements, memberLabel, formatAmount }: DuesSummaryProps) {
+const getPairKey = (settlement: PairSettlement) => `${settlement.personA}-${settlement.personB}`;
+
+function DuesSummary({
+  settlements,
+  currentUserId,
+  memberLabel,
+  formatAmount,
+  onToggleRepaid,
+}: DuesSummaryProps) {
+  const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
+  const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
+
+  const getDirection = ({ personA, personB, netAmount }: PairSettlement) =>
+    netAmount >= 0 ? { debtorUid: personA, creditorUid: personB } : { debtorUid: personB, creditorUid: personA };
+
   const renderStat = (label: string, value: string, emphasized = false) => (
     <div>
       <p className='text-muted-foreground text-xs'>{label}</p>
       <p className={join('text-sm', emphasized ? 'font-semibold' : 'font-medium')}>{value}</p>
     </div>
   );
+
+  const renderItem = (
+    { expense, share, isRepaid }: DirectionalOwed['items'][number],
+    canToggle: boolean,
+  ) => {
+    const content = (
+      <>
+        <span className='flex min-w-0 flex-1 items-center gap-2 text-left'>
+          {isRepaid ? (
+            <Check className='h-4 w-4 shrink-0 text-emerald-600' />
+          ) : (
+            <Circle className='text-muted-foreground h-4 w-4 shrink-0' />
+          )}
+          <span className='truncate'>{expense.title}</span>
+        </span>
+        <span className='shrink-0 tabular-nums'>{formatAmount(share)}</span>
+      </>
+    );
+    const rowClassName = join('text-sm', isRepaid && 'text-muted-foreground');
+
+    return (
+      <li key={expense.id}>
+        {canToggle ? (
+          <Button
+            type='button'
+            variant='tertiary'
+            aria-label={`${isRepaid ? 'Mark not repaid' : 'Mark repaid'}: ${expense.title}`}
+            onClick={() => onToggleRepaid(expense.id)}
+            className={join(
+              'h-auto w-full justify-start gap-3 rounded-md px-2 py-2 focus:outline-transparent!',
+              rowClassName,
+            )}
+          >
+            {content}
+          </Button>
+        ) : (
+          <div className={join('flex items-center justify-between gap-3 px-2 py-2', rowClassName)}>
+            {content}
+          </div>
+        )}
+      </li>
+    );
+  };
 
   const renderDirection = (
     fromUid: string,
@@ -32,6 +94,8 @@ function DuesSummary({ settlements, memberLabel, formatAmount }: DuesSummaryProp
     if (owed.total <= EPSILON) {
       return null;
     }
+
+    const canToggle = fromUid === currentUserId;
 
     return (
       <div key={`${fromUid}-${toUid}`} className='space-y-2'>
@@ -47,69 +111,85 @@ function DuesSummary({ settlements, memberLabel, formatAmount }: DuesSummaryProp
             </div>
           </>
         )}
-        <ul className='space-y-1.5'>
-          {owed.items.map(({ expense, share, isRepaid }) => (
-            <li
-              key={expense.id}
-              className={join(
-                'flex items-center justify-between gap-3 text-sm',
-                isRepaid && 'text-muted-foreground',
-              )}
-            >
-              <span className='flex min-w-0 items-center gap-2'>
-                {isRepaid ? (
-                  <Check className='h-3.5 w-3.5 shrink-0 text-emerald-600' />
-                ) : (
-                  <Circle className='text-muted-foreground h-3.5 w-3.5 shrink-0' />
-                )}
-                <span className='truncate'>{expense.title}</span>
-              </span>
-              <span className='shrink-0 tabular-nums'>{formatAmount(share)}</span>
-            </li>
-          ))}
-        </ul>
+        <ul className='-mx-2'>{owed.items.map((item) => renderItem(item, canToggle))}</ul>
+        {canToggle && (
+          <p className='text-muted-foreground text-xs'>Tap an item once you&apos;ve paid it back.</p>
+        )}
+      </div>
+    );
+  };
+
+  const renderBreakdown = (settlement: PairSettlement) => {
+    const { personA, personB, netAmount, aOwesB, bOwesA } = settlement;
+    const showTotals =
+      (aOwesB.total > EPSILON && bOwesA.total > EPSILON) ||
+      aOwesB.repaid > EPSILON ||
+      bOwesA.repaid > EPSILON;
+    const { debtorUid, creditorUid } = getDirection(settlement);
+
+    return (
+      <div className='space-y-4'>
+        <div className='flex items-baseline justify-between gap-3'>
+          <p className='min-w-0 text-sm font-medium'>
+            {isPairSettled(settlement)
+              ? `${memberLabel(personA)} and ${memberLabel(personB)} are settled up`
+              : `${memberLabel(debtorUid)} owes ${memberLabel(creditorUid)}`}
+          </p>
+          {!isPairSettled(settlement) && (
+            <p className='shrink-0 text-base font-semibold tabular-nums'>
+              {formatAmount(Math.abs(netAmount))}
+              <span className='text-muted-foreground ml-1 text-xs font-normal'>net</span>
+            </p>
+          )}
+        </div>
+        {renderDirection(personA, personB, aOwesB, showTotals)}
+        {renderDirection(personB, personA, bOwesA, showTotals)}
       </div>
     );
   };
 
   return (
-    <ul className='divide-border mt-2 divide-y'>
-      {settlements.map((settlement) => {
-        const { personA, personB, netAmount, aOwesB, bOwesA } = settlement;
-        const hasRepaidHistory = aOwesB.repaid > EPSILON || bOwesA.repaid > EPSILON;
-        const isCircular = aOwesB.total > EPSILON && bOwesA.total > EPSILON;
-        const showTotals = isCircular || hasRepaidHistory;
-        const debtorUid = netAmount >= 0 ? personA : personB;
-        const creditorUid = netAmount >= 0 ? personB : personA;
+    <>
+      <ul className='divide-border -mx-3 mt-1 divide-y'>
+        {settlements.map((settlement) => {
+          const { personA, personB, netAmount } = settlement;
+          const settled = isPairSettled(settlement);
+          const { debtorUid, creditorUid } = getDirection(settlement);
 
-        if (isPairSettled(settlement)) {
           return (
-            <li key={`${personA}-${personB}`} className='text-muted-foreground py-3 text-sm first:pt-0 last:pb-0'>
-              {memberLabel(personA)} and {memberLabel(personB)} are settled up
-              {hasRepaidHistory && ' (fully repaid)'}
+            <li key={getPairKey(settlement)}>
+              <Button
+                type='button'
+                variant='tertiary'
+                onClick={() => setSelectedPairKey(getPairKey(settlement))}
+                className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left focus:outline-transparent!'
+              >
+                <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
+                  {settled
+                    ? `${memberLabel(personA)} and ${memberLabel(personB)} are settled up`
+                    : `${memberLabel(debtorUid)} owes ${memberLabel(creditorUid)}`}
+                </span>
+                <span className='flex shrink-0 items-center gap-1'>
+                  {!settled && (
+                    <span className='text-sm font-semibold tabular-nums'>
+                      {formatAmount(Math.abs(netAmount))}
+                    </span>
+                  )}
+                  <ChevronRight className='text-muted-foreground h-4 w-4' />
+                </span>
+              </Button>
             </li>
           );
-        }
-
-        return (
-          <li key={`${personA}-${personB}`} className='space-y-3 py-3 first:pt-0 last:pb-0'>
-            <div className='flex items-baseline justify-between gap-3'>
-              <p className='min-w-0 text-sm font-medium'>
-                {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
-              </p>
-              <p className='shrink-0 text-base font-semibold tabular-nums'>
-                {formatAmount(Math.abs(netAmount))}
-                <span className='text-muted-foreground ml-1 text-xs font-normal'>net</span>
-              </p>
-            </div>
-            <div className='space-y-4'>
-              {renderDirection(personA, personB, aOwesB, showTotals)}
-              {renderDirection(personB, personA, bOwesA, showTotals)}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+        })}
+      </ul>
+      <Modal
+        isOpen={selectedSettlement !== undefined}
+        onClose={() => setSelectedPairKey(null)}
+        title='Dues'
+      >
+        {selectedSettlement && renderBreakdown(selectedSettlement)}
+      </Modal>
+    </>
   );
 }
 

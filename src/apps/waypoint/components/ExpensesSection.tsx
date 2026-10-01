@@ -720,8 +720,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         ) : (
           <DuesSummary
             settlements={pairSettlements}
+            currentUserId={currentUserId}
             memberLabel={memberLabel}
             formatAmount={(amount) => formatTotal(amount, amount, currency)}
+            onToggleRepaid={(expenseId) =>
+              void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+            }
           />
         )}
       </div>
