@@ -10,6 +10,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
 import UserAvatar from '@/ui/UserAvatar';
+import { SITE_VERSION } from '@lib/app';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -106,6 +107,11 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     option({ label: 'Change name', value: 'change-name' }),
     separator(),
     option({ label: 'Sign out', value: 'signout' }),
+    custom(() => (
+      <div className='border-border text-muted-foreground mt-1 border-t px-3 py-2 text-xs text-right'>
+        Version {SITE_VERSION}
+      </div>
+    )),
   ];
 
   const handleItemSelect = async (value: string) => {

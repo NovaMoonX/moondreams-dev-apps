@@ -14,7 +14,7 @@
 - Follow the existing folder organization and keep responsibilities separated by feature, UI, hooks, context, routes, lib, and utils.
 - Use shared date/time formatting helpers from `src/utils/formatUtils.ts` for timestamp display instead of inline `Date` formatting.
 - When showing a user or member avatar in the UI, prefer the shared `UserAvatar` component from `src/ui/UserAvatar.tsx` instead of raw `Avatar` components.
-- **Bump `SITE_VERSION` in `src/lib/app/app.constants.ts` on every PR that changes app code or behavior** — patch (`1.0.x`) for fixes/small tweaks, minor (`1.x.0`) for new features. It's the single site-wide version, shown in the corner badge and logged once on mount across every mini-app; it must never go stale.
+- **Bump `SITE_VERSION` in `src/lib/app/app.constants.ts` on every PR that changes app code or behavior** — patch (`1.0.x`) for fixes/small tweaks, minor (`1.x.0`) for new features. It's the single site-wide version, shown in the avatar menu and on the error page, and logged once on mount across every mini-app; it must never go stale.
 
 ### File structure and imports
 - Follow the existing project structure and keep code organized by feature, UI, hooks, context, routes, lib, and utils.
