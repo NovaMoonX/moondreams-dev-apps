@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { AlertCircle, AlertTriangle, Bell, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BedDouble, Bell, Info } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import IconBadge from '@/components/IconBadge';
@@ -30,15 +30,46 @@ import {
   selectUnseenActivityEvents,
   selectUnseenActivityStays,
 } from '@apps/waypoint/store/selectors';
-import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
+import {
+  ANNOUNCEMENT_SEVERITY_LABELS,
+  EVENT_TYPE_BADGE_CLASSES,
+  EVENT_TYPE_EMOJIS,
+} from '@apps/waypoint/constants';
 import type { Announcement, AnnouncementSeverity, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
-const ANNOUNCEMENT_SEVERITY_ICONS: Record<AnnouncementSeverity, { icon: typeof Info; className: string }> = {
-  INFO: { icon: Info, className: 'text-sky-500' },
-  HEADS_UP: { icon: AlertCircle, className: 'text-amber-500' },
-  URGENT: { icon: AlertTriangle, className: 'text-destructive' },
+// A soft tint of the severity color — the full-strength EVENT_TYPE_BADGE_CLASSES treatment
+// is "normal," this is deliberately a notch lighter so it doesn't compete with it.
+const ANNOUNCEMENT_SEVERITY_ICONS: Record<AnnouncementSeverity, { icon: typeof Info; chipClassName: string }> = {
+  INFO: { icon: Info, chipClassName: 'bg-sky-500/15 text-sky-600 dark:text-sky-400' },
+  HEADS_UP: { icon: AlertCircle, chipClassName: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+  URGENT: { icon: AlertTriangle, chipClassName: 'bg-destructive/15 text-destructive' },
 };
+
+/** The small round icon chip every "What's new" row leads with — the one consistent visual
+ * anchor across announcements and updates, whatever kind of item the row describes. */
+function Chip({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={join('flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm', className)}>
+      {children}
+    </span>
+  );
+}
+
+function getUpdateItemChip(item: UpdateItem) {
+  if (item.kind === 'event') {
+    return (
+      <Chip className={EVENT_TYPE_BADGE_CLASSES[item.data.eventType]}>
+        {EVENT_TYPE_EMOJIS[item.data.eventType]}
+      </Chip>
+    );
+  }
+  return (
+    <Chip className='bg-muted text-muted-foreground'>
+      <BedDouble className='h-3.5 w-3.5' />
+    </Chip>
+  );
+}
 
 interface NotificationsIndicatorProps {
   trip: TripSpace;
@@ -279,21 +310,17 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
             <div className='divide-border divide-y'>
               {announcements.map((announcement) => {
                 const isOwnAnnouncement = announcement.createdBy === currentUserId;
-                const { icon: SeverityIcon, className: severityIconClassName } =
-                  ANNOUNCEMENT_SEVERITY_ICONS[announcement.severity];
+                const { icon: SeverityIcon, chipClassName } = ANNOUNCEMENT_SEVERITY_ICONS[announcement.severity];
                 return (
                   <div
                     key={announcement.id}
-                    className='flex items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0'
+                    className='flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0'
                   >
-                    <div className='min-w-0 space-y-0.5'>
-                      <div className='flex items-start gap-1.5'>
-                        <SeverityIcon
-                          className={join('mt-0.5 h-4 w-4 shrink-0', severityIconClassName)}
-                          aria-label={ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
-                        />
-                        <p className='min-w-0 flex-1 text-sm font-medium'>{announcement.title}</p>
-                      </div>
+                    <Chip className={chipClassName}>
+                      <SeverityIcon className='h-3.5 w-3.5' aria-label={ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]} />
+                    </Chip>
+                    <div className='min-w-0 flex-1 space-y-0.5'>
+                      <p className='text-sm font-medium'>{announcement.title}</p>
                       <p className='text-muted-foreground text-xs whitespace-pre-line'>{announcement.body}</p>
                       <p className='text-muted-foreground text-right text-xs'>
                         - {getActorName(announcement.createdBy)}
@@ -321,9 +348,12 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
                 return (
                   <div
                     key={getUpdateItemKey(item)}
-                    className='flex items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0'
+                    className='flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0'
                   >
-                    <div className='min-w-0 space-y-0.5'>{renderUpdateItemBody(item, activity, actorName, trip)}</div>
+                    {getUpdateItemChip(item)}
+                    <div className='min-w-0 flex-1 space-y-0.5'>
+                      {renderUpdateItemBody(item, activity, actorName, trip)}
+                    </div>
                     <DismissIconButton onClick={() => dismissUpdateItem(item)} />
                   </div>
                 );
