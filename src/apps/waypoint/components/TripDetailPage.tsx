@@ -47,6 +47,7 @@ import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
@@ -90,8 +91,15 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     isValidSectionTab(tabParam) ? tabParam : isActive ? '' : 'overview',
   );
 
+  // On a phone, an active trip behaves like an app: a bottom bar switches between whole
+  // screens (Today is the live HUD) instead of expanding sections beneath it.
+  const hasAppNav = isActive && isSmallScreen;
+
   const setSectionTab = (value: string) => {
     setSectionTabState(value);
+    if (hasAppNav) {
+      window.scrollTo({ top: 0 });
+    }
     const nextSearchParams = new URLSearchParams(searchParams);
     if (isValidSectionTab(value)) {
       nextSearchParams.set('tab', value);
@@ -332,6 +340,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         className={join(
           'mx-auto max-w-4xl',
           isActive ? 'space-y-2.5 py-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
+          hasAppNav && 'pb-24',
         )}
       >
         <div className={join('flex items-center justify-between', isSmallScreen && 'mb-3')}>
@@ -451,24 +460,28 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             </span>
           </div>
         )}
-        <div className='mt-4'>
-          <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
-        </div>
-        <hr className='border-border mt-4' />
+        {(!hasAppNav || sectionTab === '') && (
+          <div className='mt-4'>
+            <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
+          </div>
+        )}
+        {!hasAppNav && <hr className='border-border mt-4' />}
         <Tabs
           value={sectionTab}
           onValueChange={setSectionTab}
           tabsWidth='full'
           variant='pills'
         >
-          <TabsList>
-            <TabsTrigger value='overview'>Timeline</TabsTrigger>
-            <TabsTrigger value='members'>Members</TabsTrigger>
-            <TabsTrigger value='expenses'>Expenses</TabsTrigger>
-            <TabsTrigger value='stays'>Stays</TabsTrigger>
-            <TabsTrigger value='checklist'>Checklist</TabsTrigger>
-          </TabsList>
-          {sectionTab !== '' && (
+          {!hasAppNav && (
+            <TabsList>
+              <TabsTrigger value='overview'>Timeline</TabsTrigger>
+              <TabsTrigger value='members'>Members</TabsTrigger>
+              <TabsTrigger value='expenses'>Expenses</TabsTrigger>
+              <TabsTrigger value='stays'>Stays</TabsTrigger>
+              <TabsTrigger value='checklist'>Checklist</TabsTrigger>
+            </TabsList>
+          )}
+          {sectionTab !== '' && !hasAppNav && (
             <div className='mt-4 flex justify-center'>
               <Button
                 type='button'
@@ -504,7 +517,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </TabsContent>
         </Tabs>
       </div>
-      {isActive && <TripProgressBar trip={trip} now={now} />}
+      {hasAppNav ? (
+        <TripBottomNav trip={trip} now={now} value={sectionTab} onChange={setSectionTab} />
+      ) : (
+        isActive && <TripProgressBar trip={trip} now={now} />
+      )}
       <AnnouncementFormModal
         key={isAnnouncementFormOpen ? 'open' : 'closed'}
         isOpen={isAnnouncementFormOpen}

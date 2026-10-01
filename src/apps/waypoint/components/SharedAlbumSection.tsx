@@ -14,6 +14,8 @@ import { setSharedAlbumLink } from '@apps/waypoint/store/actions/tripActions';
 import { selectShouldShowAlbumReminder } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
+const ALBUM_BANNER_IMAGE = '/by-app/waypoint/photos-on-table.webp';
+
 interface SharedAlbumSectionProps {
   trip: TripSpace;
   currentUserId: string;
@@ -75,20 +77,29 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
       <>
         <Button
           type='button'
-          variant='secondary'
-          className='border-fuchsia-500/60 bg-fuchsia-50 dark:bg-fuchsia-950/30 flex h-auto w-full items-center justify-start gap-3 rounded-xl border p-3 text-left'
+          variant='tertiary'
+          className='border-border bg-background relative flex h-auto w-full items-center justify-start overflow-hidden rounded-xl border p-0 text-left'
           onClick={() => setIsModalOpen(true)}
         >
-          <Images className='text-fuchsia-700 dark:text-fuchsia-300 h-5 w-5 shrink-0' />
-          <div className='min-w-0 flex-1'>
-            <p className='text-fuchsia-700 dark:text-fuchsia-300 text-xs font-bold tracking-wide uppercase'>
-              That&apos;s today&apos;s plan
-            </p>
-            <p className='text-sm font-medium'>
-              {trip.sharedAlbumUrl
-                ? "Add today's photos to the shared album"
-                : 'Start a shared album for the trip'}
-            </p>
+          <img
+            src={ALBUM_BANNER_IMAGE}
+            alt=''
+            aria-hidden
+            className='absolute inset-0 h-full w-full object-cover opacity-50'
+          />
+          <div className='from-background via-background/90 absolute inset-0 bg-linear-to-r to-transparent' />
+          <div className='relative flex min-w-0 flex-1 items-center gap-3 p-4'>
+            <Images className='text-fuchsia-600/70 dark:text-fuchsia-300/70 h-5 w-5 shrink-0' />
+            <div className='min-w-0 flex-1'>
+              <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
+                That&apos;s today&apos;s plan
+              </p>
+              <p className='text-sm font-medium'>
+                {trip.sharedAlbumUrl
+                  ? "Add today's photos to the shared album"
+                  : 'Start a shared album for the trip'}
+              </p>
+            </div>
           </div>
         </Button>
         <SharedAlbumLinkModal

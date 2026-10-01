@@ -22,6 +22,7 @@ import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
+import TodayAgenda from '@apps/waypoint/components/TodayAgenda';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
@@ -139,26 +140,27 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
       {isDoneForToday && (
         <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
       )}
-      <div className='mt-2 grid grid-cols-2 gap-2 sm:hidden'>
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          onClick={() => onViewDay(todayIndex)}
-        >
-          Today&apos;s schedule
-        </Button>
-        {hasTomorrow && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            onClick={() => onViewDay(todayIndex + 1)}
-          >
-            Tomorrow&apos;s schedule
-          </Button>
-        )}
-      </div>
+      {isSmallScreen && (
+        <>
+          <TodayAgenda
+            title='Today'
+            dayIndex={todayIndex}
+            now={now}
+            onViewAll={() => onViewDay(todayIndex)}
+            onOpenEvent={openEventDrawer}
+          />
+          {hasTomorrow && (
+            <TodayAgenda
+              title='Tomorrow'
+              dayIndex={todayIndex + 1}
+              now={now}
+              limit={3}
+              onViewAll={() => onViewDay(todayIndex + 1)}
+              onOpenEvent={openEventDrawer}
+            />
+          )}
+        </>
+      )}
       <div className='hidden flex-wrap gap-x-4 gap-y-1 pt-3 sm:flex'>
         <Button
           type='button'
