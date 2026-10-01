@@ -334,11 +334,7 @@ function ActiveNowCard({
       )}
     >
       {imageUrl && (
-        <EnrichedImage
-          src={imageUrl}
-          alt=''
-          className='h-36 w-full object-cover sm:aspect-2/1 sm:h-auto'
-        />
+        <EnrichedImage src={imageUrl} alt='' className='aspect-video w-full object-cover' />
       )}
       <div className='p-3.5'>
         <div className='flex items-start justify-between gap-3'>
