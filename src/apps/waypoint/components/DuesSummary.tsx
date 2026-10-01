@@ -70,14 +70,14 @@ function DuesSummary({
             aria-label={`${isRepaid ? 'Mark not repaid' : 'Mark repaid'}: ${expense.title}`}
             onClick={() => onToggleRepaid(expense.id)}
             className={join(
-              'h-auto w-full justify-start gap-3 rounded-md px-2! py-3! focus:outline-transparent!',
+              'h-auto w-full justify-start gap-3 rounded-md px-2! py-1.5! focus:outline-transparent!',
               rowClassName,
             )}
           >
             {content}
           </Button>
         ) : (
-          <div className={join('flex items-center justify-between gap-3 px-2 py-3', rowClassName)}>
+          <div className={join('flex items-center justify-between gap-3 px-2 py-1.5', rowClassName)}>
             {content}
           </div>
         )}
@@ -111,7 +111,7 @@ function DuesSummary({
             </div>
           </div>
         )}
-        <ul className={join('-mx-2 space-y-0.5', showTotals && 'border-border/60 border-t pt-2')}>
+        <ul className={join('-mx-2', showTotals && 'border-border/60 border-t pt-2')}>
           {owed.items.map((item) => renderItem(item, canToggle))}
         </ul>
         {canToggle && (
