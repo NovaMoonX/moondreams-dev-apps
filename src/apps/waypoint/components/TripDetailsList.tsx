@@ -50,7 +50,7 @@ function TripDetailsList({ trip, currentUserId, onOpen }: TripDetailsListProps) 
       label: 'Checklist',
       summary: checklistItems.length === 0 ? 'Nothing to do yet' : `${completedCount} of ${checklistItems.length} done`,
       icon: <ListChecks className='h-5 w-5' />,
-      badge: 0,
+      badge: checklistItems.length - completedCount,
     },
   ];
 

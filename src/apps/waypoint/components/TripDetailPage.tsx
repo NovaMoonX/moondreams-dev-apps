@@ -85,22 +85,23 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const isValidSectionTab = (value: string | null): value is TripSectionTab =>
     value !== null && TRIP_SECTION_TABS.includes(value as TripSectionTab);
   const tabParam = searchParams.get('tab');
-  // An active trip opens with nothing expanded — the live HUD above is the
-  // point; a non-active trip keeps the old behavior of opening to Timeline.
-  // A valid ?tab= in the URL takes priority over that default, so a shared
-  // or refreshed link reopens on the same section.
+  // Phones always open on Overview; wider screens open an inactive trip on Timeline since
+  // nothing else fills the page. A valid ?tab= in the URL takes priority over either default.
   const [sectionTab, setSectionTabState] = useState(() =>
-    isValidSectionTab(tabParam) ? tabParam : isActive ? '' : 'overview',
+    isValidSectionTab(tabParam) ? tabParam : isActive || isSmallScreen ? '' : 'overview',
   );
+  const [cameFromOverview, setCameFromOverview] = useState(false);
 
   const hasAppNav = isSmallScreen;
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
-  const isNestedScreen = hasAppNav && (sectionTab === 'stays' || sectionTab === 'members');
+  const isNestedScreen =
+    hasAppNav && sectionTab !== '' && (sectionTab === 'stays' || sectionTab === 'members' || cameFromOverview);
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
-  const setSectionTab = (value: string) => {
+  const setSectionTab = (value: string, fromOverview = false) => {
     setSectionTabState(value);
+    setCameFromOverview(fromOverview);
     if (hasAppNav) {
       window.scrollTo({ top: 0 });
     }
@@ -478,7 +479,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TripEntryPoints
               trip={trip}
               currentUserId={currentUserId}
-              onOpen={(tab) => setSectionTab(tab)}
+              onOpen={(tab) => setSectionTab(tab, true)}
             />
           </div>
         )}
@@ -492,7 +493,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TripDetailsList
               trip={trip}
               currentUserId={currentUserId}
-              onOpen={(tab) => setSectionTab(tab)}
+              onOpen={(tab) => setSectionTab(tab, true)}
             />
           </div>
         )}
