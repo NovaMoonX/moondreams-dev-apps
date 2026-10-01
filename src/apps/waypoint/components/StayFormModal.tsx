@@ -16,6 +16,7 @@ import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,
+  toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { getTimezoneOptions } from '@/utils/timezoneUtils';
@@ -98,9 +99,33 @@ export function StayFormModal({
   const [draft, setDraft] = useState(() => getInitialDraft(trip, stay));
   const [error, setError] = useState<string | null>(null);
   const [showTimezoneField, setShowTimezoneField] = useState(false);
+  const [showConfirmationCode, setShowConfirmationCode] = useState(
+    Boolean(stay?.confirmationCode),
+  );
   const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
+
+  // Moving a start instant keeps the same start->end window by shifting its paired end by
+  // the same delta — used for both check-in/check-out and planned arrival/departure.
+  const shiftPairedEnd = (
+    oldStartDate: string,
+    oldStartTime: string,
+    oldEndDate: string,
+    oldEndTime: string,
+    newStartDate: string,
+    newStartTime: string,
+  ) => {
+    const oldStartAt = fromLocalDateAndTimeInputValues(oldStartDate, oldStartTime);
+    const oldEndAt = fromLocalDateAndTimeInputValues(oldEndDate, oldEndTime);
+    const newStartAt = fromLocalDateAndTimeInputValues(newStartDate, newStartTime);
+    if (oldStartAt === undefined || oldEndAt === undefined || newStartAt === undefined) {
+      return null;
+    }
+
+    const newEndAt = newStartAt + (oldEndAt - oldStartAt);
+    return { date: toLocalDateInputValue(newEndAt), time: toLocalTimeInputValue(newEndAt) };
+  };
 
   const draftCheckInAt = fromLocalDateAndTimeInputValues(
     draft.checkInDate,
@@ -171,6 +196,8 @@ export function StayFormModal({
         place: draft.place,
         linkUrl: draft.linkUrl,
         linkPreview: draft.linkPreview,
+        changeHistory: stay?.changeHistory ?? [],
+        seenBy: stay?.seenBy ?? {},
       });
       setError(null);
     } catch (submitError) {
@@ -234,9 +261,20 @@ export function StayFormModal({
               value={`${draft.checkInDate}T${draft.checkInTime}`}
               onChange={(event) => {
                 const [date, time] = event.target.value.split('T');
+                const shiftedCheckOut = shiftPairedEnd(
+                  draft.checkInDate,
+                  draft.checkInTime,
+                  draft.checkOutDate,
+                  draft.checkOutTime,
+                  date ?? '',
+                  time ?? '',
+                );
                 updateDraft({
                   checkInDate: date ?? '',
                   checkInTime: time ?? '',
+                  ...(shiftedCheckOut
+                    ? { checkOutDate: shiftedCheckOut.date, checkOutTime: shiftedCheckOut.time }
+                    : {}),
                 });
               }}
             />
@@ -275,6 +313,24 @@ export function StayFormModal({
             + Add timezone
           </Button>
         )}
+        {showConfirmationCode ? (
+          <div className='space-y-1.5'>
+            <Label>Confirmation code</Label>
+            <Input
+              value={draft.confirmationCode}
+              onChange={(event) => updateDraft({ confirmationCode: event.target.value })}
+            />
+          </div>
+        ) : (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            onClick={() => setShowConfirmationCode(true)}
+          >
+            + Add confirmation code
+          </Button>
+        )}
         <div className='grid gap-3 sm:grid-cols-2'>
           <div className='space-y-1.5'>
             <Label>Planned arrival</Label>
@@ -283,7 +339,24 @@ export function StayFormModal({
               value={`${draft.plannedArrivalDate}T${draft.plannedArrivalTime}`}
               onChange={(event) => {
                 const [date, time] = event.target.value.split('T');
-                updateDraft({ plannedArrivalDate: date ?? '', plannedArrivalTime: time ?? '' });
+                const shiftedDeparture = shiftPairedEnd(
+                  draft.plannedArrivalDate,
+                  draft.plannedArrivalTime,
+                  draft.plannedDepartureDate,
+                  draft.plannedDepartureTime,
+                  date ?? '',
+                  time ?? '',
+                );
+                updateDraft({
+                  plannedArrivalDate: date ?? '',
+                  plannedArrivalTime: time ?? '',
+                  ...(shiftedDeparture
+                    ? {
+                        plannedDepartureDate: shiftedDeparture.date,
+                        plannedDepartureTime: shiftedDeparture.time,
+                      }
+                    : {}),
+                });
               }}
             />
           </div>
@@ -317,7 +390,7 @@ export function StayFormModal({
                 disabled={isSubmitting || !isFormComplete}
                 onClick={() => void handleSubmit()}
               >
-                {isSubmitting ? 'Saving…' : stay ? 'Save changes' : 'Add stay'}
+                {isSubmitting ? 'Saving…' : stay ? 'Save' : 'Add'}
               </Button>
             </>
           }

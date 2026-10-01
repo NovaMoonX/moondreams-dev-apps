@@ -9,6 +9,8 @@ import {
 import { startTripListener } from '../store/listeners/tripListeners';
 import { startTripExpensesListener } from '../store/listeners/expenseListeners';
 import { startTripEventsListener } from '../store/listeners/eventListeners';
+import { startEventSuggestionsListener } from '../store/listeners/eventSuggestionListeners';
+import { startAnnouncementsListener } from '../store/listeners/announcementListeners';
 import { startChecklistListener } from '../store/listeners/checklistListeners';
 import { startTripStaysListener } from '../store/listeners/stayListeners';
 import {
@@ -18,6 +20,14 @@ import {
 import { setTrips } from '../store/slices/tripSlice';
 import { clearExpenses, setExpenses } from '../store/slices/expensesSlice';
 import { clearEvents, setEvents } from '../store/slices/eventsSlice';
+import {
+  clearEventSuggestions,
+  setEventSuggestions,
+} from '../store/slices/eventSuggestionsSlice';
+import {
+  clearAnnouncements,
+  setAnnouncements,
+} from '../store/slices/announcementsSlice';
 import { setChecklist } from '../store/slices/checklistSlice';
 import { clearStays, setStays } from '../store/slices/staysSlice';
 
@@ -93,6 +103,28 @@ export function useWaypointSync(
 
     return startTripEventsListener(tripId, (events) => {
       dispatch(setEvents({ tripId, events }));
+    });
+  }, [dispatch, tripId]);
+
+  useEffect(() => {
+    if (!tripId) {
+      dispatch(clearEventSuggestions());
+      return;
+    }
+
+    return startEventSuggestionsListener(tripId, (suggestions) => {
+      dispatch(setEventSuggestions({ tripId, suggestions }));
+    });
+  }, [dispatch, tripId]);
+
+  useEffect(() => {
+    if (!tripId) {
+      dispatch(clearAnnouncements());
+      return;
+    }
+
+    return startAnnouncementsListener(tripId, (announcements) => {
+      dispatch(setAnnouncements({ tripId, announcements }));
     });
   }, [dispatch, tripId]);
 

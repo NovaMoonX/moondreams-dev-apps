@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import {
   Button,
   ButtonProps,
@@ -22,6 +24,8 @@ interface EllipsisDropdownProps
   disabled?: boolean;
   disabledMessage?: TooltipProps['message'];
   disabledTooltipPlacement?: TooltipProps['placement'];
+  /** Overrides the default vertical-dots glyph — e.g. a horizontal variant. */
+  icon?: ReactNode;
 }
 
 function EllipsisDropdown({
@@ -37,6 +41,7 @@ function EllipsisDropdown({
   disabled = false,
   disabledMessage,
   disabledTooltipPlacement,
+  icon,
 }: EllipsisDropdownProps) {
   const button = (
     <Button
@@ -50,7 +55,7 @@ function EllipsisDropdown({
         event.stopPropagation();
       }}
     >
-      <DotsVertical className='h-4 w-4' />
+      {icon ?? <DotsVertical className='h-4 w-4' />}
     </Button>
   );
 
@@ -69,7 +74,7 @@ function EllipsisDropdown({
               event.stopPropagation();
             }}
           >
-            <DotsVertical className='h-4 w-4' />
+            {icon ?? <DotsVertical className='h-4 w-4' />}
           </Button>
         </span>
       </Tooltip>

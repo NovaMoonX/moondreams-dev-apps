@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ExternalLink, Settings2 } from 'lucide-react';
+import { ExternalLink, Images, Settings2 } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -14,12 +14,18 @@ import { setSharedAlbumLink } from '@apps/waypoint/store/actions/tripActions';
 import { selectShouldShowAlbumReminder } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
+const ALBUM_BANNER_IMAGE = '/by-app/waypoint/photos-on-table.webp';
+
 interface SharedAlbumSectionProps {
   trip: TripSpace;
   currentUserId: string;
+  /** 'icon' collapses this down to a single header icon button that opens the same
+   * modal — for an active trip's mobile header, where vertical space is scarce.
+   * 'banner' is a prominent standalone prompt for once today's events are done. */
+  variant?: 'full' | 'icon' | 'banner';
 }
 
-function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
+function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlbumSectionProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const now = useNow();
@@ -65,6 +71,74 @@ function SharedAlbumSection({ trip, currentUserId }: SharedAlbumSectionProps) {
       : canSet
         ? 'Add a link (Google Photos works great) to start capturing memories together.'
         : "An Editor or Admin can start the shared album whenever they're ready.";
+
+  if (variant === 'banner') {
+    return (
+      <>
+        <Button
+          type='button'
+          variant='tertiary'
+          className='border-border bg-background relative flex h-auto w-full items-center justify-start overflow-hidden rounded-xl border p-0 text-left'
+          onClick={() => setIsModalOpen(true)}
+        >
+          <img
+            src={ALBUM_BANNER_IMAGE}
+            alt=''
+            aria-hidden
+            className='absolute inset-0 h-full w-full object-cover opacity-50'
+          />
+          <div className='from-background via-background/90 absolute inset-0 bg-linear-to-r via-60% to-transparent' />
+          <div className='relative flex min-w-0 flex-1 items-center gap-3 p-4'>
+            <Images className='text-fuchsia-600/70 dark:text-fuchsia-300/70 h-5 w-5 shrink-0' />
+            <div className='min-w-0 flex-1'>
+              <p className='text-sm font-medium'>Catch any good moments today?</p>
+              <p className='text-muted-foreground text-xs'>
+                {trip.sharedAlbumUrl
+                  ? "Add today's photos to the shared album"
+                  : 'Start a shared album for the trip'}
+              </p>
+            </div>
+          </div>
+        </Button>
+        <SharedAlbumLinkModal
+          key={isModalOpen ? 'open' : 'closed'}
+          isOpen={isModalOpen}
+          tripId={trip.id}
+          currentUrl={trip.sharedAlbumUrl}
+          isSaving={isSaving}
+          onSubmit={(url) => void handleSave(url)}
+          onClose={() => setIsModalOpen(false)}
+        />
+      </>
+    );
+  }
+
+  if (variant === 'icon') {
+    return (
+      <>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          aria-label='Shared album'
+          title='Shared album'
+          className='px-2'
+          onClick={() => setIsModalOpen(true)}
+        >
+          <Images className='h-4 w-4' />
+        </Button>
+        <SharedAlbumLinkModal
+          key={isModalOpen ? 'open' : 'closed'}
+          isOpen={isModalOpen}
+          tripId={trip.id}
+          currentUrl={trip.sharedAlbumUrl}
+          isSaving={isSaving}
+          onSubmit={(url) => void handleSave(url)}
+          onClose={() => setIsModalOpen(false)}
+        />
+      </>
+    );
+  }
 
   return (
     <>

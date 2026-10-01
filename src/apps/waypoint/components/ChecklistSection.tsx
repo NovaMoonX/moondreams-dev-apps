@@ -16,6 +16,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
+import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import { CHECKLIST_CATEGORY_LABELS } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
@@ -179,24 +180,22 @@ export default function ChecklistSection({
 
   return (
     <section className='space-y-4 pt-4'>
-      <div className='flex flex-wrap items-center justify-between gap-3'>
-        <div>
-          <h2 className='text-xl font-semibold'>Before the Road</h2>
-          <p className='text-muted-foreground text-sm'>
-            {completedCount} of {items.length} complete
-          </p>
-        </div>
-        {canEdit && (
-          <Button
-            onClick={() => {
-              setEditingItem(null);
-              setIsModalOpen(true);
-            }}
-          >
-            Add item
-          </Button>
-        )}
-      </div>
+      <SectionHeader
+        title='Before the Road'
+        subtitle={`${completedCount} of ${items.length} complete`}
+        action={
+          canEdit && (
+            <Button
+              onClick={() => {
+                setEditingItem(null);
+                setIsModalOpen(true);
+              }}
+            >
+              Add item
+            </Button>
+          )
+        }
+      />
       <div
         className='bg-muted h-2 overflow-hidden rounded-full'
         role='progressbar'

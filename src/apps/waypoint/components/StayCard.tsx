@@ -19,7 +19,9 @@ import type { Stay } from '@apps/waypoint/types';
 interface StayCardProps {
   stay: Stay;
   canEdit: boolean;
-  onEdit: (stay: Stay) => void;
+  /** `onSuccess`, when given, is the mobile details drawer's own close — call it only once
+   * the edit actually completes, not just because the edit modal was opened. */
+  onEdit: (stay: Stay, onSuccess?: () => void) => void;
   onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
 
@@ -35,15 +37,23 @@ function getStayLocation(stay: Stay) {
   return location;
 }
 
-interface StayDetailLinesProps {
+export interface StayDetailLinesProps {
   stay: Stay;
   showTitle: boolean;
   showExtras: boolean;
+  showNotesIndicator?: boolean;
   canEdit: boolean;
   onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
 
-function StayDetailLines({ stay, showTitle, showExtras, canEdit, onSaveNotes }: StayDetailLinesProps) {
+export function StayDetailLines({
+  stay,
+  showTitle,
+  showExtras,
+  showNotesIndicator,
+  canEdit,
+  onSaveNotes,
+}: StayDetailLinesProps) {
   return (
     <>
       <div className='flex flex-wrap items-center gap-2'>
@@ -51,6 +61,14 @@ function StayDetailLines({ stay, showTitle, showExtras, canEdit, onSaveNotes }: 
         <Badge variant='muted' outline>
           {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
         </Badge>
+        {showNotesIndicator && stay.notes && (
+          <span
+            className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
+            role='img'
+            aria-label='Has notes'
+            title='Has notes'
+          />
+        )}
       </div>
       <LocationLink {...getStayLocation(stay)} label={stay.address} />
       <p className='text-muted-foreground text-sm'>
@@ -86,6 +104,7 @@ function StayDetailLines({ stay, showTitle, showExtras, canEdit, onSaveNotes }: 
 
 export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = getDisplayImage(stay);
   const drawerTriggerProps = isSmallScreen
@@ -126,6 +145,7 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
                 stay={stay}
                 showTitle
                 showExtras={false}
+                showNotesIndicator={isSmallScreen}
                 canEdit={canEdit}
                 onSaveNotes={onSaveNotes}
               />
@@ -163,7 +183,7 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
           imageUrl={imageUrl}
           location={getStayLocation(stay)}
           linkUrl={stay.linkUrl}
-          onEdit={canEdit ? () => onEdit(stay) : null}
+          onEdit={canEdit ? () => onEdit(stay, closeDrawer) : null}
         >
           <StayDetailLines
             stay={stay}

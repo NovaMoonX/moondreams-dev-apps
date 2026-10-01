@@ -484,8 +484,10 @@ Ephemeral by design, mirroring the existing `/presence/{userId}` pattern: no his
 **1. Event Active Status Machine**
 
 ```
-[UPCOMING] ---> now >= startAt ---> [ACTIVE] ---> now >= endAt ---> [COMPLETED]
+[UPCOMING] ---> now >= startAt ---> [ACTIVE] ---> now >= impliedEndAt ---> [COMPLETED]
 ```
+
+`impliedEndAt` is `endAt` when set, otherwise the end of the event's own local calendar day (`getEndOfLocalDay(startAt)`) — an event with no end time doesn't stay "Active Now" forever. Among several simultaneously `ACTIVE` events, Overview's Active Now card shows whichever started most recently.
 
 **2. Proposal Approval State Machine**
 
@@ -506,7 +508,7 @@ Two conditions, both required:
 - **Gated to an already-started trip**: `changeHistory` only accumulates once `now >= trip.startDate`.
 - **Every edit is appended, not overwritten**: on a write touching `startAt`/`endAt`/`locationName`/`dayIndex`/`endDayIndex`, the client diffs against the previous state, collects every changed field into one `EventChangeSnapshot`, and appends it. If Admin A moves the start time and Admin B later moves the location, both snapshots survive in order.
 
-Combined with the write rule below, every entry in `changeHistory` was necessarily made by an Admin, which is what makes the log trustworthy. Updating or deleting an *existing* event once the trip has started is Admin-only; creating a brand-new event stays open to Editors throughout — this only restricts changing something already part of the plan.
+Combined with the write rule below, every entry in `changeHistory` was necessarily made by an Admin, which is what makes the log trustworthy. Updating or deleting an *existing* event once the trip has started is Admin-only; creating a brand-new event or stay follows the same narrowing — open to Editors before the trip starts, Admin-only once it has (`canCreateItem`) — since an already-underway plan needs one steward either way.
 
 **Worth flagging in the UI**: the *live* value of a field is always whoever wrote last, even though both edits remain visible in `changeHistory`. If Admin A moves an event to 2pm and Admin B independently moves the same event to 3pm moments later, A's edit doesn't disappear from the record, but it's no longer what's shown by default — someone would need to expand the history to see it happened at all. That's expected last-write-wins behavior, not a bug, but the UI shouldn't make it look like B's edit is the *only* one that occurred.
 
@@ -517,6 +519,10 @@ Since `startDate`/`endDate` are only ever estimates at creation, shifting them l
 The edit form offers a **"shift dated items" checkbox**, checked by default: checked, every event's `startAt`/`endAt` and every stay's `checkInAt`/`checkOutAt`/`plannedArrivalAt`/`plannedDepartureAt` shifts by the same delta as `trip.startDate`, preserving each item's `dayIndex` and its position relative to everything else (stays have no `dayIndex`, so this is the only path that keeps them aligned with the trip). Unchecked, events/expenses/checklist items keep their exact absolute date and time and have their `dayIndex`/`completeByDayIndex` recomputed against the new range instead (clamped for events, since `dayIndex` is required; set to `null` — "no specific day" — for expenses/checklist that now fall outside it); stays are left untouched either way, since nothing about them is relative.
 
 While the function runs, `trip.dateShiftStatus` is `'PENDING'` — `firestore.rules` denies every write to the trip document and its subcollections until it flips back to `'IDLE'` (or the function fails and resets it), and the client mirrors that lock by hiding every edit entry point and showing a banner. This is what makes the two-phase "shift, then reassign" work safely: nothing else can write to the trip mid-shift.
+
+**4b. Deleting a Trip**
+
+An Admin deletes a trip through the `deleteTrip` callable, not a client `deleteDoc` — deleting a Firestore parent document leaves its subcollections behind, and the invite-code rule denies client deletes. The function removes the trip document and its invite code in one batch (so a trip is never left with a live invite), then recursively deletes the trip's subcollections, its `pendingRequests`, its events' scheduled reminders, and its Storage files.
 
 **5. Dues / Settle-Up Calculation**
 
@@ -563,6 +569,18 @@ A client-side `groupBy` on `ideaDetails.location` over the already-loaded ideas 
               assignments (past checklist/expense/comment records) are left as-is — only future access is revoked
 ```
 
+**13a. Event Archive, Activity Tracking, and Suggested Replacements**
+
+`TimelineEvent` additionally carries `isArchived: boolean` and `seenBy: Record<uid, number>`. Archiving mirrors the trip-level pattern (`isArchived`/`setTripArchived`) — an Admin-only toggle (enforced in the action, the UI, and `firestore.rules` alike — whatever the trip's phase, since approving a suggestion archives its source event even pre-trip), offered in the Timeline once the trip has started, that excludes the event from the default Timeline view without deleting it. `seenBy` tracks, per member, when they last viewed an event; a member writes only their own key, through a Firestore transaction (not a plain `updateDoc`) since it's a genuinely multi-writer map — the same reasoning `runTransaction`-based writes elsewhere in this doc apply to `members`.
+
+An event is "unseen activity" for a member when its `createdAt` (if `>= trip.startDate`, i.e. created post-start) or its latest `changeHistory` entry's `latestChangedAt` is newer than that member's `seenBy` entry. Overview surfaces these under a "Recent updates" list; opening an event's details marks it seen.
+
+A separate, flat trip subcollection, `apps/waypoint/trips/{tripId}/eventSuggestions/{id}`, lets any member propose a replacement (new title/time/location) for an existing event and upvote others' suggestions (own-uid-only array membership). A suggestion's end time must fall after its start time (checked in the form, the action, and the rule). Editing one runs in a transaction and writes only its content fields, never `upvotedBy`, so a concurrent vote can't conflict with the edit. Approving one — Admin-only, a single transaction that re-reads the source event and the suggestion and aborts if either was archived, removed, or edited meanwhile — archives the source event (stamping `archivedBy`/`archivedAt`, so other members see the "Archived" update), creates a new `TimelineEvent` from the suggested fields (carrying over everything not overridden: event type, attendees, reminders, notes), and deletes the suggestion, in one batch.
+
+**13b. Admin Announcements**
+
+`apps/waypoint/trips/{tripId}/announcements/{id}`: `severity` (`INFO`/`HEADS_UP`/`URGENT`), `title`, `body`, an optional `expiresAt`, and `dismissedBy: Record<uid, number>` (own-key-only, transactional, same shape/reasoning as `seenBy` above). Create/delete is Admin-only, and the author can't dismiss their own announcement (the rule rejects it, not just the UI) — the one subcollection in this schema where `EDITOR` doesn't suffice for create. "Live" for a given member is `!expired && uid not in dismissedBy`; Overview stacks every live announcement at the top, each opening a detail modal with a Dismiss action.
+
 No member — Admin included — can change their own role; it always has to be a different Admin, which also means the trip creator can never self-demote.
 
 **14. Auto-Generated Transit Leg (Next Steps tier, not MVP)**
@@ -585,7 +603,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 
 - **`trips/{tripId}`**: read allowed if `request.auth.uid` is a key in `members` — nothing else, no pending-related exception (see Criterion #8). Changing a role and removing a member are security-critical transitions restricted to `ADMIN`.
 - **`pendingRequests/{requestId}`**: see the full rules block in the Data Schema section above — three-branch read (path-based self-check, "my requests" query safety, "requests for my trip" query safety), create requires the caller's own uid plus a real, not-yet-joined trip, delete restricted to the requester or a trip Admin, update always denied.
-- **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` specifically**: updating/deleting an *existing* event once `now >= trip.startDate` is `ADMIN`-only (creating new ones stays open to `EDITOR`s). Every write to any of these, and to `trips/{tripId}` itself, additionally requires `trip.dateShiftStatus != 'PENDING'` — see "Changing Trip Dates" above.
+- **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle — which may insert the member's own missing `paidMemberStatus` key on an `EVERYONE_INCLUDING_FUTURE` expense, since people who join later aren't backfilled). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` and `stays/` specifically**: updating/deleting an *existing* item once `now >= trip.startDate` is `ADMIN`-only, and creating a brand-new one narrows the same way (`isTripCreateAllowed`) — `EDITOR`s can add new events/stays before the trip starts, `ADMIN`-only once it has. Every write to any of these, and to `trips/{tripId}` itself, additionally requires `trip.dateShiftStatus != 'PENDING'` — see "Changing Trip Dates" above.
 - **`comments/{commentId}`**: posting is covered by the general membership rule; approving/declining a proposal is a dedicated narrow rule restricted to `ADMIN`/`EDITOR` (or `ADMIN`-only post-trip-start for event-targeted proposals, per State Machine #2).
 - **`ideas/{ideaId}`**: creating and reading open to any trip member (#1 — not a planning-permission surface). Voting is narrow: a member can only add/remove *their own* uid from `voterUids` (#5). Setting `convertedToEntityId` follows the same permission as creating the resulting entity.
 - **`stayCriteria/{criterionId}`**: reading open to any member; write follows the same `EDITOR`/`ADMIN` rule as the departure checklist.
@@ -597,7 +615,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 ## Client State Management (Redux Toolkit)
 
 - **Central vs. app-scoped**: if no earlier mini app has introduced `src/store/` yet, Waypoint's Phase 4 roadmap includes the one-time central store foundation issue. Otherwise, Waypoint builds directly on it.
-- **Typed per-app state**: `WaypointState` composes `trip`, `events`, `stays`, `checklist`, `expenses`, `comments`, `ideas`, `stayCriteria`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
+- **Typed per-app state**: `WaypointState` composes `trip`, `expenses`, `events`, `eventSuggestions`, `announcements`, `checklist`, `stays`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
 - **Member display info is never in Waypoint's own state.** `TripMember` only carries `uid`/`role`/`joinedAt`; any component rendering a member's name or avatar resolves it via the existing central `useUserInfo(uid)` hook.
 - **`resetAllState`**: dispatched on UID change, including via `DevAccountSwitcher`.
 - **Multi-doc atomic mutations get their own actions**: `proposalActions.ts` (approve/decline), `membershipActions.ts` (approve/decline pending request, change role, remove member — all Admin-only, atomic per State Machine #13), `ideaActions.ts` (convert idea → event or stay).
@@ -635,7 +653,7 @@ Every `*Section.tsx` below owns its create/edit forms via DreamerUI's `Form`/`Fo
 
 - **Read Access**: full trip content (events, stays, checklist, expenses, comments) readable only by `members`. A join request is readable only by the person who sent it or an `ADMIN` of that trip.
 - **Admin Write Boundaries**: everything an `EDITOR` can do, plus updating/deleting an existing event once the trip has started, approving/declining pending requests (assigning the role at approval), changing an existing member's role, and removing a member.
-- **Editor Write Boundaries**: create, update, and delete stays, checklist items, stay criteria, and expenses; create new events at any time. Once the trip has started, updating/deleting an *existing* event is Admin-only.
+- **Editor Write Boundaries**: create, update, and delete stays, checklist items, stay criteria, and expenses; create new events and stays before the trip starts (Admin-only once it has — `canCreateItem`). Once the trip has started, updating/deleting an *existing* event is Admin-only.
 - **Commenter Write Boundaries**: view all trip data, toggle checklist items assigned to them, update their own expense-paid status, post comments, submit edit proposals.
 - **Viewer Write Boundaries**: read trip data and toggle their own expense-paid status only.
 - **Social vs. planning actions**: live travel-status updates, and adding or voting on a Trip Idea, are open to every trip member regardless of role.

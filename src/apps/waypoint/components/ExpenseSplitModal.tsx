@@ -8,6 +8,7 @@ import {
   Modal,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -113,12 +114,17 @@ function ExpenseSplitModal({
     (sum, uid) => sum + (Number(displayAmounts[uid]) || 0),
     0,
   );
+  const remainder = amount - customTotal;
   const isMemberSelectionValid =
     targetType !== 'SPECIFIC_MEMBERS' || specificMemberIds.length > 0;
   const isAmountsValid = !isCustomSplit || Math.abs(customTotal - amount) < 0.01;
 
   const updateAmount = (uid: string, value: string) => {
     setCustomSplitAmounts({ ...displayAmounts, [uid]: value });
+  };
+
+  const setAmountToPercent = (uid: string, percent: number) => {
+    updateAmount(uid, ((percent / 100) * amount).toFixed(2));
   };
 
   const toggleSpecificMember = (uid: string, checked: boolean) => {
@@ -221,22 +227,51 @@ function ExpenseSplitModal({
                 </Button>
               )}
             </div>
-            <div className='space-y-2'>
+            <p className='text-muted-foreground text-xs'>Total {formatAmount(amount)}</p>
+            <div className='space-y-3'>
               {splitMemberIds.map((uid) => (
-                <div key={uid} className='flex items-center gap-2'>
-                  <span className='text-sm flex-1'>{memberLabel(uid)}</span>
-                  <Input
-                    type='number'
-                    className='w-28'
-                    value={displayAmounts[uid] ?? ''}
-                    onChange={(event) => updateAmount(uid, event.target.value)}
-                  />
+                <div key={uid} className='space-y-1'>
+                  <div className='flex items-center gap-2'>
+                    <span className='text-sm flex-1'>{memberLabel(uid)}</span>
+                    <span className='text-muted-foreground text-xs'>
+                      even {formatAmount(evenSplit[uid] ?? 0)}
+                    </span>
+                    <Input
+                      type='number'
+                      className='w-28'
+                      value={displayAmounts[uid] ?? ''}
+                      onChange={(event) => updateAmount(uid, event.target.value)}
+                    />
+                  </div>
+                  <div className='flex justify-end gap-1'>
+                    {[25, 50, 75, 100].map((percent) => (
+                      <Button
+                        key={percent}
+                        type='button'
+                        variant='tertiary'
+                        size='sm'
+                        className='h-6 px-1.5 text-xs'
+                        onClick={() => setAmountToPercent(uid, percent)}
+                      >
+                        {percent}%
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
-            {isCustomSplit && !isAmountsValid && (
-              <p className='text-destructive text-sm'>
-                Split amounts must add up to {amount}.
+            {isCustomSplit && (
+              <p
+                className={join(
+                  'text-sm',
+                  isAmountsValid ? 'text-muted-foreground' : 'text-destructive',
+                )}
+              >
+                {Math.abs(remainder) < 0.01
+                  ? 'Fully allocated'
+                  : remainder > 0
+                    ? `${formatAmount(remainder)} remaining`
+                    : `${formatAmount(Math.abs(remainder))} over`}
               </p>
             )}
           </div>

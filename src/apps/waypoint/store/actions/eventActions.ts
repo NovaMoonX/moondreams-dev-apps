@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -13,7 +13,7 @@ import type {
 } from '@apps/waypoint/types';
 import { DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
-import { canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
+import { canArchiveEvent, canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
   uid: string;
@@ -40,9 +40,13 @@ interface DeleteEventInput {
   eventId: string;
 }
 
-function canEditEvents(uid: string, trip: TripSpace) {
-  return ['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '');
-}
+const CONCURRENTLY_WRITTEN_EVENT_FIELDS = [
+  'seenBy',
+  'isArchived',
+  'archivedBy',
+  'archivedAt',
+  'changeHistory',
+];
 
 const TRACKED_CHANGE_FIELDS = [
   'startAt',
@@ -109,7 +113,7 @@ export const createEvent = createAsyncThunk<
   CreateEventInput,
   { rejectValue: string }
 >('waypoint/events/create', async ({ uid, trip, event }, { rejectWithValue }) => {
-  if (!canEditEvents(uid, trip)) {
+  if (!canCreateItem(trip, uid)) {
     return rejectWithValue('You do not have permission to add timeline events.');
   }
   if (!event.title.trim()) {
@@ -146,6 +150,10 @@ export const createEvent = createAsyncThunk<
     notes: null,
     changeHistory: [],
     reminderId,
+    isArchived: false,
+    archivedBy: null,
+    archivedAt: null,
+    seenBy: { [uid]: now },
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -183,8 +191,7 @@ export const updateEvent = createAsyncThunk<
       reminderEnabled: event.reminderEnabled,
       assignedMemberIds: event.assignedMemberIds,
     });
-    const updatedEvent: TimelineEvent = {
-      ...event,
+    const trimmedFields = {
       id: eventId,
       tripId: trip.id,
       title: trimmedTitle,
@@ -192,14 +199,29 @@ export const updateEvent = createAsyncThunk<
       address: event.address?.trim() || null,
       linkUrl: event.linkUrl?.trim() || null,
       linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
-      changeHistory: newSnapshot
-        ? [...(previousEvent.changeHistory ?? []), newSnapshot]
-        : (previousEvent.changeHistory ?? []),
       reminderId,
       lastEditedAt: Date.now(),
     };
+    // `seenBy`, the archive fields, and `changeHistory` change independently of this form,
+    // so the cached copies are never written back — history is appended server-side instead.
+    const editableFields = Object.fromEntries(
+      Object.entries(event).filter(
+        ([key]) => !CONCURRENTLY_WRITTEN_EVENT_FIELDS.includes(key),
+      ),
+    );
 
-    await setDoc(eventRef, updatedEvent);
+    await updateDoc(eventRef, {
+      ...getMissingEventFields(previousEvent),
+      ...editableFields,
+      ...trimmedFields,
+      ...(newSnapshot ? { changeHistory: arrayUnion(newSnapshot) } : {}),
+    });
+
+    const updatedEvent: TimelineEvent = {
+      ...event,
+      ...trimmedFields,
+      changeHistory: [...(previousEvent.changeHistory ?? []), ...(newSnapshot ? [newSnapshot] : [])],
+    };
     return updatedEvent;
   },
 );
@@ -221,6 +243,10 @@ function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
     reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
     reminderEnabled: true,
     reminderId: null,
+    isArchived: false,
+    archivedBy: null,
+    archivedAt: null,
+    seenBy: {},
   };
   const missing = Object.fromEntries(
     Object.entries(defaults).filter(([key]) => !(key in event)),
@@ -252,6 +278,59 @@ export const updateEventNotes = createAsyncThunk<
   await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), changes);
   return { ...event, ...changes };
 });
+
+interface SetEventArchivedInput {
+  uid: string;
+  trip: TripSpace;
+  event: TimelineEvent;
+  isArchived: boolean;
+}
+
+export const setEventArchived = createAsyncThunk<
+  { eventId: string; isArchived: boolean },
+  SetEventArchivedInput,
+  { rejectValue: string }
+>(
+  'waypoint/events/setArchived',
+  async ({ uid, trip, event, isArchived }, { rejectWithValue }) => {
+    if (!canArchiveEvent(trip, uid)) {
+      return rejectWithValue('You do not have permission to archive this event.');
+    }
+
+    await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), {
+      ...getMissingEventFields(event),
+      isArchived,
+      archivedBy: isArchived ? uid : null,
+      archivedAt: isArchived ? Date.now() : null,
+      lastEditedAt: Date.now(),
+    });
+    return { eventId: event.id, isArchived };
+  },
+);
+
+interface MarkEventSeenInput {
+  uid: string;
+  trip: TripSpace;
+  eventId: string;
+}
+
+// Written by every trip member independently (each to their own key), so — unlike a plain
+// updateDoc — this must read-modify-write inside a transaction to avoid one member's mark
+// clobbering another's concurrent one.
+export const markEventSeen = createAsyncThunk<void, MarkEventSeenInput, { rejectValue: string }>(
+  'waypoint/events/markSeen',
+  async ({ uid, trip, eventId }) => {
+    const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(eventRef);
+      if (!snapshot.exists()) {
+        return;
+      }
+      const seenBy = (snapshot.data().seenBy ?? {}) as Record<string, number>;
+      transaction.update(eventRef, { seenBy: { ...seenBy, [uid]: Date.now() } });
+    });
+  },
+);
 
 export const deleteEvent = createAsyncThunk<
   string,

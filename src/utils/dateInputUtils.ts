@@ -62,3 +62,14 @@ export function fromLocalDateAndTimeInputValues(
 export function isSameCalendarDay(left: number, right: number) {
   return toDateInputValue(left) === toDateInputValue(right);
 }
+
+/** Whether two instants fall on the same calendar day in the viewer's local timezone. */
+export function isSameLocalCalendarDay(left: number, right: number) {
+  return toLocalDateInputValue(left) === toLocalDateInputValue(right);
+}
+
+/** Start of the local calendar day following `timestamp` — the exclusive upper bound of "today" for an instant. */
+export function getEndOfLocalDay(timestamp: number) {
+  const date = new Date(timestamp);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+}

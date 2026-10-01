@@ -26,6 +26,7 @@ import {
 } from '@/utils/dateInputUtils';
 import {
   getDayCount,
+  getDayIndex,
   getDayInputValue,
   getDayLabel,
 } from '@/utils/dateRangeUtils';
@@ -114,11 +115,13 @@ interface EventDraft {
   place: PlaceRef | null;
   linkUrl: string;
   linkPreview: LinkPreview | null;
+  hasAttendeeOverride: boolean;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
   hasVenueHours: boolean;
   venueOpenTime: string;
   venueCloseTime: string;
+  hasReminderOverride: boolean;
   reminderMinutesBefore: number;
   reminderEnabled: boolean;
 }
@@ -160,11 +163,19 @@ function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
     place: event?.place ?? null,
     linkUrl: event?.linkUrl ?? '',
     linkPreview: event?.linkPreview ?? null,
+    hasAttendeeOverride: Boolean(
+      event && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
+    ),
     attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
     hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
     venueOpenTime: event?.venueOpenTime ?? '',
     venueCloseTime: event?.venueCloseTime ?? '',
+    hasReminderOverride: Boolean(
+      event &&
+        (event.reminderEnabled === false ||
+          event.reminderMinutesBefore !== DEFAULT_REMINDER_MINUTES_BEFORE),
+    ),
     reminderMinutesBefore:
       event?.reminderMinutesBefore ?? DEFAULT_REMINDER_MINUTES_BEFORE,
     reminderEnabled: event?.reminderEnabled ?? true,
@@ -190,6 +201,39 @@ function EventFormModal({
 
   const updateDraft = (changes: Partial<EventDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
+
+  // Moving the start keeps the same start->end window by shifting the end by the same delta.
+  const updateStart = (nextDayIndex: number, nextTime: string) => {
+    if (!draft.hasEndTime) {
+      updateDraft({ dayIndex: nextDayIndex, time: nextTime });
+      return;
+    }
+
+    const previousStartAt = fromLocalDateAndTimeInputValues(
+      getDayInputValue(trip.startDate, draft.dayIndex),
+      draft.time,
+    );
+    const previousEndAt = fromLocalDateAndTimeInputValues(
+      getDayInputValue(trip.startDate, draft.endDayIndex),
+      draft.endTime,
+    );
+    const nextStartAt = fromLocalDateAndTimeInputValues(
+      getDayInputValue(trip.startDate, nextDayIndex),
+      nextTime,
+    );
+    if (previousStartAt === undefined || previousEndAt === undefined || nextStartAt === undefined) {
+      updateDraft({ dayIndex: nextDayIndex, time: nextTime });
+      return;
+    }
+
+    const nextEndAt = nextStartAt + (previousEndAt - previousStartAt);
+    updateDraft({
+      dayIndex: nextDayIndex,
+      time: nextTime,
+      endDayIndex: getDayIndex(trip.startDate, nextEndAt),
+      endTime: toLocalTimeInputValue(nextEndAt),
+    });
+  };
 
   const handleNext = () => {
     if (!draft.title.trim() || !draft.time) {
@@ -272,6 +316,10 @@ function EventFormModal({
         reminderMinutesBefore: draft.reminderMinutesBefore,
         reminderEnabled: draft.reminderEnabled,
         reminderId: event?.reminderId ?? null,
+        isArchived: event?.isArchived ?? false,
+        archivedBy: event?.archivedBy ?? null,
+        archivedAt: event?.archivedAt ?? null,
+        seenBy: event?.seenBy ?? {},
       });
       setStep(1);
       setError(null);
@@ -351,7 +399,7 @@ function EventFormModal({
                   value: String(index),
                 }))}
                 value={String(draft.dayIndex)}
-                onChange={(value) => updateDraft({ dayIndex: Number(value) })}
+                onChange={(value) => updateStart(Number(value), draft.time)}
               />
             </div>
             <div className='space-y-1.5'>
@@ -359,7 +407,7 @@ function EventFormModal({
               <Input
                 type='time'
                 value={draft.time}
-                onChange={(event) => updateDraft({ time: event.target.value })}
+                onChange={(event) => updateStart(draft.dayIndex, event.target.value)}
               />
             </div>
             {draft.hasEndTime ? (
@@ -495,23 +543,52 @@ function EventFormModal({
                 onUseTitle={(title) => updateDraft({ title })}
               />
             )}
-            <div className='space-y-1.5'>
-              <Label>Reminder</Label>
-              <Select
-                options={reminderOptions}
-                value={draft.reminderEnabled ? String(draft.reminderMinutesBefore) : 'off'}
-                onChange={(value) =>
-                  value === 'off'
-                    ? updateDraft({ reminderEnabled: false })
-                    : updateDraft({ reminderEnabled: true, reminderMinutesBefore: Number(value) })
-                }
-              />
-              {reminderAt !== null && (
-                <p className='text-muted-foreground text-xs'>
-                  Will remind at {formatTime(reminderAt)}
-                </p>
-              )}
-            </div>
+            {draft.hasReminderOverride ? (
+              <div className='space-y-1.5'>
+                <div className='flex items-center justify-between'>
+                  <Label>Reminder</Label>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    aria-label='Reset reminder'
+                    onClick={() =>
+                      updateDraft({
+                        hasReminderOverride: false,
+                        reminderEnabled: true,
+                        reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
+                      })
+                    }
+                  >
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
+                <Select
+                  options={reminderOptions}
+                  value={draft.reminderEnabled ? String(draft.reminderMinutesBefore) : 'off'}
+                  onChange={(value) =>
+                    value === 'off'
+                      ? updateDraft({ reminderEnabled: false })
+                      : updateDraft({ reminderEnabled: true, reminderMinutesBefore: Number(value) })
+                  }
+                />
+                {reminderAt !== null && (
+                  <p className='text-muted-foreground text-xs'>
+                    Will remind at {formatTime(reminderAt)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0'
+                onClick={() => updateDraft({ hasReminderOverride: true })}
+              >
+                + Customize reminder
+              </Button>
+            )}
             {draft.hasVenueHours ? (
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
@@ -558,39 +635,70 @@ function EventFormModal({
                 + Add business hours
               </Button>
             )}
-            <div className='space-y-1.5'>
-              <Label>Attendees</Label>
-              <Select
-                options={attendeeTargetOptions}
-                value={draft.attendeeTargetType}
-                onChange={(value) =>
-                  updateDraft({ attendeeTargetType: value as EventAttendeeTargetType })
-                }
-              />
-            </div>
-            {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && (
-              <div className='space-y-2'>
-                {memberOptions.map((member) => (
-                  <label
-                    key={member.value}
-                    className='flex items-center gap-2 text-sm'
-                  >
-                    <Checkbox
-                      checked={draft.assignedMemberIds.includes(member.value)}
-                      onCheckedChange={(checked) =>
+            {draft.hasAttendeeOverride ? (
+              <>
+                <div className='space-y-1.5'>
+                  <div className='flex items-center justify-between'>
+                    <Label>Attendees</Label>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      aria-label='Reset attendees'
+                      onClick={() =>
                         updateDraft({
-                          assignedMemberIds: checked
-                            ? [...draft.assignedMemberIds, member.value]
-                            : draft.assignedMemberIds.filter(
-                                (uid) => uid !== member.value,
-                              ),
+                          hasAttendeeOverride: false,
+                          attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+                          assignedMemberIds: [],
                         })
                       }
-                    />
-                    {member.label}
-                  </label>
-                ))}
-              </div>
+                    >
+                      <X className='h-4 w-4' />
+                    </Button>
+                  </div>
+                  <Select
+                    options={attendeeTargetOptions}
+                    value={draft.attendeeTargetType}
+                    onChange={(value) =>
+                      updateDraft({ attendeeTargetType: value as EventAttendeeTargetType })
+                    }
+                  />
+                </div>
+                {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && (
+                  <div className='space-y-2'>
+                    {memberOptions.map((member) => (
+                      <label
+                        key={member.value}
+                        className='flex items-center gap-2 text-sm'
+                      >
+                        <Checkbox
+                          checked={draft.assignedMemberIds.includes(member.value)}
+                          onCheckedChange={(checked) =>
+                            updateDraft({
+                              assignedMemberIds: checked
+                                ? [...draft.assignedMemberIds, member.value]
+                                : draft.assignedMemberIds.filter(
+                                    (uid) => uid !== member.value,
+                                  ),
+                            })
+                          }
+                        />
+                        {member.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0'
+                onClick={() => updateDraft({ hasAttendeeOverride: true })}
+              >
+                + Limit attendees
+              </Button>
             )}
             <ModalFooterActions
               leftActions={
@@ -616,11 +724,7 @@ function EventFormModal({
                   loading={isSubmitting}
                   onClick={() => void handleSubmit()}
                 >
-                  {isSubmitting
-                    ? 'Saving…'
-                    : event
-                      ? 'Save changes'
-                      : 'Add event'}
+                  {isSubmitting ? 'Saving…' : event ? 'Save' : 'Add'}
                 </Button>
               }
             />

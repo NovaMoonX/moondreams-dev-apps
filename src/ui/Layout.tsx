@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { APP_REGISTRY_PATH_MAP } from '@/lib/app';
+import { APP_REGISTRY_PATH_MAP, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { useAuth } from '@hooks/useAuth';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
@@ -12,7 +12,6 @@ import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
 import ThemeToggle from '@ui/ThemeToggle';
-import VersionBadge from '@ui/VersionBadge';
 
 function LocationSync() {
   const navigate = useNavigate();
@@ -84,6 +83,10 @@ function Layout() {
   const isBannerVisible = networkStatus !== null;
   useReminderToasts();
 
+  useEffect(() => {
+    console.log(`MoonDreams Dev Apps v${SITE_VERSION}`);
+  }, []);
+
   return (
     <div className='transition-colors duration-200'>
       <LocationSync />
@@ -112,8 +115,6 @@ function Layout() {
       </div>
 
       <Outlet />
-
-      <VersionBadge />
     </div>
   );
 }

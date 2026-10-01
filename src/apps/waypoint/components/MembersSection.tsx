@@ -16,6 +16,7 @@ import {
   removeMember,
 } from '@apps/waypoint/store/actions/membershipActions';
 import MemberRoleBadge from './MemberRoleBadge';
+import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
 import PendingMembersPanel from './PendingMembersPanel';
@@ -122,7 +123,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   return (
     <div className='space-y-6 pt-4'>
       <section className='space-y-3'>
-        <h2 className='text-xl font-semibold'>Members</h2>
+        <SectionHeader title='Members' />
         <ul className='divide-border divide-y'>
           {memberIds.map((memberId) => {
             const member = members[memberId];

@@ -1,11 +1,14 @@
 import type { RootState } from '@/store';
+import { getEndOfLocalDay } from '@/utils/dateInputUtils';
 import {
   getPerPersonMultiplier,
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
 import type {
+  Announcement,
   EventStatus,
+  EventSuggestion,
   Stay,
   TimelineEvent,
   TripExpense,
@@ -148,16 +151,75 @@ export const selectActiveStaysForDay =
     );
   };
 
+export const selectEventSuggestionsForEvent =
+  (eventId: string) => (state: RootState): EventSuggestion[] =>
+    state.waypoint.eventSuggestions.items.filter((suggestion) => suggestion.eventId === eventId);
+
+export const selectLiveAnnouncements =
+  (uid: string, now: number) => (state: RootState): Announcement[] =>
+    state.waypoint.announcements.items
+      .filter(
+        (announcement) =>
+          (announcement.expiresAt === null || announcement.expiresAt > now) &&
+          !(uid in announcement.dismissedBy),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt);
+
 export const selectEventsByDay =
   (dayIndex: number) => (state: RootState) =>
     state.waypoint.events.items.filter((event) => event.dayIndex === dayIndex);
 
-/** Event Active Status Machine: UPCOMING -> now >= startAt -> ACTIVE -> now >= endAt -> COMPLETED. An event without an endAt stays ACTIVE once started. */
+/** Timestamp of an event's most recent post-trip-start activity (creation or a tracked
+ * field edit), or 0 if it has none — `changeHistory` entries are only ever appended while
+ * the trip is active, and `createdAt >= trip.startDate` can only be true if the trip had
+ * already started at creation time, so both checks are naturally already "post-start." */
+export function getEventLastActivityAt(event: TimelineEvent, trip: TripSpace) {
+  const createdWhileLive = event.createdAt >= trip.startDate ? event.createdAt : 0;
+  // Events and stays saved before activity tracking existed have no history or seenBy yet.
+  const lastChangeAt = (event.changeHistory ?? []).at(-1)?.latestChangedAt ?? 0;
+  const archivedAt = event.archivedAt ?? 0;
+  return Math.max(createdWhileLive, lastChangeAt, archivedAt);
+}
+
+export function isEventActivityUnseen(event: TimelineEvent, trip: TripSpace, uid: string) {
+  return getEventLastActivityAt(event, trip) > (event.seenBy?.[uid] ?? 0);
+}
+
+// Archiving is its own activity worth surfacing, so an archived event isn't excluded
+// outright — it only drops out once its latest activity (including the archive) is seen.
+export const selectUnseenActivityEvents =
+  (trip: TripSpace, uid: string) => (state: RootState): TimelineEvent[] =>
+    state.waypoint.events.items
+      .filter((event) => isEventActivityUnseen(event, trip, uid))
+      .sort((a, b) => getEventLastActivityAt(b, trip) - getEventLastActivityAt(a, trip));
+
+/** Same idea as `getEventLastActivityAt`, for stays — a stay has no archive concept, so
+ * only its creation and tracked-field edits count as activity. */
+export function getStayLastActivityAt(stay: Stay, trip: TripSpace) {
+  const createdWhileLive = stay.createdAt >= trip.startDate ? stay.createdAt : 0;
+  const lastChangeAt = (stay.changeHistory ?? []).at(-1)?.latestChangedAt ?? 0;
+  return Math.max(createdWhileLive, lastChangeAt);
+}
+
+export function isStayActivityUnseen(stay: Stay, trip: TripSpace, uid: string) {
+  return getStayLastActivityAt(stay, trip) > (stay.seenBy?.[uid] ?? 0);
+}
+
+export const selectUnseenActivityStays =
+  (trip: TripSpace, uid: string) => (state: RootState): Stay[] =>
+    state.waypoint.stays.items
+      .filter((stay) => isStayActivityUnseen(stay, trip, uid))
+      .sort((a, b) => getStayLastActivityAt(b, trip) - getStayLastActivityAt(a, trip));
+
+/** Event Active Status Machine: UPCOMING -> now >= startAt -> ACTIVE -> now >= endAt -> COMPLETED. An
+ * event without an endAt implicitly ends at the end of its own local calendar day, so it doesn't stay
+ * ACTIVE forever (and doesn't resurface as Active Now once a later event on the same day has finished). */
 export function getEventStatus(event: TimelineEvent, now: number): EventStatus {
   if (now < event.startAt) {
     return 'UPCOMING';
   }
-  if (event.endAt !== null && now >= event.endAt) {
+  const impliedEndAt = event.endAt ?? getEndOfLocalDay(event.startAt);
+  if (now >= impliedEndAt) {
     return 'COMPLETED';
   }
   return 'ACTIVE';

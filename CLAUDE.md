@@ -18,6 +18,7 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - **Date-only vs. instant.** A date picked with no time (`fromDateInputValue`) is UTC midnight: display it with `formatDateUTC`/`getDayLabel`, never `formatDate`/`formatDateTime`/local getters, and treat a date-only end date as covering its whole day (`endDate + 1 day`) when comparing an instant against it. An instant (`startAt`, `createdAt`) displays in local time. Full rule in `copilot-instructions.md` ("Know which of the two kinds of time value a field is").
 - **Copy is product-forward**: warm, friendly user-facing text (subtext, empty states, descriptions), not spec-literal.
 - **Dreamer UI first.** No raw `<button>`/`<input>`/`<select>`/`<textarea>`. Use `AppToggle` (`@/components/AppToggle`), never Dreamer UI's raw `Toggle`. Use a toggle for anything that takes effect immediately (live filter, "show archived"); use `Checkbox` only for form-staged values and to-do-style completion marks.
+- **A toggled icon-button state (liked, upvoted, saved, bookmarked) is shown by filling the icon, not by switching the button's `variant`.** Keep the button on one neutral `variant` (usually `tertiary`) and conditionally add `fill-current` plus a matching `text-*` color class to the icon itself, e.g. `className={join('h-3.5 w-3.5', isUpvoted && 'fill-current text-primary')}`. Reference: the upvote button in `EventSuggestionsList.tsx`.
 
 ## Forms, modals, and CRUD conventions
 
@@ -36,7 +37,12 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - **Request/response calls go through TanStack Query** (`queryOptions` factory in `src/lib/<feature>/<feature>Queries.ts` or `src/apps/<app>/queries/<resource>Queries.ts`). Key includes every param that changes the result and nothing that doesn't; `staleTime` fits how often the data changes. Writes and non-idempotent calls stay uncached.
 - **`meta: { persist: true }` must earn its place.** Remove it from any query whose `queryFn` reads Firestore (Firestore's own cache already persists it) or returns secrets, tokens, or key material. Keep it on safe third-party/worker results so they work offline.
 - **`useAppSelector` that builds a new array/object** (`.filter`, `.map`, spread, object literal, `[]` fallback) must pass `shallowEqual` from `react-redux` or use a `createSelector` selector. A selector that returns an existing slice or `.find(...) ?? null` is fine.
-- **Read-modify-write of a shared field** (a `members` map, a counter) happens inside one `runTransaction`, reading via `transaction.get()` — never a Redux-cached read followed by a separate write. Thunks that only assign caller-supplied values to disjoint scalar fields don't need one. Reference: Waypoint `membershipActions.ts`.
+- **Pick the atomic write that fits — never write a cached document back whole.** Anything another user can change while a modal is open (`seenBy`/`dismissedBy` maps, vote or history arrays, `members`, a paid-status map, `isArchived`) is a concurrency hazard. Full rules in `copilot-instructions.md` ("Atomic writes"); the short form:
+  - **Append/remove on an array** (`changeHistory`, `upvotedBy`) → `arrayUnion`/`arrayRemove`.
+  - **One member's own key in a map** → `runTransaction` (read via `transaction.get`) or a dotted-path `updateDoc`.
+  - **Derived from the prior value, or must hold across several documents** (role changes, approving a suggestion, a counter) → one `runTransaction` that re-reads everything it depends on and aborts with a readable message if the world changed. Network side effects (reminders, uploads) stay outside it, with cleanup if it fails.
+  - **An edit form's save** → `updateDoc` with only the fields the form owns, never `setDoc` of the cached object: that silently overwrites a concurrent vote, seen-mark, or archive. Reference: `updateEvent`, `updateStay`, `markExpensePaid`.
+  - A `writeBatch` is for independent writes with no reads. Thunks that only assign caller-supplied values to disjoint scalar fields need none of this. Reference: Waypoint `membershipActions.ts`.
 
 ## Firestore and Storage rules
 
@@ -45,6 +51,9 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - Never add a global `match /{path=**}/X` rule for something scoped under an app path; prefer a body check (`resource.data.householdId == householdId`).
 - Repeated assertions go in helper functions. Never put a self-referential `get()`/`exists()` in a collection's own `allow read`; use `resource.data`. Split OR-ed read predicates into separate `allow read` statements.
 - Denials and atomicity are verified against the emulator (e.g. a raw REST or client-SDK write), not just by the absence of a UI button.
+- **Every PR that adds/renames a field, changes who may write one, moves a path, or adds a collection updates `firestore.rules` (and `storage.rules`, indexes) in the same PR, and says so in the PR body.** Before finishing, grep the diff for each touched field and permission and confirm a rule covers it; a rule you didn't need to change is a conclusion to state, not assume.
+- **Verify rules directly against the emulator before the PR is done** — sign in as each role through the auth emulator and hit Firestore's REST API (`Bearer owner` seeds fixtures): one allowed write and one denied write per role-sensitive rule you touched, including the "editor/non-member must be denied" side. Rule changes also re-run every pre-existing rule on the same collection.
+- **Rules must tolerate documents written before a field existed.** On update paths read new fields with `resource.data.get('field', default)`, never `resource.data.field`; a legacy document may be backfilled only with the field's empty value (`{}`/`[]`/`null`), never arbitrary content.
 
 ## Cloud Functions
 
@@ -63,6 +72,7 @@ Migrating between them means moving the collection path and updating every actio
 
 - **Typecheck with `npx tsc -b --force` (or `npm run build`)** — `tsc --noEmit -p .` checks nothing in this solution-style repo. Also run `npx eslint .`.
 - **Drive the change in a real browser** against the local Emulator Suite, signed in through the dev fixture switcher, with a throwaway Playwright script (delete it when done). A passing typecheck is not evidence a feature works. Also re-drive every pre-existing feature that touches a file you changed, and treat "the new feature works" and "nothing regressed" as separate checks.
+- **New work must be backwards compatible with data already in Firestore.** Existing documents will not have a new field, so: readers default it (`doc.field ?? []`, `?.`) instead of assuming it exists; edit actions backfill missing keys alongside the write (see `getMissingEventFields`); rules accept the legacy shape. Prove it by writing a legacy-shaped document (the new keys deleted) through the emulator and driving every read and edit path over it in the browser — a page crash or a denied save on old data is a regression. Never normalize legacy documents in a listener if an action detects missing keys to backfill them.
 - **Anything that shows or compares a date runs in a timezone behind UTC** — create the Playwright page with `timezoneId: 'America/Los_Angeles'`. Cloud sandboxes and CI run in UTC, where a date-only value formatted in local time looks correct; the off-by-one only appears west of UTC. Check that the displayed date matches the date picker's value.
 - **Leave the dev server and emulators running** after browser validation; finish with `npm run seed:reset` so data is back to the seeded baseline.
 - **Update the mini-app seed** (`scripts/seeds/<app>.ts`) when a feature adds an entity or state worth seeding, including its `firestoreDocuments` count.

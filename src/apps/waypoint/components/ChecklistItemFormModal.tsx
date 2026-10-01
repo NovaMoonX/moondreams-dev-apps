@@ -242,7 +242,7 @@ export default function ChecklistItemFormModal({
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete}
                 >
-                  {isSubmitting ? 'Saving…' : item ? 'Save changes' : 'Add item'}
+                  {isSubmitting ? 'Saving…' : item ? 'Save' : 'Add'}
                 </Button>
               </>
             }

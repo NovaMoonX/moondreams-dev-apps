@@ -42,7 +42,7 @@ export interface EditTripValues {
   coverImageRemoved: boolean;
   defaultCurrency: string | null;
   /** Only meaningful when the trip's dates are actually changing and it has
-   * dated items — see `EditTripModal`'s shift checkbox. */
+   * dated items — see `EditTripDatesModal`'s shift checkbox. */
   shiftDates: boolean;
 }
 
@@ -340,5 +340,31 @@ export const setSharedAlbumLink = createAsyncThunk<
     await batch.commit();
     dispatch(upsertTrip(updatedTrip));
     return updatedTrip;
+  },
+);
+
+interface DeleteTripInput {
+  uid: string;
+  trip: TripSpace;
+}
+
+export const deleteTrip = createAsyncThunk<string, DeleteTripInput, { rejectValue: string }>(
+  'waypoint/trips/delete',
+  async ({ uid, trip }, { rejectWithValue }) => {
+    if (trip.members[uid]?.role !== 'ADMIN') {
+      return rejectWithValue('Only trip admins can delete this trip.');
+    }
+
+    try {
+      const deleteTripCallable = httpsCallable<{ tripId: string }, { tripId: string }>(
+        functions,
+        'deleteTrip',
+      );
+      await deleteTripCallable({ tripId: trip.id });
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error, "We couldn't delete this trip. Please try again."));
+    }
+
+    return trip.id;
   },
 );

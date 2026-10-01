@@ -19,6 +19,8 @@ import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
+import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
@@ -30,6 +32,7 @@ import {
   createExpense,
   deleteExpense,
   markExpensePaid,
+  toggleExpenseRepaid,
   updateExpense,
   updateExpenseSplit,
 } from '@apps/waypoint/store/actions/expenseActions';
@@ -52,9 +55,10 @@ import {
 } from '@apps/waypoint/utils/expenseCategories';
 import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
-  computeDuesSummary,
+  computeEvenSplit,
+  computePairSettlements,
   getActiveSplitAmounts,
-  getDebtExpenses,
+  getExpenseTotalAmount,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
@@ -134,6 +138,49 @@ function formatTotal(min: number, max: number, currency: string) {
   });
   const minimum = formatter.format(min);
   return min === max ? minimum : `${minimum}-${formatter.format(max)}`;
+}
+
+interface SplitShare {
+  uid: string;
+  amountLabel: string;
+  isPaid: boolean;
+}
+
+interface SplitBreakdown {
+  /** Set only for an even split — one shared "$X per person" line instead of naming everyone. */
+  perPersonLabel: string | null;
+  /** Every debtor (payer excluded — they don't owe themselves). */
+  shares: SplitShare[];
+}
+
+function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBreakdown | null {
+  const splitMemberIds = getSplitMemberIds(expense, memberIds);
+  const total = getExpenseTotalAmount(expense, memberIds);
+  if (expense.status !== 'PAID' || splitMemberIds.length <= 1 || total === null) {
+    return null;
+  }
+
+  const customAmounts = getActiveSplitAmounts(expense, memberIds);
+  const amounts = customAmounts ?? computeEvenSplit(splitMemberIds, total);
+  // A null payer means everyone already paid their own share directly — no one owes
+  // anyone, so there's nothing to mark repaid.
+  const shares =
+    expense.payerUid === null
+      ? []
+      : splitMemberIds
+          .filter((uid) => uid !== expense.payerUid)
+          .map((uid) => ({
+            uid,
+            amountLabel: formatTotal(amounts[uid] ?? 0, amounts[uid] ?? 0, expense.currency),
+            isPaid: (expense.paidMemberStatus ?? {})[uid]?.isPaid ?? false,
+          }));
+
+  const perPersonLabel =
+    customAmounts === null
+      ? `${formatTotal(amounts[splitMemberIds[0]] ?? 0, amounts[splitMemberIds[0]] ?? 0, expense.currency)} per person`
+      : null;
+
+  return { perPersonLabel, shares };
 }
 
 interface ExpenseCluster {
@@ -262,7 +309,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     { label: 'Expected', total: toTotalsView(totals.expected) },
     { label: 'Total', total: toTotalsView(totals.total) },
   ];
-  const duesSummary = computeDuesSummary(expenses, memberIds);
+  const pairSettlements = computePairSettlements(expenses, memberIds);
 
   const sortedExpenses =
     sortBy === 'day'
@@ -391,6 +438,37 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         : 'Not yet paid';
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
+    const splitBreakdown = getSplitBreakdown(expense, memberIds);
+    const repaidNames = (splitBreakdown?.shares ?? [])
+      .filter((share) => share.isPaid)
+      .map((share) => memberLabel(share.uid));
+    const renderRepaidControl = (share: SplitShare | undefined) => {
+      if (!share) {
+        return null;
+      }
+
+      const toggle = () =>
+        void dispatch(
+          toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+        );
+
+      if (!share.isPaid) {
+        return (
+          <Button type='button' variant='link' className='shrink-0 text-xs' onClick={toggle}>
+            Mark as repaid
+          </Button>
+        );
+      }
+
+      return (
+        <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
+          <span className='text-muted-foreground text-xs'>You repaid this</span>
+          <Button type='button' variant='link' className='text-xs' onClick={toggle}>
+            Undo
+          </Button>
+        </span>
+      );
+    };
 
     return (
       <li
@@ -414,15 +492,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
-        <div className='col-start-1 whitespace-nowrap'>
-          <p className='font-medium'>
+        <div className='col-span-2'>
+          <p className='whitespace-nowrap font-medium'>
             {formatTotal(displayRange.min, displayRange.max, expense.currency)}
             {expense.isPerPerson && (
               <span className='text-muted-foreground text-sm font-normal'> per person</span>
             )}
           </p>
           {expense.isPerPerson && (
-            <p className='text-muted-foreground text-xs'>
+            <p className='text-muted-foreground whitespace-nowrap text-xs'>
               {formatTotal(
                 scaleAmount(displayRange.min, multiplier),
                 scaleAmount(displayRange.max, multiplier),
@@ -430,6 +508,37 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               )}{' '}
               total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
             </p>
+          )}
+          {splitBreakdown && (
+            <div className='mt-0.5 space-y-1'>
+              {splitBreakdown.perPersonLabel !== null ? (
+                <div className='flex items-baseline justify-end gap-2'>
+                  {/* Redundant with the "total for N people" line above for a per-person rate. */}
+                  {!expense.isPerPerson && (
+                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                      {splitBreakdown.perPersonLabel}
+                    </p>
+                  )}
+                  {renderRepaidControl(
+                    splitBreakdown.shares.find((share) => share.uid === currentUserId),
+                  )}
+                </div>
+              ) : (
+                splitBreakdown.shares.map((share) => (
+                  <div key={share.uid} className='flex items-baseline justify-end gap-2'>
+                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                      {memberLabel(share.uid)} {share.amountLabel}
+                    </p>
+                    {share.uid === currentUserId && renderRepaidControl(share)}
+                  </div>
+                ))
+              )}
+              {expense.payerUid === currentUserId && repaidNames.length > 0 && (
+                <p className='text-muted-foreground text-right text-xs'>
+                  Repaid so far: {repaidNames.join(', ')}
+                </p>
+              )}
+            </div>
           )}
         </div>
         {canAddExpenses && (
@@ -499,7 +608,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
               </p>
             </div>
-            <p className='font-medium whitespace-nowrap'>
+            <p className='pr-2 font-medium whitespace-nowrap'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
             </p>
           </div>
@@ -551,73 +660,73 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   return (
     <section className='space-y-5 pt-4'>
-      <div className='flex items-center justify-between gap-3'>
-        <h2 className='text-xl font-semibold'>Expenses</h2>
-        {canAddExpenses && (
-          <Button
-            onClick={() => {
-              setEditingExpense(null);
-              setIsModalOpen(true);
-            }}
-          >
-            Add expense
-          </Button>
-        )}
-      </div>
-      <div className='grid gap-3 sm:grid-cols-3'>
-        {totalCards.map(({ label, total }) => (
-          <div key={label} className='border-border rounded-lg border p-3'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+      <SectionHeader
+        title='Expenses'
+        action={
+          canAddExpenses && (
+            <Button
+              onClick={() => {
+                setEditingExpense(null);
+                setIsModalOpen(true);
+              }}
+            >
+              Add expense
+            </Button>
+          )
+        }
+      />
+      <div className='space-y-3'>
+        <div className='border-border flex w-fit items-center gap-1 rounded-md border p-0.5'>
+          {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
+            <Button
+              key={option.value}
+              type='button'
+              variant={totalsView === option.value ? 'primary' : 'secondary'}
+              size='sm'
+              aria-pressed={totalsView === option.value}
+              className={join(
+                'h-6 px-2 text-xs',
+                totalsView !== option.value && 'bg-transparent',
+              )}
+              onClick={() => setTotalsView(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+          {totalCards.map(({ label, total }) => (
+            <div
+              key={label}
+              className={join(
+                'border-border rounded-lg border p-3 text-center sm:text-left',
+                label === 'Total' && 'col-span-2 sm:col-span-1',
+              )}
+            >
               <p className='text-muted-foreground text-sm'>{label}</p>
-              <div className='border-border flex items-center gap-1 rounded-md border p-0.5'>
-                {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
-                  <Button
-                    key={option.value}
-                    type='button'
-                    variant={totalsView === option.value ? 'primary' : 'secondary'}
-                    size='sm'
-                    aria-pressed={totalsView === option.value}
-                    className={join(
-                      'h-6 px-2 text-xs',
-                      totalsView !== option.value && 'bg-transparent',
-                    )}
-                    onClick={() => setTotalsView(option.value)}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
+              <p className='mt-1 text-lg font-semibold'>
+                {formatTotal(total.min, total.max, currency)}
+              </p>
             </div>
-            <p className='mt-1 text-lg font-semibold'>
-              {formatTotal(total.min, total.max, currency)}
-            </p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       <div className='border-border rounded-lg border p-3'>
         <p className='text-sm font-medium'>Dues summary</p>
-        {duesSummary.debts.length === 0 ? (
+        {pairSettlements.length === 0 ? (
           <p className='text-muted-foreground mt-1 text-sm'>
             Everyone&apos;s settled up.
           </p>
         ) : (
-          <ul className='mt-2 space-y-1'>
-            {duesSummary.debts.map((debt) => {
-              const debtItems = getDebtExpenses(debt, expenses, memberIds)
-                .map((expense) => expense.title)
-                .join(', ');
-
-              return (
-                <li key={`${debt.from}-${debt.to}`} className='text-sm'>
-                  {memberLabel(debt.from)} owes {memberLabel(debt.to)}{' '}
-                  <span className='font-medium'>
-                    {formatTotal(debt.amount, debt.amount, currency)}
-                  </span>
-                  {debtItems && <span className='text-muted-foreground'> ({debtItems})</span>}
-                </li>
-              );
-            })}
-          </ul>
+          <DuesSummary
+            settlements={pairSettlements}
+            currentUserId={currentUserId}
+            memberLabel={memberLabel}
+            formatAmount={(amount) => formatTotal(amount, amount, currency)}
+            onToggleRepaid={(expenseId) =>
+              void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+            }
+          />
         )}
       </div>
       <div className='flex flex-wrap items-center gap-2'>

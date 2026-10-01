@@ -475,8 +475,8 @@ function ExpenseFormModal({
                         ? 'Saving…'
                         : 'Adding…'
                       : isEditing
-                        ? 'Save changes'
-                        : 'Add expense'}
+                        ? 'Save'
+                        : 'Add'}
                   </Button>
                 </>
               }

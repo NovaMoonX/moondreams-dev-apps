@@ -49,6 +49,11 @@ export function isTripActive(trip: TripSpace, now = Date.now()) {
   return now >= trip.startDate && now < trip.endDate;
 }
 
+/** True once the trip has started, whether it's still ongoing or already over. */
+export function hasTripStarted(trip: TripSpace, now = Date.now()) {
+  return now >= trip.startDate;
+}
+
 /** A date-shift Cloud Function is re-dating this trip's events/stays/expenses/
  * checklist — everything about the trip is read-only until it finishes. */
 export function isTripDateShiftLocked(trip: TripSpace) {
@@ -56,11 +61,28 @@ export function isTripDateShiftLocked(trip: TripSpace) {
 }
 
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
- * Admin-only while the trip is active — creating a new one stays open to Editors throughout. */
+ * Admin-only while the trip is active — creating a new one follows `canCreateItem` instead. */
 export function canEditExistingItem(trip: TripSpace, uid: string) {
   if (isTripDateShiftLocked(trip)) {
     return false;
   }
 
   return isTripActive(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
+}
+
+/** Archiving or restoring an event is Admin-only whatever the trip's phase, since approving
+ * an event suggestion archives its source event even before the trip starts. */
+export function canArchiveEvent(trip: TripSpace, uid: string) {
+  return !isTripDateShiftLocked(trip) && isTripAdmin(trip, uid);
+}
+
+/** Creating a brand-new event/stay stays open to Editors before the trip starts, but
+ * narrows to Admin-only once it has — an already-underway plan needs one steward, same
+ * as editing an existing item. */
+export function canCreateItem(trip: TripSpace, uid: string) {
+  if (isTripDateShiftLocked(trip)) {
+    return false;
+  }
+
+  return hasTripStarted(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }

@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -218,24 +218,63 @@ export const deleteExpense = createAsyncThunk<
 interface MarkExpensePaidInput {
   expense: TripExpense;
   payerUid: string | null;
+  /** Only meaningful when keeping the expense as an estimated range — a paid-amount override
+   * shown alongside the range instead of replacing it. */
   paidAmount: number | null;
+  /** Only meaningful for a range expense — converts it to a known-amount expense, clearing
+   * amountMin/amountMax. This is the default path from the mark-paid modal. */
+  knownAmount: number | null;
 }
 
 export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
-  async ({ expense, payerUid, paidAmount }) => {
-    const updatedExpense: TripExpense = {
-      ...expense,
-      status: 'PAID',
+  async ({ expense, payerUid, paidAmount, knownAmount }) => {
+    // Only the fields this action owns are written — a whole-document write would clobber
+    // a debtor's concurrent repaid toggle held in `paidMemberStatus`.
+    const changes = {
+      status: 'PAID' as const,
       payerUid,
-      paidAmount: expense.amount === null ? paidAmount : null,
+      amount: knownAmount ?? expense.amount,
+      amountMin: knownAmount !== null ? null : expense.amountMin,
+      amountMax: knownAmount !== null ? null : expense.amountMax,
+      paidAmount: knownAmount === null && expense.amount === null ? paidAmount : null,
       lastEditedAt: Date.now(),
     };
 
-    await setDoc(
+    await updateDoc(
       doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
-      updatedExpense,
+      changes,
     );
+    const updatedExpense: TripExpense = { ...expense, ...changes };
     return updatedExpense;
+  },
+);
+
+interface ToggleExpenseRepaidInput {
+  uid: string;
+  tripId: string;
+  expenseId: string;
+}
+
+// Each debtor toggles only their own key, so — like markEventSeen — this must
+// read-modify-write inside a transaction to avoid clobbering a concurrent toggle.
+export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInput>(
+  'waypoint/expenses/toggleRepaid',
+  async ({ uid, tripId, expenseId }) => {
+    const expenseRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        return;
+      }
+      const paidMemberStatus = (snapshot.data().paidMemberStatus ?? {}) as TripExpense['paidMemberStatus'];
+      const wasPaid = paidMemberStatus[uid]?.isPaid ?? false;
+      transaction.update(expenseRef, {
+        paidMemberStatus: {
+          ...paidMemberStatus,
+          [uid]: { isPaid: !wasPaid, paidAt: wasPaid ? null : Date.now() },
+        },
+      });
+    });
   },
 );

@@ -1,8 +1,10 @@
 import { useRef, useState, type PointerEvent } from 'react';
 
-import type { ToastData } from '@moondreamsdev/dreamer-ui/components';
+import { Button, type ToastData } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { X } from 'lucide-react';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { TOAST_APP_LABELS, TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80;
@@ -21,6 +23,7 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
   const style = TOAST_TYPE_STYLES[type ?? 'info'] ?? TOAST_TYPE_STYLES.info;
   const isReminder = type === 'reminder';
   const appLabel = TOAST_APP_LABELS.get(id);
+  const isSmallScreen = useMediaQuery().isBelow('sm');
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -72,6 +75,7 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
         'relative flex touch-none items-start gap-3 rounded-lg border p-4 shadow-lg select-none',
         !isDragging && 'transition-transform duration-200 ease-out',
         isReminder && 'cursor-pointer',
+        !isSmallScreen && 'pr-8',
         style.className,
       )}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
@@ -86,6 +90,22 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
         <div className='text-sm leading-5 font-medium'>{title}</div>
         {description && <div className='mt-1 text-sm leading-5 opacity-90'>{description}</div>}
       </div>
+      {!isSmallScreen && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='icon'
+          aria-label='Dismiss'
+          className='absolute top-1.5 right-1.5 h-6 w-6 bg-transparent! opacity-60 hover:opacity-100'
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove?.(id);
+          }}
+        >
+          <X className='h-3.5 w-3.5' />
+        </Button>
+      )}
     </div>
   );
 }
