@@ -13,6 +13,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import DismissIconButton from '@apps/waypoint/components/DismissIconButton';
 import {
   deleteAnnouncement,
   dismissAnnouncement,
@@ -46,15 +47,25 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     return null;
   }
 
+  const dismissOneAnnouncement = (announcement: Announcement) => {
+    void dispatch(dismissAnnouncement({ uid: currentUserId, trip, announcementId: announcement.id }));
+  };
+
   const dismissEvent = (event: TimelineEvent) => {
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
   };
 
-  const dismissAll = () => {
-    announcements.forEach((announcement) => {
-      void dispatch(dismissAnnouncement({ uid: currentUserId, trip, announcementId: announcement.id }));
-    });
+  const dismissAllAnnouncements = () => {
+    announcements.forEach(dismissOneAnnouncement);
+  };
+
+  const dismissAllUpdates = () => {
     unseenEvents.forEach(dismissEvent);
+  };
+
+  const dismissAll = () => {
+    dismissAllAnnouncements();
+    dismissAllUpdates();
     setIsOpen(false);
   };
 
@@ -94,36 +105,65 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     </Button>
   );
 
+  const sectionHeading = (label: string, onDismissSection: () => void) => (
+    <div className='flex items-center justify-between'>
+      <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>{label}</h3>
+      <Button type='button' variant='link' size='sm' className='h-auto p-0 text-xs' onClick={onDismissSection}>
+        Dismiss
+      </Button>
+    </div>
+  );
+
   const content = (
-    <div className='space-y-3'>
-      <div className='max-h-[60vh] space-y-3 overflow-y-auto'>
-        {announcements.map((announcement) => (
-          <div key={announcement.id} className='border-border bg-card space-y-2 rounded-lg border p-3'>
-            <div className='flex items-start justify-between gap-2'>
-              <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity]}>
-                {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
-              </Badge>
-              {isAdmin && <DeleteIconButton onClick={() => void handleDeleteAnnouncement(announcement)} />}
+    <div className='space-y-4'>
+      <div className='max-h-[60vh] space-y-4 overflow-y-auto'>
+        {announcements.length > 0 && (
+          <div className='space-y-2'>
+            {sectionHeading('Announcements', dismissAllAnnouncements)}
+            <div className='space-y-3'>
+              {announcements.map((announcement) => (
+                <div key={announcement.id} className='border-border bg-card space-y-2 rounded-lg border p-3'>
+                  <div className='flex items-start justify-between gap-2'>
+                    <Badge variant='base' className={ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity]}>
+                      {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
+                    </Badge>
+                    <div className='flex items-center gap-1'>
+                      {isAdmin && <DeleteIconButton onClick={() => void handleDeleteAnnouncement(announcement)} />}
+                      <DismissIconButton onClick={() => dismissOneAnnouncement(announcement)} />
+                    </div>
+                  </div>
+                  <p className='font-semibold'>{announcement.title}</p>
+                  <p className='text-sm whitespace-pre-line'>{announcement.body}</p>
+                </div>
+              ))}
             </div>
-            <p className='font-semibold'>{announcement.title}</p>
-            <p className='text-sm whitespace-pre-line'>{announcement.body}</p>
           </div>
-        ))}
-        {unseenEvents.map((event) => (
-          <div key={event.id} className='border-border bg-card space-y-1 rounded-lg border p-3'>
-            <p className='text-muted-foreground text-xs font-medium'>
-              {event.createdAt >= trip.startDate ? 'New' : 'Updated'} · {formatTime(event.startAt)}
-            </p>
-            <EventDetailLines
-              event={event}
-              showTitle
-              showNotes={false}
-              showChangeHistory={false}
-              canEdit={false}
-              onSaveNotes={async () => {}}
-            />
+        )}
+        {unseenEvents.length > 0 && (
+          <div className='space-y-2'>
+            {sectionHeading('Updates', dismissAllUpdates)}
+            <div className='space-y-3'>
+              {unseenEvents.map((event) => (
+                <div key={event.id} className='border-border bg-card space-y-1 rounded-lg border p-3'>
+                  <div className='flex items-start justify-between gap-2'>
+                    <p className='text-muted-foreground text-xs font-medium'>
+                      {event.createdAt >= trip.startDate ? 'New' : 'Updated'} · {formatTime(event.startAt)}
+                    </p>
+                    <DismissIconButton onClick={() => dismissEvent(event)} />
+                  </div>
+                  <EventDetailLines
+                    event={event}
+                    showTitle
+                    showNotes={false}
+                    showChangeHistory={false}
+                    canEdit={false}
+                    onSaveNotes={async () => {}}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+        )}
       </div>
       <div className='flex justify-end'>
         <Button type='button' size='sm' onClick={dismissAll}>
@@ -137,7 +177,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     return (
       <>
         {trigger}
-        <Drawer isOpen={isOpen} onClose={() => setIsOpen(false)} title='Notifications'>
+        <Drawer isOpen={isOpen} onClose={() => setIsOpen(false)} title="What's new">
           {content}
         </Drawer>
       </>
@@ -151,9 +191,12 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
       onOpenChange={setIsOpen}
       placement='bottom'
       alignment='end'
-      className='w-80'
+      className='w-80 p-3'
     >
-      {content}
+      <div className='space-y-3'>
+        <h2 className='font-semibold'>What&apos;s new</h2>
+        {content}
+      </div>
     </Popover>
   );
 }
