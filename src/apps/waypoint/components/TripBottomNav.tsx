@@ -28,9 +28,7 @@ function TripBottomNav({ trip, now, value, showProgress, onChange }: TripBottomN
       aria-label='Trip sections'
       className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-20 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur'
     >
-      {showProgress && (
-        <TripProgressBar trip={trip} now={now} className='absolute inset-x-0 top-0 h-0.5' />
-      )}
+      {showProgress && <TripProgressBar trip={trip} now={now} />}
       <ul className='mx-auto grid max-w-4xl grid-cols-3'>
         {NAV_ITEMS.map((item) => {
           const isSelected = item.matches.includes(value);
