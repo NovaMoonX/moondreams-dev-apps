@@ -1,79 +1,52 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { BedDouble, ChevronRight, Users } from 'lucide-react';
+import { BedDouble, ListChecks, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { useAppSelector } from '@/store';
 
-import { selectStays } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+
+export type TripEntryTab = 'stays' | 'members' | 'checklist';
 
 interface TripEntryPointsProps {
   trip: TripSpace;
   currentUserId: string;
-  onOpen: (tab: 'stays' | 'members') => void;
-}
-
-function pluralize(count: number, noun: string) {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+  onOpen: (tab: TripEntryTab) => void;
 }
 
 function TripEntryPoints({ trip, currentUserId, onOpen }: TripEntryPointsProps) {
-  const stayCount = useAppSelector(selectStays).length;
   const pendingCount = useAppSelector((state) =>
     isTripAdmin(trip, currentUserId)
       ? state.waypoint.pendingRequests.tripRequests.filter((request) => request.tripId === trip.id).length
       : 0,
   );
-  const memberCount = Object.keys(trip.members).length;
 
-  const rows: { tab: 'stays' | 'members'; label: string; summary: string; icon: ReactNode; badge: number }[] = [
-    {
-      tab: 'stays',
-      label: 'Stays',
-      summary: stayCount === 0 ? 'Nothing booked yet' : pluralize(stayCount, 'stay'),
-      icon: <BedDouble className='h-5 w-5' />,
-      badge: 0,
-    },
-    {
-      tab: 'members',
-      label: 'Members',
-      summary: pendingCount > 0 ? `${pluralize(memberCount, 'member')} · ${pendingCount} waiting` : pluralize(memberCount, 'member'),
-      icon: <Users className='h-5 w-5' />,
-      badge: pendingCount,
-    },
+  const pills: { tab: TripEntryTab; label: string; icon: ReactNode; hasBadge: boolean }[] = [
+    { tab: 'stays', label: 'Stays', icon: <BedDouble className='h-4 w-4' />, hasBadge: false },
+    { tab: 'members', label: 'Members', icon: <Users className='h-4 w-4' />, hasBadge: pendingCount > 0 },
+    { tab: 'checklist', label: 'Checklist', icon: <ListChecks className='h-4 w-4' />, hasBadge: false },
   ];
 
   return (
-    <section className='space-y-1'>
-      <h3 className='text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase'>
-        Trip details
-      </h3>
-      <ul className='divide-border border-border divide-y rounded-xl border'>
-        {rows.map((row) => (
-          <li key={row.tab}>
-            <Button
-              type='button'
-              variant='tertiary'
-              onClick={() => onOpen(row.tab)}
-              className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left'
-            >
-              <span className='text-muted-foreground relative'>
-                {row.icon}
-                {row.badge > 0 && (
-                  <span className='bg-destructive absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full' />
-                )}
-              </span>
-              <span className='min-w-0 flex-1'>
-                <span className='block text-sm font-medium'>{row.label}</span>
-                <span className='text-muted-foreground block text-xs'>{row.summary}</span>
-              </span>
-              <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div className='flex flex-wrap gap-2'>
+      {pills.map((pill) => (
+        <Button
+          key={pill.tab}
+          type='button'
+          variant='secondary'
+          size='sm'
+          onClick={() => onOpen(pill.tab)}
+          className='relative gap-1.5 rounded-full px-3'
+        >
+          {pill.icon}
+          {pill.label}
+          {pill.hasBadge && (
+            <span className='bg-destructive absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full' />
+          )}
+        </Button>
+      ))}
+    </div>
   );
 }
 

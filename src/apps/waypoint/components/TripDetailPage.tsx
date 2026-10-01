@@ -48,6 +48,7 @@ import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
+import TripDetailsList from '@apps/waypoint/components/TripDetailsList';
 import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
@@ -95,6 +96,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const hasAppNav = isSmallScreen;
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
+  const isNestedScreen = hasAppNav && (sectionTab === 'stays' || sectionTab === 'members');
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
   const setSectionTab = (value: string) => {
@@ -350,8 +352,8 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             type='button'
             variant='link'
             className={join('px-0', (isActive || isSmallScreen) && 'h-auto p-0')}
-            aria-label='Back to My Trips'
-            onClick={onBack}
+            aria-label={isNestedScreen ? 'Back to Overview' : 'Back to My Trips'}
+            onClick={isNestedScreen ? () => setSectionTab('') : onBack}
           >
             <ChevronLeft className={isSmallScreen ? 'h-6 w-6' : undefined} />
             {!isSmallScreen && 'Back to My Trips'}
@@ -471,14 +473,8 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             </span>
           </div>
         )}
-        {hasAppNav && <hr className='border-border mt-5' />}
-        {showOverviewHud && (
-          <div className='mt-5 sm:mt-4'>
-            <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
-          </div>
-        )}
         {hasAppNav && sectionTab === '' && (
-          <div className='mt-5'>
+          <div className='mt-4'>
             <TripEntryPoints
               trip={trip}
               currentUserId={currentUserId}
@@ -486,16 +482,19 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             />
           </div>
         )}
-        {hasAppNav && (sectionTab === 'stays' || sectionTab === 'members') && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='-mb-4 h-auto p-0'
-            onClick={() => setSectionTab('')}
-          >
-            <ChevronLeft className='h-4 w-4' /> Overview
-          </Button>
+        {showOverviewHud && (
+          <div className='mt-5 sm:mt-4'>
+            <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
+          </div>
+        )}
+        {hasAppNav && sectionTab === '' && (
+          <div className='mt-5'>
+            <TripDetailsList
+              trip={trip}
+              currentUserId={currentUserId}
+              onOpen={(tab) => setSectionTab(tab)}
+            />
+          </div>
         )}
         {!hasAppNav && <hr className='border-border mt-4' />}
         <Tabs

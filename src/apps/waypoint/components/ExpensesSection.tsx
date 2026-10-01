@@ -676,41 +676,41 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )
         }
       />
-      <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
-        {totalCards.map(({ label, total }) => (
-          <div
-            key={label}
-            className={join(
-              'border-border rounded-lg border p-3',
-              label === 'Total' && 'col-span-2 sm:col-span-1',
-            )}
-          >
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+      <div className='space-y-3'>
+        <div className='border-border flex w-fit items-center gap-1 rounded-md border p-0.5'>
+          {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
+            <Button
+              key={option.value}
+              type='button'
+              variant={totalsView === option.value ? 'primary' : 'secondary'}
+              size='sm'
+              aria-pressed={totalsView === option.value}
+              className={join(
+                'h-6 px-2 text-xs',
+                totalsView !== option.value && 'bg-transparent',
+              )}
+              onClick={() => setTotalsView(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+          {totalCards.map(({ label, total }) => (
+            <div
+              key={label}
+              className={join(
+                'border-border rounded-lg border p-3 text-center sm:text-left',
+                label === 'Total' && 'col-span-2 sm:col-span-1',
+              )}
+            >
               <p className='text-muted-foreground text-sm'>{label}</p>
-              <div className='border-border flex items-center gap-1 rounded-md border p-0.5'>
-                {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
-                  <Button
-                    key={option.value}
-                    type='button'
-                    variant={totalsView === option.value ? 'primary' : 'secondary'}
-                    size='sm'
-                    aria-pressed={totalsView === option.value}
-                    className={join(
-                      'h-6 px-2 text-xs',
-                      totalsView !== option.value && 'bg-transparent',
-                    )}
-                    onClick={() => setTotalsView(option.value)}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
+              <p className='mt-1 text-lg font-semibold'>
+                {formatTotal(total.min, total.max, currency)}
+              </p>
             </div>
-            <p className='mt-1 text-lg font-semibold'>
-              {formatTotal(total.min, total.max, currency)}
-            </p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       <div className='border-border rounded-lg border p-3'>
         <p className='text-sm font-medium'>Dues summary</p>
