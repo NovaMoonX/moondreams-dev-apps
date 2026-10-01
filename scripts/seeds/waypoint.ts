@@ -11,6 +11,8 @@ const ACTIVE_TRIP_ID = 'seed-waypoint-trip-active';
 const INVITE_CODE = 'PNW2026';
 const ARCHIVED_INVITE_CODE = 'PNW2025';
 const ACTIVE_INVITE_CODE = 'ONTHEGO';
+const EVENING_TRIP_ID = 'seed-waypoint-trip-evening';
+const EVENING_INVITE_CODE = 'WINDDOWN';
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 
@@ -948,8 +950,94 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     createdAt: context.now,
   });
 
+  const eveningTripTitle = 'Skagit Valley Day Trip';
+  const eveningTripStart = startOfToday - DAY_MS;
+  const eveningTripRef = context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('trips')
+    .doc(EVENING_TRIP_ID);
+
+  await eveningTripRef.set({
+    id: EVENING_TRIP_ID,
+    title: eveningTripTitle,
+    coverImageUrl: null,
+    startDate: eveningTripStart,
+    endDate: startOfToday + 3 * DAY_MS,
+    defaultCurrency: null,
+    isArchived: false,
+    members: {
+      [alex.uid]: { uid: alex.uid, role: 'ADMIN', joinedAt },
+      [taylor.uid]: { uid: taylor.uid, role: 'EDITOR', joinedAt },
+    },
+    inviteCode: EVENING_INVITE_CODE,
+    sharedAlbumUrl: null,
+    sharedAlbumSetByUid: null,
+    sharedAlbumSetAt: null,
+    dateShiftStatus: 'IDLE',
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  await context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('inviteCodes')
+    .doc(EVENING_INVITE_CODE)
+    .set({ tripId: EVENING_TRIP_ID, title: eveningTripTitle });
+
+  // Every event today has already ended and the next one is tomorrow, so the Overview
+  // shows its "done for today" state whatever time the seed runs.
+  const eveningEvents = [
+    { id: 'evening-breakfast', type: 'DINING', title: 'Breakfast at the Calico Cupboard', place: 'Calico Cupboard Cafe', start: context.now - 9 * HOUR_MS, end: context.now - 8 * HOUR_MS },
+    { id: 'evening-tulips', type: 'ACTIVITY', title: 'Tulip fields walk', place: 'Roozengaarde', start: context.now - 7 * HOUR_MS, end: context.now - 4 * HOUR_MS },
+    { id: 'evening-dinner', type: 'DINING', title: 'Dinner in La Conner', place: 'La Conner Seafood & Prime Rib House', start: context.now - 3 * HOUR_MS, end: context.now - 90 * 60_000 },
+    { id: 'evening-whales', type: 'ACTIVITY', title: 'Morning whale watch', place: 'Anacortes Marina', start: startOfToday + DAY_MS + 9 * HOUR_MS, end: startOfToday + DAY_MS + 12 * HOUR_MS },
+  ] as const;
+
+  await Promise.all(
+    eveningEvents.map((event) => {
+      const dayIndex = Math.floor((event.start - eveningTripStart) / DAY_MS);
+      return eveningTripRef.collection('events').doc(event.id).set({
+        id: event.id,
+        tripId: EVENING_TRIP_ID,
+        eventType: event.type,
+        dayIndex,
+        endDayIndex: Math.floor((event.end - eveningTripStart) / DAY_MS),
+        title: event.title,
+        startAt: event.start,
+        endAt: event.end,
+        locationName: event.place,
+        address: null,
+        latitude: null,
+        longitude: null,
+        eventDetails: null,
+        notes: null,
+        attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+        assignedMemberIds: [],
+        venueOpenTime: null,
+        venueCloseTime: null,
+        changeHistory: [],
+        place: null,
+        linkUrl: null,
+        linkPreview: null,
+        reminderMinutesBefore: 20,
+        reminderEnabled: false,
+        reminderId: null,
+        isArchived: false,
+        archivedBy: null,
+        archivedAt: null,
+        seenBy: { [alex.uid]: context.now, [taylor.uid]: context.now },
+        createdBy: alex.uid,
+        createdAt: joinedAt,
+        lastEditedAt: joinedAt,
+      });
+    }),
+  );
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 34,
+    firestoreDocuments: 40,
   };
 }
