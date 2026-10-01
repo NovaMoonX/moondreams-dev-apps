@@ -317,6 +317,8 @@ function EventFormModal({
         reminderEnabled: draft.reminderEnabled,
         reminderId: event?.reminderId ?? null,
         isArchived: event?.isArchived ?? false,
+        archivedBy: event?.archivedBy ?? null,
+        archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
       });
       setStep(1);

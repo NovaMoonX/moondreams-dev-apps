@@ -176,17 +176,20 @@ export const selectEventsByDay =
 export function getEventLastActivityAt(event: TimelineEvent, trip: TripSpace) {
   const createdWhileLive = event.createdAt >= trip.startDate ? event.createdAt : 0;
   const lastChangeAt = event.changeHistory.at(-1)?.latestChangedAt ?? 0;
-  return Math.max(createdWhileLive, lastChangeAt);
+  const archivedAt = event.archivedAt ?? 0;
+  return Math.max(createdWhileLive, lastChangeAt, archivedAt);
 }
 
 export function isEventActivityUnseen(event: TimelineEvent, trip: TripSpace, uid: string) {
   return getEventLastActivityAt(event, trip) > (event.seenBy?.[uid] ?? 0);
 }
 
+// Archiving is its own activity worth surfacing, so an archived event isn't excluded
+// outright — it only drops out once its latest activity (including the archive) is seen.
 export const selectUnseenActivityEvents =
   (trip: TripSpace, uid: string) => (state: RootState): TimelineEvent[] =>
     state.waypoint.events.items
-      .filter((event) => !event.isArchived && isEventActivityUnseen(event, trip, uid))
+      .filter((event) => isEventActivityUnseen(event, trip, uid))
       .sort((a, b) => getEventLastActivityAt(b, trip) - getEventLastActivityAt(a, trip));
 
 /** Event Active Status Machine: UPCOMING -> now >= startAt -> ACTIVE -> now >= endAt -> COMPLETED. An

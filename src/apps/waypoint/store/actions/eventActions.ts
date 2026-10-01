@@ -143,6 +143,8 @@ export const createEvent = createAsyncThunk<
     changeHistory: [],
     reminderId,
     isArchived: false,
+    archivedBy: null,
+    archivedAt: null,
     seenBy: { [uid]: now },
     createdBy: uid,
     createdAt: now,
@@ -220,6 +222,8 @@ function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
     reminderEnabled: true,
     reminderId: null,
     isArchived: false,
+    archivedBy: null,
+    archivedAt: null,
     seenBy: {},
   };
   const missing = Object.fromEntries(
@@ -274,6 +278,8 @@ export const setEventArchived = createAsyncThunk<
     await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), {
       ...getMissingEventFields(event),
       isArchived,
+      archivedBy: isArchived ? uid : null,
+      archivedAt: isArchived ? Date.now() : null,
       lastEditedAt: Date.now(),
     });
     return { eventId: event.id, isArchived };

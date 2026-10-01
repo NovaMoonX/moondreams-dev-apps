@@ -1724,6 +1724,8 @@ service cloud.firestore {
             'reminderEnabled',
             'reminderId',
             'isArchived',
+            'archivedBy',
+            'archivedAt',
             'seenBy',
             'createdBy',
             'createdAt',
@@ -1768,6 +1770,8 @@ service cloud.firestore {
           && request.resource.data.reminderEnabled is bool
           && (request.resource.data.reminderId == null || request.resource.data.reminderId is string)
           && request.resource.data.isArchived is bool
+          && (request.resource.data.archivedBy == null || request.resource.data.archivedBy is string)
+          && (request.resource.data.archivedAt == null || isTimestampNumber(request.resource.data.archivedAt))
           && request.resource.data.seenBy is map
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)

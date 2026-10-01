@@ -7,8 +7,9 @@ import { shallowEqual } from 'react-redux';
 
 import IconBadge from '@/components/IconBadge';
 import { useNow } from '@/hooks/useNow';
+import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { formatTime } from '@/utils/formatUtils';
+import { getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
@@ -31,6 +32,32 @@ interface NotificationsIndicatorProps {
   className?: string;
 }
 
+interface EventActivity {
+  label: 'Created' | 'Updated' | 'Archived';
+  uid: string;
+  at: number;
+}
+
+/** Whichever of create/edit/archive happened most recently is the activity this update describes. */
+function getEventActivity(event: TimelineEvent, trip: TripSpace): EventActivity {
+  const candidates: EventActivity[] = [];
+  if (event.createdAt >= trip.startDate) {
+    candidates.push({ label: 'Created', uid: event.createdBy, at: event.createdAt });
+  }
+  const lastChange = event.changeHistory.at(-1);
+  if (lastChange) {
+    candidates.push({ label: 'Updated', uid: lastChange.latestChangedBy, at: lastChange.latestChangedAt });
+  }
+  if (event.isArchived && event.archivedBy && event.archivedAt) {
+    candidates.push({ label: 'Archived', uid: event.archivedBy, at: event.archivedAt });
+  }
+
+  return candidates.reduce(
+    (latest, candidate) => (candidate.at > latest.at ? candidate : latest),
+    { label: 'Created' as const, uid: event.createdBy, at: event.createdAt },
+  );
+}
+
 function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className }: NotificationsIndicatorProps) {
   const now = useNow();
   const dispatch = useAppDispatch();
@@ -42,6 +69,8 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
   const isAdmin = isTripAdmin(trip, currentUserId);
   const hasUrgent = announcements.some((announcement) => announcement.severity === 'URGENT');
   const totalCount = announcements.length + unseenEvents.length;
+  const actorUids = Array.from(new Set(unseenEvents.map((event) => getEventActivity(event, trip).uid)));
+  const actorsById = useUserInfo(actorUids)?.map ?? {};
 
   if (totalCount === 0) {
     return null;
@@ -143,24 +172,28 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
           <div className='space-y-2'>
             {sectionHeading('Updates', dismissAllUpdates)}
             <div className='space-y-3'>
-              {unseenEvents.map((event) => (
-                <div key={event.id} className='border-border bg-card space-y-1 rounded-lg border p-3'>
-                  <div className='flex items-start justify-between gap-2'>
-                    <p className='text-muted-foreground text-xs font-medium'>
-                      {event.createdAt >= trip.startDate ? 'New' : 'Updated'} · {formatTime(event.startAt)}
-                    </p>
-                    <DismissIconButton onClick={() => dismissEvent(event)} />
+              {unseenEvents.map((event) => {
+                const activity = getEventActivity(event, trip);
+                const actorName = actorsById[activity.uid]?.displayName || actorsById[activity.uid]?.email || 'Someone';
+                return (
+                  <div key={event.id} className='border-border bg-card space-y-1 rounded-lg border p-3'>
+                    <div className='flex items-start justify-between gap-2'>
+                      <p className='text-muted-foreground text-xs font-medium'>
+                        {activity.label} · {getDayLabel(trip.startDate, event.dayIndex)} · by {actorName}
+                      </p>
+                      <DismissIconButton onClick={() => dismissEvent(event)} />
+                    </div>
+                    <EventDetailLines
+                      event={event}
+                      showTitle
+                      showNotes={false}
+                      showChangeHistory={false}
+                      canEdit={false}
+                      onSaveNotes={async () => {}}
+                    />
                   </div>
-                  <EventDetailLines
-                    event={event}
-                    showTitle
-                    showNotes={false}
-                    showChangeHistory={false}
-                    canEdit={false}
-                    onSaveNotes={async () => {}}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -195,7 +228,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     >
       <div className='space-y-3'>
         <h2 className='font-semibold'>What&apos;s new</h2>
-        {content}
+        <div className='text-sm'>{content}</div>
       </div>
     </Popover>
   );

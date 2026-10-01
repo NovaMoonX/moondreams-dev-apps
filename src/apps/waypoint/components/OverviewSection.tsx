@@ -368,7 +368,7 @@ function ActiveNowCard({
             )}
           </div>
           <div onClick={stopPropagation}>
-            <MapNavigationButton {...event} />
+            <MapNavigationButton {...event} variant='primary' />
           </div>
         </div>
         {progress !== null && (

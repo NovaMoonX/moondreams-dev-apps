@@ -204,6 +204,10 @@ export interface TimelineEvent {
   /** Superseded by an accepted suggestion, or manually archived once the trip is live —
    * excluded from the default Timeline view. */
   isArchived: boolean;
+  /** Who archived this event and when — cleared back to `null` on unarchive, so these only
+   * ever describe the current archived state, not archive history. */
+  archivedBy: string | null;
+  archivedAt: number | null;
   /** uid -> ms timestamp of when that member last viewed this event, used to flag
    * unseen post-start creations/edits in the Overview section. */
   seenBy: Record<string, number>;
