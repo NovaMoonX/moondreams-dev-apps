@@ -96,6 +96,7 @@ function Waypoint() {
 
   const setSelectedTripId = (tripId: string | null) => {
     const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('tab');
     if (tripId) {
       nextSearchParams.set('trip', tripId);
     } else {
@@ -113,6 +114,7 @@ function Waypoint() {
   const handleViewInvitedTrip = (tripId: string) => {
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('inviteCode');
+    nextSearchParams.delete('tab');
     nextSearchParams.set('trip', tripId);
     setSearchParams(nextSearchParams, { replace: true });
   };
