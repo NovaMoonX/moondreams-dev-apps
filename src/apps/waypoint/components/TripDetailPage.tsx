@@ -48,7 +48,7 @@ import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
-import TripDetailsList from '@apps/waypoint/components/TripDetailsList';
+import StaysEntry from '@apps/waypoint/components/StaysEntry';
 import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
@@ -90,18 +90,16 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const [sectionTab, setSectionTabState] = useState(() =>
     isValidSectionTab(tabParam) ? tabParam : isActive || isSmallScreen ? '' : 'overview',
   );
-  const [cameFromOverview, setCameFromOverview] = useState(false);
 
   const hasAppNav = isSmallScreen;
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
   const isNestedScreen =
-    hasAppNav && sectionTab !== '' && (sectionTab === 'stays' || sectionTab === 'members' || cameFromOverview);
+    hasAppNav && (sectionTab === 'stays' || sectionTab === 'members' || sectionTab === 'checklist');
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
-  const setSectionTab = (value: string, fromOverview = false) => {
+  const setSectionTab = (value: string) => {
     setSectionTabState(value);
-    setCameFromOverview(fromOverview);
     if (hasAppNav) {
       window.scrollTo({ top: 0 });
     }
@@ -479,7 +477,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TripEntryPoints
               trip={trip}
               currentUserId={currentUserId}
-              onOpen={(tab) => setSectionTab(tab, true)}
+              onOpen={setSectionTab}
             />
           </div>
         )}
@@ -490,11 +488,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
         {hasAppNav && sectionTab === '' && (
           <div className='mt-5'>
-            <TripDetailsList
-              trip={trip}
-              currentUserId={currentUserId}
-              onOpen={(tab) => setSectionTab(tab, true)}
-            />
+            <StaysEntry onOpen={() => setSectionTab('stays')} />
           </div>
         )}
         {!hasAppNav && <hr className='border-border mt-4' />}

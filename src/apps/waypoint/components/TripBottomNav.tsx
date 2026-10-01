@@ -1,6 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarDays, House, ListChecks, Wallet } from 'lucide-react';
+import { CalendarDays, House, Wallet } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
@@ -15,12 +15,11 @@ interface TripBottomNavProps {
   onChange: (value: string) => void;
 }
 
-// Stays and Members live behind Overview, so Overview stays highlighted while on them.
+// Stays, Members and Checklist live behind Overview, so it stays highlighted while on them.
 const NAV_ITEMS: { value: string; label: string; icon: ReactNode; matches: string[] }[] = [
-  { value: '', label: 'Overview', icon: <House className='h-5 w-5' />, matches: ['', 'stays', 'members'] },
+  { value: '', label: 'Overview', icon: <House className='h-5 w-5' />, matches: ['', 'stays', 'members', 'checklist'] },
   { value: 'overview', label: 'Timeline', icon: <CalendarDays className='h-5 w-5' />, matches: ['overview'] },
   { value: 'expenses', label: 'Expenses', icon: <Wallet className='h-5 w-5' />, matches: ['expenses'] },
-  { value: 'checklist', label: 'Checklist', icon: <ListChecks className='h-5 w-5' />, matches: ['checklist'] },
 ];
 
 function TripBottomNav({ trip, now, value, showProgress, onChange }: TripBottomNavProps) {
@@ -32,7 +31,7 @@ function TripBottomNav({ trip, now, value, showProgress, onChange }: TripBottomN
       {showProgress && (
         <TripProgressBar trip={trip} now={now} className='absolute inset-x-0 top-0 h-0.5' />
       )}
-      <ul className='mx-auto grid max-w-4xl grid-cols-4'>
+      <ul className='mx-auto grid max-w-4xl grid-cols-3'>
         {NAV_ITEMS.map((item) => {
           const isSelected = item.matches.includes(value);
 
