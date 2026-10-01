@@ -217,75 +217,80 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     }
   };
 
-  const actionItems = [
-    ...(canEdit
-      ? [
-          option({
-            label: 'Post announcement',
-            value: 'announcement',
-            icon: <Megaphone className='h-4 w-4' />,
-            onClick: () => setIsAnnouncementFormOpen(true),
-          }),
-        ]
-      : []),
-    ...(isAdmin
-      ? [
-          option({
-            label: trip.isArchived ? 'Unarchive trip' : 'Archive trip',
-            value: 'archive',
-            icon: trip.isArchived ? (
-              <ArchiveRestore className='h-4 w-4' />
-            ) : (
-              <Archive className='h-4 w-4' />
-            ),
-            onClick: () => void handleToggleArchived(),
-          }),
-        ]
-      : []),
-    ...(canEdit
-      ? [
-          option({
-            label: 'Set cover photo',
-            value: 'cover',
-            icon: <Image className='h-4 w-4' />,
-            onClick: () => setEditingField('cover'),
-          }),
-        ]
-      : []),
-    ...(isAdmin
-      ? [
-          option({
-            label: 'Delete trip',
-            value: 'delete',
-            icon: <Trash2 className='h-4 w-4' />,
-            onClick: () => void handleDeleteTrip(),
-          }),
-        ]
-      : []),
-  ];
+  const titleActionItem = canEdit
+    ? option({
+        label: 'Change title',
+        value: 'title',
+        icon: <Pencil className='h-4 w-4' />,
+        onClick: () => {
+          setEditingField('title');
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
+  const datesActionItem = canEdit
+    ? option({
+        label: 'Change dates',
+        value: 'dates',
+        icon: <Calendar className='h-4 w-4' />,
+        onClick: () => {
+          setEditingField('dates');
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
+  const coverActionItem = canEdit
+    ? option({
+        label: 'Set cover photo',
+        value: 'cover',
+        icon: <Image className='h-4 w-4' />,
+        onClick: () => {
+          setEditingField('cover');
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
+  const announcementActionItem = canEdit
+    ? option({
+        label: 'Post announcement',
+        value: 'announcement',
+        icon: <Megaphone className='h-4 w-4' />,
+        onClick: () => {
+          setIsAnnouncementFormOpen(true);
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
+  const archiveActionItem = isAdmin
+    ? option({
+        label: trip.isArchived ? 'Unarchive trip' : 'Archive trip',
+        value: 'archive',
+        icon: trip.isArchived ? (
+          <ArchiveRestore className='h-4 w-4' />
+        ) : (
+          <Archive className='h-4 w-4' />
+        ),
+        onClick: () => void handleToggleArchived(),
+      })
+    : null;
+  const deleteActionItem = isAdmin
+    ? option({
+        label: 'Delete trip',
+        value: 'delete',
+        icon: <Trash2 className='h-4 w-4' />,
+        onClick: () => void handleDeleteTrip(),
+      })
+    : null;
 
-  const mobileOnlyActionItems = canEdit
-    ? [
-        option({
-          label: 'Change title',
-          value: 'title',
-          icon: <Pencil className='h-4 w-4' />,
-          onClick: () => {
-            setEditingField('title');
-            setIsMobileActionsOpen(false);
-          },
-        }),
-        option({
-          label: 'Change dates',
-          value: 'dates',
-          icon: <Calendar className='h-4 w-4' />,
-          onClick: () => {
-            setEditingField('dates');
-            setIsMobileActionsOpen(false);
-          },
-        }),
-      ]
-    : [];
+  const actionItems = [announcementActionItem, archiveActionItem, coverActionItem, deleteActionItem].filter(
+    (item): item is NonNullable<typeof item> => item !== null,
+  );
+  const groupedEditActionItems = [titleActionItem, datesActionItem, coverActionItem].filter(
+    (item): item is NonNullable<typeof item> => item !== null,
+  );
+  const standaloneActionItems = [announcementActionItem, archiveActionItem].filter(
+    (item): item is NonNullable<typeof item> => item !== null,
+  );
 
   const moreButtonTrigger = (
     <Button
@@ -308,14 +313,37 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           isActive ? 'space-y-2.5 py-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
         )}
       >
-        <Button
-          type='button'
-          variant='link'
-          className={join('px-0', isActive && 'h-auto p-0')}
-          onClick={onBack}
-        >
-          <ChevronLeft /> Back to My Trips
-        </Button>
+        <div className='flex items-center justify-between'>
+          <Button
+            type='button'
+            variant='link'
+            className={join('px-0', (isActive || isSmallScreen) && 'h-auto p-0')}
+            aria-label='Back to My Trips'
+            onClick={onBack}
+          >
+            <ChevronLeft className={isSmallScreen ? 'h-6 w-6' : undefined} />
+            {!isSmallScreen && 'Back to My Trips'}
+          </Button>
+          {isSmallScreen && (
+            <div className='flex shrink-0 items-center gap-1.5'>
+              {isActive && (
+                <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
+              )}
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                aria-label='Copy trip link'
+                title='Copy trip link'
+                className='bg-transparent! px-2'
+                onClick={() => void handleCopyTripLink()}
+              >
+                <Link className='h-4 w-4' />
+              </Button>
+              {moreButtonTrigger}
+            </div>
+          )}
+        </div>
         <div>
           {trip.coverImageUrl && (
             <img
@@ -373,27 +401,20 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                   <UpdatesIndicator trip={trip} currentUserId={currentUserId} />
                 </div>
               )}
-              {isActive && (
-                <span className='sm:hidden'>
-                  <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
-                </span>
-              )}
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                aria-label='Copy trip link'
-                title='Copy trip link'
-                className='bg-transparent! px-2'
-                onClick={() => void handleCopyTripLink()}
-              >
-                <Link className='h-4 w-4' />
-              </Button>
-              {isSmallScreen ? (
-                moreButtonTrigger
-              ) : (
+              <div className='hidden items-center gap-1.5 sm:flex sm:gap-2'>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  aria-label='Copy trip link'
+                  title='Copy trip link'
+                  className='bg-transparent! px-2'
+                  onClick={() => void handleCopyTripLink()}
+                >
+                  <Link className='h-4 w-4' />
+                </Button>
                 <DropdownMenu items={actionItems} trigger={moreButtonTrigger} placement='bottom' alignment='end' />
-              )}
+              </div>
             </div>
           </div>
           <div className={join('mt-3', isActive && 'hidden sm:block')}>
@@ -497,19 +518,33 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         onClose={() => setIsMobileActionsOpen(false)}
         title='Trip actions'
       >
-        <div className='space-y-1'>
-          {[...mobileOnlyActionItems, ...actionItems].map((item) => (
-            <Button
-              key={item.value}
-              type='button'
-              variant='tertiary'
-              className='w-full justify-start gap-3'
-              onClick={item.onClick}
-            >
-              {item.icon}
-              {item.label}
-            </Button>
-          ))}
+        <div className='space-y-2'>
+          {[
+            { items: groupedEditActionItems, destructive: false },
+            ...standaloneActionItems.map((item) => ({ items: [item], destructive: false })),
+            ...(deleteActionItem ? [{ items: [deleteActionItem], destructive: true }] : []),
+          ].map(
+            ({ items: groupItems, destructive }) =>
+              groupItems.length > 0 && (
+                <div key={groupItems[0].value} className='bg-muted/50 overflow-hidden rounded-lg'>
+                  {groupItems.map((item) => (
+                    <Button
+                      key={item.value}
+                      type='button'
+                      variant='tertiary'
+                      className={join(
+                        'w-full justify-start gap-3 rounded-none px-3 py-2.5',
+                        destructive && 'text-destructive hover:text-destructive',
+                      )}
+                      onClick={item.onClick}
+                    >
+                      {item.icon}
+                      {item.label}
+                    </Button>
+                  ))}
+                </div>
+              ),
+          )}
         </div>
       </Drawer>
     </div>

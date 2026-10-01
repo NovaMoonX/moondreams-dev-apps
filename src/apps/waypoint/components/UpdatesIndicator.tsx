@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { History } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
+import IconBadge from '@/components/IconBadge';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatTime } from '@/utils/formatUtils';
 
@@ -47,8 +48,7 @@ function UpdatesIndicator({ trip, currentUserId, className }: UpdatesIndicatorPr
         className={className}
         onClick={() => setIsOpen(true)}
       >
-        <History className='h-4 w-4' />
-        <span className='text-xs'>{unseenEvents.length}</span>
+        <IconBadge icon={<History className='h-4 w-4 text-sky-500' />} count={unseenEvents.length} />
       </Button>
       <StepThroughModal
         isOpen={isOpen}
@@ -59,7 +59,7 @@ function UpdatesIndicator({ trip, currentUserId, className }: UpdatesIndicatorPr
         onDismissAll={dismissAll}
         onClose={() => setIsOpen(false)}
         renderItem={(event) => (
-          <div className='space-y-1'>
+          <div className='border-border bg-card space-y-1 rounded-lg border p-4'>
             <p className='text-muted-foreground text-xs font-medium'>
               {event.createdAt >= trip.startDate ? 'New' : 'Updated'} ·{' '}
               {formatTime(event.startAt)}
@@ -68,6 +68,7 @@ function UpdatesIndicator({ trip, currentUserId, className }: UpdatesIndicatorPr
               event={event}
               showTitle
               showNotes
+              showChangeHistory={false}
               canEdit={false}
               onSaveNotes={async () => {}}
             />

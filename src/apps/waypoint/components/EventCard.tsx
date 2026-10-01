@@ -58,6 +58,7 @@ export interface EventDetailLinesProps {
   showTitle: boolean;
   showNotes: boolean;
   showNotesIndicator?: boolean;
+  showChangeHistory?: boolean;
   canEdit: boolean;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
@@ -67,6 +68,7 @@ export function EventDetailLines({
   showTitle,
   showNotes,
   showNotesIndicator,
+  showChangeHistory = true,
   canEdit,
   onSaveNotes,
 }: EventDetailLinesProps) {
@@ -121,9 +123,11 @@ export function EventDetailLines({
           placeholder={EVENT_NOTES_PLACEHOLDER}
         />
       )}
-      <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
-        <ChangeBadge changeHistory={event.changeHistory} />
-      </div>
+      {showChangeHistory && (
+        <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+          <ChangeBadge changeHistory={event.changeHistory} />
+        </div>
+      )}
     </>
   );
 }

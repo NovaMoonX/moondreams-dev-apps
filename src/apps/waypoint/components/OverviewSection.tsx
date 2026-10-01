@@ -335,7 +335,7 @@ function ActiveNowCard({
     <article
       {...clickProps}
       className={join(
-        'border-border bg-card overflow-hidden rounded-xl border',
+        'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden rounded-xl border-2 shadow-sm',
         isSmallScreen && 'cursor-pointer',
       )}
     >
@@ -350,8 +350,8 @@ function ActiveNowCard({
         <div className='flex items-start justify-between gap-3'>
           <div className='min-w-0'>
             <div className='flex flex-wrap items-center gap-2'>
-              <p className='text-muted-foreground flex items-center gap-1 text-xs font-medium tracking-wide uppercase'>
-                <PlayCircle className='text-primary h-3 w-3' /> Active now
+              <p className='text-emerald-700 dark:text-emerald-300 flex items-center gap-1 text-xs font-bold tracking-wide uppercase'>
+                <PlayCircle className='h-3 w-3' /> Active now
               </p>
               <EventTypeBadge event={event} />
             </div>
@@ -379,9 +379,9 @@ function ActiveNowCard({
         </div>
         {progress !== null && (
           <div className='mt-2'>
-            <div className='bg-muted h-1 overflow-hidden rounded-full'>
+            <div className='bg-emerald-500/20 h-1 overflow-hidden rounded-full'>
               <div
-                className='bg-primary h-full transition-[width]'
+                className='bg-emerald-500 h-full transition-[width]'
                 style={{ width: `${progress * 100}%` }}
               />
             </div>

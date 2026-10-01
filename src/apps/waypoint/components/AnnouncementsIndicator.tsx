@@ -5,6 +5,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Megaphone } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
+import IconBadge from '@/components/IconBadge';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -34,6 +35,7 @@ function AnnouncementsIndicator({ trip, currentUserId, className }: Announcement
   const announcements = useAppSelector(selectLiveAnnouncements(currentUserId, now), shallowEqual);
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = isTripAdmin(trip, currentUserId);
+  const hasUrgent = announcements.some((announcement) => announcement.severity === 'URGENT');
 
   if (announcements.length === 0) {
     return null;
@@ -81,8 +83,11 @@ function AnnouncementsIndicator({ trip, currentUserId, className }: Announcement
         className={className}
         onClick={() => setIsOpen(true)}
       >
-        <Megaphone className='h-4 w-4' />
-        <span className='text-xs'>{announcements.length}</span>
+        <IconBadge
+          icon={<Megaphone className='h-4 w-4 text-amber-500' />}
+          count={announcements.length}
+          urgent={hasUrgent}
+        />
       </Button>
       <StepThroughModal
         isOpen={isOpen}
