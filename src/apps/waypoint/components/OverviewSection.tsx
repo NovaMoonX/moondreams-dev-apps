@@ -88,7 +88,9 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
   const todayIndex = getDayIndex(trip.startDate, now);
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
-  const checkInStays = stays.filter((stay) => isSameLocalCalendarDay(stay.checkInAt, now));
+  const checkInStays = stays
+    .filter((stay) => isSameLocalCalendarDay(stay.checkInAt, now))
+    .sort((a, b) => a.checkInAt - b.checkInAt);
   // Nothing left today — no event running right now, and whatever's next (if
   // anything) isn't until a later day.
   const isDoneForToday =
@@ -113,6 +115,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         <CheckInStayCard
           key={stay.id}
           stay={stay}
+          now={now}
           isSmallScreen={isSmallScreen}
           onOpenDetails={() => openStayDrawer(stay)}
         />
@@ -233,15 +236,18 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
 
 function CheckInStayCard({
   stay,
+  now,
   isSmallScreen,
   onOpenDetails,
 }: {
   stay: Stay;
+  now: number;
   isSmallScreen: boolean;
   onOpenDetails: () => void;
 }) {
   const imageUrl = getDisplayImage(stay);
   const clickProps = isSmallScreen ? getOpenDetailsProps(stay.name, onOpenDetails) : {};
+  const hasCheckedIn = stay.checkInAt <= now;
 
   return (
     <article
@@ -261,11 +267,12 @@ function CheckInStayCard({
         )}
         <div className='min-w-0 flex-1 space-y-0.5'>
           <p className='text-muted-foreground flex items-center gap-1 text-xs font-medium tracking-wide uppercase'>
-            <LogIn className='h-3 w-3' /> Checking in today
+            <LogIn className='h-3 w-3' /> {hasCheckedIn ? 'Checked in' : 'Checking in today'}
           </p>
           <h3 className='truncate text-sm font-semibold sm:text-base'>{stay.name}</h3>
           <p className='text-muted-foreground truncate text-xs'>
             {formatTime(stay.checkInAt)}
+            {hasCheckedIn ? '' : ` · ${formatCountdown(stay.checkInAt, now)}`}
             {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
           </p>
         </div>

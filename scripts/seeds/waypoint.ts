@@ -131,6 +131,12 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const activeTripTitle = 'Olympic Peninsula Loop';
   const activeTripStart = context.now - DAY_MS;
   const activeTripEnd = context.now + 2 * DAY_MS;
+  // Anchored to local calendar days, not trip-start offsets, so the two stays always check in
+  // on different days and the later one lands on today whatever time the seed runs.
+  const startOfToday = new Date(context.now).setHours(0, 0, 0, 0);
+  const lodgeCheckInAt = Math.max(activeTripStart, startOfToday - DAY_MS + 16 * HOUR_MS);
+  const lodgeCheckOutAt = startOfToday + 11 * HOUR_MS;
+  const kalalochCheckInAt = Math.min(context.now + 3 * HOUR_MS, startOfToday + 23.5 * HOUR_MS);
 
   await activeTripRef.set({
     id: ACTIVE_TRIP_ID,
@@ -808,11 +814,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: '416 Lake Crescent Rd, Port Angeles, WA',
     latitude: 48.0587,
     longitude: -123.7853,
-    checkInAt: activeTripStart + 16 * 3_600_000,
-    checkOutAt: activeTripStart + DAY_MS + 2 * 3_600_000,
+    checkInAt: lodgeCheckInAt,
+    checkOutAt: lodgeCheckOutAt,
     checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: activeTripStart + 16 * 3_600_000,
-    plannedDepartureAt: activeTripStart + DAY_MS + 2 * 3_600_000,
+    plannedArrivalAt: lodgeCheckInAt,
+    plannedDepartureAt: lodgeCheckOutAt,
     confirmationCode: null,
     notes: 'Front desk closes at 10pm - call ahead for a late arrival.',
     place: null,
@@ -833,10 +839,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: '157151 US-101, Forks, WA',
     latitude: 47.6124,
     longitude: -124.3743,
-    checkInAt: activeTripStart + DAY_MS + 6 * 3_600_000,
+    checkInAt: kalalochCheckInAt,
     checkOutAt: activeTripEnd,
     checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: activeTripStart + DAY_MS + 6 * 3_600_000,
+    plannedArrivalAt: kalalochCheckInAt,
     plannedDepartureAt: activeTripEnd,
     confirmationCode: 'KAL-48213',
     notes:
@@ -849,7 +855,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
         changes: [
           {
             field: 'checkInAt',
-            previousValue: activeTripStart + DAY_MS + 4 * 3_600_000,
+            previousValue: kalalochCheckInAt - 2 * HOUR_MS,
             changedBy: taylor.uid,
             changedAt: context.now - 2_700_000,
           },
