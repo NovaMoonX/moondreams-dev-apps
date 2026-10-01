@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
-import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Bell } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Bell, Info } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import IconBadge from '@/components/IconBadge';
@@ -30,9 +30,15 @@ import {
   selectUnseenActivityEvents,
   selectUnseenActivityStays,
 } from '@apps/waypoint/store/selectors';
-import { ANNOUNCEMENT_SEVERITY_BADGE_CLASSES, ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
-import type { Announcement, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
+import type { Announcement, AnnouncementSeverity, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+
+const ANNOUNCEMENT_SEVERITY_ICONS: Record<AnnouncementSeverity, { icon: typeof Info; className: string }> = {
+  INFO: { icon: Info, className: 'text-sky-500' },
+  HEADS_UP: { icon: AlertCircle, className: 'text-amber-500' },
+  URGENT: { icon: AlertTriangle, className: 'text-destructive' },
+};
 
 interface NotificationsIndicatorProps {
   trip: TripSpace;
@@ -273,23 +279,25 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
             <div className='divide-border divide-y'>
               {announcements.map((announcement) => {
                 const isOwnAnnouncement = announcement.createdBy === currentUserId;
+                const { icon: SeverityIcon, className: severityIconClassName } =
+                  ANNOUNCEMENT_SEVERITY_ICONS[announcement.severity];
                 return (
                   <div
                     key={announcement.id}
                     className='flex items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0'
                   >
-                    <div className='min-w-0 space-y-1'>
+                    <div className='min-w-0 space-y-0.5'>
                       <div className='flex items-start gap-1.5'>
-                        <Badge
-                          variant='base'
-                          className={join('shrink-0', ANNOUNCEMENT_SEVERITY_BADGE_CLASSES[announcement.severity])}
-                        >
-                          {ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
-                        </Badge>
+                        <SeverityIcon
+                          className={join('mt-0.5 h-4 w-4 shrink-0', severityIconClassName)}
+                          aria-label={ANNOUNCEMENT_SEVERITY_LABELS[announcement.severity]}
+                        />
                         <p className='min-w-0 flex-1 text-sm font-medium'>{announcement.title}</p>
                       </div>
                       <p className='text-muted-foreground text-xs whitespace-pre-line'>{announcement.body}</p>
-                      <p className='text-muted-foreground text-right text-xs'>{getActorName(announcement.createdBy)}</p>
+                      <p className='text-muted-foreground text-right text-xs'>
+                        — {getActorName(announcement.createdBy)}
+                      </p>
                     </div>
                     <div className='flex shrink-0 items-center gap-1'>
                       {isAdmin && <DeleteIconButton onClick={() => void handleDeleteAnnouncement(announcement)} />}
