@@ -18,7 +18,7 @@ function StaysEntry({ onOpen }: StaysEntryProps) {
     : 'Add your stays';
   const summary = firstStay
     ? `${stays.length} ${stays.length === 1 ? 'stay' : 'stays'}`
-    : 'Share where the group is staying — hotels, rentals, campgrounds — so everyone has the details in one place.';
+    : 'Share where the group is staying — hotels, rentals, campgrounds, etc.';
 
   return (
     <section className='space-y-1'>

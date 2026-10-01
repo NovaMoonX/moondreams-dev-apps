@@ -20,6 +20,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
@@ -61,9 +62,7 @@ import {
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
-  isPairSettled,
   scaleAmount,
-  type DirectionalOwed,
 } from '@apps/waypoint/utils/splitCalculators';
 
 const { option } = DropdownMenuFactories;
@@ -719,74 +718,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             Everyone&apos;s settled up.
           </p>
         ) : (
-          <ul className='mt-2 space-y-2'>
-            {pairSettlements.map((settlement) => {
-              const { personA, personB, netAmount, aOwesB, bOwesA } = settlement;
-              const settled = isPairSettled(settlement);
-              const isCircular = aOwesB.total > 0.005 && bOwesA.total > 0.005;
-              const hasRepaidHistory = aOwesB.repaid > 0.005 || bOwesA.repaid > 0.005;
-              const showBreakdown = isCircular || hasRepaidHistory;
-              const debtorUid = netAmount >= 0 ? personA : personB;
-              const creditorUid = netAmount >= 0 ? personB : personA;
-              const netDisplay = Math.abs(netAmount);
-              const simpleItems = (netAmount >= 0 ? aOwesB : bOwesA).remainingExpenses
-                .map((expense) => expense.title)
-                .join(', ');
-
-              const renderDirection = (fromUid: string, toUid: string, owed: DirectionalOwed) => {
-                if (owed.total <= 0.005) {
-                  return null;
-                }
-
-                const stillOwed = owed.remainingExpenses.map((expense) => expense.title).join(', ');
-                const alreadyRepaid = owed.repaidExpenses.map((expense) => expense.title).join(', ');
-
-                return (
-                  <li key={`${fromUid}-${toUid}`} className='text-muted-foreground text-xs'>
-                    {memberLabel(fromUid)} owes {memberLabel(toUid)}{' '}
-                    <span className='font-medium'>{formatTotal(owed.total, owed.total, currency)}</span>
-                    {' total'}
-                    {owed.repaid > 0.005 && (
-                      <>
-                        {' — '}
-                        {formatTotal(owed.remaining, owed.remaining, currency)} still owed
-                      </>
-                    )}
-                    {stillOwed && <span> · Still owed: {stillOwed}</span>}
-                    {alreadyRepaid && <span> · Already repaid: {alreadyRepaid}</span>}
-                  </li>
-                );
-              };
-
-              return (
-                <li key={`${personA}-${personB}`}>
-                  {settled ? (
-                    <p className='text-muted-foreground text-sm'>
-                      {memberLabel(personA)} and {memberLabel(personB)} are settled up
-                      {hasRepaidHistory && ' (fully repaid)'}
-                    </p>
-                  ) : (
-                    <p className='text-sm'>
-                      {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}{' '}
-                      <span className='font-medium'>
-                        {formatTotal(netDisplay, netDisplay, currency)}
-                      </span>{' '}
-                      net
-                      {!showBreakdown && simpleItems && (
-                        <span className='text-muted-foreground'> ({simpleItems})</span>
-                      )}
-                    </p>
-                  )}
-                  {showBreakdown && (
-                    <ul className='border-border mt-1 ml-3 space-y-0.5 border-l pl-2'>
-                      {renderDirection(personA, personB, aOwesB)}
-                      {renderDirection(personB, personA, bOwesA)}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <DuesSummary
+            settlements={pairSettlements}
+            memberLabel={memberLabel}
+            formatAmount={(amount) => formatTotal(amount, amount, currency)}
+          />
         )}
       </div>
       <div className='flex flex-wrap items-center gap-2'>

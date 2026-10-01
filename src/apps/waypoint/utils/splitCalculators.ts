@@ -94,7 +94,14 @@ export function computeEvenSplit(
   );
 }
 
+export interface OwedItem {
+  expense: TripExpense;
+  share: number;
+  isRepaid: boolean;
+}
+
 export interface DirectionalOwed {
+  items: OwedItem[];
   total: number;
   repaid: number;
   remaining: number;
@@ -141,6 +148,7 @@ function getOwedInDirection(
       const share = amounts[debtorUid] ?? 0;
       const isRepaid = (expense.paidMemberStatus ?? {})[debtorUid]?.isPaid ?? false;
       return {
+        items: [...acc.items, { expense, share, isRepaid }],
         total: acc.total + share,
         repaid: acc.repaid + (isRepaid ? share : 0),
         remaining: acc.remaining + (isRepaid ? 0 : share),
@@ -148,7 +156,7 @@ function getOwedInDirection(
         repaidExpenses: isRepaid ? [...acc.repaidExpenses, expense] : acc.repaidExpenses,
       };
     },
-    { total: 0, repaid: 0, remaining: 0, remainingExpenses: [], repaidExpenses: [] },
+    { items: [], total: 0, repaid: 0, remaining: 0, remainingExpenses: [], repaidExpenses: [] },
   );
 }
 
