@@ -557,7 +557,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                       variant='tertiary'
                       className={join(
                         'w-full justify-start gap-3 rounded-none px-3 py-2.5',
-                        destructive && 'text-destructive hover:text-destructive',
+                        destructive && 'text-destructive! hover:text-destructive!',
                       )}
                       onClick={item.onClick}
                     >
