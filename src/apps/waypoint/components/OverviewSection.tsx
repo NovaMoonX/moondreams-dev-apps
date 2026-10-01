@@ -2,8 +2,7 @@ import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { History, X } from 'lucide-react';
-import { shallowEqual } from 'react-redux';
+import { LogIn, PlayCircle } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -16,7 +15,7 @@ import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
-import AnnouncementsList from '@apps/waypoint/components/AnnouncementsList';
+import AnnouncementsIndicator from '@apps/waypoint/components/AnnouncementsIndicator';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
 import LocationLink from '@apps/waypoint/components/LocationLink';
@@ -24,13 +23,12 @@ import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
+import UpdatesIndicator from '@apps/waypoint/components/UpdatesIndicator';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
   selectActiveEvent,
-  selectLiveAnnouncements,
   selectStays,
-  selectUnseenActivityEvents,
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -83,8 +81,6 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const activeEvent = useAppSelector(selectActiveEvent(now));
   const upNextEvent = useAppSelector(selectUpNextEvent(now));
   const stays = useAppSelector(selectStays);
-  const unseenEvents = useAppSelector(selectUnseenActivityEvents(trip, currentUserId), shallowEqual);
-  const announcements = useAppSelector(selectLiveAnnouncements(currentUserId, now), shallowEqual);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
 
@@ -113,40 +109,12 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     setDetail({ type: 'stay', stay });
   };
 
-  // Below `sm`, tapping a recent update opens the drawer, same as the other
-  // cards. At `sm`+, its extra info (time, location) is shown right on the
-  // row instead — nothing to tap, so viewing one never marks it seen.
-  const openRecentUpdateDrawer = (event: TimelineEvent) => {
-    setDetail({ type: 'event', event });
-    void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
-  };
-
-  // Dismisses just the one currently shown, not the whole queue — so someone
-  // can step through unseen events one at a time instead of losing all of
-  // them in a single click.
-  const dismissRecentUpdate = (event: TimelineEvent) => {
-    void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
-  };
-
   return (
     <div className='space-y-3'>
-      {announcements.length > 0 && (
-        <AnnouncementsList
-          trip={trip}
-          currentUserId={currentUserId}
-          announcements={announcements}
-          isSmallScreen={isSmallScreen}
-        />
-      )}
-      {unseenEvents.length > 0 && (
-        <RecentUpdatesList
-          trip={trip}
-          events={unseenEvents}
-          isSmallScreen={isSmallScreen}
-          onOpenDetails={openRecentUpdateDrawer}
-          onDismiss={dismissRecentUpdate}
-        />
-      )}
+      <div className='flex items-center gap-2 sm:hidden'>
+        <AnnouncementsIndicator trip={trip} currentUserId={currentUserId} />
+        <UpdatesIndicator trip={trip} currentUserId={currentUserId} />
+      </div>
       {checkInStays.map((stay) => (
         <CheckInStayCard
           key={stay.id}
@@ -260,67 +228,6 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   );
 }
 
-function RecentUpdatesList({
-  trip,
-  events,
-  isSmallScreen,
-  onOpenDetails,
-  onDismiss,
-}: {
-  trip: TripSpace;
-  events: TimelineEvent[];
-  isSmallScreen: boolean;
-  onOpenDetails: (event: TimelineEvent) => void;
-  onDismiss: (event: TimelineEvent) => void;
-}) {
-  const [firstEvent, ...restEvents] = events;
-  const label = (firstEvent.createdAt >= trip.startDate ? 'New: ' : 'Updated: ') + firstEvent.title;
-  const locationLabel = [firstEvent.locationName, firstEvent.address].filter(Boolean).join(' · ');
-
-  return (
-    <div className='border-amber-500/60 bg-amber-50 dark:bg-amber-950/30 flex items-center gap-2 rounded-xl border p-2.5'>
-      <History className='text-amber-700 dark:text-amber-300 h-4 w-4 shrink-0 sm:hidden' />
-      <p className='text-amber-700 dark:text-amber-300 hidden shrink-0 text-xs font-bold tracking-wide uppercase sm:inline'>
-        Updates
-      </p>
-      {isSmallScreen ? (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className='h-auto min-h-0 min-w-0 flex-1 justify-start p-0! text-left'
-          onClick={() => onOpenDetails(firstEvent)}
-        >
-          <span className='block min-w-0 truncate text-sm underline underline-offset-2'>{label}</span>
-        </Button>
-      ) : (
-        <div className='flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5'>
-          <span className='truncate text-sm font-medium'>{label}</span>
-          <span className='text-muted-foreground text-xs'>
-            {formatTime(firstEvent.startAt)}
-            {firstEvent.endAt ? ` - ${formatTime(firstEvent.endAt)}` : ''}
-          </span>
-          {locationLabel && (
-            <span className='text-muted-foreground min-w-0 truncate text-xs'>{locationLabel}</span>
-          )}
-        </div>
-      )}
-      {restEvents.length > 0 && (
-        <span className='text-muted-foreground shrink-0 text-xs'>+{restEvents.length} more</span>
-      )}
-      <Button
-        type='button'
-        variant='tertiary'
-        size='icon'
-        aria-label={`Dismiss "${firstEvent.title}"`}
-        className='text-muted-foreground hover:text-foreground size-5 shrink-0 bg-transparent! hover:bg-transparent!'
-        onClick={() => onDismiss(firstEvent)}
-      >
-        <X className='h-3.5 w-3.5' />
-      </Button>
-    </div>
-  );
-}
 
 function EventTypeBadge({ event }: { event: TimelineEvent }) {
   return (
@@ -346,7 +253,7 @@ function CheckInStayCard({
     <article
       {...clickProps}
       className={join(
-        'border-sky-500/60 bg-sky-50 dark:bg-sky-950/30 rounded-xl border p-3',
+        'border-border bg-card rounded-xl border p-3',
         isSmallScreen && 'cursor-pointer',
       )}
     >
@@ -359,8 +266,8 @@ function CheckInStayCard({
           />
         )}
         <div className='min-w-0 flex-1 space-y-0.5'>
-          <p className='text-sky-700 dark:text-sky-300 text-xs font-bold tracking-wide uppercase'>
-            Checking in today
+          <p className='text-muted-foreground flex items-center gap-1 text-xs font-medium tracking-wide uppercase'>
+            <LogIn className='h-3 w-3' /> Checking in today
           </p>
           <h3 className='truncate text-sm font-semibold sm:text-base'>{stay.name}</h3>
           <p className='text-muted-foreground truncate text-xs'>
@@ -428,7 +335,7 @@ function ActiveNowCard({
     <article
       {...clickProps}
       className={join(
-        'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden rounded-xl border-2 shadow-sm',
+        'border-border bg-card overflow-hidden rounded-xl border',
         isSmallScreen && 'cursor-pointer',
       )}
     >
@@ -443,8 +350,8 @@ function ActiveNowCard({
         <div className='flex items-start justify-between gap-3'>
           <div className='min-w-0'>
             <div className='flex flex-wrap items-center gap-2'>
-              <p className='text-emerald-700 dark:text-emerald-300 text-xs font-bold tracking-wide uppercase'>
-                Active Now
+              <p className='text-muted-foreground flex items-center gap-1 text-xs font-medium tracking-wide uppercase'>
+                <PlayCircle className='text-primary h-3 w-3' /> Active now
               </p>
               <EventTypeBadge event={event} />
             </div>
@@ -472,9 +379,9 @@ function ActiveNowCard({
         </div>
         {progress !== null && (
           <div className='mt-2'>
-            <div className='bg-emerald-500/20 h-1 overflow-hidden rounded-full'>
+            <div className='bg-muted h-1 overflow-hidden rounded-full'>
               <div
-                className='bg-emerald-500 h-full transition-[width]'
+                className='bg-primary h-full transition-[width]'
                 style={{ width: `${progress * 100}%` }}
               />
             </div>

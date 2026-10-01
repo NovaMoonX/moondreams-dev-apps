@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@/lib/firebase/config';
@@ -42,7 +42,7 @@ export interface EditTripValues {
   coverImageRemoved: boolean;
   defaultCurrency: string | null;
   /** Only meaningful when the trip's dates are actually changing and it has
-   * dated items — see `EditTripModal`'s shift checkbox. */
+   * dated items — see `EditTripDatesModal`'s shift checkbox. */
   shiftDates: boolean;
 }
 
@@ -340,5 +340,28 @@ export const setSharedAlbumLink = createAsyncThunk<
     await batch.commit();
     dispatch(upsertTrip(updatedTrip));
     return updatedTrip;
+  },
+);
+
+interface DeleteTripInput {
+  uid: string;
+  trip: TripSpace;
+}
+
+export const deleteTrip = createAsyncThunk<string, DeleteTripInput, { rejectValue: string }>(
+  'waypoint/trips/delete',
+  async ({ uid, trip }, { rejectWithValue }) => {
+    if (trip.members[uid]?.role !== 'ADMIN') {
+      return rejectWithValue('Only trip admins can delete this trip.');
+    }
+
+    if (trip.coverImageUrl) {
+      await deleteFile(getTripCoverStoragePath(trip.id)).catch(() => {});
+    }
+    if (trip.inviteCode) {
+      await deleteDoc(doc(INVITE_CODE_COLLECTION, trip.inviteCode)).catch(() => {});
+    }
+    await deleteDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id));
+    return trip.id;
   },
 );
