@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -60,7 +60,7 @@ import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { hasTripRole, isTripAdmin, isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 
-const { option } = DropdownMenuFactories;
+const { option, custom } = DropdownMenuFactories;
 
 interface TripDetailPageProps {
   trip: TripSpace;
@@ -109,6 +109,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const canEdit = !isTripDateShiftLocked(trip) && hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const isAdmin = isTripAdmin(trip, currentUserId);
+
+  // The trip list -> trip detail transition is a query-param change, not a route change,
+  // so the browser doesn't reset scroll position on its own — do it explicitly.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const handleViewDay = (dayIndex: number) => {
     setSectionTab('overview');
@@ -280,8 +286,24 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         onClick: () => void handleDeleteTrip(),
       })
     : null;
+  // The option() factory has no destructive styling hook, so the desktop dropdown's
+  // delete entry is rendered as custom content instead — the mobile drawer already
+  // applies its own red styling directly from `deleteActionItem` above.
+  const deleteDesktopMenuItem = isAdmin
+    ? custom(() => (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='text-destructive! hover:bg-destructive/10 w-full justify-start gap-2 rounded-none px-3 py-2 text-sm'
+          onClick={() => void handleDeleteTrip()}
+        >
+          <Trash2 className='h-4 w-4' />
+          Delete trip
+        </Button>
+      ))
+    : null;
 
-  const actionItems = [announcementActionItem, archiveActionItem, coverActionItem, deleteActionItem].filter(
+  const actionItems = [announcementActionItem, archiveActionItem, coverActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const groupedEditActionItems = [titleActionItem, datesActionItem, coverActionItem].filter(
@@ -429,8 +451,10 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             </span>
           </div>
         )}
-        <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
-        <hr className='border-border' />
+        <div className='mt-4'>
+          <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
+        </div>
+        <hr className='border-border mt-4' />
         <Tabs
           value={sectionTab}
           onValueChange={setSectionTab}

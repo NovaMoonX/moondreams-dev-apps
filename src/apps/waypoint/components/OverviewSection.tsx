@@ -136,7 +136,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
       {isDoneForToday && (
         <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />
       )}
-      <div className='grid grid-cols-2 gap-2 sm:hidden'>
+      <div className='mt-2 grid grid-cols-2 gap-2 sm:hidden'>
         <Button
           type='button'
           variant='secondary'
@@ -156,7 +156,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           </Button>
         )}
       </div>
-      <div className='hidden flex-wrap gap-x-4 gap-y-1 pt-1 sm:flex'>
+      <div className='hidden flex-wrap gap-x-4 gap-y-1 pt-3 sm:flex'>
         <Button
           type='button'
           variant='tertiary'
