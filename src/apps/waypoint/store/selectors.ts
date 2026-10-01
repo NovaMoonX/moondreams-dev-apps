@@ -192,6 +192,24 @@ export const selectUnseenActivityEvents =
       .filter((event) => isEventActivityUnseen(event, trip, uid))
       .sort((a, b) => getEventLastActivityAt(b, trip) - getEventLastActivityAt(a, trip));
 
+/** Same idea as `getEventLastActivityAt`, for stays — a stay has no archive concept, so
+ * only its creation and tracked-field edits count as activity. */
+export function getStayLastActivityAt(stay: Stay, trip: TripSpace) {
+  const createdWhileLive = stay.createdAt >= trip.startDate ? stay.createdAt : 0;
+  const lastChangeAt = stay.changeHistory.at(-1)?.latestChangedAt ?? 0;
+  return Math.max(createdWhileLive, lastChangeAt);
+}
+
+export function isStayActivityUnseen(stay: Stay, trip: TripSpace, uid: string) {
+  return getStayLastActivityAt(stay, trip) > (stay.seenBy?.[uid] ?? 0);
+}
+
+export const selectUnseenActivityStays =
+  (trip: TripSpace, uid: string) => (state: RootState): Stay[] =>
+    state.waypoint.stays.items
+      .filter((stay) => isStayActivityUnseen(stay, trip, uid))
+      .sort((a, b) => getStayLastActivityAt(b, trip) - getStayLastActivityAt(a, trip));
+
 /** Event Active Status Machine: UPCOMING -> now >= startAt -> ACTIVE -> now >= endAt -> COMPLETED. An
  * event without an endAt implicitly ends at the end of its own local calendar day, so it doesn't stay
  * ACTIVE forever (and doesn't resurface as Active Now once a later event on the same day has finished). */

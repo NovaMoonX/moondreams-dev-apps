@@ -196,6 +196,8 @@ export function StayFormModal({
         place: draft.place,
         linkUrl: draft.linkUrl,
         linkPreview: draft.linkPreview,
+        changeHistory: stay?.changeHistory ?? [],
+        seenBy: stay?.seenBy ?? {},
       });
       setError(null);
     } catch (submitError) {

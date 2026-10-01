@@ -9,20 +9,28 @@ import IconBadge from '@/components/IconBadge';
 import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayIndex, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatTime } from '@/utils/formatUtils';
 
-import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import DismissIconButton from '@apps/waypoint/components/DismissIconButton';
+import { LocationLink } from '@apps/waypoint/components/LocationLink';
 import {
   deleteAnnouncement,
   dismissAnnouncement,
 } from '@apps/waypoint/store/actions/announcementActions';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
-import { selectLiveAnnouncements, selectUnseenActivityEvents } from '@apps/waypoint/store/selectors';
+import { markStaySeen } from '@apps/waypoint/store/actions/stayActions';
+import {
+  getEventLastActivityAt,
+  getStayLastActivityAt,
+  selectLiveAnnouncements,
+  selectUnseenActivityEvents,
+  selectUnseenActivityStays,
+} from '@apps/waypoint/store/selectors';
 import { ANNOUNCEMENT_SEVERITY_BADGE_CLASSES, ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
-import type { Announcement, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import type { Announcement, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
 interface NotificationsIndicatorProps {
@@ -32,15 +40,15 @@ interface NotificationsIndicatorProps {
   className?: string;
 }
 
-interface EventActivity {
+interface Activity {
   label: 'Created' | 'Updated' | 'Archived';
   uid: string;
   at: number;
 }
 
 /** Whichever of create/edit/archive happened most recently is the activity this update describes. */
-function getEventActivity(event: TimelineEvent, trip: TripSpace): EventActivity {
-  const candidates: EventActivity[] = [];
+function getEventActivity(event: TimelineEvent, trip: TripSpace): Activity {
+  const candidates: Activity[] = [];
   if (event.createdAt >= trip.startDate) {
     candidates.push({ label: 'Created', uid: event.createdBy, at: event.createdAt });
   }
@@ -58,6 +66,98 @@ function getEventActivity(event: TimelineEvent, trip: TripSpace): EventActivity 
   );
 }
 
+// A stay has no archive concept, so it only ever reads as Created or Updated.
+function getStayActivity(stay: Stay): Activity {
+  const lastChange = stay.changeHistory.at(-1);
+  if (lastChange && lastChange.latestChangedAt >= stay.createdAt) {
+    return { label: 'Updated', uid: lastChange.latestChangedBy, at: lastChange.latestChangedAt };
+  }
+  return { label: 'Created', uid: stay.createdBy, at: stay.createdAt };
+}
+
+type UpdateItem = { kind: 'event'; data: TimelineEvent } | { kind: 'stay'; data: Stay };
+
+function getUpdateItemActivity(item: UpdateItem, trip: TripSpace): Activity {
+  return item.kind === 'event' ? getEventActivity(item.data, trip) : getStayActivity(item.data);
+}
+
+function getUpdateItemLastActivityAt(item: UpdateItem, trip: TripSpace): number {
+  return item.kind === 'event' ? getEventLastActivityAt(item.data, trip) : getStayLastActivityAt(item.data, trip);
+}
+
+function getUpdateItemKey(item: UpdateItem): string {
+  return `${item.kind}-${item.data.id}`;
+}
+
+function getUpdateItemDayLabel(item: UpdateItem, trip: TripSpace): string {
+  const dayIndex = item.kind === 'event' ? item.data.dayIndex : getDayIndex(trip.startDate, item.data.checkInAt);
+  return getDayLabel(trip.startDate, dayIndex);
+}
+
+function getActivityVerb(label: Activity['label']) {
+  if (label === 'Created') return 'added';
+  if (label === 'Archived') return 'archived';
+  return 'updated';
+}
+
+// Read as a notification — "so-and-so did X" as the headline, with the specifics (when/
+// where) as muted subtext — rather than a structured record of every field on the item.
+function renderUpdateItemBody(item: UpdateItem, activity: Activity, actorName: string, trip: TripSpace) {
+  const title = item.kind === 'event' ? item.data.title : item.data.name;
+  const headline = (
+    <p className='text-sm'>
+      <span className='font-medium'>{actorName}</span> {getActivityVerb(activity.label)}{' '}
+      <span className='font-medium'>{title}</span>
+    </p>
+  );
+
+  if (item.kind === 'event') {
+    const event = item.data;
+    if (activity.label === 'Archived') {
+      return (
+        <>
+          {headline}
+          <p className='text-muted-foreground text-xs'>
+            Originally planned for {getUpdateItemDayLabel(item, trip)} at {formatTime(event.startAt)}
+          </p>
+        </>
+      );
+    }
+
+    const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
+    return (
+      <>
+        {headline}
+        <p className='text-muted-foreground text-xs'>
+          {getUpdateItemDayLabel(item, trip)} · {formatTime(event.startAt)}
+          {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
+        </p>
+        {locationLabel && <LocationLink {...event} label={locationLabel} className='text-xs' />}
+      </>
+    );
+  }
+
+  const stay = item.data;
+  return (
+    <>
+      {headline}
+      <p className='text-muted-foreground text-xs'>
+        {getUpdateItemDayLabel(item, trip)} · {formatTime(stay.checkInAt)} - {formatTime(stay.checkOutAt)}
+      </p>
+      {stay.address && (
+        <LocationLink
+          locationName={stay.stayType === 'HOTEL' ? stay.name : null}
+          address={stay.address}
+          latitude={stay.latitude}
+          longitude={stay.longitude}
+          label={stay.address}
+          className='text-xs'
+        />
+      )}
+    </>
+  );
+}
+
 function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className }: NotificationsIndicatorProps) {
   const now = useNow();
   const dispatch = useAppDispatch();
@@ -65,11 +165,16 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
   const { confirm } = useActionModal();
   const announcements = useAppSelector(selectLiveAnnouncements(currentUserId, now), shallowEqual);
   const unseenEvents = useAppSelector(selectUnseenActivityEvents(trip, currentUserId), shallowEqual);
+  const unseenStays = useAppSelector(selectUnseenActivityStays(trip, currentUserId), shallowEqual);
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = isTripAdmin(trip, currentUserId);
   const hasUrgent = announcements.some((announcement) => announcement.severity === 'URGENT');
-  const totalCount = announcements.length + unseenEvents.length;
-  const actorUids = Array.from(new Set(unseenEvents.map((event) => getEventActivity(event, trip).uid)));
+  const updateItems: UpdateItem[] = [
+    ...unseenEvents.map((event): UpdateItem => ({ kind: 'event', data: event })),
+    ...unseenStays.map((stay): UpdateItem => ({ kind: 'stay', data: stay })),
+  ].sort((a, b) => getUpdateItemLastActivityAt(b, trip) - getUpdateItemLastActivityAt(a, trip));
+  const totalCount = announcements.length + updateItems.length;
+  const actorUids = Array.from(new Set(updateItems.map((item) => getUpdateItemActivity(item, trip).uid)));
   const actorsById = useUserInfo(actorUids)?.map ?? {};
 
   if (totalCount === 0) {
@@ -80,8 +185,12 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     void dispatch(dismissAnnouncement({ uid: currentUserId, trip, announcementId: announcement.id }));
   };
 
-  const dismissEvent = (event: TimelineEvent) => {
-    void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
+  const dismissUpdateItem = (item: UpdateItem) => {
+    if (item.kind === 'event') {
+      void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: item.data.id }));
+    } else {
+      void dispatch(markStaySeen({ uid: currentUserId, trip, stayId: item.data.id }));
+    }
   };
 
   const dismissAllAnnouncements = () => {
@@ -89,7 +198,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
   };
 
   const dismissAllUpdates = () => {
-    unseenEvents.forEach(dismissEvent);
+    updateItems.forEach(dismissUpdateItem);
   };
 
   const dismissAll = () => {
@@ -168,29 +277,20 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
             </div>
           </div>
         )}
-        {unseenEvents.length > 0 && (
+        {updateItems.length > 0 && (
           <div className='space-y-2'>
             {sectionHeading('Updates', dismissAllUpdates)}
-            <div className='space-y-3'>
-              {unseenEvents.map((event) => {
-                const activity = getEventActivity(event, trip);
+            <div className='divide-border divide-y'>
+              {updateItems.map((item) => {
+                const activity = getUpdateItemActivity(item, trip);
                 const actorName = actorsById[activity.uid]?.displayName || actorsById[activity.uid]?.email || 'Someone';
                 return (
-                  <div key={event.id} className='border-border bg-card space-y-1 rounded-lg border p-3'>
-                    <div className='flex items-start justify-between gap-2'>
-                      <p className='text-muted-foreground text-xs font-medium'>
-                        {activity.label} · {getDayLabel(trip.startDate, event.dayIndex)} · by {actorName}
-                      </p>
-                      <DismissIconButton onClick={() => dismissEvent(event)} />
-                    </div>
-                    <EventDetailLines
-                      event={event}
-                      showTitle
-                      showNotes={false}
-                      showChangeHistory={false}
-                      canEdit={false}
-                      onSaveNotes={async () => {}}
-                    />
+                  <div
+                    key={getUpdateItemKey(item)}
+                    className='flex items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0'
+                  >
+                    <div className='min-w-0 space-y-0.5'>{renderUpdateItemBody(item, activity, actorName, trip)}</div>
+                    <DismissIconButton onClick={() => dismissUpdateItem(item)} />
                   </div>
                 );
               })}

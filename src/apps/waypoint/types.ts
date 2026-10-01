@@ -61,6 +61,19 @@ export interface TripJoinRequest {
   requestedAt: number;
 }
 
+export interface StayFieldChange {
+  field: 'checkInAt' | 'checkOutAt';
+  previousValue: number;
+  changedBy: string;
+  changedAt: number;
+}
+
+export interface StayChangeSnapshot {
+  changes: StayFieldChange[];
+  latestChangedBy: string;
+  latestChangedAt: number;
+}
+
 export interface Stay {
   id: string;
   tripId: string;
@@ -79,6 +92,10 @@ export interface Stay {
   place: PlaceRef | null;
   linkUrl: string | null;
   linkPreview: LinkPreview | null;
+  changeHistory: StayChangeSnapshot[];
+  /** uid -> ms timestamp of when that member last viewed this stay, used to flag
+   * unseen post-start creations/edits in the "What's new" notifications panel. */
+  seenBy: Record<string, number>;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

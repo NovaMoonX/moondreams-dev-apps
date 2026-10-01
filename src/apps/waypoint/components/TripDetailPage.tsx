@@ -517,7 +517,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         onClose={() => setIsMobileActionsOpen(false)}
         title='Trip actions'
       >
-        <div className='space-y-2'>
+        <div className='space-y-4'>
           {[
             { items: groupedEditActionItems, destructive: false },
             ...standaloneActionItems.map((item) => ({ items: [item], destructive: false })),

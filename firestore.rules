@@ -1992,6 +1992,8 @@ service cloud.firestore {
             'place',
             'linkUrl',
             'linkPreview',
+            'changeHistory',
+            'seenBy',
             'createdBy',
             'createdAt',
             'lastEditedAt'
@@ -2024,16 +2026,29 @@ service cloud.firestore {
             && request.resource.data.linkUrl.matches('^https?://.*')
           ))
           && (request.resource.data.linkPreview == null || request.resource.data.linkPreview is map)
+          && request.resource.data.changeHistory is list
+          && request.resource.data.seenBy is map
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
           && isTimestampNumber(request.resource.data.lastEditedAt);
+      }
+
+      // Every trip member (not just editors/admins) can mark a stay "seen" for
+      // themselves — but only their own key, never anyone else's.
+      function isStaySeenByUpdateValid() {
+        return isTripSubcollectionMember()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
+          && request.resource.data.seenBy is map
+          && request.resource.data.seenBy.diff(resource.data.get('seenBy', {})).affectedKeys().hasOnly([request.auth.uid])
+          && isTimestampNumber(request.resource.data.seenBy[request.auth.uid]);
       }
 
       allow read: if isTripSubcollectionMember();
       allow create: if isTripCreateAllowed()
         && isStayShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isTripAdminOnlyWhileActive()
+      allow update: if (
+        isTripAdminOnlyWhileActive()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
             'stayType',
@@ -2050,9 +2065,11 @@ service cloud.firestore {
             'place',
             'linkUrl',
             'linkPreview',
+            'changeHistory',
             'lastEditedAt'
           ])
-        && isStayShapeValid();
+        && isStayShapeValid()
+      ) || isStaySeenByUpdateValid();
       allow delete: if isTripAdminOnlyWhileActive();
     }
 

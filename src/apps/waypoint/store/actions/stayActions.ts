@@ -1,9 +1,9 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { Stay, TripSpace } from '@apps/waypoint/types';
-import { canCreateItem, canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
+import type { Stay, StayChangeSnapshot, StayFieldChange, TripSpace } from '@apps/waypoint/types';
+import { canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 type StayFields = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
 
@@ -18,6 +18,31 @@ interface UpdateStayInput {
   trip: TripSpace;
   stayId: string;
   stay: StayFields;
+  previousStay: Stay;
+}
+
+const TRACKED_STAY_CHANGE_FIELDS = ['checkInAt', 'checkOutAt'] as const;
+
+function buildStayChangeSnapshot(
+  previousStay: Stay,
+  nextStay: StayFields,
+  uid: string,
+): StayChangeSnapshot | null {
+  const now = Date.now();
+  const changes: StayFieldChange[] = TRACKED_STAY_CHANGE_FIELDS.filter(
+    (field) => previousStay[field] !== nextStay[field],
+  ).map((field) => ({
+    field,
+    previousValue: previousStay[field],
+    changedBy: uid,
+    changedAt: now,
+  }));
+
+  if (changes.length === 0) {
+    return null;
+  }
+
+  return { changes, latestChangedBy: uid, latestChangedAt: now };
 }
 
 interface DeleteStayInput {
@@ -60,6 +85,8 @@ export const createStay = createAsyncThunk<
     notes: stay.notes?.trim() || null,
     linkUrl: stay.linkUrl?.trim() || null,
     linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
+    changeHistory: [],
+    seenBy: { [uid]: now },
     createdBy: uid,
     createdAt: now,
     lastEditedAt: now,
@@ -90,7 +117,7 @@ export const updateStay = createAsyncThunk<
   StayFields,
   UpdateStayInput,
   { rejectValue: string }
->('waypoint/stays/update', async ({ uid, trip, stayId, stay }, { rejectWithValue }) => {
+>('waypoint/stays/update', async ({ uid, trip, stayId, stay, previousStay }, { rejectWithValue }) => {
   if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to edit stays.');
   }
@@ -100,6 +127,7 @@ export const updateStay = createAsyncThunk<
   }
 
   const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
+  const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(previousStay, stay, uid) : null;
   const currentStay = {
     ...stay,
     id: stayId,
@@ -111,6 +139,9 @@ export const updateStay = createAsyncThunk<
     notes: stay.notes?.trim() || null,
     linkUrl: stay.linkUrl?.trim() || null,
     linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
+    changeHistory: newSnapshot
+      ? [...(previousStay.changeHistory ?? []), newSnapshot]
+      : (previousStay.changeHistory ?? []),
   };
   await setDoc(stayRef, { ...currentStay, lastEditedAt: Date.now() }, { merge: true });
   return stay;
@@ -128,6 +159,8 @@ function getMissingStayFields(stay: Stay): Partial<Stay> {
     place: null,
     linkUrl: null,
     linkPreview: null,
+    changeHistory: [],
+    seenBy: {},
   };
   const missing = Object.fromEntries(
     Object.entries(defaults).filter(([key]) => !(key in stay)),
@@ -171,3 +204,24 @@ export const deleteStay = createAsyncThunk<
   await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId));
   return stayId;
 });
+
+interface MarkStaySeenInput {
+  uid: string;
+  trip: TripSpace;
+  stayId: string;
+}
+
+export const markStaySeen = createAsyncThunk<void, MarkStaySeenInput, { rejectValue: string }>(
+  'waypoint/stays/markSeen',
+  async ({ uid, trip, stayId }) => {
+    const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(stayRef);
+      if (!snapshot.exists()) {
+        return;
+      }
+      const seenBy = (snapshot.data().seenBy ?? {}) as Record<string, number>;
+      transaction.update(stayRef, { seenBy: { ...seenBy, [uid]: Date.now() } });
+    });
+  },
+);
