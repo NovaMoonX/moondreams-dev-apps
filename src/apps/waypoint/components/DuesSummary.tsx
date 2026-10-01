@@ -70,14 +70,14 @@ function DuesSummary({
             aria-label={`${isRepaid ? 'Mark not repaid' : 'Mark repaid'}: ${expense.title}`}
             onClick={() => onToggleRepaid(expense.id)}
             className={join(
-              'h-auto w-full justify-start gap-3 rounded-md px-2 py-2 focus:outline-transparent!',
+              'h-auto w-full justify-start gap-3 rounded-md px-2! py-3! focus:outline-transparent!',
               rowClassName,
             )}
           >
             {content}
           </Button>
         ) : (
-          <div className={join('flex items-center justify-between gap-3 px-2 py-2', rowClassName)}>
+          <div className={join('flex items-center justify-between gap-3 px-2 py-3', rowClassName)}>
             {content}
           </div>
         )}
@@ -98,10 +98,10 @@ function DuesSummary({
     const canToggle = fromUid === currentUserId;
 
     return (
-      <div key={`${fromUid}-${toUid}`} className='space-y-2'>
+      <div key={`${fromUid}-${toUid}`} className='bg-muted/40 space-y-3 rounded-xl p-3'>
         {showTotals && (
-          <>
-            <p className='text-muted-foreground text-xs font-medium'>
+          <div className='space-y-2'>
+            <p className='text-sm font-medium'>
               {memberLabel(fromUid)} → {memberLabel(toUid)}
             </p>
             <div className='grid grid-cols-3 gap-2'>
@@ -109,9 +109,11 @@ function DuesSummary({
               {renderStat('Repaid', formatAmount(owed.repaid))}
               {renderStat('Still owed', formatAmount(owed.remaining), true)}
             </div>
-          </>
+          </div>
         )}
-        <ul className='-mx-2'>{owed.items.map((item) => renderItem(item, canToggle))}</ul>
+        <ul className={join('-mx-2 space-y-0.5', showTotals && 'border-border/60 border-t pt-2')}>
+          {owed.items.map((item) => renderItem(item, canToggle))}
+        </ul>
         {canToggle && (
           <p className='text-muted-foreground text-xs'>Tap an item once you&apos;ve paid it back.</p>
         )}
@@ -129,8 +131,8 @@ function DuesSummary({
 
     return (
       <div className='space-y-4'>
-        <div className='flex items-baseline justify-between gap-3'>
-          <p className='min-w-0 text-sm font-medium'>
+        <div className='border-border flex items-center justify-between gap-3 rounded-full border px-4 py-2.5'>
+          <p className='min-w-0 text-sm leading-tight font-medium'>
             {isPairSettled(settlement)
               ? `${memberLabel(personA)} and ${memberLabel(personB)} are settled up`
               : `${memberLabel(debtorUid)} owes ${memberLabel(creditorUid)}`}
