@@ -229,9 +229,10 @@ interface MarkExpensePaidInput {
 export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
   async ({ expense, payerUid, paidAmount, knownAmount }) => {
-    const updatedExpense: TripExpense = {
-      ...expense,
-      status: 'PAID',
+    // Only the fields this action owns are written — a whole-document write would clobber
+    // a debtor's concurrent repaid toggle held in `paidMemberStatus`.
+    const changes = {
+      status: 'PAID' as const,
       payerUid,
       amount: knownAmount ?? expense.amount,
       amountMin: knownAmount !== null ? null : expense.amountMin,
@@ -240,10 +241,11 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
       lastEditedAt: Date.now(),
     };
 
-    await setDoc(
+    await updateDoc(
       doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
-      updatedExpense,
+      changes,
     );
+    const updatedExpense: TripExpense = { ...expense, ...changes };
     return updatedExpense;
   },
 );
@@ -265,7 +267,7 @@ export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInp
       if (!snapshot.exists()) {
         return;
       }
-      const paidMemberStatus = snapshot.data().paidMemberStatus as TripExpense['paidMemberStatus'];
+      const paidMemberStatus = (snapshot.data().paidMemberStatus ?? {}) as TripExpense['paidMemberStatus'];
       const wasPaid = paidMemberStatus[uid]?.isPaid ?? false;
       transaction.update(expenseRef, {
         paidMemberStatus: {

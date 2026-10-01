@@ -125,7 +125,7 @@ export function EventDetailLines({
       )}
       {showChangeHistory && (
         <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
-          <ChangeBadge changeHistory={event.changeHistory} />
+          <ChangeBadge changeHistory={event.changeHistory ?? []} />
         </div>
       )}
     </>

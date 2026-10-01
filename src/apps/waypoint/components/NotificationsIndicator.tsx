@@ -90,7 +90,7 @@ function getEventActivity(event: TimelineEvent, trip: TripSpace): Activity {
   if (event.createdAt >= trip.startDate) {
     candidates.push({ label: 'Created', uid: event.createdBy, at: event.createdAt });
   }
-  const lastChange = event.changeHistory.at(-1);
+  const lastChange = (event.changeHistory ?? []).at(-1);
   if (lastChange) {
     candidates.push({ label: 'Updated', uid: lastChange.latestChangedBy, at: lastChange.latestChangedAt });
   }
@@ -106,7 +106,7 @@ function getEventActivity(event: TimelineEvent, trip: TripSpace): Activity {
 
 // A stay has no archive concept, so it only ever reads as Created or Updated.
 function getStayActivity(stay: Stay): Activity {
-  const lastChange = stay.changeHistory.at(-1);
+  const lastChange = (stay.changeHistory ?? []).at(-1);
   if (lastChange && lastChange.latestChangedAt >= stay.createdAt) {
     return { label: 'Updated', uid: lastChange.latestChangedBy, at: lastChange.latestChangedAt };
   }

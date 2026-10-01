@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -39,6 +39,14 @@ interface DeleteEventInput {
   trip: TripSpace;
   eventId: string;
 }
+
+const CONCURRENTLY_WRITTEN_EVENT_FIELDS = [
+  'seenBy',
+  'isArchived',
+  'archivedBy',
+  'archivedAt',
+  'changeHistory',
+];
 
 const TRACKED_CHANGE_FIELDS = [
   'startAt',
@@ -183,8 +191,7 @@ export const updateEvent = createAsyncThunk<
       reminderEnabled: event.reminderEnabled,
       assignedMemberIds: event.assignedMemberIds,
     });
-    const updatedEvent: TimelineEvent = {
-      ...event,
+    const trimmedFields = {
       id: eventId,
       tripId: trip.id,
       title: trimmedTitle,
@@ -192,14 +199,29 @@ export const updateEvent = createAsyncThunk<
       address: event.address?.trim() || null,
       linkUrl: event.linkUrl?.trim() || null,
       linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
-      changeHistory: newSnapshot
-        ? [...(previousEvent.changeHistory ?? []), newSnapshot]
-        : (previousEvent.changeHistory ?? []),
       reminderId,
       lastEditedAt: Date.now(),
     };
+    // `seenBy`, the archive fields, and `changeHistory` change independently of this form,
+    // so the cached copies are never written back — history is appended server-side instead.
+    const editableFields = Object.fromEntries(
+      Object.entries(event).filter(
+        ([key]) => !CONCURRENTLY_WRITTEN_EVENT_FIELDS.includes(key),
+      ),
+    );
 
-    await setDoc(eventRef, updatedEvent);
+    await updateDoc(eventRef, {
+      ...getMissingEventFields(previousEvent),
+      ...editableFields,
+      ...trimmedFields,
+      ...(newSnapshot ? { changeHistory: arrayUnion(newSnapshot) } : {}),
+    });
+
+    const updatedEvent: TimelineEvent = {
+      ...event,
+      ...trimmedFields,
+      changeHistory: [...(previousEvent.changeHistory ?? []), ...(newSnapshot ? [newSnapshot] : [])],
+    };
     return updatedEvent;
   },
 );

@@ -172,7 +172,7 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
           .map((uid) => ({
             uid,
             amountLabel: formatTotal(amounts[uid] ?? 0, amounts[uid] ?? 0, expense.currency),
-            isPaid: expense.paidMemberStatus[uid]?.isPaid ?? false,
+            isPaid: (expense.paidMemberStatus ?? {})[uid]?.isPaid ?? false,
           }));
 
   const perPersonLabel =

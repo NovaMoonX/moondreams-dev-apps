@@ -139,7 +139,7 @@ function getOwedInDirection(
 
       const amounts = getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(splitMemberIds, total);
       const share = amounts[debtorUid] ?? 0;
-      const isRepaid = expense.paidMemberStatus[debtorUid]?.isPaid ?? false;
+      const isRepaid = (expense.paidMemberStatus ?? {})[debtorUid]?.isPaid ?? false;
       return {
         total: acc.total + share,
         repaid: acc.repaid + (isRepaid ? share : 0),

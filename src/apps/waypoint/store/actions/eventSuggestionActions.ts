@@ -5,13 +5,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  runTransaction,
   setDoc,
   updateDoc,
-  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getDayIndex } from '@/utils/dateRangeUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 import { isTripAdmin, isTripMember } from '@apps/waypoint/utils/roleGuards';
@@ -119,11 +120,31 @@ export const updateEventSuggestion = createAsyncThunk<
       note: fields.note?.trim() || null,
     };
 
-    await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions', suggestion.id),
-      changes,
+    const suggestionRef = doc(
+      db,
+      'apps',
+      'waypoint',
+      'trips',
+      trip.id,
+      'eventSuggestions',
+      suggestion.id,
     );
-    return { ...suggestion, ...changes };
+    try {
+      // Reads the live document first: an Admin may have approved or declined this
+      // suggestion while the edit modal was open, and the edit must not resurrect it.
+      const currentSuggestion = await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(suggestionRef);
+        if (!snapshot.exists()) {
+          throw new Error('This suggestion was already approved or removed.');
+        }
+
+        transaction.update(suggestionRef, changes);
+        return snapshot.data() as EventSuggestion;
+      });
+      return { ...currentSuggestion, ...changes };
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error, 'Unable to save this suggestion.'));
+    }
   },
 );
 
@@ -179,6 +200,16 @@ export const approveEventSuggestion = createAsyncThunk<
     }
 
     const newEventRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'));
+    const sourceEventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', sourceEvent.id);
+    const suggestionRef = doc(
+      db,
+      'apps',
+      'waypoint',
+      'trips',
+      trip.id,
+      'eventSuggestions',
+      suggestion.id,
+    );
     const dayIndex = getDayIndex(trip.startDate, suggestion.suggestedStartAt);
     const endDayIndex =
       suggestion.suggestedEndAt !== null
@@ -186,7 +217,6 @@ export const approveEventSuggestion = createAsyncThunk<
         : dayIndex;
     const now = Date.now();
 
-    await cancelEventReminder(sourceEvent.reminderId);
     const reminderId = await scheduleEventReminder({
       trip,
       uid,
@@ -200,41 +230,68 @@ export const approveEventSuggestion = createAsyncThunk<
       },
     });
 
-    const newEvent: TimelineEvent = {
-      ...sourceEvent,
-      id: newEventRef.id,
-      dayIndex,
-      endDayIndex,
-      title: suggestion.suggestedTitle,
-      startAt: suggestion.suggestedStartAt,
-      endAt: suggestion.suggestedEndAt,
-      locationName: suggestion.suggestedLocationName,
-      address: suggestion.suggestedAddress,
-      latitude: suggestion.suggestedLatitude,
-      longitude: suggestion.suggestedLongitude,
-      place: suggestion.suggestedPlace,
-      reminderId,
-      isArchived: false,
-      archivedBy: null,
-      archivedAt: null,
-      seenBy: {},
-      createdBy: uid,
-      createdAt: now,
-      lastEditedAt: now,
-    };
+    try {
+      // Everything is re-read inside the transaction: another Admin may have approved or
+      // declined this suggestion, archived the event, or the owner may have edited the
+      // suggestion since this card was rendered.
+      await runTransaction(db, async (transaction) => {
+        const [sourceSnapshot, suggestionSnapshot] = await Promise.all([
+          transaction.get(sourceEventRef),
+          transaction.get(suggestionRef),
+        ]);
+        if (!suggestionSnapshot.exists()) {
+          throw new Error('This suggestion was already approved or declined.');
+        }
+        if (!sourceSnapshot.exists() || sourceSnapshot.data().isArchived === true) {
+          throw new Error('This event was already replaced or archived.');
+        }
+        const currentSuggestion = suggestionSnapshot.data() as EventSuggestion;
+        if (
+          currentSuggestion.suggestedTitle !== suggestion.suggestedTitle ||
+          currentSuggestion.suggestedStartAt !== suggestion.suggestedStartAt ||
+          currentSuggestion.suggestedEndAt !== suggestion.suggestedEndAt
+        ) {
+          throw new Error('This suggestion was just edited. Take another look before approving.');
+        }
 
-    const batch = writeBatch(db);
-    batch.set(newEventRef, newEvent);
-    batch.update(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', sourceEvent.id), {
-      isArchived: true,
-      archivedBy: uid,
-      archivedAt: now,
-      lastEditedAt: now,
-    });
-    batch.delete(
-      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions', suggestion.id),
-    );
-    await batch.commit();
+        const newEvent: TimelineEvent = {
+          ...(sourceSnapshot.data() as TimelineEvent),
+          id: newEventRef.id,
+          dayIndex,
+          endDayIndex,
+          title: suggestion.suggestedTitle,
+          startAt: suggestion.suggestedStartAt,
+          endAt: suggestion.suggestedEndAt,
+          locationName: currentSuggestion.suggestedLocationName,
+          address: currentSuggestion.suggestedAddress,
+          latitude: currentSuggestion.suggestedLatitude,
+          longitude: currentSuggestion.suggestedLongitude,
+          place: currentSuggestion.suggestedPlace,
+          reminderId,
+          isArchived: false,
+          archivedBy: null,
+          archivedAt: null,
+          seenBy: {},
+          createdBy: uid,
+          createdAt: now,
+          lastEditedAt: now,
+        };
+
+        transaction.set(newEventRef, newEvent);
+        transaction.update(sourceEventRef, {
+          isArchived: true,
+          archivedBy: uid,
+          archivedAt: now,
+          lastEditedAt: now,
+        });
+        transaction.delete(suggestionRef);
+      });
+    } catch (error) {
+      await cancelEventReminder(reminderId);
+      return rejectWithValue(getErrorMessage(error, 'Unable to approve this suggestion.'));
+    }
+
+    await cancelEventReminder(sourceEvent.reminderId);
   },
 );
 

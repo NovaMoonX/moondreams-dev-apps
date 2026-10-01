@@ -130,12 +130,17 @@ This checklist names the sections to walk; the rules themselves live there:
 ## 4. Sync Firestore + Storage rules with the final data model
 
 Walk "Firestore and Storage rules" in `CLAUDE.md` against every rule, index,
-and Storage path the diff touches or should have touched.
+and Storage path the diff touches or should have touched. Confirm each rule change
+was verified against the emulator (allowed + denied write per role, plus a
+legacy-shaped document), and that every write path in the diff uses the atomic
+primitive that fits (`arrayUnion`, `runTransaction`, field-scoped `updateDoc`) —
+see "State, data, and performance".
 
 ## 5. Validate
 
 Follow "Validation" in `CLAUDE.md`: `npx tsc -b --force` and `npx eslint .`,
-update the mini-app seed, drive the feature end-to-end in a real browser
+update the mini-app seed, prove backwards compatibility against legacy-shaped
+documents, drive the feature end-to-end in a real browser
 against the emulators, re-drive every pre-existing feature that touches a
 changed file (seed whatever state that needs), and verify rule denials and
 atomicity directly against the emulator. Delete throwaway scripts; leave the

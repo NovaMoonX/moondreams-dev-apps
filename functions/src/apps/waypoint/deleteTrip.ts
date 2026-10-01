@@ -9,13 +9,8 @@ if (getApps().length === 0) {
 
 const BATCH_LIMIT = 450;
 
-/**
- * Admin-only. The trip document and its invite code go in one batch, so a
- * trip is never left with a live invite (or an invite-less trip). Everything
- * hanging off the trip — subcollections, join requests, event reminders,
- * the cover image — is then cleaned up, which a client-side `deleteDoc` on
- * the parent can't do.
- */
+// The trip and its invite code go in one batch so an invite never outlives its trip;
+// the rest (subcollections, requests, reminders, cover) is what a client deleteDoc can't reach.
 export const deleteTrip = onCall(
   {
     region: 'us-central1',

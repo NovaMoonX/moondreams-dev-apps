@@ -2069,9 +2069,11 @@ service cloud.firestore {
       allow create: if isTripCreateAllowed()
         && isStayShapeValid()
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if (
-        isTripAdminOnlyWhileActive()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      // `seenBy` is only ever a member's own key, so an edit may touch it solely to give a
+      // stay saved before the field existed its empty starting map.
+      function isStayEditKeySetValid() {
+        let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+        return affectedKeys.hasOnly([
             'name',
             'stayType',
             'address',
@@ -2088,8 +2090,16 @@ service cloud.firestore {
             'linkUrl',
             'linkPreview',
             'changeHistory',
+            'seenBy',
             'lastEditedAt'
           ])
+          && (!affectedKeys.hasAny(['seenBy'])
+            || (!('seenBy' in resource.data) && request.resource.data.seenBy.size() == 0));
+      }
+
+      allow update: if (
+        isTripAdminOnlyWhileActive()
+        && isStayEditKeySetValid()
         && isStayShapeValid()
       ) || isStaySeenByUpdateValid();
       allow delete: if isTripAdminOnlyWhileActive();
@@ -2162,10 +2172,10 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
       allow update: if isTripExpenseMember()
         && isTripDateShiftIdle(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data)
-        && (resource.data.paidMemberStatus.keys().hasAll([request.auth.uid])
+        && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
           || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
-        && request.resource.data.paidMemberStatus.diff(resource.data.paidMemberStatus)
+        && request.resource.data.paidMemberStatus.diff(resource.data.get('paidMemberStatus', {}))
           .affectedKeys().hasOnly([request.auth.uid])
         && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
         && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null

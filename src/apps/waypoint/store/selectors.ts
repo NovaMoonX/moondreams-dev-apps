@@ -175,7 +175,8 @@ export const selectEventsByDay =
  * already started at creation time, so both checks are naturally already "post-start." */
 export function getEventLastActivityAt(event: TimelineEvent, trip: TripSpace) {
   const createdWhileLive = event.createdAt >= trip.startDate ? event.createdAt : 0;
-  const lastChangeAt = event.changeHistory.at(-1)?.latestChangedAt ?? 0;
+  // Events and stays saved before activity tracking existed have no history or seenBy yet.
+  const lastChangeAt = (event.changeHistory ?? []).at(-1)?.latestChangedAt ?? 0;
   const archivedAt = event.archivedAt ?? 0;
   return Math.max(createdWhileLive, lastChangeAt, archivedAt);
 }
@@ -196,7 +197,7 @@ export const selectUnseenActivityEvents =
  * only its creation and tracked-field edits count as activity. */
 export function getStayLastActivityAt(stay: Stay, trip: TripSpace) {
   const createdWhileLive = stay.createdAt >= trip.startDate ? stay.createdAt : 0;
-  const lastChangeAt = stay.changeHistory.at(-1)?.latestChangedAt ?? 0;
+  const lastChangeAt = (stay.changeHistory ?? []).at(-1)?.latestChangedAt ?? 0;
   return Math.max(createdWhileLive, lastChangeAt);
 }
 

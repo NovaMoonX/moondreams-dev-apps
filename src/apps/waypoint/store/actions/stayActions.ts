@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, StayChangeSnapshot, StayFieldChange, TripSpace } from '@apps/waypoint/types';
@@ -18,6 +18,7 @@ interface UpdateStayInput {
   trip: TripSpace;
   stayId: string;
   stay: StayFields;
+  previousStay: Stay;
 }
 
 const TRACKED_STAY_CHANGE_FIELDS = ['checkInAt', 'checkOutAt'] as const;
@@ -116,7 +117,7 @@ export const updateStay = createAsyncThunk<
   StayFields,
   UpdateStayInput,
   { rejectValue: string }
->('waypoint/stays/update', async ({ uid, trip, stayId, stay }, { rejectWithValue }) => {
+>('waypoint/stays/update', async ({ uid, trip, stayId, stay, previousStay }, { rejectWithValue }) => {
   if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to edit stays.');
   }
@@ -126,8 +127,15 @@ export const updateStay = createAsyncThunk<
   }
 
   const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
-  const currentStay = {
-    ...stay,
+  const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(previousStay, stay, uid) : null;
+  // `seenBy` and `changeHistory` change independently of this form, so the cached copies
+  // are never written back — history is appended server-side instead.
+  const editableFields = Object.fromEntries(
+    Object.entries(stay).filter(([key]) => key !== 'seenBy' && key !== 'changeHistory'),
+  );
+  const changes = {
+    ...getMissingStayFields(previousStay),
+    ...editableFields,
     id: stayId,
     tripId: trip.id,
     name: stay.name.trim(),
@@ -137,21 +145,11 @@ export const updateStay = createAsyncThunk<
     notes: stay.notes?.trim() || null,
     linkUrl: stay.linkUrl?.trim() || null,
     linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
+    ...(newSnapshot ? { changeHistory: arrayUnion(newSnapshot) } : {}),
+    lastEditedAt: Date.now(),
   };
 
-  // The history is read-modify-written, so it's appended to the stay as it is now, not as
-  // the edit modal saw it — otherwise two near-simultaneous admin saves drop one record.
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(stayRef);
-    if (!snapshot.exists()) {
-      throw new Error('This stay no longer exists.');
-    }
-
-    const previousStay = snapshot.data() as Stay;
-    const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(previousStay, stay, uid) : null;
-    const changeHistory = [...(previousStay.changeHistory ?? []), ...(newSnapshot ? [newSnapshot] : [])];
-    transaction.set(stayRef, { ...currentStay, changeHistory, lastEditedAt: Date.now() }, { merge: true });
-  });
+  await updateDoc(stayRef, changes);
   return stay;
 });
 
