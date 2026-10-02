@@ -463,10 +463,15 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                   {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
                 </p>
                 {trip.timezone && (
-                  <p className='text-muted-foreground flex items-center gap-1 text-sm'>
-                    <Globe className='h-3.5 w-3.5 shrink-0' />
-                    {formatTimezoneLabel(trip.timezone)}
-                  </p>
+                  <>
+                    <span aria-hidden className='text-muted-foreground'>
+                      ·
+                    </span>
+                    <p className='text-muted-foreground flex items-center gap-1 text-sm'>
+                      <Globe className='h-3.5 w-3.5 shrink-0' />
+                      {formatTimezoneLabel(trip.timezone)}
+                    </p>
+                  </>
                 )}
                 {canEditDates && !isSmallScreen && (
                   <Pencil className='text-muted-foreground h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100' />

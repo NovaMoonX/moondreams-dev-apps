@@ -13,7 +13,16 @@ interface TimezoneSelectProps {
 function TimezoneSelect({ value, onChange, disabled = false }: TimezoneSelectProps) {
   const options = useMemo(() => getTimezoneOptions(), []);
 
-  return <Select options={options} value={value} disabled={disabled} onChange={onChange} />;
+  return (
+    <Select
+      searchable
+      searchPlaceholder='Search time zones…'
+      options={options}
+      value={value}
+      disabled={disabled}
+      onChange={onChange}
+    />
+  );
 }
 
 export default TimezoneSelect;

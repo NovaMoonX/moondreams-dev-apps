@@ -24,7 +24,7 @@ function DateRangeField({ value, onChange, disabled = false }: DateRangeFieldPro
         disabled={disabled}
         onChange={(event) => onChange(shiftDateRangeStart(value, event.target.value))}
       />
-      <span aria-hidden className='text-muted-foreground'>
+      <span aria-hidden className='text-foreground font-semibold'>
         –
       </span>
       <Input

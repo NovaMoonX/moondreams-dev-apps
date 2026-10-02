@@ -2,16 +2,16 @@ import { useMemo, useState } from 'react';
 
 import {
   Button,
-  Checkbox,
   Form,
   FormFactories,
   Modal,
+  RadioGroup,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import DateRangeField, {
   type DateRangeValue,
 } from '@/components/forms/DateRangeField';
-import TimezoneField from '@/components/forms/TimezoneField';
+import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
@@ -64,7 +64,6 @@ function EditTripDatesModal({
     [trip?.startDate, trip?.endDate, trip?.timezone],
   );
   const [formData, setFormData] = useState<TripDatesFormData>(initialData);
-  const [resetCount, setResetCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const events = useAppSelector(selectTimelineEvents);
   const stays = useAppSelector(selectStays);
@@ -75,10 +74,6 @@ function EditTripDatesModal({
 
   const { startDate, endDate } = formData.dates;
   const keepOriginalDates = formData.keepOriginalDates;
-  const hasDatesChanged =
-    startDate !== initialData.dates.startDate ||
-    endDate !== initialData.dates.endDate ||
-    formData.timezone !== initialData.timezone;
 
   const newStartDate = fromDateInputValue(startDate);
   const newEndDate = fromDateInputValue(endDate);
@@ -146,51 +141,55 @@ function EditTripDatesModal({
           />
         ),
       }),
-      custom({
-        name: 'timezone',
-        label: '',
-        renderComponent: (props) => (
-          <TimezoneField
-            value={props.value as string}
-            onChange={(value) => props.onValueChange(value)}
-            describe={(zone) => (
-              <>
-                Times default to <b className='font-medium'>{zone}</b>. Events
-                and stays can use their own.
-              </>
-            )}
-            disabled={isSubmitting}
-          />
-        ),
-      }),
-      ...(showKeepOriginalOption
+      ...(showKeepOriginalOption || outOfRangeCount > 0
         ? [
             custom({
               name: 'keepOriginalDates',
-              label: 'Existing plans',
+              label: '',
               renderComponent: (props) => (
-                <div className='space-y-1 pl-1'>
-                  <label className='flex items-center gap-2'>
-                    <Checkbox
-                      checked={props.value as boolean}
-                      onCheckedChange={(checked) =>
-                        props.onValueChange(Boolean(checked))
+                <div className='space-y-2'>
+                  {showKeepOriginalOption && (
+                    <RadioGroup
+                      value={props.value ? 'keep' : 'move'}
+                      onChange={(value) =>
+                        props.onValueChange(value === 'keep')
                       }
+                      options={[
+                        { label: 'Move my plans with the trip', value: 'move' },
+                        {
+                          label: 'Keep my plans on their original dates',
+                          value: 'keep',
+                        },
+                      ]}
                     />
-                    Keep events and stays on their original dates
-                  </label>
-                  <p className='text-muted-foreground pl-7 text-sm'>
-                    {props.value
-                      ? 'Everything stays on the same calendar days, and its day number updates to match.'
-                      : 'Everything moves along with the trip.'}
-                  </p>
+                  )}
+                  {outOfRangeCount > 0 && (
+                    <p className='text-warning text-sm'>
+                      {outOfRangeCount === 1
+                        ? '1 item falls'
+                        : `${outOfRangeCount} items fall`}{' '}
+                      outside the new dates and will show under Outside trip
+                      dates.
+                    </p>
+                  )}
                 </div>
               ),
             }),
           ]
         : []),
+      custom({
+        name: 'timezone',
+        label: '',
+        renderComponent: (props) => (
+          <TimezoneSelect
+            value={props.value as string}
+            onChange={(value) => props.onValueChange(value)}
+            disabled={isSubmitting}
+          />
+        ),
+      }),
     ],
-    [showKeepOriginalOption, isSubmitting],
+    [showKeepOriginalOption, outOfRangeCount, isSubmitting],
   );
 
   if (!trip) {
@@ -198,11 +197,6 @@ function EditTripDatesModal({
   }
 
   const isFormComplete = newStartDate !== undefined && newEndDate !== undefined;
-
-  const handleReset = () => {
-    setFormData(initialData);
-    setResetCount((current) => current + 1);
-  };
 
   const handleSubmit = async (data: TripDatesFormData) => {
     const nextStartDate = fromDateInputValue(data.dates.startDate);
@@ -236,7 +230,6 @@ function EditTripDatesModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Trip dates'>
       <Form
-        key={resetCount}
         id='waypoint-trip-dates'
         form={fields}
         initialData={initialData}
@@ -247,17 +240,7 @@ function EditTripDatesModal({
         }}
         submitButton={
           <div className='space-y-3'>
-            {hasDatesChanged && (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='text-muted-foreground hover:text-foreground'
-                onClick={handleReset}
-              >
-                Go back to original dates
-              </Button>
-            )}
+            {error && <p className='text-destructive text-sm'>{error}</p>}
             <ModalFooterActions
               rightActions={
                 <>
@@ -277,15 +260,6 @@ function EditTripDatesModal({
           </div>
         }
       />
-      {outOfRangeCount > 0 && (
-        <p className='text-warning mt-3 text-sm'>
-          {outOfRangeCount === 1
-            ? '1 item falls'
-            : `${outOfRangeCount} items fall`}{' '}
-          outside the new dates and will show under Outside trip dates.
-        </p>
-      )}
-      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </Modal>
   );
 }

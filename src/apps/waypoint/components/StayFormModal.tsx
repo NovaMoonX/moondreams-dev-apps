@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import {
   Button,
@@ -22,7 +22,7 @@ import {
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { compareDayTime, shiftRangeEnd } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { getTimezoneOptions, formatTimezoneLabel } from '@/utils/timezoneUtils';
+import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { STAY_TYPES, STAY_TYPE_OPTION_LABELS } from '@apps/waypoint/constants';
 import type { Stay, StayType, TripSpace } from '@apps/waypoint/types';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
@@ -165,7 +165,6 @@ export function StayFormModal({
   );
   const isRelative = isRelativeTrip(trip);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
-  const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
 
@@ -481,8 +480,7 @@ export function StayFormModal({
         ) : showTimezoneField ? (
           <div className='space-y-1.5'>
             <Label>Timezone</Label>
-            <Select
-              options={timezoneOptions}
+            <TimezoneSelect
               value={draft.checkInTimezone}
               onChange={(value) => updateDraft({ checkInTimezone: value })}
             />

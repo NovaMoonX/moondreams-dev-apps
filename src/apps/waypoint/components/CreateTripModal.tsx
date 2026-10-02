@@ -7,8 +7,10 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import DateRangeField, { type DateRangeValue } from '@/components/forms/DateRangeField';
-import TimezoneField from '@/components/forms/TimezoneField';
+import DateRangeField, {
+  type DateRangeValue,
+} from '@/components/forms/DateRangeField';
+import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
@@ -75,15 +77,9 @@ function CreateTripModal({
         name: 'timezone',
         label: '',
         renderComponent: (props) => (
-          <TimezoneField
+          <TimezoneSelect
             value={props.value as string}
             onChange={(value) => props.onValueChange(value)}
-            describe={(zone) => (
-              <>
-                Times default to <b className='font-medium'>{zone}</b>. Events and stays can use
-                their own.
-              </>
-            )}
             disabled={isSubmitting}
           />
         ),
