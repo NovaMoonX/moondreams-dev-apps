@@ -92,6 +92,16 @@ interface EventFormModalProps {
   onClose: () => void;
 }
 
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className='flex items-center gap-3 pt-2'>
+      <div className='border-border flex-1 border-t' />
+      <span className='text-muted-foreground text-sm font-medium'>{label}</span>
+      <div className='border-border flex-1 border-t' />
+    </div>
+  );
+}
+
 function toSelectOptions<T extends string>(labels: Record<T, string>) {
   return Object.entries(labels).map(([value, text]) => ({
     value,
@@ -477,6 +487,12 @@ function EventFormModal({
         ? mealTypeOptions
         : activitySettingOptions;
 
+  const detailsSectionLabel = {
+    TRAVEL: 'Travel',
+    DINING: 'Meal',
+    ACTIVITY: 'Activity',
+    FREE_TIME: '',
+  }[draft.eventType];
   const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
   const attendeesLabel = isTravel ? "Who's traveling" : 'Attendees';
   const detailChips = [
@@ -663,6 +679,7 @@ function EventFormModal({
           </>
         ) : (
           <>
+            {draft.eventType !== 'FREE_TIME' && <SectionDivider label={detailsSectionLabel} />}
             {draft.eventType !== 'FREE_TIME' && (
               <div className='space-y-1.5'>
                 <Label>{quickLabel}</Label>
@@ -681,6 +698,7 @@ function EventFormModal({
                 onDepartureAirportPicked={(airport) => void fillLocationFromAirport(airport)}
               />
             )}
+            <SectionDivider label='Where' />
             <PlaceAutocompleteInput
               label='Location'
               quickSearch={{ label: 'Search by title', value: draft.title }}
@@ -715,6 +733,7 @@ function EventFormModal({
                 }
               />
             </div>
+            <SectionDivider label='More details' />
             {isLinkable && draft.hasLink && (
               <RemovableField
                 label='Link'
@@ -883,7 +902,7 @@ function EventFormModal({
                 </div>
               </RemovableField>
             )}
-            <AddFieldChips chips={detailChips} onAdd={revealDetail} />
+            <AddFieldChips heading='Add to this event' chips={detailChips} onAdd={revealDetail} />
             <ModalFooterActions
               leftActions={
                 <>
