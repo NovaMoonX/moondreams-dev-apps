@@ -35,6 +35,20 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 - **Pending-request/invite features ship both sides together**: owner approve/decline *and* requester cancel/withdraw (delete their own doc, destructive confirm).
 - **Static option lists** (dropdown options, role/status allowlists) are declared once in the mini-app's `constants.ts` (never `types.ts`, which is types only) and imported everywhere. Reference: `src/apps/waypoint/constants.ts`.
 
+## Design & UX
+
+How Waypoint's phone-first redesign works; new features follow it. Design the phone screen first, then widen.
+
+- **Layout switches.** Swap components with `useMediaQuery().isBelow('sm')`; pure reflow uses `sm:` classes.
+- **Phone shell.** A trip's bottom nav is only Overview / Timeline / Expenses (`TripBottomNav`). Every other section is a nested screen reached *from Overview* by an entry point (a count pill in `TripEntryPoints`, or a chevron row like `StaysEntry`) — never a new bottom-nav slot. The nav keeps Overview highlighted (`matches`), the header chevron reads "Back to Overview", and the id goes in `TRIP_SECTION_TABS` so `?tab=` works. Desktop shows the same section as a `TabsList` tab.
+- **Overview is the phase-aware hub.** Show what needs action *now* (pre-trip: ideas, checklist, album; live: Active Now / Up Next / Today). One emphasized surface at a time (Active Now's emerald card is the reference); everything else is a quiet row.
+- **Overlays.** Phone → `Drawer`, desktop → `Popover`/`DropdownMenu`, forms and confirmations → `Modal`/`useActionModal` at every size. Build the content once and render it in both. In a drawer's action list, group related actions in one `bg-muted/50` block, keep other actions standalone, and put destructive ones last in red.
+- **Screens and cards.** Every section opens with `SectionHeader` (title + at most one primary CTA, hidden when not permitted). Overview rows use the small uppercase eyebrow `h3`. One border per card — tint to group, never nest — with flat `divide-y` rows inside. An empty list is one muted line with the CTA in the header; an Overview entry with nothing yet is a tappable prompt row.
+- **Indicators.** Leading round icon chip with a soft tint; counts only when `> 0`, via `IconBadge` or the `bg-primary` pill.
+- **Create and edit ask little up front.** Required essentials only (usually a title plus the one field that makes it real); everything else sits behind a "+ Add X" reveal with a "Remove X" undo. Two-up fields use `grid gap-3 sm:grid-cols-2`. The footer stays on one row, so labels stay short (Cancel / Save / Add / Post). Go multi-step only when step two is truly secondary. Forms are `Modal`s, not full-height drawers.
+- **Copy** reads like a friend: notification sentences ("Alex added Lunch at Salt Creek"), warm one-line prompts, concrete placeholders ("Dinner at Ichiran").
+- **Trip-phase gating has two clocks.** Display uses the viewer's local day (`getTripStatus`); write gating uses UTC to match `firestore.rules` (`roleGuards.ts`: `hasTripStarted`). A UI gate and the rule that backs it use the same one — never mix them.
+
 ## State, data, and performance
 
 - **Firestore `onSnapshot` lives in `store/listeners/`** as `startXListener(key, onChange)`, started once from a `useXSync` hook at the mini-app's top-level page (reference: `useNineLivesSync.ts`, `useWaypointSync.ts`). Never inside a leaf/tab/panel component's `useEffect`. The exception is a genuinely modal-local, ephemeral subscription that no other component reads (e.g. a single invite-code lookup); keep it a small hook and mount it via a conditionally-rendered, keyed component so it subscribes once per key.
