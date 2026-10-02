@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Archive, ArchiveRestore } from 'lucide-react';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
+import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -17,10 +18,15 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { formatEventTimeRange, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
 import {
+  ACTIVITY_SETTING_LABELS,
+  EVENT_LINK_KIND_LABELS,
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
+  MEAL_TYPE_LABELS,
+  TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
+import { getTransitSummary } from '@apps/waypoint/utils/transitDetails';
 
 const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet…';
 
@@ -44,13 +50,16 @@ interface EventCardProps {
 function getQuickField(event: TimelineEvent): string | null {
   const details = event.eventDetails;
   if (event.eventType === 'TRAVEL' && details && 'transitType' in details) {
-    return details.transitType;
+    return TRANSIT_TYPE_LABELS[details.transitType] ?? details.transitType;
   }
   if (event.eventType === 'DINING' && details && 'mealType' in details) {
-    return details.mealType;
+    const cuisines = (details.cuisines ?? []).join(', ');
+    return [MEAL_TYPE_LABELS[details.mealType] ?? details.mealType, cuisines]
+      .filter(Boolean)
+      .join(' · ');
   }
   if (event.eventType === 'ACTIVITY' && details && 'settings' in details) {
-    return details.settings.join(' / ');
+    return details.settings.map((setting) => ACTIVITY_SETTING_LABELS[setting] ?? setting).join(' / ');
   }
   return null;
 }
@@ -81,6 +90,10 @@ export function EventDetailLines({
 }: EventDetailLinesProps) {
   const quickField = getQuickField(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
+  const transitLines =
+    event.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
+      ? getTransitSummary(event.eventDetails.transitType, event.eventDetails.transitDetails)
+      : [];
 
   return (
     <>
@@ -107,6 +120,19 @@ export function EventDetailLines({
       </div>
       {showTitle && <h3 className='pt-1 font-semibold'>{event.title}</h3>}
       {quickField && <p className='text-muted-foreground text-sm'>{quickField}</p>}
+      {transitLines.length > 0 && (
+        <dl className='text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm'>
+          {transitLines.map((line) => (
+            <div key={line.label} className='contents'>
+              <dt>{line.label}</dt>
+              <dd className='text-foreground'>{line.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE' && (
+        <EventAttendeeAvatars trip={trip} events={[event]} />
+      )}
       {locationLabel && <LocationLink {...event} label={locationLabel} />}
       {(event.venueOpenTime || event.venueCloseTime) && (
         <p className='text-muted-foreground text-sm'>
@@ -116,6 +142,11 @@ export function EventDetailLines({
       )}
       {event.linkUrl && (
         <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+          {event.linkKind && (
+            <span className='text-muted-foreground mr-1.5 text-sm'>
+              {EVENT_LINK_KIND_LABELS[event.linkKind]}:
+            </span>
+          )}
           <ExternalLinkText href={event.linkUrl} />
         </div>
       )}

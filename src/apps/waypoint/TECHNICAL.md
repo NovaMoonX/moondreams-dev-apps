@@ -124,7 +124,7 @@ interface TimelineEvent {
   eventType: EventType;
   dayIndex: number | null; // null = "no specific day" (RELATIVE trips only)
   endDayIndex: number | null; // equal to dayIndex for the common single-day case; higher for events spanning multiple days
-  title: string;
+  title: string; // Travel events may leave it blank in the form — a title like "Flight DL 482" is derived from the transit details on save
   startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
   endTime: string | null;
   timezone: string | null; // zone override for this event's times; null follows the trip's timezone
@@ -139,7 +139,9 @@ interface TimelineEvent {
   assignedMemberIds: string[]; // []
   changeHistory: EventChangeSnapshot[]; // [] — every post-trip-start edit, appended, never overwritten
   place: PlaceRef | null; // set by a Google Places pick — see "Enrichment: place search and link previews" below
-  linkUrl: string | null; // booking/listing link — DINING and ACTIVITY only; other event types leave this null
+  linkUrl: string | null; // booking/menu/listing link — any type but FREE_TIME
+  linkKind: 'WEBSITE' | 'RESERVATION' | 'MENU' | 'BOOKING' | null; // what the link is; null on events saved before it existed
+  groupLabel: string | null; // free-text group name — events of the same eventType sharing a label render as one collapsible group; derived at render time, no group document
   linkPreview: LinkPreview | null; // scraped from linkUrl by the fetchLinkMetadata cloud function
   createdBy: string;
   createdAt: number;
@@ -158,8 +160,7 @@ interface TravelEventDetails {
 
 interface DiningEventDetails {
   mealType: MealType;
-  menuLink: string | null;
-  cuisines: string[]; // []
+  cuisines: string[]; // [] — the menu is just the event's `linkUrl` with `linkKind: 'MENU'`
 }
 
 interface ActivityEventDetails {
@@ -183,8 +184,8 @@ interface TransitDetailsBase {
 }
 
 interface PointToPointTransitDetails extends TransitDetailsBase {
-  startLocation: string | null; // free text — not every trip has a "city"
-  endLocation: string | null;
+  startLocation: string | null; // free text — null means "from the previous event"
+  endLocation: string | null; // null means "to the next event"
 }
 
 interface FlightTransitDetails extends TransitDetailsBase {
@@ -196,7 +197,7 @@ interface FlightTransitDetails extends TransitDetailsBase {
 }
 
 interface DriveTransitDetails extends PointToPointTransitDetails {
-  confirmationCode: string | null;
+  // no confirmationCode — a rental's code belongs to the planned Rentals section, not a leg
   vehicleInfo: string | null;
 }
 

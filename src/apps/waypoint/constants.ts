@@ -4,6 +4,7 @@ import type {
   ChecklistCategory,
   EventAttendeeTargetType,
   EventFieldChange,
+  EventLinkKind,
   EventType,
   ExpenseCategory,
   ExpenseSortBy,
@@ -93,6 +94,71 @@ export const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {
   BIKE: 'Bike',
   SCOOTER: 'Scooter',
   OTHER: 'Other',
+};
+
+export interface TransitFieldSpec {
+  key: string;
+  label: string;
+  placeholder: string;
+  /** Essential fields show up front; the rest wait behind "+ Add details". */
+  essential: boolean;
+}
+
+const ROUTE_FIELDS: TransitFieldSpec[] = [
+  { key: 'startLocation', label: 'Starting point', placeholder: 'Defaults to your previous event', essential: false },
+  { key: 'endLocation', label: 'Destination', placeholder: 'Defaults to your next event', essential: false },
+];
+
+export const TRANSIT_FIELD_SPECS: Record<TransitType, TransitFieldSpec[]> = {
+  FLIGHT: [
+    { key: 'airline', label: 'Airline', placeholder: 'Delta', essential: true },
+    { key: 'flightNumber', label: 'Flight number', placeholder: 'DL 482', essential: true },
+    { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'XK7P2Q', essential: true },
+    { key: 'departureAirportCode', label: 'From (airport)', placeholder: 'JFK', essential: true },
+    { key: 'arrivalAirportCode', label: 'To (airport)', placeholder: 'LAX', essential: true },
+  ],
+  TRAIN: [
+    { key: 'operator', label: 'Operator', placeholder: 'Amtrak', essential: true },
+    { key: 'trainNumber', label: 'Train number', placeholder: '171', essential: true },
+    { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
+    { key: 'departureStation', label: 'From (station)', placeholder: 'Penn Station', essential: false },
+    { key: 'arrivalStation', label: 'To (station)', placeholder: 'Union Station', essential: false },
+  ],
+  FERRY: [
+    { key: 'operator', label: 'Operator', placeholder: 'Washington State Ferries', essential: true },
+    { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
+    { key: 'departurePort', label: 'From (port)', placeholder: 'Seattle', essential: false },
+    { key: 'arrivalPort', label: 'To (port)', placeholder: 'Bainbridge Island', essential: false },
+  ],
+  DRIVE: [
+    { key: 'vehicleInfo', label: 'Vehicle', placeholder: 'Blue Subaru Outback', essential: false },
+    ...ROUTE_FIELDS,
+  ],
+  WALK: ROUTE_FIELDS,
+  BIKE: [
+    { key: 'operator', label: 'Bike share or shop', placeholder: 'Citi Bike', essential: false },
+    ...ROUTE_FIELDS,
+  ],
+  SCOOTER: [
+    { key: 'operator', label: 'Scooter company', placeholder: 'Lime', essential: false },
+    ...ROUTE_FIELDS,
+  ],
+  OTHER: [],
+};
+
+export const EVENT_LINK_KIND_LABELS: Record<EventLinkKind, string> = {
+  WEBSITE: 'Website',
+  RESERVATION: 'Reservation',
+  MENU: 'Menu',
+  BOOKING: 'Booking',
+};
+
+// Which kinds of link each event type offers; the first is the default.
+export const EVENT_LINK_KINDS_BY_TYPE: Record<EventType, readonly EventLinkKind[]> = {
+  TRAVEL: ['BOOKING', 'WEBSITE'],
+  DINING: ['MENU', 'RESERVATION', 'WEBSITE'],
+  ACTIVITY: ['BOOKING', 'WEBSITE'],
+  FREE_TIME: [],
 };
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {

@@ -180,12 +180,82 @@ export type EventAttendeeTargetType =
   | 'EVERYONE_INCLUDING_FUTURE'
   | 'SPECIFIC_MEMBERS';
 
+export type EventLinkKind = 'WEBSITE' | 'RESERVATION' | 'MENU' | 'BOOKING';
+
+export interface TransitDetailsBase {
+  notes: string | null;
+  /** A duration (ms), not a point in time. */
+  estimatedTravelTimeMs: number | null;
+}
+
+/** `null` start/end means "from the previous event" / "to the next event". */
+export interface PointToPointTransitDetails extends TransitDetailsBase {
+  startLocation: string | null;
+  endLocation: string | null;
+}
+
+export interface FlightTransitDetails extends TransitDetailsBase {
+  airline: string | null;
+  flightNumber: string | null;
+  confirmationCode: string | null;
+  departureAirportCode: string | null;
+  arrivalAirportCode: string | null;
+}
+
+export interface DriveTransitDetails extends PointToPointTransitDetails {
+  vehicleInfo: string | null;
+}
+
+export interface FerryTransitDetails extends TransitDetailsBase {
+  operator: string | null;
+  confirmationCode: string | null;
+  departurePort: string | null;
+  arrivalPort: string | null;
+}
+
+export interface TrainTransitDetails extends TransitDetailsBase {
+  operator: string | null;
+  trainNumber: string | null;
+  confirmationCode: string | null;
+  departureStation: string | null;
+  arrivalStation: string | null;
+}
+
+export type WalkTransitDetails = PointToPointTransitDetails;
+
+export interface BikeTransitDetails extends PointToPointTransitDetails {
+  operator: string | null;
+}
+
+export interface ScooterTransitDetails extends PointToPointTransitDetails {
+  operator: string | null;
+}
+
+export interface OtherTransitDetails extends TransitDetailsBase {
+  customFields: Record<string, string> | null;
+}
+
+/** Which variant applies is read off the sibling `transitType`. */
+export type TransitDetails =
+  | FlightTransitDetails
+  | DriveTransitDetails
+  | FerryTransitDetails
+  | TrainTransitDetails
+  | WalkTransitDetails
+  | BikeTransitDetails
+  | ScooterTransitDetails
+  | OtherTransitDetails;
+
 export interface TravelEventDetails {
   transitType: TransitType;
+  /** Absent on events saved before transit details existed. */
+  transitDetails: TransitDetails | null;
 }
 
 export interface DiningEventDetails {
   mealType: MealType;
+  /** Absent on events saved before cuisines existed. */
+  cuisines: string[];
 }
 
 export interface ActivityEventDetails {
@@ -253,9 +323,13 @@ export interface TimelineEvent {
   venueCloseTime: string | null;
   changeHistory: EventChangeSnapshot[];
   place: PlaceRef | null;
-  /** Only meaningful for DINING and ACTIVITY events; other types leave this null. */
+  /** Only meaningful for DINING, ACTIVITY and TRAVEL events; FREE_TIME leaves this null. */
   linkUrl: string | null;
   linkPreview: LinkPreview | null;
+  /** What the link is (menu, reservation…); `null` on events saved before this existed. */
+  linkKind: EventLinkKind | null;
+  /** Free-text group name — events of the same type sharing a label render as one group. */
+  groupLabel: string | null;
   /** Minutes before `startAt` to send a reminder. Always a real value (defaults to
    * `DEFAULT_REMINDER_MINUTES_BEFORE`) — an event with no reminder configured yet
    * reads as "default lead time, enabled" rather than "no reminder." */

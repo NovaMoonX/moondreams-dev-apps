@@ -1780,6 +1780,8 @@ service cloud.firestore {
             'place',
             'linkUrl',
             'linkPreview',
+            'linkKind',
+            'groupLabel',
             'reminderMinutesBefore',
             'reminderEnabled',
             'reminderId',
@@ -1819,6 +1821,8 @@ service cloud.firestore {
             && request.resource.data.linkUrl.matches('^https?://.*')
           ))
           && (request.resource.data.linkPreview == null || request.resource.data.linkPreview is map)
+          && request.resource.data.get('linkKind', null) in [null, 'WEBSITE', 'RESERVATION', 'MENU', 'BOOKING']
+          && (request.resource.data.get('groupLabel', null) == null || isNonEmptyString(request.resource.data.get('groupLabel', null)))
           && request.resource.data.reminderMinutesBefore is int
           && request.resource.data.reminderMinutesBefore >= 5
           && request.resource.data.reminderMinutesBefore <= 60

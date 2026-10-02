@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Button,
@@ -10,6 +10,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
+
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -27,10 +28,14 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import {
   ACTIVITY_SETTING_LABELS,
+  ADD_NEW_OPTION,
   DEFAULT_REMINDER_MINUTES_BEFORE,
   EVENT_ATTENDEE_TARGET_LABELS,
+  EVENT_LINK_KIND_LABELS,
+  EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
@@ -41,12 +46,20 @@ import type {
   ActivitySetting,
   EventAttendeeTargetType,
   EventDetails,
+  EventLinkKind,
   EventType,
   MealType,
   TimelineEvent,
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
+import {
+  buildTransitDetails,
+  EMPTY_TRANSIT_DRAFT,
+  getDerivedTravelTitle,
+  getInitialTransitDraft,
+  type TransitDraft,
+} from '@apps/waypoint/utils/transitDetails';
 import {
   buildEventTimeFields,
   getEventTime,
@@ -58,6 +71,8 @@ interface EventFormModalProps {
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
+  /** Existing events, to offer their group names for same-type grouping. */
+  events?: TimelineEvent[];
   /** A rough center point (from an existing trip event/stay) to bias place search
    * results toward, so "starbucks" finds the one near this trip first. */
   placeBias?: PlaceSelectionBias;
@@ -115,6 +130,11 @@ interface EventDraft {
   place: PlaceRef | null;
   linkUrl: string;
   linkPreview: LinkPreview | null;
+  linkKind: EventLinkKind | null;
+  groupLabel: string;
+  isGrouped: boolean;
+  transit: TransitDraft;
+  cuisines: string;
   hasAttendeeOverride: boolean;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
@@ -126,14 +146,21 @@ interface EventDraft {
   reminderEnabled: boolean;
 }
 
-/** Only these event types carry a bookable link (dining reservations, activity
- * tickets); travel and free time don't have a natural "booking" to attach. */
+/** Free time has no natural "booking" or site to attach. */
 const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = [
   'DINING',
   'ACTIVITY',
+  'TRAVEL',
 ];
 
 const NO_DAY_VALUE = 'none';
+
+const DEFAULT_QUICK_FIELD: Record<EventType, string> = {
+  TRAVEL: 'FLIGHT',
+  DINING: 'DINNER',
+  ACTIVITY: 'INDOOR',
+  FREE_TIME: 'INDOOR',
+};
 
 function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: boolean) {
   const days = getDayOptions(trip.startDate, trip.endDate, current).map(({ value, label }) => ({
@@ -176,6 +203,17 @@ function getInitialDraft(trip: TripSpace, event: TimelineEvent | undefined): Eve
     place: event?.place ?? null,
     linkUrl: event?.linkUrl ?? '',
     linkPreview: event?.linkPreview ?? null,
+    linkKind: event?.linkKind ?? null,
+    groupLabel: event?.groupLabel ?? '',
+    isGrouped: Boolean(event?.groupLabel),
+    transit:
+      event?.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
+        ? getInitialTransitDraft(event.eventDetails.transitType, event.eventDetails.transitDetails)
+        : EMPTY_TRANSIT_DRAFT,
+    cuisines:
+      event?.eventType === 'DINING' && event.eventDetails && 'mealType' in event.eventDetails
+        ? (event.eventDetails.cuisines ?? []).join(', ')
+        : '',
     hasAttendeeOverride: Boolean(
       event && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
     ),
@@ -200,6 +238,7 @@ function EventFormModal({
   trip,
   memberOptions,
   event,
+  events = [],
   placeBias,
   isSubmitting = false,
   onSubmit,
@@ -211,6 +250,18 @@ function EventFormModal({
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event));
   const isRelative = isRelativeTrip(trip);
+  const sameTypeGroupLabels = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          events
+            .filter((other) => other.eventType === draft.eventType && other.groupLabel)
+            .map((other) => other.groupLabel as string),
+        ),
+      ),
+    [events, draft.eventType],
+  );
+  const isTravel = draft.eventType === 'TRAVEL';
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const updateDraft = (changes: Partial<EventDraft>) =>
@@ -246,8 +297,8 @@ function EventFormModal({
   };
 
   const handleNext = () => {
-    if (!draft.title.trim() || !draft.time || (draft.dayIndex === null && !isRelative)) {
-      setError('Enter a title, day, and start time.');
+    if ((!isTravel && !draft.title.trim()) || !draft.time || (draft.dayIndex === null && !isRelative)) {
+      setError(isTravel ? 'Enter a day and start time.' : 'Enter a title, day, and start time.');
       return;
     }
     if (draft.hasEndTime && !draft.endTime) {
@@ -277,16 +328,30 @@ function EventFormModal({
       return;
     }
 
-    let eventDetails: EventDetails;
-    if (draft.eventType === 'TRAVEL') {
-      eventDetails = { transitType: draft.quickField as TransitType };
-    } else if (draft.eventType === 'DINING') {
-      eventDetails = { mealType: draft.quickField as MealType };
-    } else if (draft.eventType === 'ACTIVITY') {
-      eventDetails = { settings: [draft.quickField as ActivitySetting] };
-    } else {
-      eventDetails = {};
-    }
+    const transitType = draft.quickField as TransitType;
+    const transitDetails = isTravel ? buildTransitDetails(transitType, draft.transit) : null;
+    const getEventDetails = (): EventDetails => {
+      if (draft.eventType === 'TRAVEL') {
+        return { transitType, transitDetails };
+      }
+      if (draft.eventType === 'DINING') {
+        const cuisines = draft.cuisines
+          .split(',')
+          .map((cuisine) => cuisine.trim())
+          .filter(Boolean);
+        return { mealType: draft.quickField as MealType, cuisines };
+      }
+      if (draft.eventType === 'ACTIVITY') {
+        return { settings: [draft.quickField as ActivitySetting] };
+      }
+      return {};
+    };
+    const eventDetails = getEventDetails();
+    const title = isTravel && !draft.title.trim()
+      ? getDerivedTravelTitle(transitType, transitDetails)
+      : draft.title;
+    const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
+    const linkKinds = EVENT_LINK_KINDS_BY_TYPE[draft.eventType];
 
     const assignedMemberIds =
       draft.attendeeTargetType === 'SPECIFIC_MEMBERS'
@@ -299,7 +364,7 @@ function EventFormModal({
       await onSubmit({
         eventType: draft.eventType,
         ...timeFields,
-        title: draft.title,
+        title,
         locationName: draft.locationName,
         address: draft.address,
         latitude: draft.latitude,
@@ -312,12 +377,10 @@ function EventFormModal({
         venueCloseTime: draft.hasVenueHours ? draft.venueCloseTime || null : null,
         changeHistory: event?.changeHistory ?? [],
         place: draft.place,
-        linkUrl: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
-          ? draft.linkUrl
-          : null,
-        linkPreview: LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType)
-          ? draft.linkPreview
-          : null,
+        linkUrl: isLinkable ? draft.linkUrl : null,
+        linkPreview: isLinkable ? draft.linkPreview : null,
+        linkKind: isLinkable && draft.linkUrl.trim() ? (draft.linkKind ?? linkKinds[0] ?? null) : null,
+        groupLabel: draft.isGrouped ? draft.groupLabel.trim() || null : null,
         reminderMinutesBefore: draft.reminderMinutesBefore,
         reminderEnabled: draft.reminderEnabled,
         reminderId: event?.reminderId ?? null,
@@ -392,7 +455,12 @@ function EventFormModal({
                 options={eventTypeOptions}
                 value={draft.eventType}
                 onChange={(value) =>
-                  updateDraft({ eventType: value as EventType })
+                  updateDraft({
+                    eventType: value as EventType,
+                    quickField: DEFAULT_QUICK_FIELD[value as EventType],
+                    isGrouped: false,
+                    groupLabel: '',
+                  })
                 }
               />
             </div>
@@ -400,7 +468,14 @@ function EventFormModal({
               <Label>Title</Label>
               <Input
                 value={draft.title}
-                placeholder='Dinner at Ichiran'
+                placeholder={
+                  isTravel
+                    ? getDerivedTravelTitle(
+                        draft.quickField as TransitType,
+                        buildTransitDetails(draft.quickField as TransitType, draft.transit),
+                      )
+                    : 'Dinner at Ichiran'
+                }
                 onChange={(event) => updateDraft({ title: event.target.value })}
               />
             </div>
@@ -521,6 +596,23 @@ function EventFormModal({
                 />
               </div>
             )}
+            {isTravel && (
+              <TransitDetailsFields
+                transitType={draft.quickField as TransitType}
+                value={draft.transit}
+                onChange={(transit) => updateDraft({ transit })}
+              />
+            )}
+            {draft.eventType === 'DINING' && (
+              <div className='space-y-1.5'>
+                <Label>Cuisines</Label>
+                <Input
+                  placeholder='Ramen, Japanese'
+                  value={draft.cuisines}
+                  onChange={(event) => updateDraft({ cuisines: event.target.value })}
+                />
+              </div>
+            )}
             <PlaceAutocompleteInput
               label='Location'
               quickSearch={{ label: 'Search by title', value: draft.title }}
@@ -532,7 +624,7 @@ function EventFormModal({
               bias={placeBias}
               onSelect={(result: PlaceSelectionResult) =>
                 updateDraft({
-                  title: draft.title.trim() ? draft.title : result.name,
+                  title: draft.title.trim() || isTravel ? draft.title : result.name,
                   locationName: result.name,
                   address: result.address,
                   latitude: result.latitude,
@@ -568,6 +660,62 @@ function EventFormModal({
                 currentTitle={draft.title}
                 onUseTitle={(title) => updateDraft({ title })}
               />
+            )}
+            {LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) && draft.linkUrl.trim() && (
+              <div className='space-y-1.5'>
+                <Label>This link is a…</Label>
+                <Select
+                  options={EVENT_LINK_KINDS_BY_TYPE[draft.eventType].map((kind) => ({
+                    value: kind,
+                    text: EVENT_LINK_KIND_LABELS[kind],
+                  }))}
+                  value={draft.linkKind ?? EVENT_LINK_KINDS_BY_TYPE[draft.eventType][0]}
+                  onChange={(value) => updateDraft({ linkKind: value as EventLinkKind })}
+                />
+              </div>
+            )}
+            {draft.isGrouped ? (
+              <div className='space-y-1.5'>
+                <div className='flex items-center justify-between'>
+                  <Label>Group</Label>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    aria-label='Remove from group'
+                    onClick={() => updateDraft({ isGrouped: false, groupLabel: '' })}
+                  >
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
+                {sameTypeGroupLabels.length > 0 && (
+                  <Select
+                    options={[
+                      ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
+                      { value: ADD_NEW_OPTION, text: 'New group…' },
+                    ]}
+                    value={sameTypeGroupLabels.includes(draft.groupLabel) ? draft.groupLabel : ADD_NEW_OPTION}
+                    onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
+                  />
+                )}
+                {!sameTypeGroupLabels.includes(draft.groupLabel) && (
+                  <Input
+                    placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
+                    value={draft.groupLabel}
+                    onChange={(event) => updateDraft({ groupLabel: event.target.value })}
+                  />
+                )}
+              </div>
+            ) : (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-auto p-0'
+                onClick={() => updateDraft({ isGrouped: true })}
+              >
+                + Add to a group
+              </Button>
             )}
             {draft.dayIndex === null ? null : draft.hasReminderOverride ? (
               <div className='space-y-1.5'>
@@ -663,7 +811,7 @@ function EventFormModal({
               <>
                 <div className='space-y-1.5'>
                   <div className='flex items-center justify-between'>
-                    <Label>Attendees</Label>
+                    <Label>{isTravel ? "Who's traveling" : 'Attendees'}</Label>
                     <Button
                       type='button'
                       variant='tertiary'
@@ -721,7 +869,7 @@ function EventFormModal({
                 className='h-auto p-0'
                 onClick={() => updateDraft({ hasAttendeeOverride: true })}
               >
-                + Limit attendees
+                {isTravel ? "+ Who's traveling" : '+ Limit attendees'}
               </Button>
             )}
             <ModalFooterActions

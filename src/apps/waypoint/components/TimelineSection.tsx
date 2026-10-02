@@ -15,6 +15,7 @@ import AppToggle from '@/components/AppToggle';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
+import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
@@ -44,6 +45,7 @@ import {
   canEditExistingItem,
   hasTripStarted,
 } from '@apps/waypoint/utils/roleGuards';
+import { groupEventsByLabel } from '@apps/waypoint/utils/eventGroups';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
@@ -192,6 +194,15 @@ export function TimelineSection({
     </div>
   );
 
+  const renderEventItems = (items: TimelineEvent[]) =>
+    groupEventsByLabel(items).map((item) =>
+      item.kind === 'group' ? (
+        <EventGroupCard key={item.key} trip={trip} group={item} renderEvent={renderEventCard} />
+      ) : (
+        renderEventCard(item.event)
+      ),
+    );
+
   const renderDivider = (label: string) => (
     <div className='flex items-center gap-3'>
       <div className='border-border flex-1 border-t' />
@@ -221,7 +232,7 @@ export function TimelineSection({
             .map((day) => (
               <div key={day} className='space-y-3'>
                 {renderDivider(getDayDateLabel(trip.startDate, day))}
-                {visibleEvents.filter((event) => event.dayIndex === day).map(renderEventCard)}
+                {renderEventItems(visibleEvents.filter((event) => event.dayIndex === day))}
               </div>
             ))}
         </div>
@@ -229,7 +240,7 @@ export function TimelineSection({
     }
 
     if (scope !== 'all') {
-      return <div className='space-y-3'>{visibleEvents.map(renderEventCard)}</div>;
+      return <div className='space-y-3'>{renderEventItems(visibleEvents)}</div>;
     }
 
     return (
@@ -238,7 +249,7 @@ export function TimelineSection({
           ({ bucket, items }) => (
             <div key={bucket} className='space-y-3'>
               {renderDivider(getBucketLabel(bucket, trip.startDate))}
-              {items.map(renderEventCard)}
+              {renderEventItems(items)}
             </div>
           ),
         )}
@@ -384,6 +395,7 @@ export function TimelineSection({
         trip={trip}
         memberOptions={memberOptions}
         event={editingEvent}
+        events={events}
         placeBias={placeBias}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
