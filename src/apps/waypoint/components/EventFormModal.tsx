@@ -25,7 +25,6 @@ import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime, formatTime } from '@/utils/formatUtils';
-import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -211,7 +210,6 @@ function EventFormModal({
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event));
-  const [isChangingTimezone, setIsChangingTimezone] = useState(false);
   const isRelative = isRelativeTrip(trip);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
@@ -469,31 +467,19 @@ function EventFormModal({
             )}
             {isRelative && effectiveTimezone && (
               <div className='space-y-1.5'>
-                {isChangingTimezone ? (
-                  <>
-                    <Label>Time zone</Label>
-                    <TimezoneSelect
-                      value={effectiveTimezone}
-                      onChange={(value) =>
-                        updateDraft({ timezone: value === trip.timezone ? null : value })
-                      }
-                    />
-                  </>
-                ) : (
-                  <p className='text-muted-foreground text-sm'>
-                    Time zone: {formatTimezoneLabel(effectiveTimezone)}
-                    {draft.timezone === null && ' (trip default)'}{' '}
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className='h-auto p-0'
-                      onClick={() => setIsChangingTimezone(true)}
-                    >
-                      Change
-                    </Button>
-                  </p>
-                )}
+                <Label>Time zone</Label>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <TimezoneSelect
+                    pill
+                    value={effectiveTimezone}
+                    onChange={(value) =>
+                      updateDraft({ timezone: value === trip.timezone ? null : value })
+                    }
+                  />
+                  {draft.timezone === null && (
+                    <span className='text-muted-foreground text-xs'>Trip default</span>
+                  )}
+                </div>
               </div>
             )}
             <ModalFooterActions

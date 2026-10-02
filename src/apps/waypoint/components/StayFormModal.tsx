@@ -22,7 +22,6 @@ import {
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { compareDayTime, shiftRangeEnd } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { STAY_TYPES, STAY_TYPE_OPTION_LABELS } from '@apps/waypoint/constants';
 import type { Stay, StayType, TripSpace } from '@apps/waypoint/types';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
@@ -451,36 +450,25 @@ export function StayFormModal({
         )}
         {isRelative && effectiveTimezone ? (
           <div className='space-y-1.5'>
-            {showTimezoneField ? (
-              <>
-                <Label>Time zone</Label>
-                <TimezoneSelect
-                  value={effectiveTimezone}
-                  onChange={(value) =>
-                    updateDraft({ checkInTimezone: value === trip.timezone ? '' : value })
-                  }
-                />
-              </>
-            ) : (
-              <p className='text-muted-foreground text-sm'>
-                Time zone: {formatTimezoneLabel(effectiveTimezone)}
-                {draft.checkInTimezone === '' && ' (trip default)'}{' '}
-                <Button
-                  type='button'
-                  variant='link'
-                  size='sm'
-                  className='h-auto p-0'
-                  onClick={() => setShowTimezoneField(true)}
-                >
-                  Change
-                </Button>
-              </p>
-            )}
+            <Label>Time zone</Label>
+            <div className='flex flex-wrap items-center gap-2'>
+              <TimezoneSelect
+                pill
+                value={effectiveTimezone}
+                onChange={(value) =>
+                  updateDraft({ checkInTimezone: value === trip.timezone ? '' : value })
+                }
+              />
+              {draft.checkInTimezone === '' && (
+                <span className='text-muted-foreground text-xs'>Trip default</span>
+              )}
+            </div>
           </div>
         ) : showTimezoneField ? (
           <div className='space-y-1.5'>
             <Label>Timezone</Label>
             <TimezoneSelect
+              pill
               value={draft.checkInTimezone}
               onChange={(value) => updateDraft({ checkInTimezone: value })}
             />
