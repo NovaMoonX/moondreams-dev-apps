@@ -27,7 +27,7 @@ function TimezoneSelect({ value, onChange, disabled = false, pill = false }: Tim
       onChange={onChange}
       className={join(pill && 'w-fit')}
       triggerClassName={join(
-        pill && 'bg-secondary border-transparent gap-2 rounded-md py-1.5 pr-3 pl-9 text-sm',
+        pill && 'bg-secondary border-transparent gap-2 rounded-full! py-1.5 pr-3 pl-8 text-sm',
       )}
       dropdownClassName={join(pill && 'min-w-72')}
     />
