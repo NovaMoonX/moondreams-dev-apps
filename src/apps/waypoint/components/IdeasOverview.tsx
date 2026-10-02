@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 
 import { Button, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Lightbulb } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
@@ -80,16 +79,27 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
       <Tabs value={ideaType} onValueChange={(value) => setIdeaType(value as IdeaType)} variant='pills'>
         <TabsList>
           {IDEA_TYPES.map((type) => (
-            <TabsTrigger key={type} value={type}>
+            <TabsTrigger
+              key={type}
+              value={type}
+              className='aria-selected:bg-amber-200! aria-selected:text-amber-900! dark:aria-selected:bg-amber-900! dark:aria-selected:text-amber-50!'
+            >
               {IDEA_TYPE_PLURAL_LABELS[type]}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
       {preview.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>
-          No {IDEA_TYPE_PLURAL_LABELS[ideaType].toLowerCase()} yet — be the first to add one.
-        </p>
+        <div className='flex flex-col items-center gap-1 pt-2 pb-2 text-center'>
+          <span className='text-4xl leading-none' aria-hidden='true'>
+            {IDEA_TYPE_EMOJIS[ideaType]}
+          </span>
+          <p className='mt-1 font-semibold'>No {IDEA_TYPE_PLURAL_LABELS[ideaType].toLowerCase()} yet</p>
+          <p className='text-muted-foreground text-sm'>Be the first to suggest one for the group.</p>
+          <Button type='button' size='sm' className='mt-2' onClick={() => onAdd(ideaType)}>
+            + Add an idea
+          </Button>
+        </div>
       ) : (
         <div className='divide-border divide-y'>
           {preview.map((idea) => {
@@ -126,22 +136,26 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           })}
         </div>
       )}
-      <div className={join('flex items-center gap-3', ideas.length > 0 ? 'justify-between' : 'justify-start')}>
-        <Button type='button' size='sm' onClick={() => onAdd(ideaType)}>
-          + Add an idea
-        </Button>
-        {ideas.length > 0 && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-auto p-0 text-sm'
-            onClick={onOpen}
-          >
-            See all {ideas.length} <ChevronRight className='h-4 w-4' />
-          </Button>
-        )}
-      </div>
+      {(preview.length > 0 || ideas.length > 0) && (
+        <div className='flex items-center gap-3'>
+          {preview.length > 0 && (
+            <Button type='button' size='sm' onClick={() => onAdd(ideaType)}>
+              + Add an idea
+            </Button>
+          )}
+          {ideas.length > 0 && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='ml-auto h-auto p-0 text-sm'
+              onClick={onOpen}
+            >
+              See all {ideas.length} <ChevronRight className='h-4 w-4' />
+            </Button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

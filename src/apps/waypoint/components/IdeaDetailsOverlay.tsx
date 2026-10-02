@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type ReactElement, type ReactNode } from 'react';
+import { useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -15,7 +15,6 @@ import {
 } from '@apps/waypoint/constants';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTiming } from '@apps/waypoint/utils/ideaLabels';
-import { getOpenDetailsProps } from '@apps/waypoint/utils/openDetailsProps';
 
 let openIdeaId: string | null = null;
 const openIdeaListeners = new Set<() => void>();
@@ -38,7 +37,13 @@ const setOpenIdea = (ideaId: string, isOpen: boolean) => {
   openIdeaListeners.forEach((listener) => listener());
 };
 
-export type IdeaOpenProps = ReturnType<typeof getOpenDetailsProps>;
+export interface IdeaOpenProps {
+  role: 'button';
+  tabIndex: number;
+  'aria-label': string;
+  onClick: () => void;
+  onKeyDown: (keyEvent: KeyboardEvent<HTMLElement>) => void;
+}
 export type IdeaAnchor = (content: ReactNode) => ReactElement;
 
 interface IdeaDetailsOverlayProps {
@@ -149,7 +154,18 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
   // One details view is open at a time, so moving between ideas never leaves two showing.
   const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openIdeaId === idea.id);
   const setIsOpen = (open: boolean) => setOpenIdea(idea.id, open);
-  const openProps = getOpenDetailsProps(idea.title, () => setIsOpen(true));
+  const openProps: IdeaOpenProps = {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': `Open details for ${idea.title}`,
+    onClick: () => setIsOpen(true),
+    onKeyDown: (keyEvent) => {
+      if (keyEvent.target === keyEvent.currentTarget && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) {
+        keyEvent.preventDefault();
+        setIsOpen(true);
+      }
+    },
+  };
 
   if (isSmallScreen) {
     return (

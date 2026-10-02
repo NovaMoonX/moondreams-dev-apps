@@ -19,6 +19,7 @@ import { isValidHttpUrl } from '@/utils/urlUtils';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
+  IDEA_TYPE_EMOJIS,
   IDEA_TYPE_LABELS,
   IDEA_TYPES,
   TIME_BLOCK_LABELS,
@@ -70,7 +71,10 @@ interface IdeaFormModalProps {
 
 const { custom, input, select } = FormFactories;
 
-const typeOptions = IDEA_TYPES.map((value) => ({ value, label: IDEA_TYPE_LABELS[value] }));
+const typeOptions = IDEA_TYPES.map((value) => ({
+  value,
+  label: `${IDEA_TYPE_EMOJIS[value]} ${IDEA_TYPE_LABELS[value]}`,
+}));
 
 const EMPTY_EXTRAS: IdeaExtras = {
   link: { enabled: false, value: '', isDraftInvalid: false },
@@ -119,7 +123,7 @@ interface IdeaExtrasFieldsProps {
 }
 
 function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFieldsProps) {
-  const detailsLabel = isRestaurant ? 'Cuisine' : 'Indoor or outdoor';
+  const detailsLabel = isRestaurant ? 'Cuisine' : 'Indoor / outdoor';
   const chips = [
     { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
     {
