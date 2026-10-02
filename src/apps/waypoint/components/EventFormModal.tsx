@@ -9,9 +9,10 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { X } from 'lucide-react';
+import { Bell, Clock, Layers, Link2, Users, Utensils, X } from 'lucide-react';
 
 
+import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
@@ -132,6 +133,8 @@ interface EventDraft {
   linkKind: EventLinkKind | null;
   groupLabel: string;
   isGrouped: boolean;
+  hasLink: boolean;
+  hasCuisines: boolean;
   transit: TransitDraft;
   cuisines: string;
   hasAttendeeOverride: boolean;
@@ -204,6 +207,13 @@ function getInitialDraft(trip: TripSpace, event: TimelineEvent | undefined): Eve
     linkKind: event?.linkKind ?? null,
     groupLabel: event?.groupLabel ?? '',
     isGrouped: Boolean(event?.groupLabel),
+    hasLink: Boolean(event?.linkUrl),
+    hasCuisines: Boolean(
+      event?.eventType === 'DINING' &&
+        event.eventDetails &&
+        'cuisines' in event.eventDetails &&
+        event.eventDetails.cuisines?.length,
+    ),
     transit:
       event?.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
         ? getInitialTransitDraft(event.eventDetails.transitType, event.eventDetails.transitDetails)
@@ -348,7 +358,6 @@ function EventFormModal({
     const title = isTravel && !draft.title.trim()
       ? getDerivedTravelTitle(transitType, transitDetails)
       : draft.title;
-    const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
     const linkKinds = EVENT_LINK_KINDS_BY_TYPE[draft.eventType];
 
     const assignedMemberIds =
@@ -440,6 +449,49 @@ function EventFormModal({
       : draft.eventType === 'DINING'
         ? mealTypeOptions
         : activitySettingOptions;
+
+  const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
+  const attendeesLabel = isTravel ? "Who's traveling" : 'Attendees';
+  const detailChips = [
+    { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' />, isShown: !isLinkable || draft.hasLink },
+    {
+      key: 'cuisines',
+      label: 'Cuisine',
+      icon: <Utensils className='h-4 w-4' />,
+      isShown: draft.eventType !== 'DINING' || draft.hasCuisines,
+    },
+    { key: 'group', label: 'Group', icon: <Layers className='h-4 w-4' />, isShown: draft.isGrouped },
+    {
+      key: 'reminder',
+      label: 'Reminder',
+      icon: <Bell className='h-4 w-4' />,
+      isShown: draft.dayIndex === null || draft.hasReminderOverride,
+    },
+    {
+      key: 'venueHours',
+      label: 'Business hours',
+      icon: <Clock className='h-4 w-4' />,
+      isShown: draft.hasVenueHours,
+    },
+    {
+      key: 'attendees',
+      label: attendeesLabel,
+      icon: <Users className='h-4 w-4' />,
+      isShown: draft.hasAttendeeOverride,
+    },
+  ].filter((chip) => !chip.isShown);
+
+  const revealDetail = (key: string) =>
+    updateDraft(
+      {
+        link: { hasLink: true },
+        cuisines: { hasCuisines: true },
+        group: { isGrouped: true },
+        reminder: { hasReminderOverride: true },
+        venueHours: { hasVenueHours: true },
+        attendees: { hasAttendeeOverride: true },
+      }[key] ?? {},
+    );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Timeline event'>
@@ -601,16 +653,6 @@ function EventFormModal({
                 onChange={(transit) => updateDraft({ transit })}
               />
             )}
-            {draft.eventType === 'DINING' && (
-              <div className='space-y-1.5'>
-                <Label>Cuisines</Label>
-                <Input
-                  placeholder='Ramen, Japanese'
-                  value={draft.cuisines}
-                  onChange={(event) => updateDraft({ cuisines: event.target.value })}
-                />
-              </div>
-            )}
             <PlaceAutocompleteInput
               label='Location'
               quickSearch={{ label: 'Search by title', value: draft.title }}
@@ -645,96 +687,94 @@ function EventFormModal({
                 }
               />
             </div>
-            {LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) && (
-              <LinkAttachField
-                url={draft.linkUrl}
-                preview={draft.linkPreview}
-                label='Booking, reservation, or website link'
-                addLabel='+ Add booking or website link'
-                placeholder='https://…'
-                onChange={(linkUrl, linkPreview) =>
-                  updateDraft({ linkUrl, linkPreview })
+            {isLinkable && draft.hasLink && (
+              <RemovableField
+                label='Link'
+                removeLabel='Remove link'
+                onRemove={() =>
+                  updateDraft({ hasLink: false, linkUrl: '', linkPreview: null, linkKind: null })
                 }
-                currentTitle={draft.title}
-                onUseTitle={(title) => updateDraft({ title })}
-              />
-            )}
-            {LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType) && draft.linkUrl.trim() && (
-              <div className='space-y-1.5'>
-                <Label>This link is a…</Label>
-                <Select
-                  options={EVENT_LINK_KINDS_BY_TYPE[draft.eventType].map((kind) => ({
-                    value: kind,
-                    text: EVENT_LINK_KIND_LABELS[kind],
-                  }))}
-                  value={draft.linkKind ?? EVENT_LINK_KINDS_BY_TYPE[draft.eventType][0]}
-                  onChange={(value) => updateDraft({ linkKind: value as EventLinkKind })}
-                />
-              </div>
-            )}
-            {draft.isGrouped ? (
-              <div className='space-y-1.5'>
-                <div className='flex items-center justify-between'>
-                  <Label>Group</Label>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='icon'
-                    aria-label='Remove from group'
-                    onClick={() => updateDraft({ isGrouped: false, groupLabel: '' })}
-                  >
-                    <X className='h-4 w-4' />
-                  </Button>
-                </div>
-                {sameTypeGroupLabels.length > 0 && (
-                  <Select
-                    options={[
-                      ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
-                      { value: ADD_NEW_OPTION, text: 'New group…' },
-                    ]}
-                    value={sameTypeGroupLabels.includes(draft.groupLabel) ? draft.groupLabel : ADD_NEW_OPTION}
-                    onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
-                  />
-                )}
-                {!sameTypeGroupLabels.includes(draft.groupLabel) && (
-                  <Input
-                    placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
-                    value={draft.groupLabel}
-                    onChange={(event) => updateDraft({ groupLabel: event.target.value })}
-                  />
-                )}
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => updateDraft({ isGrouped: true })}
               >
-                + Add to a group
-              </Button>
+                <LinkAttachField
+                  url={draft.linkUrl}
+                  preview={draft.linkPreview}
+                  label=''
+                  startRevealed
+                  placeholder='https://…'
+                  onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+                  currentTitle={draft.title}
+                  onUseTitle={(title) => updateDraft({ title })}
+                />
+                {draft.linkUrl.trim() && (
+                  <Select
+                    options={EVENT_LINK_KINDS_BY_TYPE[draft.eventType].map((kind) => ({
+                      value: kind,
+                      text: EVENT_LINK_KIND_LABELS[kind],
+                    }))}
+                    value={draft.linkKind ?? EVENT_LINK_KINDS_BY_TYPE[draft.eventType][0]}
+                    onChange={(value) => updateDraft({ linkKind: value as EventLinkKind })}
+                  />
+                )}
+              </RemovableField>
             )}
-            {draft.dayIndex === null ? null : draft.hasReminderOverride ? (
-              <div className='space-y-1.5'>
-                <div className='flex items-center justify-between'>
-                  <Label>Reminder</Label>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='icon'
-                    aria-label='Reset reminder'
-                    onClick={() =>
-                      updateDraft({
-                        hasReminderOverride: false,
-                        reminderEnabled: true,
-                        reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
-                      })
-                    }
-                  >
-                    <X className='h-4 w-4' />
-                  </Button>
+            {draft.eventType === 'DINING' && draft.hasCuisines && (
+              <RemovableField
+                label='Cuisine'
+                removeLabel='Remove cuisine'
+                onRemove={() => updateDraft({ hasCuisines: false, cuisines: '' })}
+              >
+                <Input
+                  placeholder='Ramen, Japanese'
+                  value={draft.cuisines}
+                  onChange={(event) => updateDraft({ cuisines: event.target.value })}
+                />
+              </RemovableField>
+            )}
+            {draft.isGrouped && (
+              <RemovableField
+                label='Group'
+                removeLabel='Remove from group'
+                onRemove={() => updateDraft({ isGrouped: false, groupLabel: '' })}
+              >
+                <div className='space-y-2'>
+                  {sameTypeGroupLabels.length > 0 && (
+                    <Select
+                      options={[
+                        ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
+                        { value: ADD_NEW_OPTION, text: 'New group…' },
+                      ]}
+                      value={
+                        sameTypeGroupLabels.includes(draft.groupLabel)
+                          ? draft.groupLabel
+                          : ADD_NEW_OPTION
+                      }
+                      onChange={(value) =>
+                        updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })
+                      }
+                    />
+                  )}
+                  {!sameTypeGroupLabels.includes(draft.groupLabel) && (
+                    <Input
+                      placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
+                      value={draft.groupLabel}
+                      onChange={(event) => updateDraft({ groupLabel: event.target.value })}
+                    />
+                  )}
                 </div>
+              </RemovableField>
+            )}
+            {draft.dayIndex !== null && draft.hasReminderOverride && (
+              <RemovableField
+                label='Reminder'
+                removeLabel='Reset reminder'
+                onRemove={() =>
+                  updateDraft({
+                    hasReminderOverride: false,
+                    reminderEnabled: true,
+                    reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
+                  })
+                }
+              >
                 <Select
                   options={reminderOptions}
                   value={draft.reminderEnabled ? String(draft.reminderMinutesBefore) : 'off'}
@@ -747,38 +787,16 @@ function EventFormModal({
                 {reminderText !== null && (
                   <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
                 )}
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => updateDraft({ hasReminderOverride: true })}
-              >
-                + Customize reminder
-              </Button>
+              </RemovableField>
             )}
-            {draft.hasVenueHours ? (
-              <div className='space-y-1.5'>
-                <div className='flex items-center justify-between'>
-                  <Label>Business hours</Label>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='icon'
-                    aria-label='Remove venue hours'
-                    onClick={() =>
-                      updateDraft({
-                        hasVenueHours: false,
-                        venueOpenTime: '',
-                        venueCloseTime: '',
-                      })
-                    }
-                  >
-                    <X className='h-4 w-4' />
-                  </Button>
-                </div>
+            {draft.hasVenueHours && (
+              <RemovableField
+                label='Business hours'
+                removeLabel='Remove venue hours'
+                onRemove={() =>
+                  updateDraft({ hasVenueHours: false, venueOpenTime: '', venueCloseTime: '' })
+                }
+              >
                 <div className='grid gap-3 sm:grid-cols-2'>
                   <Input
                     type='time'
@@ -793,39 +811,21 @@ function EventFormModal({
                     onChange={(event) => updateDraft({ venueCloseTime: event.target.value })}
                   />
                 </div>
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => updateDraft({ hasVenueHours: true })}
-              >
-                + Add business hours
-              </Button>
+              </RemovableField>
             )}
-            {draft.hasAttendeeOverride ? (
-              <>
-                <div className='space-y-1.5'>
-                  <div className='flex items-center justify-between'>
-                    <Label>{isTravel ? "Who's traveling" : 'Attendees'}</Label>
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='icon'
-                      aria-label='Reset attendees'
-                      onClick={() =>
-                        updateDraft({
-                          hasAttendeeOverride: false,
-                          attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
-                          assignedMemberIds: [],
-                        })
-                      }
-                    >
-                      <X className='h-4 w-4' />
-                    </Button>
-                  </div>
+            {draft.hasAttendeeOverride && (
+              <RemovableField
+                label={attendeesLabel}
+                removeLabel='Reset attendees'
+                onRemove={() =>
+                  updateDraft({
+                    hasAttendeeOverride: false,
+                    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+                    assignedMemberIds: [],
+                  })
+                }
+              >
+                <div className='space-y-3'>
                   <Select
                     options={attendeeTargetOptions}
                     value={draft.attendeeTargetType}
@@ -833,43 +833,29 @@ function EventFormModal({
                       updateDraft({ attendeeTargetType: value as EventAttendeeTargetType })
                     }
                   />
+                  {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && (
+                    <div className='space-y-2'>
+                      {memberOptions.map((member) => (
+                        <label key={member.value} className='flex items-center gap-2 text-sm'>
+                          <Checkbox
+                            checked={draft.assignedMemberIds.includes(member.value)}
+                            onCheckedChange={(checked) =>
+                              updateDraft({
+                                assignedMemberIds: checked
+                                  ? [...draft.assignedMemberIds, member.value]
+                                  : draft.assignedMemberIds.filter((uid) => uid !== member.value),
+                              })
+                            }
+                          />
+                          {member.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && (
-                  <div className='space-y-2'>
-                    {memberOptions.map((member) => (
-                      <label
-                        key={member.value}
-                        className='flex items-center gap-2 text-sm'
-                      >
-                        <Checkbox
-                          checked={draft.assignedMemberIds.includes(member.value)}
-                          onCheckedChange={(checked) =>
-                            updateDraft({
-                              assignedMemberIds: checked
-                                ? [...draft.assignedMemberIds, member.value]
-                                : draft.assignedMemberIds.filter(
-                                    (uid) => uid !== member.value,
-                                  ),
-                            })
-                          }
-                        />
-                        {member.label}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => updateDraft({ hasAttendeeOverride: true })}
-              >
-                {isTravel ? "+ Who's traveling" : '+ Limit attendees'}
-              </Button>
+              </RemovableField>
             )}
+            <AddFieldChips chips={detailChips} onAdd={revealDetail} />
             <ModalFooterActions
               leftActions={
                 <>

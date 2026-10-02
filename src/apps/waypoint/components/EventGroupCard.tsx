@@ -20,6 +20,7 @@ const MINUTE_MS = 60_000;
 interface EventGroupCardProps {
   trip: TripSpace;
   group: EventGroup;
+  showAttendees: boolean;
   renderEvent: (event: TimelineEvent) => ReactNode;
 }
 
@@ -37,7 +38,7 @@ function formatLayover(trip: TripSpace, previous: TimelineEvent, next: TimelineE
   return label;
 }
 
-function EventGroupCard({ trip, group, renderEvent }: EventGroupCardProps) {
+function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
@@ -75,7 +76,9 @@ function EventGroupCard({ trip, group, renderEvent }: EventGroupCardProps) {
             </span>
           </div>
           <h3 className='truncate font-semibold'>{group.label}</h3>
-          <EventAttendeeAvatars trip={trip} events={group.events} includeEveryone />
+          {showAttendees && (
+            <EventAttendeeAvatars trip={trip} events={group.events} includeEveryone />
+          )}
         </div>
         <Button
           type='button'
@@ -112,7 +115,9 @@ function EventGroupCard({ trip, group, renderEvent }: EventGroupCardProps) {
                       <span className='text-muted-foreground shrink-0 text-xs'>
                         {formatEventStartTime(trip, event)}
                       </span>
-                      <EventAttendeeAvatars trip={trip} events={[event]} includeEveryone />
+                      {showAttendees && (
+                        <EventAttendeeAvatars trip={trip} events={[event]} includeEveryone />
+                      )}
                     </Button>
                   </li>
                 ))}
@@ -129,11 +134,12 @@ function EventGroupCard({ trip, group, renderEvent }: EventGroupCardProps) {
                 {renderEvent(currentEvent)}
               </div>
               {group.events.length > 1 && (
-                <div className='flex items-center justify-between'>
+                <div className='flex items-center justify-between sm:justify-center'>
                   <Button
                     type='button'
                     variant='tertiary'
                     size='icon'
+                    className='sm:hidden'
                     aria-label='Previous leg'
                     disabled={currentIndex === 0}
                     onClick={() => goTo(currentIndex - 1)}
@@ -147,6 +153,7 @@ function EventGroupCard({ trip, group, renderEvent }: EventGroupCardProps) {
                     type='button'
                     variant='tertiary'
                     size='icon'
+                    className='sm:hidden'
                     aria-label='Next leg'
                     disabled={currentIndex === lastIndex}
                     onClick={() => goTo(currentIndex + 1)}

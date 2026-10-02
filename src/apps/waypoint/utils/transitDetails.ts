@@ -94,6 +94,23 @@ export function getDerivedTravelTitle(
   return title;
 }
 
+const FLIGHT_NUMBER_PATTERN = /^[A-Z0-9]{2,3}\d{1,4}[A-Z]?$/;
+
+export function getFlightTrackingUrl(
+  transitType: TransitType,
+  details: TransitDetails | null | undefined,
+): string | null {
+  if (transitType !== 'FLIGHT' || !details || !('flightNumber' in details)) {
+    return null;
+  }
+
+  const flightNumber = (details.flightNumber ?? '').replace(/\s+/g, '').toUpperCase();
+  const url = FLIGHT_NUMBER_PATTERN.test(flightNumber)
+    ? `https://www.flightaware.com/live/flight/${flightNumber}`
+    : null;
+  return url;
+}
+
 export interface TransitSummaryLine {
   label: string;
   value: string;

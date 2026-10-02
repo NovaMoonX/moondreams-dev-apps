@@ -26,7 +26,7 @@ import {
   MEAL_TYPE_LABELS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
-import { getTransitSummary } from '@apps/waypoint/utils/transitDetails';
+import { getFlightTrackingUrl, getTransitSummary } from '@apps/waypoint/utils/transitDetails';
 
 const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet…';
 
@@ -38,6 +38,7 @@ interface EventCardProps {
    * could otherwise modify it, sees an archived event fully read-only. */
   canArchive: boolean;
   showCover: boolean;
+  showAttendees: boolean;
   /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
   showArchiveToggle: boolean;
   /** `onSuccess`, when given, is the mobile details drawer's own close — call it only once
@@ -71,6 +72,7 @@ export interface EventDetailLinesProps {
   showNotes: boolean;
   showNotesIndicator?: boolean;
   showChangeHistory?: boolean;
+  showAttendees?: boolean;
   /** Cards abbreviate the zone ("PDT"); the full details view spells it out. */
   zoneStyle?: ZoneStyle;
   canEdit: boolean;
@@ -84,6 +86,7 @@ export function EventDetailLines({
   showNotes,
   showNotesIndicator,
   showChangeHistory = true,
+  showAttendees = true,
   zoneStyle = 'short',
   canEdit,
   onSaveNotes,
@@ -94,6 +97,10 @@ export function EventDetailLines({
     event.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
       ? getTransitSummary(event.eventDetails.transitType, event.eventDetails.transitDetails)
       : [];
+  const trackingUrl =
+    event.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
+      ? getFlightTrackingUrl(event.eventDetails.transitType, event.eventDetails.transitDetails)
+      : null;
 
   return (
     <>
@@ -130,7 +137,12 @@ export function EventDetailLines({
           ))}
         </dl>
       )}
-      {event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE' && (
+      {trackingUrl && (
+        <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+          <ExternalLinkText href={trackingUrl} label='Track flight status' />
+        </div>
+      )}
+      {showAttendees && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE' && (
         <EventAttendeeAvatars trip={trip} events={[event]} />
       )}
       {locationLabel && <LocationLink {...event} label={locationLabel} />}
@@ -175,6 +187,7 @@ export function EventCard({
   canEdit,
   canArchive,
   showCover,
+  showAttendees,
   showArchiveToggle,
   onEdit,
   onSaveNotes,
@@ -227,6 +240,7 @@ export function EventCard({
               showTitle
               showNotes={false}
               showNotesIndicator={isSmallScreen}
+              showAttendees={showAttendees}
               canEdit={canModify}
               onSaveNotes={onSaveNotes}
             />

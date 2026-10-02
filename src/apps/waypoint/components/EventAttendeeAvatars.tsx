@@ -3,6 +3,8 @@ import AvatarStack from '@/ui/AvatarStack';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 
+const MAX_VISIBLE_AVATARS = 4;
+
 interface EventAttendeeAvatarsProps {
   trip: TripSpace;
   events: TimelineEvent[];
@@ -29,7 +31,11 @@ function EventAttendeeAvatars({ trip, events, includeEveryone = false }: EventAt
     return null;
   }
 
-  return <AvatarStack people={people} size='xs' direction='horizontal' />;
+  return (
+    <div>
+      <AvatarStack people={people} size='xs' direction='horizontal' max={MAX_VISIBLE_AVATARS} />
+    </div>
+  );
 }
 
 export default EventAttendeeAvatars;

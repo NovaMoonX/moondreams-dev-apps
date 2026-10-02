@@ -103,33 +103,41 @@ export interface TransitFieldSpec {
   label: string;
   placeholder: string;
   essential: boolean;
+  /** Fields sharing a group are revealed together by one chip. */
+  group?: 'route' | 'stations' | 'ports';
 }
 
 const ROUTE_FIELDS: TransitFieldSpec[] = [
-  { key: 'startLocation', label: 'Starting point', placeholder: 'Defaults to your previous event', essential: false },
-  { key: 'endLocation', label: 'Destination', placeholder: 'Defaults to your next event', essential: false },
+  { key: 'startLocation', label: 'Starting point', placeholder: 'Defaults to your previous event', essential: false, group: 'route' },
+  { key: 'endLocation', label: 'Destination', placeholder: 'Defaults to your next event', essential: false, group: 'route' },
 ];
+
+export const TRANSIT_GROUP_LABELS = {
+  route: 'Route',
+  stations: 'Stations',
+  ports: 'Ports',
+} as const;
 
 export const TRANSIT_FIELD_SPECS: Record<TransitType, TransitFieldSpec[]> = {
   FLIGHT: [
     { key: 'airline', label: 'Airline', placeholder: 'Delta', essential: true },
-    { key: 'flightNumber', label: 'Flight number', placeholder: 'DL 482', essential: true },
+    { key: 'flightNumber', label: 'Flight number', placeholder: 'DAL 482', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'XK7P2Q', essential: true },
-    { key: 'departureAirportCode', label: 'From (airport)', placeholder: 'JFK', essential: true },
-    { key: 'arrivalAirportCode', label: 'To (airport)', placeholder: 'LAX', essential: true },
+    { key: 'departureAirportCode', label: 'Departing airport', placeholder: 'JFK', essential: true },
+    { key: 'arrivalAirportCode', label: 'Arriving airport', placeholder: 'LAX', essential: true },
   ],
   TRAIN: [
     { key: 'operator', label: 'Operator', placeholder: 'Amtrak', essential: true },
     { key: 'trainNumber', label: 'Train number', placeholder: '171', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
-    { key: 'departureStation', label: 'From (station)', placeholder: 'Penn Station', essential: false },
-    { key: 'arrivalStation', label: 'To (station)', placeholder: 'Union Station', essential: false },
+    { key: 'departureStation', label: 'Departing station', placeholder: 'Penn Station', essential: false, group: 'stations' },
+    { key: 'arrivalStation', label: 'Arriving station', placeholder: 'Union Station', essential: false, group: 'stations' },
   ],
   FERRY: [
     { key: 'operator', label: 'Operator', placeholder: 'Washington State Ferries', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
-    { key: 'departurePort', label: 'From (port)', placeholder: 'Seattle', essential: false },
-    { key: 'arrivalPort', label: 'To (port)', placeholder: 'Bainbridge Island', essential: false },
+    { key: 'departurePort', label: 'Departing port', placeholder: 'Seattle', essential: false, group: 'ports' },
+    { key: 'arrivalPort', label: 'Arriving port', placeholder: 'Bainbridge Island', essential: false, group: 'ports' },
   ],
   DRIVE: [
     { key: 'vehicleInfo', label: 'Vehicle', placeholder: 'Blue Subaru Outback', essential: false },

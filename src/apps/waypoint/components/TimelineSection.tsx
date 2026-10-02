@@ -98,6 +98,7 @@ export function TimelineSection({
   const canEdit = canEditExistingItem(trip, currentUserId);
   const canAddEvents = canCreateItem(trip, currentUserId);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
+  const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
   const stays = useAppSelector(selectStays);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
@@ -175,6 +176,7 @@ export function TimelineSection({
         canEdit={canEdit}
         canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
+        showAttendees={showAttendees}
         showArchiveToggle={hasTripStarted(trip)}
         onEdit={(selectedEvent, onSuccess) => {
           setEditingEvent(selectedEvent);
@@ -197,7 +199,13 @@ export function TimelineSection({
   const renderEventItems = (items: TimelineEvent[]) =>
     groupEventsByLabel(items).map((item) =>
       item.kind === 'group' ? (
-        <EventGroupCard key={item.key} trip={trip} group={item} renderEvent={renderEventCard} />
+        <EventGroupCard
+          key={item.key}
+          trip={trip}
+          group={item}
+          showAttendees={showAttendees}
+          renderEvent={renderEventCard}
+        />
       ) : (
         renderEventCard(item.event)
       ),
@@ -355,6 +363,14 @@ export function TimelineSection({
                 onCheckedChange={setShowCovers}
               />
               Show covers
+            </label>
+            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <AppToggle
+                size='sm'
+                checked={showAttendees}
+                onCheckedChange={setShowAttendees}
+              />
+              Show who&apos;s attending
             </label>
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
               <AppToggle
