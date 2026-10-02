@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import {
   Button,
   Checkbox,
@@ -18,6 +20,8 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
+import { findTopPlace } from '@/lib/places/placesLookup';
+import type { AirportOption } from '@/lib/airports/airportsQueries';
 import type {
   PlaceRef,
   PlaceSelectionBias,
@@ -254,6 +258,7 @@ function EventFormModal({
   onClose,
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event));
@@ -302,6 +307,24 @@ function EventFormModal({
       endDayIndex: nextEnd.day,
       endTime: nextEnd.time,
     });
+  };
+
+  const fillLocationFromAirport = async (airport: AirportOption) => {
+    const result = await findTopPlace(
+      queryClient,
+      `${airport.name} ${airport.iataCode}`,
+      { latitude: airport.latitude, longitude: airport.longitude },
+      ['airport'],
+    ).catch(() => null);
+    if (result) {
+      updateDraft({
+        locationName: result.name,
+        address: result.address,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        place: result.place,
+      });
+    }
   };
 
   const handleNext = () => {
@@ -651,6 +674,7 @@ function EventFormModal({
                 transitType={draft.quickField as TransitType}
                 value={draft.transit}
                 onChange={(transit) => updateDraft({ transit })}
+                onDepartureAirportPicked={(airport) => void fillLocationFromAirport(airport)}
               />
             )}
             <PlaceAutocompleteInput

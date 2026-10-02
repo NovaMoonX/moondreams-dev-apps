@@ -18,8 +18,14 @@ function roundBias(bias?: PlaceSelectionBias) {
 // repeated search or re-picked place is served from cache instead of billed again.
 export const placesQueryKeys = {
   all: ['places'] as const,
-  autocomplete: (input: string, bias?: PlaceSelectionBias) =>
-    [...placesQueryKeys.all, 'autocomplete', normalizeString(input), roundBias(bias)] as const,
+  autocomplete: (input: string, bias?: PlaceSelectionBias, primaryTypes?: string[]) =>
+    [
+      ...placesQueryKeys.all,
+      'autocomplete',
+      normalizeString(input),
+      roundBias(bias),
+      primaryTypes ?? null,
+    ] as const,
   details: (placeId: string) => [...placesQueryKeys.all, 'details', placeId] as const,
 };
 
@@ -27,10 +33,12 @@ export function placeAutocompleteQueryOptions(
   input: string,
   sessionToken: string,
   bias?: PlaceSelectionBias,
+  primaryTypes?: string[],
 ) {
   return queryOptions({
-    queryKey: placesQueryKeys.autocomplete(input, bias),
-    queryFn: () => autocomplete(normalizeString(input), sessionToken, roundBias(bias) ?? undefined),
+    queryKey: placesQueryKeys.autocomplete(input, bias, primaryTypes),
+    queryFn: () =>
+      autocomplete(normalizeString(input), sessionToken, roundBias(bias) ?? undefined, primaryTypes),
     staleTime: DAY_MS,
     gcTime: DAY_MS,
     meta: { persist: true },

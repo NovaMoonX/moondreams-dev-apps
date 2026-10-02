@@ -6,6 +6,7 @@ import { ListPlus, MapPin, StickyNote, Timer, Truck } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
+import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
 import {
   TRANSIT_FIELD_SPECS,
   TRANSIT_GROUP_LABELS,
@@ -18,6 +19,7 @@ interface TransitDetailsFieldsProps {
   transitType: TransitType;
   value: TransitDraft;
   onChange: (value: TransitDraft) => void;
+  onDepartureAirportPicked?: (airport: AirportOption) => void;
 }
 
 interface ExtraField {
@@ -77,7 +79,56 @@ function AirlineField({ value, onChange }: AirlineFieldProps) {
   );
 }
 
-function TransitDetailsFields({ transitType, value, onChange }: TransitDetailsFieldsProps) {
+interface AirportFieldProps {
+  fieldKey: string;
+  value: TransitDraft;
+  onChange: (value: TransitDraft) => void;
+  onPicked?: (airport: AirportOption) => void;
+}
+
+function AirportField({ fieldKey, value, onChange, onPicked }: AirportFieldProps) {
+  const { data: airports = [] } = useQuery(airportsQueryOptions());
+  const current = value.values[fieldKey] ?? '';
+  const options = [
+    ...airports.map((airport) => ({
+      value: airport.iataCode,
+      text: `${airport.iataCode} · ${airport.city}`,
+      description: `${airport.name}, ${airport.country}`,
+    })),
+    ...(current && !airports.some((airport) => airport.iataCode === current)
+      ? [{ value: current, text: current }]
+      : []),
+  ];
+
+  const setAirport = (code: string) => {
+    onChange({ ...value, values: { ...value.values, [fieldKey]: code } });
+    const picked = airports.find((airport) => airport.iataCode === code);
+    if (picked) {
+      onPicked?.(picked);
+    }
+  };
+
+  return (
+    <Select
+      searchable
+      allowAdd
+      clearable
+      options={options}
+      value={current}
+      placeholder='Search airports'
+      searchPlaceholder='Search or add an airport'
+      onChange={setAirport}
+      onAdd={(code) => setAirport(code.toUpperCase())}
+    />
+  );
+}
+
+function TransitDetailsFields({
+  transitType,
+  value,
+  onChange,
+  onDepartureAirportPicked,
+}: TransitDetailsFieldsProps) {
   const specs = TRANSIT_FIELD_SPECS[transitType].filter((spec) => !spec.hidden);
   const essentialSpecs = specs.filter((spec) => spec.essential);
   const extraFields = specs
@@ -146,6 +197,13 @@ function TransitDetailsFields({ transitType, value, onChange }: TransitDetailsFi
               <Label>{spec.label}</Label>
               {transitType === 'FLIGHT' && spec.key === 'airline' ? (
                 <AirlineField value={value} onChange={onChange} />
+              ) : transitType === 'FLIGHT' && spec.key.endsWith('AirportCode') ? (
+                <AirportField
+                  fieldKey={spec.key}
+                  value={value}
+                  onChange={onChange}
+                  onPicked={spec.key === 'departureAirportCode' ? onDepartureAirportPicked : undefined}
+                />
               ) : (
                 <Input
                   placeholder={spec.placeholder}
