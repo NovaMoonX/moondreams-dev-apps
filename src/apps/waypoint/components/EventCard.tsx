@@ -20,12 +20,10 @@ import { formatEventTimeRange, getEventTime, type ZoneStyle } from '@apps/waypoi
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_LINK_KIND_LABELS,
-  EVENT_TYPE_BADGE_CLASSES,
-  EVENT_TYPE_EMOJIS,
-  EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
+import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 import { getFlightTrackingUrl, getTransitSummary } from '@apps/waypoint/utils/transitDetails';
 
 const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet…';
@@ -92,6 +90,7 @@ export function EventDetailLines({
   onSaveNotes,
 }: EventDetailLinesProps) {
   const quickField = getQuickField(event);
+  const badge = getEventBadge(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
   const { startMs, endMs } = getEventTime(trip, event);
   const impliedDurationMs = startMs !== null && endMs !== null && endMs > startMs ? endMs - startMs : null;
@@ -112,8 +111,8 @@ export function EventDetailLines({
   return (
     <>
       <div className='flex flex-wrap items-center gap-2'>
-        <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
-          {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
+        <Badge variant='base' className={badge.className}>
+          {badge.emoji} {badge.label}
         </Badge>
         {event.isArchived && (
           <Badge variant='muted' outline className='items-center gap-1'>

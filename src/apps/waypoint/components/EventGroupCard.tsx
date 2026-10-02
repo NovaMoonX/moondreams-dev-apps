@@ -5,11 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
-import {
-  EVENT_TYPE_BADGE_CLASSES,
-  EVENT_TYPE_EMOJIS,
-  EVENT_TYPE_LABELS,
-} from '@apps/waypoint/constants';
+import { getGroupBadge } from '@apps/waypoint/utils/eventBadge';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import type { EventGroup } from '@apps/waypoint/utils/eventGroups';
 import { formatEventStartTime, getEventTime } from '@apps/waypoint/utils/tripTime';
@@ -43,6 +39,7 @@ function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupC
   const [activeIndex, setActiveIndex] = useState(0);
   const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
   const isTravel = group.eventType === 'TRAVEL';
+  const badge = getGroupBadge(group.events);
   const lastIndex = group.events.length - 1;
   const currentIndex = Math.min(activeIndex, lastIndex);
   const currentEvent = group.events[currentIndex];
@@ -68,8 +65,8 @@ function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupC
       <div className='border-border bg-card flex items-center gap-3 rounded-lg border p-3'>
         <div className='min-w-0 flex-1 space-y-1'>
           <div className='flex flex-wrap items-center gap-2'>
-            <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[group.eventType]}>
-              {EVENT_TYPE_EMOJIS[group.eventType]} {EVENT_TYPE_LABELS[group.eventType]}
+            <Badge variant='base' className={badge.className}>
+              {badge.emoji} {badge.label}
             </Badge>
             <span className='text-muted-foreground text-sm'>
               {group.events.length} events

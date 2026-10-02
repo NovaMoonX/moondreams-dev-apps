@@ -98,6 +98,19 @@ export const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {
   OTHER: 'Other',
 };
 
+// A travel event wears its transit type's color instead of the generic travel blue, kept
+// clear of the dining, activity and free-time hues.
+export const TRANSIT_TYPE_BADGE_CLASSES: Record<TransitType, string> = {
+  FLIGHT: 'bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-100',
+  DRIVE: 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100',
+  FERRY: 'bg-cyan-200 text-cyan-900 dark:bg-cyan-900 dark:text-cyan-100',
+  TRAIN: 'bg-indigo-200 text-indigo-900 dark:bg-indigo-900 dark:text-indigo-100',
+  WALK: 'bg-lime-200 text-lime-900 dark:bg-lime-900 dark:text-lime-100',
+  BIKE: 'bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-100',
+  SCOOTER: 'bg-pink-200 text-pink-900 dark:bg-pink-900 dark:text-pink-100',
+  OTHER: 'bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100',
+};
+
 export const TRANSIT_TYPE_EMOJIS: Record<TransitType, string> = {
   FLIGHT: '✈️',
   DRIVE: '🚗',

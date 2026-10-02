@@ -12,7 +12,7 @@ import { getEventStatus, selectEventsByDay } from '@apps/waypoint/store/selector
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { groupEventsByLabel, type EventGroup } from '@apps/waypoint/utils/eventGroups';
 import { getEventTime } from '@apps/waypoint/utils/tripTime';
-import { EVENT_TYPE_EMOJIS } from '@apps/waypoint/constants';
+import { getEventBadge, getGroupBadge } from '@apps/waypoint/utils/eventBadge';
 
 interface TodayAgendaProps {
   trip: TripSpace;
@@ -60,7 +60,7 @@ function TodayAgenda({ trip, title, dayIndex, now, limit, onViewAll, onOpenEvent
               status === 'UPCOMING' && 'bg-muted',
             )}
           >
-            {isDone ? <Check className='h-3.5 w-3.5' /> : EVENT_TYPE_EMOJIS[event.eventType]}
+            {isDone ? <Check className='h-3.5 w-3.5' /> : getEventBadge(event).emoji}
           </span>
           <span className='min-w-0 flex-1'>
             <span
@@ -142,7 +142,7 @@ function AgendaGroup({ group, renderRow }: AgendaGroupProps) {
           aria-hidden
           className='bg-muted flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs'
         >
-          {EVENT_TYPE_EMOJIS[group.eventType]}
+          {getGroupBadge(group.events).emoji}
         </span>
         <span className='min-w-0 flex-1'>
           <span className='block truncate text-sm font-medium'>{group.label}</span>
