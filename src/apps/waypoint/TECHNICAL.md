@@ -567,7 +567,7 @@ Unchanged: consumed from the global `/presence/{userId}` RTDB path, matched agai
 
 **10. Idea Board Prominence (derived, not stored)**
 
-Whether the idea board renders prominent (pre-trip) or quiet (post-start) is derived purely from `now < trip.startDate` — the same UTC boundary `firestore.rules` uses to close idea creation (`hasTripStarted`, not the header's local-day status). Pre-trip, Overview shows one prominent card (an Activities / Restaurants toggle, defaulting to Activities, over that type's top three undecided ideas with inline voting; tapping one opens its details drawer; plus an "Add an idea" button and "See all"); once the trip starts it becomes a quiet chevron row on phones, the Ideas tab stays on desktop, nobody can post a new idea, and voting and reading never close. An idea with `convertedToEntityId` set shows an "On the itinerary" badge and drops out of the Overview preview.
+Whether the idea board renders prominent (pre-trip) or quiet (post-start) is derived purely from `now < trip.startDate` — the same UTC boundary `firestore.rules` uses to close idea creation (`hasTripStarted`, not the header's local-day status). Pre-trip, Overview shows one prominent card (an Activities / Restaurants toggle, defaulting to Activities, over that type's top three undecided ideas with inline voting; tapping one opens its details (drawer on phones, popover on wider screens); plus an "Add an idea" button and "See all"); once the trip starts it becomes a quiet chevron row on phones, the Ideas tab stays on desktop, nobody can post a new idea, and voting and reading never close. An idea with `convertedToEntityId` set shows an "On the itinerary" badge and drops out of the Overview preview.
 
 **11. Idea → Itinerary Conversion**
 
@@ -702,8 +702,8 @@ src/apps/waypoint/
 │   │   ├── ExpenseFormModal.tsx   (DreamerUI Form — Add only: title/amount-or-range/payer/day)
 │   │   └── ExpenseSplitModal.tsx  (DreamerUI Form — the distinct Split action: target type + members + splitAmounts)
 │   ├── IdeasSection.tsx           (type filter: All/Restaurants/Activities; nested screen on phones)
-│   │   ├── IdeaCard.tsx           (tap opens IdeaDetailsDrawer; timing line, tags, vote; converted ideas sit under an "Already on the itinerary" divider)
-│   │   ├── IdeaDetailsDrawer.tsx  (full idea: timing, tags, note, Visit site, vote)
+│   │   ├── IdeaCard.tsx           (tap opens IdeaDetailsOverlay; timing line, tags, vote; converted ideas sit under an "Already on the itinerary" divider)
+│   │   ├── IdeaDetailsOverlay.tsx (full idea: a drawer with a big centered vote on phones, an anchored popover with the compact vote on wider screens)
 │   │   ├── IdeaVoteButton.tsx
 │   │   ├── IdeaFormModal.tsx      (DreamerUI Form: type + name up front; optional fields appear from a grid of add-chips, `AddFieldChips`)
 │   │   └── StayCriteriaPanel.tsx  (DreamerUI Form — Editor/Admin-managed must-have/nice-to-have list)

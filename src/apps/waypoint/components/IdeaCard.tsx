@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
+import IdeaDetailsOverlay, { type IdeaOpenProps } from '@apps/waypoint/components/IdeaDetailsOverlay';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import {
   IDEA_TYPE_CHIP_CLASSES,
@@ -11,24 +12,22 @@ import {
 } from '@apps/waypoint/constants';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTimingSummary } from '@apps/waypoint/utils/ideaLabels';
-import { getOpenDetailsProps } from '@apps/waypoint/utils/openDetailsProps';
 
 interface IdeaCardProps {
   trip: TripSpace;
   idea: TripIdea;
   currentUserId: string;
-  onOpen: () => void;
 }
 
-function IdeaCard({ trip, idea, currentUserId, onOpen }: IdeaCardProps) {
+function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
   const adderInfo = useUserInfo(idea.addedByUid);
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const timing = getIdeaTimingSummary(trip, idea);
   const tags = getIdeaTags(idea);
 
-  return (
+  const renderCard = (openProps: IdeaOpenProps) => (
     <div
-      {...getOpenDetailsProps(idea.title, onOpen)}
+      {...openProps}
       className='border-border bg-card hover:bg-muted/40 cursor-pointer space-y-2 rounded-xl border p-3'
     >
       <div className='flex items-start justify-between gap-3'>
@@ -67,6 +66,15 @@ function IdeaCard({ trip, idea, currentUserId, onOpen }: IdeaCardProps) {
         </div>
       )}
     </div>
+  );
+
+  return (
+    <IdeaDetailsOverlay
+      trip={trip}
+      idea={idea}
+      currentUserId={currentUserId}
+      renderTrigger={renderCard}
+    />
   );
 }
 

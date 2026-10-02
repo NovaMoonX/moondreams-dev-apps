@@ -5,13 +5,12 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Lightbulb } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
-import IdeaDetailsDrawer from '@apps/waypoint/components/IdeaDetailsDrawer';
+import IdeaDetailsOverlay from '@apps/waypoint/components/IdeaDetailsOverlay';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import { IDEA_TYPE_EMOJIS, IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
 import { selectSortedIdeas } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTimingSummary } from '@apps/waypoint/utils/ideaLabels';
-import { getOpenDetailsProps } from '@apps/waypoint/utils/openDetailsProps';
 
 interface IdeasOverviewProps {
   trip: TripSpace;
@@ -26,7 +25,6 @@ const PREVIEW_COUNT = 3;
 function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOverviewProps) {
   const ideas = useAppSelector((state) => selectSortedIdeas(state, trip.id));
   const [ideaType, setIdeaType] = useState<IdeaType>('ACTIVITY');
-  const [openIdeaId, setOpenIdeaId] = useState<string | null>(null);
   const undecided = useMemo(
     () => ideas.filter((idea) => idea.convertedToEntityId === null),
     [ideas],
@@ -93,29 +91,38 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           No {IDEA_TYPE_PLURAL_LABELS[ideaType].toLowerCase()} yet — be the first to add one.
         </p>
       ) : (
-        <ul className='divide-border divide-y'>
+        <div className='divide-border divide-y'>
           {preview.map((idea) => {
             const timing = getIdeaTimingSummary(trip, idea);
             return (
-              <li
+              <IdeaDetailsOverlay
                 key={idea.id}
-                {...getOpenDetailsProps(idea.title, () => setOpenIdeaId(idea.id))}
-                className='hover:bg-primary/5 flex cursor-pointer items-center justify-between gap-3 py-2'
-              >
-                <span className='flex min-w-0 items-center gap-2 text-sm'>
-                  <span aria-hidden='true'>{IDEA_TYPE_EMOJIS[idea.ideaType]}</span>
-                  <span className='min-w-0'>
-                    <span className='block truncate font-medium'>{idea.title}</span>
-                    {timing && <span className='text-muted-foreground block truncate text-xs'>{timing}</span>}
-                  </span>
-                </span>
-                <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
-                  <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
-                </span>
-              </li>
+                trip={trip}
+                idea={idea}
+                currentUserId={currentUserId}
+                renderTrigger={(openProps) => (
+                  <div
+                    {...openProps}
+                    className='hover:bg-primary/5 flex cursor-pointer items-center justify-between gap-3 py-2'
+                  >
+                    <span className='flex min-w-0 items-center gap-2 text-sm'>
+                      <span aria-hidden='true'>{IDEA_TYPE_EMOJIS[idea.ideaType]}</span>
+                      <span className='min-w-0'>
+                        <span className='block truncate font-medium'>{idea.title}</span>
+                        {timing && (
+                          <span className='text-muted-foreground block truncate text-xs'>{timing}</span>
+                        )}
+                      </span>
+                    </span>
+                    <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
+                      <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
+                    </span>
+                  </div>
+                )}
+              />
             );
           })}
-        </ul>
+        </div>
       )}
       <div className={join('flex items-center gap-3', ideas.length > 0 ? 'justify-between' : 'justify-start')}>
         <Button type='button' size='sm' onClick={() => onAdd(ideaType)}>
@@ -133,12 +140,6 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           </Button>
         )}
       </div>
-      <IdeaDetailsDrawer
-        trip={trip}
-        ideaId={openIdeaId}
-        currentUserId={currentUserId}
-        onClose={() => setOpenIdeaId(null)}
-      />
     </section>
   );
 }

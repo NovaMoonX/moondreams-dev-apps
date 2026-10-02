@@ -4,7 +4,6 @@ import { Button, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/c
 
 import { useAppSelector } from '@/store';
 import IdeaCard from '@apps/waypoint/components/IdeaCard';
-import IdeaDetailsDrawer from '@apps/waypoint/components/IdeaDetailsDrawer';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import { IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
 import { filterIdeasByType, selectSortedIdeas } from '@apps/waypoint/store/selectors';
@@ -22,7 +21,6 @@ const ALL_IDEAS = 'ALL';
 function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps) {
   const ideas = useAppSelector((state) => selectSortedIdeas(state, trip.id));
   const [filter, setFilter] = useState<string>(ALL_IDEAS);
-  const [openIdeaId, setOpenIdeaId] = useState<string | null>(null);
   const ideaType = IDEA_TYPES.find((type) => type === filter) ?? null;
   const visibleIdeas = filterIdeasByType(ideas, ideaType);
   const undecided = visibleIdeas.filter((idea) => idea.convertedToEntityId === null);
@@ -31,13 +29,7 @@ function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps)
   const renderCards = (items: typeof visibleIdeas) => (
     <div className='space-y-3'>
       {items.map((idea) => (
-        <IdeaCard
-          key={idea.id}
-          trip={trip}
-          idea={idea}
-          currentUserId={currentUserId}
-          onOpen={() => setOpenIdeaId(idea.id)}
-        />
+        <IdeaCard key={idea.id} trip={trip} idea={idea} currentUserId={currentUserId} />
       ))}
     </div>
   );
@@ -85,12 +77,6 @@ function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps)
           {renderCards(onItinerary)}
         </>
       )}
-      <IdeaDetailsDrawer
-        trip={trip}
-        ideaId={openIdeaId}
-        currentUserId={currentUserId}
-        onClose={() => setOpenIdeaId(null)}
-      />
     </section>
   );
 }
