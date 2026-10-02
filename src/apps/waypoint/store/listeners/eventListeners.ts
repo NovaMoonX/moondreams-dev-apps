@@ -1,4 +1,4 @@
-import { collection, onSnapshot, query, orderBy, type Unsubscribe } from 'firebase/firestore';
+import { collection, onSnapshot, query, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { TimelineEvent } from '@apps/waypoint/types';
@@ -12,10 +12,7 @@ export function startTripEventsListener(
     return () => undefined;
   }
 
-  const eventsQuery = query(
-    collection(db, 'apps', 'waypoint', 'trips', tripId, 'events'),
-    orderBy('startAt'),
-  );
+  const eventsQuery = query(collection(db, 'apps', 'waypoint', 'trips', tripId, 'events'));
 
   return onSnapshot(
     eventsQuery,

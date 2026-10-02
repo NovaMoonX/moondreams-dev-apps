@@ -8,11 +8,11 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import DateRangeField, { type DateRangeValue } from '@/components/forms/DateRangeField';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { createDateInputField } from '@/utils/formFactoryHelpers';
 
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
@@ -22,11 +22,11 @@ import {
   selectTripExpenses,
 } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
+import { getStayTime } from '@apps/waypoint/utils/tripTime';
 
 interface TripDatesFormData {
-  startDate: string;
-  endDate: string;
-  shiftDates: boolean;
+  dates: DateRangeValue;
+  keepOriginalDates: boolean;
 }
 
 interface EditTripDatesModalProps {
@@ -50,9 +50,11 @@ function EditTripDatesModal({
 }: EditTripDatesModalProps) {
   const initialData = useMemo<TripDatesFormData>(
     () => ({
-      startDate: toDateInputValue(trip?.startDate),
-      endDate: toDateInputValue(trip?.endDate),
-      shiftDates: true,
+      dates: {
+        startDate: toDateInputValue(trip?.startDate),
+        endDate: toDateInputValue(trip?.endDate),
+      },
+      keepOriginalDates: false,
     }),
     [trip?.startDate, trip?.endDate],
   );
@@ -64,75 +66,74 @@ function EditTripDatesModal({
   const expenses = useAppSelector(selectTripExpenses);
   const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
 
-  const { startDate, endDate } = formData;
-  const shiftDates = formData.shiftDates ?? true;
-  const isStartDateChanging = startDate !== initialData.startDate;
-  const hasDatesChanged = isStartDateChanging || endDate !== initialData.endDate;
-  const wouldRequireDataShift = isStartDateChanging || endDate < initialData.endDate;
+  const { startDate, endDate } = formData.dates;
+  const keepOriginalDates = formData.keepOriginalDates;
+  const hasDatesChanged =
+    startDate !== initialData.dates.startDate || endDate !== initialData.dates.endDate;
+
+  const newStartDate = fromDateInputValue(startDate);
+  const newEndDate = fromDateInputValue(endDate);
+  const deltaDays =
+    trip && newStartDate !== undefined ? Math.round((newStartDate - trip.startDate) / DAY_MS) : 0;
 
   const hasDatedItems =
-    events.length > 0 ||
+    events.some((event) => event.dayIndex !== null) ||
     stays.length > 0 ||
     expenses.some((expense) => expense.dayIndex !== null) ||
     checklistItems.some((item) => item.completeByDayIndex !== null);
-  const showShiftOption = hasDatedItems && wouldRequireDataShift;
+  const showKeepOriginalOption = hasDatedItems && deltaDays !== 0;
+  const isRebasing = showKeepOriginalOption && keepOriginalDates;
 
-  const checkItemsOutOfRange = () => {
-    if (!trip) {
-      return false;
+  const countItemsOutOfRange = () => {
+    if (!trip || newStartDate === undefined || newEndDate === undefined) {
+      return 0;
     }
 
-    const newStartDate = fromDateInputValue(startDate);
-    const newEndDate = fromDateInputValue(endDate);
-    if (newStartDate === undefined || newEndDate === undefined) {
-      return false;
-    }
-
-    const deltaDays = Math.round((newStartDate - trip.startDate) / DAY_MS);
     const newDayCount = getDayCount(newStartDate, newEndDate);
-    const isOutOfRange = (dayIndex: number) => dayIndex < 0 || dayIndex >= newDayCount;
+    const shift = isRebasing ? deltaDays : 0;
+    const isOutOfRange = (dayIndex: number | null) =>
+      dayIndex !== null && (dayIndex - shift < 0 || dayIndex - shift >= newDayCount);
 
-    return shiftDates
-      ? events.some((event) => isOutOfRange(event.endDayIndex)) ||
-          expenses.some((expense) => expense.dayIndex !== null && isOutOfRange(expense.dayIndex)) ||
-          checklistItems.some(
-            (item) => item.completeByDayIndex !== null && isOutOfRange(item.completeByDayIndex),
-          ) ||
-          stays.some((stay) => {
-            const shiftedCheckIn = stay.checkInAt + (newStartDate - trip.startDate);
-            const shiftedCheckOut = stay.checkOutAt + (newStartDate - trip.startDate);
-            return shiftedCheckIn < newStartDate || shiftedCheckOut > newEndDate + DAY_MS;
-          })
-      : events.some((event) => isOutOfRange(event.endDayIndex - deltaDays)) ||
-          expenses.some(
-            (expense) => expense.dayIndex !== null && isOutOfRange(expense.dayIndex - deltaDays),
-          ) ||
-          checklistItems.some(
-            (item) =>
-              item.completeByDayIndex !== null && isOutOfRange(item.completeByDayIndex - deltaDays),
-          ) ||
-          stays.some(
-            (stay) => stay.checkInAt < newStartDate || stay.checkOutAt > newEndDate + DAY_MS,
-          );
+    const outOfRangeEvents = events.filter(
+      (event) => isOutOfRange(event.dayIndex) || isOutOfRange(event.endDayIndex),
+    );
+    const outOfRangeStays = stays.filter((stay) => {
+      const { checkIn, checkOut, plannedArrival, plannedDeparture } = getStayTime(trip, stay);
+      return [checkIn, checkOut, plannedArrival, plannedDeparture].some((point) =>
+        isOutOfRange(point.dayIndex),
+      );
+    });
+    const outOfRangeExpenses = expenses.filter((expense) => isOutOfRange(expense.dayIndex));
+    const outOfRangeChecklist = checklistItems.filter((item) =>
+      isOutOfRange(item.completeByDayIndex),
+    );
+
+    const result =
+      outOfRangeEvents.length +
+      outOfRangeStays.length +
+      outOfRangeExpenses.length +
+      outOfRangeChecklist.length;
+    return result;
   };
-  const wouldPlaceItemsOutOfRange = checkItemsOutOfRange();
+  const outOfRangeCount = countItemsOutOfRange();
 
   const fields = useMemo(
     () => [
-      createDateInputField({
-        name: 'startDate',
-        label: 'Estimated start date',
-        variant: 'outline',
+      custom({
+        name: 'dates',
+        label: 'Trip dates',
+        renderComponent: (props) => (
+          <DateRangeField
+            value={props.value as DateRangeValue}
+            onChange={(value) => props.onValueChange(value)}
+            disabled={isSubmitting}
+          />
+        ),
       }),
-      createDateInputField({
-        name: 'endDate',
-        label: 'Estimated end date',
-        variant: 'outline',
-      }),
-      ...(showShiftOption
+      ...(showKeepOriginalOption
         ? [
             custom({
-              name: 'shiftDates',
+              name: 'keepOriginalDates',
               label: 'Existing plans',
               renderComponent: (props) => (
                 <div className='space-y-1 pl-1'>
@@ -141,50 +142,27 @@ function EditTripDatesModal({
                       checked={props.value as boolean}
                       onCheckedChange={(checked) => props.onValueChange(Boolean(checked))}
                     />
-                    Shift every event, stay, expense, and checklist date to match
+                    Keep events and stays on their original dates
                   </label>
-                  <div className='pl-7'>
-                    {shiftDates && isStartDateChanging && (
-                      <p className='text-muted-foreground mb-3 text-sm'>
-                        Moving the start date will shift every event, stay, expense, and checklist
-                        due date on this trip by the same amount.
-                      </p>
-                    )}
-                    {shiftDates && !isStartDateChanging && (
-                      <p className='text-muted-foreground mb-3 text-sm'>
-                        The start date isn&apos;t changing, so everything keeps its current day and
-                        time.
-                      </p>
-                    )}
-                    {!shiftDates && (
-                      <p className='text-warning mb-3 text-sm'>
-                        Events, expenses, and checklist items will keep their exact date and time —
-                        only their day number will update to match the new dates. <b>Note: </b>This
-                        can take longer to process than shifting everything together.
-                      </p>
-                    )}
-                    {wouldPlaceItemsOutOfRange && (
-                      <p className='text-destructive mb-3 text-sm'>
-                        These dates are shorter than before — some events, stays, expenses, or
-                        checklist items fall outside the new range and will lose their day.
-                      </p>
-                    )}
-                  </div>
+                  <p className='text-muted-foreground pl-7 text-sm'>
+                    {props.value
+                      ? 'Everything stays on the same calendar days, and its day number updates to match.'
+                      : 'Everything moves along with the trip.'}
+                  </p>
                 </div>
               ),
             }),
           ]
         : []),
     ],
-    [showShiftOption, shiftDates, isStartDateChanging, wouldPlaceItemsOutOfRange],
+    [showKeepOriginalOption, isSubmitting],
   );
 
   if (!trip) {
     return null;
   }
 
-  const isFormComplete =
-    fromDateInputValue(startDate) !== undefined && fromDateInputValue(endDate) !== undefined;
+  const isFormComplete = newStartDate !== undefined && newEndDate !== undefined;
 
   const handleReset = () => {
     setFormData(initialData);
@@ -192,11 +170,11 @@ function EditTripDatesModal({
   };
 
   const handleSubmit = async (data: TripDatesFormData) => {
-    const newStartDate = fromDateInputValue(data.startDate);
-    const newEndDate = fromDateInputValue(data.endDate);
+    const nextStartDate = fromDateInputValue(data.dates.startDate);
+    const nextEndDate = fromDateInputValue(data.dates.endDate);
 
-    if (newStartDate === undefined || newEndDate === undefined) {
-      setError('Enter both estimated trip dates.');
+    if (nextStartDate === undefined || nextEndDate === undefined) {
+      setError('Enter both trip dates.');
       return;
     }
 
@@ -204,13 +182,13 @@ function EditTripDatesModal({
     try {
       await onSubmit({
         title: trip.title,
-        startDate: newStartDate,
-        endDate: newEndDate,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
         coverImageUrl: trip.coverImageUrl,
         coverImageFile: null,
         coverImageRemoved: false,
         defaultCurrency: trip.defaultCurrency,
-        shiftDates: data.shiftDates ?? true,
+        keepOriginalDates: isRebasing && data.keepOriginalDates,
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to update the dates.'));
@@ -261,6 +239,12 @@ function EditTripDatesModal({
           </div>
         }
       />
+      {outOfRangeCount > 0 && (
+        <p className='text-warning mt-3 text-sm'>
+          {outOfRangeCount === 1 ? '1 item falls' : `${outOfRangeCount} items fall`} outside the
+          new dates and will show under Outside trip dates.
+        </p>
+      )}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </Modal>
   );

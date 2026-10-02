@@ -25,7 +25,7 @@ import { createTrip } from '@apps/waypoint/store/actions/tripActions';
 import {
   getTripStatus,
   selectTrips,
-  selectTimelineEvents,
+  selectSortedTimelineEvents,
 } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 
@@ -39,7 +39,7 @@ function Waypoint() {
   const [showArchived, setShowArchived] = useState(false);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
   const trips = useAppSelector(selectTrips);
-  const timelineEvents = useAppSelector(selectTimelineEvents);
+  const timelineEvents = useAppSelector(selectSortedTimelineEvents);
   const tripsLoaded = useAppSelector((state) => state.waypoint.trip.loaded);
   const pendingRequests = useAppSelector(
     (state) => state.waypoint.pendingRequests.myRequests,
@@ -64,7 +64,7 @@ function Waypoint() {
     title: string;
     startDate: number;
     endDate: number;
-    coverImageFile: File | null;
+    timezone: string;
   }) => {
     if (!user?.uid) {
       return;

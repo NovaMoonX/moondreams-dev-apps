@@ -15,6 +15,72 @@ const EVENING_TRIP_ID = 'seed-waypoint-trip-evening';
 const EVENING_INVITE_CODE = 'WINDDOWN';
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
+const TRIP_TIMEZONE = 'America/Los_Angeles';
+
+const pad = (value: number) => String(value).padStart(2, '0');
+const toClock = (totalMinutes: number) =>
+  `${pad(Math.floor(totalMinutes / 60) % 24)}:${pad(totalMinutes % 60)}`;
+
+/** An instant's calendar date (as UTC midnight) and minutes since midnight, read on a wall clock in `timeZone`. */
+function getWallClock(epoch: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(epoch));
+  const read = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return {
+    dateUtc: Date.UTC(read('year'), read('month') - 1, read('day')),
+    minutes: read('hour') * 60 + read('minute'),
+  };
+}
+
+/** A relative event's time fields; `null` zone follows the trip's. */
+function relativeEventTime({
+  day,
+  endDay = day,
+  start,
+  end = null,
+  timezone = null,
+}: {
+  day: number;
+  endDay?: number;
+  start: string;
+  end?: string | null;
+  timezone?: string | null;
+}) {
+  return {
+    dayIndex: day,
+    endDayIndex: end === null ? day : endDay,
+    startAt: null,
+    endAt: null,
+    startTime: start,
+    endTime: end,
+    timezone,
+  };
+}
+
+/** A relative stay's day + time fields; the planned arrival/departure start out equal to the booking. */
+function relativeStayTime(checkIn: [number, string], checkOut: [number, string]) {
+  return {
+    checkInAt: null,
+    checkOutAt: null,
+    plannedArrivalAt: null,
+    plannedDepartureAt: null,
+    checkInDayIndex: checkIn[0],
+    checkInTime: checkIn[1],
+    checkOutDayIndex: checkOut[0],
+    checkOutTime: checkOut[1],
+    plannedArrivalDayIndex: checkIn[0],
+    plannedArrivalTime: checkIn[1],
+    plannedDepartureDayIndex: checkOut[0],
+    plannedDepartureTime: checkOut[1],
+  };
+}
 
 export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -32,8 +98,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     upcomingAnchor.getUTCDate(),
   );
   const upcomingTripEnd = upcomingTripStart + 3 * DAY_MS;
-  const atUpcomingTripHour = (dayOffset: number, hour: number, minute = 0) =>
-    upcomingTripStart + dayOffset * DAY_MS + hour * HOUR_MS + minute * 60_000;
   const archivedTripTitle = 'Last Year’s Coast Trip';
   const tripRef = context.firestore
     .collection('apps')
@@ -82,6 +146,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       'https://images.rawpixel.com/image_800/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvZmwyNzkwOTU5NzA1Ni1pbWFnZS1rdXFtcjRxNi5qcGc.jpg',
     startDate: upcomingTripStart,
     endDate: upcomingTripEnd,
+    timeModel: 'RELATIVE',
+    timezone: TRIP_TIMEZONE,
     defaultCurrency: null,
     isArchived: false,
     members: {
@@ -105,7 +171,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
-    dateShiftStatus: 'IDLE',
+    dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -117,6 +183,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     coverImageUrl: null,
     startDate: Date.UTC(2025, 8, 25),
     endDate: Date.UTC(2025, 8, 28),
+    timeModel: 'RELATIVE',
+    timezone: TRIP_TIMEZONE,
     defaultCurrency: null,
     isArchived: true,
     members: {
@@ -130,21 +198,24 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
-    dateShiftStatus: 'IDLE',
+    dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
   });
 
   const activeTripTitle = 'Olympic Peninsula Loop';
-  const activeTripStart = context.now - DAY_MS;
-  const activeTripEnd = context.now + 2 * DAY_MS;
+  // Day 2 of 4 in the trip's own time zone, so "today" is always inside the trip wherever the seed runs.
+  const nowOnTripClock = getWallClock(context.now, TRIP_TIMEZONE);
+  const activeTripStart = nowOnTripClock.dateUtc - DAY_MS;
+  const activeTripEnd = activeTripStart + 3 * DAY_MS;
   // Anchored to local calendar days, not trip-start offsets, so the two stays always check in
   // on different days and the later one lands on today whatever time the seed runs.
   const startOfToday = new Date(context.now).setHours(0, 0, 0, 0);
-  const lodgeCheckInAt = Math.max(activeTripStart, startOfToday - DAY_MS + 16 * HOUR_MS);
-  const lodgeCheckOutAt = startOfToday + 11 * HOUR_MS;
-  const kalalochCheckInAt = Math.min(context.now + 3 * HOUR_MS, startOfToday + 23.5 * HOUR_MS);
+  // Where seed time falls on the trip's clock, so one event genuinely spans "now" and one stay checks in later today.
+  const lunchStartMinutes = Math.max(0, nowOnTripClock.minutes - 30);
+  const lunchEndMinutes = Math.min(1439, nowOnTripClock.minutes + 30);
+  const kalalochCheckInMinutes = Math.min(nowOnTripClock.minutes + 180, 1410);
 
   await activeTripRef.set({
     id: ACTIVE_TRIP_ID,
@@ -152,6 +223,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     coverImageUrl: null,
     startDate: activeTripStart,
     endDate: activeTripEnd,
+    timeModel: 'RELATIVE',
+    timezone: TRIP_TIMEZONE,
     defaultCurrency: null,
     isArchived: false,
     members: {
@@ -170,7 +243,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
-    dateShiftStatus: 'IDLE',
+    dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
     lastEditedAt: context.now,
@@ -418,11 +491,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-flight',
     tripId: TRIP_ID,
     eventType: 'TRAVEL',
-    dayIndex: 0,
-    endDayIndex: 0,
+    ...relativeEventTime({ day: 0, start: '09:00', end: '14:30', timezone: 'America/New_York' }),
     title: 'Flight to Seattle',
-    startAt: atUpcomingTripHour(0, 9),
-    endAt: atUpcomingTripHour(0, 11, 30),
     locationName: 'Seattle-Tacoma International Airport',
     address: null,
     latitude: 47.4502,
@@ -453,11 +523,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-dinner',
     tripId: TRIP_ID,
     eventType: 'DINING',
-    dayIndex: 0,
-    endDayIndex: 0,
+    ...relativeEventTime({ day: 0, start: '19:00', end: null }),
     title: 'Dinner at Pike Place',
-    startAt: atUpcomingTripHour(0, 19),
-    endAt: null,
     locationName: 'Pike Place Market',
     address: 'Seattle, WA',
     latitude: 47.6097,
@@ -494,11 +561,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-hike',
     tripId: TRIP_ID,
     eventType: 'ACTIVITY',
-    dayIndex: 1,
-    endDayIndex: 1,
+    ...relativeEventTime({ day: 1, start: '10:00', end: '13:00' }),
     title: 'Discovery Park hike',
-    startAt: atUpcomingTripHour(1, 10),
-    endAt: atUpcomingTripHour(1, 13),
     locationName: 'Discovery Park',
     address: '3801 Discovery Park Blvd, Seattle, WA',
     latitude: 47.6613,
@@ -536,11 +600,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-free-time',
     tripId: TRIP_ID,
     eventType: 'FREE_TIME',
-    dayIndex: 2,
-    endDayIndex: 2,
+    ...relativeEventTime({ day: 2, start: '14:00', end: null }),
     title: 'Free time downtown',
-    startAt: atUpcomingTripHour(2, 14),
-    endAt: null,
     locationName: null,
     address: null,
     latitude: null,
@@ -575,11 +636,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: 'Seattle, WA',
     latitude: 47.6097,
     longitude: -122.3425,
-    checkInAt: atUpcomingTripHour(0, 15),
-    checkOutAt: atUpcomingTripHour(2, 11),
-    checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: atUpcomingTripHour(0, 15),
-    plannedDepartureAt: atUpcomingTripHour(2, 11),
+    ...relativeStayTime([0, '15:00'], [2, '11:00']),
+    checkInTimezone: null,
     confirmationCode: null,
     notes: 'Door code is 4821. Parking is in the garage off Western Ave.',
     place: null,
@@ -606,11 +664,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: 'Portland, OR',
     latitude: 45.5231,
     longitude: -122.6765,
-    checkInAt: atUpcomingTripHour(2, 15),
-    checkOutAt: atUpcomingTripHour(3, 11),
-    checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: atUpcomingTripHour(2, 15),
-    plannedDepartureAt: atUpcomingTripHour(3, 11),
+    ...relativeStayTime([2, '15:00'], [3, '11:00']),
+    checkInTimezone: null,
     confirmationCode: null,
     notes: null,
     place: null,
@@ -665,11 +720,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'active-trip-ferry',
     tripId: ACTIVE_TRIP_ID,
     eventType: 'TRAVEL',
-    dayIndex: 0,
-    endDayIndex: 0,
+    ...relativeEventTime({ day: 0, start: '09:00', end: '11:00' }),
     title: 'Ferry to Bainbridge Island',
-    startAt: activeTripStart + 9 * 3_600_000,
-    endAt: activeTripStart + 11 * 3_600_000,
     locationName: 'Bainbridge Island Ferry Terminal',
     address: null,
     latitude: 47.6238,
@@ -703,11 +755,12 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'active-trip-lunch',
     tripId: ACTIVE_TRIP_ID,
     eventType: 'DINING',
-    dayIndex: 1,
-    endDayIndex: 1,
+    ...relativeEventTime({
+      day: 1,
+      start: toClock(lunchStartMinutes),
+      end: toClock(lunchEndMinutes),
+    }),
     title: 'Lunch at Salt Creek',
-    startAt: context.now - 1_800_000,
-    endAt: context.now + 1_800_000,
     locationName: 'Salt Creek Recreation Area',
     address: null,
     latitude: 48.1585,
@@ -730,7 +783,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     linkPreview: null,
     reminderMinutesBefore: 20,
     reminderEnabled: true,
-    reminderId: null,
+    reminderId: 'seed-waypoint-reminder-alex',
     isArchived: false,
     archivedBy: null,
     archivedAt: null,
@@ -744,11 +797,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'active-trip-tidepools',
     tripId: ACTIVE_TRIP_ID,
     eventType: 'ACTIVITY',
-    dayIndex: 1,
-    endDayIndex: 1,
+    ...relativeEventTime({ day: 1, start: '10:00', end: '13:00' }),
     title: 'Tidepooling at Salt Creek',
-    startAt: activeTripStart + DAY_MS + 10 * 3_600_000,
-    endAt: activeTripStart + DAY_MS + 13 * 3_600_000,
     locationName: 'Salt Creek Recreation Area',
     address: null,
     latitude: 48.1585,
@@ -763,8 +813,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       {
         changes: [
           {
-            field: 'startAt',
-            previousValue: activeTripStart + DAY_MS + 9 * 3_600_000,
+            field: 'startTime',
+            previousValue: '09:00',
             changedBy: alex.uid,
             changedAt: context.now - 3_600_000,
           },
@@ -792,11 +842,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'active-trip-dinner',
     tripId: ACTIVE_TRIP_ID,
     eventType: 'DINING',
-    dayIndex: 2,
-    endDayIndex: 2,
+    ...relativeEventTime({ day: 2, start: '18:00' }),
     title: 'Dinner in Port Angeles',
-    startAt: activeTripStart + 2 * DAY_MS + 18 * 3_600_000,
-    endAt: null,
     locationName: 'Port Angeles',
     address: null,
     latitude: 48.1181,
@@ -829,11 +876,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'active-trip-old-museum',
     tripId: ACTIVE_TRIP_ID,
     eventType: 'ACTIVITY',
-    dayIndex: 2,
-    endDayIndex: 2,
+    ...relativeEventTime({ day: 2, start: '14:00', end: '16:00' }),
     title: 'Feiro Marine Life Center',
-    startAt: activeTripStart + 2 * DAY_MS + 14 * 3_600_000,
-    endAt: activeTripStart + 2 * DAY_MS + 16 * 3_600_000,
     locationName: 'Feiro Marine Life Center',
     address: 'Port Angeles, WA',
     latitude: 48.1226,
@@ -868,11 +912,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: '416 Lake Crescent Rd, Port Angeles, WA',
     latitude: 48.0587,
     longitude: -123.7853,
-    checkInAt: lodgeCheckInAt,
-    checkOutAt: lodgeCheckOutAt,
-    checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: lodgeCheckInAt,
-    plannedDepartureAt: lodgeCheckOutAt,
+    ...relativeStayTime([0, '16:00'], [1, '11:00']),
+    checkInTimezone: null,
     confirmationCode: null,
     notes: 'Front desk closes at 10pm - call ahead for a late arrival.',
     place: null,
@@ -893,11 +934,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: '157151 US-101, Forks, WA',
     latitude: 47.6124,
     longitude: -124.3743,
-    checkInAt: kalalochCheckInAt,
-    checkOutAt: activeTripEnd,
-    checkInTimezone: 'America/Los_Angeles',
-    plannedArrivalAt: kalalochCheckInAt,
-    plannedDepartureAt: activeTripEnd,
+    ...relativeStayTime([1, toClock(kalalochCheckInMinutes)], [3, '11:00']),
+    checkInTimezone: null,
     confirmationCode: 'KAL-48213',
     notes:
       'Check in at the main lodge, then drive down to the bluff cabins. No cell service past Forks, so grab the door code before you lose signal.\n\nFirewood is sold at the front desk.',
@@ -908,8 +946,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       {
         changes: [
           {
-            field: 'checkInAt',
-            previousValue: kalalochCheckInAt - 2 * HOUR_MS,
+            field: 'checkInTime',
+            previousValue: toClock(Math.max(0, kalalochCheckInMinutes - 120)),
             changedBy: taylor.uid,
             changedAt: context.now - 2_700_000,
           },
@@ -974,8 +1012,11 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     tripId: ACTIVE_TRIP_ID,
     eventId: 'active-trip-dinner',
     suggestedTitle: 'Dinner at Downriggers',
-    suggestedStartAt: activeTripStart + 2 * DAY_MS + 18 * 3_600_000,
+    suggestedStartAt: null,
     suggestedEndAt: null,
+    suggestedDayIndex: 2,
+    suggestedStartTime: '18:00',
+    suggestedEndTime: null,
     suggestedLocationName: 'Downriggers on the Waterfront',
     suggestedAddress: '115 E Railroad Ave, Port Angeles, WA',
     suggestedLatitude: 48.1215,
@@ -1090,6 +1131,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 43,
+    firestoreDocuments: 45,
   };
 }

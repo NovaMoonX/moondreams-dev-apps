@@ -7,6 +7,7 @@ export interface CreateTripValues {
   title: string;
   startDate: number;
   endDate: number;
+  timezone: string;
   createdBy: string;
   createdAt: number;
   inviteCode?: string | null;
@@ -32,7 +33,9 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
-    dateShiftStatus: 'IDLE',
+    timeModel: 'RELATIVE',
+    timezone: values.timezone,
+    dateShiftStatus: null,
     createdBy: values.createdBy,
     createdAt: values.createdAt,
     lastEditedAt: values.createdAt,

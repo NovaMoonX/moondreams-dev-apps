@@ -45,7 +45,7 @@ function EditTripTitleModal({
         coverImageFile: null,
         coverImageRemoved: false,
         defaultCurrency: trip.defaultCurrency,
-        shiftDates: true,
+        keepOriginalDates: false,
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to update the title.'));

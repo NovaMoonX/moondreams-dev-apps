@@ -1,5 +1,12 @@
 import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { type EventTimeSource, getEventTime } from '@apps/waypoint/utils/tripTime';
+
+export type EventReminderSource = EventTimeSource &
+  Pick<
+    TimelineEvent,
+    'id' | 'title' | 'reminderMinutesBefore' | 'reminderEnabled' | 'assignedMemberIds'
+  >;
 
 function getReminderTargetUids(trip: TripSpace, assignedMemberIds: string[]): string[] {
   return assignedMemberIds.length > 0 ? assignedMemberIds : Object.keys(trip.members);
@@ -16,12 +23,14 @@ export async function scheduleEventReminder({
 }: {
   trip: TripSpace;
   uid: string;
-  event: Pick<
-    TimelineEvent,
-    'id' | 'title' | 'startAt' | 'reminderMinutesBefore' | 'reminderEnabled' | 'assignedMemberIds'
-  >;
+  event: EventReminderSource;
 }): Promise<string | null> {
   if (!event.reminderEnabled) {
+    return null;
+  }
+
+  const startMs = getEventTime(trip, event).startMs;
+  if (startMs === null) {
     return null;
   }
 
@@ -36,7 +45,7 @@ export async function scheduleEventReminder({
       targetUids,
       title: event.title,
       body: `Starting in ${event.reminderMinutesBefore} minutes.`,
-      scheduledFor: event.startAt - event.reminderMinutesBefore * 60_000,
+      scheduledFor: startMs - event.reminderMinutesBefore * 60_000,
       createdBy: uid,
       relatedEntityPath: `apps/waypoint/trips/${trip.id}/events/${event.id}`,
     });

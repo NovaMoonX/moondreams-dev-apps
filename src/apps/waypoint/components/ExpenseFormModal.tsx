@@ -15,7 +15,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
@@ -160,15 +160,13 @@ function ExpenseFormModal({
     (mode === 'amount'
       ? parseAmount(formData.amount) !== null
       : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin);
+  const storedDayIndex = initialExpense?.dayIndex ?? null;
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
-      ...Array.from({ length: getDayCount(trip.startDate, trip.endDate) }, (_, index) => ({
-        value: String(index),
-        label: getDayLabel(trip.startDate, index),
-      })),
+      ...getDayOptions(trip.startDate, trip.endDate, storedDayIndex),
     ],
-    [trip.startDate, trip.endDate],
+    [trip.startDate, trip.endDate, storedDayIndex],
   );
   const payerOptions = useMemo(
     () => [

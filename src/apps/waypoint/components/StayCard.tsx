@@ -10,13 +10,13 @@ import NotesField from '@apps/waypoint/components/NotesField';
 import EnrichedImage from '@/components/EnrichedImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import { formatDateTime } from '@/utils/formatUtils';
-import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { STAY_TYPE_LABELS } from '@apps/waypoint/constants';
-import type { Stay } from '@apps/waypoint/types';
+import type { Stay, TripSpace } from '@apps/waypoint/types';
+import { formatStayTimeRange, getStayTimezoneLabel } from '@apps/waypoint/utils/tripTime';
 
 interface StayCardProps {
+  trip: TripSpace;
   stay: Stay;
   canEdit: boolean;
   /** `onSuccess`, when given, is the mobile details drawer's own close — call it only once
@@ -38,6 +38,7 @@ function getStayLocation(stay: Stay) {
 }
 
 export interface StayDetailLinesProps {
+  trip: TripSpace;
   stay: Stay;
   showTitle: boolean;
   showExtras: boolean;
@@ -47,6 +48,7 @@ export interface StayDetailLinesProps {
 }
 
 export function StayDetailLines({
+  trip,
   stay,
   showTitle,
   showExtras,
@@ -54,6 +56,8 @@ export function StayDetailLines({
   canEdit,
   onSaveNotes,
 }: StayDetailLinesProps) {
+  const timezoneLabel = getStayTimezoneLabel(trip, stay);
+
   return (
     <>
       <div className='flex flex-wrap items-center gap-2'>
@@ -72,11 +76,9 @@ export function StayDetailLines({
       </div>
       <LocationLink {...getStayLocation(stay)} label={stay.address} />
       <p className='text-muted-foreground text-sm'>
-        {formatDateTime(stay.checkInAt)} - {formatDateTime(stay.checkOutAt)}
+        {formatStayTimeRange(trip, stay)}
       </p>
-      {stay.checkInTimezone && (
-        <p className='text-muted-foreground text-xs'>{formatTimezoneLabel(stay.checkInTimezone)}</p>
-      )}
+      {timezoneLabel && <p className='text-muted-foreground text-xs'>{timezoneLabel}</p>}
       {stay.linkUrl && (
         <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
           <ExternalLinkText href={stay.linkUrl} />
@@ -102,7 +104,7 @@ export function StayDetailLines({
   );
 }
 
-export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) {
+export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -142,6 +144,7 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
           <div className='flex min-w-0 items-start justify-between gap-3 p-4'>
             <div className='min-w-0 space-y-1'>
               <StayDetailLines
+                trip={trip}
                 stay={stay}
                 showTitle
                 showExtras={false}
@@ -186,6 +189,7 @@ export function StayCard({ stay, canEdit, onEdit, onSaveNotes }: StayCardProps) 
           onEdit={canEdit ? () => onEdit(stay, closeDrawer) : null}
         >
           <StayDetailLines
+            trip={trip}
             stay={stay}
             showTitle={false}
             showExtras

@@ -11,7 +11,7 @@ import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getDayLabel } from '@/utils/dateRangeUtils';
+import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
@@ -32,17 +32,11 @@ import {
 import {
   canEditExistingItem,
   hasTripRole,
-  isTripDateShiftLocked,
 } from '@apps/waypoint/utils/roleGuards';
 
 interface ChecklistSectionProps {
   trip: TripSpace;
   currentUserId: string;
-}
-
-interface ChecklistDayGroup {
-  dayIndex: number | null;
-  items: ChecklistItem[];
 }
 
 function getChecklistCategoryLabel(item: ChecklistItem): string {
@@ -64,13 +58,11 @@ export default function ChecklistSection({
   const items = useAppSelector((state) => state.waypoint.checklist.items);
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
-  const canEdit =
-    !isTripDateShiftLocked(trip) && hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+  const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditExisting = canEditExistingItem(trip, currentUserId);
 
   const mayToggle = (item: ChecklistItem) =>
-    !isTripDateShiftLocked(trip) &&
-    (canEdit || item.assignedToUids.includes(currentUserId));
+    canEdit || item.assignedToUids.includes(currentUserId);
 
   const visibleItems = useMemo(
     () =>
@@ -79,22 +71,10 @@ export default function ChecklistSection({
         : items,
     [assignedToMeOnly, currentUserId, items],
   );
-  const dayGroups: ChecklistDayGroup[] = useMemo(
-    () =>
-      Array.from(
-        visibleItems
-          .reduce<Map<number | null, ChecklistItem[]>>((byDay, item) => {
-            byDay.set(item.completeByDayIndex, [
-              ...(byDay.get(item.completeByDayIndex) ?? []),
-              item,
-            ]);
-            return byDay;
-          }, new Map())
-          .entries(),
-      )
-        .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a - b))
-        .map(([dayIndex, dayItems]) => ({ dayIndex, items: dayItems })),
-    [visibleItems],
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  const dayGroups = useMemo(
+    () => groupByIndexBucket(visibleItems, (item) => item.completeByDayIndex, dayCount),
+    [visibleItems, dayCount],
   );
 
   const completedCount = items.filter((item) => item.isCompleted).length;
@@ -226,12 +206,12 @@ export default function ChecklistSection({
         </p>
       ) : (
         <div className='space-y-4'>
-          {dayGroups.map(({ dayIndex, items: dayItems }) => (
-            <div key={dayIndex ?? 'no-day'} className='space-y-2'>
+          {dayGroups.map(({ bucket, items: dayItems }) => (
+            <div key={bucket} className='space-y-2'>
               <div className='flex items-center gap-3'>
                 <div className='border-border flex-1 border-t' />
                 <span className='text-muted-foreground text-sm font-medium'>
-                  {dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex)}
+                  {getBucketLabel(bucket, trip.startDate)}
                 </span>
                 <div className='border-border flex-1 border-t' />
               </div>

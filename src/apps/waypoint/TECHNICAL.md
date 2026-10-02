@@ -48,7 +48,9 @@ interface TripSpace {
   sharedAlbumUrl: string | null; // e.g. a Google Photos/Drive folder link — Waypoint never stores photos itself
   sharedAlbumSetByUid: string | null;
   sharedAlbumSetAt: number | null;
-  dateShiftStatus: 'IDLE' | 'PENDING'; // 'PENDING' while shiftTripDates is re-dating the trip — see 4a below
+  timeModel: 'RELATIVE' | 'ABSOLUTE'; // absent on trips created before relative times — read as 'ABSOLUTE'. See "Relative vs. absolute times" below
+  timezone: string | null; // IANA default zone for the trip's wall-clock times; null on ABSOLUTE trips
+  dateShiftStatus: 'IDLE' | 'PENDING' | null; // @deprecated — the date-shift lock no longer exists; kept so older trips keep the field. New trips write null
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -120,11 +122,14 @@ interface TimelineEvent {
   id: string;
   tripId: string;
   eventType: EventType;
-  dayIndex: number;
-  endDayIndex: number; // equal to dayIndex for the common single-day case; higher for events spanning multiple days
+  dayIndex: number | null; // null = "no specific day" (RELATIVE trips only)
+  endDayIndex: number | null; // equal to dayIndex for the common single-day case; higher for events spanning multiple days
   title: string;
-  startAt: number;
-  endAt: number | null;
+  startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
+  endTime: string | null;
+  timezone: string | null; // zone override for this event's times; null follows the trip's timezone
+  startAt: number | null; // @deprecated — ABSOLUTE trips only (null on RELATIVE ones); superseded by dayIndex + startTime
+  endAt: number | null; // @deprecated — ABSOLUTE trips only; superseded by endDayIndex + endTime
   locationName: string | null; // not every event type has one — e.g. FREE_TIME
   address: string | null;
   latitude: number | null;
@@ -236,8 +241,8 @@ type TransitDetails =
 
 ```typescript
 interface EventFieldChange {
-  field: 'startAt' | 'endAt' | 'locationName' | 'dayIndex' | 'endDayIndex';
-  previousValue: number | string;
+  field: 'startAt' | 'endAt' | 'startTime' | 'endTime' | 'locationName' | 'dayIndex' | 'endDayIndex';
+  previousValue: number | string | null;
   changedBy: string;
   changedAt: number;
 }
@@ -261,11 +266,19 @@ interface Stay {
   address: string;
   latitude: number | null;
   longitude: number | null;
-  checkInAt: number; // official booking check-in — informational
-  checkOutAt: number; // official booking check-out — informational
-  checkInTimezone: string | null; // IANA name (e.g. "Asia/Tokyo") — one field covers both, since check-in/out are almost always the same property
-  plannedArrivalAt: number; // drives Stay/Leg Segmentation — defaults to checkInAt at creation
-  plannedDepartureAt: number; // defaults to checkOutAt at creation
+  checkInDayIndex: number | null; // RELATIVE trips: a trip day + "HH:mm" for each of the four points below
+  checkInTime: string | null; // official booking check-in — informational
+  checkOutDayIndex: number | null;
+  checkOutTime: string | null; // official booking check-out — informational
+  plannedArrivalDayIndex: number | null; // drives Stay/Leg Segmentation — defaults to the check-in at creation
+  plannedArrivalTime: string | null;
+  plannedDepartureDayIndex: number | null; // defaults to the check-out at creation
+  plannedDepartureTime: string | null;
+  checkInTimezone: string | null; // IANA name (e.g. "Asia/Tokyo") — zone override for the stay's times; null follows the trip's timezone
+  checkInAt: number | null; // @deprecated — ABSOLUTE trips only; superseded by checkInDayIndex + checkInTime
+  checkOutAt: number | null; // @deprecated — ABSOLUTE trips only
+  plannedArrivalAt: number | null; // @deprecated — ABSOLUTE trips only
+  plannedDepartureAt: number | null; // @deprecated — ABSOLUTE trips only
   confirmationCode: string | null;
   notes: string | null;
   place: PlaceRef | null;
@@ -484,10 +497,10 @@ Ephemeral by design, mirroring the existing `/presence/{userId}` pattern: no his
 **1. Event Active Status Machine**
 
 ```
-[UPCOMING] ---> now >= startAt ---> [ACTIVE] ---> now >= impliedEndAt ---> [COMPLETED]
+[UPCOMING] ---> now >= start ---> [ACTIVE] ---> now >= impliedEnd ---> [COMPLETED]
 ```
 
-`impliedEndAt` is `endAt` when set, otherwise the end of the event's own local calendar day (`getEndOfLocalDay(startAt)`) — an event with no end time doesn't stay "Active Now" forever. Among several simultaneously `ACTIVE` events, Overview's Active Now card shows whichever started most recently.
+`start`/`impliedEnd` are real instants, computed by `getEventTime` in `utils/tripTime.ts`: on a relative trip, the event's trip day + `startTime` read in its effective zone (`event.timezone ?? trip.timezone`); on an absolute trip, `startAt`. `impliedEnd` is the explicit end when set, otherwise the end of the event's own day — an event with no end time doesn't stay "Active Now" forever. An event with no day, or on a day outside the trip's dates, has no instant and is never live. A trip itself is judged by the viewer's local calendar day, so its last day still counts as active. Among several simultaneously `ACTIVE` events, Overview's Active Now card shows whichever started most recently.
 
 **2. Proposal Approval State Machine**
 
@@ -500,25 +513,31 @@ Once the trip has started, approving a proposal against an **event** specificall
 
 **3. Stay / Leg Segmentation (derived, not stored)**
 
-No separate "Leg" entity. The timeline groups by `dayIndex`/`endDayIndex`; which `Stay` is "active" for a day is derived by matching the current time against each Stay's `plannedArrivalAt`/`plannedDepartureAt` window — the group's actual intent, not the official `checkInAt`/`checkOutAt`. A transition day can have more than one Stay active (checking out of one place, into another the same day) — the derivation returns every matching Stay, not just one, and the UI stacks their banners.
+No separate "Leg" entity. The timeline groups by `dayIndex`/`endDayIndex`; which `Stay` is "active" for a day is derived by checking whether the day falls between each Stay's planned arrival and departure days — the group's actual intent, not the official check-in/check-out. A transition day can have more than one Stay active (checking out of one place, into another the same day) — the derivation returns every matching Stay, not just one, and the UI stacks their banners.
 
 **4. Event Change Visibility — append-only history, Admin-only after start**
 
 Two conditions, both required:
 - **Gated to an already-started trip**: `changeHistory` only accumulates once `now >= trip.startDate`.
-- **Every edit is appended, not overwritten**: on a write touching `startAt`/`endAt`/`locationName`/`dayIndex`/`endDayIndex`, the client diffs against the previous state, collects every changed field into one `EventChangeSnapshot`, and appends it. If Admin A moves the start time and Admin B later moves the location, both snapshots survive in order.
+- **Every edit is appended, not overwritten**: on a write touching `startTime`/`endTime` (`startAt`/`endAt` on absolute trips)/`locationName`/`dayIndex`/`endDayIndex`, the client diffs against the previous state, collects every changed field into one `EventChangeSnapshot`, and appends it. If Admin A moves the start time and Admin B later moves the location, both snapshots survive in order.
 
 Combined with the write rule below, every entry in `changeHistory` was necessarily made by an Admin, which is what makes the log trustworthy. Updating or deleting an *existing* event once the trip has started is Admin-only; creating a brand-new event or stay follows the same narrowing — open to Editors before the trip starts, Admin-only once it has (`canCreateItem`) — since an already-underway plan needs one steward either way.
 
 **Worth flagging in the UI**: the *live* value of a field is always whoever wrote last, even though both edits remain visible in `changeHistory`. If Admin A moves an event to 2pm and Admin B independently moves the same event to 3pm moments later, A's edit doesn't disappear from the record, but it's no longer what's shown by default — someone would need to expand the history to see it happened at all. That's expected last-write-wins behavior, not a bug, but the UI shouldn't make it look like B's edit is the *only* one that occurred.
 
+**Relative vs. absolute times**
+
+Trips carry a `timeModel`. A **relative** trip stores every dated item as a trip day number plus a floating `"HH:mm"` — "Day 2, 09:00" is 9:00 AM wherever you are, shown identically to every viewer, which is what makes moving the trip's dates a single trip-document write. An **absolute** trip (anything created before relative times; a document with no `timeModel`) keeps events and stays as real timestamps and its dates are fixed: the date editor is hidden and `firestore.rules` rejects a change to `startDate`/`endDate`/`timezone`. `utils/tripTime.ts` is the one place that knows about both: `getEventTime`/`getStayTime` normalise either shape for the UI and selectors, and `buildEventTimeFields`/`buildStayTimeFields` build the right write for each. Superseded fields (`startAt`, `checkInAt`, …) stay in the types, marked `@deprecated`, because existing trips still carry them.
+
+A zone is only needed to turn a relative time into a real instant — for reminders and the Active Now / Up Next HUD. `trip.timezone` is the default (the creator's zone at creation, editable from the trip header); an event or stay can override it. Day-of views, grouping and display never use it.
+
 **4a. Changing Trip Dates**
 
-Since `startDate`/`endDate` are only ever estimates at creation, shifting them later has to be safe by design, not just possible. When the trip has any dated items and the dates actually change, the client doesn't touch the affected subcollections itself — it calls the `shiftTripDates` callable, which does the work with the Admin SDK (so it isn't bound by per-document rules or client-side timeouts) and can reschedule a reminder directly, something a client write can only ever cancel.
+On a relative trip the default is one write to the trip document: every item keeps its day number, so everything moves with the trip. Items whose day is now past the last day (or before the first) are kept, not nulled — they render under an "Outside trip dates" group and come back if the trip is extended again; the edit form warns about how many will land there. Every date input that is part of a range (trip, event, stay) carries the end along when the start moves, keeping the range's length.
 
-The edit form offers a **"shift dated items" checkbox**, checked by default: checked, every event's `startAt`/`endAt` and every stay's `checkInAt`/`checkOutAt`/`plannedArrivalAt`/`plannedDepartureAt` shifts by the same delta as `trip.startDate`, preserving each item's `dayIndex` and its position relative to everything else (stays have no `dayIndex`, so this is the only path that keeps them aligned with the trip). Unchecked, events/expenses/checklist items keep their exact absolute date and time and have their `dayIndex`/`completeByDayIndex` recomputed against the new range instead (clamped for events, since `dayIndex` is required; set to `null` — "no specific day" — for expenses/checklist that now fall outside it); stays are left untouched either way, since nothing about them is relative.
+When the start date moves, the edit form also offers **"Keep events and stays on their original dates"** (off by default). Checked, the client calls the `shiftTripDates` callable, which rebases every event, stay, expense and checklist item's day number by the start-date delta inside one Admin SDK transaction — Admin because `firestore.rules` limit who can write events and stays on a live trip, and a transaction so a concurrent edit can't be half-applied. A trip with more than ~450 items is refused rather than half-rebased.
 
-While the function runs, `trip.dateShiftStatus` is `'PENDING'` — `firestore.rules` denies every write to the trip document and its subcollections until it flips back to `'IDLE'` (or the function fails and resets it), and the client mirrors that lock by hiding every edit entry point and showing a banner. This is what makes the two-phase "shift, then reassign" work safely: nothing else can write to the trip mid-shift.
+Reminders are absolute instants (the delivery function only reads `scheduledFor`), so they have to follow the trip: the `rescheduleTripReminders` Firestore trigger runs when a relative trip's `startDate`, `endDate` or `timezone` changes and re-derives every reminder from the stored events — moved when the event is still on the calendar, cancelled when it falls outside the trip or has no day, and re-created (with `reminderId` written back) when it returns to range after its reminder was cancelled or sent. Clients can only cancel a reminder, so this is the one place a reminder is rescheduled.
 
 **4b. Deleting a Trip**
 
@@ -603,7 +622,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 
 - **`trips/{tripId}`**: read allowed if `request.auth.uid` is a key in `members` — nothing else, no pending-related exception (see Criterion #8). Changing a role and removing a member are security-critical transitions restricted to `ADMIN`.
 - **`pendingRequests/{requestId}`**: see the full rules block in the Data Schema section above — three-branch read (path-based self-check, "my requests" query safety, "requests for my trip" query safety), create requires the caller's own uid plus a real, not-yet-joined trip, delete restricted to the requester or a trip Admin, update always denied.
-- **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle — which may insert the member's own missing `paidMemberStatus` key on an `EVERYONE_INCLUDING_FUTURE` expense, since people who join later aren't backfilled). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` and `stays/` specifically**: updating/deleting an *existing* item once `now >= trip.startDate` is `ADMIN`-only, and creating a brand-new one narrows the same way (`isTripCreateAllowed`) — `EDITOR`s can add new events/stays before the trip starts, `ADMIN`-only once it has. Every write to any of these, and to `trips/{tripId}` itself, additionally requires `trip.dateShiftStatus != 'PENDING'` — see "Changing Trip Dates" above.
+- **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle — which may insert the member's own missing `paidMemberStatus` key on an `EVERYONE_INCLUDING_FUTURE` expense, since people who join later aren't backfilled). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` and `stays/` specifically**: updating/deleting an *existing* item once `now >= trip.startDate` is `ADMIN`-only, and creating a brand-new one narrows the same way (`isTripCreateAllowed`) — `EDITOR`s can add new events/stays before the trip starts, `ADMIN`-only once it has. Event and stay shapes branch on the parent trip's `timeModel`: a relative trip's events require a `"HH:mm"` `startTime` and null `startAt`/`endAt`, `dayIndex`/`endDayIndex` are null together or an int pair, and stays need all four day + time points in order; an absolute trip keeps the timestamp shape. New trips must be created `RELATIVE` with a `timezone`, `timeModel` can't change afterwards, and an absolute trip's dates and timezone can't be edited. A trip counts as active through its whole last day (`endDate` + one day).
 - **`comments/{commentId}`**: posting is covered by the general membership rule; approving/declining a proposal is a dedicated narrow rule restricted to `ADMIN`/`EDITOR` (or `ADMIN`-only post-trip-start for event-targeted proposals, per State Machine #2).
 - **`ideas/{ideaId}`**: creating and reading open to any trip member (#1 — not a planning-permission surface). Voting is narrow: a member can only add/remove *their own* uid from `voterUids` (#5). Setting `convertedToEntityId` follows the same permission as creating the resulting entity.
 - **`stayCriteria/{criterionId}`**: reading open to any member; write follows the same `EDITOR`/`ADMIN` rule as the departure checklist.
@@ -725,7 +744,7 @@ src/apps/waypoint/
 │   ├── useTripTimeline.ts
 │   └── useTravelStatus.ts          (thin RTDB read/write wrapper, outside Redux)
 ├── utils/
-│   ├── dateUtils.ts
+│   ├── tripTime.ts                 (relative/absolute time adapter — see "Relative vs. absolute times")
 │   ├── mapUrlHelpers.ts
 │   ├── roleGuards.ts               (incl. canApproveMembers/canChangeRole/canRemoveMembers — Admin-only, blocks self-role-changes)
 │   └── splitCalculators.ts         (dues/settle-up netting, status- and range-aware per State Machine 5)

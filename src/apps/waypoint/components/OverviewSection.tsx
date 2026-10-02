@@ -9,10 +9,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import { formatCountdown, formatDuration, formatTime } from '@/utils/formatUtils';
-import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
+import { formatClockTime, formatCountdown, formatDuration } from '@/utils/formatUtils';
+import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
-import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
@@ -31,6 +30,13 @@ import {
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import {
+  formatEventTimeRange,
+  getEventTime,
+  getStayTime,
+  getStayTimezoneLabel,
+  isRelativeTrip,
+} from '@apps/waypoint/utils/tripTime';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
@@ -77,8 +83,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const now = useNow();
   const dispatch = useAppDispatch();
   const isLive = getTripStatus(trip, now) === 'ACTIVE';
-  const activeEvent = useAppSelector(selectActiveEvent(now));
-  const upNextEvent = useAppSelector(selectUpNextEvent(now));
+  const activeEvent = useAppSelector(selectActiveEvent(trip, now));
+  const upNextEvent = useAppSelector(selectUpNextEvent(trip, now));
   const stays = useAppSelector(selectStays);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -87,16 +93,20 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     return null;
   }
 
-  const todayIndex = getDayIndex(trip.startDate, now);
+  const todayIndex = getLocalDayIndex(trip.startDate, now);
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
+  const isCheckInToday = (stay: Stay) =>
+    isRelativeTrip(trip)
+      ? getStayTime(trip, stay).checkIn.dayIndex === todayIndex
+      : stay.checkInAt !== null && isSameLocalCalendarDay(stay.checkInAt, now);
   const checkInStays = stays
-    .filter((stay) => isSameLocalCalendarDay(stay.checkInAt, now))
-    .sort((a, b) => a.checkInAt - b.checkInAt);
+    .filter(isCheckInToday)
+    .sort((a, b) => (getStayTime(trip, a).checkInMs ?? 0) - (getStayTime(trip, b).checkInMs ?? 0));
   // Nothing left today — no event running right now, and whatever's next (if
   // anything) isn't until a later day.
   const isDoneForToday =
     !activeEvent &&
-    (!upNextEvent || getDayIndex(trip.startDate, upNextEvent.startAt) !== todayIndex);
+    (!upNextEvent || getEventTime(trip, upNextEvent).dayIndex !== todayIndex);
 
   // Below `sm`, Active Now/Up Next/Checking-in cards are too tight for the full
   // details, so tapping opens the drawer — same split Timeline/EventCard use.
@@ -116,6 +126,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         {checkInStays.map((stay) => (
           <CheckInStayCard
             key={stay.id}
+            trip={trip}
             stay={stay}
             now={now}
             isSmallScreen={isSmallScreen}
@@ -124,6 +135,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         ))}
         {activeEvent && (
           <ActiveNowCard
+            trip={trip}
             event={activeEvent}
             now={now}
             isSmallScreen={isSmallScreen}
@@ -132,6 +144,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         )}
         {upNextEvent && (
           <UpNextCard
+            trip={trip}
             event={upNextEvent}
             now={now}
             isSmallScreen={isSmallScreen}
@@ -146,6 +159,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         <>
           <hr className='border-border' />
           <TodayAgenda
+            trip={trip}
             title='Today'
             dayIndex={todayIndex}
             now={now}
@@ -153,6 +167,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           />
           {hasTomorrow && (
             <TodayAgenda
+              trip={trip}
               title='Tomorrow'
               dayIndex={todayIndex + 1}
               now={now}
@@ -197,6 +212,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           onEdit={null}
         >
           <EventDetailLines
+            trip={trip}
             event={detail.event}
             showTitle={false}
             showNotes
@@ -217,6 +233,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           onEdit={null}
         >
           <StayDetailLines
+            trip={trip}
             stay={detail.stay}
             showTitle={false}
             showExtras
@@ -239,11 +256,13 @@ function EventTypeBadge({ event }: { event: TimelineEvent }) {
 }
 
 function CheckInStayCard({
+  trip,
   stay,
   now,
   isSmallScreen,
   onOpenDetails,
 }: {
+  trip: TripSpace;
   stay: Stay;
   now: number;
   isSmallScreen: boolean;
@@ -251,7 +270,9 @@ function CheckInStayCard({
 }) {
   const imageUrl = getDisplayImage(stay);
   const clickProps = isSmallScreen ? getOpenDetailsProps(stay.name, onOpenDetails) : {};
-  const hasCheckedIn = stay.checkInAt <= now;
+  const { checkIn, checkInMs } = getStayTime(trip, stay);
+  const hasCheckedIn = checkInMs !== null && checkInMs <= now;
+  const timezoneLabel = getStayTimezoneLabel(trip, stay);
 
   return (
     <article
@@ -275,9 +296,9 @@ function CheckInStayCard({
           </p>
           <h3 className='truncate text-sm font-semibold sm:text-base'>{stay.name}</h3>
           <p className='text-muted-foreground truncate text-xs'>
-            {formatTime(stay.checkInAt)}
-            {hasCheckedIn ? '' : ` · ${formatCountdown(stay.checkInAt, now)}`}
-            {stay.checkInTimezone ? ` · ${formatTimezoneLabel(stay.checkInTimezone)}` : ''}
+            {checkIn.time ? formatClockTime(checkIn.time) : ''}
+            {hasCheckedIn || checkInMs === null ? '' : ` · ${formatCountdown(checkInMs, now)}`}
+            {timezoneLabel ? ` · ${timezoneLabel}` : ''}
           </p>
         </div>
         {!isSmallScreen && (
@@ -318,20 +339,23 @@ function CheckInStayCard({
 }
 
 function ActiveNowCard({
+  trip,
   event,
   now,
   isSmallScreen,
   onOpenDetails,
 }: {
+  trip: TripSpace;
   event: TimelineEvent;
   now: number;
   isSmallScreen: boolean;
   onOpenDetails: () => void;
 }) {
-  const duration = event.endAt !== null ? event.endAt - event.startAt : null;
+  const { startMs, endMs } = getEventTime(trip, event);
+  const duration = startMs !== null && endMs !== null ? endMs - startMs : null;
   const progress =
-    duration !== null && duration > 0
-      ? Math.min(1, Math.max(0, (now - event.startAt) / duration))
+    duration !== null && duration > 0 && startMs !== null
+      ? Math.min(1, Math.max(0, (now - startMs) / duration))
       : null;
   const imageUrl = getDisplayImage(event);
   const clickProps = isSmallScreen ? getOpenDetailsProps(event.title, onOpenDetails) : {};
@@ -358,8 +382,7 @@ function ActiveNowCard({
             </div>
             <h3 className='mt-1 truncate text-lg font-bold'>{event.title}</h3>
             <p className='text-muted-foreground text-xs'>
-              {formatTime(event.startAt)}
-              {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
+              {formatEventTimeRange(trip, event)}
             </p>
             {(event.locationName || event.address) && (
               <LocationLink
@@ -387,7 +410,7 @@ function ActiveNowCard({
               />
             </div>
             <p className='text-muted-foreground mt-0.5 text-xs'>
-              {formatDuration((event.endAt as number) - now)} left
+              {formatDuration((endMs as number) - now)} left
             </p>
           </div>
         )}
@@ -397,11 +420,13 @@ function ActiveNowCard({
 }
 
 function UpNextCard({
+  trip,
   event,
   now,
   isSmallScreen,
   onOpenDetails,
 }: {
+  trip: TripSpace;
   event: TimelineEvent;
   now: number;
   isSmallScreen: boolean;
@@ -410,6 +435,7 @@ function UpNextCard({
   const imageUrl = getDisplayImage(event);
   const clickProps = isSmallScreen ? getOpenDetailsProps(event.title, onOpenDetails) : {};
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
+  const { startTime, startMs } = getEventTime(trip, event);
 
   return (
     <div
@@ -434,7 +460,8 @@ function UpNextCard({
           <div className='mt-1 flex flex-wrap items-center gap-2'>
             <EventTypeBadge event={event} />
             <span className='text-muted-foreground text-sm'>
-              {formatTime(event.startAt)} · {formatCountdown(event.startAt, now)}
+              {startTime ? formatClockTime(startTime) : ''}
+              {startMs !== null ? ` · ${formatCountdown(startMs, now)}` : ''}
             </span>
           </div>
           <h4 className='mt-1 text-sm font-medium'>{event.title}</h4>

@@ -8,6 +8,7 @@ import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TripSpace } from '@apps/waypoint/types';
+import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import {
   createTripSpace,
   TRIP_COLLECTION_PATH,
@@ -30,7 +31,7 @@ interface CreateTripInput {
   title: string;
   startDate: number;
   endDate: number;
-  coverImageFile: File | null;
+  timezone: string;
 }
 
 export interface EditTripValues {
@@ -41,9 +42,9 @@ export interface EditTripValues {
   coverImageFile: File | null;
   coverImageRemoved: boolean;
   defaultCurrency: string | null;
-  /** Only meaningful when the trip's dates are actually changing and it has
-   * dated items — see `EditTripDatesModal`'s shift checkbox. */
-  shiftDates: boolean;
+  /** Only meaningful when the start date moves: items keep their calendar dates and their
+   * day numbers are rebased, instead of moving along with the trip. */
+  keepOriginalDates: boolean;
 }
 
 interface EditTripInput {
@@ -56,6 +57,12 @@ interface SetTripArchivedInput {
   uid: string;
   trip: TripSpace;
   isArchived: boolean;
+}
+
+interface SetTripTimezoneInput {
+  uid: string;
+  trip: TripSpace;
+  timezone: string;
 }
 
 interface SetSharedAlbumLinkInput {
@@ -71,7 +78,7 @@ export const createTrip = createAsyncThunk<
 >(
   'waypoint/trips/create',
   async (
-    { uid, title, startDate, endDate, coverImageFile },
+    { uid, title, startDate, endDate, timezone },
     { dispatch, rejectWithValue },
   ) => {
     const trimmedTitle = title.trim();
@@ -94,35 +101,18 @@ export const createTrip = createAsyncThunk<
       title: trimmedTitle,
       startDate,
       endDate,
+      timezone,
       createdBy: uid,
       createdAt: Date.now(),
       inviteCode,
     });
-    const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
-    const lastEditedAt = Date.now();
-
     const batch = writeBatch(db);
-    batch.set(tripRef, trip);
+    batch.set(doc(db, ...TRIP_COLLECTION_PATH, tripId), trip);
     batch.set(doc(INVITE_CODE_COLLECTION, inviteCode), {
       tripId,
       title: trip.title,
     });
     await batch.commit();
-
-    if (coverImageFile) {
-      try {
-        const coverImageUrl = await uploadFile(
-          getTripCoverStoragePath(tripId),
-          coverImageFile,
-        );
-        await updateDoc(tripRef, { coverImageUrl, lastEditedAt });
-        trip.coverImageUrl = coverImageUrl;
-        trip.lastEditedAt = lastEditedAt;
-      } catch (error) {
-        await deleteFile(getTripCoverStoragePath(tripId));
-        throw error;
-      }
-    }
 
     dispatch(upsertTrip(trip));
 
@@ -186,10 +176,6 @@ export const editTrip = createAsyncThunk<
       return rejectWithValue('You do not have permission to edit this trip.');
     }
 
-    if (trip.dateShiftStatus === 'PENDING') {
-      return rejectWithValue("This trip's dates are already being updated.");
-    }
-
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, trip.id);
     const lastEditedAt = Date.now();
 
@@ -205,11 +191,14 @@ export const editTrip = createAsyncThunk<
 
     const datesChanged =
       values.startDate !== trip.startDate || values.endDate !== trip.endDate;
+    if (datesChanged && !isRelativeTrip(trip)) {
+      return rejectWithValue("This trip's dates are fixed.");
+    }
 
-    // Re-dating every event/stay/expense/checklist item can touch far more
-    // documents than a client should write one at a time, so that work runs
-    // server-side, where it can't time out the caller.
-    if (datesChanged) {
+    // Rebasing every item's day number can touch more documents than a client should write
+    // one at a time, and editors can't write events/stays on a live trip, so it runs server-side.
+    const rebasesItems = datesChanged && values.keepOriginalDates && values.startDate !== trip.startDate;
+    if (rebasesItems) {
       try {
         const shiftTripDates = httpsCallable<
           {
@@ -219,7 +208,6 @@ export const editTrip = createAsyncThunk<
             endDate: number;
             coverImageUrl: string | null;
             defaultCurrency: string | null;
-            shiftDates: boolean;
           },
           ShiftTripDatesResponse
         >(functions, 'shiftTripDates');
@@ -230,7 +218,6 @@ export const editTrip = createAsyncThunk<
           endDate: values.endDate,
           coverImageUrl,
           defaultCurrency,
-          shiftDates: values.shiftDates,
         });
       } catch (error) {
         return rejectWithValue(getShiftTripDatesErrorMessage(error));
@@ -241,6 +228,7 @@ export const editTrip = createAsyncThunk<
         title,
         coverImageUrl,
         defaultCurrency,
+        ...(datesChanged ? { startDate: values.startDate, endDate: values.endDate } : {}),
         lastEditedAt,
       });
       if (title !== trip.title && trip.inviteCode) {
@@ -260,6 +248,32 @@ export const editTrip = createAsyncThunk<
       defaultCurrency,
       lastEditedAt,
     };
+    dispatch(upsertTrip(updatedTrip));
+    return updatedTrip;
+  },
+);
+
+export const setTripTimezone = createAsyncThunk<
+  TripSpace,
+  SetTripTimezoneInput,
+  { rejectValue: string }
+>(
+  'waypoint/trips/setTimezone',
+  async ({ uid, trip, timezone }, { dispatch, rejectWithValue }) => {
+    if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
+      return rejectWithValue('You do not have permission to change the time zone.');
+    }
+    if (!isRelativeTrip(trip)) {
+      return rejectWithValue("This trip's times don't use a time zone.");
+    }
+    if (!timezone.trim()) {
+      return rejectWithValue('Choose a time zone.');
+    }
+
+    const lastEditedAt = Date.now();
+    await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), { timezone, lastEditedAt });
+
+    const updatedTrip: TripSpace = { ...trip, timezone, lastEditedAt };
     dispatch(upsertTrip(updatedTrip));
     return updatedTrip;
   },

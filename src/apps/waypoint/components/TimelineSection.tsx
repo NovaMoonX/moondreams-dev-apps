@@ -30,13 +30,17 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
+import {
+  getBucketLabel,
+  getDayCount,
+  getDayLabel,
+  groupByIndexBucket,
+} from '@/utils/dateRangeUtils';
 import {
   canArchiveEvent,
   canCreateItem,
   canEditExistingItem,
   hasTripStarted,
-  isTripDateShiftLocked,
 } from '@apps/waypoint/utils/roleGuards';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
@@ -152,6 +156,7 @@ export function TimelineSection({
   const renderEventCard = (event: TimelineEvent) => (
     <div key={event.id} className='space-y-2'>
       <EventCard
+        trip={trip}
         event={event}
         canEdit={canEdit}
         canArchive={canArchiveEvent(trip, currentUserId)}
@@ -184,11 +189,10 @@ export function TimelineSection({
   );
 
   const renderEvents = (dayIndex?: number) => {
-    const visibleEvents = [...(
+    const visibleEvents =
       dayIndex === undefined
         ? attendanceFilteredEvents
-        : attendanceFilteredEvents.filter((event) => event.dayIndex === dayIndex)
-    )].sort((a, b) => a.startAt - b.startAt);
+        : attendanceFilteredEvents.filter((event) => event.dayIndex === dayIndex);
 
     if (visibleEvents.length === 0) {
       return <p className='text-muted-foreground py-6 text-sm'>No events planned yet.</p>;
@@ -198,22 +202,16 @@ export function TimelineSection({
       return <div className='space-y-3'>{visibleEvents.map(renderEventCard)}</div>;
     }
 
-    const eventsByDay = new Map<number, TimelineEvent[]>();
-    for (const event of visibleEvents) {
-      const dayEvents = eventsByDay.get(event.dayIndex) ?? [];
-      dayEvents.push(event);
-      eventsByDay.set(event.dayIndex, dayEvents);
-    }
-    const sortedDayIndices = Array.from(eventsByDay.keys()).sort((a, b) => a - b);
-
     return (
       <div className='space-y-3'>
-        {sortedDayIndices.map((groupDayIndex) => (
-          <div key={groupDayIndex} className='space-y-3'>
-            {renderDivider(getDayLabel(trip.startDate, groupDayIndex))}
-            {(eventsByDay.get(groupDayIndex) ?? []).map(renderEventCard)}
-          </div>
-        ))}
+        {groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount).map(
+          ({ bucket, items }) => (
+            <div key={bucket} className='space-y-3'>
+              {renderDivider(getBucketLabel(bucket, trip.startDate))}
+              {items.map(renderEventCard)}
+            </div>
+          ),
+        )}
       </div>
     );
   };
@@ -276,7 +274,6 @@ export function TimelineSection({
             canAddEvents && (
               <Button
                 type='button'
-                disabled={isTripDateShiftLocked(trip)}
                 onClick={() => {
                   setEditingEvent(undefined);
                   setIsFormOpen(true);

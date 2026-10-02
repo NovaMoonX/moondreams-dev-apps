@@ -16,14 +16,45 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 import { isTripAdmin, isTripMember } from '@apps/waypoint/utils/roleGuards';
+import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
+
+type SuggestedTimeFields = Pick<
+  EventSuggestion,
+  | 'suggestedStartAt'
+  | 'suggestedEndAt'
+  | 'suggestedDayIndex'
+  | 'suggestedStartTime'
+  | 'suggestedEndTime'
+>;
+
+function validateSuggestedTime(trip: TripSpace, fields: SuggestedTimeFields) {
+  if (!isRelativeTrip(trip)) {
+    if (fields.suggestedStartAt === null) {
+      return 'Choose a valid start time.';
+    }
+    const isEndBeforeStart =
+      fields.suggestedEndAt !== null && fields.suggestedEndAt <= fields.suggestedStartAt;
+    return isEndBeforeStart ? 'The suggested end time must be after the start time.' : null;
+  }
+
+  if (fields.suggestedDayIndex === null || fields.suggestedStartTime === null) {
+    return 'Choose a valid day and start time.';
+  }
+  const isEndBeforeStart =
+    fields.suggestedEndTime !== null && fields.suggestedEndTime <= fields.suggestedStartTime;
+  return isEndBeforeStart ? 'The suggested end time must be after the start time.' : null;
+}
 
 interface CreateEventSuggestionInput {
   uid: string;
   trip: TripSpace;
   eventId: string;
   suggestedTitle: string;
-  suggestedStartAt: number;
+  suggestedStartAt: number | null;
   suggestedEndAt: number | null;
+  suggestedDayIndex: number | null;
+  suggestedStartTime: string | null;
+  suggestedEndTime: string | null;
   suggestedLocationName: string | null;
   suggestedAddress: string | null;
   suggestedLatitude: number | null;
@@ -45,8 +76,9 @@ export const createEventSuggestion = createAsyncThunk<
     if (!fields.suggestedTitle.trim()) {
       return rejectWithValue('Enter a title for the suggested change.');
     }
-    if (fields.suggestedEndAt !== null && fields.suggestedEndAt <= fields.suggestedStartAt) {
-      return rejectWithValue('The suggested end time must be after the start time.');
+    const timeError = validateSuggestedTime(trip, fields);
+    if (timeError) {
+      return rejectWithValue(timeError);
     }
 
     const suggestionRef = doc(
@@ -59,6 +91,9 @@ export const createEventSuggestion = createAsyncThunk<
       suggestedTitle: fields.suggestedTitle.trim(),
       suggestedStartAt: fields.suggestedStartAt,
       suggestedEndAt: fields.suggestedEndAt,
+      suggestedDayIndex: fields.suggestedDayIndex,
+      suggestedStartTime: fields.suggestedStartTime,
+      suggestedEndTime: fields.suggestedEndTime,
       suggestedLocationName: fields.suggestedLocationName?.trim() || null,
       suggestedAddress: fields.suggestedAddress?.trim() || null,
       suggestedLatitude: fields.suggestedLatitude,
@@ -80,8 +115,11 @@ interface UpdateEventSuggestionInput {
   trip: TripSpace;
   suggestion: EventSuggestion;
   suggestedTitle: string;
-  suggestedStartAt: number;
+  suggestedStartAt: number | null;
   suggestedEndAt: number | null;
+  suggestedDayIndex: number | null;
+  suggestedStartTime: string | null;
+  suggestedEndTime: string | null;
   suggestedLocationName: string | null;
   suggestedAddress: string | null;
   suggestedLatitude: number | null;
@@ -104,14 +142,18 @@ export const updateEventSuggestion = createAsyncThunk<
       return rejectWithValue('Enter a title for the suggested change.');
     }
 
-    if (fields.suggestedEndAt !== null && fields.suggestedEndAt <= fields.suggestedStartAt) {
-      return rejectWithValue('The suggested end time must be after the start time.');
+    const timeError = validateSuggestedTime(trip, fields);
+    if (timeError) {
+      return rejectWithValue(timeError);
     }
 
     const changes = {
       suggestedTitle: fields.suggestedTitle.trim(),
       suggestedStartAt: fields.suggestedStartAt,
       suggestedEndAt: fields.suggestedEndAt,
+      suggestedDayIndex: fields.suggestedDayIndex,
+      suggestedStartTime: fields.suggestedStartTime,
+      suggestedEndTime: fields.suggestedEndTime,
       suggestedLocationName: fields.suggestedLocationName?.trim() || null,
       suggestedAddress: fields.suggestedAddress?.trim() || null,
       suggestedLatitude: fields.suggestedLatitude,
@@ -181,6 +223,35 @@ export const toggleSuggestionUpvote = createAsyncThunk<
   },
 );
 
+/** The event's time fields once a suggestion is accepted; its zone stays whatever the source event had. */
+function getApprovedEventTimeFields(trip: TripSpace, suggestion: EventSuggestion) {
+  if (isRelativeTrip(trip)) {
+    return {
+      dayIndex: suggestion.suggestedDayIndex,
+      endDayIndex: suggestion.suggestedDayIndex,
+      startAt: null,
+      endAt: null,
+      startTime: suggestion.suggestedStartTime,
+      endTime: suggestion.suggestedEndTime,
+    };
+  }
+
+  const startAt = suggestion.suggestedStartAt;
+  const dayIndex = startAt === null ? null : getDayIndex(trip.startDate, startAt);
+  const endDayIndex =
+    suggestion.suggestedEndAt === null
+      ? dayIndex
+      : getDayIndex(trip.startDate, suggestion.suggestedEndAt);
+  return {
+    dayIndex,
+    endDayIndex,
+    startAt,
+    endAt: suggestion.suggestedEndAt,
+    startTime: null,
+    endTime: null,
+  };
+}
+
 interface ApproveEventSuggestionInput {
   uid: string;
   trip: TripSpace;
@@ -210,11 +281,7 @@ export const approveEventSuggestion = createAsyncThunk<
       'eventSuggestions',
       suggestion.id,
     );
-    const dayIndex = getDayIndex(trip.startDate, suggestion.suggestedStartAt);
-    const endDayIndex =
-      suggestion.suggestedEndAt !== null
-        ? getDayIndex(trip.startDate, suggestion.suggestedEndAt)
-        : dayIndex;
+    const timeFields = getApprovedEventTimeFields(trip, suggestion);
     const now = Date.now();
 
     const reminderId = await scheduleEventReminder({
@@ -223,7 +290,8 @@ export const approveEventSuggestion = createAsyncThunk<
       event: {
         id: newEventRef.id,
         title: suggestion.suggestedTitle,
-        startAt: suggestion.suggestedStartAt,
+        ...timeFields,
+        timezone: sourceEvent.timezone ?? null,
         reminderMinutesBefore: sourceEvent.reminderMinutesBefore,
         reminderEnabled: sourceEvent.reminderEnabled,
         assignedMemberIds: sourceEvent.assignedMemberIds,
@@ -248,8 +316,15 @@ export const approveEventSuggestion = createAsyncThunk<
         const currentSuggestion = suggestionSnapshot.data() as EventSuggestion;
         if (
           currentSuggestion.suggestedTitle !== suggestion.suggestedTitle ||
-          currentSuggestion.suggestedStartAt !== suggestion.suggestedStartAt ||
-          currentSuggestion.suggestedEndAt !== suggestion.suggestedEndAt
+          (
+            [
+              'suggestedStartAt',
+              'suggestedEndAt',
+              'suggestedDayIndex',
+              'suggestedStartTime',
+              'suggestedEndTime',
+            ] as const
+          ).some((field) => (currentSuggestion[field] ?? null) !== (suggestion[field] ?? null))
         ) {
           throw new Error('This suggestion was just edited. Take another look before approving.');
         }
@@ -257,11 +332,9 @@ export const approveEventSuggestion = createAsyncThunk<
         const newEvent: TimelineEvent = {
           ...(sourceSnapshot.data() as TimelineEvent),
           id: newEventRef.id,
-          dayIndex,
-          endDayIndex,
+          ...timeFields,
+          timezone: sourceEvent.timezone ?? null,
           title: suggestion.suggestedTitle,
-          startAt: suggestion.suggestedStartAt,
-          endAt: suggestion.suggestedEndAt,
           locationName: currentSuggestion.suggestedLocationName,
           address: currentSuggestion.suggestedAddress,
           latitude: currentSuggestion.suggestedLatitude,

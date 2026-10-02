@@ -12,7 +12,12 @@ import type {
   TripSpace,
 } from '@apps/waypoint/types';
 import { DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
-import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
+import {
+  cancelEventReminder,
+  type EventReminderSource,
+  scheduleEventReminder,
+} from '@apps/waypoint/utils/reminders';
+import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import { canArchiveEvent, canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
@@ -48,28 +53,45 @@ const CONCURRENTLY_WRITTEN_EVENT_FIELDS = [
   'changeHistory',
 ];
 
-const TRACKED_CHANGE_FIELDS = [
-  'startAt',
-  'endAt',
-  'locationName',
-  'dayIndex',
-  'endDayIndex',
-] as const;
+const ABSOLUTE_TRACKED_FIELDS = ['startAt', 'endAt', 'locationName', 'dayIndex', 'endDayIndex'] as const;
+const RELATIVE_TRACKED_FIELDS = ['startTime', 'endTime', 'locationName', 'dayIndex', 'endDayIndex'] as const;
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function validateEventTime(trip: TripSpace, event: EventFields) {
+  const message = 'Choose a valid event date and time.';
+  if (!isRelativeTrip(trip)) {
+    const isValid = event.startAt !== null && Number.isFinite(event.startAt);
+    return isValid ? null : message;
+  }
+
+  const hasValidStart = event.startTime !== null && TIME_PATTERN.test(event.startTime);
+  const hasValidEnd = event.endTime === null || TIME_PATTERN.test(event.endTime);
+  const isRangeOrdered =
+    event.dayIndex === null ||
+    event.endDayIndex === null ||
+    event.endDayIndex >= event.dayIndex;
+  return hasValidStart && hasValidEnd && isRangeOrdered ? null : message;
+}
 
 function buildChangeSnapshot(
+  trip: TripSpace,
   previousEvent: TimelineEvent,
   nextEvent: TimelineEvent,
   uid: string,
 ): EventChangeSnapshot | null {
   const now = Date.now();
-  const changes: EventFieldChange[] = TRACKED_CHANGE_FIELDS.filter(
-    (field) => previousEvent[field] !== nextEvent[field],
-  ).map((field) => ({
-    field,
-    previousValue: previousEvent[field] as number | string,
-    changedBy: uid,
-    changedAt: now,
-  }));
+  const trackedFields: readonly EventFieldChange['field'][] = isRelativeTrip(trip)
+    ? RELATIVE_TRACKED_FIELDS
+    : ABSOLUTE_TRACKED_FIELDS;
+  const changes: EventFieldChange[] = trackedFields
+    .filter((field) => (previousEvent[field] ?? null) !== (nextEvent[field] ?? null))
+    .map((field) => ({
+      field,
+      previousValue: previousEvent[field] ?? null,
+      changedBy: uid,
+      changedAt: now,
+    }));
 
   if (changes.length === 0) {
     return null;
@@ -82,12 +104,11 @@ async function resolveEventReminderId(
   trip: TripSpace,
   uid: string,
   previousEvent: TimelineEvent,
-  nextEvent: Pick<
-    TimelineEvent,
-    'id' | 'title' | 'startAt' | 'reminderMinutesBefore' | 'reminderEnabled' | 'assignedMemberIds'
-  >,
+  nextEvent: EventReminderSource,
 ): Promise<string | null> {
-  const startChanged = previousEvent.startAt !== nextEvent.startAt;
+  const startChanged = (['startAt', 'dayIndex', 'startTime', 'timezone'] as const).some(
+    (field) => (previousEvent[field] ?? null) !== (nextEvent[field] ?? null),
+  );
   const minutesChanged = previousEvent.reminderMinutesBefore !== nextEvent.reminderMinutesBefore;
   const enabledChanged = previousEvent.reminderEnabled !== nextEvent.reminderEnabled;
 
@@ -119,8 +140,9 @@ export const createEvent = createAsyncThunk<
   if (!event.title.trim()) {
     return rejectWithValue('Event title is required.');
   }
-  if (!Number.isFinite(event.startAt)) {
-    return rejectWithValue('Choose a valid event date and time.');
+  const timeError = validateEventTime(trip, event);
+  if (timeError) {
+    return rejectWithValue(timeError);
   }
 
   const eventRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'));
@@ -132,7 +154,13 @@ export const createEvent = createAsyncThunk<
     event: {
       id: eventRef.id,
       title: trimmedTitle,
+      dayIndex: event.dayIndex,
+      endDayIndex: event.endDayIndex,
       startAt: event.startAt,
+      endAt: event.endAt,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      timezone: event.timezone,
       reminderMinutesBefore: event.reminderMinutesBefore,
       reminderEnabled: event.reminderEnabled,
       assignedMemberIds: event.assignedMemberIds,
@@ -176,17 +204,24 @@ export const updateEvent = createAsyncThunk<
     if (!event.title.trim()) {
       return rejectWithValue('Event title is required.');
     }
-    if (!Number.isFinite(event.startAt)) {
-      return rejectWithValue('Choose a valid event date and time.');
+    const timeError = validateEventTime(trip, event);
+    if (timeError) {
+      return rejectWithValue(timeError);
     }
 
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
-    const newSnapshot = isTripActive(trip) ? buildChangeSnapshot(previousEvent, event, uid) : null;
+    const newSnapshot = isTripActive(trip) ? buildChangeSnapshot(trip, previousEvent, event, uid) : null;
     const trimmedTitle = event.title.trim();
     const reminderId = await resolveEventReminderId(trip, uid, previousEvent, {
       id: eventId,
       title: trimmedTitle,
+      dayIndex: event.dayIndex,
+      endDayIndex: event.endDayIndex,
       startAt: event.startAt,
+      endAt: event.endAt,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      timezone: event.timezone,
       reminderMinutesBefore: event.reminderMinutesBefore,
       reminderEnabled: event.reminderEnabled,
       assignedMemberIds: event.assignedMemberIds,
@@ -230,7 +265,12 @@ export const updateEvent = createAsyncThunk<
 // fields existed needs them written alongside any partial update.
 function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
   const defaults: Partial<TimelineEvent> = {
-    endDayIndex: event.dayIndex,
+    endDayIndex: event.dayIndex ?? null,
+    startAt: null,
+    endAt: null,
+    startTime: null,
+    endTime: null,
+    timezone: null,
     eventDetails: null,
     attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: [],

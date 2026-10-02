@@ -26,7 +26,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 ## The Build Plan
 
 **Core MVP**
-- [ ] Trip Space Setup & Roles: Start a trip with a title and dates (given as an estimate, editable anytime) — destination, cover photo, and default currency are editable afterward, not required upfront. Roles are admin, editor, commenter, viewer. New members request access via an invite link and join once an admin approves them and sets their role.
+- [ ] Trip Space Setup & Roles: Start a trip with a title and dates (given as an estimate, editable anytime — plans move with them, or stay put on their original dates if you'd rather) and a default time zone — destination, cover photo, and default currency are editable afterward, not required upfront. Roles are admin, editor, commenter, viewer. New members request access via an invite link and join once an admin approves them and sets their role.
 - [ ] Before the Road Checklist: Departure task list with completion states and member assignments.
 - [ ] Expense Allocation & Splitter: Itemized expenses assigned to everyone, specific members, or individuals, tracking who's paid and rolling it up into a clear "who owes who" summary.
 - [ ] Day-by-Day Timeline & Directions: Structured timeline grouped by day with event times, transit types, locations, and 1-tap native map navigation.

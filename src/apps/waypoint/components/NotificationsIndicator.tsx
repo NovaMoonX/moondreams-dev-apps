@@ -10,9 +10,8 @@ import IconBadge from '@/components/IconBadge';
 import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getDayIndex, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatTime } from '@/utils/formatUtils';
 
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import DismissIconButton from '@apps/waypoint/components/DismissIconButton';
@@ -37,6 +36,13 @@ import {
 } from '@apps/waypoint/constants';
 import type { Announcement, AnnouncementSeverity, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+import {
+  formatEventStartTime,
+  formatEventTimeRange,
+  formatStayClockRange,
+  getEventTime,
+  getStayTime,
+} from '@apps/waypoint/utils/tripTime';
 
 // A soft tint of the severity color — the full-strength EVENT_TYPE_BADGE_CLASSES treatment
 // is "normal," this is deliberately a notch lighter so it doesn't compete with it.
@@ -128,8 +134,11 @@ function getUpdateItemKey(item: UpdateItem): string {
 }
 
 function getUpdateItemDayLabel(item: UpdateItem, trip: TripSpace): string {
-  const dayIndex = item.kind === 'event' ? item.data.dayIndex : getDayIndex(trip.startDate, item.data.checkInAt);
-  return getDayLabel(trip.startDate, dayIndex);
+  const dayIndex =
+    item.kind === 'event'
+      ? getEventTime(trip, item.data).dayIndex
+      : getStayTime(trip, item.data).checkIn.dayIndex;
+  return dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex);
 }
 
 function getActivityVerb(label: Activity['label']) {
@@ -156,7 +165,7 @@ function renderUpdateItemBody(item: UpdateItem, activity: Activity, actorName: s
         <>
           {headline}
           <p className='text-muted-foreground text-xs'>
-            Originally planned for {getUpdateItemDayLabel(item, trip)} at {formatTime(event.startAt)}
+            Originally planned for {getUpdateItemDayLabel(item, trip)} at {formatEventStartTime(trip, event)}
           </p>
         </>
       );
@@ -167,8 +176,7 @@ function renderUpdateItemBody(item: UpdateItem, activity: Activity, actorName: s
       <>
         {headline}
         <p className='text-muted-foreground text-xs'>
-          {getUpdateItemDayLabel(item, trip)} · {formatTime(event.startAt)}
-          {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
+          {getUpdateItemDayLabel(item, trip)} · {formatEventTimeRange(trip, event)}
         </p>
         {locationLabel && <LocationLink {...event} label={locationLabel} className='text-xs' />}
       </>
@@ -180,7 +188,7 @@ function renderUpdateItemBody(item: UpdateItem, activity: Activity, actorName: s
     <>
       {headline}
       <p className='text-muted-foreground text-xs'>
-        {getUpdateItemDayLabel(item, trip)} · {formatTime(stay.checkInAt)} - {formatTime(stay.checkOutAt)}
+        {getUpdateItemDayLabel(item, trip)} · {formatStayClockRange(trip, stay)}
       </p>
       {stay.address && (
         <LocationLink

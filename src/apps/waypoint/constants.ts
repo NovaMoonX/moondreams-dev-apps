@@ -77,6 +77,8 @@ export const ANNOUNCEMENT_SEVERITY_BADGE_CLASSES: Record<AnnouncementSeverity, s
 export const EVENT_FIELD_LABELS: Record<EventFieldChange['field'], string> = {
   startAt: 'Start time',
   endAt: 'End time',
+  startTime: 'Start time',
+  endTime: 'End time',
   locationName: 'Location',
   dayIndex: 'Day',
   endDayIndex: 'End day',

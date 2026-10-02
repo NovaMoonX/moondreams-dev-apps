@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Badge, Disclosure } from '@moondreamsdev/dreamer-ui/components';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { formatDateTime } from '@/utils/formatUtils';
+import { formatClockTime, formatDateTime } from '@/utils/formatUtils';
 import { EVENT_FIELD_LABELS } from '@apps/waypoint/constants';
 import type { EventChangeSnapshot, EventFieldChange } from '@apps/waypoint/types';
 
@@ -11,9 +11,15 @@ interface ChangeBadgeProps {
   changeHistory: EventChangeSnapshot[];
 }
 
-function formatPreviousValue(field: EventFieldChange['field'], value: number | string) {
+function formatPreviousValue(field: EventFieldChange['field'], value: number | string | null) {
+  if (value === null) {
+    return field === 'dayIndex' || field === 'endDayIndex' ? 'No day' : 'not set';
+  }
   if (field === 'startAt' || field === 'endAt') {
     return formatDateTime(value as number);
+  }
+  if (field === 'startTime' || field === 'endTime') {
+    return formatClockTime(value as string);
   }
   if (field === 'dayIndex' || field === 'endDayIndex') {
     return `Day ${(value as number) + 1}`;
