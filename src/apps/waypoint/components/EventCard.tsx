@@ -95,7 +95,11 @@ export function EventDetailLines({
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
   const transitLines =
     event.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
-      ? getTransitSummary(event.eventDetails.transitType, event.eventDetails.transitDetails)
+      ? getTransitSummary(
+          event.eventDetails.transitType,
+          event.eventDetails.transitDetails,
+          event.title,
+        )
       : [];
   const trackingUrl =
     event.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
@@ -126,7 +130,9 @@ export function EventDetailLines({
         )}
       </div>
       {showTitle && <h3 className='pt-1 font-semibold'>{event.title}</h3>}
-      {quickField && <p className='text-muted-foreground text-sm'>{quickField}</p>}
+      {quickField && !event.title.toLowerCase().includes(quickField.toLowerCase()) && (
+        <p className='text-muted-foreground text-sm'>{quickField}</p>
+      )}
       {transitLines.length > 0 && (
         <dl className='text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm'>
           {transitLines.map((line) => (

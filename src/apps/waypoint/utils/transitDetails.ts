@@ -119,6 +119,7 @@ export interface TransitSummaryLine {
 export function getTransitSummary(
   transitType: TransitType,
   details: TransitDetails | null | undefined,
+  title = '',
 ): TransitSummaryLine[] {
   if (!details) {
     return [];
@@ -131,15 +132,15 @@ export function getTransitSummary(
     asText(record.arrivalAirportCode) || asText(record.arrivalStation) || asText(record.arrivalPort) || asText(record.endLocation),
   ];
   const lines = [
-    pick('Flight', 'flightNumber'),
-    pick('Train', 'trainNumber'),
+    pick('Flight number', 'flightNumber'),
+    pick('Train number', 'trainNumber'),
     pick('Operator', 'operator'),
     pick('Airline', 'airline'),
     pick('Vehicle', 'vehicleInfo'),
     pick('Confirmation', 'confirmationCode'),
     { label: 'Route', value: route.some(Boolean) ? route.map((part) => part || '…').join(' → ') : '' },
     { label: 'Travel time', value: formatTravelDuration(details.estimatedTravelTimeMs) ?? '' },
-  ].filter((line) => line.value);
+  ].filter((line) => line.value && !title.toLowerCase().includes(line.value.toLowerCase()));
 
   const result = transitType === 'OTHER'
     ? [
