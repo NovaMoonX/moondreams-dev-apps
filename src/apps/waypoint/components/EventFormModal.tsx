@@ -45,6 +45,7 @@ import {
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
   REMINDER_MINUTES_BEFORE_OPTIONS,
+  TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 import type {
@@ -104,7 +105,10 @@ const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(
     text: `${EVENT_TYPE_EMOJIS[value as EventType]} ${text}`,
   }),
 );
-const transitTypeOptions = toSelectOptions(TRANSIT_TYPE_LABELS);
+const transitTypeOptions = Object.entries(TRANSIT_TYPE_LABELS).map(([value, text]) => ({
+  value,
+  text: `${TRANSIT_TYPE_EMOJIS[value as TransitType]} ${text}`,
+}));
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
 const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
 const attendeeTargetOptions = toSelectOptions(EVENT_ATTENDEE_TARGET_LABELS);

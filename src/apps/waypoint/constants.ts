@@ -98,6 +98,17 @@ export const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {
   OTHER: 'Other',
 };
 
+export const TRANSIT_TYPE_EMOJIS: Record<TransitType, string> = {
+  FLIGHT: '✈️',
+  DRIVE: '🚗',
+  FERRY: '⛴️',
+  TRAIN: '🚆',
+  WALK: '🚶',
+  BIKE: '🚲',
+  SCOOTER: '🛴',
+  OTHER: '🧭',
+};
+
 export interface TransitFieldSpec {
   key: string;
   label: string;
