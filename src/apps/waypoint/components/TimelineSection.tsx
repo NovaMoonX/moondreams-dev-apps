@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -9,9 +9,12 @@ import {
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useQueryClient } from '@tanstack/react-query';
 import { shallowEqual } from 'react-redux';
 
 import AppToggle from '@/components/AppToggle';
+import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
+import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
@@ -97,6 +100,15 @@ export function TimelineSection({
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
   const canAddEvents = canCreateItem(trip, currentUserId);
+  const queryClient = useQueryClient();
+
+  // The flight form's airline and airport pickers read these, so have them cached before it opens.
+  useEffect(() => {
+    if (canAddEvents || canEdit) {
+      void queryClient.prefetchQuery(airlinesQueryOptions());
+      void queryClient.prefetchQuery(airportsQueryOptions());
+    }
+  }, [canAddEvents, canEdit, queryClient]);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);

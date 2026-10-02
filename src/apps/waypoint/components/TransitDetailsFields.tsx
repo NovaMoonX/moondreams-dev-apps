@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Input, Label, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
@@ -32,6 +32,32 @@ const TRAVEL_TIME_KEY = 'travelTime';
 const NOTES_KEY = 'notes';
 const DETAILS_KEY = 'details';
 
+const MAX_VISIBLE_OPTIONS = 50;
+
+interface SearchOption {
+  value: string;
+  text: string;
+  description?: string;
+}
+
+// Rendering thousands of rows is what makes the dropdown slow to open, so only the best
+// matches are handed to the select.
+function useLimitedOptions(options: SearchOption[], current: string) {
+  const [term, setTerm] = useState('');
+  const limited = useMemo(() => {
+    const query = term.trim().toLowerCase();
+    const matches = query
+      ? options.filter((option) =>
+          `${option.text} ${option.description ?? ''} ${option.value}`.toLowerCase().includes(query),
+        )
+      : options;
+    const top = matches.slice(0, MAX_VISIBLE_OPTIONS);
+    const selected = options.find((option) => option.value === current);
+    return selected && !top.includes(selected) ? [selected, ...top] : top;
+  }, [options, term, current]);
+  return { options: limited, onSearch: setTerm };
+}
+
 interface AirlineFieldProps {
   value: TransitDraft;
   onChange: (value: TransitDraft) => void;
@@ -40,16 +66,20 @@ interface AirlineFieldProps {
 function AirlineField({ value, onChange }: AirlineFieldProps) {
   const { data: airlines = [] } = useQuery(airlinesQueryOptions());
   const current = value.values.airline ?? '';
-  const options = [
-    ...airlines.map((airline) => ({
-      value: airline.name,
-      text: airline.name,
-      description: airline.iataCode,
-    })),
-    ...(current && !airlines.some((airline) => airline.name === current)
-      ? [{ value: current, text: current }]
-      : []),
-  ];
+  const allOptions = useMemo(
+    () => [
+      ...airlines.map((airline) => ({
+        value: airline.name,
+        text: airline.name,
+        description: airline.iataCode,
+      })),
+      ...(current && !airlines.some((airline) => airline.name === current)
+        ? [{ value: current, text: current }]
+        : []),
+    ],
+    [airlines, current],
+  );
+  const { options, onSearch } = useLimitedOptions(allOptions, current);
 
   const setAirline = (name: string) => {
     const match = airlines.find((airline) => airline.name === name);
@@ -73,6 +103,7 @@ function AirlineField({ value, onChange }: AirlineFieldProps) {
       value={current}
       placeholder='Search airlines'
       searchPlaceholder='Search or add an airline'
+      onSearch={onSearch}
       onChange={setAirline}
       onAdd={setAirline}
     />
@@ -89,16 +120,20 @@ interface AirportFieldProps {
 function AirportField({ fieldKey, value, onChange, onPicked }: AirportFieldProps) {
   const { data: airports = [] } = useQuery(airportsQueryOptions());
   const current = value.values[fieldKey] ?? '';
-  const options = [
-    ...airports.map((airport) => ({
-      value: airport.iataCode,
-      text: `${airport.iataCode} · ${airport.city}`,
-      description: `${airport.name}, ${airport.country}`,
-    })),
-    ...(current && !airports.some((airport) => airport.iataCode === current)
-      ? [{ value: current, text: current }]
-      : []),
-  ];
+  const allOptions = useMemo(
+    () => [
+      ...airports.map((airport) => ({
+        value: airport.iataCode,
+        text: `${airport.iataCode} · ${airport.city}`,
+        description: `${airport.name}, ${airport.country}`,
+      })),
+      ...(current && !airports.some((airport) => airport.iataCode === current)
+        ? [{ value: current, text: current }]
+        : []),
+    ],
+    [airports, current],
+  );
+  const { options, onSearch } = useLimitedOptions(allOptions, current);
 
   const setAirport = (code: string) => {
     onChange({ ...value, values: { ...value.values, [fieldKey]: code } });
@@ -117,6 +152,7 @@ function AirportField({ fieldKey, value, onChange, onPicked }: AirportFieldProps
       value={current}
       placeholder='Search airports'
       searchPlaceholder='Search or add an airport'
+      onSearch={onSearch}
       onChange={setAirport}
       onAdd={(code) => setAirport(code.toUpperCase())}
     />
