@@ -254,6 +254,11 @@ function EventFormModal({
       setError('Enter an end time, or remove the end time.');
       return;
     }
+    const isSameDay = (draft.endDayIndex ?? draft.dayIndex) === draft.dayIndex;
+    if (draft.hasEndTime && isSameDay && draft.endTime <= draft.time) {
+      setError('The end time needs to be after the start time.');
+      return;
+    }
     setError(null);
     setStep(2);
   };

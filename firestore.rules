@@ -1740,7 +1740,11 @@ service cloud.firestore {
           && data.get('endAt', null) == null
           && isClockTime(data.get('startTime', null))
           && (data.get('endTime', null) == null
-            || (isClockTime(data.endTime) && data.dayIndex != null))
+            || (
+              isClockTime(data.endTime)
+              && data.dayIndex != null
+              && (data.endDayIndex > data.dayIndex || data.endTime > data.startTime)
+            ))
           && (data.get('timezone', null) == null || isNonEmptyString(data.timezone));
       }
 

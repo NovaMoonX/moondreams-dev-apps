@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@/lib/firebase/config';
@@ -42,6 +42,8 @@ export interface EditTripValues {
   coverImageFile: File | null;
   coverImageRemoved: boolean;
   defaultCurrency: string | null;
+  /** The trip's default time zone; saved in the same write as the dates so the two can't diverge. */
+  timezone: string | null;
   /** Only meaningful when the start date moves: items keep their calendar dates and their
    * day numbers are rebased, instead of moving along with the trip. */
   keepOriginalDates: boolean;
@@ -57,12 +59,6 @@ interface SetTripArchivedInput {
   uid: string;
   trip: TripSpace;
   isArchived: boolean;
-}
-
-interface SetTripTimezoneInput {
-  uid: string;
-  trip: TripSpace;
-  timezone: string;
 }
 
 interface SetSharedAlbumLinkInput {
@@ -191,7 +187,9 @@ export const editTrip = createAsyncThunk<
 
     const datesChanged =
       values.startDate !== trip.startDate || values.endDate !== trip.endDate;
-    if (datesChanged && !isRelativeTrip(trip)) {
+    const timezone = values.timezone?.trim() || null;
+    const timezoneChanged = timezone !== null && timezone !== (trip.timezone ?? null);
+    if ((datesChanged || timezoneChanged) && !isRelativeTrip(trip)) {
       return rejectWithValue("This trip's dates are fixed.");
     }
 
@@ -208,6 +206,7 @@ export const editTrip = createAsyncThunk<
             endDate: number;
             coverImageUrl: string | null;
             defaultCurrency: string | null;
+            timezone: string | null;
           },
           ShiftTripDatesResponse
         >(functions, 'shiftTripDates');
@@ -218,6 +217,7 @@ export const editTrip = createAsyncThunk<
           endDate: values.endDate,
           coverImageUrl,
           defaultCurrency,
+          timezone: timezoneChanged ? timezone : null,
         });
       } catch (error) {
         return rejectWithValue(getShiftTripDatesErrorMessage(error));
@@ -229,6 +229,7 @@ export const editTrip = createAsyncThunk<
         coverImageUrl,
         defaultCurrency,
         ...(datesChanged ? { startDate: values.startDate, endDate: values.endDate } : {}),
+        ...(timezoneChanged ? { timezone } : {}),
         lastEditedAt,
       });
       if (title !== trip.title && trip.inviteCode) {
@@ -246,34 +247,9 @@ export const editTrip = createAsyncThunk<
       endDate: values.endDate,
       coverImageUrl,
       defaultCurrency,
+      ...(timezoneChanged ? { timezone } : {}),
       lastEditedAt,
     };
-    dispatch(upsertTrip(updatedTrip));
-    return updatedTrip;
-  },
-);
-
-export const setTripTimezone = createAsyncThunk<
-  TripSpace,
-  SetTripTimezoneInput,
-  { rejectValue: string }
->(
-  'waypoint/trips/setTimezone',
-  async ({ uid, trip, timezone }, { dispatch, rejectWithValue }) => {
-    if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
-      return rejectWithValue('You do not have permission to change the time zone.');
-    }
-    if (!isRelativeTrip(trip)) {
-      return rejectWithValue("This trip's times don't use a time zone.");
-    }
-    if (!timezone.trim()) {
-      return rejectWithValue('Choose a time zone.');
-    }
-
-    const lastEditedAt = Date.now();
-    await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), { timezone, lastEditedAt });
-
-    const updatedTrip: TripSpace = { ...trip, timezone, lastEditedAt };
     dispatch(upsertTrip(updatedTrip));
     return updatedTrip;
   },

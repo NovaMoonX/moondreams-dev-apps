@@ -41,6 +41,7 @@ function EditTripCoverModal({
         coverImageFile: coverUpload.file,
         coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
         defaultCurrency: trip.defaultCurrency,
+        timezone: trip.timezone,
         keepOriginalDates: false,
       });
     } catch (submitError) {

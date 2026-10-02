@@ -44,14 +44,23 @@ const getZoneOffsetMs = (epoch: number, timeZone: string) => {
   return result;
 };
 
+const DAY_MS = 86_400_000;
+
 /** The instant a wall-clock `date` ("YYYY-MM-DD") + `time` ("HH:mm") occurs in an IANA `timeZone`.
- * Two passes so a DST change between the guess and the answer still lands on the right offset. */
+ * A time that happens twice (clocks going back) resolves to its first occurrence; one that never
+ * happens (clocks springing forward) lands the same distance past the gap, like `new Date(...)`. */
 export function zonedDateTimeToEpoch(date: string, time: string, timeZone: string): number {
   const [year, month, day] = date.split('-').map(Number);
   const [hour, minute] = time.split(':').map(Number);
   const wallClockAsUtc = Date.UTC(year, month - 1, day, hour, minute);
-  const firstGuess = wallClockAsUtc - getZoneOffsetMs(wallClockAsUtc, timeZone);
-  const result = wallClockAsUtc - getZoneOffsetMs(firstGuess, timeZone);
+  const offsetBefore = getZoneOffsetMs(wallClockAsUtc - DAY_MS, timeZone);
+  const offsetAfter = getZoneOffsetMs(wallClockAsUtc + DAY_MS, timeZone);
+  const validInstants = Array.from(new Set([offsetBefore, offsetAfter]))
+    .map((offset) => ({ offset, instant: wallClockAsUtc - offset }))
+    .filter(({ offset, instant }) => getZoneOffsetMs(instant, timeZone) === offset)
+    .map(({ instant }) => instant)
+    .sort((first, second) => first - second);
+  const result = validInstants[0] ?? wallClockAsUtc - offsetBefore;
   return result;
 }
 

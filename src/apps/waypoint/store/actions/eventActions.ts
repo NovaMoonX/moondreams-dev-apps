@@ -71,6 +71,14 @@ function validateEventTime(trip: TripSpace, event: EventFields) {
     event.dayIndex === null ||
     event.endDayIndex === null ||
     event.endDayIndex >= event.dayIndex;
+  const endsAfterStart =
+    event.endTime === null ||
+    event.startTime === null ||
+    (event.endDayIndex ?? event.dayIndex) !== event.dayIndex ||
+    event.endTime > event.startTime;
+  if (!endsAfterStart) {
+    return 'The end time needs to be after the start time.';
+  }
   return hasValidStart && hasValidEnd && isRangeOrdered ? null : message;
 }
 

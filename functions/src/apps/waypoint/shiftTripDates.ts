@@ -24,6 +24,16 @@ interface ShiftTripDatesInput {
   endDate: number;
   coverImageUrl: string | null;
   defaultCurrency: string | null;
+  timezone: string | null;
+}
+
+function isValidTimezone(timeZone: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function parseInput(data: unknown): ShiftTripDatesInput {
@@ -46,6 +56,12 @@ function parseInput(data: unknown): ShiftTripDatesInput {
     );
   }
 
+  const timezone =
+    typeof payload.timezone === 'string' && payload.timezone.trim() ? payload.timezone.trim() : null;
+  if (timezone && !isValidTimezone(timezone)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid time zone.');
+  }
+
   return {
     tripId,
     title,
@@ -53,6 +69,7 @@ function parseInput(data: unknown): ShiftTripDatesInput {
     endDate,
     coverImageUrl: typeof payload.coverImageUrl === 'string' ? payload.coverImageUrl : null,
     defaultCurrency: typeof payload.defaultCurrency === 'string' ? payload.defaultCurrency : null,
+    timezone,
   };
 }
 
@@ -160,6 +177,7 @@ export const shiftTripDates = onCall(
             endDate: input.endDate,
             coverImageUrl: input.coverImageUrl,
             defaultCurrency: input.defaultCurrency,
+            ...(input.timezone ? { timezone: input.timezone } : {}),
             lastEditedAt: editedAt,
           });
 

@@ -1,4 +1,3 @@
-import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import type { TripSpace, UserRole } from '@apps/waypoint/types';
 
 export function getTripMember(trip: TripSpace, uid: string) {
@@ -45,15 +44,17 @@ export function canRemoveMembers(
   return canChangeRole(trip, currentUserId, targetUserId);
 }
 
-/** Judged by the viewer's local calendar day, so the trip's last day still counts as active. */
+const DAY_MS = 86_400_000;
+
+// These gate who may write, so they use the same UTC boundaries as firestore.rules (which can't
+// see the viewer's zone); the trip's display status is judged by the viewer's local day instead.
 export function isTripActive(trip: TripSpace, now = Date.now()) {
-  const dayIndex = getLocalDayIndex(trip.startDate, now);
-  return dayIndex >= 0 && dayIndex < getDayCount(trip.startDate, trip.endDate);
+  return now >= trip.startDate && now < trip.endDate + DAY_MS;
 }
 
 /** True once the trip has started, whether it's still ongoing or already over. */
 export function hasTripStarted(trip: TripSpace, now = Date.now()) {
-  return getLocalDayIndex(trip.startDate, now) >= 0;
+  return now >= trip.startDate;
 }
 
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to

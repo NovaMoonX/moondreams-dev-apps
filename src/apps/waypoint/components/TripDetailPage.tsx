@@ -58,7 +58,6 @@ import {
   deleteTrip,
   editTrip,
   setTripArchived,
-  setTripTimezone,
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
@@ -171,30 +170,6 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             type: 'error',
           },
     );
-  };
-
-  const handleEditDates = async (values: EditTripValues, timezone: string) => {
-    setIsSubmittingTripEdit(true);
-    try {
-      const datesChanged = values.startDate !== trip.startDate || values.endDate !== trip.endDate;
-      const editedTrip = datesChanged
-        ? await dispatch(editTrip({ uid: currentUserId, trip, values })).unwrap()
-        : trip;
-      if (timezone !== editedTrip.timezone) {
-        await dispatch(
-          setTripTimezone({ uid: currentUserId, trip: editedTrip, timezone }),
-        ).unwrap();
-      }
-      setEditingField(null);
-    } catch (editError) {
-      addToast({
-        title: 'Unable to update this trip',
-        description: getErrorMessage(editError, 'Please try again.'),
-        type: 'error',
-      });
-    } finally {
-      setIsSubmittingTripEdit(false);
-    }
   };
 
   const handleEditTrip = async (values: EditTripValues) => {
@@ -610,7 +585,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         isOpen={editingField === 'dates'}
         trip={trip}
         isSubmitting={isSubmittingTripEdit}
-        onSubmit={handleEditDates}
+        onSubmit={handleEditTrip}
         onClose={() => setEditingField(null)}
       />
       <EditTripCoverModal

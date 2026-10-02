@@ -37,7 +37,7 @@ interface EditTripDatesModalProps {
   isOpen: boolean;
   trip: TripSpace | null;
   isSubmitting?: boolean;
-  onSubmit: (values: EditTripValues, timezone: string) => Promise<void> | void;
+  onSubmit: (values: EditTripValues) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -210,19 +210,17 @@ function EditTripDatesModal({
 
     setError(null);
     try {
-      await onSubmit(
-        {
-          title: trip.title,
-          startDate: nextStartDate,
-          endDate: nextEndDate,
-          coverImageUrl: trip.coverImageUrl,
-          coverImageFile: null,
-          coverImageRemoved: false,
-          defaultCurrency: trip.defaultCurrency,
-          keepOriginalDates: isRebasing && data.keepOriginalDates,
-        },
-        data.timezone,
-      );
+      await onSubmit({
+        title: trip.title,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
+        coverImageUrl: trip.coverImageUrl,
+        coverImageFile: null,
+        coverImageRemoved: false,
+        defaultCurrency: trip.defaultCurrency,
+        timezone: data.timezone,
+        keepOriginalDates: isRebasing && data.keepOriginalDates,
+      });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to update the dates.'));
     }

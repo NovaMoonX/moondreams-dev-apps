@@ -88,7 +88,9 @@ export const rescheduleTripReminders = onDocumentUpdated(
             return [(batch: FirebaseFirestore.WriteBatch) => batch.update(reminderRef, { scheduledFor })];
           }
 
-          const newReminderRef = firestore.collection('reminders').doc();
+          // Triggers can be delivered more than once; a fixed id per event means a repeat rewrites
+          // the same document instead of creating a second one that would also be sent.
+          const newReminderRef = firestore.doc(`reminders/waypoint-${tripRef.id}-${eventDoc.id}`);
           const assigned: string[] = Array.isArray(event.assignedMemberIds) ? event.assignedMemberIds : [];
           const targetUids = assigned.length > 0 ? assigned : Object.keys(after.members ?? {});
           return [

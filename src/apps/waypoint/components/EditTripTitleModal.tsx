@@ -45,6 +45,7 @@ function EditTripTitleModal({
         coverImageFile: null,
         coverImageRemoved: false,
         defaultCurrency: trip.defaultCurrency,
+        timezone: trip.timezone,
         keepOriginalDates: false,
       });
     } catch (submitError) {
