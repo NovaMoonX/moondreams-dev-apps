@@ -198,6 +198,8 @@ export interface PointToPointTransitDetails extends TransitDetailsBase {
 
 export interface FlightTransitDetails extends TransitDetailsBase {
   airline: string | null;
+  airlineIataCode: string | null;
+  airlineIcaoCode: string | null;
   flightNumber: string | null;
   confirmationCode: string | null;
   departureAirportCode: string | null;

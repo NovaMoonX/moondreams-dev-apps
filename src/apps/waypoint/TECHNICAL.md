@@ -190,6 +190,8 @@ interface PointToPointTransitDetails extends TransitDetailsBase {
 
 interface FlightTransitDetails extends TransitDetailsBase {
   airline: string | null;
+  airlineIataCode: string | null; // set when the airline is picked from the list; null for a custom one
+  airlineIcaoCode: string | null; // FlightAware links use this 3-letter code, not the IATA one
   flightNumber: string | null;
   confirmationCode: string | null;
   departureAirportCode: string | null;

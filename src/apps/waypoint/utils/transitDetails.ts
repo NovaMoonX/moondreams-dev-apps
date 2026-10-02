@@ -58,8 +58,14 @@ export function buildTransitDetails(
   const fields = Object.fromEntries(
     TRANSIT_FIELD_SPECS[transitType].map(({ key }) => [key, draft.values[key]?.trim() || null]),
   );
+  const iataCode = fields.airlineIataCode as string | null | undefined;
+  const flightNumber = (fields.flightNumber as string | null | undefined)?.trim();
+  const normalizedFields =
+    transitType === 'FLIGHT' && iataCode && flightNumber && /^\d+[A-Za-z]?$/.test(flightNumber)
+      ? { ...fields, flightNumber: `${iataCode} ${flightNumber}` }
+      : fields;
   const details = {
-    ...fields,
+    ...normalizedFields,
     notes: draft.notes.trim() || null,
     estimatedTravelTimeMs: totalMinutes > 0 ? totalMinutes * MINUTE_MS : null,
     ...(transitType === 'OTHER'
@@ -94,8 +100,10 @@ export function getDerivedTravelTitle(
   return title;
 }
 
-const FLIGHT_NUMBER_PATTERN = /^[A-Z0-9]{2,3}\d{1,4}[A-Z]?$/;
+const FLIGHT_NUMBER_PATTERN = /^([A-Z0-9]{2,3}?)(\d{1,4}[A-Z]?)$/;
 
+/** FlightAware routes on a 3-letter ICAO airline code, so the picked airline's code wins over
+ * whatever prefix the flight number was typed with. */
 export function getFlightTrackingUrl(
   transitType: TransitType,
   details: TransitDetails | null | undefined,
@@ -104,10 +112,11 @@ export function getFlightTrackingUrl(
     return null;
   }
 
-  const flightNumber = (details.flightNumber ?? '').replace(/\s+/g, '').toUpperCase();
-  const url = FLIGHT_NUMBER_PATTERN.test(flightNumber)
-    ? `https://www.flightaware.com/live/flight/${flightNumber}`
-    : null;
+  const compact = (details.flightNumber ?? '').replace(/\s+/g, '').toUpperCase();
+  const match = FLIGHT_NUMBER_PATTERN.exec(compact);
+  const icaoCode = ('airlineIcaoCode' in details && details.airlineIcaoCode) || null;
+  const flightId = icaoCode && match ? `${icaoCode}${match[2]}` : match ? compact : null;
+  const url = flightId ? `https://www.flightaware.com/live/flight/${flightId}` : null;
   return url;
 }
 

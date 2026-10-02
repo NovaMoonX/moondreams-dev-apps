@@ -1,9 +1,11 @@
 import { useState } from 'react';
 
-import { Button, Input, Label, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { useQuery } from '@tanstack/react-query';
 import { ListPlus, MapPin, StickyNote, Timer, Truck } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import {
   TRANSIT_FIELD_SPECS,
   TRANSIT_GROUP_LABELS,
@@ -28,8 +30,55 @@ const TRAVEL_TIME_KEY = 'travelTime';
 const NOTES_KEY = 'notes';
 const DETAILS_KEY = 'details';
 
+interface AirlineFieldProps {
+  value: TransitDraft;
+  onChange: (value: TransitDraft) => void;
+}
+
+function AirlineField({ value, onChange }: AirlineFieldProps) {
+  const { data: airlines = [] } = useQuery(airlinesQueryOptions());
+  const current = value.values.airline ?? '';
+  const options = [
+    ...airlines.map((airline) => ({
+      value: airline.name,
+      text: airline.name,
+      description: airline.iataCode,
+    })),
+    ...(current && !airlines.some((airline) => airline.name === current)
+      ? [{ value: current, text: current }]
+      : []),
+  ];
+
+  const setAirline = (name: string) => {
+    const match = airlines.find((airline) => airline.name === name);
+    onChange({
+      ...value,
+      values: {
+        ...value.values,
+        airline: name,
+        airlineIataCode: match?.iataCode ?? '',
+        airlineIcaoCode: match?.icaoCode ?? '',
+      },
+    });
+  };
+
+  return (
+    <Select
+      searchable
+      allowAdd
+      clearable
+      options={options}
+      value={current}
+      placeholder='Search airlines'
+      searchPlaceholder='Search or add an airline'
+      onChange={setAirline}
+      onAdd={setAirline}
+    />
+  );
+}
+
 function TransitDetailsFields({ transitType, value, onChange }: TransitDetailsFieldsProps) {
-  const specs = TRANSIT_FIELD_SPECS[transitType];
+  const specs = TRANSIT_FIELD_SPECS[transitType].filter((spec) => !spec.hidden);
   const essentialSpecs = specs.filter((spec) => spec.essential);
   const extraFields = specs
     .filter((spec) => !spec.essential)
@@ -95,11 +144,15 @@ function TransitDetailsFields({ transitType, value, onChange }: TransitDetailsFi
           {essentialSpecs.map((spec) => (
             <div key={spec.key} className='space-y-1.5'>
               <Label>{spec.label}</Label>
-              <Input
-                placeholder={spec.placeholder}
-                value={value.values[spec.key] ?? ''}
-                onChange={(event) => setValue(spec.key, event.target.value)}
-              />
+              {transitType === 'FLIGHT' && spec.key === 'airline' ? (
+                <AirlineField value={value} onChange={onChange} />
+              ) : (
+                <Input
+                  placeholder={spec.placeholder}
+                  value={value.values[spec.key] ?? ''}
+                  onChange={(event) => setValue(spec.key, event.target.value)}
+                />
+              )}
             </div>
           ))}
         </div>

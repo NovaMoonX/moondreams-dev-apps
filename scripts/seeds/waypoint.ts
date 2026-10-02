@@ -494,7 +494,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     tripId: TRIP_ID,
     eventType: 'TRAVEL',
     ...relativeEventTime({ day: 0, start: '09:00', end: '11:05', timezone: 'America/New_York' }),
-    title: 'Flight DAL 482',
+    title: 'Flight DL 482',
     locationName: 'John F. Kennedy International Airport',
     address: null,
     latitude: 40.6413,
@@ -502,8 +502,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     eventDetails: {
       transitType: 'FLIGHT',
       transitDetails: {
-        airline: 'Delta',
-        flightNumber: 'DAL 482',
+        airline: 'Delta Air Lines',
+        airlineIataCode: 'DL',
+        airlineIcaoCode: 'DAL',
+        flightNumber: 'DL 482',
         confirmationCode: 'XK7P2Q',
         departureAirportCode: 'JFK',
         arrivalAirportCode: 'ORD',
@@ -539,7 +541,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     tripId: TRIP_ID,
     eventType: 'TRAVEL',
     ...relativeEventTime({ day: 0, start: '12:30', end: '14:30', timezone: 'America/New_York' }),
-    title: 'Flight DAL 1190',
+    title: 'Flight DL 1190',
     locationName: 'Seattle-Tacoma International Airport',
     address: null,
     latitude: 47.4502,
@@ -547,8 +549,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     eventDetails: {
       transitType: 'FLIGHT',
       transitDetails: {
-        airline: 'Delta',
-        flightNumber: 'DAL 1190',
+        airline: 'Delta Air Lines',
+        airlineIataCode: 'DL',
+        airlineIcaoCode: 'DAL',
+        flightNumber: 'DL 1190',
         confirmationCode: 'XK7P2Q',
         departureAirportCode: 'ORD',
         arrivalAirportCode: 'SEA',

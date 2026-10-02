@@ -41,6 +41,7 @@
     "@tanstack/react-query-persist-client": "^5.103.2",
     "firebase": "12.16.0",
     "firebase-admin": "^13.10.0",
+    "iata-airlines": "^1.0.1",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.46.0",
     "react": "^19.2.8",

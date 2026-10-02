@@ -105,6 +105,8 @@ export interface TransitFieldSpec {
   essential: boolean;
   /** Fields sharing a group are revealed together by one chip. */
   group?: 'route' | 'stations' | 'ports';
+  /** Stored with the leg but never shown as an input of its own. */
+  hidden?: boolean;
 }
 
 const ROUTE_FIELDS: TransitFieldSpec[] = [
@@ -120,8 +122,10 @@ export const TRANSIT_GROUP_LABELS = {
 
 export const TRANSIT_FIELD_SPECS: Record<TransitType, TransitFieldSpec[]> = {
   FLIGHT: [
-    { key: 'airline', label: 'Airline', placeholder: 'Delta', essential: true },
-    { key: 'flightNumber', label: 'Flight number', placeholder: 'DAL 482', essential: true },
+    { key: 'airline', label: 'Airline', placeholder: 'Delta Air Lines', essential: true },
+    { key: 'airlineIataCode', label: 'Airline IATA code', placeholder: '', essential: false, hidden: true },
+    { key: 'airlineIcaoCode', label: 'Airline ICAO code', placeholder: '', essential: false, hidden: true },
+    { key: 'flightNumber', label: 'Flight number', placeholder: 'DL 482', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'XK7P2Q', essential: true },
     { key: 'departureAirportCode', label: 'Departing airport', placeholder: 'JFK', essential: true },
     { key: 'arrivalAirportCode', label: 'Arriving airport', placeholder: 'LAX', essential: true },
