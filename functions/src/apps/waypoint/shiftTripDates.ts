@@ -82,8 +82,21 @@ function rebaseDayFields(data: DocumentData, fields: readonly string[], deltaDay
   return result;
 }
 
+function rebaseIdeaDays(data: DocumentData, deltaDays: number) {
+  const days: unknown = data.ideaDetails?.suggestedDays;
+  if (!Array.isArray(days) || days.length === 0) {
+    return {};
+  }
+
+  const result = {
+    'ideaDetails.suggestedDays': days.map((day) => (typeof day === 'number' ? day - deltaDays : day)),
+  };
+  return result;
+}
+
 /**
- * Moves a trip's dates while keeping every event, stay, expense and checklist item on the
+ * Moves a trip's dates while keeping every event, stay, expense, checklist item and idea's
+ * suggested days on the
  * calendar day it was already on: the trip's start moves, so each item's day number is
  * rebased by the same amount. Called only when someone opts into "keep original dates" —
  * the default (items travel with the trip) is a plain trip-document write on the client.
@@ -135,13 +148,15 @@ export const shiftTripDates = onCall(
             throw new HttpsError('failed-precondition', "This trip's dates are fixed.");
           }
 
-          const [events, stays, expenses, checklist] = await Promise.all([
+          const [events, stays, expenses, checklist, ideas] = await Promise.all([
             transaction.get(tripRef.collection('events')),
             transaction.get(tripRef.collection('stays')),
             transaction.get(tripRef.collection('expenses')),
             transaction.get(tripRef.collection('checklist')),
+            transaction.get(tripRef.collection('ideas')),
           ]);
-          const itemCount = events.size + stays.size + expenses.size + checklist.size;
+          const itemCount =
+            events.size + stays.size + expenses.size + checklist.size + ideas.size;
           if (itemCount > MAX_ITEMS) {
             throw new HttpsError(
               'failed-precondition',
@@ -150,7 +165,7 @@ export const shiftTripDates = onCall(
           }
 
           const deltaDays = Math.round((input.startDate - trip.startDate) / DAY_MS);
-          const rebased: { ref: DocumentReference; data: Record<string, number> }[] = [
+          const rebased: { ref: DocumentReference; data: Record<string, number | unknown[]> }[] = [
             ...events.docs.map((doc) => ({
               ref: doc.ref,
               data: rebaseDayFields(doc.data(), ['dayIndex', 'endDayIndex'], deltaDays),
@@ -166,6 +181,10 @@ export const shiftTripDates = onCall(
             ...checklist.docs.map((doc) => ({
               ref: doc.ref,
               data: rebaseDayFields(doc.data(), ['completeByDayIndex'], deltaDays),
+            })),
+            ...ideas.docs.map((doc) => ({
+              ref: doc.ref,
+              data: rebaseIdeaDays(doc.data(), deltaDays),
             })),
           ].filter(({ data }) => Object.keys(data).length > 0);
 
