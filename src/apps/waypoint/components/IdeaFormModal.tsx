@@ -39,7 +39,7 @@ interface Reveal<T> {
 }
 
 interface IdeaExtras {
-  link: Reveal<string> & { isDraftInvalid: boolean };
+  link: Reveal<string> & { draft: string };
   details: Reveal<{ cuisines: string; settings: ActivitySetting[] }>;
   when: Reveal<{ days: number[]; blocks: TimeBlock[] }>;
   note: Reveal<string>;
@@ -77,7 +77,7 @@ const typeOptions = IDEA_TYPES.map((value) => ({
 }));
 
 const EMPTY_EXTRAS: IdeaExtras = {
-  link: { enabled: false, value: '', isDraftInvalid: false },
+  link: { enabled: false, value: '', draft: '' },
   details: { enabled: false, value: { cuisines: '', settings: [] } },
   when: { enabled: false, value: { days: [], blocks: [] } },
   note: { enabled: false, value: '' },
@@ -148,9 +148,9 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
             preview={null}
             label=''
             startRevealed
-            onChange={(url) => onChange({ ...extras, link: { ...extras.link, enabled: true, value: url } })}
-            onDraftValidityChange={(isValid) =>
-              onChange({ ...extras, link: { ...extras.link, isDraftInvalid: !isValid } })
+            onChange={(url) => onChange({ ...extras, link: { enabled: true, value: url, draft: url } })}
+            onDraftChange={(draft) =>
+              onChange({ ...extras, link: { ...extras.link, enabled: true, draft } })
             }
           />
         </RemovableField>
@@ -292,7 +292,7 @@ function IdeaFormModal({
 
   const isRestaurant = formData.ideaType === 'RESTAURANT';
   const link = formData.extras.link;
-  const isLinkValid = !link.enabled || (!link.isDraftInvalid && (link.value.trim() === '' || isValidHttpUrl(link.value)));
+  const isLinkValid = !link.enabled || (link.draft.trim() === '' || isValidHttpUrl(link.draft));
   const isFormComplete = formData.title.trim() !== '' && isLinkValid;
 
   const fields = useMemo(
@@ -327,7 +327,7 @@ function IdeaFormModal({
       await onSubmit({
         ideaType: data.ideaType,
         title: data.title,
-        linkUrl: extras.link.enabled ? extras.link.value.trim() || null : null,
+        linkUrl: extras.link.enabled ? extras.link.draft.trim() || null : null,
         notes: extras.note.enabled ? extras.note.value.trim() || null : null,
         ideaDetails: getIdeaDetails(data),
       });

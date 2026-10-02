@@ -31,13 +31,12 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
   const onItinerary = ideas.length - undecided.length;
 
   if (!canAdd) {
-    if (ideas.length === 0) {
-      return null;
-    }
-
-    const summary = `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'}${
-      onItinerary > 0 ? `, ${onItinerary} on the itinerary` : ''
-    }`;
+    const summary =
+      ideas.length === 0
+        ? 'No ideas were added before the trip'
+        : `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'}${
+            onItinerary > 0 ? `, ${onItinerary} on the itinerary` : ''
+          }`;
 
     return (
       <section className='space-y-1'>

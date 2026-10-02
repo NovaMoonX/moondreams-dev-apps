@@ -9,10 +9,10 @@ export function getIdeaTags(idea: TripIdea) {
     return [];
   }
 
-  const result =
-    'cuisines' in ideaDetails
-      ? ideaDetails.cuisines
-      : ideaDetails.settings.map((setting) => ACTIVITY_SETTING_LABELS[setting]);
+  const result = ('cuisines' in ideaDetails
+    ? ideaDetails.cuisines
+    : ideaDetails.settings.map((setting) => ACTIVITY_SETTING_LABELS[setting])
+  ).filter((tag): tag is string => typeof tag === 'string');
   return result;
 }
 
@@ -25,8 +25,12 @@ export function getIdeaTiming(trip: TripSpace, idea: TripIdea) {
 
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const result = {
-    days: ideaDetails.suggestedDays.filter((day) => day >= 0 && day < dayCount),
-    blocks: ideaDetails.suggestedTimeBlocks.map((block) => TIME_BLOCK_LABELS[block]),
+    days: ideaDetails.suggestedDays.filter(
+      (day) => typeof day === 'number' && day >= 0 && day < dayCount,
+    ),
+    blocks: ideaDetails.suggestedTimeBlocks
+      .map((block) => TIME_BLOCK_LABELS[block])
+      .filter((label): label is string => typeof label === 'string'),
   };
   return result;
 }

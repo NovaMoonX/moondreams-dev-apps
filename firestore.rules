@@ -2057,6 +2057,27 @@ service cloud.firestore {
         return !hasTripStarted(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data);
       }
 
+      // Rules can't check each list element's type, so the lists are bounded and the enum ones
+      // are limited to their allowed values; the app also ignores anything unexpected on read.
+      function isIdeaDetailsValid(ideaType, details) {
+        return details == null
+          || (details is map
+            && details.keys().hasAll(['suggestedDays', 'suggestedTimeBlocks'])
+            && details.suggestedDays is list
+            && details.suggestedDays.size() <= 90
+            && details.suggestedTimeBlocks is list
+            && details.suggestedTimeBlocks.hasOnly(['MORNING', 'AFTERNOON', 'EVENING'])
+            && (ideaType == 'RESTAURANT'
+              ? details.keys().hasOnly(['cuisines', 'suggestedDays', 'suggestedTimeBlocks'])
+                && details.keys().hasAll(['cuisines'])
+                && details.cuisines is list
+                && details.cuisines.size() <= 20
+              : details.keys().hasOnly(['settings', 'suggestedDays', 'suggestedTimeBlocks'])
+                && details.keys().hasAll(['settings'])
+                && details.settings is list
+                && details.settings.hasOnly(['INDOOR', 'OUTDOOR'])));
+      }
+
       function isIdeaShapeValid() {
         return request.resource.data.keys().hasOnly([
             'id',
@@ -2078,7 +2099,7 @@ service cloud.firestore {
           && isNonEmptyString(request.resource.data.title)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && (request.resource.data.linkUrl == null || isHttpUrl(request.resource.data.linkUrl))
-          && (request.resource.data.ideaDetails == null || request.resource.data.ideaDetails is map)
+          && isIdeaDetailsValid(request.resource.data.ideaType, request.resource.data.ideaDetails)
           && request.resource.data.addedByUid is string
           && request.resource.data.voterUids is list
           && (request.resource.data.convertedToEntityId == null || request.resource.data.convertedToEntityId is string)
@@ -2087,14 +2108,14 @@ service cloud.firestore {
       }
 
       // Anyone on the trip can post an idea until the trip starts — never on another member's
-      // behalf, and never with votes other than their own.
+      // behalf, and never with more than their own single vote.
       function isIdeaCreateValid() {
         return isTripSubcollectionMember()
           && isTripNotStarted()
           && isIdeaShapeValid()
           && request.resource.data.addedByUid == request.auth.uid
           && request.resource.data.convertedToEntityId == null
-          && request.resource.data.voterUids.removeAll([request.auth.uid]).size() == 0;
+          && (request.resource.data.voterUids.size() == 0 || request.resource.data.voterUids == [request.auth.uid]);
       }
 
       // Voting never closes: a member can only add or remove their own uid.
@@ -2104,6 +2125,7 @@ service cloud.firestore {
         return isTripSubcollectionMember()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voterUids'])
           && request.resource.data.voterUids is list
+          && request.resource.data.voterUids.toSet().size() == request.resource.data.voterUids.size()
           && added.removeAll([request.auth.uid]).size() == 0
           && removed.removeAll([request.auth.uid]).size() == 0
           && (added.size() + removed.size()) <= 1;

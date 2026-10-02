@@ -25,8 +25,8 @@ interface LinkAttachFieldProps {
   addLabel?: string;
   /** Show the input straight away instead of behind the add link. */
   startRevealed?: boolean;
-  /** Fires as the typed text changes: false while it is neither empty nor a valid link. */
-  onDraftValidityChange?: (isValid: boolean) => void;
+  /** Fires on every keystroke with the typed text, ahead of the (async) preview fetch. */
+  onDraftChange?: (draft: string) => void;
 }
 
 /** An app-agnostic URL field that fetches a preview on its own once the text is a valid
@@ -41,7 +41,7 @@ function LinkAttachField({
   placeholder = 'https://…',
   addLabel = '+ Add link',
   startRevealed = false,
-  onDraftValidityChange,
+  onDraftChange,
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
@@ -103,7 +103,7 @@ function LinkAttachField({
 
   const handleDraftChange = (value: string) => {
     setDraftUrl(value);
-    onDraftValidityChange?.(value.trim() === '' || isValidHttpUrl(value));
+    onDraftChange?.(value);
     latestDraftRef.current = value.trim();
     setError(null);
     scheduleAutoFetch.cancel();
@@ -120,7 +120,6 @@ function LinkAttachField({
   const clearLink = () => {
     setDraftUrl('');
     setIsRevealed(true);
-    onDraftValidityChange?.(true);
     latestDraftRef.current = '';
     setError(null);
     onChange('', null);
