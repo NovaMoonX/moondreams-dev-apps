@@ -66,6 +66,19 @@ function relativeEventTime({
   };
 }
 
+/** An absolute-time trip's event fields from start/end instants. */
+function absoluteEventTime(startAt: number, endAt: number, tripStart: number) {
+  return {
+    dayIndex: Math.floor((startAt - tripStart) / DAY_MS),
+    endDayIndex: Math.floor((endAt - tripStart) / DAY_MS),
+    startAt,
+    endAt,
+    startTime: null,
+    endTime: null,
+    timezone: null,
+  };
+}
+
 /** A relative stay's day + time fields; the planned arrival/departure start out equal to the booking. */
 function relativeStayTime(checkIn: [number, string], checkOut: [number, string]) {
   return {
@@ -846,7 +859,17 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: null,
     latitude: 47.6238,
     longitude: -122.5108,
-    eventDetails: { transitType: 'FERRY' },
+    eventDetails: {
+      transitType: 'FERRY',
+      transitDetails: {
+        operator: 'Washington State Ferries',
+        confirmationCode: 'WSF-48820',
+        departurePort: 'Bainbridge Island Ferry Terminal',
+        arrivalPort: 'Seattle',
+        notes: null,
+        estimatedTravelTimeMs: null,
+      },
+    },
     notes: null,
     attendeeTargetType: 'SPECIFIC_MEMBERS',
     assignedMemberIds: [alex.uid, taylor.uid],
@@ -1446,8 +1469,174 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     }),
   );
 
+  // One of every transit type across the three live trips, so each badge color, card layout
+  // and route line can be eyeballed. The event's own location mirrors the route's place.
+  const travelEvents = [
+    {
+      collection: eventsCollection,
+      id: 'seed-waypoint-drive',
+      tripId: TRIP_ID,
+      title: 'Drive to Pike Place Suites',
+      time: relativeEventTime({ day: 0, start: '15:30', end: '16:15' }),
+      place: { name: 'Pike Place Suites', latitude: 47.6088, longitude: -122.3402 },
+      transitType: 'DRIVE',
+      details: { vehicleInfo: 'Rental sedan', startLocation: 'Sea-Tac Airport', endLocation: 'Pike Place Suites' },
+    },
+    {
+      collection: eventsCollection,
+      id: 'seed-waypoint-train',
+      tripId: TRIP_ID,
+      title: 'Link light rail to the U-District',
+      time: relativeEventTime({ day: 1, start: '08:15', end: '08:45' }),
+      place: { name: 'Westlake Station', latitude: 47.6113, longitude: -122.3371 },
+      transitType: 'TRAIN',
+      details: { operator: 'Sound Transit', trainNumber: '1 Line', confirmationCode: null, departureStation: 'Westlake Station', arrivalStation: 'U District Station' },
+    },
+    {
+      collection: eventsCollection,
+      id: 'seed-waypoint-scooter',
+      tripId: TRIP_ID,
+      title: 'Scooter to Kerry Park',
+      time: relativeEventTime({ day: 1, start: '15:30', end: '16:00' }),
+      place: { name: 'Kerry Park', latitude: 47.6295, longitude: -122.3599 },
+      transitType: 'SCOOTER',
+      details: { operator: 'Lime', startLocation: 'Pike Place Suites', endLocation: 'Kerry Park' },
+    },
+    {
+      collection: eventsCollection,
+      id: 'seed-waypoint-walk',
+      tripId: TRIP_ID,
+      title: 'Walk the waterfront',
+      time: relativeEventTime({ day: 2, start: '15:30', end: '16:10' }),
+      place: { name: 'Seattle Waterfront', latitude: 47.6062, longitude: -122.3407 },
+      transitType: 'WALK',
+      details: { startLocation: null, endLocation: 'Seattle Waterfront' },
+    },
+    {
+      collection: eventsCollection,
+      id: 'seed-waypoint-shuttle',
+      tripId: TRIP_ID,
+      title: 'Hotel shuttle to the airport',
+      time: relativeEventTime({ day: 3, start: '09:00', end: '09:45' }),
+      place: { name: 'Seattle-Tacoma International Airport', latitude: 47.4502, longitude: -122.3088 },
+      transitType: 'OTHER',
+      details: { customFields: { Provider: 'Hotel shuttle', 'Pickup spot': 'Front desk' } },
+    },
+    {
+      collection: activeEventsCollection,
+      id: 'active-trip-drive',
+      tripId: ACTIVE_TRIP_ID,
+      title: 'Drive to Salt Creek',
+      time: relativeEventTime({ day: 1, start: '08:15', end: '09:00' }),
+      place: { name: 'Salt Creek Recreation Area', latitude: 48.1585, longitude: -123.6928 },
+      transitType: 'DRIVE',
+      details: { vehicleInfo: 'Rental SUV', startLocation: null, endLocation: 'Salt Creek Recreation Area' },
+    },
+    {
+      collection: activeEventsCollection,
+      id: 'active-trip-walk',
+      tripId: ACTIVE_TRIP_ID,
+      title: 'Walk down to the tide pools',
+      time: relativeEventTime({ day: 1, start: '09:15', end: '09:55' }),
+      place: { name: 'Tongue Point Trail', latitude: 48.1623, longitude: -123.7165 },
+      transitType: 'WALK',
+      details: { startLocation: 'Salt Creek parking lot', endLocation: 'Tongue Point Trail' },
+    },
+    {
+      collection: activeEventsCollection,
+      id: 'active-trip-bike',
+      tripId: ACTIVE_TRIP_ID,
+      title: 'Bike the Olympic Discovery Trail',
+      time: relativeEventTime({ day: 2, start: '08:30', end: '10:00' }),
+      place: { name: 'Olympic Discovery Trail', latitude: 48.1181, longitude: -123.4307 },
+      transitType: 'BIKE',
+      details: { operator: 'Peninsula Bike Rentals', startLocation: null, endLocation: 'Olympic Discovery Trail' },
+    },
+    {
+      collection: activeEventsCollection,
+      id: 'active-trip-shuttle',
+      tripId: ACTIVE_TRIP_ID,
+      title: 'Shuttle to Hurricane Ridge',
+      time: relativeEventTime({ day: 3, start: '09:00', end: '09:45' }),
+      place: { name: 'Hurricane Ridge Visitor Center', latitude: 47.9696, longitude: -123.4983 },
+      transitType: 'OTHER',
+      details: { customFields: { Provider: 'Park shuttle', Fare: '$12 each' } },
+    },
+    {
+      collection: eveningTripRef.collection('events'),
+      id: 'evening-drive',
+      tripId: EVENING_TRIP_ID,
+      title: 'Drive to La Conner',
+      time: absoluteEventTime(context.now - 10 * HOUR_MS, context.now - 9 * HOUR_MS - 15 * 60_000, eveningTripStart),
+      place: { name: 'La Conner', latitude: 48.3918, longitude: -122.4954 },
+      transitType: 'DRIVE',
+      details: { vehicleInfo: 'Blue hatchback', startLocation: null, endLocation: 'La Conner' },
+    },
+    {
+      collection: eveningTripRef.collection('events'),
+      id: 'evening-bike',
+      tripId: EVENING_TRIP_ID,
+      title: 'Bike back along the dike',
+      time: absoluteEventTime(context.now - 4 * HOUR_MS, context.now - 3 * HOUR_MS - 15 * 60_000, eveningTripStart),
+      place: { name: 'Fir Island Farm Reserve', latitude: 48.3329, longitude: -122.3835 },
+      transitType: 'BIKE',
+      details: { operator: null, startLocation: 'Roozengaarde', endLocation: 'Fir Island Farm Reserve' },
+    },
+    {
+      collection: eveningTripRef.collection('events'),
+      id: 'evening-ferry',
+      tripId: EVENING_TRIP_ID,
+      title: 'Ferry to Orcas Island',
+      time: absoluteEventTime(startOfToday + DAY_MS + 13 * HOUR_MS, startOfToday + DAY_MS + 14 * HOUR_MS + 30 * 60_000, eveningTripStart),
+      place: { name: 'Anacortes Ferry Terminal', latitude: 48.5019, longitude: -122.6792 },
+      transitType: 'FERRY',
+      details: { operator: 'Washington State Ferries', confirmationCode: 'WSF-20931', departurePort: 'Anacortes Ferry Terminal', arrivalPort: 'Orcas Island' },
+    },
+  ] as const;
+
+  await Promise.all(
+    travelEvents.map((travel) =>
+      travel.collection.doc(travel.id).set({
+        id: travel.id,
+        tripId: travel.tripId,
+        eventType: 'TRAVEL',
+        ...travel.time,
+        title: travel.title,
+        locationName: travel.place.name,
+        address: null,
+        latitude: travel.place.latitude,
+        longitude: travel.place.longitude,
+        eventDetails: {
+          transitType: travel.transitType,
+          transitDetails: { notes: null, estimatedTravelTimeMs: null, ...travel.details },
+        },
+        notes: null,
+        attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+        assignedMemberIds: [],
+        venueOpenTime: null,
+        venueCloseTime: null,
+        changeHistory: [],
+        place: null,
+        linkUrl: null,
+        linkPreview: null,
+        linkKind: null,
+        groupLabel: null,
+        reminderMinutesBefore: 20,
+        reminderEnabled: false,
+        reminderId: null,
+        isArchived: false,
+        archivedBy: null,
+        archivedAt: null,
+        seenBy: { [alex.uid]: context.now, [taylor.uid]: context.now },
+        createdBy: alex.uid,
+        createdAt: joinedAt,
+        lastEditedAt: joinedAt,
+      }),
+    ),
+  );
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 59,
+    firestoreDocuments: 71,
   };
 }
