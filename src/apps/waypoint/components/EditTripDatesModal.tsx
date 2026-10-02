@@ -182,6 +182,7 @@ function EditTripDatesModal({
         label: '',
         renderComponent: (props) => (
           <TimezoneSelect
+            pill
             value={props.value as string}
             onChange={(value) => props.onValueChange(value)}
             disabled={isSubmitting}
