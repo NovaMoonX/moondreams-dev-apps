@@ -100,19 +100,21 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
                 trip={trip}
                 idea={idea}
                 currentUserId={currentUserId}
-                renderTrigger={(openProps) => (
+                renderTrigger={(openProps, anchor) => (
                   <div
                     {...openProps}
                     className='flex cursor-pointer items-center justify-between gap-3 px-3 py-2'
                   >
                     <span className='flex min-w-0 items-center gap-2 text-sm'>
                       <span aria-hidden='true'>{IDEA_TYPE_EMOJIS[idea.ideaType]}</span>
-                      <span className='min-w-0'>
-                        <span className='block truncate font-medium'>{idea.title}</span>
-                        {timing && (
-                          <span className='text-muted-foreground block truncate text-xs'>{timing}</span>
-                        )}
-                      </span>
+                      {anchor(
+                        <span className='block min-w-0'>
+                          <span className='block truncate font-medium'>{idea.title}</span>
+                          {timing && (
+                            <span className='text-muted-foreground block truncate text-xs'>{timing}</span>
+                          )}
+                        </span>,
+                      )}
                     </span>
                     <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
                       <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />

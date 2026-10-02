@@ -15,6 +15,7 @@ import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips'
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { isValidHttpUrl } from '@/utils/urlUtils';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
@@ -37,7 +38,7 @@ interface Reveal<T> {
 }
 
 interface IdeaExtras {
-  link: Reveal<string>;
+  link: Reveal<string> & { isDraftInvalid: boolean };
   details: Reveal<{ cuisines: string; settings: ActivitySetting[] }>;
   when: Reveal<{ days: number[]; blocks: TimeBlock[] }>;
   note: Reveal<string>;
@@ -72,18 +73,10 @@ const { custom, input, select } = FormFactories;
 const typeOptions = IDEA_TYPES.map((value) => ({ value, label: IDEA_TYPE_LABELS[value] }));
 
 const EMPTY_EXTRAS: IdeaExtras = {
-  link: { enabled: false, value: '' },
+  link: { enabled: false, value: '', isDraftInvalid: false },
   details: { enabled: false, value: { cuisines: '', settings: [] } },
   when: { enabled: false, value: { days: [], blocks: [] } },
   note: { enabled: false, value: '' },
-};
-
-const isHttpUrl = (value: string) => {
-  try {
-    return ['http:', 'https:'].includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
 };
 
 const toggleItem = <T,>(items: T[], item: T, isChecked: boolean) =>
@@ -151,7 +144,10 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
             preview={null}
             label=''
             startRevealed
-            onChange={(url) => onChange({ ...extras, link: { enabled: true, value: url } })}
+            onChange={(url) => onChange({ ...extras, link: { ...extras.link, enabled: true, value: url } })}
+            onDraftValidityChange={(isValid) =>
+              onChange({ ...extras, link: { ...extras.link, isDraftInvalid: !isValid } })
+            }
           />
         </RemovableField>
       )}
@@ -292,7 +288,7 @@ function IdeaFormModal({
 
   const isRestaurant = formData.ideaType === 'RESTAURANT';
   const link = formData.extras.link;
-  const isLinkValid = !link.enabled || link.value.trim() === '' || isHttpUrl(link.value.trim());
+  const isLinkValid = !link.enabled || (!link.isDraftInvalid && (link.value.trim() === '' || isValidHttpUrl(link.value)));
   const isFormComplete = formData.title.trim() !== '' && isLinkValid;
 
   const fields = useMemo(

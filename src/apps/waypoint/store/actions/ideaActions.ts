@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { arrayRemove, arrayUnion, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { isValidHttpUrl } from '@/utils/urlUtils';
 import type { IdeaDetails, IdeaType, TripIdea, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, isTripMember } from '@apps/waypoint/utils/roleGuards';
 
@@ -26,6 +27,10 @@ export const createIdea = createAsyncThunk<TripIdea, CreateIdeaInput, { rejectVa
     }
     if (!fields.title.trim()) {
       return rejectWithValue('Enter a name for this idea.');
+    }
+
+    if (fields.linkUrl?.trim() && !isValidHttpUrl(fields.linkUrl)) {
+      return rejectWithValue('Enter a valid link, like https://example.com.');
     }
 
     const ideaRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas'));

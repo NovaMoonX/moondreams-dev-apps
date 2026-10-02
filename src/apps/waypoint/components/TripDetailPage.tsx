@@ -92,25 +92,22 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const isValidSectionTab = (value: string | null): value is TripSectionTab =>
     value !== null && TRIP_SECTION_TABS.includes(value as TripSectionTab);
   const tabParam = searchParams.get('tab');
-  // Phones always open on Overview; wider screens open an inactive trip on Timeline since
-  // nothing else fills the page. A valid ?tab= in the URL takes priority over either default.
-  const [sectionTab, setSectionTabState] = useState(() =>
-    isValidSectionTab(tabParam) ? tabParam : isActive || isSmallScreen ? '' : 'overview',
+  // Only a tab the person chose (or the URL names) is stored; otherwise phones land on Overview
+  // and wider screens open an inactive trip on Timeline. Deriving the default keeps it right
+  // when the window is resized.
+  const [selectedTab, setSelectedTab] = useState<string | null>(() =>
+    isValidSectionTab(tabParam) ? tabParam : null,
   );
+  const sectionTab = selectedTab ?? (isActive || isSmallScreen ? '' : 'overview');
 
   const hasAppNav = isSmallScreen;
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
-  const isNestedScreen =
-    hasAppNav &&
-    (sectionTab === 'stays' ||
-      sectionTab === 'members' ||
-      sectionTab === 'checklist' ||
-      sectionTab === 'ideas');
+  const isNestedScreen = hasAppNav && sectionTab !== '';
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
   const setSectionTab = (value: string) => {
-    setSectionTabState(value);
+    setSelectedTab(value);
     if (hasAppNav) {
       window.scrollTo({ top: 0 });
     }

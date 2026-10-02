@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export const DEBOUNCE_MS = {
   autocomplete: 450,
   linkDetection: 800,
-  hoverClose: 200,
 } as const;
 
 /** Returns `value` once it has stopped changing for `delayMs`. */

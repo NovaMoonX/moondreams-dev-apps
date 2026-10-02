@@ -11,3 +11,4 @@ export * from './inviteCodeUtils';
 export * from './mapUrlUtils';
 export * from './stringUtils';
 export * from './timezoneUtils';
+export * from './urlUtils';

@@ -7,6 +7,7 @@ import { X } from 'lucide-react';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { DEBOUNCE_MS, useDebouncedCallback } from '@/hooks/useDebounce';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { isValidHttpUrl } from '@/utils/urlUtils';
 import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 
@@ -24,15 +25,8 @@ interface LinkAttachFieldProps {
   addLabel?: string;
   /** Show the input straight away instead of behind the add link. */
   startRevealed?: boolean;
-}
-
-function isValidHttpUrl(value: string) {
-  try {
-    const parsed = new URL(value);
-    return ['http:', 'https:'].includes(parsed.protocol) && /\.[a-z]{2,}$/i.test(parsed.hostname);
-  } catch {
-    return false;
-  }
+  /** Fires as the typed text changes: false while it is neither empty nor a valid link. */
+  onDraftValidityChange?: (isValid: boolean) => void;
 }
 
 /** An app-agnostic URL field that fetches a preview on its own once the text is a valid
@@ -47,6 +41,7 @@ function LinkAttachField({
   placeholder = 'https://…',
   addLabel = '+ Add link',
   startRevealed = false,
+  onDraftValidityChange,
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
@@ -108,6 +103,7 @@ function LinkAttachField({
 
   const handleDraftChange = (value: string) => {
     setDraftUrl(value);
+    onDraftValidityChange?.(value.trim() === '' || isValidHttpUrl(value));
     latestDraftRef.current = value.trim();
     setError(null);
     scheduleAutoFetch.cancel();
@@ -124,6 +120,7 @@ function LinkAttachField({
   const clearLink = () => {
     setDraftUrl('');
     setIsRevealed(true);
+    onDraftValidityChange?.(true);
     latestDraftRef.current = '';
     setError(null);
     onChange('', null);

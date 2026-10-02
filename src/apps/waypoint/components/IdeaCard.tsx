@@ -3,7 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
-import IdeaDetailsOverlay, { type IdeaOpenProps } from '@apps/waypoint/components/IdeaDetailsOverlay';
+import IdeaDetailsOverlay, { type IdeaAnchor, type IdeaOpenProps } from '@apps/waypoint/components/IdeaDetailsOverlay';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import {
   IDEA_TYPE_CHIP_CLASSES,
@@ -25,7 +25,7 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
   const timing = getIdeaTimingSummary(trip, idea);
   const tags = getIdeaTags(idea);
 
-  const renderCard = (openProps: IdeaOpenProps) => (
+  const renderCard = (openProps: IdeaOpenProps, anchor: IdeaAnchor) => (
     <div
       {...openProps}
       className='border-border bg-card cursor-pointer space-y-2 rounded-xl border p-3'
@@ -41,6 +41,7 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
           >
             {IDEA_TYPE_EMOJIS[idea.ideaType]}
           </span>
+          {anchor(
           <div className='min-w-0'>
             <p className='font-medium'>{idea.title}</p>
             {timing && (
@@ -50,7 +51,8 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
               </p>
             )}
             <p className='text-muted-foreground text-xs'>Suggested by {adderName}</p>
-          </div>
+          </div>,
+          )}
         </div>
         <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
           <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />

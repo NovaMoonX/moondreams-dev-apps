@@ -35,6 +35,11 @@ service cloud.firestore {
       return request.time.toMillis() >= trip.startDate;
     }
 
+    // Links are rendered as hrefs, so only http(s) is allowed — never `javascript:` or `data:`.
+    function isHttpUrl(value) {
+      return value is string && value.matches('^https?://[^\\s]+$');
+    }
+
     function isClockTime(value) {
       return value is string && value.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
     }
@@ -2072,7 +2077,7 @@ service cloud.firestore {
           && request.resource.data.ideaType in ['RESTAURANT', 'ACTIVITY']
           && isNonEmptyString(request.resource.data.title)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
-          && (request.resource.data.linkUrl == null || request.resource.data.linkUrl is string)
+          && (request.resource.data.linkUrl == null || isHttpUrl(request.resource.data.linkUrl))
           && (request.resource.data.ideaDetails == null || request.resource.data.ideaDetails is map)
           && request.resource.data.addedByUid is string
           && request.resource.data.voterUids is list
