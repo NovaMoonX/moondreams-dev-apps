@@ -16,7 +16,7 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatClockTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { formatEventTimeRange, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
+import { formatEventTimeRange, getEventTime, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_LINK_KIND_LABELS,
@@ -93,12 +93,15 @@ export function EventDetailLines({
 }: EventDetailLinesProps) {
   const quickField = getQuickField(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
+  const { startMs, endMs } = getEventTime(trip, event);
+  const impliedDurationMs = startMs !== null && endMs !== null && endMs > startMs ? endMs - startMs : null;
   const transitLines =
     event.eventType === 'TRAVEL' && event.eventDetails && 'transitType' in event.eventDetails
       ? getTransitSummary(
           event.eventDetails.transitType,
           event.eventDetails.transitDetails,
           event.title,
+          impliedDurationMs,
         )
       : [];
   const trackingUrl =

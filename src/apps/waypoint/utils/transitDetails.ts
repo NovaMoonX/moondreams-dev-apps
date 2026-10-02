@@ -129,6 +129,7 @@ export function getTransitSummary(
   transitType: TransitType,
   details: TransitDetails | null | undefined,
   title = '',
+  impliedDurationMs: number | null = null,
 ): TransitSummaryLine[] {
   if (!details) {
     return [];
@@ -148,7 +149,7 @@ export function getTransitSummary(
     pick('Vehicle', 'vehicleInfo'),
     pick('Confirmation', 'confirmationCode'),
     { label: 'Route', value: route.some(Boolean) ? route.map((part) => part || '…').join(' → ') : '' },
-    { label: 'Travel time', value: formatTravelDuration(details.estimatedTravelTimeMs) ?? '' },
+    { label: 'Travel time', value: formatTravelDuration(impliedDurationMs ?? details.estimatedTravelTimeMs) ?? '' },
   ].filter((line) => line.value && !title.toLowerCase().includes(line.value.toLowerCase()));
 
   const result = transitType === 'OTHER'

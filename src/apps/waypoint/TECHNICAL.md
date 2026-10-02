@@ -180,7 +180,7 @@ type EventDetails = TravelEventDetails | DiningEventDetails | ActivityEventDetai
 ```typescript
 interface TransitDetailsBase {
   notes: string | null;
-  estimatedTravelTimeMs: number | null; // duration, not a point in time — milliseconds for consistency with every other time field
+  estimatedTravelTimeMs: number | null; // duration, not a point in time — milliseconds for consistency with every other time field; only asked when the leg has no end time (an end time implies the duration)
 }
 
 interface PointToPointTransitDetails extends TransitDetailsBase {
@@ -235,6 +235,9 @@ interface OtherTransitDetails extends TransitDetailsBase {
 type TransitDetails =
   | FlightTransitDetails | DriveTransitDetails | FerryTransitDetails | TrainTransitDetails
   | WalkTransitDetails | BikeTransitDetails | ScooterTransitDetails | OtherTransitDetails;
+// The event's own location is entered once and mirrored into the route on save: `endLocation` for
+// Drive/Walk/Bike/Scooter ("going to"), `departureStation`/`departurePort` for Train/Ferry; a Flight's
+// location comes from its departing airport.
 // startLocation/endLocation only apply to Drive/Walk/Bike/Scooter — Flight/Ferry/Train already
 // have their own departure/arrival pair, so a generic start/end there would be a second way to
 // say the same thing. Which variant applies is read off the sibling `transitType` field.

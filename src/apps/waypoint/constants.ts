@@ -113,23 +113,18 @@ export interface TransitFieldSpec {
   key: string;
   label: string;
   placeholder: string;
+  /** Essential fields show up front, in their section; the rest wait behind a chip. */
   essential: boolean;
-  /** Fields sharing a group are revealed together by one chip. */
-  group?: 'route' | 'stations' | 'ports';
+  /** Where an essential field sits; defaults to the carrier section. */
+  section?: 'route';
   /** Stored with the leg but never shown as an input of its own. */
   hidden?: boolean;
 }
 
-const ROUTE_FIELDS: TransitFieldSpec[] = [
-  { key: 'startLocation', label: 'Starting point', placeholder: 'Defaults to your previous event', essential: false, group: 'route' },
-  { key: 'endLocation', label: 'Destination', placeholder: 'Defaults to your next event', essential: false, group: 'route' },
+const START_FIELDS: TransitFieldSpec[] = [
+  { key: 'startLocation', label: 'Starting from', placeholder: 'Defaults to your previous event', essential: false },
+  { key: 'endLocation', label: 'Destination', placeholder: '', essential: false, hidden: true },
 ];
-
-export const TRANSIT_GROUP_LABELS = {
-  route: 'Route',
-  stations: 'Stations',
-  ports: 'Ports',
-} as const;
 
 export const TRANSIT_FIELD_SPECS: Record<TransitType, TransitFieldSpec[]> = {
   FLIGHT: [
@@ -138,36 +133,59 @@ export const TRANSIT_FIELD_SPECS: Record<TransitType, TransitFieldSpec[]> = {
     { key: 'airlineIcaoCode', label: 'Airline ICAO code', placeholder: '', essential: false, hidden: true },
     { key: 'flightNumber', label: 'Flight number', placeholder: 'DL 482', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'XK7P2Q', essential: true },
-    { key: 'departureAirportCode', label: 'Departing airport', placeholder: 'JFK', essential: true },
-    { key: 'arrivalAirportCode', label: 'Arriving airport', placeholder: 'LAX', essential: true },
+    { key: 'departureAirportCode', label: 'Departing airport', placeholder: 'JFK', essential: true, section: 'route' },
+    { key: 'arrivalAirportCode', label: 'Arriving airport', placeholder: 'LAX', essential: true, section: 'route' },
   ],
   TRAIN: [
     { key: 'operator', label: 'Operator', placeholder: 'Amtrak', essential: true },
     { key: 'trainNumber', label: 'Train number', placeholder: '171', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
-    { key: 'departureStation', label: 'Departing station', placeholder: 'Penn Station', essential: false, group: 'stations' },
-    { key: 'arrivalStation', label: 'Arriving station', placeholder: 'Union Station', essential: false, group: 'stations' },
+    { key: 'departureStation', label: 'Departing station', placeholder: '', essential: false, hidden: true },
+    { key: 'arrivalStation', label: 'Arriving station', placeholder: 'Union Station', essential: true, section: 'route' },
   ],
   FERRY: [
     { key: 'operator', label: 'Operator', placeholder: 'Washington State Ferries', essential: true },
     { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
-    { key: 'departurePort', label: 'Departing port', placeholder: 'Seattle', essential: false, group: 'ports' },
-    { key: 'arrivalPort', label: 'Arriving port', placeholder: 'Bainbridge Island', essential: false, group: 'ports' },
+    { key: 'departurePort', label: 'Departing port', placeholder: '', essential: false, hidden: true },
+    { key: 'arrivalPort', label: 'Arriving port', placeholder: 'Bainbridge Island', essential: true, section: 'route' },
   ],
   DRIVE: [
     { key: 'vehicleInfo', label: 'Vehicle', placeholder: 'Blue Subaru Outback', essential: false },
-    ...ROUTE_FIELDS,
+    ...START_FIELDS,
   ],
-  WALK: ROUTE_FIELDS,
+  WALK: START_FIELDS,
   BIKE: [
     { key: 'operator', label: 'Bike share or shop', placeholder: 'Citi Bike', essential: false },
-    ...ROUTE_FIELDS,
+    ...START_FIELDS,
   ],
   SCOOTER: [
     { key: 'operator', label: 'Scooter company', placeholder: 'Lime', essential: false },
-    ...ROUTE_FIELDS,
+    ...START_FIELDS,
   ],
   OTHER: [],
+};
+
+// What the event's location is for each kind of leg: where you head to catch it, or
+// where a short trip ends. A flight takes its location from the departing airport instead.
+export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
+  FLIGHT: null,
+  TRAIN: 'Departing station',
+  FERRY: 'Departing port',
+  DRIVE: 'Going to',
+  WALK: 'Going to',
+  BIKE: 'Going to',
+  SCOOTER: 'Going to',
+  OTHER: 'Where to navigate',
+};
+
+// The stored route field that mirrors the event's location, so the place is entered once.
+export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {
+  TRAIN: 'departureStation',
+  FERRY: 'departurePort',
+  DRIVE: 'endLocation',
+  WALK: 'endLocation',
+  BIKE: 'endLocation',
+  SCOOTER: 'endLocation',
 };
 
 export const EVENT_LINK_KIND_LABELS: Record<EventLinkKind, string> = {

@@ -11,10 +11,11 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Layers, Link2, Type, Users, Utensils, X } from 'lucide-react';
+import { Bell, Clock, Layers, Link2, MapPin, Sun, Type, Users, Utensils, X } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import SectionDivider from '@/components/forms/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
@@ -45,6 +46,8 @@ import {
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
   REMINDER_MINUTES_BEFORE_OPTIONS,
+  TRANSIT_LOCATION_LABELS,
+  TRANSIT_LOCATION_MIRROR_KEYS,
   TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
@@ -56,6 +59,7 @@ import type {
   EventType,
   MealType,
   TimelineEvent,
+  TransitDetails,
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
@@ -92,16 +96,6 @@ interface EventFormModalProps {
   onClose: () => void;
 }
 
-function SectionDivider({ label }: { label: string }) {
-  return (
-    <div className='flex items-center gap-3 pt-2'>
-      <div className='border-border flex-1 border-t' />
-      <span className='text-muted-foreground text-sm font-medium'>{label}</span>
-      <div className='border-border flex-1 border-t' />
-    </div>
-  );
-}
-
 function toSelectOptions<T extends string>(labels: Record<T, string>) {
   return Object.entries(labels).map(([value, text]) => ({
     value,
@@ -120,7 +114,6 @@ const transitTypeOptions = Object.entries(TRANSIT_TYPE_LABELS).map(([value, text
   text: `${TRANSIT_TYPE_EMOJIS[value as TransitType]} ${text}`,
 }));
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
-const activitySettingOptions = toSelectOptions(ACTIVITY_SETTING_LABELS);
 const attendeeTargetOptions = toSelectOptions(EVENT_ATTENDEE_TARGET_LABELS);
 const reminderOptions = [
   { value: 'off', text: "Don't remind me" },
@@ -141,7 +134,13 @@ interface EventDraft {
   endTime: string;
   /** Override of the trip's time zone; `null` follows the trip. */
   timezone: string | null;
+  /** Transit type for travel, meal type for dining; unused otherwise. */
   quickField: string;
+  isMealTouched: boolean;
+  settings: ActivitySetting[];
+  hasSettings: boolean;
+  hasAddress: boolean;
+  hasLocation: boolean;
   locationName: string;
   address: string;
   latitude: number | null;
@@ -175,12 +174,19 @@ const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = [
 
 const NO_DAY_VALUE = 'none';
 
-const DEFAULT_QUICK_FIELD: Record<EventType, string> = {
-  TRAVEL: 'FLIGHT',
-  DINING: 'DINNER',
-  ACTIVITY: 'INDOOR',
-  FREE_TIME: 'INDOOR',
-};
+function getMealForTime(time: string): MealType {
+  const hour = Number(time.split(':')[0]);
+  if (hour >= 5 && hour < 11) return 'BREAKFAST';
+  if (hour >= 11 && hour < 15) return 'LUNCH';
+  if (hour >= 15 && hour < 17) return 'SNACK';
+  return 'DINNER';
+}
+
+function getDefaultSubtype(eventType: EventType, time: string): string {
+  if (eventType === 'TRAVEL') return 'FLIGHT';
+  if (eventType === 'DINING') return getMealForTime(time);
+  return '';
+}
 
 function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: boolean) {
   const days = getDayOptions(trip.startDate, trip.endDate, current).map(({ value, label }) => ({
@@ -207,8 +213,16 @@ function getDerivedTitle(draft: EventDraft): string {
 
 function getInitialDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
   const draft = getBaseDraft(trip, event);
-  const hasTitle = Boolean(event) && event?.title !== getDerivedTitle(draft);
-  return { ...draft, hasTitle, title: hasTitle ? (event?.title ?? '') : '' };
+  const mirrorKey =
+    event?.eventType === 'TRAVEL'
+      ? TRANSIT_LOCATION_MIRROR_KEYS[draft.quickField as TransitType]
+      : undefined;
+  const withLocation = {
+    ...draft,
+    locationName: draft.locationName || (mirrorKey ? (draft.transit.values[mirrorKey] ?? '') : ''),
+  };
+  const hasTitle = Boolean(event) && event?.title !== getDerivedTitle(withLocation);
+  return { ...withLocation, hasTitle, title: hasTitle ? (event?.title ?? '') : '' };
 }
 
 function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
@@ -232,11 +246,22 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
             event.eventDetails &&
             'mealType' in event.eventDetails
           ? event.eventDetails.mealType
-          : event?.eventType === 'ACTIVITY' &&
-              event.eventDetails &&
-              'settings' in event.eventDetails
-            ? (event.eventDetails.settings[0] ?? 'INDOOR')
-            : 'INDOOR',
+          : event
+            ? ''
+            : getDefaultSubtype('ACTIVITY', '09:00'),
+    isMealTouched: Boolean(event),
+    settings:
+      event?.eventType === 'ACTIVITY' && event.eventDetails && 'settings' in event.eventDetails
+        ? (event.eventDetails.settings ?? [])
+        : [],
+    hasSettings: Boolean(
+      event?.eventType === 'ACTIVITY' &&
+        event.eventDetails &&
+        'settings' in event.eventDetails &&
+        event.eventDetails.settings?.length,
+    ),
+    hasAddress: Boolean(event?.address),
+    hasLocation: Boolean(event?.locationName),
     locationName: event?.locationName ?? '',
     address: event?.address ?? '',
     latitude: event?.latitude ?? null,
@@ -318,16 +343,23 @@ function EventFormModal({
 
   // Moving the start keeps the same start->end window by shifting the end by the same delta.
   const updateStart = (nextDayIndex: number | null, nextTime: string) => {
+    const applyChanges = (changes: Partial<EventDraft>) =>
+      updateDraft({
+        ...(draft.eventType === 'DINING' && !draft.isMealTouched
+          ? { quickField: getMealForTime(nextTime) }
+          : {}),
+        ...changes,
+      });
     if (nextDayIndex === null) {
-      updateDraft({ dayIndex: null, endDayIndex: null, time: nextTime, hasEndTime: false, endTime: '' });
+      applyChanges({ dayIndex: null, endDayIndex: null, time: nextTime, hasEndTime: false, endTime: '' });
       return;
     }
     if (draft.dayIndex === null) {
-      updateDraft({ dayIndex: nextDayIndex, endDayIndex: nextDayIndex, time: nextTime });
+      applyChanges({ dayIndex: nextDayIndex, endDayIndex: nextDayIndex, time: nextTime });
       return;
     }
     if (!draft.hasEndTime || draft.endTime === '') {
-      updateDraft({ dayIndex: nextDayIndex, endDayIndex: nextDayIndex, time: nextTime });
+      applyChanges({ dayIndex: nextDayIndex, endDayIndex: nextDayIndex, time: nextTime });
       return;
     }
 
@@ -337,7 +369,7 @@ function EventFormModal({
       nextStart: { day: nextDayIndex, time: nextTime },
       max: nextDayIndex < dayCount ? { day: dayCount - 1, time: '23:59' } : undefined,
     });
-    updateDraft({
+    applyChanges({
       dayIndex: nextDayIndex,
       time: nextTime,
       endDayIndex: nextEnd.day,
@@ -356,6 +388,7 @@ function EventFormModal({
       updateDraft({
         locationName: result.name,
         address: result.address,
+        hasAddress: Boolean(result.address) || draft.hasAddress,
         latitude: result.latitude,
         longitude: result.longitude,
         place: result.place,
@@ -396,7 +429,16 @@ function EventFormModal({
     }
 
     const transitType = draft.quickField as TransitType;
-    const transitDetails = isTravel ? buildTransitDetails(transitType, draft.transit) : null;
+    const getTransitDetails = () => {
+      const built = buildTransitDetails(transitType, draft.transit);
+      const mirrorKey = TRANSIT_LOCATION_MIRROR_KEYS[transitType];
+      return {
+        ...built,
+        ...(mirrorKey ? { [mirrorKey]: draft.locationName.trim() || null } : {}),
+        ...(draft.hasEndTime ? { estimatedTravelTimeMs: null } : {}),
+      } as TransitDetails;
+    };
+    const transitDetails = isTravel ? getTransitDetails() : null;
     const getEventDetails = (): EventDetails => {
       if (draft.eventType === 'TRAVEL') {
         return { transitType, transitDetails };
@@ -409,7 +451,7 @@ function EventFormModal({
         return { mealType: draft.quickField as MealType, cuisines };
       }
       if (draft.eventType === 'ACTIVITY') {
-        return { settings: [draft.quickField as ActivitySetting] };
+        return { settings: draft.hasSettings ? draft.settings : [] };
       }
       return {};
     };
@@ -494,27 +536,16 @@ function EventFormModal({
   const reminderText = getReminderText();
   const effectiveTimezone = draft.timezone ?? trip.timezone;
 
-  const quickLabel =
-    draft.eventType === 'TRAVEL'
-      ? 'Transit type'
-      : draft.eventType === 'DINING'
-        ? 'Meal type'
-        : 'Setting';
-  const quickOptions =
-    draft.eventType === 'TRAVEL'
-      ? transitTypeOptions
-      : draft.eventType === 'DINING'
-        ? mealTypeOptions
-        : activitySettingOptions;
-
-  const detailsSectionLabel = {
-    TRAVEL: 'Travel',
-    DINING: 'Meal',
-    ACTIVITY: 'Activity',
-    FREE_TIME: '',
-  }[draft.eventType];
   const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
+  const isPlaceEvent = draft.eventType === 'DINING' || draft.eventType === 'ACTIVITY';
   const attendeesLabel = isTravel ? "Who's traveling" : 'Attendees';
+  const transitType = draft.quickField as TransitType;
+  const isLocationVisible = isTravel
+    ? transitType === 'FLIGHT'
+      ? Boolean(draft.transit.values.departureAirportCode) && !draft.locationName.trim()
+      : true
+    : isPlaceEvent || (draft.eventType === 'FREE_TIME' && draft.hasLocation);
+  const isAddressShown = draft.hasAddress;
   const detailChips = [
     { key: 'title', label: 'Title', icon: <Type className='h-4 w-4' />, isShown: draft.hasTitle },
     { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' />, isShown: !isLinkable || draft.hasLink },
@@ -524,18 +555,36 @@ function EventFormModal({
       icon: <Utensils className='h-4 w-4' />,
       isShown: draft.eventType !== 'DINING' || draft.hasCuisines,
     },
+    {
+      key: 'settings',
+      label: 'Indoor / outdoor',
+      icon: <Sun className='h-4 w-4' />,
+      isShown: draft.eventType !== 'ACTIVITY' || draft.hasSettings,
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      icon: <MapPin className='h-4 w-4' />,
+      isShown: draft.eventType !== 'FREE_TIME' || draft.hasLocation,
+    },
+    {
+      key: 'address',
+      label: 'Address',
+      icon: <MapPin className='h-4 w-4' />,
+      isShown: !isLocationVisible || isAddressShown,
+    },
+    {
+      key: 'venueHours',
+      label: 'Business hours',
+      icon: <Clock className='h-4 w-4' />,
+      isShown: !isPlaceEvent || draft.hasVenueHours,
+    },
     { key: 'group', label: 'Group', icon: <Layers className='h-4 w-4' />, isShown: draft.isGrouped },
     {
       key: 'reminder',
       label: 'Reminder',
       icon: <Bell className='h-4 w-4' />,
       isShown: draft.dayIndex === null || draft.hasReminderOverride,
-    },
-    {
-      key: 'venueHours',
-      label: 'Business hours',
-      icon: <Clock className='h-4 w-4' />,
-      isShown: draft.hasVenueHours,
     },
     {
       key: 'attendees',
@@ -551,6 +600,9 @@ function EventFormModal({
         title: { hasTitle: true },
         link: { hasLink: true },
         cuisines: { hasCuisines: true },
+        settings: { hasSettings: true },
+        location: { hasLocation: true },
+        address: { hasAddress: true },
         group: { isGrouped: true },
         reminder: { hasReminderOverride: true },
         venueHours: { hasVenueHours: true },
@@ -558,10 +610,50 @@ function EventFormModal({
       }[key] ?? {},
     );
 
+  const locationField = (label: string) => (
+    <div className='space-y-4'>
+      <PlaceAutocompleteInput
+        label={label}
+        quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
+        placeholder='Ichiran Shibuya'
+        value={draft.locationName}
+        onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
+        bias={placeBias}
+        onSelect={(result: PlaceSelectionResult) =>
+          updateDraft({
+            locationName: result.name,
+            address: result.address,
+            hasAddress: Boolean(result.address) || draft.hasAddress,
+            latitude: result.latitude,
+            longitude: result.longitude,
+            place: result.place,
+          })
+        }
+        className='mb-0' // overwrite space-y-4
+      />
+      {isAddressShown && (
+        <RemovableField
+          label='Address'
+          removeLabel='Remove address'
+          onRemove={() => updateDraft({ hasAddress: false, address: '' })}
+        >
+          <Input
+            placeholder='Street address'
+            value={draft.address}
+            onChange={(event) => updateDraft({ address: event.target.value, ...UNLINKED_PLACE })}
+          />
+        </RemovableField>
+      )}
+    </div>
+  );
+  const travelLocationLabel = TRANSIT_LOCATION_LABELS[transitType];
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Timeline event'>
       <div className='space-y-4'>
-        <p className='text-muted-foreground text-sm'>Step {step} of 2</p>
+        <p className='text-muted-foreground text-sm'>
+          Step {step} of 2 · {step === 1 ? 'What & when' : 'Details'}
+        </p>
         {step === 1 ? (
           <>
             <div className='space-y-1.5'>
@@ -572,13 +664,34 @@ function EventFormModal({
                 onChange={(value) =>
                   updateDraft({
                     eventType: value as EventType,
-                    quickField: DEFAULT_QUICK_FIELD[value as EventType],
+                    quickField: getDefaultSubtype(value as EventType, draft.time),
+                    isMealTouched: false,
                     isGrouped: false,
                     groupLabel: '',
                   })
                 }
               />
             </div>
+            {isTravel && (
+              <div className='space-y-1.5'>
+                <Label>Transit type</Label>
+                <Select
+                  options={transitTypeOptions}
+                  value={draft.quickField}
+                  onChange={(value) => updateDraft({ quickField: value })}
+                />
+              </div>
+            )}
+            {draft.eventType === 'DINING' && (
+              <div className='space-y-1.5'>
+                <Label>Meal</Label>
+                <Select
+                  options={mealTypeOptions}
+                  value={draft.quickField}
+                  onChange={(value) => updateDraft({ quickField: value, isMealTouched: true })}
+                />
+              </div>
+            )}
             <div className='space-y-1.5'>
               <Label>Day</Label>
               <Select
@@ -590,7 +703,7 @@ function EventFormModal({
               />
             </div>
             <div className='space-y-1.5'>
-              <Label>Start time</Label>
+              <Label>{isTravel ? 'Departs' : 'Start time'}</Label>
               <Input
                 type='time'
                 value={draft.time}
@@ -600,7 +713,7 @@ function EventFormModal({
             {draft.dayIndex === null ? null : draft.hasEndTime ? (
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
-                  <Label>End day &amp; time</Label>
+                  <Label>{isTravel ? 'Arrives' : 'End day & time'}</Label>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -642,7 +755,7 @@ function EventFormModal({
                 className='h-auto p-0'
                 onClick={() => updateDraft({ hasEndTime: true })}
               >
-                + Add end time
+                {isTravel ? '+ Add arrival time' : '+ Add end time'}
               </Button>
             )}
             {isRelative && effectiveTimezone && (
@@ -686,59 +799,48 @@ function EventFormModal({
           </>
         ) : (
           <>
-            {draft.eventType !== 'FREE_TIME' && <SectionDivider label={detailsSectionLabel} />}
-            {draft.eventType !== 'FREE_TIME' && (
-              <div className='space-y-1.5'>
-                <Label>{quickLabel}</Label>
-                <Select
-                  options={quickOptions}
-                  value={draft.quickField}
-                  onChange={(value) => updateDraft({ quickField: value })}
-                />
-              </div>
-            )}
             {isTravel && (
               <TransitDetailsFields
-                transitType={draft.quickField as TransitType}
+                transitType={transitType}
                 value={draft.transit}
                 onChange={(transit) => updateDraft({ transit })}
                 onDepartureAirportPicked={(airport) => void fillLocationFromAirport(airport)}
-              />
-            )}
-            <SectionDivider label='Where to navigate' />
-            <PlaceAutocompleteInput
-              label='Location'
-              quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
-              placeholder='Ichiran Shibuya'
-              value={draft.locationName}
-              onChange={(locationName) =>
-                updateDraft({ locationName, ...UNLINKED_PLACE })
-              }
-              bias={placeBias}
-              onSelect={(result: PlaceSelectionResult) =>
-                updateDraft({
-                  locationName: result.name,
-                  address: result.address,
-                  latitude: result.latitude,
-                  longitude: result.longitude,
-                  place: result.place,
-                })
-              }
-              className='mb-0' // overwrite space-y-4
-            />
-            <div className='space-y-1.5'>
-              <Label>Address</Label>
-              <Input
-                placeholder='Street address'
-                value={draft.address}
-                onChange={(event) =>
-                  updateDraft({
-                    address: event.target.value,
-                    ...UNLINKED_PLACE,
-                  })
+                hasEndTime={draft.hasEndTime}
+                routeLocation={
+                  transitType === 'FLIGHT'
+                    ? isLocationVisible
+                      ? locationField('Departure location')
+                      : undefined
+                    : locationField(travelLocationLabel ?? 'Where to navigate')
                 }
               />
-            </div>
+            )}
+            {isPlaceEvent && (
+              <>
+                <SectionDivider label='Where to navigate' />
+                {locationField('Location')}
+              </>
+            )}
+            {draft.eventType === 'FREE_TIME' && draft.hasLocation && (
+              <>
+                <SectionDivider label='Where to navigate' />
+                <RemovableField
+                  label='Location'
+                  removeLabel='Remove location'
+                  onRemove={() =>
+                    updateDraft({
+                      hasLocation: false,
+                      hasAddress: false,
+                      locationName: '',
+                      address: '',
+                      ...UNLINKED_PLACE,
+                    })
+                  }
+                >
+                  {locationField('')}
+                </RemovableField>
+              </>
+            )}
             <SectionDivider label='More details' />
             {draft.hasTitle && (
               <RemovableField
@@ -853,6 +955,32 @@ function EventFormModal({
                 {reminderText !== null && (
                   <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
                 )}
+              </RemovableField>
+            )}
+            {draft.eventType === 'ACTIVITY' && draft.hasSettings && (
+              <RemovableField
+                label='Indoor / outdoor'
+                removeLabel='Remove indoor / outdoor'
+                onRemove={() => updateDraft({ hasSettings: false, settings: [] })}
+              >
+                <div className='flex flex-wrap gap-4'>
+                  {(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => (
+                    <label key={setting} className='flex items-center gap-2 text-sm'>
+                      <Checkbox
+                        checked={draft.settings.includes(setting)}
+                        onCheckedChange={(checked) =>
+                          updateDraft({
+                            settings:
+                              checked === true
+                                ? [...draft.settings, setting]
+                                : draft.settings.filter((existing) => existing !== setting),
+                          })
+                        }
+                      />
+                      {ACTIVITY_SETTING_LABELS[setting]}
+                    </label>
+                  ))}
+                </div>
               </RemovableField>
             )}
             {draft.hasVenueHours && (

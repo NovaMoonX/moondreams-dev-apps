@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { Button, Input, Label, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { ListPlus, MapPin, StickyNote, Timer, Truck } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import SectionDivider from '@/components/forms/SectionDivider';
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
 import {
   TRANSIT_FIELD_SPECS,
-  TRANSIT_GROUP_LABELS,
+  TRANSIT_TYPE_LABELS,
   type TransitFieldSpec,
 } from '@apps/waypoint/constants';
 import type { TransitType } from '@apps/waypoint/types';
@@ -20,6 +21,10 @@ interface TransitDetailsFieldsProps {
   value: TransitDraft;
   onChange: (value: TransitDraft) => void;
   onDepartureAirportPicked?: (airport: AirportOption) => void;
+  /** With an end time set the duration is implied, so the estimate isn't asked for. */
+  hasEndTime: boolean;
+  /** The event's location field, placed in the route section. */
+  routeLocation?: ReactNode;
 }
 
 interface ExtraField {
@@ -164,24 +169,15 @@ function TransitDetailsFields({
   value,
   onChange,
   onDepartureAirportPicked,
+  hasEndTime,
+  routeLocation,
 }: TransitDetailsFieldsProps) {
   const specs = TRANSIT_FIELD_SPECS[transitType].filter((spec) => !spec.hidden);
-  const essentialSpecs = specs.filter((spec) => spec.essential);
+  const carrierSpecs = specs.filter((spec) => spec.essential && spec.section !== 'route');
+  const routeSpecs = specs.filter((spec) => spec.essential && spec.section === 'route');
   const extraFields = specs
     .filter((spec) => !spec.essential)
-    .reduce<ExtraField[]>((fields, spec) => {
-      const key = spec.group ?? spec.key;
-      const existing = fields.find((field) => field.key === key);
-      if (existing) {
-        return fields.map((field) =>
-          field === existing ? { ...field, specs: [...field.specs, spec] } : field,
-        );
-      }
-      return [
-        ...fields,
-        { key, label: spec.group ? TRANSIT_GROUP_LABELS[spec.group] : spec.label, specs: [spec] },
-      ];
-    }, []);
+    .map<ExtraField>((spec) => ({ key: spec.key, label: spec.label, specs: [spec] }));
 
   const hasTravelTime = Boolean(value.hours || value.minutes);
   const [revealed, setRevealed] = useState<string[]>(() =>
@@ -210,14 +206,38 @@ function TransitDetailsFields({
     ...extraFields.map((field) => ({
       key: field.key,
       label: field.label,
-      icon: field.specs[0].group ? <MapPin className='h-4 w-4' /> : <Truck className='h-4 w-4' />,
+      icon: field.key === 'startLocation' ? <MapPin className='h-4 w-4' /> : <Truck className='h-4 w-4' />,
     })),
     ...(transitType === 'OTHER'
       ? [{ key: DETAILS_KEY, label: 'Details', icon: <ListPlus className='h-4 w-4' /> }]
       : []),
-    { key: TRAVEL_TIME_KEY, label: 'Travel time', icon: <Timer className='h-4 w-4' /> },
+    ...(hasEndTime
+      ? []
+      : [{ key: TRAVEL_TIME_KEY, label: 'Travel time', icon: <Timer className='h-4 w-4' /> }]),
     { key: NOTES_KEY, label: 'Notes', icon: <StickyNote className='h-4 w-4' /> },
   ].filter((chip) => !revealed.includes(chip.key));
+
+  const renderSpec = (spec: TransitFieldSpec) => (
+    <div key={spec.key} className='space-y-1.5'>
+      <Label>{spec.label}</Label>
+      {transitType === 'FLIGHT' && spec.key === 'airline' ? (
+        <AirlineField value={value} onChange={onChange} />
+      ) : transitType === 'FLIGHT' && spec.key.endsWith('AirportCode') ? (
+        <AirportField
+          fieldKey={spec.key}
+          value={value}
+          onChange={onChange}
+          onPicked={spec.key === 'departureAirportCode' ? onDepartureAirportPicked : undefined}
+        />
+      ) : (
+        <Input
+          placeholder={spec.placeholder}
+          value={value.values[spec.key] ?? ''}
+          onChange={(event) => setValue(spec.key, event.target.value)}
+        />
+      )}
+    </div>
+  );
 
   const hide = (key: string, cleared: Partial<TransitDraft>) => {
     setRevealed((current) => current.filter((item) => item !== key));
@@ -226,30 +246,21 @@ function TransitDetailsFields({
 
   return (
     <div className='space-y-4'>
-      {essentialSpecs.length > 0 && (
-        <div className='grid grid-cols-2 gap-3'>
-          {essentialSpecs.map((spec) => (
-            <div key={spec.key} className='space-y-1.5'>
-              <Label>{spec.label}</Label>
-              {transitType === 'FLIGHT' && spec.key === 'airline' ? (
-                <AirlineField value={value} onChange={onChange} />
-              ) : transitType === 'FLIGHT' && spec.key.endsWith('AirportCode') ? (
-                <AirportField
-                  fieldKey={spec.key}
-                  value={value}
-                  onChange={onChange}
-                  onPicked={spec.key === 'departureAirportCode' ? onDepartureAirportPicked : undefined}
-                />
-              ) : (
-                <Input
-                  placeholder={spec.placeholder}
-                  value={value.values[spec.key] ?? ''}
-                  onChange={(event) => setValue(spec.key, event.target.value)}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+      {carrierSpecs.length > 0 && (
+        <>
+          <SectionDivider label={TRANSIT_TYPE_LABELS[transitType]} />
+          <div className='grid grid-cols-2 gap-3'>{carrierSpecs.map(renderSpec)}</div>
+        </>
+      )}
+      {(routeSpecs.length > 0 || routeLocation) && (
+        <>
+          <SectionDivider label='Route' />
+          {transitType !== 'FLIGHT' && routeLocation}
+          {routeSpecs.length > 0 && (
+            <div className='grid grid-cols-2 gap-3'>{routeSpecs.map(renderSpec)}</div>
+          )}
+          {transitType === 'FLIGHT' && routeLocation}
+        </>
       )}
       {extraFields
         .filter((field) => revealed.includes(field.key))
@@ -267,12 +278,12 @@ function TransitDetailsFields({
               })
             }
           >
-            <div className={field.specs.length > 1 ? 'grid gap-3 sm:grid-cols-2' : undefined}>
+            <div>
               {field.specs.map((spec) => (
                 <Input
                   key={spec.key}
                   aria-label={spec.label}
-                  placeholder={spec.label === field.label ? spec.placeholder : `${spec.label}: ${spec.placeholder}`}
+                  placeholder={spec.placeholder}
                   value={value.values[spec.key] ?? ''}
                   onChange={(event) => setValue(spec.key, event.target.value)}
                 />
@@ -334,7 +345,7 @@ function TransitDetailsFields({
           </div>
         </RemovableField>
       )}
-      {revealed.includes(TRAVEL_TIME_KEY) && (
+      {revealed.includes(TRAVEL_TIME_KEY) && !hasEndTime && (
         <RemovableField
           label='Estimated travel time'
           removeLabel='Remove travel time'
