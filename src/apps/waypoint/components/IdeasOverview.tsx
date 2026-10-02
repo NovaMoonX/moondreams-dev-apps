@@ -65,9 +65,9 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
   const preview = undecided.filter((idea) => idea.ideaType === ideaType).slice(0, PREVIEW_COUNT);
 
   return (
-    <section className='border-primary/30 bg-primary/5 space-y-3 rounded-xl border p-4'>
+    <section className='space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30'>
       <div className='flex items-start gap-3'>
-        <span className='bg-primary/15 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
+        <span className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-700 dark:bg-amber-900 dark:text-amber-200'>
           <Lightbulb className='h-4 w-4' />
         </span>
         <div className='min-w-0'>

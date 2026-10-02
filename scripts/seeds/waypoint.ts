@@ -13,6 +13,8 @@ const ARCHIVED_INVITE_CODE = 'PNW2025';
 const ACTIVE_INVITE_CODE = 'ONTHEGO';
 const EVENING_TRIP_ID = 'seed-waypoint-trip-evening';
 const EVENING_INVITE_CODE = 'WINDDOWN';
+const EMPTY_TRIP_ID = 'seed-waypoint-trip-empty';
+const EMPTY_INVITE_CODE = 'FRESHSTART';
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 const TRIP_TIMEZONE = 'America/Los_Angeles';
@@ -1289,6 +1291,48 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     .doc(EVENING_INVITE_CODE)
     .set({ tripId: EVENING_TRIP_ID, title: eveningTripTitle });
 
+  // A trip with nothing planned yet, so every section's empty state is always reachable.
+  const emptyTripTitle = 'Oregon Coast Getaway';
+  const emptyAnchor = new Date(context.now + 30 * DAY_MS);
+  const emptyTripStart = Date.UTC(
+    emptyAnchor.getUTCFullYear(),
+    emptyAnchor.getUTCMonth(),
+    emptyAnchor.getUTCDate(),
+  );
+
+  await context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('trips')
+    .doc(EMPTY_TRIP_ID)
+    .set({
+      id: EMPTY_TRIP_ID,
+      title: emptyTripTitle,
+      coverImageUrl: null,
+      startDate: emptyTripStart,
+      endDate: emptyTripStart + 2 * DAY_MS,
+      timeModel: 'RELATIVE',
+      timezone: TRIP_TIMEZONE,
+      defaultCurrency: null,
+      isArchived: false,
+      members: { [alex.uid]: { uid: alex.uid, role: 'ADMIN', joinedAt } },
+      inviteCode: EMPTY_INVITE_CODE,
+      sharedAlbumUrl: null,
+      sharedAlbumSetByUid: null,
+      sharedAlbumSetAt: null,
+      dateShiftStatus: null,
+      createdBy: alex.uid,
+      createdAt: joinedAt,
+      lastEditedAt: context.now,
+    });
+
+  await context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('inviteCodes')
+    .doc(EMPTY_INVITE_CODE)
+    .set({ tripId: EMPTY_TRIP_ID, title: emptyTripTitle });
+
   // Every event today has already ended and the next one is tomorrow, so the Overview
   // shows its "done for today" state whatever time the seed runs.
   const eveningEvents = [
@@ -1340,6 +1384,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 56,
+    firestoreDocuments: 58,
   };
 }
