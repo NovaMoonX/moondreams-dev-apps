@@ -103,7 +103,7 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
                 renderTrigger={(openProps) => (
                   <div
                     {...openProps}
-                    className='hover:bg-primary/5 flex cursor-pointer items-center justify-between gap-3 py-2'
+                    className='flex cursor-pointer items-center justify-between gap-3 px-3 py-2'
                   >
                     <span className='flex min-w-0 items-center gap-2 text-sm'>
                       <span aria-hidden='true'>{IDEA_TYPE_EMOJIS[idea.ideaType]}</span>

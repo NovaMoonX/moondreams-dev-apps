@@ -28,7 +28,7 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
   const renderCard = (openProps: IdeaOpenProps) => (
     <div
       {...openProps}
-      className='border-border bg-card hover:bg-muted/40 cursor-pointer space-y-2 rounded-xl border p-3'
+      className='border-border bg-card cursor-pointer space-y-2 rounded-xl border p-3'
     >
       <div className='flex items-start justify-between gap-3'>
         <div className='flex min-w-0 items-start gap-2.5'>

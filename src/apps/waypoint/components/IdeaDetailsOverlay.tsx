@@ -4,6 +4,7 @@ import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/compon
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
+import { DEBOUNCE_MS, useDebouncedCallback } from '@/hooks/useDebounce';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayLabel } from '@/utils/dateRangeUtils';
@@ -99,6 +100,7 @@ function IdeaDetailsBody({
 function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDetailsOverlayProps) {
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [isOpen, setIsOpen] = useState(false);
+  const closeSoon = useDebouncedCallback(() => setIsOpen(false), DEBOUNCE_MS.hoverClose);
   const trigger = renderTrigger(getOpenDetailsProps(idea.title, () => setIsOpen(true)));
 
   if (isSmallScreen) {
@@ -125,7 +127,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
   }
 
   return (
-    <div className='[&>div]:block'>
+    <div className='[&>div]:block' onMouseEnter={closeSoon.cancel} onMouseLeave={() => closeSoon.run()}>
       <Popover
         trigger={trigger}
         isOpen={isOpen}
