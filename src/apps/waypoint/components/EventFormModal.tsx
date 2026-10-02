@@ -703,27 +703,27 @@ function EventFormModal({
               </div>
             )}
             <div className='space-y-1.5'>
-              <Label>Day</Label>
-              <Select
-                options={getDayChoices(trip, draft.dayIndex, isRelative)}
-                value={draft.dayIndex === null ? NO_DAY_VALUE : String(draft.dayIndex)}
-                onChange={(value) =>
-                  updateStart(value === NO_DAY_VALUE ? null : Number(value), draft.time)
-                }
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>{isTravel ? 'Departs' : 'Start time'}</Label>
-              <Input
-                type='time'
-                value={draft.time}
-                onChange={(event) => updateStart(draft.dayIndex, event.target.value)}
-              />
+              <Label>{isTravel ? 'Departs' : 'Starts at'}</Label>
+              <div className='grid gap-3 sm:grid-cols-2'>
+                <Select
+                  options={getDayChoices(trip, draft.dayIndex, isRelative)}
+                  value={draft.dayIndex === null ? NO_DAY_VALUE : String(draft.dayIndex)}
+                  onChange={(value) =>
+                    updateStart(value === NO_DAY_VALUE ? null : Number(value), draft.time)
+                  }
+                />
+                <Input
+                  type='time'
+                  aria-label='Start time'
+                  value={draft.time}
+                  onChange={(event) => updateStart(draft.dayIndex, event.target.value)}
+                />
+              </div>
             </div>
             {draft.dayIndex === null ? null : draft.hasEndTime ? (
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
-                  <Label>{isTravel ? 'Arrives' : 'End day & time'}</Label>
+                  <Label>{isTravel ? 'Arrives' : 'Ends at'}</Label>
                   <Button
                     type='button'
                     variant='tertiary'
