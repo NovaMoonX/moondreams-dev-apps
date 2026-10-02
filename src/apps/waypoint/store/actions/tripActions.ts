@@ -7,6 +7,7 @@ import { db, functions } from '@/lib/firebase/config';
 import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { isValidHttpUrl } from '@/utils/urlUtils';
 import type { TripSpace } from '@apps/waypoint/types';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import {
@@ -290,15 +291,8 @@ export const setSharedAlbumLink = createAsyncThunk<
   'waypoint/trips/setSharedAlbumLink',
   async ({ uid, trip, url }, { dispatch, rejectWithValue }) => {
     const trimmedUrl = url?.trim() || null;
-    if (trimmedUrl !== null) {
-      try {
-        const parsedUrl = new URL(trimmedUrl);
-        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-          throw new Error('Unsupported protocol');
-        }
-      } catch {
-        return rejectWithValue('Enter a valid album link.');
-      }
+    if (trimmedUrl !== null && !isValidHttpUrl(trimmedUrl)) {
+      return rejectWithValue('Enter a valid album link.');
     }
 
     const memberRole = trip.members[uid]?.role;

@@ -13,9 +13,11 @@ import type {
   Announcement,
   EventStatus,
   EventSuggestion,
+  IdeaType,
   Stay,
   TimelineEvent,
   TripExpense,
+  TripIdea,
   TripSpace,
   TripStatus,
 } from '@apps/waypoint/types';
@@ -216,6 +218,26 @@ export const selectActiveStaysForDay =
 export const selectEventSuggestionsForEvent =
   (eventId: string) => (state: RootState): EventSuggestion[] =>
     state.waypoint.eventSuggestions.items.filter((suggestion) => suggestion.eventId === eventId);
+
+const selectIdeasState = (state: RootState) => state.waypoint.ideas;
+
+/** Decided ideas (already on the itinerary) sink; otherwise most votes first, then newest. */
+export const selectSortedIdeas = createSelector(
+  [selectIdeasState, (_state: RootState, tripId: string) => tripId],
+  (ideasState, tripId): TripIdea[] =>
+    ideasState.tripId !== tripId
+      ? []
+      : [...ideasState.items].sort(
+          (a, b) =>
+            Number(a.convertedToEntityId !== null) - Number(b.convertedToEntityId !== null) ||
+            b.voterUids.length - a.voterUids.length ||
+            b.createdAt - a.createdAt,
+        ),
+);
+
+export function filterIdeasByType(ideas: TripIdea[], ideaType: IdeaType | null): TripIdea[] {
+  return ideaType === null ? ideas : ideas.filter((idea) => idea.ideaType === ideaType);
+}
 
 export const selectLiveAnnouncements =
   (uid: string, now: number) => (state: RootState): Announcement[] =>
