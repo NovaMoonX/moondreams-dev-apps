@@ -55,15 +55,6 @@ function stopPropagation(clickEvent: MouseEvent) {
   clickEvent.stopPropagation();
 }
 
-function getStayLocation(stay: Stay) {
-  return {
-    locationName: stay.stayType === 'HOTEL' ? stay.name : null,
-    address: stay.address,
-    latitude: stay.latitude,
-    longitude: stay.longitude,
-  };
-}
-
 function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
   return {
     role: 'button' as const,
@@ -76,6 +67,15 @@ function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
         onOpenDetails();
       }
     },
+  };
+}
+
+function getStayLocation(stay: Stay) {
+  return {
+    locationName: stay.stayType === 'HOTEL' ? stay.name : null,
+    address: stay.address,
+    latitude: stay.latitude,
+    longitude: stay.longitude,
   };
 }
 

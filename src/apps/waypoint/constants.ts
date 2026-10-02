@@ -9,8 +9,10 @@ import type {
   ExpenseCategory,
   ExpenseSortBy,
   ExpenseTotalsView,
+  IdeaType,
   MealType,
   StayType,
+  TimeBlock,
   TransitType,
   UserRole,
 } from '@apps/waypoint/types';
@@ -171,6 +173,36 @@ export const ACTIVITY_SETTING_LABELS: Record<ActivitySetting, string> = {
   OUTDOOR: 'Outdoor',
 };
 
+export const IDEA_TYPES: readonly IdeaType[] = ['RESTAURANT', 'ACTIVITY'];
+
+export const IDEA_TYPE_LABELS: Record<IdeaType, string> = {
+  RESTAURANT: 'Restaurant',
+  ACTIVITY: 'Activity',
+};
+
+export const IDEA_TYPE_PLURAL_LABELS: Record<IdeaType, string> = {
+  RESTAURANT: 'Restaurants',
+  ACTIVITY: 'Activities',
+};
+
+export const IDEA_TYPE_EMOJIS: Record<IdeaType, string> = {
+  RESTAURANT: '🍽️',
+  ACTIVITY: '🎒',
+};
+
+export const IDEA_TYPE_CHIP_CLASSES: Record<IdeaType, string> = {
+  RESTAURANT: EVENT_TYPE_BADGE_CLASSES.DINING,
+  ACTIVITY: EVENT_TYPE_BADGE_CLASSES.ACTIVITY,
+};
+
+export const TIME_BLOCKS: readonly TimeBlock[] = ['MORNING', 'AFTERNOON', 'EVENING'];
+
+export const TIME_BLOCK_LABELS: Record<TimeBlock, string> = {
+  MORNING: 'Morning',
+  AFTERNOON: 'Afternoon',
+  EVENING: 'Evening',
+};
+
 // 5-minute increments, 5-60 minutes before an event starts.
 export const REMINDER_MINUTES_BEFORE_OPTIONS: readonly number[] = [
   5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
@@ -257,6 +289,7 @@ export const TRIP_SECTION_TABS = [
   'expenses',
   'stays',
   'checklist',
+  'ideas',
 ] as const;
 
 export type TripSectionTab = (typeof TRIP_SECTION_TABS)[number];

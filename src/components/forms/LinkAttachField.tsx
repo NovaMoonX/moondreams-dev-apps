@@ -7,6 +7,7 @@ import { X } from 'lucide-react';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { DEBOUNCE_MS, useDebouncedCallback } from '@/hooks/useDebounce';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { isValidHttpUrl } from '@/utils/urlUtils';
 import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 
@@ -22,15 +23,10 @@ interface LinkAttachFieldProps {
   placeholder?: string;
   /** Text of the link-style button that reveals the field; hidden until clicked. */
   addLabel?: string;
-}
-
-function isValidHttpUrl(value: string) {
-  try {
-    const parsed = new URL(value);
-    return ['http:', 'https:'].includes(parsed.protocol) && /\.[a-z]{2,}$/i.test(parsed.hostname);
-  } catch {
-    return false;
-  }
+  /** Show the input straight away instead of behind the add link. */
+  startRevealed?: boolean;
+  /** Fires on every keystroke with the typed text, ahead of the (async) preview fetch. */
+  onDraftChange?: (draft: string) => void;
 }
 
 /** An app-agnostic URL field that fetches a preview on its own once the text is a valid
@@ -44,12 +40,14 @@ function LinkAttachField({
   label = 'Link',
   placeholder = 'https://…',
   addLabel = '+ Add link',
+  startRevealed = false,
+  onDraftChange,
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isRevealed, setIsRevealed] = useState(false);
+  const [isRevealed, setIsRevealed] = useState(startRevealed);
   const latestDraftRef = useRef(url.trim());
   const justPastedRef = useRef(false);
 
@@ -105,6 +103,7 @@ function LinkAttachField({
 
   const handleDraftChange = (value: string) => {
     setDraftUrl(value);
+    onDraftChange?.(value);
     latestDraftRef.current = value.trim();
     setError(null);
     scheduleAutoFetch.cancel();
@@ -146,7 +145,7 @@ function LinkAttachField({
 
   return (
     <div className='space-y-1.5'>
-      <Label>{label}</Label>
+      {label && <Label>{label}</Label>}
       {attachedUrl ? (
         <div className='border-border bg-card flex items-center gap-3 rounded-md border p-2'>
           {preview?.imageUrl && (

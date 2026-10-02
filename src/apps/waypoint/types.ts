@@ -173,6 +173,8 @@ export type TransitType =
   | 'OTHER';
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type ActivitySetting = 'INDOOR' | 'OUTDOOR';
+export type IdeaType = 'RESTAURANT' | 'ACTIVITY';
+export type TimeBlock = 'MORNING' | 'AFTERNOON' | 'EVENING';
 export type EventStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
 export type TripStatus = 'UPCOMING' | 'ACTIVE' | 'PAST';
 export type EventAttendeeTargetType =
@@ -391,6 +393,41 @@ export interface Announcement {
   dismissedBy: Record<string, number>;
   createdBy: string;
   createdAt: number;
+}
+
+/** Shared by ideas that happen once, on one day, at roughly one time of day. */
+export interface SingleOccasionIdeaDetails {
+  /** `dayIndex` values; empty means no day preference. */
+  suggestedDays: number[];
+  suggestedTimeBlocks: TimeBlock[];
+}
+
+export interface RestaurantIdeaDetails extends SingleOccasionIdeaDetails {
+  cuisines: string[];
+}
+
+export interface ActivityIdeaDetails extends SingleOccasionIdeaDetails {
+  settings: ActivitySetting[];
+}
+
+export type IdeaDetails = RestaurantIdeaDetails | ActivityIdeaDetails;
+
+/** A place or thing a member suggests for the trip — anyone can post one until the trip starts
+ * and anyone can vote on it at any time. */
+export interface TripIdea {
+  id: string;
+  tripId: string;
+  ideaType: IdeaType;
+  title: string;
+  notes: string | null;
+  linkUrl: string | null;
+  ideaDetails: IdeaDetails | null;
+  addedByUid: string;
+  voterUids: string[];
+  /** The timeline event this idea became, once converted. */
+  convertedToEntityId: string | null;
+  createdAt: number;
+  lastEditedAt: number;
 }
 
 export interface ChecklistItem {
