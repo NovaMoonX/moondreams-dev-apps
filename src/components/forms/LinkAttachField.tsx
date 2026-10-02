@@ -22,6 +22,8 @@ interface LinkAttachFieldProps {
   placeholder?: string;
   /** Text of the link-style button that reveals the field; hidden until clicked. */
   addLabel?: string;
+  /** Show the input straight away instead of behind the add link. */
+  startRevealed?: boolean;
 }
 
 function isValidHttpUrl(value: string) {
@@ -44,12 +46,13 @@ function LinkAttachField({
   label = 'Link',
   placeholder = 'https://…',
   addLabel = '+ Add link',
+  startRevealed = false,
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isRevealed, setIsRevealed] = useState(false);
+  const [isRevealed, setIsRevealed] = useState(startRevealed);
   const latestDraftRef = useRef(url.trim());
   const justPastedRef = useRef(false);
 
@@ -146,7 +149,7 @@ function LinkAttachField({
 
   return (
     <div className='space-y-1.5'>
-      <Label>{label}</Label>
+      {label && <Label>{label}</Label>}
       {attachedUrl ? (
         <div className='border-border bg-card flex items-center gap-3 rounded-md border p-2'>
           {preview?.imageUrl && (

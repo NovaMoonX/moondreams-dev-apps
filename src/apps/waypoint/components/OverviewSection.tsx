@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -30,6 +30,7 @@ import {
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { getOpenDetailsProps } from '@apps/waypoint/utils/openDetailsProps';
 import {
   formatEventTimeRange,
   getEventTime,
@@ -61,21 +62,6 @@ function getStayLocation(stay: Stay) {
     address: stay.address,
     latitude: stay.latitude,
     longitude: stay.longitude,
-  };
-}
-
-function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
-  return {
-    role: 'button' as const,
-    tabIndex: 0,
-    'aria-label': `Open details for ${label}`,
-    onClick: onOpenDetails,
-    onKeyDown: (keyEvent: KeyboardEvent<HTMLElement>) => {
-      if (keyEvent.target === keyEvent.currentTarget && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) {
-        keyEvent.preventDefault();
-        onOpenDetails();
-      }
-    },
   };
 }
 

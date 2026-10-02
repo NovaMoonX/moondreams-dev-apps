@@ -1,14 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Lightbulb } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
+import IdeaDetailsDrawer from '@apps/waypoint/components/IdeaDetailsDrawer';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
-import { IDEA_TYPE_EMOJIS } from '@apps/waypoint/constants';
+import { IDEA_TYPE_EMOJIS, IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
 import { selectSortedIdeas } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TripSpace } from '@apps/waypoint/types';
+import { getIdeaTimingSummary } from '@apps/waypoint/utils/ideaLabels';
+import { getOpenDetailsProps } from '@apps/waypoint/utils/openDetailsProps';
 
 interface IdeasOverviewProps {
   trip: TripSpace;
@@ -22,6 +25,8 @@ const PREVIEW_COUNT = 3;
 
 function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOverviewProps) {
   const ideas = useAppSelector((state) => selectSortedIdeas(state, trip.id));
+  const [ideaType, setIdeaType] = useState<IdeaType>('ACTIVITY');
+  const [openIdeaId, setOpenIdeaId] = useState<string | null>(null);
   const undecided = useMemo(
     () => ideas.filter((idea) => idea.convertedToEntityId === null),
     [ideas],
@@ -59,7 +64,7 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
     );
   }
 
-  const preview = undecided.slice(0, PREVIEW_COUNT);
+  const preview = undecided.filter((idea) => idea.ideaType === ideaType).slice(0, PREVIEW_COUNT);
 
   return (
     <section className='border-primary/30 bg-primary/5 space-y-3 rounded-xl border p-4'>
@@ -74,21 +79,46 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           </p>
         </div>
       </div>
-      {preview.length > 0 && (
-        <ul className='divide-border divide-y'>
-          {preview.map((idea) => (
-            <li key={idea.id} className='flex items-center justify-between gap-3 py-2'>
-              <span className='flex min-w-0 items-center gap-2 text-sm'>
-                <span aria-hidden='true'>{IDEA_TYPE_EMOJIS[idea.ideaType]}</span>
-                <span className='truncate font-medium'>{idea.title}</span>
-              </span>
-              <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
-            </li>
+      <Tabs value={ideaType} onValueChange={(value) => setIdeaType(value as IdeaType)} variant='pills'>
+        <TabsList>
+          {IDEA_TYPES.map((type) => (
+            <TabsTrigger key={type} value={type}>
+              {IDEA_TYPE_PLURAL_LABELS[type]}
+            </TabsTrigger>
           ))}
+        </TabsList>
+      </Tabs>
+      {preview.length === 0 ? (
+        <p className='text-muted-foreground text-sm'>
+          No {IDEA_TYPE_PLURAL_LABELS[ideaType].toLowerCase()} yet — be the first to add one.
+        </p>
+      ) : (
+        <ul className='divide-border divide-y'>
+          {preview.map((idea) => {
+            const timing = getIdeaTimingSummary(trip, idea);
+            return (
+              <li
+                key={idea.id}
+                {...getOpenDetailsProps(idea.title, () => setOpenIdeaId(idea.id))}
+                className='hover:bg-primary/5 flex cursor-pointer items-center justify-between gap-3 py-2'
+              >
+                <span className='flex min-w-0 items-center gap-2 text-sm'>
+                  <span aria-hidden='true'>{IDEA_TYPE_EMOJIS[idea.ideaType]}</span>
+                  <span className='min-w-0'>
+                    <span className='block truncate font-medium'>{idea.title}</span>
+                    {timing && <span className='text-muted-foreground block truncate text-xs'>{timing}</span>}
+                  </span>
+                </span>
+                <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
+                  <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className={join('flex items-center gap-3', ideas.length > 0 ? 'justify-between' : 'justify-start')}>
-        <Button type='button' onClick={() => onAdd('RESTAURANT')}>
+        <Button type='button' size='sm' onClick={() => onAdd(ideaType)}>
           + Add an idea
         </Button>
         {ideas.length > 0 && (
@@ -103,6 +133,12 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           </Button>
         )}
       </div>
+      <IdeaDetailsDrawer
+        trip={trip}
+        ideaId={openIdeaId}
+        currentUserId={currentUserId}
+        onClose={() => setOpenIdeaId(null)}
+      />
     </section>
   );
 }

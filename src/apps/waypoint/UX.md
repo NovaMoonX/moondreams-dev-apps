@@ -126,7 +126,7 @@ block-beta
   style Checklist fill:transparent,stroke:#888888,stroke-width:1px;
   style Album fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A prominent card with the top few undecided ideas, inline voting and an add button — pre-trip is when ideas matter, so Overview asks people to act on them right here. New ideas close once the trip starts; the card then becomes a quiet "Ideas" row (phones) and the Ideas tab (desktop), and voting stays open.*
+*A prominent card with an Activities / Restaurants toggle (Activities first), the top three undecided ideas of that type with inline voting, and an add button; tapping an idea opens a details drawer — pre-trip is when ideas matter, so Overview asks people to act on them right here. New ideas close once the trip starts; the card then becomes a quiet "Ideas" row (phones) and the Ideas tab (desktop), and voting stays open.*
 
 **Overview — live**
 ```mermaid

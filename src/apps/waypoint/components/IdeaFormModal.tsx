@@ -9,8 +9,9 @@ import {
   Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
-import type { ReactNode } from 'react';
+import { CalendarDays, Link2, StickyNote, Sun, Utensils } from 'lucide-react';
 
+import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -35,13 +36,17 @@ interface Reveal<T> {
   value: T;
 }
 
-interface IdeaFormData {
-  ideaType: IdeaType;
-  title: string;
+interface IdeaExtras {
   link: Reveal<string>;
   details: Reveal<{ cuisines: string; settings: ActivitySetting[] }>;
   when: Reveal<{ days: number[]; blocks: TimeBlock[] }>;
   note: Reveal<string>;
+}
+
+interface IdeaFormData {
+  ideaType: IdeaType;
+  title: string;
+  extras: IdeaExtras;
 }
 
 export interface IdeaFormFields {
@@ -66,6 +71,13 @@ const { custom, input, select } = FormFactories;
 
 const typeOptions = IDEA_TYPES.map((value) => ({ value, label: IDEA_TYPE_LABELS[value] }));
 
+const EMPTY_EXTRAS: IdeaExtras = {
+  link: { enabled: false, value: '' },
+  details: { enabled: false, value: { cuisines: '', settings: [] } },
+  when: { enabled: false, value: { days: [], blocks: [] } },
+  note: { enabled: false, value: '' },
+};
+
 const isHttpUrl = (value: string) => {
   try {
     return ['http:', 'https:'].includes(new URL(value).protocol);
@@ -87,72 +99,183 @@ const parseCuisines = (value: string) =>
         all.findIndex((other) => other.toLowerCase() === cuisine.toLowerCase()) === index,
     );
 
-function RevealField({
-  isOpen,
-  addLabel,
-  removeLabel,
-  onOpen,
-  onRemove,
-  children,
-}: {
-  isOpen: boolean;
-  addLabel: string;
-  removeLabel: string;
-  onOpen: () => void;
-  onRemove: () => void;
-  children: ReactNode;
-}) {
-  if (!isOpen) {
-    return (
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        className='h-auto p-0 text-xs'
-        onClick={onOpen}
-      >
-        {addLabel}
-      </Button>
-    );
-  }
-
-  return (
-    <div className='space-y-2'>
-      {children}
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        className='h-auto p-0 text-xs'
-        onClick={onRemove}
-      >
-        {removeLabel}
-      </Button>
-    </div>
-  );
-}
-
 const getInitialData = (ideaType: IdeaType): IdeaFormData => ({
   ideaType,
   title: '',
-  link: { enabled: false, value: '' },
-  details: { enabled: false, value: { cuisines: '', settings: [] } },
-  when: { enabled: false, value: { days: [], blocks: [] } },
-  note: { enabled: false, value: '' },
+  extras: EMPTY_EXTRAS,
 });
 
-const getIdeaDetails = (data: IdeaFormData): IdeaDetails => {
-  const when = data.when.enabled
-    ? { suggestedDays: data.when.value.days, suggestedTimeBlocks: data.when.value.blocks }
+const getIdeaDetails = ({ ideaType, extras }: IdeaFormData): IdeaDetails => {
+  const when = extras.when.enabled
+    ? { suggestedDays: extras.when.value.days, suggestedTimeBlocks: extras.when.value.blocks }
     : { suggestedDays: [], suggestedTimeBlocks: [] };
-  if (data.ideaType === 'RESTAURANT') {
+  if (ideaType === 'RESTAURANT') {
     return {
       ...when,
-      cuisines: data.details.enabled ? parseCuisines(data.details.value.cuisines) : [],
+      cuisines: extras.details.enabled ? parseCuisines(extras.details.value.cuisines) : [],
     };
   }
-  return { ...when, settings: data.details.enabled ? data.details.value.settings : [] };
+  return { ...when, settings: extras.details.enabled ? extras.details.value.settings : [] };
 };
+
+interface IdeaExtrasFieldsProps {
+  extras: IdeaExtras;
+  isRestaurant: boolean;
+  trip: TripSpace;
+  onChange: (extras: IdeaExtras) => void;
+}
+
+function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFieldsProps) {
+  const detailsLabel = isRestaurant ? 'Cuisine' : 'Indoor or outdoor';
+  const chips = [
+    { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
+    {
+      key: 'details',
+      label: detailsLabel,
+      icon: isRestaurant ? <Utensils className='h-4 w-4' /> : <Sun className='h-4 w-4' />,
+    },
+    { key: 'when', label: 'Best day or time', icon: <CalendarDays className='h-4 w-4' /> },
+    { key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> },
+  ].filter((chip) => !extras[chip.key as keyof IdeaExtras].enabled);
+
+  const reveal = (key: string) =>
+    onChange({ ...extras, [key]: { ...extras[key as keyof IdeaExtras], enabled: true } });
+  const remove = (key: keyof IdeaExtras) => onChange({ ...extras, [key]: EMPTY_EXTRAS[key] });
+
+  return (
+    <div className='space-y-4'>
+      {extras.link.enabled && (
+        <RemovableField label='Link' removeLabel='Remove link' onRemove={() => remove('link')}>
+          <LinkAttachField
+            url={extras.link.value}
+            preview={null}
+            label=''
+            startRevealed
+            onChange={(url) => onChange({ ...extras, link: { enabled: true, value: url } })}
+          />
+        </RemovableField>
+      )}
+      {extras.details.enabled && (
+        <RemovableField
+          label={detailsLabel}
+          removeLabel={`Remove ${detailsLabel.toLowerCase()}`}
+          onRemove={() => remove('details')}
+        >
+          {isRestaurant ? (
+            <Input
+              variant='outline'
+              placeholder='Ramen, Japanese'
+              value={extras.details.value.cuisines}
+              onChange={(changeEvent) =>
+                onChange({
+                  ...extras,
+                  details: {
+                    ...extras.details,
+                    value: { ...extras.details.value, cuisines: changeEvent.target.value },
+                  },
+                })
+              }
+            />
+          ) : (
+            <div className='flex flex-wrap gap-4'>
+              {(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => (
+                <label key={setting} className='flex items-center gap-2 text-sm'>
+                  <Checkbox
+                    checked={extras.details.value.settings.includes(setting)}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...extras,
+                        details: {
+                          ...extras.details,
+                          value: {
+                            ...extras.details.value,
+                            settings: toggleItem(
+                              extras.details.value.settings,
+                              setting,
+                              checked === true,
+                            ),
+                          },
+                        },
+                      })
+                    }
+                  />
+                  {ACTIVITY_SETTING_LABELS[setting]}
+                </label>
+              ))}
+            </div>
+          )}
+        </RemovableField>
+      )}
+      {extras.when.enabled && (
+        <RemovableField
+          label='Best day or time'
+          removeLabel='Remove best day or time'
+          onRemove={() => remove('when')}
+        >
+          <div className='grid gap-3 sm:grid-cols-2'>
+            <div className='space-y-1.5'>
+              {getDayOptions(trip.startDate, trip.endDate).map(({ value, label }) => (
+                <label key={value} className='flex items-center gap-2 text-sm'>
+                  <Checkbox
+                    checked={extras.when.value.days.includes(Number(value))}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...extras,
+                        when: {
+                          ...extras.when,
+                          value: {
+                            ...extras.when.value,
+                            days: toggleItem(extras.when.value.days, Number(value), checked === true),
+                          },
+                        },
+                      })
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div className='space-y-1.5'>
+              {TIME_BLOCKS.map((block) => (
+                <label key={block} className='flex items-center gap-2 text-sm'>
+                  <Checkbox
+                    checked={extras.when.value.blocks.includes(block)}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...extras,
+                        when: {
+                          ...extras.when,
+                          value: {
+                            ...extras.when.value,
+                            blocks: toggleItem(extras.when.value.blocks, block, checked === true),
+                          },
+                        },
+                      })
+                    }
+                  />
+                  {TIME_BLOCK_LABELS[block]}
+                </label>
+              ))}
+            </div>
+          </div>
+        </RemovableField>
+      )}
+      {extras.note.enabled && (
+        <RemovableField label='Note' removeLabel='Remove note' onRemove={() => remove('note')}>
+          <Textarea
+            rows={2}
+            variant='outline'
+            value={extras.note.value}
+            onChange={(changeEvent) =>
+              onChange({ ...extras, note: { enabled: true, value: changeEvent.target.value } })
+            }
+          />
+        </RemovableField>
+      )}
+      <AddFieldChips chips={chips} onAdd={reveal} />
+    </div>
+  );
+}
 
 function IdeaFormModal({
   isOpen,
@@ -168,7 +291,8 @@ function IdeaFormModal({
   const [error, setError] = useState<string | null>(null);
 
   const isRestaurant = formData.ideaType === 'RESTAURANT';
-  const isLinkValid = !formData.link.enabled || formData.link.value.trim() === '' || isHttpUrl(formData.link.value.trim());
+  const link = formData.extras.link;
+  const isLinkValid = !link.enabled || link.value.trim() === '' || isHttpUrl(link.value.trim());
   const isFormComplete = formData.title.trim() !== '' && isLinkValid;
 
   const fields = useMemo(
@@ -181,166 +305,30 @@ function IdeaFormModal({
         placeholder: isRestaurant ? 'Ichiran Ramen' : 'Rattlesnake Ledge hike',
       }),
       custom({
-        name: 'link',
-        label: 'Link',
-        renderComponent: (props) => {
-          const link = props.value as Reveal<string>;
-          return (
-            <LinkAttachField
-              url={link.value}
-              preview={null}
-              label='Link'
-              addLabel='+ Add link'
-              placeholder='https://…'
-              onChange={(url) => props.onValueChange({ enabled: url !== '' || link.enabled, value: url })}
-            />
-          );
-        },
-      }),
-      custom({
-        name: 'details',
-        label: isRestaurant ? 'Cuisine' : 'Setting',
-        renderComponent: (props) => {
-          const details = props.value as IdeaFormData['details'];
-          return (
-            <RevealField
-              isOpen={details.enabled}
-              addLabel={isRestaurant ? '+ Add cuisine' : '+ Add indoor or outdoor'}
-              removeLabel={isRestaurant ? 'Remove cuisine' : 'Remove setting'}
-              onOpen={() => props.onValueChange({ ...details, enabled: true })}
-              onRemove={() => props.onValueChange({ ...details, enabled: false })}
-            >
-              {isRestaurant ? (
-                <Input
-                  variant='outline'
-                  placeholder='Ramen, Japanese'
-                  value={details.value.cuisines}
-                  onChange={(changeEvent) =>
-                    props.onValueChange({
-                      ...details,
-                      value: { ...details.value, cuisines: changeEvent.target.value },
-                    })
-                  }
-                />
-              ) : (
-                <div className='flex flex-wrap gap-4'>
-                  {(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => (
-                    <label key={setting} className='flex items-center gap-2 text-sm'>
-                      <Checkbox
-                        checked={details.value.settings.includes(setting)}
-                        onCheckedChange={(checked) =>
-                          props.onValueChange({
-                            ...details,
-                            value: {
-                              ...details.value,
-                              settings: toggleItem(details.value.settings, setting, checked === true),
-                            },
-                          })
-                        }
-                      />
-                      {ACTIVITY_SETTING_LABELS[setting]}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </RevealField>
-          );
-        },
-      }),
-      custom({
-        name: 'when',
-        label: 'Best day and time',
-        renderComponent: (props) => {
-          const when = props.value as IdeaFormData['when'];
-          return (
-            <RevealField
-              isOpen={when.enabled}
-              addLabel='+ Add best day or time'
-              removeLabel='Remove best day or time'
-              onOpen={() => props.onValueChange({ ...when, enabled: true })}
-              onRemove={() => props.onValueChange({ ...when, enabled: false })}
-            >
-              <div className='grid gap-3 sm:grid-cols-2'>
-                <div className='space-y-1.5'>
-                  {getDayOptions(trip.startDate, trip.endDate).map(({ value, label }) => (
-                    <label key={value} className='flex items-center gap-2 text-sm'>
-                      <Checkbox
-                        checked={when.value.days.includes(Number(value))}
-                        onCheckedChange={(checked) =>
-                          props.onValueChange({
-                            ...when,
-                            value: {
-                              ...when.value,
-                              days: toggleItem(when.value.days, Number(value), checked === true),
-                            },
-                          })
-                        }
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-                <div className='space-y-1.5'>
-                  {TIME_BLOCKS.map((block) => (
-                    <label key={block} className='flex items-center gap-2 text-sm'>
-                      <Checkbox
-                        checked={when.value.blocks.includes(block)}
-                        onCheckedChange={(checked) =>
-                          props.onValueChange({
-                            ...when,
-                            value: {
-                              ...when.value,
-                              blocks: toggleItem(when.value.blocks, block, checked === true),
-                            },
-                          })
-                        }
-                      />
-                      {TIME_BLOCK_LABELS[block]}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </RevealField>
-          );
-        },
-      }),
-      custom({
-        name: 'note',
-        label: 'Note',
-        renderComponent: (props) => {
-          const note = props.value as Reveal<string>;
-          return (
-            <RevealField
-              isOpen={note.enabled}
-              addLabel='+ Add note'
-              removeLabel='Remove note'
-              onOpen={() => props.onValueChange({ ...note, enabled: true })}
-              onRemove={() => props.onValueChange({ enabled: false, value: '' })}
-            >
-              <Textarea
-                rows={2}
-                variant='outline'
-                value={note.value}
-                onChange={(changeEvent) =>
-                  props.onValueChange({ ...note, value: changeEvent.target.value })
-                }
-              />
-            </RevealField>
-          );
-        },
+        name: 'extras',
+        label: '',
+        renderComponent: (props) => (
+          <IdeaExtrasFields
+            extras={props.value as IdeaExtras}
+            isRestaurant={isRestaurant}
+            trip={trip}
+            onChange={props.onValueChange}
+          />
+        ),
       }),
     ],
-    [isRestaurant, trip.startDate, trip.endDate],
+    [isRestaurant, trip],
   );
 
   const handleSubmit = async (data: IdeaFormData) => {
     setError(null);
+    const { extras } = data;
     try {
       await onSubmit({
         ideaType: data.ideaType,
         title: data.title,
-        linkUrl: data.link.enabled ? data.link.value.trim() || null : null,
-        notes: data.note.enabled ? data.note.value.trim() || null : null,
+        linkUrl: extras.link.enabled ? extras.link.value.trim() || null : null,
+        notes: extras.note.enabled ? extras.note.value.trim() || null : null,
         ideaDetails: getIdeaDetails(data),
       });
     } catch (submitError) {
