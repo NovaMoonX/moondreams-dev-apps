@@ -82,16 +82,25 @@ function rebaseDayFields(data: DocumentData, fields: readonly string[], deltaDay
   return result;
 }
 
-function rebaseIdeaDays(data: DocumentData, deltaDays: number) {
+// An idea's suggested days are only a hint: any that land outside the new range are cleared
+// from the idea (which is always kept, with none left it just has no day preference).
+function rebaseIdeaDays(
+  data: DocumentData,
+  deltaDays: number,
+  dayCount: number,
+): Record<string, number[]> {
   const days: unknown = data.ideaDetails?.suggestedDays;
   if (!Array.isArray(days) || days.length === 0) {
     return {};
   }
 
-  const result = {
-    'ideaDetails.suggestedDays': days.map((day) => (typeof day === 'number' ? day - deltaDays : day)),
-  };
-  return result;
+  const rebasedDays = days
+    .filter((day): day is number => typeof day === 'number')
+    .map((day) => day - deltaDays)
+    .filter((day) => day >= 0 && day < dayCount);
+  const hasChanged =
+    rebasedDays.length !== days.length || rebasedDays.some((day, index) => day !== days[index]);
+  return hasChanged ? { 'ideaDetails.suggestedDays': rebasedDays } : {};
 }
 
 /**
@@ -103,7 +112,8 @@ function rebaseIdeaDays(data: DocumentData, deltaDays: number) {
  *
  * Runs with the Admin SDK because Firestore rules limit who can write events and stays
  * while a trip is live, and inside one transaction so a concurrent edit can't be half-applied.
- * Items pushed outside the new range keep their out-of-range number rather than being clamped.
+ * Items pushed outside the new range keep their out-of-range number rather than being clamped;
+ * the exception is an idea's suggested days, which are cleared (the idea itself is kept).
  */
 export const shiftTripDates = onCall(
   {
@@ -165,6 +175,7 @@ export const shiftTripDates = onCall(
           }
 
           const deltaDays = Math.round((input.startDate - trip.startDate) / DAY_MS);
+          const newDayCount = Math.max(1, Math.floor((input.endDate - input.startDate) / DAY_MS) + 1);
           const rebased: { ref: DocumentReference; data: Record<string, number | unknown[]> }[] = [
             ...events.docs.map((doc) => ({
               ref: doc.ref,
@@ -184,7 +195,7 @@ export const shiftTripDates = onCall(
             })),
             ...ideas.docs.map((doc) => ({
               ref: doc.ref,
-              data: rebaseIdeaDays(doc.data(), deltaDays),
+              data: rebaseIdeaDays(doc.data(), deltaDays, newDayCount),
             })),
           ].filter(({ data }) => Object.keys(data).length > 0);
 
