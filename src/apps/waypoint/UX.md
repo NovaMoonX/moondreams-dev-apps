@@ -119,14 +119,14 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 1
-  Ideas["💡 Ideas →"]
+  Ideas["💡 Ideas for the trip<br/>🍣 Sushi Dai ▲12 · 🥾 Rattlesnake Ledge ▲7<br/>+ Add an idea · See all ›"]
   Checklist["▓▓▓▓▓░░░ Checklist progress"]
   Album["🔗 Shared album link"]
   style Ideas fill:transparent,stroke:#888888,stroke-width:1px;
   style Checklist fill:transparent,stroke:#888888,stroke-width:1px;
   style Album fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Just an entry point now, not a duplicated mini-list — the Ideas screen already separates by type, so nothing here needs to repeat that.*
+*A prominent card with the top few undecided ideas, inline voting and an add button — pre-trip is when ideas matter, so Overview asks people to act on them right here. New ideas close once the trip starts; the card then becomes a quiet "Ideas" row (phones) and the Ideas tab (desktop), and voting stays open.*
 
 **Overview — live**
 ```mermaid
@@ -142,7 +142,7 @@ block-beta
   style StatusCollapsed fill:transparent,stroke:#888888,stroke-width:1px;
   style Next fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Ideas and travel status moved up right below the Active Now hero — both collapsed by default (▸), expanding on tap rather than a persistent inline feed. I read "near the top" as "right below the hero," not literally above it, since Active Now is still the screen's whole reason for existing in live mode — flag it if you meant above.*
+*Ideas and travel status moved up right below the Active Now hero — both collapsed by default (▸), expanding on tap rather than a persistent inline feed. Ideas can no longer be added at this point; an idea already on the itinerary is badged. I read "near the top" as "right below the hero," not literally above it, since Active Now is still the screen's whole reason for existing in live mode — flag it if you meant above.*
 
 **Timeline**
 ```mermaid

@@ -567,7 +567,7 @@ Unchanged: consumed from the global `/presence/{userId}` RTDB path, matched agai
 
 **10. Idea Board Prominence (derived, not stored)**
 
-Whether the idea board renders prominent (pre-trip) or tucked into a discovery tab (post-start) is derived purely from `now < trip.startDate`.
+Whether the idea board renders prominent (pre-trip) or quiet (post-start) is derived purely from `now < trip.startDate` — the same UTC boundary `firestore.rules` uses to close idea creation (`hasTripStarted`, not the header's local-day status). Pre-trip, Overview shows one prominent card (top undecided ideas with inline voting, an "Add an idea" button, "See all"); once the trip starts it becomes a quiet chevron row on phones, the Ideas tab stays on desktop, nobody can post a new idea, and voting and reading never close. An idea with `convertedToEntityId` set shows an "On the itinerary" badge and drops out of the Overview preview.
 
 **11. Idea → Itinerary Conversion**
 
@@ -624,7 +624,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 - **`pendingRequests/{requestId}`**: see the full rules block in the Data Schema section above — three-branch read (path-based self-check, "my requests" query safety, "requests for my trip" query safety), create requires the caller's own uid plus a real, not-yet-joined trip, delete restricted to the requester or a trip Admin, update always denied.
 - **`events/`, `checklist/`, `expenses/`, `stays/` subcollections**: membership-based against the parent trip's `members` map, role-checked for write (`ADMIN`/`EDITOR` full write; `COMMENTER` write on their own assigned items/proposals; `VIEWER` limited to their own expense-paid toggle — which may insert the member's own missing `paidMemberStatus` key on an `EVERYONE_INCLUDING_FUTURE` expense, since people who join later aren't backfilled). `createdBy` can't be spoofed post-creation; everything else — `notes`, `transitDetails`, `changeHistory`, `splitAmounts`, `dayIndex` — is a type/shape check only, so a new nullable field never touches `firestore.rules`. **`events/` and `stays/` specifically**: updating/deleting an *existing* item once `now >= trip.startDate` is `ADMIN`-only, and creating a brand-new one narrows the same way (`isTripCreateAllowed`) — `EDITOR`s can add new events/stays before the trip starts, `ADMIN`-only once it has. Event and stay shapes branch on the parent trip's `timeModel`: a relative trip's events require a `"HH:mm"` `startTime` and null `startAt`/`endAt`, `dayIndex`/`endDayIndex` are null together or an int pair, and stays need all four day + time points in order; an absolute trip keeps the timestamp shape. New trips must be created `RELATIVE` with a `timezone`, `timeModel` can't change afterwards, and an absolute trip's dates and timezone can't be edited. A trip counts as active through its whole last day (`endDate` + one day).
 - **`comments/{commentId}`**: posting is covered by the general membership rule; approving/declining a proposal is a dedicated narrow rule restricted to `ADMIN`/`EDITOR` (or `ADMIN`-only post-trip-start for event-targeted proposals, per State Machine #2).
-- **`ideas/{ideaId}`**: creating and reading open to any trip member (#1 — not a planning-permission surface). Voting is narrow: a member can only add/remove *their own* uid from `voterUids` (#5). Setting `convertedToEntityId` follows the same permission as creating the resulting entity.
+- **`ideas/{ideaId}`**: reading open to any trip member, and creating open to any member (every role) **until `now >= trip.startDate`**, as themselves (`addedByUid`) with no votes but their own and no `convertedToEntityId`. Voting is narrow and never closes: a member can only add/remove *their own* uid from `voterUids`. Edit, delete and setting `convertedToEntityId` are denied until the issues that add them. Idea `suggestedDays` are not rebased when a trip's dates shift (same as `eventSuggestions.suggestedDayIndex`); the card hides days beyond the trip's length.
 - **`stayCriteria/{criterionId}`**: reading open to any member; write follows the same `EDITOR`/`ADMIN` rule as the departure checklist.
 - **Criterion #7 (visibility field as query filter)**: not applicable — Waypoint has no private/public-style field anywhere in this schema.
 - **Criterion #8**: confirmed satisfied by construction — see the Data Schema section's pending-requests writeup.
@@ -634,10 +634,10 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 ## Client State Management (Redux Toolkit)
 
 - **Central vs. app-scoped**: if no earlier mini app has introduced `src/store/` yet, Waypoint's Phase 4 roadmap includes the one-time central store foundation issue. Otherwise, Waypoint builds directly on it.
-- **Typed per-app state**: `WaypointState` composes `trip`, `expenses`, `events`, `eventSuggestions`, `announcements`, `checklist`, `stays`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
+- **Typed per-app state**: `WaypointState` composes `trip`, `expenses`, `events`, `eventSuggestions`, `announcements`, `ideas`, `checklist`, `stays`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
 - **Member display info is never in Waypoint's own state.** `TripMember` only carries `uid`/`role`/`joinedAt`; any component rendering a member's name or avatar resolves it via the existing central `useUserInfo(uid)` hook.
 - **`resetAllState`**: dispatched on UID change, including via `DevAccountSwitcher`.
-- **Multi-doc atomic mutations get their own actions**: `proposalActions.ts` (approve/decline), `membershipActions.ts` (approve/decline pending request, change role, remove member — all Admin-only, atomic per State Machine #13), `ideaActions.ts` (convert idea → event or stay).
+- **Multi-doc atomic mutations get their own actions**: `proposalActions.ts` (approve/decline), `membershipActions.ts` (approve/decline pending request, change role, remove member — all Admin-only, atomic per State Machine #13), `ideaActions.ts` (post an idea, toggle a vote; conversion to an event or stay joins it later).
 - **Snapshot listener tiering**: all Firestore listeners are started from `useWaypointSync.ts`, called once at the app root (`Waypoint.tsx`), mirroring Nine Lives' `useNineLivesSync.ts` — never from inside a leaf/tab component, so switching tabs or reopening the same trip never tears down and resubscribes a listener.
   - *User-level* (while signed in, not tied to any open trip): every trip the user belongs to, and "my pending trips" — `where('uid', '==', myUid)` against `apps/waypoint/pendingRequests`, rendered via `MyPendingTrips.tsx` with a follow-up fetch per result to resolve `tripId` to a trip title, and a Withdraw action that deletes the requester's own doc (`cancelJoinRequest` — see Client hooks pattern: the requester-facing cancel action is mandatory, not a later follow-up).
   - *Eager* (on opening a trip): the trip doc, events, stays, checklist, ideas, stay criteria, a lightweight expenses listener (dues/totals are whole-trip visibility, not a per-item drill-down), a pending-proposal *count* for `ADMIN`/`EDITOR`, and — for an `ADMIN` — a `where('tripId', '==', tripId)` query against `apps/waypoint/pendingRequests`, gated the same way the Members tab UI is (Admin only).
@@ -675,7 +675,7 @@ Every `*Section.tsx` below owns its create/edit forms via DreamerUI's `Form`/`Fo
 - **Editor Write Boundaries**: create, update, and delete stays, checklist items, stay criteria, and expenses; create new events and stays before the trip starts (Admin-only once it has — `canCreateItem`). Once the trip has started, updating/deleting an *existing* event is Admin-only.
 - **Commenter Write Boundaries**: view all trip data, toggle checklist items assigned to them, update their own expense-paid status, post comments, submit edit proposals.
 - **Viewer Write Boundaries**: read trip data and toggle their own expense-paid status only.
-- **Social vs. planning actions**: live travel-status updates, and adding or voting on a Trip Idea, are open to every trip member regardless of role.
+- **Social vs. planning actions**: live travel-status updates, and adding a Trip Idea (until the trip starts) and voting on one (any time), are open to every trip member regardless of role.
 - **Shared Album Link**: any member can set it if unset; changing an existing link requires `EDITOR`/`ADMIN`.
 - **Role Mutability Guard**: an `ADMIN` can change any *other* member's role, including promoting to `ADMIN` — never their own.
 - **Member Removal**: revokes access immediately; historical assignments, expense shares, and authored comments stay intact.
@@ -689,8 +689,8 @@ Every `*Section.tsx` below owns its create/edit forms via DreamerUI's `Form`/`Fo
 ```
 src/apps/waypoint/
 ├── components/
-│   ├── OverviewSection.tsx        (pre-trip: idea teaser, checklist progress, album link.
-│   │                                live: Active/Up Next HUD, travel-status feed. DreamerUI-free, no form)
+│   ├── OverviewSection.tsx        (live only: Active/Up Next HUD. Returns null pre-trip)
+│   ├── IdeasOverview.tsx          (Overview: prominent pre-trip Ideas card, quiet row once the trip starts)
 │   ├── TimelineSection.tsx        (day tabs incl. "All", stay banner(s), auto-transit legs)
 │   │   ├── EventCard.tsx
 │   │   ├── EventFormModal.tsx     (DreamerUI Form, Steps-grouped — see UI Component Conventions)
@@ -701,9 +701,10 @@ src/apps/waypoint/
 │   ├── ExpensesSection.tsx        (day tabs incl. "All"/"Other"; Totals block)
 │   │   ├── ExpenseFormModal.tsx   (DreamerUI Form — Add only: title/amount-or-range/payer/day)
 │   │   └── ExpenseSplitModal.tsx  (DreamerUI Form — the distinct Split action: target type + members + splitAmounts)
-│   ├── IdeasSection.tsx           (type filter: Restaurant/Activity/Stay)
-│   │   ├── IdeaCard.tsx           (votes, Add-to-Itinerary/Select-as-Stay)
-│   │   ├── IdeaFormModal.tsx      (DreamerUI Form, fields branch by ideaType)
+│   ├── IdeasSection.tsx           (type filter: All/Restaurants/Activities; nested screen on phones)
+│   │   ├── IdeaCard.tsx           (votes, "On the itinerary" badge)
+│   │   ├── IdeaVoteButton.tsx
+│   │   ├── IdeaFormModal.tsx      (DreamerUI Form: type + name up front, "+ Add X" reveals for the rest)
 │   │   └── StayCriteriaPanel.tsx  (DreamerUI Form — Editor/Admin-managed must-have/nice-to-have list)
 │   ├── StaysSection.tsx
 │   │   ├── StayCard.tsx
@@ -729,9 +730,9 @@ src/apps/waypoint/
 │   ├── actions/
 │   │   ├── proposalActions.ts      (approve/decline — atomic multi-doc write)
 │   │   ├── membershipActions.ts    (approve/decline pending, change role, remove member — Admin-only, atomic)
-│   │   └── ideaActions.ts          (convert idea → event or stay — atomic multi-doc write)
+│   │   └── ideaActions.ts          (createIdea, toggleIdeaVote; conversion → event/stay joins later)
 │   ├── listeners/
-│   │   ├── tripListeners.ts        (eager tier — trip, events, stays, checklist, ideas, stayCriteria,
+│   │   ├── tripListeners.ts        (eager tier — trip, events, stays, checklist, stayCriteria,
 │   │   │                             expenses, proposal counts)
 │   │   └── pendingRequestsListeners.ts (startMyPendingRequestsListener + startTripPendingRequestsListener —
 │   │                                     plain functions, called only from useWaypointSync.ts)

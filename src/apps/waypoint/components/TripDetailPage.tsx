@@ -42,6 +42,9 @@ import EditTripCoverModal from '@apps/waypoint/components/EditTripCoverModal';
 import EditTripDatesModal from '@apps/waypoint/components/EditTripDatesModal';
 import EditTripTitleModal from '@apps/waypoint/components/EditTripTitleModal';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
+import IdeaFormModal, { type IdeaFormFields } from '@apps/waypoint/components/IdeaFormModal';
+import IdeasOverview from '@apps/waypoint/components/IdeasOverview';
+import IdeasSection from '@apps/waypoint/components/IdeasSection';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndicator';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
@@ -54,6 +57,7 @@ import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
+import { createIdea } from '@apps/waypoint/store/actions/ideaActions';
 import {
   deleteTrip,
   editTrip,
@@ -61,8 +65,8 @@ import {
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
-import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+import type { IdeaType, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const { option, custom } = DropdownMenuFactories;
@@ -98,7 +102,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
   const isNestedScreen =
-    hasAppNav && (sectionTab === 'stays' || sectionTab === 'members' || sectionTab === 'checklist');
+    hasAppNav &&
+    (sectionTab === 'stays' ||
+      sectionTab === 'members' ||
+      sectionTab === 'checklist' ||
+      sectionTab === 'ideas');
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
   const setSectionTab = (value: string) => {
@@ -120,10 +128,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const [editingField, setEditingField] = useState<EditingField>(null);
   const [isSubmittingTripEdit, setIsSubmittingTripEdit] = useState(false);
   const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
+  const [ideaFormType, setIdeaFormType] = useState<IdeaType | null>(null);
+  const [isSubmittingIdea, setIsSubmittingIdea] = useState(false);
 
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditDates = canEdit && isRelativeTrip(trip);
   const isAdmin = isTripAdmin(trip, currentUserId);
+  const canAddIdeas = canAddIdea(trip, currentUserId, now);
 
   // The trip list -> trip detail transition is a query-param change, not a route change,
   // so the browser doesn't reset scroll position on its own — do it explicitly.
@@ -151,6 +162,22 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       });
     } finally {
       setIsSubmittingAnnouncement(false);
+    }
+  };
+
+  const handlePostIdea = async (fields: IdeaFormFields) => {
+    setIsSubmittingIdea(true);
+    try {
+      await dispatch(createIdea({ uid: currentUserId, trip, ...fields })).unwrap();
+      setIdeaFormType(null);
+    } catch (ideaError) {
+      addToast({
+        title: 'Unable to post this idea',
+        description: getErrorMessage(ideaError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSubmittingIdea(false);
     }
   };
 
@@ -493,6 +520,17 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
           </div>
         )}
+        {(hasAppNav ? sectionTab === '' : canAddIdeas) && (
+          <div className='mt-5'>
+            <IdeasOverview
+              trip={trip}
+              currentUserId={currentUserId}
+              canAdd={canAddIdeas}
+              onOpen={() => setSectionTab('ideas')}
+              onAdd={setIdeaFormType}
+            />
+          </div>
+        )}
         {hasAppNav && sectionTab === '' && (
           <div className='mt-5'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
@@ -512,6 +550,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               <TabsTrigger value='expenses'>Expenses</TabsTrigger>
               <TabsTrigger value='stays'>Stays</TabsTrigger>
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
+              <TabsTrigger value='ideas'>Ideas</TabsTrigger>
             </TabsList>
           )}
           {sectionTab !== '' && !hasAppNav && (
@@ -548,6 +587,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           <TabsContent value='checklist'>
             <ChecklistSection trip={trip} currentUserId={currentUserId} />
           </TabsContent>
+          <TabsContent value='ideas'>
+            <IdeasSection
+              trip={trip}
+              currentUserId={currentUserId}
+              canAdd={canAddIdeas}
+              onAdd={setIdeaFormType}
+            />
+          </TabsContent>
         </Tabs>
       </div>
       {hasAppNav ? (
@@ -571,6 +618,15 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         isSubmitting={isSubmittingAnnouncement}
         onSubmit={handlePostAnnouncement}
         onClose={() => setIsAnnouncementFormOpen(false)}
+      />
+      <IdeaFormModal
+        key={`idea-${ideaFormType ?? 'closed'}`}
+        isOpen={ideaFormType !== null}
+        trip={trip}
+        defaultType={ideaFormType ?? 'RESTAURANT'}
+        isSubmitting={isSubmittingIdea}
+        onSubmit={handlePostIdea}
+        onClose={() => setIdeaFormType(null)}
       />
       <EditTripTitleModal
         key={`title-${editingField === 'title' ? 'open' : 'closed'}`}

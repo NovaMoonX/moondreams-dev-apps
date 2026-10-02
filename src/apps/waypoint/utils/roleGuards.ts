@@ -57,6 +57,11 @@ export function hasTripStarted(trip: TripSpace, now = Date.now()) {
   return now >= trip.startDate;
 }
 
+/** Any member may post an idea, but only until the trip starts; voting and reading never close. */
+export function canAddIdea(trip: TripSpace, uid: string, now = Date.now()) {
+  return isTripMember(trip, uid) && !hasTripStarted(trip, now);
+}
+
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
  * Admin-only while the trip is active — creating a new one follows `canCreateItem` instead. */
 export function canEditExistingItem(trip: TripSpace, uid: string) {

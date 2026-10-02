@@ -862,7 +862,7 @@ Adds `sharedAlbumUrl`/`sharedAlbumSetByUid`/`sharedAlbumSetAt` to `TripSpace`, p
 - `src/apps/waypoint/components/IdeasSection.tsx`
 - `src/apps/waypoint/components/IdeaCard.tsx`
 - `src/apps/waypoint/components/IdeaFormModal.tsx`
-- `src/apps/waypoint/components/OverviewSection.tsx` (pre-trip Ideas link, and prominence toggle)
+- `src/apps/waypoint/components/IdeasOverview.tsx` (Overview's pre-trip Ideas card, and prominence toggle)
 - `firestore.rules`
 
 ### Description
@@ -871,18 +871,18 @@ Create+Read for `TripIdea`, Restaurant and Activity types only (Stay ideas are I
 ### Possible Approach
 1. Add `TripIdea`, `IdeaType`, `IdeaDetailsBase`, `SingleOccasionIdeaDetails` (`suggestedDays`, `suggestedTimeBlocks`), `RestaurantIdeaDetails`, `ActivityIdeaDetails` to `types.ts`.
 2. Build `IdeaFormModal.tsx` (fields branch by `ideaType`) and `IdeaCard.tsx` (vote count/button, link, Restaurant/Activity-specific chips).
-3. Build `IdeasSection.tsx` (new tab): type filter (Restaurant/Activity for now), voting wired to `voterUids` (a member can only toggle their own uid).
-4. Fill in `OverviewSection.tsx`'s pre-trip Ideas entry as a real link into `IdeasSection`, and add the `now < trip.startDate` prominence derivation (Idea Board Prominence, State Machine 10).
-5. `firestore.rules`: create/read open to any member; voting narrow (own uid only).
+3. Build `IdeasSection.tsx` (a desktop tab, and a nested screen reached from Overview on phones): type filter (Restaurant/Activity for now), voting wired to `voterUids` (a member can only toggle their own uid).
+4. Build `IdeasOverview.tsx`: a prominent pre-trip card on Overview (top undecided ideas with inline voting, "Add an idea", "See all"), a quiet row once the trip starts, driven by `!hasTripStarted` (Idea Board Prominence, State Machine 10).
+5. `firestore.rules`: read open to any member; create open to any member only before the trip starts; voting narrow (own uid only) and always open.
 
 ### CRUD & Entry-Point Requirements
-- [ ] Create: a Restaurant or Activity idea is posted with its type-specific fields.
-- [ ] Read: ideas render on the Ideas tab (type-filtered), reachable from Overview's pre-trip link.
+- [ ] Create: a Restaurant or Activity idea is posted with its type-specific fields, and only before the trip starts.
+- [ ] Read: ideas render on the Ideas screen (type-filtered), reachable from Overview before and after the trip starts; one already on the itinerary is clearly marked.
 - [ ] Update: voting (`voterUids`) is covered here since it's core to the board's purpose — see Issue 24 for general field editing.
 - [ ] Delete: not covered by this issue — see Issue 24.
 
 ### Success Criteria
-- [ ] Overview's pre-trip Ideas entry is a link, not a duplicated list, per `UX.md`.
+- [ ] Overview shows a prominent pre-trip Ideas card (top ideas, inline voting, add) that becomes a quiet row after the trip starts.
 - [ ] `firestore.rules` updated; the voting rule specifically rejects a member modifying another uid's presence in `voterUids`.
 
 ---

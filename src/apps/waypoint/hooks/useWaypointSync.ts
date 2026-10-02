@@ -11,6 +11,7 @@ import { startTripExpensesListener } from '../store/listeners/expenseListeners';
 import { startTripEventsListener } from '../store/listeners/eventListeners';
 import { startEventSuggestionsListener } from '../store/listeners/eventSuggestionListeners';
 import { startAnnouncementsListener } from '../store/listeners/announcementListeners';
+import { startIdeasListener } from '../store/listeners/ideaListeners';
 import { startChecklistListener } from '../store/listeners/checklistListeners';
 import { startTripStaysListener } from '../store/listeners/stayListeners';
 import {
@@ -28,6 +29,7 @@ import {
   clearAnnouncements,
   setAnnouncements,
 } from '../store/slices/announcementsSlice';
+import { clearIdeas, setIdeas } from '../store/slices/ideasSlice';
 import { setChecklist } from '../store/slices/checklistSlice';
 import { clearStays, setStays } from '../store/slices/staysSlice';
 
@@ -125,6 +127,17 @@ export function useWaypointSync(
 
     return startAnnouncementsListener(tripId, (announcements) => {
       dispatch(setAnnouncements({ tripId, announcements }));
+    });
+  }, [dispatch, tripId]);
+
+  useEffect(() => {
+    if (!tripId) {
+      dispatch(clearIdeas());
+      return;
+    }
+
+    return startIdeasListener(tripId, (ideas) => {
+      dispatch(setIdeas({ tripId, ideas }));
     });
   }, [dispatch, tripId]);
 

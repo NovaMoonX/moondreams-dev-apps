@@ -1114,6 +1114,129 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     createdAt: context.now - 1_800_000,
   });
 
+  const seedIdea = (
+    tripId: string,
+    id: string,
+    idea: {
+      ideaType: 'RESTAURANT' | 'ACTIVITY';
+      title: string;
+      linkUrl: string | null;
+      notes: string | null;
+      ideaDetails: Record<string, unknown> | null;
+      addedByUid: string;
+      voterUids: string[];
+      convertedToEntityId: string | null;
+      createdAt: number;
+    },
+  ) =>
+    context.firestore
+      .collection('apps')
+      .doc('waypoint')
+      .collection('trips')
+      .doc(tripId)
+      .collection('ideas')
+      .doc(id)
+      .set({ id, tripId, ...idea, lastEditedAt: idea.createdAt });
+
+  await Promise.all([
+    seedIdea(TRIP_ID, 'seed-idea-ramen', {
+      ideaType: 'RESTAURANT',
+      title: 'Ramen at Tsujita',
+      linkUrl: 'https://www.tsujita.com',
+      notes: 'Rich tonkotsu broth — go early to skip the line.',
+      ideaDetails: {
+        cuisines: ['Ramen', 'Japanese'],
+        suggestedDays: [0],
+        suggestedTimeBlocks: ['EVENING'],
+      },
+      addedByUid: jamie.uid,
+      voterUids: [jamie.uid, alex.uid, taylor.uid],
+      convertedToEntityId: null,
+      createdAt: context.now - 3 * 86_400_000,
+    }),
+    seedIdea(TRIP_ID, 'seed-idea-brunch', {
+      ideaType: 'RESTAURANT',
+      title: 'Brunch at Portage Bay Cafe',
+      linkUrl: null,
+      notes: null,
+      ideaDetails: {
+        cuisines: ['Brunch'],
+        suggestedDays: [],
+        suggestedTimeBlocks: ['MORNING', 'AFTERNOON'],
+      },
+      addedByUid: taylor.uid,
+      voterUids: [taylor.uid, alex.uid],
+      convertedToEntityId: null,
+      createdAt: context.now - 2 * 86_400_000,
+    }),
+    seedIdea(TRIP_ID, 'seed-idea-rattlesnake', {
+      ideaType: 'ACTIVITY',
+      title: 'Rattlesnake Ledge hike',
+      linkUrl: 'https://www.wta.org/go-hiking/hikes/rattlesnake-ledge',
+      notes: 'About 4 miles round trip with a great view of the lake.',
+      ideaDetails: { settings: ['OUTDOOR'], suggestedDays: [1], suggestedTimeBlocks: ['MORNING'] },
+      addedByUid: alex.uid,
+      voterUids: [alex.uid, jamie.uid],
+      convertedToEntityId: null,
+      createdAt: context.now - 2 * 86_400_000,
+    }),
+    seedIdea(TRIP_ID, 'seed-idea-museum', {
+      ideaType: 'ACTIVITY',
+      title: 'Museum of Pop Culture',
+      linkUrl: null,
+      notes: null,
+      ideaDetails: { settings: ['INDOOR'], suggestedDays: [], suggestedTimeBlocks: [] },
+      addedByUid: jamie.uid,
+      voterUids: [jamie.uid],
+      convertedToEntityId: null,
+      createdAt: context.now - 86_400_000,
+    }),
+    seedIdea(TRIP_ID, 'seed-idea-market', {
+      ideaType: 'ACTIVITY',
+      title: 'Pike Place Market stroll',
+      linkUrl: null,
+      notes: null,
+      ideaDetails: null,
+      addedByUid: alex.uid,
+      voterUids: [alex.uid, taylor.uid],
+      createdAt: context.now - 12 * 3_600_000,
+      convertedToEntityId: null,
+    }),
+    seedIdea(TRIP_ID, 'seed-idea-dinner', {
+      ideaType: 'RESTAURANT',
+      title: 'Dinner at Canlis',
+      linkUrl: null,
+      notes: 'Already on the schedule.',
+      ideaDetails: { cuisines: ['Pacific Northwest'], suggestedDays: [0], suggestedTimeBlocks: ['EVENING'] },
+      addedByUid: alex.uid,
+      voterUids: [alex.uid, taylor.uid, jamie.uid],
+      convertedToEntityId: 'seed-waypoint-dinner',
+      createdAt: context.now - 4 * 86_400_000,
+    }),
+    seedIdea(ACTIVE_TRIP_ID, 'active-idea-lunch', {
+      ideaType: 'RESTAURANT',
+      title: 'Seafood lunch in Port Angeles',
+      linkUrl: null,
+      notes: null,
+      ideaDetails: { cuisines: ['Seafood'], suggestedDays: [], suggestedTimeBlocks: ['AFTERNOON'] },
+      addedByUid: taylor.uid,
+      voterUids: [taylor.uid, alex.uid],
+      convertedToEntityId: 'active-trip-lunch',
+      createdAt: joinedAt,
+    }),
+    seedIdea(ACTIVE_TRIP_ID, 'active-idea-tidepools', {
+      ideaType: 'ACTIVITY',
+      title: 'Ruby Beach tide pools',
+      linkUrl: null,
+      notes: 'Check the tide chart first.',
+      ideaDetails: { settings: ['OUTDOOR'], suggestedDays: [], suggestedTimeBlocks: [] },
+      addedByUid: alex.uid,
+      voterUids: [alex.uid],
+      convertedToEntityId: null,
+      createdAt: joinedAt,
+    }),
+  ]);
+
   await context.firestore.collection('reminders').doc('seed-waypoint-reminder-alex').set({
     id: 'seed-waypoint-reminder-alex',
     appId: 'waypoint',
@@ -1217,6 +1340,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 48,
+    firestoreDocuments: 56,
   };
 }
