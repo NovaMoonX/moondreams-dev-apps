@@ -69,20 +69,23 @@ export const rescheduleTripReminders = onDocumentUpdated(
             return [];
           }
 
-          const scheduledFor = getReminderInstant(after, event);
+          const scheduledFor = event.isArchived === true ? null : getReminderInstant(after, event);
           const reminderRef =
             typeof event.reminderId === 'string' ? firestore.doc(`reminders/${event.reminderId}`) : null;
           const reminder = reminderRef ? (await reminderRef.get()).data() : undefined;
           const isPending = reminder?.status === 'pending';
 
-          if (scheduledFor === null) {
-            return reminderRef && isPending ? [(batch: FirebaseFirestore.WriteBatch) => batch.update(reminderRef, { status: 'cancelled' })] : [];
+          const cancelPending = () =>
+            reminderRef && isPending
+              ? [(batch: FirebaseFirestore.WriteBatch) => batch.update(reminderRef, { status: 'cancelled' })]
+              : [];
+
+          // A reminder moved to a time that already passed would be delivered all at once.
+          if (scheduledFor === null || scheduledFor <= now) {
+            return cancelPending();
           }
           if (isPending && reminderRef) {
             return [(batch: FirebaseFirestore.WriteBatch) => batch.update(reminderRef, { scheduledFor })];
-          }
-          if (scheduledFor <= now) {
-            return [];
           }
 
           const newReminderRef = firestore.collection('reminders').doc();
