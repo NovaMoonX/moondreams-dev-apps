@@ -11,7 +11,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Layers, Link2, Users, Utensils, X } from 'lucide-react';
+import { Bell, Clock, Layers, Link2, Type, Users, Utensils, X } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -133,6 +133,7 @@ const reminderOptions = [
 interface EventDraft {
   eventType: EventType;
   title: string;
+  hasTitle: boolean;
   dayIndex: number | null;
   endDayIndex: number | null;
   hasEndTime: boolean;
@@ -190,11 +191,32 @@ function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: bool
   return [...none, ...days];
 }
 
+function getDerivedTitle(draft: EventDraft): string {
+  if (draft.eventType === 'TRAVEL') {
+    const transitType = draft.quickField as TransitType;
+    return getDerivedTravelTitle(transitType, buildTransitDetails(transitType, draft.transit));
+  }
+  if (draft.locationName.trim()) {
+    return draft.locationName.trim();
+  }
+  if (draft.eventType === 'DINING') {
+    return MEAL_TYPE_LABELS[draft.quickField as MealType] ?? EVENT_TYPE_LABELS.DINING;
+  }
+  return EVENT_TYPE_LABELS[draft.eventType];
+}
+
 function getInitialDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
+  const draft = getBaseDraft(trip, event);
+  const hasTitle = Boolean(event) && event?.title !== getDerivedTitle(draft);
+  return { ...draft, hasTitle, title: hasTitle ? (event?.title ?? '') : '' };
+}
+
+function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
   const time = event ? getEventTime(trip, event) : null;
   return {
     eventType: event?.eventType ?? 'ACTIVITY',
-    title: event?.title ?? '',
+    title: '',
+    hasTitle: false,
     dayIndex: event ? (time?.dayIndex ?? null) : 0,
     endDayIndex: event ? (time?.endDayIndex ?? null) : 0,
     hasEndTime: Boolean(time?.endTime),
@@ -342,8 +364,8 @@ function EventFormModal({
   };
 
   const handleNext = () => {
-    if ((!isTravel && !draft.title.trim()) || !draft.time || (draft.dayIndex === null && !isRelative)) {
-      setError(isTravel ? 'Enter a day and start time.' : 'Enter a title, day, and start time.');
+    if (!draft.time || (draft.dayIndex === null && !isRelative)) {
+      setError('Enter a day and start time.');
       return;
     }
     if (draft.hasEndTime && !draft.endTime) {
@@ -392,9 +414,7 @@ function EventFormModal({
       return {};
     };
     const eventDetails = getEventDetails();
-    const title = isTravel && !draft.title.trim()
-      ? getDerivedTravelTitle(transitType, transitDetails)
-      : draft.title;
+    const title = draft.hasTitle && draft.title.trim() ? draft.title : getDerivedTitle(draft);
     const linkKinds = EVENT_LINK_KINDS_BY_TYPE[draft.eventType];
 
     const assignedMemberIds =
@@ -496,6 +516,7 @@ function EventFormModal({
   const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
   const attendeesLabel = isTravel ? "Who's traveling" : 'Attendees';
   const detailChips = [
+    { key: 'title', label: 'Title', icon: <Type className='h-4 w-4' />, isShown: draft.hasTitle },
     { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' />, isShown: !isLinkable || draft.hasLink },
     {
       key: 'cuisines',
@@ -527,6 +548,7 @@ function EventFormModal({
   const revealDetail = (key: string) =>
     updateDraft(
       {
+        title: { hasTitle: true },
         link: { hasLink: true },
         cuisines: { hasCuisines: true },
         group: { isGrouped: true },
@@ -555,21 +577,6 @@ function EventFormModal({
                     groupLabel: '',
                   })
                 }
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Title</Label>
-              <Input
-                value={draft.title}
-                placeholder={
-                  isTravel
-                    ? getDerivedTravelTitle(
-                        draft.quickField as TransitType,
-                        buildTransitDetails(draft.quickField as TransitType, draft.transit),
-                      )
-                    : 'Dinner at Ichiran'
-                }
-                onChange={(event) => updateDraft({ title: event.target.value })}
               />
             </div>
             <div className='space-y-1.5'>
@@ -698,10 +705,10 @@ function EventFormModal({
                 onDepartureAirportPicked={(airport) => void fillLocationFromAirport(airport)}
               />
             )}
-            <SectionDivider label='Where' />
+            <SectionDivider label='Where to navigate' />
             <PlaceAutocompleteInput
               label='Location'
-              quickSearch={{ label: 'Search by title', value: draft.title }}
+              quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
               placeholder='Ichiran Shibuya'
               value={draft.locationName}
               onChange={(locationName) =>
@@ -710,7 +717,6 @@ function EventFormModal({
               bias={placeBias}
               onSelect={(result: PlaceSelectionResult) =>
                 updateDraft({
-                  title: draft.title.trim() || isTravel ? draft.title : result.name,
                   locationName: result.name,
                   address: result.address,
                   latitude: result.latitude,
@@ -734,6 +740,19 @@ function EventFormModal({
               />
             </div>
             <SectionDivider label='More details' />
+            {draft.hasTitle && (
+              <RemovableField
+                label='Title'
+                removeLabel='Remove title'
+                onRemove={() => updateDraft({ hasTitle: false, title: '' })}
+              >
+                <Input
+                  value={draft.title}
+                  placeholder={getDerivedTitle(draft)}
+                  onChange={(event) => updateDraft({ title: event.target.value })}
+                />
+              </RemovableField>
+            )}
             {isLinkable && draft.hasLink && (
               <RemovableField
                 label='Link'
@@ -749,8 +768,8 @@ function EventFormModal({
                   startRevealed
                   placeholder='https://…'
                   onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
-                  currentTitle={draft.title}
-                  onUseTitle={(title) => updateDraft({ title })}
+                  currentTitle={draft.hasTitle ? draft.title : ''}
+                  onUseTitle={(title) => updateDraft({ title, hasTitle: true })}
                 />
                 {draft.linkUrl.trim() && (
                   <Select

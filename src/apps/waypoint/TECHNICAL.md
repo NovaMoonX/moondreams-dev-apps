@@ -124,7 +124,7 @@ interface TimelineEvent {
   eventType: EventType;
   dayIndex: number | null; // null = "no specific day" (RELATIVE trips only)
   endDayIndex: number | null; // equal to dayIndex for the common single-day case; higher for events spanning multiple days
-  title: string; // Travel events may leave it blank in the form — a title like "Flight DL 482" is derived from the transit details on save
+  title: string; // always stored non-empty, but the form never requires one — a blank title is derived on save ("Flight DL 482", the location name, or the event type)
   startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
   endTime: string | null;
   timezone: string | null; // zone override for this event's times; null follows the trip's timezone

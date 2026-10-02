@@ -445,7 +445,7 @@ flowchart LR
 | Entity | Initial (create) | Later (edit only) | Grouping |
 |---|---|---|---|
 | Trip Space | title, start/end dates (framed as estimates) | destination labels, tags, currency, cover image | none |
-| Timeline Event | `eventType` (category: Travel/Dining/Activity/Free Time), title, day, start time, that category's one quick field (see below), location, assignees (which members are involved) | end time/day, address, notes, transit details (flight number, confirmation code, estimated time — behind "+ Add details"), cuisines, link kind, group | **Steps** |
+| Timeline Event | `eventType` (category: Travel/Dining/Activity/Free Time), day, start time, that category's one quick field (see below), location, assignees (which members are involved) | end time/day, address, notes, title (derived when left out), transit details (flight number, confirmation code, estimated time — behind "+ Add details"), cuisines, link kind, group | **Steps** |
 | Stay | name, address, official check-in/out | confirmation code, notes¹ | none |
 | Checklist Item | title, category (incl. a custom "Other" option with its own label), assignees | — | none |
 | Expense | title, amount (or a min-max range), currency (defaulted), payer, day (or "Other" for none) | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |
