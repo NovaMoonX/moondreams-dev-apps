@@ -2131,10 +2131,26 @@ service cloud.firestore {
           && (added.size() + removed.size()) <= 1;
       }
 
+      // The poster, or any Editor/Admin, can change or remove an idea in any trip phase; votes
+      // and who posted it are never touched by an edit.
+      function isIdeaManager() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember()
+          && (resource.data.addedByUid == request.auth.uid
+            || trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']);
+      }
+
+      function isIdeaEditValid() {
+        return isIdeaManager()
+          && isIdeaShapeValid()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['ideaType', 'title', 'notes', 'linkUrl', 'ideaDetails', 'lastEditedAt']);
+      }
+
       allow read: if isTripSubcollectionMember();
       allow create: if isIdeaCreateValid();
-      allow update: if isIdeaVoteUpdateValid();
-      allow delete: if false;
+      allow update: if isIdeaVoteUpdateValid() || isIdeaEditValid();
+      allow delete: if isIdeaManager();
     }
 
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {
