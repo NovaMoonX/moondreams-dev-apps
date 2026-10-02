@@ -2,6 +2,17 @@ import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleRe
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { type EventTimeSource, getEventTime } from '@apps/waypoint/utils/tripTime';
 
+function formatLead(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return [
+    hours ? `${hours} ${hours === 1 ? 'hour' : 'hours'}` : '',
+    rest ? `${rest} minutes` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export type EventReminderSource = EventTimeSource &
   Pick<
     TimelineEvent,
@@ -44,7 +55,7 @@ export async function scheduleEventReminder({
       appId: 'waypoint',
       targetUids,
       title: event.title,
-      body: `Starting in ${event.reminderMinutesBefore} minutes.`,
+      body: `Starting in ${formatLead(event.reminderMinutesBefore)}.`,
       scheduledFor: startMs - event.reminderMinutesBefore * 60_000,
       createdBy: uid,
       relatedEntityPath: `apps/waypoint/trips/${trip.id}/events/${event.id}`,

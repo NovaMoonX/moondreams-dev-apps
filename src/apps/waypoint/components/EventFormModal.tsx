@@ -45,7 +45,8 @@ import {
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
   MEAL_TYPE_LABELS,
-  REMINDER_MINUTES_BEFORE_OPTIONS,
+  MAX_REMINDER_MINUTES_BEFORE,
+  REMINDER_STEP_MINUTES,
   TRANSIT_LOCATION_LABELS,
   TRANSIT_LOCATION_MIRROR_KEYS,
   TRANSIT_TYPE_EMOJIS,
@@ -115,13 +116,22 @@ const transitTypeOptions = Object.entries(TRANSIT_TYPE_LABELS).map(([value, text
 }));
 const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
 const attendeeTargetOptions = toSelectOptions(EVENT_ATTENDEE_TARGET_LABELS);
-const reminderOptions = [
-  { value: 'off', text: "Don't remind me" },
-  ...REMINDER_MINUTES_BEFORE_OPTIONS.map((minutes) => ({
-    value: String(minutes),
-    text: `${minutes} minutes before`,
-  })),
-];
+const reminderHourOptions = Array.from(
+  { length: Math.floor(MAX_REMINDER_MINUTES_BEFORE / 60) + 1 },
+  (_, hours) => ({ value: String(hours), text: `${hours} hr` }),
+);
+
+function getReminderMinuteOptions(hours: number) {
+  const maxMinutes = Math.min(59, MAX_REMINDER_MINUTES_BEFORE - hours * 60);
+  return Array.from({ length: Math.floor(maxMinutes / REMINDER_STEP_MINUTES) + 1 }, (_, step) => step * REMINDER_STEP_MINUTES)
+    .filter((minutes) => hours > 0 || minutes > 0)
+    .map((minutes) => ({ value: String(minutes), text: `${minutes} min` }));
+}
+
+function clampReminderMinutes(hours: number, minutes: number) {
+  const total = Math.min(MAX_REMINDER_MINUTES_BEFORE, Math.max(REMINDER_STEP_MINUTES, hours * 60 + minutes));
+  return total;
+}
 
 interface EventDraft {
   eventType: EventType;
@@ -943,15 +953,44 @@ function EventFormModal({
                   })
                 }
               >
-                <Select
-                  options={reminderOptions}
-                  value={draft.reminderEnabled ? String(draft.reminderMinutesBefore) : 'off'}
-                  onChange={(value) =>
-                    value === 'off'
-                      ? updateDraft({ reminderEnabled: false })
-                      : updateDraft({ reminderEnabled: true, reminderMinutesBefore: Number(value) })
-                  }
-                />
+                <div className='flex items-center gap-2'>
+                  <Select
+                    className='flex-1'
+                    disabled={!draft.reminderEnabled}
+                    options={reminderHourOptions}
+                    value={String(Math.floor(draft.reminderMinutesBefore / 60))}
+                    onChange={(value) =>
+                      updateDraft({
+                        reminderMinutesBefore: clampReminderMinutes(
+                          Number(value),
+                          draft.reminderMinutesBefore % 60,
+                        ),
+                      })
+                    }
+                  />
+                  <Select
+                    className='flex-1'
+                    disabled={!draft.reminderEnabled}
+                    options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
+                    value={String(draft.reminderMinutesBefore % 60)}
+                    onChange={(value) =>
+                      updateDraft({
+                        reminderMinutesBefore: clampReminderMinutes(
+                          Math.floor(draft.reminderMinutesBefore / 60),
+                          Number(value),
+                        ),
+                      })
+                    }
+                  />
+                  <span className='text-muted-foreground shrink-0 text-sm'>before</span>
+                </div>
+                <label className='flex items-center gap-2 text-sm'>
+                  <Checkbox
+                    checked={!draft.reminderEnabled}
+                    onCheckedChange={(checked) => updateDraft({ reminderEnabled: checked !== true })}
+                  />
+                  Don&apos;t remind me
+                </label>
                 {reminderText !== null && (
                   <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
                 )}

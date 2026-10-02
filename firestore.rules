@@ -1830,7 +1830,7 @@ service cloud.firestore {
           && (request.resource.data.get('groupLabel', null) == null || isNonEmptyString(request.resource.data.get('groupLabel', null)))
           && request.resource.data.reminderMinutesBefore is int
           && request.resource.data.reminderMinutesBefore >= 5
-          && request.resource.data.reminderMinutesBefore <= 60
+          && request.resource.data.reminderMinutesBefore <= 180
           && request.resource.data.reminderMinutesBefore % 5 == 0
           && request.resource.data.reminderEnabled is bool
           && (request.resource.data.reminderId == null || request.resource.data.reminderId is string)

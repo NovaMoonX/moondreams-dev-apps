@@ -244,10 +244,9 @@ export const TIME_BLOCK_LABELS: Record<TimeBlock, string> = {
   EVENING: 'Evening',
 };
 
-// 5-minute increments, 5-60 minutes before an event starts.
-export const REMINDER_MINUTES_BEFORE_OPTIONS: readonly number[] = [
-  5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
-];
+// Reminders go out 5 minutes to 3 hours (airport time) before an event, in 5-minute steps.
+export const REMINDER_STEP_MINUTES = 5;
+export const MAX_REMINDER_MINUTES_BEFORE = 180;
 
 export const DEFAULT_REMINDER_MINUTES_BEFORE = 20;
 
