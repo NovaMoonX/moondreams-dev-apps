@@ -56,6 +56,7 @@ interface IdeaFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   defaultType: IdeaType;
+  canPost: boolean;
   isSubmitting?: boolean;
   onSubmit: (fields: IdeaFormFields) => Promise<void> | void;
   onClose: () => void;
@@ -157,6 +158,7 @@ function IdeaFormModal({
   isOpen,
   trip,
   defaultType,
+  canPost,
   isSubmitting = false,
   onSubmit,
   onClose,
@@ -367,7 +369,7 @@ function IdeaFormModal({
                 <Button
                   type='submit'
                   loading={isSubmitting}
-                  disabled={isSubmitting || !isFormComplete}
+                  disabled={isSubmitting || !isFormComplete || !canPost}
                 >
                   Post
                 </Button>
@@ -376,6 +378,11 @@ function IdeaFormModal({
           />
         }
       />
+      {!canPost && (
+        <p className='text-muted-foreground mt-3 text-sm'>
+          This trip has started, so new ideas can no longer be added.
+        </p>
+      )}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </Modal>
   );

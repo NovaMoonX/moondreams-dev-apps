@@ -47,6 +47,7 @@ How Waypoint's phone-first redesign works; new features follow it. Design the ph
 - **Indicators.** Leading round icon chip with a soft tint; counts only when `> 0`, via `IconBadge` or the `bg-primary` pill.
 - **Create and edit ask little up front.** Required essentials only (usually a title plus the one field that makes it real); everything else sits behind a "+ Add X" reveal with a "Remove X" undo. Two-up fields use `grid gap-3 sm:grid-cols-2`. The footer stays on one row, so labels stay short (Cancel / Save / Add / Post). Go multi-step only when step two is truly secondary. Forms are `Modal`s, not full-height drawers.
 - **Copy** reads like a friend: notification sentences ("Alex added Lunch at Salt Creek"), warm one-line prompts, concrete placeholders ("Dinner at Ichiran").
+- **Never offer an action the user can't complete.** Gate every button, reveal and submit with the same predicate as the rule behind it (`canAddIdea`, with `now` from `useNow()`), hide it rather than show-then-fail, and when state can flip while a form is open, disable its submit and say why.
 - **Trip-phase gating has two clocks.** Display uses the viewer's local day (`getTripStatus`); write gating uses UTC to match `firestore.rules` (`roleGuards.ts`: `hasTripStarted`). A UI gate and the rule that backs it use the same one — never mix them.
 
 ## State, data, and performance

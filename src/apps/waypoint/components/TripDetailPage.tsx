@@ -624,6 +624,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         isOpen={ideaFormType !== null}
         trip={trip}
         defaultType={ideaFormType ?? 'RESTAURANT'}
+        canPost={canAddIdeas}
         isSubmitting={isSubmittingIdea}
         onSubmit={handlePostIdea}
         onClose={() => setIdeaFormType(null)}
