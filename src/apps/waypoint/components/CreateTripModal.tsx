@@ -8,10 +8,9 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 
 import DateRangeField, { type DateRangeValue } from '@/components/forms/DateRangeField';
-import TimezoneSelect from '@/components/forms/TimezoneSelect';
+import TimezoneField from '@/components/forms/TimezoneField';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 
 interface CreateTripFormData {
   title: string;
@@ -46,7 +45,6 @@ function CreateTripModal({
   onClose,
 }: CreateTripModalProps) {
   const [error, setError] = useState<string | null>(null);
-  const [isChangingTimezone, setIsChangingTimezone] = useState(false);
   const [formData, setFormData] = useState<CreateTripFormData>(INITIAL_DATA);
 
   const isFormComplete =
@@ -75,38 +73,23 @@ function CreateTripModal({
       }),
       custom({
         name: 'timezone',
-        label: 'Time zone',
-        renderComponent: (props) =>
-          isChangingTimezone ? (
-            <div className='space-y-2'>
-              <TimezoneSelect
-                value={props.value as string}
-                onChange={(value) => props.onValueChange(value)}
-                disabled={isSubmitting}
-              />
-              <p className='text-muted-foreground text-sm'>
-                The default for this trip — any event or stay can use its own.
-              </p>
-            </div>
-          ) : (
-            <p className='text-muted-foreground text-sm'>
-              Times on this trip use <b>{formatTimezoneLabel(props.value as string)}</b> by default.{' '}
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => setIsChangingTimezone(true)}
-              >
-                Change
-              </Button>
-              <br />
-              Any event or stay can still use its own.
-            </p>
-          ),
+        label: '',
+        renderComponent: (props) => (
+          <TimezoneField
+            value={props.value as string}
+            onChange={(value) => props.onValueChange(value)}
+            describe={(zone) => (
+              <>
+                Times default to <b className='font-medium'>{zone}</b>. Events and stays can use
+                their own.
+              </>
+            )}
+            disabled={isSubmitting}
+          />
+        ),
       }),
     ],
-    [isSubmitting, isChangingTimezone],
+    [isSubmitting],
   );
 
   const handleSubmit = async (data: CreateTripFormData) => {

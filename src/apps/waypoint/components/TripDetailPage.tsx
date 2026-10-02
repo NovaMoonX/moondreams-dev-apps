@@ -41,7 +41,6 @@ import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import EditTripCoverModal from '@apps/waypoint/components/EditTripCoverModal';
 import EditTripDatesModal from '@apps/waypoint/components/EditTripDatesModal';
 import EditTripTitleModal from '@apps/waypoint/components/EditTripTitleModal';
-import TripTimezoneModal from '@apps/waypoint/components/TripTimezoneModal';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndicator';
@@ -76,7 +75,7 @@ interface TripDetailPageProps {
   onBack: () => void;
 }
 
-type EditingField = 'title' | 'dates' | 'timezone' | 'cover' | null;
+type EditingField = 'title' | 'dates' | 'cover' | null;
 
 function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageProps) {
   const now = useNow();
@@ -125,7 +124,6 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditDates = canEdit && isRelativeTrip(trip);
-  const canEditTimezone = canEdit && trip.timezone !== null && trip.timezone !== undefined;
   const isAdmin = isTripAdmin(trip, currentUserId);
 
   // The trip list -> trip detail transition is a query-param change, not a route change,
@@ -175,15 +173,23 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     );
   };
 
-  const handleSetTimezone = async (timezone: string) => {
+  const handleEditDates = async (values: EditTripValues, timezone: string) => {
     setIsSubmittingTripEdit(true);
     try {
-      await dispatch(setTripTimezone({ uid: currentUserId, trip, timezone })).unwrap();
+      const datesChanged = values.startDate !== trip.startDate || values.endDate !== trip.endDate;
+      const editedTrip = datesChanged
+        ? await dispatch(editTrip({ uid: currentUserId, trip, values })).unwrap()
+        : trip;
+      if (timezone !== editedTrip.timezone) {
+        await dispatch(
+          setTripTimezone({ uid: currentUserId, trip: editedTrip, timezone }),
+        ).unwrap();
+      }
       setEditingField(null);
-    } catch (timezoneError) {
+    } catch (editError) {
       addToast({
-        title: 'Unable to change the time zone',
-        description: getErrorMessage(timezoneError, 'Please try again.'),
+        title: 'Unable to update this trip',
+        description: getErrorMessage(editError, 'Please try again.'),
         type: 'error',
       });
     } finally {
@@ -269,22 +275,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     : null;
   const datesActionItem = canEditDates
     ? option({
-        label: 'Change dates',
+        label: 'Dates & time zone',
         value: 'dates',
         icon: <Calendar className='h-4 w-4' />,
         onClick: () => {
           setEditingField('dates');
-          setIsMobileActionsOpen(false);
-        },
-      })
-    : null;
-  const timezoneActionItem = canEditTimezone
-    ? option({
-        label: 'Time zone',
-        value: 'timezone',
-        icon: <Globe className='h-4 w-4' />,
-        onClick: () => {
-          setEditingField('timezone');
           setIsMobileActionsOpen(false);
         },
       })
@@ -351,7 +346,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const actionItems = [announcementActionItem, archiveActionItem, coverActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
-  const groupedEditActionItems = [titleActionItem, datesActionItem, timezoneActionItem, coverActionItem].filter(
+  const groupedEditActionItems = [titleActionItem, datesActionItem, coverActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const standaloneActionItems = [announcementActionItem, archiveActionItem].filter(
@@ -457,7 +452,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               </div>
               <div
                 className={join(
-                  'group mt-1 flex w-fit flex-wrap items-center gap-x-1.5 gap-y-0.5',
+                  'group mt-1 flex w-fit flex-wrap items-center gap-x-2 gap-y-0.5',
                   !showHeaderExtras && 'hidden',
                   canEditDates && !isSmallScreen && 'cursor-pointer',
                 )}
@@ -467,28 +462,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 <p className='text-muted-foreground'>
                   {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
                 </p>
+                {trip.timezone && (
+                  <p className='text-muted-foreground flex items-center gap-1 text-sm'>
+                    <Globe className='h-3.5 w-3.5 shrink-0' />
+                    {formatTimezoneLabel(trip.timezone)}
+                  </p>
+                )}
                 {canEditDates && !isSmallScreen && (
                   <Pencil className='text-muted-foreground h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100' />
-                )}
-                {trip.timezone && (
-                  <>
-                    <span className='text-muted-foreground'>·</span>
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className='text-muted-foreground hover:text-foreground h-auto shrink-0 gap-1 p-0 whitespace-nowrap'
-                      disabled={!canEditTimezone}
-                      title='Default time zone for this trip'
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditingField('timezone');
-                      }}
-                    >
-                      <Globe className='h-3.5 w-3.5' />
-                      {formatTimezoneLabel(trip.timezone)}
-                    </Button>
-                  </>
                 )}
               </div>
             </div>
@@ -624,15 +605,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         isOpen={editingField === 'dates'}
         trip={trip}
         isSubmitting={isSubmittingTripEdit}
-        onSubmit={handleEditTrip}
-        onClose={() => setEditingField(null)}
-      />
-      <TripTimezoneModal
-        key={`timezone-${editingField === 'timezone' ? 'open' : 'closed'}`}
-        isOpen={editingField === 'timezone'}
-        trip={trip}
-        isSubmitting={isSubmittingTripEdit}
-        onSubmit={handleSetTimezone}
+        onSubmit={handleEditDates}
         onClose={() => setEditingField(null)}
       />
       <EditTripCoverModal
