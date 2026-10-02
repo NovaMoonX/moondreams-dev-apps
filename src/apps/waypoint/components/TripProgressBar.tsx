@@ -1,7 +1,7 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Flag } from 'lucide-react';
 
-import { getDayCount, getDayIndex } from '@/utils/dateRangeUtils';
+import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
 
 import type { TripSpace } from '@apps/waypoint/types';
 
@@ -11,12 +11,13 @@ interface TripProgressBarProps {
 }
 
 function TripProgressBar({ trip, now }: TripProgressBarProps) {
-  const duration = trip.endDate - trip.startDate;
-  const elapsed = duration > 0 ? (now - trip.startDate) / duration : 0;
-  const progress = Math.min(1, Math.max(0, elapsed));
   const dayCount = getDayCount(trip.startDate, trip.endDate);
-  const currentDay = Math.min(dayCount, Math.max(1, getDayIndex(trip.startDate, now) + 1));
-  const isComplete = now >= trip.endDate;
+  const dayIndex = getLocalDayIndex(trip.startDate, now);
+  const today = new Date(now);
+  const fractionOfDay = (today.getHours() * 60 + today.getMinutes()) / 1440;
+  const progress = Math.min(1, Math.max(0, (dayIndex + fractionOfDay) / dayCount));
+  const currentDay = Math.min(dayCount, Math.max(1, dayIndex + 1));
+  const isComplete = dayIndex >= dayCount;
 
   return (
     <div className='mx-auto flex max-w-4xl items-center gap-2.5 px-4 py-1.5'>

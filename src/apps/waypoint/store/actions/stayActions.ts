@@ -3,7 +3,9 @@ import { arrayUnion, collection, deleteDoc, doc, runTransaction, setDoc, updateD
 
 import { db } from '@/lib/firebase/config';
 import type { Stay, StayChangeSnapshot, StayFieldChange, TripSpace } from '@apps/waypoint/types';
+import { compareDayTime } from '@/utils/dayTimeUtils';
 import { canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
+import { getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 type StayFields = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
 
@@ -21,22 +23,32 @@ interface UpdateStayInput {
   previousStay: Stay;
 }
 
-const TRACKED_STAY_CHANGE_FIELDS = ['checkInAt', 'checkOutAt'] as const;
+const ABSOLUTE_TRACKED_FIELDS = ['checkInAt', 'checkOutAt'] as const;
+const RELATIVE_TRACKED_FIELDS = [
+  'checkInDayIndex',
+  'checkInTime',
+  'checkOutDayIndex',
+  'checkOutTime',
+] as const;
 
 function buildStayChangeSnapshot(
+  trip: TripSpace,
   previousStay: Stay,
   nextStay: StayFields,
   uid: string,
 ): StayChangeSnapshot | null {
   const now = Date.now();
-  const changes: StayFieldChange[] = TRACKED_STAY_CHANGE_FIELDS.filter(
-    (field) => previousStay[field] !== nextStay[field],
-  ).map((field) => ({
-    field,
-    previousValue: previousStay[field],
-    changedBy: uid,
-    changedAt: now,
-  }));
+  const trackedFields: readonly StayFieldChange['field'][] = isRelativeTrip(trip)
+    ? RELATIVE_TRACKED_FIELDS
+    : ABSOLUTE_TRACKED_FIELDS;
+  const changes: StayFieldChange[] = trackedFields
+    .filter((field) => (previousStay[field] ?? null) !== (nextStay[field] ?? null))
+    .map((field) => ({
+      field,
+      previousValue: previousStay[field] ?? null,
+      changedBy: uid,
+      changedAt: now,
+    }));
 
   if (changes.length === 0) {
     return null;
@@ -62,12 +74,9 @@ export const createStay = createAsyncThunk<
   if (!stay.name.trim() || !stay.address.trim()) {
     return rejectWithValue('Stay name and address are required.');
   }
-  if (
-    !Number.isFinite(stay.checkInAt) ||
-    !Number.isFinite(stay.checkOutAt) ||
-    stay.checkOutAt <= stay.checkInAt
-  ) {
-    return rejectWithValue('Choose valid check-in and check-out times.');
+  const validationError = validateStayTimes(trip, stay);
+  if (validationError) {
+    return rejectWithValue(validationError);
   }
 
   const stayRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'stays'));
@@ -79,8 +88,6 @@ export const createStay = createAsyncThunk<
     name: stay.name.trim(),
     address: stay.address.trim(),
     checkInTimezone: stay.checkInTimezone?.trim() || null,
-    plannedArrivalAt: stay.plannedArrivalAt,
-    plannedDepartureAt: stay.plannedDepartureAt,
     confirmationCode: stay.confirmationCode?.trim() || null,
     notes: stay.notes?.trim() || null,
     linkUrl: stay.linkUrl?.trim() || null,
@@ -96,21 +103,47 @@ export const createStay = createAsyncThunk<
   return createdStay;
 });
 
-function validateStay(stay: StayFields) {
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function validateStayTimes(trip: TripSpace, stay: StayFields) {
+  const message = 'Choose valid check-in and check-out times.';
+  if (!isRelativeTrip(trip)) {
+    const { checkInAt, checkOutAt, plannedArrivalAt, plannedDepartureAt } = stay;
+    const isValid =
+      checkInAt !== null &&
+      checkOutAt !== null &&
+      plannedArrivalAt !== null &&
+      plannedDepartureAt !== null &&
+      [checkInAt, checkOutAt, plannedArrivalAt, plannedDepartureAt].every(Number.isFinite) &&
+      checkOutAt > checkInAt &&
+      plannedDepartureAt > plannedArrivalAt;
+    return isValid ? null : message;
+  }
+
+  const { checkIn, checkOut, plannedArrival, plannedDeparture } = getStayTime(trip, stay);
+  const points = [checkIn, checkOut, plannedArrival, plannedDeparture];
+  const hasEveryPoint = points.every(
+    (point) => point.dayIndex !== null && point.time !== null && TIME_PATTERN.test(point.time),
+  );
+  if (!hasEveryPoint) {
+    return message;
+  }
+
+  const asDayTime = (point: (typeof points)[number]) => ({
+    day: point.dayIndex as number,
+    time: point.time as string,
+  });
+  const isOrdered =
+    compareDayTime(asDayTime(checkOut), asDayTime(checkIn)) > 0 &&
+    compareDayTime(asDayTime(plannedDeparture), asDayTime(plannedArrival)) > 0;
+  return isOrdered ? null : message;
+}
+
+function validateStay(trip: TripSpace, stay: StayFields) {
   if (!stay.name.trim() || !stay.address.trim()) {
     return 'Stay name and address are required.';
   }
-  if (
-    !Number.isFinite(stay.checkInAt) ||
-    !Number.isFinite(stay.checkOutAt) ||
-    !Number.isFinite(stay.plannedArrivalAt) ||
-    !Number.isFinite(stay.plannedDepartureAt) ||
-    stay.checkOutAt <= stay.checkInAt ||
-    stay.plannedDepartureAt <= stay.plannedArrivalAt
-  ) {
-    return 'Choose valid stay times.';
-  }
-  return null;
+  return validateStayTimes(trip, stay);
 }
 
 export const updateStay = createAsyncThunk<
@@ -121,13 +154,13 @@ export const updateStay = createAsyncThunk<
   if (!canEditExistingItem(trip, uid)) {
     return rejectWithValue('You do not have permission to edit stays.');
   }
-  const validationError = validateStay(stay);
+  const validationError = validateStay(trip, stay);
   if (validationError) {
     return rejectWithValue(validationError);
   }
 
   const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
-  const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(previousStay, stay, uid) : null;
+  const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(trip, previousStay, stay, uid) : null;
   // `seenBy` and `changeHistory` change independently of this form, so the cached copies
   // are never written back — history is appended server-side instead.
   const editableFields = Object.fromEntries(
@@ -159,8 +192,16 @@ function getMissingStayFields(stay: Stay): Partial<Stay> {
   const defaults: Partial<Stay> = {
     stayType: 'OTHER',
     checkInTimezone: null,
-    plannedArrivalAt: stay.checkInAt,
-    plannedDepartureAt: stay.checkOutAt,
+    plannedArrivalAt: stay.checkInAt ?? null,
+    plannedDepartureAt: stay.checkOutAt ?? null,
+    checkInDayIndex: null,
+    checkInTime: null,
+    checkOutDayIndex: null,
+    checkOutTime: null,
+    plannedArrivalDayIndex: null,
+    plannedArrivalTime: null,
+    plannedDepartureDayIndex: null,
+    plannedDepartureTime: null,
     confirmationCode: null,
     place: null,
     linkUrl: null,

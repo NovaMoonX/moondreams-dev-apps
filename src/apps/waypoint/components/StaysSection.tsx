@@ -12,7 +12,7 @@ import {
   updateStay,
   updateStayNotes,
 } from '@apps/waypoint/store/actions/stayActions';
-import { selectStays, selectTimelineEvents } from '@apps/waypoint/store/selectors';
+import { selectSortedStays, selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
@@ -28,7 +28,7 @@ type StayValues = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'last
 
 export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
   const dispatch = useAppDispatch();
-  const stays = useAppSelector(selectStays);
+  const stays = useAppSelector(selectSortedStays);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStay, setEditingStay] = useState<Stay | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,6 +102,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
           {stays.map((stay) => (
             <StayCard
               key={stay.id}
+              trip={trip}
               stay={stay}
               canEdit={canEditExisting}
               onEdit={(selectedStay, onSuccess) => {

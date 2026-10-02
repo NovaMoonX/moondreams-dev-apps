@@ -4,13 +4,15 @@ import { Check } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
-import { formatTime } from '@/utils/formatUtils';
+import { formatClockTime } from '@/utils/formatUtils';
 
 import { getEventStatus, selectEventsByDay } from '@apps/waypoint/store/selectors';
-import type { TimelineEvent } from '@apps/waypoint/types';
+import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { getEventTime } from '@apps/waypoint/utils/tripTime';
 import { EVENT_TYPE_EMOJIS } from '@apps/waypoint/constants';
 
 interface TodayAgendaProps {
+  trip: TripSpace;
   title: string;
   dayIndex: number;
   now: number;
@@ -19,11 +21,11 @@ interface TodayAgendaProps {
   onOpenEvent: (event: TimelineEvent) => void;
 }
 
-function TodayAgenda({ title, dayIndex, now, limit, onViewAll, onOpenEvent }: TodayAgendaProps) {
+function TodayAgenda({ trip, title, dayIndex, now, limit, onViewAll, onOpenEvent }: TodayAgendaProps) {
   const dayEvents = useAppSelector(selectEventsByDay(dayIndex), shallowEqual);
   const events = dayEvents
     .filter((event) => !event.isArchived)
-    .sort((a, b) => a.startAt - b.startAt)
+    .sort((a, b) => (getEventTime(trip, a).startMs ?? 0) - (getEventTime(trip, b).startMs ?? 0))
     .slice(0, limit);
 
   if (events.length === 0) {
@@ -50,7 +52,7 @@ function TodayAgenda({ title, dayIndex, now, limit, onViewAll, onOpenEvent }: To
       </div>
       <ul className='divide-border border-border divide-y rounded-xl border'>
         {events.map((event) => {
-          const status = getEventStatus(event, now);
+          const status = getEventStatus(trip, event, now);
           const isDone = status === 'COMPLETED';
 
           return (
@@ -93,7 +95,7 @@ function TodayAgenda({ title, dayIndex, now, limit, onViewAll, onOpenEvent }: To
                     status === 'ACTIVE' ? 'font-medium text-emerald-600' : 'text-muted-foreground',
                   )}
                 >
-                  {status === 'ACTIVE' ? 'Now' : formatTime(event.startAt)}
+                  {status === 'ACTIVE' ? 'Now' : formatClockTime(getEventTime(trip, event).startTime ?? '00:00')}
                 </span>
               </Button>
             </li>

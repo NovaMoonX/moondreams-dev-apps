@@ -33,6 +33,11 @@ export interface TripMember {
 
 export type TripDateShiftStatus = 'IDLE' | 'PENDING';
 
+/** `ABSOLUTE` trips (created before relative times) store events and stays as real timestamps
+ * and can't have their dates changed. `RELATIVE` trips store a day number + "HH:mm" instead, so
+ * changing the trip's dates moves everything with it. A trip document with no `timeModel` is `ABSOLUTE`. */
+export type TripTimeModel = 'RELATIVE' | 'ABSOLUTE';
+
 export interface TripSpace {
   id: string;
   title: string;
@@ -46,10 +51,16 @@ export interface TripSpace {
   sharedAlbumUrl: string | null;
   sharedAlbumSetByUid: string | null;
   sharedAlbumSetAt: number | null;
-  /** `PENDING` while a Cloud Function is re-dating every event/stay/expense/checklist
-   * item after a date change — the trip and everything under it is read-only until
-   * it goes back to `IDLE`, so two shifts (or a shift and an edit) can't race. */
-  dateShiftStatus: TripDateShiftStatus;
+  /** Absent on trips created before relative times — read it through `getTimeModel`. */
+  timeModel: TripTimeModel;
+  /** IANA zone the trip's wall-clock times default to; an event or stay can override it.
+   * `null` on `ABSOLUTE` trips, which never had one. */
+  timezone: string | null;
+  /**
+   * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
+   * field keep their history. New trips write `null`.
+   */
+  dateShiftStatus: TripDateShiftStatus | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
@@ -62,8 +73,14 @@ export interface TripJoinRequest {
 }
 
 export interface StayFieldChange {
-  field: 'checkInAt' | 'checkOutAt';
-  previousValue: number;
+  field:
+    | 'checkInAt'
+    | 'checkOutAt'
+    | 'checkInDayIndex'
+    | 'checkInTime'
+    | 'checkOutDayIndex'
+    | 'checkOutTime';
+  previousValue: number | string | null;
   changedBy: string;
   changedAt: number;
 }
@@ -82,11 +99,25 @@ export interface Stay {
   address: string;
   latitude: number | null;
   longitude: number | null;
-  checkInAt: number;
-  checkOutAt: number;
+  /** @deprecated `ABSOLUTE` trips only (`null` on `RELATIVE` ones) — superseded by `checkInDayIndex` + `checkInTime`. */
+  checkInAt: number | null;
+  /** @deprecated `ABSOLUTE` trips only — superseded by `checkOutDayIndex` + `checkOutTime`. */
+  checkOutAt: number | null;
+  /** Zone override for this stay's times; `null` uses the trip's `timezone`. */
   checkInTimezone: string | null;
-  plannedArrivalAt: number;
-  plannedDepartureAt: number;
+  /** @deprecated `ABSOLUTE` trips only — superseded by `plannedArrivalDayIndex` + `plannedArrivalTime`. */
+  plannedArrivalAt: number | null;
+  /** @deprecated `ABSOLUTE` trips only — superseded by `plannedDepartureDayIndex` + `plannedDepartureTime`. */
+  plannedDepartureAt: number | null;
+  /** `RELATIVE` trips: a trip day offset plus "HH:mm" for each of the four stay times. */
+  checkInDayIndex: number | null;
+  checkInTime: string | null;
+  checkOutDayIndex: number | null;
+  checkOutTime: string | null;
+  plannedArrivalDayIndex: number | null;
+  plannedArrivalTime: string | null;
+  plannedDepartureDayIndex: number | null;
+  plannedDepartureTime: string | null;
   confirmationCode: string | null;
   notes: string | null;
   place: PlaceRef | null;
@@ -170,8 +201,15 @@ export type EventDetails =
   | FreeTimeEventDetails;
 
 export interface EventFieldChange {
-  field: 'startAt' | 'endAt' | 'locationName' | 'dayIndex' | 'endDayIndex';
-  previousValue: number | string;
+  field:
+    | 'startAt'
+    | 'endAt'
+    | 'startTime'
+    | 'endTime'
+    | 'locationName'
+    | 'dayIndex'
+    | 'endDayIndex';
+  previousValue: number | string | null;
   changedBy: string;
   changedAt: number;
 }
@@ -186,11 +224,19 @@ export interface TimelineEvent {
   id: string;
   tripId: string;
   eventType: EventType;
-  dayIndex: number;
-  endDayIndex: number;
+  /** `null` means "no specific day" (`RELATIVE` trips only). `dayIndex` and `endDayIndex` are both set or both null. */
+  dayIndex: number | null;
+  endDayIndex: number | null;
   title: string;
-  startAt: number;
+  /** @deprecated `ABSOLUTE` trips only (`null` on `RELATIVE` ones) — superseded by `dayIndex` + `startTime`. */
+  startAt: number | null;
+  /** @deprecated `ABSOLUTE` trips only — superseded by `endDayIndex` + `endTime`. */
   endAt: number | null;
+  /** "HH:mm" wall-clock time on `dayIndex`, floating — shown the same to every viewer. `RELATIVE` trips only. */
+  startTime: string | null;
+  endTime: string | null;
+  /** Zone override for this event's times; `null` uses the trip's `timezone`. */
+  timezone: string | null;
   locationName: string | null;
   address: string | null;
   latitude: number | null;
@@ -242,8 +288,14 @@ export interface EventSuggestion {
   tripId: string;
   eventId: string;
   suggestedTitle: string;
-  suggestedStartAt: number;
+  /** @deprecated `ABSOLUTE` trips only (`null` on `RELATIVE` ones) — superseded by `suggestedDayIndex` + `suggestedStartTime`. */
+  suggestedStartAt: number | null;
+  /** @deprecated `ABSOLUTE` trips only — superseded by `suggestedEndTime`. */
   suggestedEndAt: number | null;
+  /** `RELATIVE` trips: the suggested day and "HH:mm" times (the end is on the same day). */
+  suggestedDayIndex: number | null;
+  suggestedStartTime: string | null;
+  suggestedEndTime: string | null;
   suggestedLocationName: string | null;
   suggestedAddress: string | null;
   suggestedLatitude: number | null;

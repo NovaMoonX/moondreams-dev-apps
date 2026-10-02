@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import {
   Button,
@@ -10,6 +10,7 @@ import {
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
+import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
@@ -18,13 +19,15 @@ import {
   toLocalDateInputValue,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
+import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
+import { compareDayTime, shiftRangeEnd } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { getTimezoneOptions } from '@/utils/timezoneUtils';
 import { STAY_TYPES, STAY_TYPE_OPTION_LABELS } from '@apps/waypoint/constants';
 import type { Stay, StayType, TripSpace } from '@apps/waypoint/types';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import type { PlaceRef } from '@/lib/places/types';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
+import { buildStayTimeFields, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 type StayValues = Omit<
   Stay,
@@ -57,6 +60,11 @@ interface StayDraft {
   checkOutDate: string;
   checkOutTime: string;
   checkInTimezone: string;
+  /** Trip day offsets for the check-in/check-out pickers on relative trips. */
+  checkInDay: number;
+  checkOutDay: number;
+  plannedArrivalDay: number;
+  plannedDepartureDay: number;
   plannedArrivalDate: string;
   plannedArrivalTime: string;
   plannedDepartureDate: string;
@@ -64,6 +72,9 @@ interface StayDraft {
 }
 
 function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
+  const relative = stay && isRelativeTrip(trip) ? getStayTime(trip, stay) : null;
+  const lastDay = getDayCount(trip.startDate, trip.endDate) - 1;
+  const isRelative = isRelativeTrip(trip);
   return {
     name: stay?.name ?? '',
     stayType: stay?.stayType ?? 'HOTEL',
@@ -75,15 +86,64 @@ function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
     linkPreview: stay?.linkPreview ?? null,
     confirmationCode: stay?.confirmationCode ?? '',
     checkInDate: toLocalDateInputValue(stay?.checkInAt ?? trip.startDate),
-    checkInTime: stay ? new Date(stay.checkInAt).toTimeString().slice(0, 5) : '15:00',
+    checkInTime: relative
+      ? (relative.checkIn.time ?? '15:00')
+      : stay?.checkInAt
+        ? new Date(stay.checkInAt).toTimeString().slice(0, 5)
+        : '15:00',
     checkOutDate: toLocalDateInputValue(stay?.checkOutAt ?? trip.endDate),
-    checkOutTime: stay ? new Date(stay.checkOutAt).toTimeString().slice(0, 5) : '11:00',
+    checkOutTime: relative
+      ? (relative.checkOut.time ?? '11:00')
+      : stay?.checkOutAt
+        ? new Date(stay.checkOutAt).toTimeString().slice(0, 5)
+        : '11:00',
     checkInTimezone: stay?.checkInTimezone ?? '',
+    checkInDay: relative ? (relative.checkIn.dayIndex ?? 0) : 0,
+    checkOutDay: relative ? (relative.checkOut.dayIndex ?? lastDay) : isRelative ? lastDay : 0,
+    plannedArrivalDay: relative ? (relative.plannedArrival.dayIndex ?? 0) : 0,
+    plannedDepartureDay: relative ? (relative.plannedDeparture.dayIndex ?? lastDay) : isRelative ? lastDay : 0,
     plannedArrivalDate: toLocalDateInputValue(stay?.plannedArrivalAt ?? trip.startDate),
-    plannedArrivalTime: stay ? new Date(stay.plannedArrivalAt).toTimeString().slice(0, 5) : '15:00',
+    plannedArrivalTime: relative
+      ? (relative.plannedArrival.time ?? '15:00')
+      : stay?.plannedArrivalAt
+        ? new Date(stay.plannedArrivalAt).toTimeString().slice(0, 5)
+        : '15:00',
     plannedDepartureDate: toLocalDateInputValue(stay?.plannedDepartureAt ?? trip.endDate),
-    plannedDepartureTime: stay ? new Date(stay.plannedDepartureAt).toTimeString().slice(0, 5) : '11:00',
+    plannedDepartureTime: relative
+      ? (relative.plannedDeparture.time ?? '11:00')
+      : stay?.plannedDepartureAt
+        ? new Date(stay.plannedDepartureAt).toTimeString().slice(0, 5)
+        : '11:00',
   };
+}
+
+interface DayTimeFieldProps {
+  trip: TripSpace;
+  label: string;
+  day: number;
+  time: string;
+  onChange: (day: number, time: string) => void;
+}
+
+function DayTimeField({ trip, label, day, time, onChange }: DayTimeFieldProps) {
+  return (
+    <div className='space-y-1.5'>
+      <Label>{label}</Label>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <Select
+          options={getDayOptions(trip.startDate, trip.endDate, day).map(({ value, label }) => ({ value, text: label }))}
+          value={String(day)}
+          onChange={(value) => onChange(Number(value), time)}
+        />
+        <Input
+          type='time'
+          aria-label={`${label} time`}
+          value={time}
+          onChange={(event) => onChange(day, event.target.value)}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function StayFormModal({
@@ -102,7 +162,8 @@ export function StayFormModal({
   const [showConfirmationCode, setShowConfirmationCode] = useState(
     Boolean(stay?.confirmationCode),
   );
-  const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
+  const isRelative = isRelativeTrip(trip);
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
 
@@ -127,6 +188,63 @@ export function StayFormModal({
     return { date: toLocalDateInputValue(newEndAt), time: toLocalTimeInputValue(newEndAt) };
   };
 
+  // Moving a start carries its paired end along, keeping the length of the stay or plan.
+  const shiftPair = (
+    start: { day: number; time: string },
+    end: { day: number; time: string },
+    nextStart: { day: number; time: string },
+  ) =>
+    shiftRangeEnd({
+      start,
+      end,
+      nextStart,
+      max: nextStart.day < dayCount ? { day: dayCount - 1, time: '23:59' } : undefined,
+    });
+
+  const updateCheckIn = (day: number, time: string) => {
+    const end = shiftPair(
+      { day: draft.checkInDay, time: draft.checkInTime },
+      { day: draft.checkOutDay, time: draft.checkOutTime },
+      { day, time },
+    );
+    updateDraft({ checkInDay: day, checkInTime: time, checkOutDay: end.day, checkOutTime: end.time });
+  };
+
+  const updatePlannedArrival = (day: number, time: string) => {
+    const end = shiftPair(
+      { day: draft.plannedArrivalDay, time: draft.plannedArrivalTime },
+      { day: draft.plannedDepartureDay, time: draft.plannedDepartureTime },
+      { day, time },
+    );
+    updateDraft({
+      plannedArrivalDay: day,
+      plannedArrivalTime: time,
+      plannedDepartureDay: end.day,
+      plannedDepartureTime: end.time,
+    });
+  };
+
+  const relativeTimeFields = () => {
+    const checkIn = { dayIndex: draft.checkInDay, time: draft.checkInTime };
+    const checkOut = { dayIndex: draft.checkOutDay, time: draft.checkOutTime };
+    const plannedArrival = { dayIndex: draft.plannedArrivalDay, time: draft.plannedArrivalTime };
+    const plannedDeparture = { dayIndex: draft.plannedDepartureDay, time: draft.plannedDepartureTime };
+    const isOrdered = (start: typeof checkIn, end: typeof checkIn) =>
+      Boolean(start.time) &&
+      Boolean(end.time) &&
+      compareDayTime(
+        { day: end.dayIndex, time: end.time },
+        { day: start.dayIndex, time: start.time },
+      ) > 0;
+    if (!isOrdered(checkIn, checkOut) || !isOrdered(plannedArrival, plannedDeparture)) {
+      return null;
+    }
+
+    const result = buildStayTimeFields({ checkIn, checkOut, plannedArrival, plannedDeparture });
+    return result;
+  };
+  const relativeFields = isRelative ? relativeTimeFields() : null;
+
   const draftCheckInAt = fromLocalDateAndTimeInputValues(
     draft.checkInDate,
     draft.checkInTime,
@@ -143,15 +261,17 @@ export function StayFormModal({
     draft.plannedDepartureDate,
     draft.plannedDepartureTime,
   );
+  const hasValidTimes = isRelative
+    ? relativeFields !== null
+    : draftCheckInAt !== undefined &&
+      draftCheckOutAt !== undefined &&
+      draftCheckOutAt > draftCheckInAt &&
+      draftPlannedArrivalAt !== undefined &&
+      draftPlannedDepartureAt !== undefined &&
+      draftPlannedDepartureAt > draftPlannedArrivalAt;
   const isFormComplete =
-    draft.name.trim() !== '' &&
-    draft.address.trim() !== '' &&
-    draftCheckInAt !== undefined &&
-    draftCheckOutAt !== undefined &&
-    draftCheckOutAt > draftCheckInAt &&
-    draftPlannedArrivalAt !== undefined &&
-    draftPlannedDepartureAt !== undefined &&
-    draftPlannedDepartureAt > draftPlannedArrivalAt;
+    draft.name.trim() !== '' && draft.address.trim() !== '' && hasValidTimes;
+  const effectiveTimezone = draft.checkInTimezone || trip.timezone;
 
   const handleSubmit = async () => {
     if (!draft.name.trim() || !draft.address.trim()) {
@@ -167,14 +287,30 @@ export function StayFormModal({
       draft.checkOutDate,
       draft.checkOutTime,
     );
-    if (
-      checkInAt === undefined ||
-      checkOutAt === undefined ||
-      checkOutAt <= checkInAt ||
-      draftPlannedArrivalAt === undefined ||
-      draftPlannedDepartureAt === undefined ||
-      draftPlannedDepartureAt <= draftPlannedArrivalAt
-    ) {
+    const timeFields = isRelative
+      ? relativeFields
+      : checkInAt !== undefined &&
+          checkOutAt !== undefined &&
+          checkOutAt > checkInAt &&
+          draftPlannedArrivalAt !== undefined &&
+          draftPlannedDepartureAt !== undefined &&
+          draftPlannedDepartureAt > draftPlannedArrivalAt
+        ? {
+            checkInAt,
+            checkOutAt,
+            plannedArrivalAt: draftPlannedArrivalAt,
+            plannedDepartureAt: draftPlannedDepartureAt,
+            checkInDayIndex: null,
+            checkInTime: null,
+            checkOutDayIndex: null,
+            checkOutTime: null,
+            plannedArrivalDayIndex: null,
+            plannedArrivalTime: null,
+            plannedDepartureDayIndex: null,
+            plannedDepartureTime: null,
+          }
+        : null;
+    if (!timeFields) {
       setError('Choose valid check-in and check-out times.');
       return;
     }
@@ -186,11 +322,8 @@ export function StayFormModal({
         address: draft.address,
         latitude: draft.latitude,
         longitude: draft.longitude,
-        checkInAt,
-        checkOutAt,
+        ...timeFields,
         checkInTimezone: draft.checkInTimezone,
-        plannedArrivalAt: draftPlannedArrivalAt,
-        plannedDepartureAt: draftPlannedDepartureAt,
         confirmationCode: draft.confirmationCode,
         notes: stay?.notes ?? null,
         place: draft.place,
@@ -253,52 +386,89 @@ export function StayFormModal({
           currentTitle={draft.name}
           onUseTitle={(title) => updateDraft({ name: title })}
         />
-        <div className='grid gap-3 sm:grid-cols-2'>
-          <div className='space-y-1.5'>
-            <Label>Check-in</Label>
-            <Input
-              type='datetime-local'
-              value={`${draft.checkInDate}T${draft.checkInTime}`}
-              onChange={(event) => {
-                const [date, time] = event.target.value.split('T');
-                const shiftedCheckOut = shiftPairedEnd(
-                  draft.checkInDate,
-                  draft.checkInTime,
-                  draft.checkOutDate,
-                  draft.checkOutTime,
-                  date ?? '',
-                  time ?? '',
-                );
-                updateDraft({
-                  checkInDate: date ?? '',
-                  checkInTime: time ?? '',
-                  ...(shiftedCheckOut
-                    ? { checkOutDate: shiftedCheckOut.date, checkOutTime: shiftedCheckOut.time }
-                    : {}),
-                });
-              }}
+        {isRelative ? (
+          <div className='space-y-3'>
+            <DayTimeField
+              trip={trip}
+              label='Check-in'
+              day={draft.checkInDay}
+              time={draft.checkInTime}
+              onChange={updateCheckIn}
+            />
+            <DayTimeField
+              trip={trip}
+              label='Check-out'
+              day={draft.checkOutDay}
+              time={draft.checkOutTime}
+              onChange={(day, time) =>
+                updateDraft({ checkOutDay: day, checkOutTime: time })
+              }
             />
           </div>
-          <div className='space-y-1.5'>
-            <Label>Check-out</Label>
-            <Input
-              type='datetime-local'
-              value={`${draft.checkOutDate}T${draft.checkOutTime}`}
-              onChange={(event) => {
-                const [date, time] = event.target.value.split('T');
-                updateDraft({
-                  checkOutDate: date ?? '',
-                  checkOutTime: time ?? '',
-                });
-              }}
-            />
+        ) : (
+          <div className='grid gap-3 sm:grid-cols-2'>
+            <div className='space-y-1.5'>
+              <Label>Check-in</Label>
+              <Input
+                type='datetime-local'
+                value={`${draft.checkInDate}T${draft.checkInTime}`}
+                onChange={(event) => {
+                  const [date, time] = event.target.value.split('T');
+                  const shiftedCheckOut = shiftPairedEnd(
+                    draft.checkInDate,
+                    draft.checkInTime,
+                    draft.checkOutDate,
+                    draft.checkOutTime,
+                    date ?? '',
+                    time ?? '',
+                  );
+                  updateDraft({
+                    checkInDate: date ?? '',
+                    checkInTime: time ?? '',
+                    ...(shiftedCheckOut
+                      ? { checkOutDate: shiftedCheckOut.date, checkOutTime: shiftedCheckOut.time }
+                      : {}),
+                  });
+                }}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Check-out</Label>
+              <Input
+                type='datetime-local'
+                value={`${draft.checkOutDate}T${draft.checkOutTime}`}
+                onChange={(event) => {
+                  const [date, time] = event.target.value.split('T');
+                  updateDraft({
+                    checkOutDate: date ?? '',
+                    checkOutTime: time ?? '',
+                  });
+                }}
+              />
+            </div>
           </div>
-        </div>
-        {showTimezoneField ? (
+        )}
+        {isRelative && effectiveTimezone ? (
+          <div className='space-y-1.5'>
+            <Label>Time zone</Label>
+            <div className='flex flex-wrap items-center gap-2'>
+              <TimezoneSelect
+                pill
+                value={effectiveTimezone}
+                onChange={(value) =>
+                  updateDraft({ checkInTimezone: value === trip.timezone ? '' : value })
+                }
+              />
+              {draft.checkInTimezone === '' && (
+                <span className='text-muted-foreground text-xs'>Trip default</span>
+              )}
+            </div>
+          </div>
+        ) : showTimezoneField ? (
           <div className='space-y-1.5'>
             <Label>Timezone</Label>
-            <Select
-              options={timezoneOptions}
+            <TimezoneSelect
+              pill
               value={draft.checkInTimezone}
               onChange={(value) => updateDraft({ checkInTimezone: value })}
             />
@@ -331,47 +501,68 @@ export function StayFormModal({
             + Add confirmation code
           </Button>
         )}
-        <div className='grid gap-3 sm:grid-cols-2'>
-          <div className='space-y-1.5'>
-            <Label>Planned arrival</Label>
-            <Input
-              type='datetime-local'
-              value={`${draft.plannedArrivalDate}T${draft.plannedArrivalTime}`}
-              onChange={(event) => {
-                const [date, time] = event.target.value.split('T');
-                const shiftedDeparture = shiftPairedEnd(
-                  draft.plannedArrivalDate,
-                  draft.plannedArrivalTime,
-                  draft.plannedDepartureDate,
-                  draft.plannedDepartureTime,
-                  date ?? '',
-                  time ?? '',
-                );
-                updateDraft({
-                  plannedArrivalDate: date ?? '',
-                  plannedArrivalTime: time ?? '',
-                  ...(shiftedDeparture
-                    ? {
-                        plannedDepartureDate: shiftedDeparture.date,
-                        plannedDepartureTime: shiftedDeparture.time,
-                      }
-                    : {}),
-                });
-              }}
+        {isRelative ? (
+          <div className='space-y-3'>
+            <DayTimeField
+              trip={trip}
+              label='Planned arrival'
+              day={draft.plannedArrivalDay}
+              time={draft.plannedArrivalTime}
+              onChange={updatePlannedArrival}
+            />
+            <DayTimeField
+              trip={trip}
+              label='Planned departure'
+              day={draft.plannedDepartureDay}
+              time={draft.plannedDepartureTime}
+              onChange={(day, time) =>
+                updateDraft({ plannedDepartureDay: day, plannedDepartureTime: time })
+              }
             />
           </div>
-          <div className='space-y-1.5'>
-            <Label>Planned departure</Label>
-            <Input
-              type='datetime-local'
-              value={`${draft.plannedDepartureDate}T${draft.plannedDepartureTime}`}
-              onChange={(event) => {
-                const [date, time] = event.target.value.split('T');
-                updateDraft({ plannedDepartureDate: date ?? '', plannedDepartureTime: time ?? '' });
-              }}
-            />
+        ) : (
+          <div className='grid gap-3 sm:grid-cols-2'>
+            <div className='space-y-1.5'>
+              <Label>Planned arrival</Label>
+              <Input
+                type='datetime-local'
+                value={`${draft.plannedArrivalDate}T${draft.plannedArrivalTime}`}
+                onChange={(event) => {
+                  const [date, time] = event.target.value.split('T');
+                  const shiftedDeparture = shiftPairedEnd(
+                    draft.plannedArrivalDate,
+                    draft.plannedArrivalTime,
+                    draft.plannedDepartureDate,
+                    draft.plannedDepartureTime,
+                    date ?? '',
+                    time ?? '',
+                  );
+                  updateDraft({
+                    plannedArrivalDate: date ?? '',
+                    plannedArrivalTime: time ?? '',
+                    ...(shiftedDeparture
+                      ? {
+                          plannedDepartureDate: shiftedDeparture.date,
+                          plannedDepartureTime: shiftedDeparture.time,
+                        }
+                      : {}),
+                  });
+                }}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Planned departure</Label>
+              <Input
+                type='datetime-local'
+                value={`${draft.plannedDepartureDate}T${draft.plannedDepartureTime}`}
+                onChange={(event) => {
+                  const [date, time] = event.target.value.split('T');
+                  updateDraft({ plannedDepartureDate: date ?? '', plannedDepartureTime: time ?? '' });
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <ModalFooterActions
           leftActions={
             stay &&

@@ -1,4 +1,4 @@
-import { collection, onSnapshot, query, orderBy, type Unsubscribe } from 'firebase/firestore';
+import { collection, onSnapshot, query, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { Stay } from '@apps/waypoint/types';
@@ -12,10 +12,7 @@ export function startTripStaysListener(
     return () => undefined;
   }
 
-  const staysQuery = query(
-    collection(db, 'apps', 'waypoint', 'trips', tripId, 'stays'),
-    orderBy('plannedArrivalAt'),
-  );
+  const staysQuery = query(collection(db, 'apps', 'waypoint', 'trips', tripId, 'stays'));
 
   return onSnapshot(
     staysQuery,

@@ -15,7 +15,7 @@ import AppToggle from '@/components/AppToggle';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
+import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
@@ -53,7 +53,6 @@ import {
   getExpenseCategoryKeyLabel,
   getExpenseCategoryKeys,
 } from '@apps/waypoint/utils/expenseCategories';
-import { isTripDateShiftLocked } from '@apps/waypoint/utils/roleGuards';
 import {
   computeEvenSplit,
   computePairSettlements,
@@ -229,9 +228,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const currency = 'USD';
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
-  const canAddExpenses =
-    !isTripDateShiftLocked(trip) &&
-    ['ADMIN', 'EDITOR'].includes(trip.members[currentUserId]?.role ?? '');
+  const canAddExpenses = ['ADMIN', 'EDITOR'].includes(trip.members[currentUserId]?.role ?? '');
   const memberLabel = (uid: string) =>
     memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid;
   const existingGroupLabels = useMemo(
@@ -321,18 +318,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         );
 
   const dayGroups =
-    sortBy === 'day'
-      ? Array.from(
-          sortedExpenses
-            .reduce<Map<number | null, TripExpense[]>>((byDay, expense) => {
-              byDay.set(expense.dayIndex, [...(byDay.get(expense.dayIndex) ?? []), expense]);
-              return byDay;
-            }, new Map())
-            .entries(),
-        )
-          .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a - b))
-          .map(([dayIndex, items]) => ({ dayIndex, items }))
-      : null;
+    sortBy === 'day' ? groupByIndexBucket(sortedExpenses, (expense) => expense.dayIndex, dayCount) : null;
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
@@ -850,9 +836,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
           </div>
           {dayGroups ? (
-            dayGroups.map(({ dayIndex, items }) => (
-              <div key={dayIndex ?? 'no-day'} className='space-y-3'>
-                {renderDivider(dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex))}
+            dayGroups.map(({ bucket, items }) => (
+              <div key={bucket} className='space-y-3'>
+                {renderDivider(getBucketLabel(bucket, trip.startDate))}
                 <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
               </div>
             ))

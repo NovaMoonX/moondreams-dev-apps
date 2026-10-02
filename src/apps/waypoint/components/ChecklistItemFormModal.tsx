@@ -10,7 +10,7 @@ import {
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayOptions } from '@/utils/dateRangeUtils';
 import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_LABELS,
@@ -82,15 +82,13 @@ export default function ChecklistItemFormModal({
     formData.title.trim() !== '' &&
     (formData.category !== 'OTHER' || formData.customCategoryLabel.trim() !== '');
 
+  const storedDayIndex = item?.completeByDayIndex ?? null;
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
-      ...Array.from({ length: getDayCount(trip.startDate, trip.endDate) }, (_, index) => ({
-        value: String(index),
-        label: getDayLabel(trip.startDate, index),
-      })),
+      ...getDayOptions(trip.startDate, trip.endDate, storedDayIndex),
     ],
-    [trip.startDate, trip.endDate],
+    [trip.startDate, trip.endDate, storedDayIndex],
   );
 
   const fields = useMemo(() => {

@@ -1,10 +1,14 @@
+import { createSelector } from '@reduxjs/toolkit';
+
 import type { RootState } from '@/store';
-import { getEndOfLocalDay } from '@/utils/dateInputUtils';
+import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
+import { compareDayTime } from '@/utils/dayTimeUtils';
 import {
   getPerPersonMultiplier,
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
+import { getEventTime, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import type {
   Announcement,
   EventStatus,
@@ -21,11 +25,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const selectTrips = (state: RootState) => state.waypoint.trip.items;
 
+/** Judged by the viewer's local calendar day, so the trip's last day still counts as active. */
 export function getTripStatus(trip: TripSpace, now: number): TripStatus {
-  if (now < trip.startDate) {
+  const dayIndex = getLocalDayIndex(trip.startDate, now);
+  if (dayIndex < 0) {
     return 'UPCOMING';
   }
-  if (now >= trip.endDate) {
+  if (dayIndex >= getDayCount(trip.startDate, trip.endDate)) {
     return 'PAST';
   }
   return 'ACTIVE';
@@ -134,6 +140,59 @@ export const selectTimelineEvents = (state: RootState) => state.waypoint.events.
 
 export const selectStays = (state: RootState) => state.waypoint.stays.items;
 
+const selectEventsTrip = (state: RootState) =>
+  state.waypoint.trip.items.find((item) => item.id === state.waypoint.events.tripId) ?? null;
+
+const selectStaysTrip = (state: RootState) =>
+  state.waypoint.trip.items.find((item) => item.id === state.waypoint.stays.tripId) ?? null;
+
+/** Earliest first; events with no day sort last. Legacy trips keep their exact-instant order. */
+export const selectSortedTimelineEvents = createSelector(
+  [selectTimelineEvents, selectEventsTrip],
+  (events, trip): TimelineEvent[] => {
+    if (!trip) {
+      return events;
+    }
+
+    const keyed = events.map((event) => ({ event, time: getEventTime(trip, event) }));
+    const sorted = keyed
+      .sort((a, b) => {
+        if (!isRelativeTrip(trip)) {
+          return (a.time.startMs ?? 0) - (b.time.startMs ?? 0);
+        }
+        if (a.time.dayIndex === null || b.time.dayIndex === null) {
+          return Number(a.time.dayIndex === null) - Number(b.time.dayIndex === null);
+        }
+        return compareDayTime(
+          { day: a.time.dayIndex, time: a.time.startTime ?? '00:00' },
+          { day: b.time.dayIndex, time: b.time.startTime ?? '00:00' },
+        );
+      })
+      .map(({ event }) => event);
+    return sorted;
+  },
+);
+
+export const selectSortedStays = createSelector(
+  [selectStays, selectStaysTrip],
+  (stays, trip): Stay[] => {
+    if (!trip) {
+      return stays;
+    }
+
+    const keyed = stays.map((stay) => ({ stay, time: getStayTime(trip, stay).plannedArrival }));
+    const sorted = keyed
+      .sort((a, b) =>
+        compareDayTime(
+          { day: a.time.dayIndex ?? 0, time: a.time.time ?? '00:00' },
+          { day: b.time.dayIndex ?? 0, time: b.time.time ?? '00:00' },
+        ),
+      )
+      .map(({ stay }) => stay);
+    return sorted;
+  },
+);
+
 export const selectActiveStaysForDay =
   (dayIndex: number) => (state: RootState): Stay[] => {
     const trip = state.waypoint.trip.items.find(
@@ -143,12 +202,15 @@ export const selectActiveStaysForDay =
       return [];
     }
 
-    const dayStart = trip.startDate + dayIndex * 86_400_000;
-    const dayEnd = dayStart + 86_400_000;
-    return state.waypoint.stays.items.filter(
-      (stay) =>
-        stay.plannedArrivalAt < dayEnd && stay.plannedDepartureAt >= dayStart,
-    );
+    return state.waypoint.stays.items.filter((stay) => {
+      const { plannedArrival, plannedDeparture } = getStayTime(trip, stay);
+      return (
+        plannedArrival.dayIndex !== null &&
+        plannedDeparture.dayIndex !== null &&
+        plannedArrival.dayIndex <= dayIndex &&
+        dayIndex <= plannedDeparture.dayIndex
+      );
+    });
   };
 
 export const selectEventSuggestionsForEvent =
@@ -211,15 +273,19 @@ export const selectUnseenActivityStays =
       .filter((stay) => isStayActivityUnseen(stay, trip, uid))
       .sort((a, b) => getStayLastActivityAt(b, trip) - getStayLastActivityAt(a, trip));
 
-/** Event Active Status Machine: UPCOMING -> now >= startAt -> ACTIVE -> now >= endAt -> COMPLETED. An
- * event without an endAt implicitly ends at the end of its own local calendar day, so it doesn't stay
- * ACTIVE forever (and doesn't resurface as Active Now once a later event on the same day has finished). */
-export function getEventStatus(event: TimelineEvent, now: number): EventStatus {
-  if (now < event.startAt) {
+/** Event Active Status Machine: UPCOMING -> now >= start -> ACTIVE -> now >= end -> COMPLETED. An event
+ * without an end implicitly ends at the end of its own day, so it doesn't stay ACTIVE forever (and doesn't
+ * resurface as Active Now once a later event on the same day has finished). `null` when the event has no
+ * day or sits outside the trip's dates, so it can never be live. */
+export function getEventStatus(trip: TripSpace, event: TimelineEvent, now: number): EventStatus | null {
+  const { startMs, impliedEndMs } = getEventTime(trip, event);
+  if (startMs === null || impliedEndMs === null) {
+    return null;
+  }
+  if (now < startMs) {
     return 'UPCOMING';
   }
-  const impliedEndAt = event.endAt ?? getEndOfLocalDay(event.startAt);
-  if (now >= impliedEndAt) {
+  if (now >= impliedEndMs) {
     return 'COMPLETED';
   }
   return 'ACTIVE';
@@ -227,27 +293,27 @@ export function getEventStatus(event: TimelineEvent, now: number): EventStatus {
 
 // Among simultaneously active events, the one that started most recently is treated as "the" active event.
 export const selectActiveEvent =
-  (now: number) => (state: RootState): TimelineEvent | null => {
+  (trip: TripSpace, now: number) => (state: RootState): TimelineEvent | null => {
     const activeEvents = state.waypoint.events.items.filter(
-      (event) => getEventStatus(event, now) === 'ACTIVE',
+      (event) => getEventStatus(trip, event, now) === 'ACTIVE',
     );
     if (activeEvents.length === 0) {
       return null;
     }
     return activeEvents.reduce((latest, event) =>
-      event.startAt > latest.startAt ? event : latest,
+      (getEventTime(trip, event).startMs ?? 0) > (getEventTime(trip, latest).startMs ?? 0) ? event : latest,
     );
   };
 
 export const selectUpNextEvent =
-  (now: number) => (state: RootState): TimelineEvent | null => {
+  (trip: TripSpace, now: number) => (state: RootState): TimelineEvent | null => {
     const upcomingEvents = state.waypoint.events.items.filter(
-      (event) => getEventStatus(event, now) === 'UPCOMING',
+      (event) => getEventStatus(trip, event, now) === 'UPCOMING',
     );
     if (upcomingEvents.length === 0) {
       return null;
     }
     return upcomingEvents.reduce((soonest, event) =>
-      event.startAt < soonest.startAt ? event : soonest,
+      (getEventTime(trip, event).startMs ?? 0) < (getEventTime(trip, soonest).startMs ?? 0) ? event : soonest,
     );
   };

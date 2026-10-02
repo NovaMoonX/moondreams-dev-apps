@@ -12,9 +12,10 @@ import NotesField from '@apps/waypoint/components/NotesField';
 import EnrichedImage from '@/components/EnrichedImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import { formatClockTime, formatTime } from '@/utils/formatUtils';
+import { formatClockTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
-import type { TimelineEvent } from '@apps/waypoint/types';
+import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { formatEventTimeRange, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
@@ -24,6 +25,7 @@ import {
 const EVENT_NOTES_PLACEHOLDER = 'Reservation name, what to bring, where to meet…';
 
 interface EventCardProps {
+  trip: TripSpace;
   event: TimelineEvent;
   canEdit: boolean;
   /** Only an admin may archive or restore an event — everyone else, including editors who
@@ -54,21 +56,26 @@ function getQuickField(event: TimelineEvent): string | null {
 }
 
 export interface EventDetailLinesProps {
+  trip: TripSpace;
   event: TimelineEvent;
   showTitle: boolean;
   showNotes: boolean;
   showNotesIndicator?: boolean;
   showChangeHistory?: boolean;
+  /** Cards abbreviate the zone ("PDT"); the full details view spells it out. */
+  zoneStyle?: ZoneStyle;
   canEdit: boolean;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
 
 export function EventDetailLines({
+  trip,
   event,
   showTitle,
   showNotes,
   showNotesIndicator,
   showChangeHistory = true,
+  zoneStyle = 'short',
   canEdit,
   onSaveNotes,
 }: EventDetailLinesProps) {
@@ -87,8 +94,7 @@ export function EventDetailLines({
           </Badge>
         )}
         <span className='text-muted-foreground text-sm'>
-          {formatTime(event.startAt)}
-          {event.endAt ? ` - ${formatTime(event.endAt)}` : ''}
+          {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
         {showNotesIndicator && event.notes && (
           <span
@@ -133,6 +139,7 @@ export function EventDetailLines({
 }
 
 export function EventCard({
+  trip,
   event,
   canEdit,
   canArchive,
@@ -184,6 +191,7 @@ export function EventCard({
         <div className='flex items-start justify-between gap-3 p-4'>
           <div className='min-w-0 space-y-1'>
             <EventDetailLines
+              trip={trip}
               event={event}
               showTitle
               showNotes={false}
@@ -244,7 +252,9 @@ export function EventCard({
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >
           <EventDetailLines
+            trip={trip}
             event={event}
+            zoneStyle='long'
             showTitle={false}
             showNotes
             canEdit={canModify}

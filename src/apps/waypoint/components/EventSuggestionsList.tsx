@@ -8,7 +8,6 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { formatDateTime } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EventSuggestionFormModal from '@apps/waypoint/components/EventSuggestionFormModal';
 import {
@@ -21,6 +20,7 @@ import {
 import { selectEventSuggestionsForEvent } from '@apps/waypoint/store/selectors';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin, isTripMember } from '@apps/waypoint/utils/roleGuards';
+import { formatSuggestedTime } from '@apps/waypoint/utils/tripTime';
 
 interface EventSuggestionsListProps {
   trip: TripSpace;
@@ -112,7 +112,7 @@ function SuggestionRow({
       <div className='min-w-0'>
         <p className='text-sm font-medium'>{suggestion.suggestedTitle}</p>
         <p className='text-muted-foreground text-xs'>
-          {formatDateTime(suggestion.suggestedStartAt)}
+          {formatSuggestedTime(trip, suggestion)}
           {suggestion.suggestedLocationName ? ` · ${suggestion.suggestedLocationName}` : ''}
           {' · '}Suggested by {suggesterName}
         </p>

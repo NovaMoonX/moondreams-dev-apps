@@ -1,25 +1,4 @@
-let cachedTimezoneOptions: { value: string; text: string }[] | null = null;
-
-/** IANA zone name ("America/Los_Angeles") -> readable label ("America / Los Angeles"), no underscores. */
-export function formatTimezoneLabel(zone: string): string {
-  return zone
-    .split('/')
-    .map((part) => part.replace(/_/g, ' '))
-    .join(' / ');
-}
-
-/** "PDT", "EST"… as the runtime knows it at `at`; zones without a short name read like "GMT+1". */
-export function formatTimezoneAbbreviation(timeZone: string, at: number = Date.now()): string {
-  try {
-    const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'short' })
-      .formatToParts(new Date(at))
-      .find((entry) => entry.type === 'timeZoneName');
-    return part?.value ?? formatTimezoneLabel(timeZone);
-  } catch {
-    return formatTimezoneLabel(timeZone);
-  }
-}
-
+// Copy of `zonedDateTimeToEpoch` in the app's src/utils/timezoneUtils.ts — this package can't import from src.
 const getZoneOffsetMs = (epoch: number, timeZone: string) => {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -40,8 +19,7 @@ const getZoneOffsetMs = (epoch: number, timeZone: string) => {
     read('minute'),
     read('second'),
   );
-  const result = wallClockAsUtc - Math.floor(epoch / 1000) * 1000;
-  return result;
+  return wallClockAsUtc - Math.floor(epoch / 1000) * 1000;
 };
 
 const DAY_MS = 86_400_000;
@@ -62,21 +40,4 @@ export function zonedDateTimeToEpoch(date: string, time: string, timeZone: strin
     .sort((first, second) => first - second);
   const result = validInstants[0] ?? wallClockAsUtc - offsetBefore;
   return result;
-}
-
-/** Every IANA timezone the runtime supports, as `{ value, text }` select options sorted by label. */
-export function getTimezoneOptions(): { value: string; text: string }[] {
-  if (cachedTimezoneOptions) {
-    return cachedTimezoneOptions;
-  }
-
-  const zones =
-    typeof Intl.supportedValuesOf === 'function'
-      ? Intl.supportedValuesOf('timeZone')
-      : [];
-  cachedTimezoneOptions = zones
-    .map((zone) => ({ value: zone, text: formatTimezoneLabel(zone) }))
-    .sort((a, b) => a.text.localeCompare(b.text));
-
-  return cachedTimezoneOptions;
 }

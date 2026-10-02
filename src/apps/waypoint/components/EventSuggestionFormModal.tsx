@@ -18,6 +18,9 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 interface EventSuggestionFormModalProps {
   isOpen: boolean;
@@ -28,8 +31,11 @@ interface EventSuggestionFormModalProps {
   isSubmitting?: boolean;
   onSubmit: (fields: {
     suggestedTitle: string;
-    suggestedStartAt: number;
+    suggestedStartAt: number | null;
     suggestedEndAt: number | null;
+    suggestedDayIndex: number | null;
+    suggestedStartTime: string | null;
+    suggestedEndTime: string | null;
     suggestedLocationName: string | null;
     suggestedAddress: string | null;
     suggestedLatitude: number | null;
@@ -65,65 +71,131 @@ interface SuggestionFormData {
 const { custom, input, select } = FormFactories;
 
 function getInitialData(
-  tripStartDate: number,
+  trip: TripSpace,
   event: TimelineEvent,
   suggestion?: EventSuggestion,
 ): SuggestionFormData {
-  if (suggestion) {
-    return {
-      title: suggestion.suggestedTitle,
-      dayIndex: String(getDayIndex(tripStartDate, suggestion.suggestedStartAt)),
-      time: toLocalTimeInputValue(suggestion.suggestedStartAt) || '09:00',
-      endTime: {
-        enabled: Boolean(suggestion.suggestedEndAt),
-        value: toLocalTimeInputValue(suggestion.suggestedEndAt) || '',
-      },
-      location: {
+  const location = suggestion
+    ? {
         name: suggestion.suggestedLocationName ?? '',
         address: suggestion.suggestedAddress ?? '',
         latitude: suggestion.suggestedLatitude,
         longitude: suggestion.suggestedLongitude,
         place: suggestion.suggestedPlace,
+      }
+    : {
+        name: event.locationName ?? '',
+        address: event.address ?? '',
+        latitude: event.latitude,
+        longitude: event.longitude,
+        place: event.place,
+      };
+  const note = suggestion
+    ? { enabled: Boolean(suggestion.note), value: suggestion.note ?? '' }
+    : { enabled: false, value: '' };
+
+  if (suggestion && isRelativeTrip(trip)) {
+    return {
+      title: suggestion.suggestedTitle,
+      dayIndex: String(suggestion.suggestedDayIndex ?? 0),
+      time: suggestion.suggestedStartTime || '09:00',
+      endTime: {
+        enabled: Boolean(suggestion.suggestedEndTime),
+        value: suggestion.suggestedEndTime ?? '',
       },
-      note: { enabled: Boolean(suggestion.note), value: suggestion.note ?? '' },
+      location,
+      note,
     };
   }
 
+  if (suggestion) {
+    return {
+      title: suggestion.suggestedTitle,
+      dayIndex: String(getDayIndex(trip.startDate, suggestion.suggestedStartAt ?? trip.startDate)),
+      time: toLocalTimeInputValue(suggestion.suggestedStartAt) || '09:00',
+      endTime: {
+        enabled: Boolean(suggestion.suggestedEndAt),
+        value: toLocalTimeInputValue(suggestion.suggestedEndAt) || '',
+      },
+      location,
+      note,
+    };
+  }
+
+  const eventTime = getEventTime(trip, event);
   return {
     title: event.title,
-    dayIndex: String(event.dayIndex),
-    time: toLocalTimeInputValue(event.startAt) || '09:00',
-    endTime: { enabled: Boolean(event.endAt), value: toLocalTimeInputValue(event.endAt) || '' },
-    location: {
-      name: event.locationName ?? '',
-      address: event.address ?? '',
-      latitude: event.latitude,
-      longitude: event.longitude,
-      place: event.place,
-    },
-    note: { enabled: false, value: '' },
+    dayIndex: String(eventTime.dayIndex ?? 0),
+    time: eventTime.startTime || '09:00',
+    endTime: { enabled: Boolean(eventTime.endTime), value: eventTime.endTime ?? '' },
+    location,
+    note,
   };
 }
 
-function parseTimes(tripStartDate: number, data: SuggestionFormData) {
-  const date = getDayInputValue(tripStartDate, Number(data.dayIndex));
+interface ParsedTimes {
+  startAt: number | null;
+  endAt: number | null;
+  dayIndex: number | null;
+  startTime: string | null;
+  endTime: string | null;
+  error: string | null;
+}
+
+function parseTimes(trip: TripSpace, data: SuggestionFormData): ParsedTimes {
+  const dayIndex = Number(data.dayIndex);
+  const failure = (error: string): ParsedTimes => ({
+    startAt: null,
+    endAt: null,
+    dayIndex: null,
+    startTime: null,
+    endTime: null,
+    error,
+  });
+
+  if (isRelativeTrip(trip)) {
+    if (!TIME_PATTERN.test(data.time)) {
+      return failure('Choose a valid start time.');
+    }
+    if (!data.endTime.enabled) {
+      return { startAt: null, endAt: null, dayIndex, startTime: data.time, endTime: null, error: null };
+    }
+    if (!TIME_PATTERN.test(data.endTime.value)) {
+      return failure('Choose a valid end time, or remove it.');
+    }
+    if (data.endTime.value <= data.time) {
+      return failure('The end time needs to be after the start time.');
+    }
+    return {
+      startAt: null,
+      endAt: null,
+      dayIndex,
+      startTime: data.time,
+      endTime: data.endTime.value,
+      error: null,
+    };
+  }
+
+  const date = getDayInputValue(trip.startDate, dayIndex);
   const startAt = fromLocalDateAndTimeInputValues(date, data.time);
   if (startAt === undefined) {
-    return { startAt: null, endAt: null, error: 'Choose a valid start time.' };
+    return failure('Choose a valid start time.');
   }
+
+  const legacy = { dayIndex: null, startTime: null, endTime: null };
   if (!data.endTime.enabled) {
-    return { startAt, endAt: null, error: null };
+    return { ...legacy, startAt, endAt: null, error: null };
   }
 
   const endAt = fromLocalDateAndTimeInputValues(date, data.endTime.value);
   if (endAt === undefined) {
-    return { startAt, endAt: null, error: 'Choose a valid end time, or remove it.' };
+    return { ...legacy, startAt, endAt: null, error: 'Choose a valid end time, or remove it.' };
   }
   if (endAt <= startAt) {
-    return { startAt, endAt, error: 'The end time needs to be after the start time.' };
+    return { ...legacy, startAt, endAt, error: 'The end time needs to be after the start time.' };
   }
 
-  return { startAt, endAt, error: null };
+  return { ...legacy, startAt, endAt, error: null };
 }
 
 function EventSuggestionFormModal({
@@ -137,14 +209,14 @@ function EventSuggestionFormModal({
   onClose,
 }: EventSuggestionFormModalProps) {
   const initialData = useMemo(
-    () => getInitialData(trip.startDate, event, suggestion),
-    [trip.startDate, event, suggestion],
+    () => getInitialData(trip, event, suggestion),
+    [trip, event, suggestion],
   );
   const [formData, setFormData] = useState<SuggestionFormData>(initialData);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
-  const times = parseTimes(trip.startDate, formData);
+  const times = parseTimes(trip, formData);
   const isFormComplete = formData.title.trim() !== '' && formData.time !== '' && times.error === null;
 
   const fields = useMemo(
@@ -261,8 +333,8 @@ function EventSuggestionFormModal({
   );
 
   const handleSubmit = async (data: SuggestionFormData) => {
-    const { startAt, endAt, error } = parseTimes(trip.startDate, data);
-    if (startAt === null || error) {
+    const { startAt, endAt, dayIndex, startTime, endTime, error } = parseTimes(trip, data);
+    if (error) {
       setSubmitError(error);
       return;
     }
@@ -273,6 +345,9 @@ function EventSuggestionFormModal({
         suggestedTitle: data.title,
         suggestedStartAt: startAt,
         suggestedEndAt: endAt,
+        suggestedDayIndex: dayIndex,
+        suggestedStartTime: startTime,
+        suggestedEndTime: endTime,
         suggestedLocationName: data.location.name || null,
         suggestedAddress: data.location.address || null,
         suggestedLatitude: data.location.latitude,

@@ -7,17 +7,17 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import ImageUploadField from '@/components/forms/ImageUploadField';
-import { useImageUpload } from '@/hooks/useImageUpload';
+import DateRangeField, {
+  type DateRangeValue,
+} from '@/components/forms/DateRangeField';
+import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
-import { createDateInputField } from '@/utils/formFactoryHelpers';
-import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
 
 interface CreateTripFormData {
   title: string;
-  startDate: string;
-  endDate: string;
-  coverImageFile: File | null;
+  dates: DateRangeValue;
+  timezone: string;
 }
 
 interface CreateTripModalProps {
@@ -27,12 +27,18 @@ interface CreateTripModalProps {
     title: string;
     startDate: number;
     endDate: number;
-    coverImageFile: File | null;
+    timezone: string;
   }) => Promise<void> | void;
   onClose: () => void;
 }
 
 const { custom, input } = FormFactories;
+
+const INITIAL_DATA: CreateTripFormData = {
+  title: '',
+  dates: { startDate: '', endDate: '' },
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+};
 
 function CreateTripModal({
   isOpen,
@@ -41,18 +47,12 @@ function CreateTripModal({
   onClose,
 }: CreateTripModalProps) {
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CreateTripFormData>({
-    title: '',
-    startDate: '',
-    endDate: '',
-    coverImageFile: null,
-  });
-  const coverUpload = useImageUpload();
+  const [formData, setFormData] = useState<CreateTripFormData>(INITIAL_DATA);
 
   const isFormComplete =
     formData.title.trim() !== '' &&
-    fromDateInputValue(formData.startDate) !== undefined &&
-    fromDateInputValue(formData.endDate) !== undefined;
+    fromDateInputValue(formData.dates.startDate) !== undefined &&
+    fromDateInputValue(formData.dates.endDate) !== undefined;
 
   const fields = useMemo(
     () => [
@@ -62,75 +62,49 @@ function CreateTripModal({
         placeholder: 'Tokyo Summer 2026',
         variant: 'outline',
       }),
-      createDateInputField({
-        name: 'startDate',
-        label: 'Estimated start date',
-        variant: 'outline',
-      }),
-      createDateInputField({
-        name: 'endDate',
-        label: 'Estimated end date',
-        variant: 'outline',
+      custom({
+        name: 'dates',
+        label: 'When is the trip?',
+        renderComponent: (props) => (
+          <DateRangeField
+            value={props.value as DateRangeValue}
+            onChange={(value) => props.onValueChange(value)}
+            disabled={isSubmitting}
+          />
+        ),
       }),
       custom({
-        name: 'coverImageFile',
-        label: 'Cover photo',
-        renderComponent: () => (
-          <div className='space-y-2'>
-            {coverUpload.previewUrl && (
-              <img
-                src={coverUpload.previewUrl}
-                alt='Cover preview'
-                className='h-40 w-full rounded-md object-cover'
-              />
-            )}
-            <ImageUploadField
-              previewUrl={coverUpload.previewUrl}
-              error={coverUpload.error}
-              disabled={isSubmitting}
-              hideAvatar
-              onSelect={(file) => {
-                coverUpload.pick(file);
-                setFormData((current) => ({ ...current, coverImageFile: file }));
-              }}
-              onRemove={() => {
-                coverUpload.clear();
-                setFormData((current) => ({ ...current, coverImageFile: null }));
-              }}
-            />
-          </div>
+        name: 'timezone',
+        label: '',
+        renderComponent: (props) => (
+          <TimezoneSelect
+            pill
+            value={props.value as string}
+            onChange={(value) => props.onValueChange(value)}
+            disabled={isSubmitting}
+          />
         ),
       }),
     ],
-    [coverUpload, isSubmitting],
+    [isSubmitting],
   );
 
   const handleSubmit = async (data: CreateTripFormData) => {
     const title = data.title.trim();
-    const startDate = fromDateInputValue(data.startDate);
-    const endDate = fromDateInputValue(data.endDate);
+    const startDate = fromDateInputValue(data.dates.startDate);
+    const endDate = fromDateInputValue(data.dates.endDate);
 
     if (!title || startDate === undefined || endDate === undefined) {
-      setError('Enter a title and both estimated trip dates.');
+      setError('Enter a title and when the trip is.');
       return;
     }
 
     setError(null);
 
     try {
-      await onSubmit({
-        title,
-        startDate,
-        endDate,
-        coverImageFile: coverUpload.file,
-      });
+      await onSubmit({ title, startDate, endDate, timezone: data.timezone });
     } catch (submitError) {
-      setError(
-        getStorageErrorMessage(
-          submitError,
-          getErrorMessage(submitError, 'Unable to create this trip.'),
-        ),
-      );
+      setError(getErrorMessage(submitError, 'Unable to create this trip.'));
     }
   };
 
@@ -139,12 +113,7 @@ function CreateTripModal({
       <Form
         id='waypoint-create-trip'
         form={fields}
-        initialData={{
-          title: '',
-          startDate: '',
-          endDate: '',
-          coverImageFile: null,
-        }}
+        initialData={INITIAL_DATA}
         columns={1}
         spacing='normal'
         onDataChange={(data) => setFormData(data as CreateTripFormData)}

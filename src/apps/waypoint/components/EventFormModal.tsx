@@ -13,6 +13,7 @@ import { X } from 'lucide-react';
 
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
+import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import type {
@@ -20,18 +21,10 @@ import type {
   PlaceSelectionBias,
   PlaceSelectionResult,
 } from '@/lib/places/types';
-import {
-  fromLocalDateAndTimeInputValues,
-  toLocalTimeInputValue,
-} from '@/utils/dateInputUtils';
-import {
-  getDayCount,
-  getDayIndex,
-  getDayInputValue,
-  getDayLabel,
-} from '@/utils/dateRangeUtils';
+import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
+import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatTime } from '@/utils/formatUtils';
+import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -54,6 +47,11 @@ import type {
   TransitType,
   TripSpace,
 } from '@apps/waypoint/types';
+import {
+  buildEventTimeFields,
+  getEventTime,
+  isRelativeTrip,
+} from '@apps/waypoint/utils/tripTime';
 
 interface EventFormModalProps {
   isOpen: boolean;
@@ -102,11 +100,13 @@ const reminderOptions = [
 interface EventDraft {
   eventType: EventType;
   title: string;
-  dayIndex: number;
-  endDayIndex: number;
+  dayIndex: number | null;
+  endDayIndex: number | null;
   hasEndTime: boolean;
   time: string;
   endTime: string;
+  /** Override of the trip's time zone; `null` follows the trip. */
+  timezone: string | null;
   quickField: string;
   locationName: string;
   address: string;
@@ -133,15 +133,28 @@ const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = [
   'ACTIVITY',
 ];
 
-function getInitialDraft(event: TimelineEvent | undefined): EventDraft {
+const NO_DAY_VALUE = 'none';
+
+function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: boolean) {
+  const days = getDayOptions(trip.startDate, trip.endDate, current).map(({ value, label }) => ({
+    value,
+    text: label,
+  }));
+  const none = allowNoDay ? [{ text: 'No specific day', value: NO_DAY_VALUE }] : [];
+  return [...none, ...days];
+}
+
+function getInitialDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
+  const time = event ? getEventTime(trip, event) : null;
   return {
     eventType: event?.eventType ?? 'ACTIVITY',
     title: event?.title ?? '',
-    dayIndex: event?.dayIndex ?? 0,
-    endDayIndex: event?.endDayIndex ?? event?.dayIndex ?? 0,
-    hasEndTime: Boolean(event?.endAt),
-    time: toLocalTimeInputValue(event?.startAt) || '09:00',
-    endTime: toLocalTimeInputValue(event?.endAt) || '',
+    dayIndex: event ? (time?.dayIndex ?? null) : 0,
+    endDayIndex: event ? (time?.endDayIndex ?? null) : 0,
+    hasEndTime: Boolean(time?.endTime),
+    time: time?.startTime || '09:00',
+    endTime: time?.endTime ?? '',
+    timezone: event?.timezone ?? null,
     quickField:
       event?.eventType === 'TRAVEL' &&
       event.eventDetails &&
@@ -196,47 +209,44 @@ function EventFormModal({
   const { confirm } = useActionModal();
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(event));
+  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event));
+  const isRelative = isRelativeTrip(trip);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const updateDraft = (changes: Partial<EventDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
 
   // Moving the start keeps the same start->end window by shifting the end by the same delta.
-  const updateStart = (nextDayIndex: number, nextTime: string) => {
-    if (!draft.hasEndTime) {
-      updateDraft({ dayIndex: nextDayIndex, time: nextTime });
+  const updateStart = (nextDayIndex: number | null, nextTime: string) => {
+    if (nextDayIndex === null) {
+      updateDraft({ dayIndex: null, endDayIndex: null, time: nextTime, hasEndTime: false, endTime: '' });
+      return;
+    }
+    if (draft.dayIndex === null) {
+      updateDraft({ dayIndex: nextDayIndex, endDayIndex: nextDayIndex, time: nextTime });
+      return;
+    }
+    if (!draft.hasEndTime || draft.endTime === '') {
+      updateDraft({ dayIndex: nextDayIndex, endDayIndex: nextDayIndex, time: nextTime });
       return;
     }
 
-    const previousStartAt = fromLocalDateAndTimeInputValues(
-      getDayInputValue(trip.startDate, draft.dayIndex),
-      draft.time,
-    );
-    const previousEndAt = fromLocalDateAndTimeInputValues(
-      getDayInputValue(trip.startDate, draft.endDayIndex),
-      draft.endTime,
-    );
-    const nextStartAt = fromLocalDateAndTimeInputValues(
-      getDayInputValue(trip.startDate, nextDayIndex),
-      nextTime,
-    );
-    if (previousStartAt === undefined || previousEndAt === undefined || nextStartAt === undefined) {
-      updateDraft({ dayIndex: nextDayIndex, time: nextTime });
-      return;
-    }
-
-    const nextEndAt = nextStartAt + (previousEndAt - previousStartAt);
+    const nextEnd = shiftRangeEnd({
+      start: { day: draft.dayIndex, time: draft.time },
+      end: { day: draft.endDayIndex ?? draft.dayIndex, time: draft.endTime },
+      nextStart: { day: nextDayIndex, time: nextTime },
+      max: nextDayIndex < dayCount ? { day: dayCount - 1, time: '23:59' } : undefined,
+    });
     updateDraft({
       dayIndex: nextDayIndex,
       time: nextTime,
-      endDayIndex: getDayIndex(trip.startDate, nextEndAt),
-      endTime: toLocalTimeInputValue(nextEndAt),
+      endDayIndex: nextEnd.day,
+      endTime: nextEnd.time,
     });
   };
 
   const handleNext = () => {
-    if (!draft.title.trim() || !draft.time) {
+    if (!draft.title.trim() || !draft.time || (draft.dayIndex === null && !isRelative)) {
       setError('Enter a title, day, and start time.');
       return;
     }
@@ -244,26 +254,26 @@ function EventFormModal({
       setError('Enter an end time, or remove the end time.');
       return;
     }
+    const isSameDay = (draft.endDayIndex ?? draft.dayIndex) === draft.dayIndex;
+    if (draft.hasEndTime && isSameDay && draft.endTime <= draft.time) {
+      setError('The end time needs to be after the start time.');
+      return;
+    }
     setError(null);
     setStep(2);
   };
 
-  const handleSubmit = async () => {
-    const date = getDayInputValue(trip.startDate, draft.dayIndex);
-    const startAt = fromLocalDateAndTimeInputValues(date, draft.time);
-    if (startAt === undefined) {
-      setError('Choose a valid start time.');
-      return;
-    }
+  const timeFields = buildEventTimeFields(trip, {
+    dayIndex: draft.dayIndex,
+    endDayIndex: draft.endDayIndex,
+    startTime: draft.time,
+    endTime: draft.hasEndTime ? draft.endTime : null,
+    timezone: draft.timezone,
+  });
 
-    const endAt = draft.hasEndTime
-      ? fromLocalDateAndTimeInputValues(
-          getDayInputValue(trip.startDate, draft.endDayIndex),
-          draft.endTime,
-        )
-      : undefined;
-    if (draft.hasEndTime && endAt === undefined) {
-      setError('Choose a valid end time.');
+  const handleSubmit = async () => {
+    if (!timeFields) {
+      setError('Choose a valid day and start time.');
       return;
     }
 
@@ -288,13 +298,8 @@ function EventFormModal({
     try {
       await onSubmit({
         eventType: draft.eventType,
-        dayIndex: draft.dayIndex,
-        endDayIndex: draft.hasEndTime
-          ? Math.max(draft.dayIndex, draft.endDayIndex)
-          : draft.dayIndex,
+        ...timeFields,
         title: draft.title,
-        startAt,
-        endAt: draft.hasEndTime ? (endAt as number) : null,
         locationName: draft.locationName,
         address: draft.address,
         latitude: draft.latitude,
@@ -345,14 +350,22 @@ function EventFormModal({
     await onDelete();
   };
 
-  const draftStartAt = fromLocalDateAndTimeInputValues(
-    getDayInputValue(trip.startDate, draft.dayIndex),
-    draft.time,
-  );
-  const reminderAt =
-    draft.reminderEnabled && draftStartAt !== undefined
-      ? draftStartAt - draft.reminderMinutesBefore * 60_000
-      : null;
+  const getReminderText = () => {
+    if (!draft.reminderEnabled || !timeFields || timeFields.dayIndex === null) {
+      return null;
+    }
+    if (isRelative) {
+      const { time } = fromDayMinutes(
+        toDayMinutes(timeFields.dayIndex, draft.time) - draft.reminderMinutesBefore,
+      );
+      return formatClockTime(time);
+    }
+
+    const startMs = getEventTime(trip, timeFields).startMs;
+    return startMs === null ? null : formatTime(startMs - draft.reminderMinutesBefore * 60_000);
+  };
+  const reminderText = getReminderText();
+  const effectiveTimezone = draft.timezone ?? trip.timezone;
 
   const quickLabel =
     draft.eventType === 'TRAVEL'
@@ -394,12 +407,11 @@ function EventFormModal({
             <div className='space-y-1.5'>
               <Label>Day</Label>
               <Select
-                options={Array.from({ length: dayCount }, (_, index) => ({
-                  text: getDayLabel(trip.startDate, index),
-                  value: String(index),
-                }))}
-                value={String(draft.dayIndex)}
-                onChange={(value) => updateStart(Number(value), draft.time)}
+                options={getDayChoices(trip, draft.dayIndex, isRelative)}
+                value={draft.dayIndex === null ? NO_DAY_VALUE : String(draft.dayIndex)}
+                onChange={(value) =>
+                  updateStart(value === NO_DAY_VALUE ? null : Number(value), draft.time)
+                }
               />
             </div>
             <div className='space-y-1.5'>
@@ -410,7 +422,7 @@ function EventFormModal({
                 onChange={(event) => updateStart(draft.dayIndex, event.target.value)}
               />
             </div>
-            {draft.hasEndTime ? (
+            {draft.dayIndex === null ? null : draft.hasEndTime ? (
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
                   <Label>End day &amp; time</Label>
@@ -432,11 +444,8 @@ function EventFormModal({
                 </div>
                 <div className='grid gap-3 sm:grid-cols-2'>
                   <Select
-                    options={Array.from({ length: dayCount }, (_, index) => ({
-                      text: getDayLabel(trip.startDate, index),
-                      value: String(index),
-                    }))}
-                    value={String(draft.endDayIndex)}
+                    options={getDayChoices(trip, draft.endDayIndex, false)}
+                    value={String(draft.endDayIndex ?? draft.dayIndex)}
                     onChange={(value) =>
                       updateDraft({ endDayIndex: Number(value) })
                     }
@@ -460,6 +469,23 @@ function EventFormModal({
               >
                 + Add end time
               </Button>
+            )}
+            {isRelative && effectiveTimezone && (
+              <div className='space-y-1.5'>
+                <Label>Time zone</Label>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <TimezoneSelect
+                    pill
+                    value={effectiveTimezone}
+                    onChange={(value) =>
+                      updateDraft({ timezone: value === trip.timezone ? null : value })
+                    }
+                  />
+                  {draft.timezone === null && (
+                    <span className='text-muted-foreground text-xs'>Trip default</span>
+                  )}
+                </div>
+              </div>
             )}
             <ModalFooterActions
               leftActions={
@@ -543,7 +569,7 @@ function EventFormModal({
                 onUseTitle={(title) => updateDraft({ title })}
               />
             )}
-            {draft.hasReminderOverride ? (
+            {draft.dayIndex === null ? null : draft.hasReminderOverride ? (
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
                   <Label>Reminder</Label>
@@ -572,10 +598,8 @@ function EventFormModal({
                       : updateDraft({ reminderEnabled: true, reminderMinutesBefore: Number(value) })
                   }
                 />
-                {reminderAt !== null && (
-                  <p className='text-muted-foreground text-xs'>
-                    Will remind at {formatTime(reminderAt)}
-                  </p>
+                {reminderText !== null && (
+                  <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
                 )}
               </div>
             ) : (

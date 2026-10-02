@@ -29,7 +29,6 @@ export function canChangeRole(
   targetUserId: string,
 ) {
   return (
-    !isTripDateShiftLocked(trip) &&
     currentUserId !== targetUserId &&
     targetUserId !== trip.createdBy &&
     isTripAdmin(trip, currentUserId) &&
@@ -45,8 +44,12 @@ export function canRemoveMembers(
   return canChangeRole(trip, currentUserId, targetUserId);
 }
 
+const DAY_MS = 86_400_000;
+
+// These gate who may write, so they use the same UTC boundaries as firestore.rules (which can't
+// see the viewer's zone); the trip's display status is judged by the viewer's local day instead.
 export function isTripActive(trip: TripSpace, now = Date.now()) {
-  return now >= trip.startDate && now < trip.endDate;
+  return now >= trip.startDate && now < trip.endDate + DAY_MS;
 }
 
 /** True once the trip has started, whether it's still ongoing or already over. */
@@ -54,35 +57,21 @@ export function hasTripStarted(trip: TripSpace, now = Date.now()) {
   return now >= trip.startDate;
 }
 
-/** A date-shift Cloud Function is re-dating this trip's events/stays/expenses/
- * checklist — everything about the trip is read-only until it finishes. */
-export function isTripDateShiftLocked(trip: TripSpace) {
-  return trip.dateShiftStatus === 'PENDING';
-}
-
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
  * Admin-only while the trip is active — creating a new one follows `canCreateItem` instead. */
 export function canEditExistingItem(trip: TripSpace, uid: string) {
-  if (isTripDateShiftLocked(trip)) {
-    return false;
-  }
-
   return isTripActive(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }
 
 /** Archiving or restoring an event is Admin-only whatever the trip's phase, since approving
  * an event suggestion archives its source event even before the trip starts. */
 export function canArchiveEvent(trip: TripSpace, uid: string) {
-  return !isTripDateShiftLocked(trip) && isTripAdmin(trip, uid);
+  return isTripAdmin(trip, uid);
 }
 
 /** Creating a brand-new event/stay stays open to Editors before the trip starts, but
  * narrows to Admin-only once it has — an already-underway plan needs one steward, same
  * as editing an existing item. */
 export function canCreateItem(trip: TripSpace, uid: string) {
-  if (isTripDateShiftLocked(trip)) {
-    return false;
-  }
-
   return hasTripStarted(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }

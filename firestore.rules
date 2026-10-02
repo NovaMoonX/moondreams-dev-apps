@@ -23,8 +23,10 @@ service cloud.firestore {
       return value is string && value.size() > 0;
     }
 
+    // Trips are judged by calendar day, and `endDate` is the UTC midnight that starts the last
+    // day — so the trip stays active through that whole day.
     function isTripActive(trip) {
-      return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate;
+      return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate + 86400000;
     }
 
     // True once a trip has started, whether it's still ongoing or already over — used to
@@ -33,11 +35,14 @@ service cloud.firestore {
       return request.time.toMillis() >= trip.startDate;
     }
 
-    // A trip's own writes and every subcollection under it are read-only while a
-    // date-shift Cloud Function is re-dating its events/stays/expenses/checklist —
-    // the function itself writes with the Admin SDK, which bypasses these rules.
-    function isTripDateShiftIdle(trip) {
-      return !('dateShiftStatus' in trip) || trip.dateShiftStatus != 'PENDING';
+    function isClockTime(value) {
+      return value is string && value.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+
+    // Trips created before relative times have no `timeModel`; they store events and stays as
+    // absolute timestamps and can't have their dates changed.
+    function isRelativeTrip(trip) {
+      return trip.get('timeModel', null) == 'RELATIVE';
     }
 
     // `dev` is only ever set by scripts/seeds/core.ts, which refuses to run
@@ -1390,6 +1395,8 @@ service cloud.firestore {
             'sharedAlbumUrl',
             'sharedAlbumSetByUid',
             'sharedAlbumSetAt',
+            'timeModel',
+            'timezone',
             'dateShiftStatus',
             'createdBy',
             'createdAt',
@@ -1414,7 +1421,11 @@ service cloud.firestore {
           && (!('sharedAlbumSetAt' in data)
             || data.sharedAlbumSetAt == null
             || isTimestampNumber(data.sharedAlbumSetAt))
-          && (!('dateShiftStatus' in data) || data.dateShiftStatus in ['IDLE', 'PENDING'])
+          && (!('timeModel' in data) || data.timeModel in ['RELATIVE', 'ABSOLUTE'])
+          && (!('timezone' in data) || data.timezone == null || isNonEmptyString(data.timezone))
+          && (!('dateShiftStatus' in data)
+            || data.dateShiftStatus == null
+            || data.dateShiftStatus in ['IDLE', 'PENDING'])
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);
@@ -1431,6 +1442,8 @@ service cloud.firestore {
       function isTripCreateValid() {
         return request.auth != null
           && isTripFieldSetValid(request.resource.data)
+          && request.resource.data.get('timeModel', null) == 'RELATIVE'
+          && isNonEmptyString(request.resource.data.get('timezone', null))
           && request.resource.data.isArchived == false
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.members.keys().hasOnly([request.auth.uid])
@@ -1441,8 +1454,13 @@ service cloud.firestore {
           && request.resource.data.members[request.auth.uid].role == 'ADMIN';
       }
 
+      function isTimeModelUnchanged() {
+        return request.resource.data.get('timeModel', null) == resource.data.get('timeModel', null);
+      }
+
       function isTripUpdateValid() {
         return isTripFieldSetValid(request.resource.data)
+          && isTimeModelUnchanged()
           && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
@@ -1470,10 +1488,19 @@ service cloud.firestore {
             'coverImageUrl',
             'startDate',
             'endDate',
+            'timezone',
             'defaultCurrency',
             'lastEditedAt'
           ])
-          && isTripUpdateValid();
+          && isTripUpdateValid()
+          && (
+            isRelativeTrip(resource.data)
+            || (
+              request.resource.data.startDate == resource.data.startDate
+              && request.resource.data.endDate == resource.data.endDate
+              && request.resource.data.get('timezone', null) == resource.data.get('timezone', null)
+            )
+          );
       }
 
       function isTripAlbumUpdate() {
@@ -1506,6 +1533,7 @@ service cloud.firestore {
         let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
         return isTripAdmin()
           && isTripFieldSetValid(request.resource.data)
+          && isTimeModelUnchanged()
           && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
@@ -1525,6 +1553,7 @@ service cloud.firestore {
       function isTripMembershipManagementValid() {
         return isTripAdmin()
           && isTripFieldSetValid(request.resource.data)
+          && isTimeModelUnchanged()
           && request.resource.data.id == resource.data.id
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.createdAt == resource.data.createdAt
@@ -1543,7 +1572,7 @@ service cloud.firestore {
 
       allow read: if isTripMember();
       allow create: if isTripCreateValid();
-      allow update: if isTripMember() && isTripDateShiftIdle(resource.data) && (
+      allow update: if isTripMember() && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
          || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
@@ -1568,17 +1597,13 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members[request.auth.uid].role == role;
         }
 
-        function isChecklistTripIdle() {
-          return isTripDateShiftIdle(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data);
-        }
-
         function isChecklistEditor() {
-          return (hasChecklistRole('ADMIN') || hasChecklistRole('EDITOR')) && isChecklistTripIdle();
+          return hasChecklistRole('ADMIN') || hasChecklistRole('EDITOR');
         }
 
         function isChecklistAdminOnlyWhileActive() {
           let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-          return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
+          return request.auth != null && request.auth.uid in trip.members && (
             isTripActive(trip)
               ? trip.members[request.auth.uid].role == 'ADMIN'
               : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
@@ -1629,7 +1654,6 @@ service cloud.firestore {
 
         function isChecklistAssignedToggleValid() {
           return isChecklistMember()
-            && isChecklistTripIdle()
             && request.auth.uid in resource.data.assignedToUids
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'isCompleted',
@@ -1670,7 +1694,6 @@ service cloud.firestore {
       function isTripSubcollectionEditor() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripSubcollectionMember()
-          && isTripDateShiftIdle(trip)
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
@@ -1679,7 +1702,6 @@ service cloud.firestore {
       function isTripCreateAllowed() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripSubcollectionMember()
-          && isTripDateShiftIdle(trip)
           && (
             hasTripStarted(trip)
               ? trip.members[request.auth.uid].role == 'ADMIN'
@@ -1689,11 +1711,46 @@ service cloud.firestore {
 
       function isTripAdminOnlyWhileActive() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-        return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
+        return request.auth != null && request.auth.uid in trip.members && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
             : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
         );
+      }
+
+      // Legacy (absolute) trips: a real timestamp plus the day it falls on.
+      function isAbsoluteEventTimeValid(data) {
+        return data.dayIndex is int
+          && data.endDayIndex is int
+          && data.endDayIndex >= data.dayIndex
+          && isTimestampNumber(data.startAt)
+          && (data.endAt == null || isTimestampNumber(data.endAt))
+          && data.get('startTime', null) == null
+          && data.get('endTime', null) == null
+          && data.get('timezone', null) == null;
+      }
+
+      // Relative trips: a trip day (or none) plus a floating "HH:mm", never a timestamp.
+      function isRelativeEventTimeValid(data) {
+        return (
+            (data.dayIndex == null && data.endDayIndex == null)
+            || (data.dayIndex is int && data.endDayIndex is int && data.endDayIndex >= data.dayIndex)
+          )
+          && data.get('startAt', null) == null
+          && data.get('endAt', null) == null
+          && isClockTime(data.get('startTime', null))
+          && (data.get('endTime', null) == null
+            || (
+              isClockTime(data.endTime)
+              && data.dayIndex != null
+              && (data.endDayIndex > data.dayIndex || data.endTime > data.startTime)
+            ))
+          && (data.get('timezone', null) == null || isNonEmptyString(data.timezone));
+      }
+
+      function isEventTimeValid(data) {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isRelativeTrip(trip) ? isRelativeEventTimeValid(data) : isAbsoluteEventTimeValid(data);
       }
 
       function isEventShapeValid() {
@@ -1706,6 +1763,9 @@ service cloud.firestore {
             'title',
             'startAt',
             'endAt',
+            'startTime',
+            'endTime',
+            'timezone',
             'locationName',
             'address',
             'latitude',
@@ -1734,13 +1794,9 @@ service cloud.firestore {
           && request.resource.data.id == eventId
           && request.resource.data.tripId == tripId
           && request.resource.data.eventType in ['TRAVEL', 'DINING', 'ACTIVITY', 'FREE_TIME']
-          && request.resource.data.dayIndex is int
-          && request.resource.data.endDayIndex is int
-          && request.resource.data.endDayIndex >= request.resource.data.dayIndex
+          && isEventTimeValid(request.resource.data)
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
-          && isTimestampNumber(request.resource.data.startAt)
-          && (request.resource.data.endAt == null || isTimestampNumber(request.resource.data.endAt))
           && (request.resource.data.locationName == null || request.resource.data.locationName is string)
           && (request.resource.data.address == null || request.resource.data.address is string)
           && (request.resource.data.latitude == null || request.resource.data.latitude is number)
@@ -1835,6 +1891,33 @@ service cloud.firestore {
         return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
       }
 
+      function isAbsoluteSuggestedTimeValid(data) {
+        return isTimestampNumber(data.suggestedStartAt)
+          && (data.suggestedEndAt == null || (
+            isTimestampNumber(data.suggestedEndAt)
+            && data.suggestedEndAt > data.suggestedStartAt
+          ))
+          && data.get('suggestedDayIndex', null) == null
+          && data.get('suggestedStartTime', null) == null
+          && data.get('suggestedEndTime', null) == null;
+      }
+
+      function isRelativeSuggestedTimeValid(data) {
+        return data.get('suggestedStartAt', null) == null
+          && data.get('suggestedEndAt', null) == null
+          && data.get('suggestedDayIndex', null) is int
+          && isClockTime(data.get('suggestedStartTime', null))
+          && (data.get('suggestedEndTime', null) == null
+            || (isClockTime(data.suggestedEndTime) && data.suggestedEndTime > data.suggestedStartTime));
+      }
+
+      function isSuggestedTimeValid(data) {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isRelativeTrip(trip)
+          ? isRelativeSuggestedTimeValid(data)
+          : isAbsoluteSuggestedTimeValid(data);
+      }
+
       function isSuggestionShapeValid() {
         return request.resource.data.keys().hasOnly([
             'id',
@@ -1843,6 +1926,9 @@ service cloud.firestore {
             'suggestedTitle',
             'suggestedStartAt',
             'suggestedEndAt',
+            'suggestedDayIndex',
+            'suggestedStartTime',
+            'suggestedEndTime',
             'suggestedLocationName',
             'suggestedAddress',
             'suggestedLatitude',
@@ -1857,11 +1943,7 @@ service cloud.firestore {
           && request.resource.data.tripId == tripId
           && isNonEmptyString(request.resource.data.eventId)
           && isNonEmptyString(request.resource.data.suggestedTitle)
-          && isTimestampNumber(request.resource.data.suggestedStartAt)
-          && (request.resource.data.suggestedEndAt == null || (
-            isTimestampNumber(request.resource.data.suggestedEndAt)
-            && request.resource.data.suggestedEndAt > request.resource.data.suggestedStartAt
-          ))
+          && isSuggestedTimeValid(request.resource.data)
           && (request.resource.data.suggestedLocationName == null || request.resource.data.suggestedLocationName is string)
           && (request.resource.data.suggestedAddress == null || request.resource.data.suggestedAddress is string)
           && (request.resource.data.suggestedLatitude == null || request.resource.data.suggestedLatitude is number)
@@ -1969,7 +2051,6 @@ service cloud.firestore {
       function isTripSubcollectionEditor() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripSubcollectionMember()
-          && isTripDateShiftIdle(trip)
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
@@ -1978,7 +2059,6 @@ service cloud.firestore {
       function isTripCreateAllowed() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripSubcollectionMember()
-          && isTripDateShiftIdle(trip)
           && (
             hasTripStarted(trip)
               ? trip.members[request.auth.uid].role == 'ADMIN'
@@ -1988,11 +2068,61 @@ service cloud.firestore {
 
       function isTripAdminOnlyWhileActive() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-        return request.auth != null && request.auth.uid in trip.members && isTripDateShiftIdle(trip) && (
+        return request.auth != null && request.auth.uid in trip.members && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
             : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
         );
+      }
+
+      // A trip day offset plus "HH:mm" for a stay's check-in, check-out and planned pair.
+      function isStayDayTimeValid(data, dayField, timeField) {
+        return data.get(dayField, null) is int && isClockTime(data.get(timeField, null));
+      }
+
+      // Whether day B + time B falls strictly after day A + time A ("HH:mm" strings sort correctly).
+      function dayTimeAfter(dayA, timeA, dayB, timeB) {
+        return dayB > dayA || (dayB == dayA && timeB > timeA);
+      }
+
+      function isAbsoluteStayTimeValid(data) {
+        return isTimestampNumber(data.checkInAt)
+          && isTimestampNumber(data.checkOutAt)
+          && data.checkOutAt > data.checkInAt
+          && isTimestampNumber(data.plannedArrivalAt)
+          && isTimestampNumber(data.plannedDepartureAt)
+          && data.plannedDepartureAt > data.plannedArrivalAt
+          && data.get('checkInDayIndex', null) == null
+          && data.get('checkInTime', null) == null
+          && data.get('checkOutDayIndex', null) == null
+          && data.get('checkOutTime', null) == null
+          && data.get('plannedArrivalDayIndex', null) == null
+          && data.get('plannedArrivalTime', null) == null
+          && data.get('plannedDepartureDayIndex', null) == null
+          && data.get('plannedDepartureTime', null) == null;
+      }
+
+      function isRelativeStayTimeValid(data) {
+        return data.get('checkInAt', null) == null
+          && data.get('checkOutAt', null) == null
+          && data.get('plannedArrivalAt', null) == null
+          && data.get('plannedDepartureAt', null) == null
+          && isStayDayTimeValid(data, 'checkInDayIndex', 'checkInTime')
+          && isStayDayTimeValid(data, 'checkOutDayIndex', 'checkOutTime')
+          && isStayDayTimeValid(data, 'plannedArrivalDayIndex', 'plannedArrivalTime')
+          && isStayDayTimeValid(data, 'plannedDepartureDayIndex', 'plannedDepartureTime')
+          && dayTimeAfter(
+            data.checkInDayIndex, data.checkInTime, data.checkOutDayIndex, data.checkOutTime
+          )
+          && dayTimeAfter(
+            data.plannedArrivalDayIndex, data.plannedArrivalTime,
+            data.plannedDepartureDayIndex, data.plannedDepartureTime
+          );
+      }
+
+      function isStayTimeValid(data) {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isRelativeTrip(trip) ? isRelativeStayTimeValid(data) : isAbsoluteStayTimeValid(data);
       }
 
       function isStayShapeValid() {
@@ -2009,6 +2139,14 @@ service cloud.firestore {
             'checkInTimezone',
             'plannedArrivalAt',
             'plannedDepartureAt',
+            'checkInDayIndex',
+            'checkInTime',
+            'checkOutDayIndex',
+            'checkOutTime',
+            'plannedArrivalDayIndex',
+            'plannedArrivalTime',
+            'plannedDepartureDayIndex',
+            'plannedDepartureTime',
             'confirmationCode',
             'notes',
             'place',
@@ -2027,14 +2165,9 @@ service cloud.firestore {
           && isNonEmptyString(request.resource.data.address)
           && (request.resource.data.latitude == null || request.resource.data.latitude is number)
           && (request.resource.data.longitude == null || request.resource.data.longitude is number)
-          && isTimestampNumber(request.resource.data.checkInAt)
-          && isTimestampNumber(request.resource.data.checkOutAt)
-          && request.resource.data.checkOutAt > request.resource.data.checkInAt
+          && isStayTimeValid(request.resource.data)
           && (request.resource.data.checkInTimezone == null
             || isNonEmptyString(request.resource.data.checkInTimezone))
-          && isTimestampNumber(request.resource.data.plannedArrivalAt)
-          && isTimestampNumber(request.resource.data.plannedDepartureAt)
-          && request.resource.data.plannedDepartureAt > request.resource.data.plannedArrivalAt
           && (request.resource.data.confirmationCode == null
             || isNonEmptyString(request.resource.data.confirmationCode))
           && (request.resource.data.notes == null || request.resource.data.notes is string)
@@ -2084,6 +2217,14 @@ service cloud.firestore {
             'checkInTimezone',
             'plannedArrivalAt',
             'plannedDepartureAt',
+            'checkInDayIndex',
+            'checkInTime',
+            'checkOutDayIndex',
+            'checkOutTime',
+            'plannedArrivalDayIndex',
+            'plannedArrivalTime',
+            'plannedDepartureDayIndex',
+            'plannedDepartureTime',
             'confirmationCode',
             'notes',
             'place',
@@ -2114,7 +2255,6 @@ service cloud.firestore {
       function isTripExpenseEditor() {
         let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
         return isTripExpenseMember()
-          && isTripDateShiftIdle(trip)
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
@@ -2171,7 +2311,6 @@ service cloud.firestore {
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt;
       allow update: if isTripExpenseMember()
-        && isTripDateShiftIdle(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data)
         && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
           || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
