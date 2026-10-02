@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { LogIn, PlayCircle } from 'lucide-react';
+import { Car, KeyRound, LogIn, PlayCircle } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -15,24 +15,33 @@ import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
+import { RentalDetailLines } from '@apps/waypoint/components/RentalCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
-import StayNotesButton from '@apps/waypoint/components/StayNotesButton';
+import NotesViewButton from '@apps/waypoint/components/NotesViewButton';
 import TodayAgenda from '@apps/waypoint/components/TodayAgenda';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
   selectActiveEvent,
+  selectRentals,
   selectStays,
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
-import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import type { Rental, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import {
+  getRentalImage,
+  getRentalPickupLocation,
+  getRentalReturnLocation,
+} from '@apps/waypoint/utils/rentalUtils';
 import {
   formatEventTimeRange,
   getEventTime,
+  getRentalTime,
+  getRentalTimezoneLabel,
   getStayTime,
   getStayTimezoneLabel,
   isRelativeTrip,
@@ -43,7 +52,17 @@ import {
   EVENT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 
-type OverviewDetail = { type: 'event'; event: TimelineEvent } | { type: 'stay'; stay: Stay };
+type OverviewDetail =
+  | { type: 'event'; event: TimelineEvent }
+  | { type: 'stay'; stay: Stay }
+  | { type: 'rental'; rental: Rental };
+
+type RentalLeg = 'pickup' | 'return';
+
+interface RentalToday {
+  rental: Rental;
+  leg: RentalLeg;
+}
 
 interface OverviewSectionProps {
   trip: TripSpace;
@@ -86,6 +105,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const activeEvent = useAppSelector(selectActiveEvent(trip, now));
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now));
   const stays = useAppSelector(selectStays);
+  const rentals = useAppSelector(selectRentals);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
 
@@ -102,6 +122,14 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const checkInStays = stays
     .filter(isCheckInToday)
     .sort((a, b) => (getStayTime(trip, a).checkInMs ?? 0) - (getStayTime(trip, b).checkInMs ?? 0));
+  const getLegTime = ({ rental, leg }: RentalToday) =>
+    leg === 'pickup' ? rental.pickupTime : rental.returnTime;
+  const rentalsToday = rentals
+    .flatMap((rental): RentalToday[] => [
+      ...(rental.pickupDayIndex === todayIndex ? [{ rental, leg: 'pickup' as const }] : []),
+      ...(rental.returnDayIndex === todayIndex ? [{ rental, leg: 'return' as const }] : []),
+    ])
+    .sort((a, b) => getLegTime(a).localeCompare(getLegTime(b)));
   // Nothing left today — no event running right now, and whatever's next (if
   // anything) isn't until a later day.
   const isDoneForToday =
@@ -120,6 +148,10 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     setDetail({ type: 'stay', stay });
   };
 
+  const openRentalDrawer = (rental: Rental) => {
+    setDetail({ type: 'rental', rental });
+  };
+
   return (
     <div className='space-y-5 sm:space-y-3'>
       <div className='space-y-3'>
@@ -131,6 +163,17 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             now={now}
             isSmallScreen={isSmallScreen}
             onOpenDetails={() => openStayDrawer(stay)}
+          />
+        ))}
+        {rentalsToday.map(({ rental, leg }) => (
+          <RentalTodayCard
+            key={`${rental.id}-${leg}`}
+            trip={trip}
+            rental={rental}
+            leg={leg}
+            now={now}
+            isSmallScreen={isSmallScreen}
+            onOpenDetails={() => openRentalDrawer(rental)}
           />
         ))}
         {activeEvent && (
@@ -244,6 +287,28 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           />
         </PlaceDetailsDrawer>
       )}
+      {detail?.type === 'rental' && (
+        <PlaceDetailsDrawer
+          key={detail.rental.id}
+          isOpen
+          onClose={() => setDetail(null)}
+          title={detail.rental.name}
+          imageUrl={getRentalImage(detail.rental)}
+          location={getRentalPickupLocation(detail.rental)}
+          linkUrl={detail.rental.linkUrl}
+          onEdit={null}
+        >
+          <RentalDetailLines
+            trip={trip}
+            rental={detail.rental}
+            zoneStyle='long'
+            showTitle={false}
+            showExtras
+            canEdit={false}
+            onSaveNotes={async () => {}}
+          />
+        </PlaceDetailsDrawer>
+      )}
     </div>
   );
 }
@@ -330,8 +395,87 @@ function CheckInStayCard({
           )}
           {(stay.linkUrl || stay.notes) && (
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
-              <StayNotesButton stay={stay} />
+              <NotesViewButton title={stay.name} notes={stay.notes} />
               {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function RentalTodayCard({
+  trip,
+  rental,
+  leg,
+  now,
+  isSmallScreen,
+  onOpenDetails,
+}: {
+  trip: TripSpace;
+  rental: Rental;
+  leg: RentalLeg;
+  now: number;
+  isSmallScreen: boolean;
+  onOpenDetails: () => void;
+}) {
+  const isPickup = leg === 'pickup';
+  const imageUrl = getRentalImage(rental);
+  const clickProps = isSmallScreen ? getOpenDetailsProps(rental.name, onOpenDetails) : {};
+  const { pickupMs, returnMs } = getRentalTime(trip, rental);
+  const legMs = isPickup ? pickupMs : returnMs;
+  const isDone = legMs !== null && legMs <= now;
+  const location = isPickup ? getRentalPickupLocation(rental) : getRentalReturnLocation(rental);
+  const timezoneLabel = getRentalTimezoneLabel(trip, rental);
+  const label = isPickup
+    ? isDone ? 'Picked up' : 'Picking up today'
+    : isDone ? 'Returned' : 'Returning today';
+  const Icon = isPickup ? Car : KeyRound;
+
+  return (
+    <article
+      {...clickProps}
+      className={join(
+        'border-border bg-card rounded-xl border p-3',
+        isSmallScreen && 'cursor-pointer',
+      )}
+    >
+      <div className='flex items-start gap-3'>
+        {imageUrl && (
+          <EnrichedImage
+            src={imageUrl}
+            alt=''
+            className='h-12 w-12 shrink-0 rounded-lg object-cover sm:h-16 sm:w-16'
+          />
+        )}
+        <div className='min-w-0 flex-1 space-y-0.5'>
+          <p className='text-muted-foreground flex items-center gap-1 text-xs font-medium tracking-wide uppercase'>
+            <Icon className='h-3 w-3' /> {label}
+          </p>
+          <h3 className='truncate text-sm font-semibold sm:text-base'>{rental.name}</h3>
+          <p className='text-muted-foreground truncate text-xs'>
+            {formatClockTime(isPickup ? rental.pickupTime : rental.returnTime)}
+            {isDone || legMs === null ? '' : ` · ${formatCountdown(legMs, now)}`}
+            {timezoneLabel ? ` · ${timezoneLabel}` : ''}
+          </p>
+        </div>
+        {!isSmallScreen && <MapNavigationButton {...location} />}
+      </div>
+      {!isSmallScreen && (
+        <div className='mt-2 space-y-1'>
+          <LocationLink {...location} label={location.address} className='text-xs' />
+          {rental.vehicle && <p className='text-xs'>{rental.vehicle}</p>}
+          {rental.confirmationCode && (
+            <p className='text-xs'>
+              <span className='text-muted-foreground'>Confirmation · </span>
+              <span className='font-medium'>{rental.confirmationCode}</span>
+            </p>
+          )}
+          {(rental.linkUrl || rental.notes) && (
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+              <NotesViewButton title={rental.name} notes={rental.notes} />
+              {rental.linkUrl && <ExternalLinkText href={rental.linkUrl} />}
             </div>
           )}
         </div>

@@ -50,6 +50,8 @@ import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
 import StaysEntry from '@apps/waypoint/components/StaysEntry';
+import RentalsSection from '@apps/waypoint/components/RentalsSection';
+import RentalsEntry from '@apps/waypoint/components/RentalsEntry';
 import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
@@ -98,7 +100,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
   const isNestedScreen =
-    hasAppNav && (sectionTab === 'stays' || sectionTab === 'members' || sectionTab === 'checklist');
+    hasAppNav &&
+    (sectionTab === 'stays' ||
+      sectionTab === 'rentals' ||
+      sectionTab === 'members' ||
+      sectionTab === 'checklist');
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
   const setSectionTab = (value: string) => {
@@ -494,8 +500,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </div>
         )}
         {hasAppNav && sectionTab === '' && (
-          <div className='mt-5'>
+          <div className='mt-5 space-y-3'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
+            <RentalsEntry onOpen={() => setSectionTab('rentals')} />
           </div>
         )}
         {!hasAppNav && <hr className='border-border mt-4' />}
@@ -511,6 +518,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               <TabsTrigger value='members'>Members</TabsTrigger>
               <TabsTrigger value='expenses'>Expenses</TabsTrigger>
               <TabsTrigger value='stays'>Stays</TabsTrigger>
+              <TabsTrigger value='rentals'>Rentals</TabsTrigger>
               <TabsTrigger value='checklist'>Checklist</TabsTrigger>
             </TabsList>
           )}
@@ -544,6 +552,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </TabsContent>
           <TabsContent value='stays'>
             <StaysSection trip={trip} currentUserId={currentUserId} />
+          </TabsContent>
+          <TabsContent value='rentals'>
+            <RentalsSection trip={trip} currentUserId={currentUserId} />
           </TabsContent>
           <TabsContent value='checklist'>
             <ChecklistSection trip={trip} currentUserId={currentUserId} />

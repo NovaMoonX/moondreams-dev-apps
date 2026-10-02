@@ -25,6 +25,7 @@ import {
   type ChecklistState,
 } from './slices/checklistSlice';
 import { staysReducer, type StaysState } from './slices/staysSlice';
+import { rentalsReducer, type RentalsState } from './slices/rentalsSlice';
 
 export interface WaypointState {
   trip: TripState;
@@ -34,6 +35,7 @@ export interface WaypointState {
   announcements: AnnouncementsState;
   checklist: ChecklistState;
   stays: StaysState;
+  rentals: RentalsState;
   pendingRequests: PendingRequestsState;
 }
 
@@ -45,6 +47,7 @@ export const waypointReducer = combineReducers({
   announcements: announcementsReducer,
   checklist: checklistReducer,
   stays: staysReducer,
+  rentals: rentalsReducer,
   pendingRequests: pendingRequestsReducer,
 });
 
@@ -59,3 +62,4 @@ export { type EventSuggestionsState } from './slices/eventSuggestionsSlice';
 export { type AnnouncementsState } from './slices/announcementsSlice';
 export { type ChecklistState } from './slices/checklistSlice';
 export { type StaysState } from './slices/staysSlice';
+export { type RentalsState } from './slices/rentalsSlice';

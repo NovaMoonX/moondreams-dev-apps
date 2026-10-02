@@ -24,6 +24,7 @@ export type ChecklistCategory =
   | 'LOGISTICS'
   | 'OTHER';
 export type StayType = 'HOTEL' | 'RENTAL' | 'FRIEND_FAMILY' | 'OTHER';
+export type RentalType = 'CAR';
 
 export interface TripMember {
   uid: string;
@@ -127,6 +128,40 @@ export interface Stay {
   /** uid -> ms timestamp of when that member last viewed this stay, used to flag
    * unseen post-start creations/edits in the "What's new" notifications panel. */
   seenBy: Record<string, number>;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** A vehicle (for now, a car) rented for part of the trip. Its pickup and return are trip-relative
+ * times on every trip, absolute-model ones included, since those trips' dates never move. */
+export interface Rental {
+  id: string;
+  tripId: string;
+  rentalType: RentalType;
+  /** The rental company, e.g. "Hertz". */
+  name: string;
+  /** Free-text vehicle, e.g. "Toyota RAV4 or similar". */
+  vehicle: string | null;
+  pickupAddress: string;
+  pickupLatitude: number | null;
+  pickupLongitude: number | null;
+  pickupPlace: PlaceRef | null;
+  /** `null` means the car goes back to the pickup location. */
+  returnAddress: string | null;
+  returnLatitude: number | null;
+  returnLongitude: number | null;
+  returnPlace: PlaceRef | null;
+  pickupDayIndex: number;
+  pickupTime: string;
+  returnDayIndex: number;
+  returnTime: string;
+  /** Zone override for this rental's times; `null` uses the trip's `timezone`. */
+  timezone: string | null;
+  confirmationCode: string | null;
+  notes: string | null;
+  linkUrl: string | null;
+  linkPreview: LinkPreview | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

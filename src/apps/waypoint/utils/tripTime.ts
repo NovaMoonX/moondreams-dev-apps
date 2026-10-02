@@ -12,6 +12,7 @@ import {
 } from '@/utils/timezoneUtils';
 import type {
   EventSuggestion,
+  Rental,
   Stay,
   TimelineEvent,
   TripSpace,
@@ -192,6 +193,28 @@ export function getStayTime(trip: TripSpace, stay: StayTimeSource): ResolvedStay
   };
 }
 
+export type RentalTimeSource = Pick<
+  Rental,
+  'pickupDayIndex' | 'pickupTime' | 'returnDayIndex' | 'returnTime' | 'timezone'
+>;
+
+export interface ResolvedRentalTime {
+  /** Real instants; `null` when that point sits outside the trip's dates. */
+  pickupMs: number | null;
+  returnMs: number | null;
+}
+
+export function getRentalTime(trip: TripSpace, rental: RentalTimeSource): ResolvedRentalTime {
+  const timezone = getEffectiveTimezone(trip, rental.timezone);
+  const toMs = (dayIndex: number, time: string) =>
+    isInTripRange(trip, dayIndex) ? toTripMoment(trip, dayIndex, time, timezone) : null;
+
+  return {
+    pickupMs: toMs(rental.pickupDayIndex, rental.pickupTime),
+    returnMs: toMs(rental.returnDayIndex, rental.returnTime),
+  };
+}
+
 export type EventTimeFields = Pick<
   TimelineEvent,
   'dayIndex' | 'endDayIndex' | 'startAt' | 'endAt' | 'startTime' | 'endTime' | 'timezone'
@@ -319,6 +342,25 @@ function formatDayTime(trip: TripSpace, point: DayTimeValue) {
     return '';
   }
   return `${getDayDateLabel(trip.startDate, point.dayIndex)}, ${formatClockTime(point.time)}`;
+}
+
+export function formatRentalTimeRange(trip: TripSpace, rental: RentalTimeSource) {
+  const pickup = { dayIndex: rental.pickupDayIndex, time: rental.pickupTime };
+  const returned = { dayIndex: rental.returnDayIndex, time: rental.returnTime };
+  return `${formatDayTime(trip, pickup)} - ${formatDayTime(trip, returned)}`;
+}
+
+/** Only an override that differs from the trip's own zone is worth showing. */
+export function getRentalTimezoneLabel(
+  trip: TripSpace,
+  rental: RentalTimeSource,
+  zoneStyle: ZoneStyle = 'short',
+) {
+  const zone = rental.timezone;
+  if (!zone || zone === trip.timezone) {
+    return null;
+  }
+  return formatZone(zone, zoneStyle, getRentalTime(trip, rental).pickupMs);
 }
 
 export function formatStayTimeRange(trip: TripSpace, stay: StayTimeSource) {

@@ -628,6 +628,34 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  await tripRef.collection('rentals').doc('seed-waypoint-rental-sea').set({
+    id: 'seed-waypoint-rental-sea',
+    tripId: TRIP_ID,
+    rentalType: 'CAR',
+    name: 'Hertz',
+    vehicle: 'Toyota RAV4 or similar',
+    pickupAddress: 'Seattle-Tacoma International Airport Rental Car Facility, SeaTac, WA',
+    pickupLatitude: 47.4436,
+    pickupLongitude: -122.3009,
+    pickupPlace: null,
+    returnAddress: 'Portland International Airport Rental Car Center, Portland, OR',
+    returnLatitude: 45.5887,
+    returnLongitude: -122.5975,
+    returnPlace: null,
+    pickupDayIndex: 0,
+    pickupTime: '10:30',
+    returnDayIndex: 3,
+    returnTime: '16:00',
+    timezone: null,
+    confirmationCode: 'H-7731942',
+    notes: 'One-way rental, so the drop-off fee is already included. Fuel tank full on return.',
+    linkUrl: null,
+    linkPreview: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   await staysCollection.doc('seed-waypoint-seattle').set({
     id: 'seed-waypoint-seattle',
     tripId: TRIP_ID,
@@ -990,6 +1018,35 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  // Picks up later today, so Overview shows the pickup card whenever the seed runs.
+  await activeTripRef.collection('rentals').doc('active-trip-rental').set({
+    id: 'active-trip-rental',
+    tripId: ACTIVE_TRIP_ID,
+    rentalType: 'CAR',
+    name: 'Enterprise',
+    vehicle: 'Subaru Outback or similar',
+    pickupAddress: '1100 E Front St, Port Angeles, WA',
+    pickupLatitude: 48.1175,
+    pickupLongitude: -123.4217,
+    pickupPlace: null,
+    returnAddress: null,
+    returnLatitude: null,
+    returnLongitude: null,
+    returnPlace: null,
+    pickupDayIndex: 1,
+    pickupTime: toClock(Math.min(nowOnTripClock.minutes + 90, 1410)),
+    returnDayIndex: 3,
+    returnTime: '10:00',
+    timezone: null,
+    confirmationCode: 'ENT-20458',
+    notes: null,
+    linkUrl: null,
+    linkPreview: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   await activeStaysCollection.doc('active-trip-lodge').set({
     id: 'active-trip-lodge',
     tripId: ACTIVE_TRIP_ID,
@@ -1217,6 +1274,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 48,
+    firestoreDocuments: 50,
   };
 }

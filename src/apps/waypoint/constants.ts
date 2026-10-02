@@ -9,6 +9,7 @@ import type {
   ExpenseSortBy,
   ExpenseTotalsView,
   MealType,
+  RentalType,
   StayType,
   TransitType,
   UserRole,
@@ -181,6 +182,10 @@ export const STAY_TYPE_OPTION_LABELS: Record<StayType, string> = {
   RENTAL: 'Rental (e.g., Airbnb)',
 };
 
+export const RENTAL_TYPE_LABELS: Record<RentalType, string> = {
+  CAR: 'Car rental',
+};
+
 export const EVENT_ATTENDEE_TARGET_LABELS: Record<EventAttendeeTargetType, string> = {
   EVERYONE_CURRENT: 'Everyone present',
   EVERYONE_INCLUDING_FUTURE: 'Everyone, including future members',
@@ -192,6 +197,7 @@ export const TRIP_SECTION_TABS = [
   'members',
   'expenses',
   'stays',
+  'rentals',
   'checklist',
 ] as const;
 

@@ -13,6 +13,7 @@ import type {
   Announcement,
   EventStatus,
   EventSuggestion,
+  Rental,
   Stay,
   TimelineEvent,
   TripExpense,
@@ -192,6 +193,19 @@ export const selectSortedStays = createSelector(
     return sorted;
   },
 );
+
+export const selectRentals = (state: RootState) => state.waypoint.rentals.items;
+
+/** Earliest pickup first. */
+export const selectSortedRentals = createSelector([selectRentals], (rentals): Rental[] => {
+  const sorted = [...rentals].sort((a, b) =>
+    compareDayTime(
+      { day: a.pickupDayIndex, time: a.pickupTime },
+      { day: b.pickupDayIndex, time: b.pickupTime },
+    ),
+  );
+  return sorted;
+});
 
 export const selectActiveStaysForDay =
   (dayIndex: number) => (state: RootState): Stay[] => {

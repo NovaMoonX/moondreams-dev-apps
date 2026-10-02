@@ -20,6 +20,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import {
+  selectRentals,
   selectStays,
   selectTimelineEvents,
   selectTripExpenses,
@@ -67,6 +68,7 @@ function EditTripDatesModal({
   const [error, setError] = useState<string | null>(null);
   const events = useAppSelector(selectTimelineEvents);
   const stays = useAppSelector(selectStays);
+  const rentals = useAppSelector(selectRentals);
   const expenses = useAppSelector(selectTripExpenses);
   const checklistItems = useAppSelector(
     (state) => state.waypoint.checklist.items,
@@ -85,6 +87,7 @@ function EditTripDatesModal({
   const hasDatedItems =
     events.some((event) => event.dayIndex !== null) ||
     stays.length > 0 ||
+    rentals.length > 0 ||
     expenses.some((expense) => expense.dayIndex !== null) ||
     checklistItems.some((item) => item.completeByDayIndex !== null);
   const showKeepOriginalOption = hasDatedItems && deltaDays !== 0;
@@ -112,6 +115,10 @@ function EditTripDatesModal({
         (point) => isOutOfRange(point.dayIndex),
       );
     });
+    const outOfRangeRentals = rentals.filter(
+      (rental) =>
+        isOutOfRange(rental.pickupDayIndex) || isOutOfRange(rental.returnDayIndex),
+    );
     const outOfRangeExpenses = expenses.filter((expense) =>
       isOutOfRange(expense.dayIndex),
     );
@@ -122,6 +129,7 @@ function EditTripDatesModal({
     const result =
       outOfRangeEvents.length +
       outOfRangeStays.length +
+      outOfRangeRentals.length +
       outOfRangeExpenses.length +
       outOfRangeChecklist.length;
     return result;
