@@ -15,7 +15,7 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatClockTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { formatEventTimeRange } from '@apps/waypoint/utils/tripTime';
+import { formatEventTimeRange, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
 import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
@@ -62,6 +62,8 @@ export interface EventDetailLinesProps {
   showNotes: boolean;
   showNotesIndicator?: boolean;
   showChangeHistory?: boolean;
+  /** Cards abbreviate the zone ("PDT"); the full details view spells it out. */
+  zoneStyle?: ZoneStyle;
   canEdit: boolean;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
@@ -73,6 +75,7 @@ export function EventDetailLines({
   showNotes,
   showNotesIndicator,
   showChangeHistory = true,
+  zoneStyle = 'short',
   canEdit,
   onSaveNotes,
 }: EventDetailLinesProps) {
@@ -91,7 +94,7 @@ export function EventDetailLines({
           </Badge>
         )}
         <span className='text-muted-foreground text-sm'>
-          {formatEventTimeRange(trip, event)}
+          {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
         {showNotesIndicator && event.notes && (
           <span
@@ -251,6 +254,7 @@ export function EventCard({
           <EventDetailLines
             trip={trip}
             event={event}
+            zoneStyle='long'
             showTitle={false}
             showNotes
             canEdit={canModify}

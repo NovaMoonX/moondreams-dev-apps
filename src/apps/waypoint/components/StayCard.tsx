@@ -13,7 +13,11 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { STAY_TYPE_LABELS } from '@apps/waypoint/constants';
 import type { Stay, TripSpace } from '@apps/waypoint/types';
-import { formatStayTimeRange, getStayTimezoneLabel } from '@apps/waypoint/utils/tripTime';
+import {
+  formatStayTimeRange,
+  getStayTimezoneLabel,
+  type ZoneStyle,
+} from '@apps/waypoint/utils/tripTime';
 
 interface StayCardProps {
   trip: TripSpace;
@@ -43,6 +47,8 @@ export interface StayDetailLinesProps {
   showTitle: boolean;
   showExtras: boolean;
   showNotesIndicator?: boolean;
+  /** Cards abbreviate the zone ("PDT"); the full details view spells it out. */
+  zoneStyle?: ZoneStyle;
   canEdit: boolean;
   onSaveNotes: (stay: Stay, notes: string) => Promise<void>;
 }
@@ -53,10 +59,11 @@ export function StayDetailLines({
   showTitle,
   showExtras,
   showNotesIndicator,
+  zoneStyle = 'short',
   canEdit,
   onSaveNotes,
 }: StayDetailLinesProps) {
-  const timezoneLabel = getStayTimezoneLabel(trip, stay);
+  const timezoneLabel = getStayTimezoneLabel(trip, stay, zoneStyle);
 
   return (
     <>
@@ -191,6 +198,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
           <StayDetailLines
             trip={trip}
             stay={stay}
+            zoneStyle='long'
             showTitle={false}
             showExtras
             canEdit={canEdit}

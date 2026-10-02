@@ -214,6 +214,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           <EventDetailLines
             trip={trip}
             event={detail.event}
+            zoneStyle='long'
             showTitle={false}
             showNotes
             canEdit={false}
@@ -235,6 +236,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           <StayDetailLines
             trip={trip}
             stay={detail.stay}
+            zoneStyle='long'
             showTitle={false}
             showExtras
             canEdit={false}

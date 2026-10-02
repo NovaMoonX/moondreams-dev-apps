@@ -5,7 +5,11 @@ import {
 } from '@/utils/dateInputUtils';
 import { getDayCount, getDayDateLabel, getDayInputValue } from '@/utils/dateRangeUtils';
 import { formatClockTime, formatDateTime } from '@/utils/formatUtils';
-import { formatTimezoneLabel, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import {
+  formatTimezoneAbbreviation,
+  formatTimezoneLabel,
+  zonedDateTimeToEpoch,
+} from '@/utils/timezoneUtils';
 import type {
   EventSuggestion,
   Stay,
@@ -285,8 +289,17 @@ export function buildStayTimeFields(draft: StayTimeDraft): StayTimeFields {
   };
 }
 
-export function formatEventTimeRange(trip: TripSpace, event: EventTimeSource) {
-  const { dayIndex, endDayIndex, startTime, endTime, timezone } = getEventTime(trip, event);
+export type ZoneStyle = 'short' | 'long';
+
+const formatZone = (zone: string, style: ZoneStyle, at: number | null) =>
+  style === 'long' ? formatTimezoneLabel(zone) : formatTimezoneAbbreviation(zone, at ?? undefined);
+
+export function formatEventTimeRange(
+  trip: TripSpace,
+  event: EventTimeSource,
+  zoneStyle: ZoneStyle = 'short',
+) {
+  const { dayIndex, endDayIndex, startTime, endTime, timezone, startMs } = getEventTime(trip, event);
   if (!startTime) {
     return '';
   }
@@ -295,7 +308,7 @@ export function formatEventTimeRange(trip: TripSpace, event: EventTimeSource) {
   const end = endTime ? ` - ${endsOnAnotherDay ? `Day ${endDayIndex + 1} ` : ''}${formatClockTime(endTime)}` : '';
   const zone =
     isRelativeTrip(trip) && timezone && timezone !== trip.timezone
-      ? ` · ${formatTimezoneLabel(timezone)}`
+      ? ` · ${formatZone(timezone, zoneStyle, startMs)}`
       : '';
   const result = `${formatClockTime(startTime)}${end}${zone}`;
   return result;
@@ -321,12 +334,16 @@ export function formatStayTimeRange(trip: TripSpace, stay: StayTimeSource) {
 }
 
 /** The stay's own zone label — always for legacy stays, only an override for relative ones. */
-export function getStayTimezoneLabel(trip: TripSpace, stay: Pick<Stay, 'checkInTimezone'>) {
+export function getStayTimezoneLabel(
+  trip: TripSpace,
+  stay: StayTimeSource,
+  zoneStyle: ZoneStyle = 'short',
+) {
   const zone = stay.checkInTimezone;
   if (!zone || (isRelativeTrip(trip) && zone === trip.timezone)) {
     return null;
   }
-  return formatTimezoneLabel(zone);
+  return formatZone(zone, zoneStyle, getStayTime(trip, stay).checkInMs);
 }
 
 export function formatSuggestedTime(

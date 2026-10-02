@@ -8,6 +8,18 @@ export function formatTimezoneLabel(zone: string): string {
     .join(' / ');
 }
 
+/** "PDT", "EST"… as the runtime knows it at `at`; zones without a short name read like "GMT+1". */
+export function formatTimezoneAbbreviation(timeZone: string, at: number = Date.now()): string {
+  try {
+    const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'short' })
+      .formatToParts(new Date(at))
+      .find((entry) => entry.type === 'timeZoneName');
+    return part?.value ?? formatTimezoneLabel(timeZone);
+  } catch {
+    return formatTimezoneLabel(timeZone);
+  }
+}
+
 const getZoneOffsetMs = (epoch: number, timeZone: string) => {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
