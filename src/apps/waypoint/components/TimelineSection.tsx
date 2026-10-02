@@ -33,7 +33,9 @@ import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   getBucketLabel,
   getDayCount,
+  getDayDateLabel,
   getDayLabel,
+  getIndexBucket,
   groupByIndexBucket,
 } from '@/utils/dateRangeUtils';
 import {
@@ -47,6 +49,8 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import { selectActiveStaysForDay, selectStays } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
+
+const OUTSIDE_TAB = 'outside';
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -73,8 +77,16 @@ export function TimelineSection({
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const dayCount = getDayCount(trip.startDate, trip.endDate);
+  const [showArchived, setShowArchived] = useState(false);
   const memberIds = Object.keys(trip.members);
-  const activeDayIndex = activeDayTab === 'all' ? 0 : Number(activeDayTab);
+  const hasOutsideEvents = events.some(
+    (event) =>
+      getIndexBucket(event.dayIndex ?? null, dayCount) === 'outside' &&
+      (showArchived || !event.isArchived),
+  );
+  // The tab disappears once nothing is outside the range anymore, so don't stay parked on it.
+  const selectedTab = activeDayTab === OUTSIDE_TAB && !hasOutsideEvents ? 'all' : activeDayTab;
+  const activeDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? 0 : Number(selectedTab);
   const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex), shallowEqual);
   const members = useUserInfo(memberIds)?.map ?? {};
   const memberOptions = memberIds.map((uid) => ({
@@ -85,7 +97,6 @@ export function TimelineSection({
   const canAddEvents = canCreateItem(trip, currentUserId);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const stays = useAppSelector(selectStays);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const attendanceFilteredEvents = events
@@ -122,7 +133,7 @@ export function TimelineSection({
     }
   };
   const renderStayBanners = (dayIndex: number) => {
-    if (dayIndex !== activeDayIndex || activeDayTab === 'all' || activeStays.length === 0) {
+    if (dayIndex !== activeDayIndex || selectedTab === 'all' || selectedTab === OUTSIDE_TAB || activeStays.length === 0) {
       return null;
     }
 
@@ -149,8 +160,9 @@ export function TimelineSection({
         value: String(index),
         label: getDayLabel(trip.startDate, index),
       })),
+      ...(hasOutsideEvents ? [{ value: OUTSIDE_TAB, label: 'Outside trip dates' }] : []),
     ],
-    [dayCount, trip.startDate],
+    [dayCount, trip.startDate, hasOutsideEvents],
   );
 
   const renderEventCard = (event: TimelineEvent) => (
@@ -188,17 +200,35 @@ export function TimelineSection({
     </div>
   );
 
-  const renderEvents = (dayIndex?: number) => {
-    const visibleEvents =
-      dayIndex === undefined
-        ? attendanceFilteredEvents
-        : attendanceFilteredEvents.filter((event) => event.dayIndex === dayIndex);
+  const renderEvents = (scope: 'all' | 'outside' | number = 'all') => {
+    const visibleEvents = attendanceFilteredEvents.filter((event) => {
+      if (scope === 'all') return true;
+      if (scope === 'outside') {
+        return getIndexBucket(event.dayIndex ?? null, dayCount) === 'outside';
+      }
+      return event.dayIndex === scope;
+    });
 
     if (visibleEvents.length === 0) {
       return <p className='text-muted-foreground py-6 text-sm'>No events planned yet.</p>;
     }
 
-    if (dayIndex !== undefined) {
+    if (scope === 'outside') {
+      return (
+        <div className='space-y-3'>
+          {Array.from(new Set(visibleEvents.map((event) => event.dayIndex as number)))
+            .sort((first, second) => first - second)
+            .map((day) => (
+              <div key={day} className='space-y-3'>
+                {renderDivider(getDayDateLabel(trip.startDate, day))}
+                {visibleEvents.filter((event) => event.dayIndex === day).map(renderEventCard)}
+              </div>
+            ))}
+        </div>
+      );
+    }
+
+    if (scope !== 'all') {
       return <div className='space-y-3'>{visibleEvents.map(renderEventCard)}</div>;
     }
 
@@ -290,11 +320,11 @@ export function TimelineSection({
         <Select
           className='sm:hidden'
           options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}
-          value={activeDayTab}
+          value={selectedTab}
           onChange={onActiveDayTabChange}
         />
         <Tabs
-          value={activeDayTab}
+          value={selectedTab}
           onValueChange={onActiveDayTabChange}
           tabsWidth='full'
           variant='pills'
@@ -335,12 +365,17 @@ export function TimelineSection({
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>
-          {tabs.slice(1).map((tab, index) => (
-            <TabsContent key={tab.value} value={tab.value} className='pt-4 space-y-2'>
+          {Array.from({ length: dayCount }, (_, index) => (
+            <TabsContent key={index} value={String(index)} className='pt-4 space-y-2'>
               {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>
           ))}
+          {hasOutsideEvents && (
+            <TabsContent value={OUTSIDE_TAB} className='pt-4'>
+              {renderEvents('outside')}
+            </TabsContent>
+          )}
         </Tabs>
       </section>
       <EventFormModal
