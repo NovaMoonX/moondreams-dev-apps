@@ -100,7 +100,6 @@ export interface TransitFieldSpec {
   key: string;
   label: string;
   placeholder: string;
-  /** Essential fields show up front; the rest wait behind "+ Add details". */
   essential: boolean;
 }
 
@@ -153,7 +152,6 @@ export const EVENT_LINK_KIND_LABELS: Record<EventLinkKind, string> = {
   BOOKING: 'Booking',
 };
 
-// Which kinds of link each event type offers; the first is the default.
 export const EVENT_LINK_KINDS_BY_TYPE: Record<EventType, readonly EventLinkKind[]> = {
   TRAVEL: ['BOOKING', 'WEBSITE'],
   DINING: ['MENU', 'RESERVATION', 'WEBSITE'],

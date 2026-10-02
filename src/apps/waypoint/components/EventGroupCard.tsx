@@ -20,7 +20,6 @@ const MINUTE_MS = 60_000;
 interface EventGroupCardProps {
   trip: TripSpace;
   group: EventGroup;
-  /** Renders one nested event as its full card. */
   renderEvent: (event: TimelineEvent) => ReactNode;
 }
 

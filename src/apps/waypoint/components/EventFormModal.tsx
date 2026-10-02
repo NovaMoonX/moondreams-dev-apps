@@ -71,7 +71,6 @@ interface EventFormModalProps {
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
-  /** Existing events, to offer their group names for same-type grouping. */
   events?: TimelineEvent[];
   /** A rough center point (from an existing trip event/stay) to bias place search
    * results toward, so "starbucks" finds the one near this trip first. */
@@ -146,7 +145,6 @@ interface EventDraft {
   reminderEnabled: boolean;
 }
 
-/** Free time has no natural "booking" or site to attach. */
 const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = [
   'DINING',
   'ACTIVITY',

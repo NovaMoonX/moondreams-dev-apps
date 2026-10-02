@@ -248,13 +248,11 @@ export type TransitDetails =
 
 export interface TravelEventDetails {
   transitType: TransitType;
-  /** Absent on events saved before transit details existed. */
   transitDetails: TransitDetails | null;
 }
 
 export interface DiningEventDetails {
   mealType: MealType;
-  /** Absent on events saved before cuisines existed. */
   cuisines: string[];
 }
 
@@ -323,12 +321,10 @@ export interface TimelineEvent {
   venueCloseTime: string | null;
   changeHistory: EventChangeSnapshot[];
   place: PlaceRef | null;
-  /** Only meaningful for DINING, ACTIVITY and TRAVEL events; FREE_TIME leaves this null. */
+  /** Not meaningful for FREE_TIME events, which leave this null. */
   linkUrl: string | null;
   linkPreview: LinkPreview | null;
-  /** What the link is (menu, reservation…); `null` on events saved before this existed. */
   linkKind: EventLinkKind | null;
-  /** Free-text group name — events of the same type sharing a label render as one group. */
   groupLabel: string | null;
   /** Minutes before `startAt` to send a reminder. Always a real value (defaults to
    * `DEFAULT_REMINDER_MINUTES_BEFORE`) — an event with no reminder configured yet

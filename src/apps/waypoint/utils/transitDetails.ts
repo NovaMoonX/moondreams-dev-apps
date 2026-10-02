@@ -3,7 +3,6 @@ import type { TransitDetails, TransitType } from '@apps/waypoint/types';
 
 const MINUTE_MS = 60_000;
 
-/** Form-side shape of a leg's transit details: every value is a string until it's saved. */
 export interface TransitDraft {
   values: Record<string, string>;
   notes: string;
@@ -70,7 +69,6 @@ export function buildTransitDetails(
   return details as unknown as TransitDetails;
 }
 
-/** "2h 30m", "45m", "3h" — an estimated travel time, not a clock time. */
 export function formatTravelDuration(ms: number | null | undefined): string | null {
   const totalMinutes = Math.round((ms ?? 0) / MINUTE_MS);
   if (totalMinutes <= 0) {
@@ -85,7 +83,6 @@ export function formatTravelDuration(ms: number | null | undefined): string | nu
   return result;
 }
 
-/** Travel events don't need a typed title: "Flight DL 482", "Train 171", or just "Drive". */
 export function getDerivedTravelTitle(
   transitType: TransitType,
   details: TransitDetails | null | undefined,
@@ -102,7 +99,6 @@ export interface TransitSummaryLine {
   value: string;
 }
 
-/** The headline facts a card shows for a leg (identifier, confirmation, route, time). */
 export function getTransitSummary(
   transitType: TransitType,
   details: TransitDetails | null | undefined,

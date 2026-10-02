@@ -6,7 +6,6 @@ import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 interface EventAttendeeAvatarsProps {
   trip: TripSpace;
   events: TimelineEvent[];
-  /** Everyone-events add nothing to the picture, so they're skipped unless this is set. */
   includeEveryone?: boolean;
 }
 
