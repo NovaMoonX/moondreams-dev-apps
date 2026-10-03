@@ -79,6 +79,8 @@ How Waypoint's phone-first redesign works; new features follow it. Design the ph
 ## Cloud Functions
 
 - A third-party key that can't be domain-restricted is a Functions secret behind an `onCall` (never in the browser, a response or a log); a free-tier API shared by all users gets a server-side cache and a daily budget guard. Full rule in `copilot-instructions.md`.
+- **`functions/README.md` is the functions reference — keep it current in the same PR.** Adding, renaming or removing a function updates its row in the Functions table (trigger, app, purpose). A new secret or env var gets a "Secrets and config" row, and a function that caches, budgets or fetches for a user gets a per-function note. A new secret is created in production before the PR merges (CI deploys every function on merge, and a missing secret fails the whole deploy), and the PR body says so.
+- **Local setup lives in scripts, not memory.** A step every developer must repeat (like building `functions/lib/` before the emulators load it, handled by the `preemulators*` hooks) becomes a `package.json` script or `pre*` hook, and the README documents the command rather than the manual step.
 - A newly-added `onCall` function can deploy without its public-invoker IAM grant (symptom: browser CORS error; GCP Cloud Run request logs show a 403 on the `OPTIONS` preflight). See README's [Deployment](README.md#new-cloud-functions--cloud-run-invoker-access) section for the `gcloud run services update --no-invoker-iam-check` fix.
 
 ## Nine Lives placement
