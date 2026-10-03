@@ -13,6 +13,7 @@ import { formatClockTime, formatCountdown, formatDuration } from '@/utils/format
 import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
+import { formatTimezoneAbbreviation, formatTimezoneLabel } from '@/utils/timezoneUtils';
 
 import DayWeather from '@apps/waypoint/components/DayWeather';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
@@ -129,6 +130,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
   const todayIndex = getLocalDayIndex(trip.startDate, now);
   const todayWeather = weather.getDay(todayIndex);
+  const weatherZone = weather.getTimezone(todayIndex);
+  const showWeatherZone = weatherZone !== null && weatherZone !== Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
   const isCheckInToday = (stay: Stay) =>
     isRelativeTrip(trip)
@@ -211,9 +214,16 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
         )}
         {todayWeather && (
           <section className='border-border mt-5 space-y-2 border-t pt-5'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Today&apos;s weather
-            </h3>
+            <div className='flex items-baseline justify-between gap-3'>
+              <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+                Today&apos;s weather
+              </h3>
+              {showWeatherZone && (
+                <span className='text-muted-foreground text-[11px]' title={formatTimezoneLabel(weatherZone)}>
+                  Times in {formatTimezoneAbbreviation(weatherZone, now)}
+                </span>
+              )}
+            </div>
             <DayWeather
               forecast={todayWeather}
               hours={weather.getRemainingHoursToday(todayIndex)}

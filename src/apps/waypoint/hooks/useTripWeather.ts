@@ -8,6 +8,7 @@ import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   buildWeatherPlan,
   getDayForecast,
+  getDayTimezone,
   getEventForecast,
   getRemainingHours,
   type WeatherForecasts,
@@ -41,6 +42,7 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], stays: 
     todayIndex,
     hasWeather,
     getDay,
+    getTimezone: (dayIndex: number) => getDayTimezone(plan, forecasts, dayIndex),
     getRemainingHoursToday,
     getEvent: (eventId: string) => getEventForecast(plan, forecasts, eventId),
   };

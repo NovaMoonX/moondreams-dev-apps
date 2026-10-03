@@ -219,6 +219,12 @@ export function getRemainingHours(
   return result;
 }
 
+export function getDayTimezone(plan: WeatherPlan, forecasts: WeatherForecasts, dayIndex: number) {
+  const target = plan.days[dayIndex];
+  const result = target ? (forecasts[target.key]?.timezone ?? null) : null;
+  return result;
+}
+
 export function getEventForecast(
   plan: WeatherPlan,
   forecasts: WeatherForecasts,
