@@ -1,4 +1,4 @@
-import { useState, type PointerEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -10,7 +10,6 @@ import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import type { EventGroup } from '@apps/waypoint/utils/eventGroups';
 import { formatEventStartTime, getEventTime } from '@apps/waypoint/utils/tripTime';
 
-const SWIPE_THRESHOLD_PX = 50;
 const MINUTE_MS = 60_000;
 
 interface EventGroupCardProps {
@@ -37,7 +36,6 @@ function formatLayover(trip: TripSpace, previous: TimelineEvent, next: TimelineE
 function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
   const isTravel = group.eventType === 'TRAVEL';
   const badge = getGroupBadge(group.events);
   const lastIndex = group.events.length - 1;
@@ -47,18 +45,6 @@ function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupC
   const layover = previousEvent ? formatLayover(trip, previousEvent, currentEvent) : null;
 
   const goTo = (index: number) => setActiveIndex(Math.max(0, Math.min(lastIndex, index)));
-
-  const handlePointerUp = (pointerEvent: PointerEvent<HTMLDivElement>) => {
-    if (swipeStartX === null) {
-      return;
-    }
-
-    const delta = pointerEvent.clientX - swipeStartX;
-    setSwipeStartX(null);
-    if (Math.abs(delta) >= SWIPE_THRESHOLD_PX) {
-      goTo(currentIndex + (delta < 0 ? 1 : -1));
-    }
-  };
 
   return (
     <div className='space-y-2'>
@@ -122,14 +108,7 @@ function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupC
               {layover && (
                 <p className='text-muted-foreground text-xs'>Layover · {layover}</p>
               )}
-              <div
-                className='touch-pan-y'
-                onPointerDown={(pointerEvent) => setSwipeStartX(pointerEvent.clientX)}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={() => setSwipeStartX(null)}
-              >
-                {renderEvent(currentEvent)}
-              </div>
+              {renderEvent(currentEvent)}
               {group.events.length > 1 && (
                 <div className='flex items-center justify-between sm:justify-center'>
                   <Button
