@@ -31,7 +31,8 @@ Every callable requires a signed-in caller.
 
 - A secret never reaches the browser, a response, or a log.
 - `functions/.env.local` and `functions/.secret.local` are git-ignored (`*.local`).
-- Locally, put a real key in `functions/.secret.local` (`OMDB_API_KEY=…`) to call OMDb from the emulator.
+- Locally, put a real key in `functions/.secret.local` (`OMDB_API_KEY=…`) to call OMDb from the emulator. Leave the value empty (`OMDB_API_KEY=`) to use the built-in sample movies instead.
+- **Restart the emulators after editing either file.** They read `.env.local` and `.secret.local` only at startup.
 
 ## Per-function notes
 
@@ -109,4 +110,5 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | Emulator says a function isn't found, or `lib/index.js` doesn't exist | `functions/lib/` wasn't built. Start through `npm run emulators` (it builds first), or run `npm --prefix functions run build`. |
 | Browser CORS error on a callable in production | Missing public-invoker grant. See the root README's invoker section. |
 | CI deploy fails on functions with a secret error | The secret doesn't exist in production yet. Set it with `firebase functions:secrets:set`. |
-| A-List search shows sample movies locally | There's no `OMDB_API_KEY` in `functions/.secret.local`, so the emulator uses its fixture catalog. |
+| A-List search shows sample movies locally | `OMDB_API_KEY` in `functions/.secret.local` is missing or empty, so the emulator uses its fixture catalog. If you just added the key, restart the emulators. |
+| A changed `.env.local` cap or `.secret.local` key has no effect | The emulators read these files only at startup. Restart them. |
