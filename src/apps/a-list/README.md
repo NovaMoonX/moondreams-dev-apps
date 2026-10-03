@@ -52,7 +52,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Mark as Paid: Format and price (or an all-in total), standard-format price for premium showings, the convenience fee you skipped entered per ticket with your past fees as one-tap chips, and a tax rate chosen from chips built from your own history.
 - [x] Edit & Remove Viewings: Fix a price, format, date or fee, or delete a viewing; the calendar, watchlist and savings update to match.
 - [ ] Mark as Seen: A prompt after a planned movie ends that updates the watchlist and takes an optional star rating.
-- [ ] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
+- [x] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
 **Next Steps**
 - [ ] Dashboard — Formats: Movies watched by format, as a count and a percent.
