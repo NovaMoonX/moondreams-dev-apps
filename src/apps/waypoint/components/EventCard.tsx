@@ -49,7 +49,6 @@ interface EventCardProps {
   onEdit: (event: TimelineEvent, onSuccess?: () => void) => void;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
   onToggleArchived: (event: TimelineEvent, onSuccess?: () => void) => void;
-  /** The forecast for the event's hour; `null` when it has no reliable location or time. */
   weather?: HourForecast | null;
 }
 

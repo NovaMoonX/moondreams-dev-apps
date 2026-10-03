@@ -35,7 +35,6 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], stays: 
   const getDay = (dayIndex: number) => getDayForecast(plan, forecasts, dayIndex);
   const hasWeather = Object.keys(plan.days).some((dayIndex) => getDay(Number(dayIndex)) !== null);
 
-  /** Hours from the current one onward, for today of a live trip only. */
   const getRemainingHoursToday = (dayIndex: number) => {
     const day = dayIndex === todayIndex ? getDayHours(plan, forecasts, dayIndex) : null;
     const nowKey = day ? getZonedHourKey(now, day.timezone) : null;

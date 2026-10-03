@@ -106,7 +106,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const tripTitle = 'Pacific Northwest Weekend';
   // Kept relative to `context.now` (unlike the archived trip, which is meant to stay in
   // the past) so this trip is always upcoming, regardless of when the seed runs. Ten days
-  // out keeps it inside Waypoint's 14-day weather window.
+  // out keeps it inside the 14-day weather window.
   const upcomingAnchor = new Date(context.now + 10 * DAY_MS);
   const upcomingTripStart = Date.UTC(
     upcomingAnchor.getUTCFullYear(),

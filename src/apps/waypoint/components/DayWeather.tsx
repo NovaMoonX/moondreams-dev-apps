@@ -4,7 +4,6 @@ import HourlyWeatherStrip from '@apps/waypoint/components/HourlyWeatherStrip';
 
 interface DayWeatherProps {
   forecast: DayForecast;
-  /** Remaining hours of today on a live trip; empty for every other day. */
   hours: HourForecast[];
   isMinimized: boolean;
 }

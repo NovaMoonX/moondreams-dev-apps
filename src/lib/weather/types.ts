@@ -6,13 +6,11 @@ export interface WeatherLocation {
 export interface WeatherRequest extends WeatherLocation {
   /** IANA zone the forecast's times are expressed in; `null` lets the provider pick the location's own. */
   timezone: string | null;
-  /** `YYYY-MM-DD`, inclusive. */
   startDate: string;
   endDate: string;
 }
 
 export interface DayForecast {
-  /** `YYYY-MM-DD` in the request's zone. */
   date: string;
   weatherCode: number | null;
   tempMax: number | null;

@@ -5,7 +5,6 @@ import { getWeatherCondition } from '@/lib/weather/weatherCodes';
 import { formatClockTime } from '@/utils/formatUtils';
 
 interface HourlyWeatherStripProps {
-  /** Hours from the current one onward — the first reads as "Now". */
   hours: HourForecast[];
 }
 

@@ -27,8 +27,6 @@ export interface WeatherPlan {
 
 export type WeatherForecasts = Record<string, WeatherForecast>;
 
-/** Which trip days get weather: none once the trip is over, nothing beyond the 14-day forecast window,
- * and past days of a live trip back to its first day. `todayIndex` is the viewer's local day. */
 export function getWeatherDayIndexes(trip: TripSpace, todayIndex: number) {
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   if (todayIndex >= dayCount) {
@@ -54,8 +52,7 @@ function toLocated(
 
 const isLocated = (value: Located | null): value is Located => value !== null;
 
-/** A day's weather is only as trustworthy as its location, so it's the day's first event with
- * coordinates, then a stay covering the day — never a guess from elsewhere on the trip. */
+/** Deliberately no trip-wide fallback: a multi-city trip would show the wrong city's weather. */
 function getDayLocation(
   trip: TripSpace,
   dayIndex: number,
@@ -94,7 +91,6 @@ interface WeatherNeed {
   date: string;
 }
 
-/** Every forecast the trip's visible days and events need, merged so each distinct place is one request. */
 export function buildWeatherPlan(
   trip: TripSpace,
   todayIndex: number,
@@ -190,7 +186,6 @@ export function getEventForecast(
   return result;
 }
 
-/** The current hour as the provider writes it (`YYYY-MM-DDTHH:00`) in `timezone`, for the live "Now" marker. */
 export function getZonedHourKey(now: number, timezone: string | null) {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {

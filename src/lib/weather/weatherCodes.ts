@@ -17,7 +17,6 @@ export interface WeatherCondition {
 
 const UNKNOWN: WeatherCondition = { label: 'Forecast', icon: Cloud };
 
-/** Groups of WMO weather interpretation codes, as Open-Meteo reports them. */
 const CONDITIONS: { codes: number[]; condition: WeatherCondition }[] = [
   { codes: [0], condition: { label: 'Clear skies', icon: Sun } },
   { codes: [1, 2], condition: { label: 'Partly sunny', icon: CloudSun } },
