@@ -7,6 +7,7 @@ import { getEventTime, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/
 const FORECAST_WINDOW_DAYS = 14;
 // The provider serves 92 days of past data; stay clear of the edge.
 const MAX_PAST_DAYS = 90;
+const REGION_RADIUS_KM = 100;
 
 interface Located {
   latitude: number;
@@ -52,7 +53,6 @@ function toLocated(
 
 const isLocated = (value: Located | null): value is Located => value !== null;
 
-/** Deliberately no trip-wide fallback: a multi-city trip would show the wrong city's weather. */
 function getDayLocation(
   trip: TripSpace,
   dayIndex: number,
@@ -82,6 +82,22 @@ function getDayLocation(
   return fromStay ?? null;
 }
 
+function getDistanceKm(from: Located, to: Located) {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const haversine = (angle: number) => Math.sin(angle / 2) ** 2;
+  const arc =
+    haversine(toRadians(to.latitude - from.latitude)) +
+    Math.cos(toRadians(from.latitude)) *
+      Math.cos(toRadians(to.latitude)) *
+      haversine(toRadians(to.longitude - from.longitude));
+  const result = 2 * 6371 * Math.asin(Math.sqrt(arc));
+  return result;
+}
+
+function isSingleRegion(points: Located[]) {
+  return points.every((from) => points.every((to) => getDistanceKm(from, to) <= REGION_RADIUS_KM));
+}
+
 function getLocationKey({ latitude, longitude, timezone }: Located) {
   return `${roundCoordinate(latitude)},${roundCoordinate(longitude)},${timezone ?? 'auto'}`;
 }
@@ -100,8 +116,24 @@ export function buildWeatherPlan(
   const dayIndexes = getWeatherDayIndexes(trip, todayIndex);
   const visibleDays = new Set(dayIndexes);
 
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  const ownLocations = Array.from({ length: dayCount }, (_, day) => getDayLocation(trip, day, events, stays));
+  const points = [
+    ...events.filter((event) => !event.isArchived).map((event) => toLocated(event.latitude, event.longitude, null)),
+    ...stays.map((stay) => toLocated(stay.latitude, stay.longitude, null)),
+  ].filter(isLocated);
+  // A day with nothing located borrows the nearest located day: always for today, otherwise
+  // only on a single-region trip, where a multi-city trip would show the wrong city's weather.
+  const isRegional = points.length > 0 && isSingleRegion(points);
+  const getNearestLocation = (dayIndex: number) =>
+    ownLocations.reduce<{ location: Located; distance: number } | null>((nearest, location, day) => {
+      const distance = Math.abs(day - dayIndex);
+      return location && (!nearest || distance < nearest.distance) ? { location, distance } : nearest;
+    }, null)?.location ?? null;
+
   const dayNeeds = dayIndexes.flatMap((dayIndex) => {
-    const location = getDayLocation(trip, dayIndex, events, stays);
+    const location =
+      ownLocations[dayIndex] ?? (isRegional || dayIndex === todayIndex ? getNearestLocation(dayIndex) : null);
     return location ? [{ dayIndex, location, date: getDayInputValue(trip.startDate, dayIndex) }] : [];
   });
 
@@ -118,7 +150,16 @@ export function buildWeatherPlan(
       })
     : [];
 
-  const needs: WeatherNeed[] = [...dayNeeds, ...eventNeeds];
+  // The location can be on a different calendar day than the viewer, so today's request spans both neighbours.
+  const todayNeeds = dayNeeds
+    .filter(({ dayIndex }) => dayIndex === todayIndex)
+    .flatMap(({ location }) =>
+      [todayIndex - 1, todayIndex + 1].map((dayIndex) => ({
+        location,
+        date: getDayInputValue(trip.startDate, dayIndex),
+      })),
+    );
+  const needs: WeatherNeed[] = [...dayNeeds, ...eventNeeds, ...todayNeeds];
   const groupsByKey = needs.reduce<Record<string, WeatherGroup>>((groups, { location, date }) => {
     const key = getLocationKey(location);
     const existing = groups[key];
@@ -160,19 +201,21 @@ export function getDayForecast(
   return result;
 }
 
-export function getDayHours(
+/** The rest of the location's current day, from its current hour — independent of the trip's dates and events. */
+export function getRemainingHours(
   plan: WeatherPlan,
   forecasts: WeatherForecasts,
   dayIndex: number,
-): { hours: HourForecast[]; timezone: string | null } | null {
+  now: number,
+): HourForecast[] {
   const target = plan.days[dayIndex];
   const forecast = target ? forecasts[target.key] : undefined;
-  if (!target || !forecast) {
-    return null;
+  const nowKey = forecast ? getZonedHourKey(now, forecast.timezone) : null;
+  if (!forecast || !nowKey) {
+    return [];
   }
 
-  const hours = forecast.hours.filter((hour) => hour.time.startsWith(target.date));
-  const result = hours.length > 0 ? { hours, timezone: forecast.timezone } : null;
+  const result = forecast.hours.filter((hour) => hour.time >= nowKey && hour.time.startsWith(nowKey.slice(0, 10)));
   return result;
 }
 
