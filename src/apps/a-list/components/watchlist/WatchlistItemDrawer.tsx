@@ -87,14 +87,28 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!row || !user) {
+  if (!user) {
     return null;
+  }
+
+  if (!row) {
+    return (
+      <Drawer isOpen onClose={onClose} title='Movie'>
+        <div className='space-y-4'>
+          <p className='text-muted-foreground text-sm'>
+            Looks like this movie is already off your watchlist.
+          </p>
+          <Button type='button' variant='secondary' onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </Drawer>
+    );
   }
 
   const { item } = row;
   const todayKey = toLocalDateInputValue(now);
   const todayDay = fromDateInputValue(todayKey) ?? 0;
-  // An upcoming movie starts on its opening day; anything already out starts today.
   const releaseKey =
     item.movie.releaseDate === null
       ? null
@@ -149,15 +163,17 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       return;
     }
 
+    onClose();
     try {
       await dispatch(removeWatchlistItem({ uid: user.uid, movieKey })).unwrap();
       addToast({
         title: 'Removed from watchlist',
         description: item.movie.title,
       });
-      onClose();
     } catch (removeError) {
-      setError(getErrorMessage(removeError, 'Unable to remove this movie.'));
+      addToast({
+        title: getErrorMessage(removeError, 'Unable to remove this movie.'),
+      });
     }
   };
 
