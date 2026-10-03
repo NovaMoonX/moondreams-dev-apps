@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { type AListState, aListReducer } from '@apps/a-list/store';
 import { type NineLivesState, nineLivesReducer } from '@apps/nine-lives/store';
 import { type WaypointState, waypointReducer } from '@apps/waypoint/store';
 import { type RemindersState, remindersReducer } from '@store/slices/remindersSlice';
@@ -11,6 +12,7 @@ export interface RootState {
   reminders: RemindersState;
   nineLives: NineLivesState;
   waypoint: WaypointState;
+  aList: AListState;
 }
 
 export const store = configureStore({
@@ -19,6 +21,7 @@ export const store = configureStore({
     reminders: remindersReducer,
     nineLives: nineLivesReducer,
     waypoint: waypointReducer,
+    aList: aListReducer,
   },
   devTools: true,
 });

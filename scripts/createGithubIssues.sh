@@ -2,8 +2,8 @@
 #
 # Wrapper around ../_gists/create-github-issues/init.sh so creating a mini-app's
 # roadmap issues only requires the app id (its folder name under src/apps/) —
-# the ISSUES.md path, the "<Title Case> (App)" label, and the project number
-# are all derived/fixed here.
+# the ISSUES.md path, the app name set on the board's "Apps" field, and the
+# project number are all derived/fixed here.
 #
 # Usage:
 #   npm run issues:create -- <app-id>
@@ -30,16 +30,16 @@ if [[ ! -f "$ISSUES_FILE" ]]; then
   exit 1
 fi
 
-# kebab-case app id -> "Title Case (App)", e.g. "nine-lives" -> "Nine Lives (App)".
-IFS='-' read -r -a words <<<"$APP_ID"
-label=""
-for word in "${words[@]}"; do
-  first="$(printf '%s' "${word:0:1}" | tr '[:lower:]' '[:upper:]')"
-  label="$label${label:+ }$first${word:1}"
-done
-LABEL="$label (App)"
+# The app name as shown in production is the manifest's short_name (e.g.
+# "A-List"); it becomes the board's "Apps" option, created if missing.
+MANIFEST="public/manifest-$APP_ID.json"
+if [[ ! -f "$MANIFEST" ]]; then
+  echo "No manifest found at $MANIFEST" >&2
+  exit 1
+fi
+APP_NAME="$(node -p "require('./$MANIFEST').short_name")"
 
-args=("$ISSUES_FILE" --label "$LABEL" --project-number 3 --project-status-value Ready)
+args=("$ISSUES_FILE" --app-name "$APP_NAME" --project-number 3 --project-status-value Ready)
 if [[ "${npm_lifecycle_event:-}" == *dry-run* ]]; then
   args+=(--dry-run)
 fi

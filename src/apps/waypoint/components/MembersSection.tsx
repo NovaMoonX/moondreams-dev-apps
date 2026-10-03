@@ -16,7 +16,7 @@ import {
   removeMember,
 } from '@apps/waypoint/store/actions/membershipActions';
 import MemberRoleBadge from './MemberRoleBadge';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
 import PendingMembersPanel from './PendingMembersPanel';

@@ -8,6 +8,7 @@ import { TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 import { AppCatalogProvider } from '@contexts/AppCatalogContext';
 import { AuthProvider } from '@contexts/AuthContext';
 import { NetworkStatusProvider } from '@contexts/NetworkStatusContext';
+import { useDisableAutocomplete } from '@hooks/useDisableAutocomplete';
 import { useReminderSync } from '@hooks/useReminderSync';
 import { SITE_VERSION } from '@lib/app';
 import {
@@ -22,6 +23,7 @@ import { store } from '@store/index';
 // Central, app-wide reminder sync — every mini-app shares this one
 // subscription instead of each wiring its own.
 function AppShell() {
+  useDisableAutocomplete();
   useReminderSync();
 
   return <RouterProvider router={router} />;

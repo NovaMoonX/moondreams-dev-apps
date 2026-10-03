@@ -11,7 +11,7 @@ export const SEED_PROJECT_ID = 'moondreams-dev-apps';
 export { FIXTURE_PASSWORD, FIXTURE_USERS };
 
 export type SeedScope =
-  'all' | 'core' | 'worth-the-wait' | 'nine-lives' | 'waypoint';
+  'all' | 'core' | 'worth-the-wait' | 'nine-lives' | 'waypoint' | 'a-list';
 
 export interface SeedContext {
   auth: Auth;

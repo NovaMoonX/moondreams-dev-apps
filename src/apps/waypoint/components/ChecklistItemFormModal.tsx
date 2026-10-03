@@ -15,8 +15,8 @@ import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
-import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import DeleteIconButton from '@/components/DeleteIconButton';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import type { ChecklistCategory, ChecklistItem, TripSpace } from '@apps/waypoint/types';
 
 interface ChecklistFormData {

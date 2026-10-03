@@ -28,7 +28,7 @@ import EventFormModal, {
   type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
 import WeatherDayStrip from '@apps/waypoint/components/WeatherDayStrip';

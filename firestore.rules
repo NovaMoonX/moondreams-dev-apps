@@ -81,6 +81,161 @@ service cloud.firestore {
     // rules stay isolated, kept in alphabetical order by app id. A generic
     // /apps/{appId} fallback for apps without a block yet is at the bottom.
 
+    // --- App: a-list ---
+
+    match /apps/a-list {
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Every A-List document is private to one member and nests under their uid.
+    match /apps/a-list/memberships/{uid} {
+      function isMembershipOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function isCents(value) {
+        return value is int && value >= 0 && value <= 1000000;
+      }
+
+      function isNullOrIntBetween(value, low, high) {
+        return value == null || (value is int && value >= low && value <= high);
+      }
+
+      function isNullOrTaxRate(value) {
+        return value == null || (value is number && value >= 0 && value <= 0.25);
+      }
+
+      function isMembershipValid(data) {
+        let keys = ['uid', 'monthlyCostCents', 'monthlyTotalCents', 'taxRate', 'startDate',
+                    'weeklyGoal', 'monthlyGoal', 'setupCompletedAt', 'createdAt', 'lastEditedAt'];
+        return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          && data.uid == uid
+          && isCents(data.monthlyCostCents) && data.monthlyCostCents > 0
+          && isCents(data.monthlyTotalCents)
+          && data.monthlyTotalCents >= data.monthlyCostCents
+          && isNullOrTaxRate(data.taxRate)
+          && data.startDate is int
+          && isNullOrIntBetween(data.weeklyGoal, 1, 21)
+          && isNullOrIntBetween(data.monthlyGoal, 1, 93)
+          && data.setupCompletedAt is int
+          && data.createdAt is int
+          && data.lastEditedAt is int;
+      }
+
+      allow read: if isMembershipOwner();
+      allow create: if isMembershipOwner() && isMembershipValid(request.resource.data);
+      allow update: if isMembershipOwner() && isMembershipValid(request.resource.data)
+        && request.resource.data.setupCompletedAt == resource.data.setupCompletedAt
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+
+      function isMovieValid(movie) {
+        let keys = ['title', 'releaseDate', 'posterUrl', 'runtimeMinutes', 'contentRating'];
+        return movie is map && movie.keys().hasOnly(keys) && movie.keys().hasAll(keys)
+          && movie.title is string && movie.title.size() > 0 && movie.title.size() <= 200
+          && (movie.releaseDate == null || movie.releaseDate is int)
+          && (movie.posterUrl == null || (movie.posterUrl is string && movie.posterUrl.size() <= 500
+            && movie.posterUrl.matches('^https://[^\\s]+$')))
+          && isNullOrIntBetween(movie.runtimeMinutes, 1, 1000)
+          && (movie.contentRating == null || (movie.contentRating is string && movie.contentRating.size() <= 20));
+      }
+
+      function isTicketValid(ticket) {
+        let keys = ['entryMode', 'format', 'priceCents', 'standardPriceCents', 'feeAvoidedCents',
+                    'taxRate', 'taxCents', 'totalCents'];
+        return ticket is map && ticket.keys().hasOnly(keys) && ticket.keys().hasAll(keys)
+          && ticket.entryMode in ['ITEMIZED', 'ALL_IN']
+          && isFormat(ticket.format)
+          && isCents(ticket.priceCents)
+          && (ticket.standardPriceCents == null || isCents(ticket.standardPriceCents))
+          && (ticket.format != 'STANDARD' || ticket.standardPriceCents == null)
+          && isCents(ticket.feeAvoidedCents)
+          && isNullOrTaxRate(ticket.taxRate)
+          && isCents(ticket.taxCents)
+          && isCents(ticket.totalCents)
+          && ticket.totalCents == ticket.priceCents + ticket.feeAvoidedCents + ticket.taxCents;
+      }
+
+      function isFormat(value) {
+        return value in ['STANDARD', 'DOLBY_CINEMA', 'IMAX', 'PRIME', 'REALD_3D', 'LASER'];
+      }
+
+      match /watchlist/{movieKey} {
+        function isWatchlistItemValid(data) {
+          let keys = ['movieKey', 'movie', 'priority', 'preferredFormat', 'createdAt', 'lastEditedAt'];
+          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+            && data.movieKey == movieKey
+            && movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
+            && isMovieValid(data.movie)
+            && data.priority in ['MUST_SEE', 'WANT_TO_SEE', 'IF_I_HAVE_TIME']
+            && (data.preferredFormat == null || isFormat(data.preferredFormat))
+            && data.createdAt is int
+            && data.lastEditedAt is int;
+        }
+
+        allow read, delete: if isMembershipOwner();
+        allow create: if isMembershipOwner() && isWatchlistItemValid(request.resource.data);
+        allow update: if isMembershipOwner() && isWatchlistItemValid(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /viewings/{viewingId} {
+        function isViewingValid(data) {
+          let required = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
+          // `ticket` and `rating` arrived later: legacy documents lack them, so they're allowed but not required.
+          return data.keys().hasOnly(required.concat(['ticket', 'rating'])) && data.keys().hasAll(required)
+            && data.id == viewingId
+            && data.movieKey is string
+            && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
+            && isMovieValid(data.movie)
+            && data.showtimeAt is int
+            && data.endsAt is int && data.endsAt > data.showtimeAt
+            && data.status in ['PLANNED', 'SEEN']
+            // The server's clock, so a skewed device can't record a future showing as seen.
+            && (data.status == 'PLANNED' || data.showtimeAt <= request.time.toMillis())
+            && (data.get('ticket', null) == null || isTicketValid(data.ticket))
+            && isNullOrIntBetween(data.get('rating', null), 1, 5)
+            && (data.status == 'SEEN' || data.get('rating', null) == null)
+            && data.createdAt is int
+            && data.lastEditedAt is int;
+        }
+
+        function arrivesAsSeen(data) {
+          return data.status == 'SEEN' && data.endsAt <= request.time.toMillis();
+        }
+
+        allow read, delete: if isMembershipOwner();
+        allow create: if isMembershipOwner() && isViewingValid(request.resource.data)
+          && (request.resource.data.status == 'PLANNED' || arrivesAsSeen(request.resource.data));
+        allow update: if isMembershipOwner() && isViewingValid(request.resource.data)
+          && request.resource.data.movieKey == resource.data.movieKey
+          && request.resource.data.movie == resource.data.movie
+          && request.resource.data.createdAt == resource.data.createdAt
+          // A seen viewing never goes back to planned; planned only becomes seen once it has ended.
+          && (resource.data.status == 'SEEN'
+            ? request.resource.data.status == 'SEEN'
+            : (request.resource.data.status == 'PLANNED' || arrivesAsSeen(request.resource.data)));
+      }
+    }
+
+    // Written and read only by the movie-lookup Cloud Functions (admin SDK), so no client
+    // can read another member's usage counters or poison the shared cache.
+    match /apps/a-list/searchCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/a-list/movieCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/a-list/lookupUsage/{key} {
+      allow read, write: if false;
+    }
+
     // --- App: nine-lives ---
 
     match /apps/nine-lives {

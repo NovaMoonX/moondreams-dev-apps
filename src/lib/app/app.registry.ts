@@ -12,7 +12,7 @@ export type AppRegistryEntry = {
 /* IMPORTANT: Keep the following in sync with this registry:
    - in /public folder: manifests, logos, and banners
    - cloudflare-worker.js
-   - repo root README.md
+   - repo root README.md (its "Current apps" list: one line per app)
 */
 export const APP_REGISTRY: AppRegistryEntry[] = [
   {
@@ -41,6 +41,15 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
       'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
     status: 'draft',
     createdAt: '2026-09-15',
+  },
+  {
+    id: 'a-list',
+    name: 'A-List Tracker',
+    path: '/a-list',
+    description:
+      'A personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.',
+    status: 'draft',
+    createdAt: '2026-10-03',
   },
 ];
 

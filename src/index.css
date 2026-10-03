@@ -108,6 +108,9 @@ input[type="file"]:disabled::-webkit-file-upload-button {
   cursor: not-allowed;
 }
 
+[role="dialog"] [tabindex="-1"]:focus {
+  outline: none;
+}
 
 /* Dreamer UI styles */
 @import "@moondreamsdev/dreamer-ui/styles"; /* non-TailwindCSS styles */

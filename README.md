@@ -7,7 +7,10 @@ A collection of mini-apps built to fit whatever felt useful, fun, or simply inte
 
 ## Current apps
 
-- Worth the Wait — a private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.
+- 💌 **Worth the Wait** — a private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.
+- 🐱 **Nine Lives** — a private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.
+- 🧭 **Waypoint** — a collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.
+- 🎟️ **A-List Tracker** — a personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.
 
 ## Quick start
 
@@ -18,7 +21,7 @@ npm run dev
 
 Then open the local Vite app in your browser to explore the collection.
 
-For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For the callable Cloud Functions used by Worth the Wait, see [functions/README.md](functions/README.md).
+For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For every Cloud Function (what it does, its secrets, and local testing), see [functions/README.md](functions/README.md).
 
 For a production build:
 

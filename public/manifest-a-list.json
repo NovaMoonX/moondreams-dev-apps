@@ -1,0 +1,37 @@
+{
+  "name": "A-List Tracker - Moondreams Dev Apps",
+  "short_name": "A-List",
+  "description": "Track your AMC Stubs A-List movie nights and see whether the membership is paying for itself.",
+  "id": "/a-list/",
+  "start_url": "/a-list/",
+  "scope": "/a-list/",
+  "scope_extensions": [
+    {
+      "type": "origin",
+      "origin": "https://apps.moondreams.dev"
+    }
+  ],
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#000000",
+  "user_preferences": {
+    "color_scheme_dark": {
+      "background_color": "#0f172a",
+      "theme_color": "#000000"
+    }
+  },
+  "icons": [
+    {
+      "src": "/logos/by-app/logo-a-list.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logos/by-app/logo-a-list.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

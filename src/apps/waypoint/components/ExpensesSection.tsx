@@ -19,7 +19,7 @@ import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRan
 import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
