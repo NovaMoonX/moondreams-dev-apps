@@ -81,13 +81,50 @@ function getWatchlistFixtures(now: number) {
   ];
 }
 
-const HOUR_MS = 3_600_000;
 const PREVIEWS_MINUTES = 20;
 const DEFAULT_RUNTIME = 120;
 
-/** 7 pm in Los Angeles (02:00 UTC the next day) on the calendar day `daysFromNow` away. */
+const SEED_TIMEZONE = 'America/Los_Angeles';
+
+/** Wall-clock fields of an instant in `timeZone`. */
+function readWallClock(epoch: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(epoch));
+  const read = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute'),
+  };
+}
+
+/** 7 pm Los Angeles time on the LA calendar day `daysFromNow` days from LA's today, DST included. */
 function getEveningShowtime(now: number, daysFromNow: number) {
-  return getDayUtcAhead(now, daysFromNow) + 26 * HOUR_MS;
+  const today = readWallClock(now, SEED_TIMEZONE);
+  const target = new Date(
+    Date.UTC(today.year, today.month - 1, today.day + daysFromNow, 19, 0),
+  );
+  const wallAsUtc = target.getTime();
+  const offsetOf = (epoch: number) => {
+    const wall = readWallClock(epoch, SEED_TIMEZONE);
+    return (
+      Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute) -
+      epoch
+    );
+  };
+  const firstGuess = wallAsUtc - offsetOf(wallAsUtc);
+  const result = wallAsUtc - offsetOf(firstGuess);
+  return result;
 }
 
 function getViewingFixtures(now: number) {

@@ -271,6 +271,7 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
         <MoviePicker
           query={query}
           onQueryChange={setQuery}
+          showWatchlist={isCalendar}
           onPick={(result) => setSelection({ kind: 'search', result })}
           onPickWatchlistItem={(item) =>
             setSelection({

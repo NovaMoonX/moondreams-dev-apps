@@ -24,6 +24,8 @@ interface MoviePickerProps {
   onPick: (movie: MovieSearchResult) => void;
   onPickWatchlistItem: (item: WatchlistItem) => void;
   onAddByTitle: () => void;
+  /** Calendar adds pick from the watchlist first; watchlist adds search the movie database only. */
+  showWatchlist: boolean;
 }
 
 function MoviePicker({
@@ -32,6 +34,7 @@ function MoviePicker({
   onPick,
   onPickWatchlistItem,
   onAddByTitle,
+  showWatchlist,
 }: MoviePickerProps) {
   const watchlist = useAppSelector(selectWatchlistItems);
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
@@ -46,11 +49,13 @@ function MoviePicker({
   });
   const normalizedQuery = normalizeString(query);
   // An empty search shows what's still unseen; typing searches the whole list, so a rewatch can be picked.
-  const watchlistMatches = watchlist.filter((item) =>
-    normalizedQuery === ''
-      ? !seenCounts[item.movieKey]
-      : normalizeString(item.movie.title).includes(normalizedQuery),
-  );
+  const isWatchlistMatch = (item: WatchlistItem) => {
+    if (!showWatchlist) return false;
+    if (normalizedQuery === '') return !seenCounts[item.movieKey];
+    return normalizeString(item.movie.title).includes(normalizedQuery);
+  };
+  const watchlistMatches = watchlist.filter(isWatchlistMatch);
+  const listedKeys = new Set(watchlist.map((item) => item.movieKey));
   const watchlistKeys = new Set(watchlistMatches.map((item) => item.movieKey));
   const results = (search.data ?? []).filter(
     (movie) => !watchlistKeys.has(movie.movieKey),
@@ -155,7 +160,12 @@ function MoviePicker({
                 movie.movieKey,
                 movie.title,
                 movie.posterUrl,
-                movie.year?.toString() ?? null,
+                [
+                  movie.year,
+                  listedKeys.has(movie.movieKey) ? 'On your watchlist' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || null,
                 () => onPick(movie),
               ),
             )}
