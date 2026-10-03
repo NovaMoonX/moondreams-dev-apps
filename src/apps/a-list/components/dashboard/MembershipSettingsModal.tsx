@@ -38,6 +38,11 @@ interface GoalValues {
 }
 
 const { custom, input } = FormFactories;
+const COST_GROUP = [
+  'monthlyCostCents',
+  'monthlyTotalCents',
+  'taxRate',
+] as const;
 
 /** A blank goal is "no goal"; anything else must be a whole number in range. */
 function parseGoal(
@@ -102,12 +107,22 @@ function MembershipSettingsModal({
       weeklyGoal: weekly.goal,
       monthlyGoal: monthly.goal,
     };
-    const result = Object.fromEntries(
+    const changed = Object.fromEntries(
       Object.entries(next).filter(
         ([key, value]) =>
           openedWith[key as keyof MembershipEditableFields] !== value,
       ),
     ) as Partial<MembershipEditableFields>;
+    // Cost, total and rate are derived from each other, so they're written as one group.
+    const isCostGroupChanged = COST_GROUP.some((key) => key in changed);
+    const result = isCostGroupChanged
+      ? {
+          ...changed,
+          monthlyCostCents: next.monthlyCostCents,
+          monthlyTotalCents: next.monthlyTotalCents,
+          taxRate: next.taxRate,
+        }
+      : changed;
     return result;
   };
 
