@@ -101,7 +101,9 @@ Galaxy Drift planned after they open. Four more past days hold two, three, four 
 (3, 9, 15 and 17 days ago), so every poster split and the "+N" badge show on the calendar. A sixth seen viewing, The Matrix at 11 pm LA time
 two days ago, checks that late showings count on the viewer's own day. Three seen viewings carry tickets:
 The Matrix (Standard, $15.56 + $1.26 tax), Dune (Dolby Cinema with its standard price),
-and a Dune IMAX showing entered as an all-in $21.39 total.
+and a Dune IMAX showing entered as an all-in $21.39 total. Two planned showings have already ended
+without an answer (Midnight Matinee four days ago and Hometown Film Fest Shorts yesterday),
+so the Seen prompt opens on load; The Matrix and both Dune viewings carry star ratings.
 
 To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its

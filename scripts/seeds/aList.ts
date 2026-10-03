@@ -134,6 +134,12 @@ function getShowtime(now: number, daysFromNow: number, hour = 19, minute = 0) {
 }
 
 // The spec's Standard example, a premium ticket with its standard price, and an all-in total.
+const SEED_RATINGS: Record<string, number> = {
+  'seed-viewing-matrix': 4,
+  'seed-viewing-dune-1': 5,
+  'seed-viewing-dune-2': 5,
+};
+
 const SEED_TICKETS: Record<string, object> = {
   'seed-viewing-matrix': {
     entryMode: 'ITEMIZED',
@@ -187,6 +193,21 @@ function getViewingFixtures(now: number) {
       daysFromNow: -2,
       hour: 23,
     },
+    // Ended but never answered: the Seen prompt asks about these, oldest first.
+    {
+      id: 'seed-viewing-awaiting-1',
+      movieKey: 'imdb-tt99000004',
+      daysFromNow: -4,
+      hour: 20,
+      awaiting: true,
+    },
+    {
+      id: 'seed-viewing-awaiting-2',
+      movieKey: 'manual-seed-0001-hometown',
+      daysFromNow: -1,
+      hour: 14,
+      awaiting: true,
+    },
     {
       id: 'seed-viewing-starlight',
       movieKey: 'imdb-tt99000001',
@@ -222,12 +243,14 @@ function getViewingFixtures(now: number) {
       daysFromNow,
       hour = 19,
       minute = 0,
+      awaiting = false,
     }: {
       id: string;
       movieKey: string;
       daysFromNow: number;
       hour?: number;
       minute?: number;
+      awaiting?: boolean;
     }) => {
       const { movie: snapshot } = find(movieKey);
       const showtimeAt = getShowtime(now, daysFromNow, hour, minute);
@@ -235,14 +258,17 @@ function getViewingFixtures(now: number) {
         showtimeAt +
         (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *
           60_000;
+      // An ended showing marked `awaiting` stays planned, so the Seen prompt has something to ask about.
+      const status = endsAt <= now && !awaiting ? 'SEEN' : 'PLANNED';
       return {
         id,
         movieKey,
         movie: snapshot,
         showtimeAt,
         endsAt,
-        status: endsAt <= now ? 'SEEN' : 'PLANNED',
+        status,
         ticket: SEED_TICKETS[id] ?? null,
+        rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
         createdAt: Math.min(now, showtimeAt),
         lastEditedAt: Math.min(now, showtimeAt),
       };

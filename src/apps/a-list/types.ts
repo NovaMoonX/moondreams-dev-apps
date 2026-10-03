@@ -81,6 +81,8 @@ export interface Viewing {
   status: ViewingStatus;
   /** null until "Mark paid" or "+ Add ticket details". Documents written before tickets existed lack the key. */
   ticket: Ticket | null;
+  /** 1–5 whole stars, only once seen. Documents written before ratings existed lack the key. */
+  rating: number | null;
   createdAt: number;
   lastEditedAt: number;
 }

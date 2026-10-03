@@ -14,6 +14,7 @@ import {
   createDateInputField,
   createTimeInputField,
 } from '@/utils/formFactoryHelpers';
+import StarRating from '@apps/a-list/components/shared/StarRating';
 import type { Viewing } from '@apps/a-list/types';
 
 interface ShowtimeValues {
@@ -33,7 +34,8 @@ interface EditViewingFormProps {
   now: number;
   isSaving: boolean;
   onCancel: () => void;
-  onSave: (showtimeAt: number) => void;
+  /** `rating` is only passed for a seen viewing. */
+  onSave: (showtimeAt: number, rating?: number | null) => void;
 }
 
 function EditViewingForm({
@@ -48,6 +50,8 @@ function EditViewingForm({
     date: toLocalDateInputValue(viewing.showtimeAt),
     time: toLocalTimeInputValue(viewing.showtimeAt),
   });
+  const [rating, setRating] = useState<number | null>(viewing.rating ?? null);
+  const isSeen = viewing.status === 'SEEN';
   const showtimeAt = values.time
     ? fromLocalDateAndTimeInputValues(values.date, values.time)
     : undefined;
@@ -57,7 +61,9 @@ function EditViewingForm({
   const isBeforeStart =
     values.date !== '' && values.date < toDateInputValue(startDate);
   const hasChanged =
-    showtimeAt !== undefined && showtimeAt !== viewing.showtimeAt;
+    showtimeAt !== undefined &&
+    (showtimeAt !== viewing.showtimeAt ||
+      (isSeen && rating !== (viewing.rating ?? null)));
   const canSave = hasChanged && !isTooEarlyForSeen && !isBeforeStart;
 
   return (
@@ -70,6 +76,12 @@ function EditViewingForm({
         spacing='normal'
         onDataChange={(data) => setValues(data as ShowtimeValues)}
       />
+      {isSeen && (
+        <div className='space-y-1'>
+          <p className='text-sm font-medium'>Your rating</p>
+          <StarRating value={rating} onChange={setRating} size='lg' />
+        </div>
+      )}
       {isBeforeStart && (
         <p className='text-destructive text-sm'>
           Your membership started {formatDateUTC(startDate)}, so pick that day
@@ -96,7 +108,10 @@ function EditViewingForm({
               type='button'
               loading={isSaving}
               disabled={!canSave || isSaving}
-              onClick={() => showtimeAt !== undefined && onSave(showtimeAt)}
+              onClick={() =>
+                showtimeAt !== undefined &&
+                onSave(showtimeAt, isSeen ? rating : undefined)
+              }
             >
               Save
             </Button>
