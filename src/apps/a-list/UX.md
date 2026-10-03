@@ -12,7 +12,7 @@
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Modal`, `Drawer`, `Tabs`, `Badge` — custom only where the catalog has nothing: the poster split and the star rating |
 | Log in a tap or two | defaults, chips and pickers over typing; anything optional waits behind a "+ Add X" link |
 | Never overlay on overlay | tapping a day opens nothing (its movies show in a panel under the grid); tapping a movie opens a `Drawer`; whatever continues inside an open drawer — Mark paid, Edit, Add to calendar from the watchlist — swaps that drawer's content in place with a "‹ Back" link. Only a destructive confirm may sit on top |
-| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup and Membership settings are `Modal`s. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
+| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup is a `Modal`. Adding a movie and Membership settings are full-page subviews with their own back button. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
 | Never offer what can't be done | "Mark seen" appears only once the showtime has ended; "Standard price" appears only for a premium format |
 | Honest, kind math | negative net savings reads "Not yet" in a plain tone, never an alarm |
 

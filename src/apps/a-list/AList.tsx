@@ -13,7 +13,7 @@ import AddSubview from '@apps/a-list/components/add/AddSubview';
 import CalendarScreen from '@apps/a-list/components/calendar/CalendarScreen';
 import DayDrawer from '@apps/a-list/components/calendar/DayDrawer';
 import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
-import MembershipSettingsModal from '@apps/a-list/components/dashboard/MembershipSettingsModal';
+import MembershipSettingsSubview from '@apps/a-list/components/dashboard/MembershipSettingsSubview';
 import PastMoviesOfferModal from '@apps/a-list/components/setup/PastMoviesOfferModal';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
 import BottomNav from '@apps/a-list/components/shell/BottomNav';
@@ -139,13 +139,22 @@ function AList() {
     closeOverlay: () => setOverlay(null),
   };
 
+  const isSubviewOpen =
+    overlay?.kind === 'add' || overlay?.kind === 'membership';
+
   return (
     <AListOverlayContext.Provider value={overlayContext}>
       {overlay?.kind === 'add' && (
         <AddSubview overlay={overlay} onClose={() => setOverlay(null)} />
       )}
-      {/* Adding a movie takes over the app; the screens stay mounted underneath so filters and the selected day survive. */}
-      <div className={join(overlay?.kind === 'add' && 'hidden')}>
+      {overlay?.kind === 'membership' && (
+        <MembershipSettingsSubview
+          membership={membership}
+          onClose={() => setOverlay(null)}
+        />
+      )}
+      {/* A subview takes over the app; the screens stay mounted underneath so filters and the selected day survive. */}
+      <div className={join(isSubviewOpen && 'hidden')}>
         <div className='page pb-28'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>{getScreen()}</div>
           <BottomNav value={activeTab} onChange={setActiveTab} />
@@ -169,12 +178,6 @@ function AList() {
         <WatchlistItemDrawer
           key={overlay.movieKey}
           movieKey={overlay.movieKey}
-          onClose={() => setOverlay(null)}
-        />
-      )}
-      {overlay?.kind === 'membership' && (
-        <MembershipSettingsModal
-          membership={membership}
           onClose={() => setOverlay(null)}
         />
       )}

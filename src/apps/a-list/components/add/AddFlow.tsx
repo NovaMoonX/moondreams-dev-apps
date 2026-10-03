@@ -26,6 +26,7 @@ import ManualMovieForm, {
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
+import SubviewHeader from '@apps/a-list/components/shell/SubviewHeader';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import WatchlistDetailsFields, {
@@ -500,19 +501,7 @@ export function AddFlow({
   return (
     <>
       {title !== undefined && (
-        <div className='mb-4 flex items-center gap-2'>
-          <Button
-            type='button'
-            variant='secondary'
-            size='icon'
-            rounded='full'
-            aria-label={header.label}
-            onClick={header.onClick}
-          >
-            <ChevronLeft className='h-5 w-5' />
-          </Button>
-          <h1 className='text-xl font-semibold'>{header.label}</h1>
-        </div>
+        <SubviewHeader title={header.label} onBack={header.onClick} />
       )}
       {pastAdded && (
         <PastMoviesStrip

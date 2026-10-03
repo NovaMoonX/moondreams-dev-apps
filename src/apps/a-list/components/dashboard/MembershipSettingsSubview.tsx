@@ -6,7 +6,6 @@ import {
   FormFactories,
   Input,
   Label,
-  Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
@@ -22,6 +21,7 @@ import {
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import MoneyInput from '@/components/MoneyInput';
+import Subview from '@apps/a-list/components/shell/Subview';
 import { MAX_MONTHLY_GOAL, MAX_WEEKLY_GOAL } from '@apps/a-list/constants';
 import {
   updateMembership,
@@ -62,15 +62,15 @@ function parseGoal(
   return { goal: isValid ? goal : null, isValid };
 }
 
-interface MembershipSettingsModalProps {
+interface MembershipSettingsSubviewProps {
   membership: MembershipProfile;
   onClose: () => void;
 }
 
-function MembershipSettingsModal({
+function MembershipSettingsSubview({
   membership,
   onClose,
-}: MembershipSettingsModalProps) {
+}: MembershipSettingsSubviewProps) {
   const dispatch = useAppDispatch();
   const now = useNow();
   // Only fields the member changed in this form are written, so a concurrent edit to another field survives.
@@ -221,7 +221,7 @@ function MembershipSettingsModal({
   ];
 
   return (
-    <Modal isOpen onClose={onClose} title='Membership'>
+    <Subview header={{ title: 'Membership', onBack: onClose }}>
       <div className='space-y-4'>
         <div className='bg-secondary/60 flex items-center gap-3 rounded-2xl px-4 py-3'>
           <span className='text-3xl' aria-hidden='true'>
@@ -347,8 +347,8 @@ function MembershipSettingsModal({
           }
         />
       </div>
-    </Modal>
+    </Subview>
   );
 }
 
-export default MembershipSettingsModal;
+export default MembershipSettingsSubview;
