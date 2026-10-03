@@ -1,3 +1,4 @@
+import type { WeatherConditionId } from '@/lib/weather/weatherCodes';
 import type {
   ActivitySetting,
   AnnouncementSeverity,
@@ -358,3 +359,16 @@ export const TRIP_SECTION_TABS = [
 ] as const;
 
 export type TripSectionTab = (typeof TRIP_SECTION_TABS)[number];
+
+export const WEATHER_BANNER_IMAGES: Record<WeatherConditionId, string | null> = {
+  clear: '/by-app/waypoint/weather/clear.webp',
+  'partly-sunny': '/by-app/waypoint/weather/partly-sunny.webp',
+  overcast: '/by-app/waypoint/weather/overcast.webp',
+  foggy: '/by-app/waypoint/weather/foggy.webp',
+  drizzle: '/by-app/waypoint/weather/drizzle.webp',
+  rain: '/by-app/waypoint/weather/rain.webp',
+  'heavy-rain': '/by-app/waypoint/weather/heavy-rain.webp',
+  snow: '/by-app/waypoint/weather/snow.webp',
+  thunderstorms: '/by-app/waypoint/weather/thunderstorms.webp',
+  unknown: null,
+};
