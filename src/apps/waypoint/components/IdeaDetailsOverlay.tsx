@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useId, useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -16,7 +16,7 @@ import {
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTiming } from '@apps/waypoint/utils/ideaLabels';
 
-let openIdeaId: string | null = null;
+let openOverlayId: string | null = null;
 const openIdeaListeners = new Set<() => void>();
 
 const subscribeToOpenIdea = (listener: () => void) => {
@@ -26,11 +26,11 @@ const subscribeToOpenIdea = (listener: () => void) => {
   };
 };
 
-const setOpenIdea = (ideaId: string, isOpen: boolean) => {
+const setOpenIdea = (overlayId: string, isOpen: boolean) => {
   if (isOpen) {
-    openIdeaId = ideaId;
-  } else if (openIdeaId === ideaId) {
-    openIdeaId = null;
+    openOverlayId = overlayId;
+  } else if (openOverlayId === overlayId) {
+    openOverlayId = null;
   } else {
     return;
   }
@@ -151,9 +151,10 @@ function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer }: IdeaDetailsBod
  * hover, beside the idea's text. */
 function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDetailsOverlayProps) {
   const isSmallScreen = useMediaQuery().isBelow('sm');
-  // One details view is open at a time, so moving between ideas never leaves two showing.
-  const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openIdeaId === idea.id);
-  const setIsOpen = (open: boolean) => setOpenIdea(idea.id, open);
+  // Keyed per rendered card, not per idea: the same idea can sit on Overview and in the Ideas list.
+  const overlayId = useId();
+  const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openOverlayId === overlayId);
+  const setIsOpen = (open: boolean) => setOpenIdea(overlayId, open);
   const openProps: IdeaOpenProps = {
     role: 'button',
     tabIndex: 0,
