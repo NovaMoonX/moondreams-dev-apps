@@ -100,4 +100,5 @@ Migrating between them means moving the collection path and updating every actio
 
 - **Bump `SITE_VERSION`** in `src/lib/app/app.constants.ts` on every PR that changes app code or behavior: patch for a fix or small tweak, minor for a feature (finishing an in-progress feature PR is a minor bump). Bump once per PR, in its first code-changing commit, and re-check against `origin/main` first — main may already have taken the number.
 - Keep the root `README.md` and the mini-app docs current, concise, and in their existing tone.
+- **The root `README.md` "Current apps" list mirrors `APP_REGISTRY`:** every app has one line (an emoji, its name, its registry description), added in the same PR that registers the app and updated whenever an app is renamed or its description changes.
 - Commits and PRs end with the attribution lines the session's system reminder specifies.

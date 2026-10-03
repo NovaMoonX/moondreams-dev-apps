@@ -164,6 +164,7 @@ useEffect(() => {
 - Keep the root `README.md` and relevant mini-app docs current and minimal whenever code or behavior changes.
 - Preserve the existing structure and tone of existing docs; do not rewrite them into a different format or voice.
 - Update, remove, or compress stale content instead of adding long commentary.
+- **The root `README.md` "Current apps" list mirrors `APP_REGISTRY`:** every app has one line (an emoji, its name, its registry description), added in the same PR that registers the app and updated whenever an app is renamed or its description changes.
 
 ### Critical reminders
 - **No IIFEs — never self-invoke an anonymous function (`(() => {...})()`). Arrow functions passed as arguments (`.map()`, `onClick={() => ...}`, `setState((current) => ...)`) are normal and fine. See "No IIFEs" under Coding Styles.**
@@ -185,6 +186,7 @@ useEffect(() => {
 - **Date-only values (anything written with `fromDateInputValue`) are UTC midnight — display them with `formatDateUTC`/`getDayLabel`, never `formatDate`/`formatDateTime`/local getters, and bound an instant against a date-only end date with `endDate + 1 day`. Grep the diff for `formatDate(` and `toLocaleDateString(` on any such field.**
 - **In Firestore rules, move repeated assertions into helper functions.**
 - **Keep the root README and mini-app docs current, concise, and aligned with the existing format and tone.**
+- **Registering, renaming, or re-describing an app updates the root README's "Current apps" list (emoji, name, registry description) in the same PR.**
 - **Invite/join flows: always use the flat, sibling `apps/{appId}/pendingRequests` collection pattern — never nested, never a `collectionGroup`. Ship the requester's own Remove/cancel action in the same PR as approve/decline, not as a later follow-up.**
 - **A pending (not-yet-approved) requester must never be treated as an active member for presence, avatars, or reads of a resource document that carries sensitive data.**
 - **Any Firestore `onSnapshot` belongs in `store/listeners/`, started once from a `useXSync` hook at the mini-app's top-level orchestrator (see `useNineLivesSync.ts` / `useWaypointSync.ts`) — never embedded inside a tab/panel/leaf component's own effect.**

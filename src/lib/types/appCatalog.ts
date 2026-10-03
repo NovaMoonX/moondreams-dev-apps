@@ -1,4 +1,9 @@
-export type AppId = 'worth-the-wait' | 'nine-lives' | 'waypoint' | (string & {});
+export type AppId =
+  | 'worth-the-wait'
+  | 'nine-lives'
+  | 'waypoint'
+  | 'a-list'
+  | (string & {});
 
 export type AppStatus = 'draft' | 'public' | 'removed';
 

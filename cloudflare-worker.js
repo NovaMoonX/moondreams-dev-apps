@@ -60,6 +60,16 @@ const APP_REGISTRY = [
       },
     ],
   },
+  {
+    id: 'a-list',
+    name: 'A-List Tracker',
+    title: 'A-List Tracker - Moondreams Dev Apps',
+    path: '/a-list',
+    description:
+      'A personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.',
+    image:
+      'https://moondreams-dev-apps.web.app/banners/by-app/banner-a-list.png',
+  },
 ];
 
 function getAppMeta(url) {
