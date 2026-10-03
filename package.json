@@ -7,6 +7,8 @@
     "dev": "vite",
     "dev:lan": "tsx scripts/lan.ts dev",
     "lan:trust": "tsx scripts/lan.ts trust",
+    "lan:untrust": "tsx scripts/lan.ts untrust",
+    "lan:list": "tsx scripts/lan.ts list",
     "preemulators": "npm --prefix functions run build",
     "emulators": "firebase emulators:start --only auth,firestore,database,functions,storage",
     "preemulators:lan": "npm --prefix functions run build",
