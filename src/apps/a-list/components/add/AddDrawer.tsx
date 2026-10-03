@@ -12,7 +12,12 @@ import { ChevronLeft } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
+import {
+  fromDateInputValue,
+  toLocalDateInputValue,
+} from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC, formatDuration } from '@/utils/formatUtils';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
@@ -73,6 +78,7 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const now = useNow();
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<MovieSearchResult | null>(null);
   const [detailsValues, setDetailsValues] =
@@ -85,14 +91,20 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   });
   const movie = details.data;
 
+  const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
+
+  const getReleaseLabel = (releaseDate: number | null) => {
+    if (releaseDate === null) return 'Release date not announced';
+    if (releaseDate > todayDay) return `Opens ${formatDateUTC(releaseDate)}`;
+    return `Released ${formatDateUTC(releaseDate)}`;
+  };
+
   const getDetailsLine = () => {
     if (details.isPending) return 'Getting the details…';
     if (details.error || !movie)
       return "We couldn't load this movie's details just now.";
     const parts = [
-      movie.releaseDate === null
-        ? 'Release date not announced'
-        : `Releases ${formatDateUTC(movie.releaseDate)}`,
+      getReleaseLabel(movie.releaseDate),
       movie.runtimeMinutes === null
         ? null
         : formatDuration(movie.runtimeMinutes * 60_000),
