@@ -54,7 +54,8 @@ export type AListOverlay =
       date: string;
       mode: 'single' | 'past';
     }
-  | { kind: 'viewing'; id: string };
+  | { kind: 'viewing'; id: string }
+  | { kind: 'membership' };
 
 export interface WatchlistItem {
   /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */
@@ -81,6 +82,8 @@ export interface Viewing {
   status: ViewingStatus;
   /** null until "Mark paid" or "+ Add ticket details". Documents written before tickets existed lack the key. */
   ticket: Ticket | null;
+  /** 1–5 whole stars, only once seen. Documents written before ratings existed lack the key. */
+  rating: number | null;
   createdAt: number;
   lastEditedAt: number;
 }

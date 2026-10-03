@@ -1,11 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  runTransaction,
-  updateDoc,
-} from 'firebase/firestore';
+import { collection, deleteDoc, doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -78,6 +72,7 @@ export const addViewing = createAsyncThunk<
           endsAt,
           status: getInitialStatus(endsAt, now),
           ticket: ticket ?? null,
+          rating: null,
           createdAt: now,
           lastEditedAt: now,
         };
@@ -94,48 +89,67 @@ export const addViewing = createAsyncThunk<
   },
 );
 
-interface UpdateViewingShowtimeInput {
+/** Keys added after the first viewings were written, with the empty value a legacy document gets. */
+const LATER_KEYS = { ticket: null, rating: null } as const;
+
+/**
+ * A field-scoped edit in a transaction: any later-added key the freshly read document still lacks
+ * is backfilled with its empty value in the same write, and nothing the edit doesn't own is touched.
+ */
+async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
+  const viewingRef = doc(
+    db,
+    'apps',
+    'a-list',
+    'memberships',
+    uid,
+    'viewings',
+    id,
+  );
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(viewingRef);
+    if (!snapshot.exists()) {
+      throw new Error('This showing was removed.');
+    }
+
+    const stored = snapshot.data();
+    const backfill = Object.fromEntries(
+      Object.entries(LATER_KEYS).filter(([key]) => !(key in stored)),
+    );
+    transaction.update(viewingRef, {
+      ...backfill,
+      ...fields,
+      lastEditedAt: Date.now(),
+    });
+  });
+}
+
+interface UpdateViewingInput {
   uid: string;
   id: string;
   showtimeAt: number;
   runtimeMinutes: number | null;
+  /** Only for a seen viewing; a planned one has no rating. */
+  rating?: number | null;
 }
 
-/**
- * Moves a showing: the showtime and its derived end are written together. A document written
- * before tickets existed gains `ticket: null`, decided from a fresh read so a ticket saved
- * meanwhile in another tab is never cleared.
- */
-export const updateViewingShowtime = createAsyncThunk<
+/** Moves a showing (the showtime and its derived end are written together) and, once seen, its stars. */
+export const updateViewing = createAsyncThunk<
   void,
-  UpdateViewingShowtimeInput,
+  UpdateViewingInput,
   { rejectValue: string }
 >(
-  'aList/viewings/updateShowtime',
-  async ({ uid, id, showtimeAt, runtimeMinutes }, { rejectWithValue }) => {
-    const viewingRef = doc(
-      db,
-      'apps',
-      'a-list',
-      'memberships',
-      uid,
-      'viewings',
-      id,
-    );
-
+  'aList/viewings/update',
+  async (
+    { uid, id, showtimeAt, runtimeMinutes, rating },
+    { rejectWithValue },
+  ) => {
     try {
-      await runTransaction(db, async (transaction) => {
-        const snapshot = await transaction.get(viewingRef);
-        if (!snapshot.exists()) {
-          throw new Error('This showing was removed.');
-        }
-
-        transaction.update(viewingRef, {
-          showtimeAt,
-          endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
-          lastEditedAt: Date.now(),
-          ...('ticket' in snapshot.data() ? {} : { ticket: null }),
-        });
+      await editViewing(uid, id, {
+        showtimeAt,
+        endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
+        ...(rating === undefined ? {} : { rating }),
       });
     } catch (error) {
       return rejectWithValue(
@@ -174,7 +188,7 @@ interface RecordTicketInput {
   ticket: Ticket | null;
 }
 
-/** The ticket form owns the whole ticket object, so it's written in one field-scoped update. */
+/** The ticket form owns the whole ticket object, so it's written as one field. */
 export const recordTicket = createAsyncThunk<
   void,
   RecordTicketInput,
@@ -183,16 +197,33 @@ export const recordTicket = createAsyncThunk<
   'aList/viewings/recordTicket',
   async ({ uid, id, ticket }, { rejectWithValue }) => {
     try {
-      await updateDoc(
-        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
-        {
-          ticket,
-          lastEditedAt: Date.now(),
-        },
-      );
+      await editViewing(uid, id, { ticket });
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to save this ticket.'),
+      );
+    }
+  },
+);
+
+interface MarkViewingSeenInput {
+  uid: string;
+  id: string;
+  rating: number | null;
+}
+
+export const markViewingSeen = createAsyncThunk<
+  void,
+  MarkViewingSeenInput,
+  { rejectValue: string }
+>(
+  'aList/viewings/markSeen',
+  async ({ uid, id, rating }, { rejectWithValue }) => {
+    try {
+      await editViewing(uid, id, { status: 'SEEN', rating });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to mark this movie seen.'),
       );
     }
   },

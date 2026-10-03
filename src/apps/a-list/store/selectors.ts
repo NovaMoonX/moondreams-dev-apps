@@ -140,3 +140,16 @@ export const selectSavingsSummary = createSelector(
     return result;
   },
 );
+
+/** Planned showings that have ended and still need an answer, oldest first. */
+export const selectPendingSeenPrompts = createSelector(
+  [selectViewingItems, (_state: RootState, now: number) => now],
+  (viewings, now) => {
+    const result = viewings
+      .filter(
+        (viewing) => viewing.status === 'PLANNED' && viewing.endsAt <= now,
+      )
+      .sort((left, right) => left.endsAt - right.endsAt);
+    return result;
+  },
+);

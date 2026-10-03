@@ -4,6 +4,7 @@ import { Badge, Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   ChevronLeft,
+  CircleCheck,
   Pencil,
   Ticket as TicketIcon,
   Trash2,
@@ -16,12 +17,14 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import StarRating from '@apps/a-list/components/shared/StarRating';
 import EditViewingForm from '@apps/a-list/components/viewing/EditViewingForm';
 import TicketForm from '@apps/a-list/components/viewing/TicketForm';
 import {
+  markViewingSeen,
   recordTicket,
   removeViewing,
-  updateViewingShowtime,
+  updateViewing,
 } from '@apps/a-list/store/actions/viewingActions';
 import {
   selectMembership,
@@ -30,7 +33,7 @@ import {
 import type { Ticket } from '@apps/a-list/types';
 import { formatCents } from '@apps/a-list/utils/money';
 
-type DrawerView = 'details' | 'edit' | 'ticket';
+type DrawerView = 'details' | 'edit' | 'ticket' | 'seen';
 
 interface ViewingDrawerProps {
   viewingId: string;
@@ -50,6 +53,7 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
   const [view, setView] = useState<DrawerView>('details');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seenRating, setSeenRating] = useState<number | null>(null);
 
   if (!viewing || !user || !membership) {
     return null;
@@ -71,15 +75,16 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
     }
   };
 
-  const handleSaveShowtime = (showtimeAt: number) =>
+  const handleSaveShowtime = (showtimeAt: number, rating?: number | null) =>
     runSave(
       () =>
         dispatch(
-          updateViewingShowtime({
+          updateViewing({
             uid: user.uid,
             id: viewing.id,
             showtimeAt,
             runtimeMinutes: viewing.movie.runtimeMinutes,
+            rating,
           }),
         ).unwrap(),
       'Unable to save this showing.',
@@ -92,6 +97,19 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
           recordTicket({ uid: user.uid, id: viewing.id, ticket: nextTicket }),
         ).unwrap(),
       'Unable to save this ticket.',
+    );
+
+  const handleMarkSeen = () =>
+    runSave(
+      () =>
+        dispatch(
+          markViewingSeen({
+            uid: user.uid,
+            id: viewing.id,
+            rating: seenRating,
+          }),
+        ).unwrap(),
+      'Unable to mark this movie seen.',
     );
 
   const handleClearTicket = async () => {
@@ -147,6 +165,9 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
             {viewing.status === 'SEEN' ? 'Seen' : 'Planned'}
           </Badge>
           {ticket && <FormatBadge format={ticket.format} />}
+          {viewing.status === 'SEEN' && viewing.rating ? (
+            <StarRating value={viewing.rating} />
+          ) : null}
         </div>
         {ticket && (
           <p className='text-muted-foreground text-xs'>
@@ -185,8 +206,35 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
             now={now}
             isSaving={isSaving}
             onCancel={() => setView('details')}
-            onSave={(showtimeAt) => void handleSaveShowtime(showtimeAt)}
+            onSave={(showtimeAt, rating) =>
+              void handleSaveShowtime(showtimeAt, rating)
+            }
           />
+        </div>
+      );
+    }
+
+    if (view === 'seen') {
+      return (
+        <div className='space-y-4'>
+          {backLink}
+          {header}
+          <div className='space-y-1'>
+            <p className='text-sm font-medium'>
+              How was it? Stars are optional.
+            </p>
+            <StarRating value={seenRating} onChange={setSeenRating} size='lg' />
+          </div>
+          <div className='flex justify-end'>
+            <Button
+              type='button'
+              loading={isSaving}
+              disabled={isSaving}
+              onClick={() => void handleMarkSeen()}
+            >
+              Seen it
+            </Button>
+          </div>
         </div>
       );
     }
@@ -211,6 +259,16 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
       <div className='space-y-4'>
         {header}
         <div className='bg-muted/50 divide-border divide-y rounded-lg'>
+          {viewing.status === 'PLANNED' && viewing.endsAt <= now && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='w-full justify-start gap-2 rounded-none'
+              onClick={() => setView('seen')}
+            >
+              <CircleCheck className='h-4 w-4' /> Mark seen
+            </Button>
+          )}
           <Button
             type='button'
             variant='tertiary'

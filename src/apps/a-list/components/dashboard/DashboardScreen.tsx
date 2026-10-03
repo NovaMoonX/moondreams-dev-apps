@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Settings } from 'lucide-react';
@@ -8,8 +6,8 @@ import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
-import MembershipSettingsModal from '@apps/a-list/components/dashboard/MembershipSettingsModal';
 import StatTile from '@apps/a-list/components/shared/StatTile';
+import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import { selectSavingsSummary } from '@apps/a-list/store/selectors';
 import type { MembershipProfile } from '@apps/a-list/types';
 import { formatCents } from '@apps/a-list/utils/money';
@@ -19,7 +17,7 @@ interface DashboardScreenProps {
 }
 
 function DashboardScreen({ membership }: DashboardScreenProps) {
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { openOverlay } = useAListOverlay();
   const now = useNow();
   const summary = useAppSelector((state) => selectSavingsSummary(state, now));
 
@@ -43,7 +41,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             variant='tertiary'
             size='icon'
             aria-label='Membership settings'
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={() => openOverlay({ kind: 'membership' })}
           >
             <Settings className='h-5 w-5' />
           </Button>
@@ -109,12 +107,6 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             </p>
           )}
         </div>
-      )}
-      {isSettingsOpen && (
-        <MembershipSettingsModal
-          membership={membership}
-          onClose={() => setIsSettingsOpen(false)}
-        />
       )}
     </section>
   );

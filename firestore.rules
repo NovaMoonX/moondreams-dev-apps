@@ -186,8 +186,8 @@ service cloud.firestore {
       match /viewings/{viewingId} {
         function isViewingValid(data) {
           let required = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
-          // `ticket` arrived later: legacy documents lack it, so it's allowed but not required.
-          return data.keys().hasOnly(required.concat(['ticket'])) && data.keys().hasAll(required)
+          // `ticket` and `rating` arrived later: legacy documents lack them, so they're allowed but not required.
+          return data.keys().hasOnly(required.concat(['ticket', 'rating'])) && data.keys().hasAll(required)
             && data.id == viewingId
             && data.movieKey is string
             && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
@@ -198,6 +198,8 @@ service cloud.firestore {
             // The server's clock, so a skewed device can't record a future showing as seen.
             && (data.status == 'PLANNED' || data.showtimeAt <= request.time.toMillis())
             && (data.get('ticket', null) == null || isTicketValid(data.ticket))
+            && isNullOrIntBetween(data.get('rating', null), 1, 5)
+            && (data.status == 'SEEN' || data.get('rating', null) == null)
             && data.createdAt is int
             && data.lastEditedAt is int;
         }
