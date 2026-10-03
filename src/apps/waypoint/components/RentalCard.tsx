@@ -10,13 +10,9 @@ import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { RENTAL_TYPE_LABELS } from '@apps/waypoint/constants';
 import type { Rental, TripSpace } from '@apps/waypoint/types';
-import {
-  getRentalImage,
-  getRentalPickupLocation,
-  getRentalReturnLocation,
-} from '@apps/waypoint/utils/rentalUtils';
 import {
   formatRentalTimeRange,
   getRentalTimezoneLabel,
@@ -34,6 +30,26 @@ interface RentalCardProps {
 }
 
 const RENTAL_NOTES_PLACEHOLDER = 'Insurance, extra drivers, fuel policy…';
+
+function getPickupLocation(rental: Rental) {
+  return {
+    locationName: null,
+    address: rental.pickupAddress,
+    latitude: rental.pickupLatitude,
+    longitude: rental.pickupLongitude,
+  };
+}
+
+function getReturnLocation(rental: Rental) {
+  return rental.returnAddress
+    ? {
+        locationName: null,
+        address: rental.returnAddress,
+        latitude: rental.returnLatitude,
+        longitude: rental.returnLongitude,
+      }
+    : getPickupLocation(rental);
+}
 
 export interface RentalDetailLinesProps {
   trip: TripSpace;
@@ -68,11 +84,11 @@ export function RentalDetailLines({
       {rental.vehicle && <p className='text-sm'>{rental.vehicle}</p>}
       <div className='flex flex-col items-start gap-1'>
         <LocationLink
-          {...getRentalPickupLocation(rental)}
+          {...getPickupLocation(rental)}
           label={rental.returnAddress ? `Pickup · ${rental.pickupAddress}` : rental.pickupAddress}
         />
         {rental.returnAddress && (
-          <LocationLink {...getRentalReturnLocation(rental)} label={`Return · ${rental.returnAddress}`} />
+          <LocationLink {...getReturnLocation(rental)} label={`Return · ${rental.returnAddress}`} />
         )}
       </div>
       <p className='text-muted-foreground text-sm'>{formatRentalTimeRange(trip, rental)}</p>
@@ -106,7 +122,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
-  const imageUrl = getRentalImage(rental);
+  const imageUrl = getDisplayImage({ place: rental.pickupPlace, linkPreview: rental.linkPreview });
   const drawerTriggerProps = isSmallScreen
     ? {
         role: 'button',
@@ -152,7 +168,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
             </div>
             {!isSmallScreen && (
               <div className='flex shrink-0 gap-2'>
-                <MapNavigationButton {...getRentalPickupLocation(rental)} />
+                <MapNavigationButton {...getPickupLocation(rental)} />
                 {canEdit && (
                   <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(rental)}>
                     Modify
@@ -181,7 +197,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
           onClose={closeDrawer}
           title={rental.name}
           imageUrl={imageUrl}
-          location={getRentalPickupLocation(rental)}
+          location={getPickupLocation(rental)}
           linkUrl={rental.linkUrl}
           onEdit={canEdit ? () => onEdit(rental, closeDrawer) : null}
         >

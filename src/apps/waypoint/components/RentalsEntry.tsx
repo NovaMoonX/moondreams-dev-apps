@@ -1,8 +1,8 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Car, ChevronRight } from 'lucide-react';
+import { Car } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
 
+import SectionEntryRow from '@apps/waypoint/components/SectionEntryRow';
 import { selectRentals } from '@apps/waypoint/store/selectors';
 
 interface RentalsEntryProps {
@@ -21,24 +21,13 @@ function RentalsEntry({ onOpen }: RentalsEntryProps) {
     : 'Keep the car rental handy — where to pick it up, when to bring it back.';
 
   return (
-    <section className='space-y-1'>
-      <h3 className='text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase'>
-        Rentals
-      </h3>
-      <Button
-        type='button'
-        variant='tertiary'
-        onClick={onOpen}
-        className='border-border h-auto w-full justify-start gap-3 rounded-xl border px-3 py-3 text-left'
-      >
-        <Car className='text-muted-foreground h-5 w-5 shrink-0' />
-        <span className='min-w-0 flex-1'>
-          <span className='block truncate text-sm font-medium'>{title}</span>
-          <span className='text-muted-foreground block text-xs'>{summary}</span>
-        </span>
-        <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
-      </Button>
-    </section>
+    <SectionEntryRow
+      heading='Rentals'
+      icon={<Car className='h-5 w-5' />}
+      title={title}
+      summary={summary}
+      onOpen={onOpen}
+    />
   );
 }
 

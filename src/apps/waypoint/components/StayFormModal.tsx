@@ -12,7 +12,6 @@ import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
-import DayTimeField from '@apps/waypoint/components/DayTimeField';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
@@ -20,7 +19,7 @@ import {
   toLocalDateInputValue,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
-import { getDayCount } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { compareDayTime, shiftRangeEnd } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { STAY_TYPES, STAY_TYPE_OPTION_LABELS } from '@apps/waypoint/constants';
@@ -116,6 +115,35 @@ function getInitialDraft(trip: TripSpace, stay?: Stay): StayDraft {
         ? new Date(stay.plannedDepartureAt).toTimeString().slice(0, 5)
         : '11:00',
   };
+}
+
+interface DayTimeFieldProps {
+  trip: TripSpace;
+  label: string;
+  day: number;
+  time: string;
+  onChange: (day: number, time: string) => void;
+}
+
+function DayTimeField({ trip, label, day, time, onChange }: DayTimeFieldProps) {
+  return (
+    <div className='space-y-1.5'>
+      <Label>{label}</Label>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <Select
+          options={getDayOptions(trip.startDate, trip.endDate, day).map(({ value, label }) => ({ value, text: label }))}
+          value={String(day)}
+          onChange={(value) => onChange(Number(value), time)}
+        />
+        <Input
+          type='time'
+          aria-label={`${label} time`}
+          value={time}
+          onChange={(event) => onChange(day, event.target.value)}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function StayFormModal({

@@ -33,11 +33,6 @@ import {
 } from '@apps/waypoint/store/selectors';
 import type { Rental, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
-  getRentalImage,
-  getRentalPickupLocation,
-  getRentalReturnLocation,
-} from '@apps/waypoint/utils/rentalUtils';
-import {
   formatEventTimeRange,
   getEventTime,
   getRentalTime,
@@ -68,6 +63,23 @@ interface OverviewSectionProps {
 
 function stopPropagation(clickEvent: MouseEvent) {
   clickEvent.stopPropagation();
+}
+
+function getRentalLocation(rental: Rental, leg: RentalLeg) {
+  if (leg === 'return' && rental.returnAddress !== null) {
+    return {
+      locationName: null,
+      address: rental.returnAddress,
+      latitude: rental.returnLatitude,
+      longitude: rental.returnLongitude,
+    };
+  }
+  return {
+    locationName: null,
+    address: rental.pickupAddress,
+    latitude: rental.pickupLatitude,
+    longitude: rental.pickupLongitude,
+  };
 }
 
 function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
@@ -289,8 +301,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           isOpen
           onClose={() => setDetail(null)}
           title={detail.rental.name}
-          imageUrl={getRentalImage(detail.rental)}
-          location={getRentalPickupLocation(detail.rental)}
+          imageUrl={getDisplayImage({ place: detail.rental.pickupPlace, linkPreview: detail.rental.linkPreview })}
+          location={getRentalLocation(detail.rental, 'pickup')}
           linkUrl={detail.rental.linkUrl}
           onEdit={null}
         >
@@ -418,12 +430,12 @@ function RentalTodayCard({
   onOpenDetails: () => void;
 }) {
   const isPickup = leg === 'pickup';
-  const imageUrl = getRentalImage(rental);
+  const imageUrl = getDisplayImage({ place: rental.pickupPlace, linkPreview: rental.linkPreview });
   const clickProps = isSmallScreen ? getOpenDetailsProps(rental.name, onOpenDetails) : {};
   const { pickupMs, returnMs } = getRentalTime(trip, rental);
   const legMs = isPickup ? pickupMs : returnMs;
   const isDone = legMs !== null && legMs <= now;
-  const location = isPickup ? getRentalPickupLocation(rental) : getRentalReturnLocation(rental);
+  const location = getRentalLocation(rental, leg);
   const timezoneLabel = getRentalTimezoneLabel(trip, rental);
   const label = isPickup
     ? isDone ? 'Picked up' : 'Picking up today'
