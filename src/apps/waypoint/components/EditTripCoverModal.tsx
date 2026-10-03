@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import ImageUploadField from '@/components/forms/ImageUploadField';
+import PhotoPicker from '@/components/forms/PhotoPicker';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
@@ -64,11 +64,11 @@ function EditTripCoverModal({
             className='h-40 w-full rounded-md object-cover'
           />
         )}
-        <ImageUploadField
-          previewUrl={coverUpload.previewUrl}
+        <PhotoPicker
+          photoUrl={coverUpload.previewUrl}
           error={coverUpload.error}
           disabled={isSubmitting}
-          hideAvatar
+          showPreview={false}
           onSelect={(file) => coverUpload.pick(file)}
           onRemove={() => coverUpload.clear()}
         />

@@ -1,7 +1,7 @@
 import { Avatar, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ImageUploadField from '@/components/forms/ImageUploadField';
+import PhotoPicker from '@/components/forms/PhotoPicker';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { getInitials } from '@/utils/accountUtils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
@@ -119,11 +119,11 @@ function CatDetailsModalContent({
           shape='circle'
         />
         <h2 className='text-lg font-semibold'>{cat.name}</h2>
-        <ImageUploadField
-          previewUrl={photoUpload.previewUrl}
+        <PhotoPicker
+          photoUrl={photoUpload.previewUrl}
           error={photoUpload.error}
           disabled={isSubmitting}
-          hideAvatar
+          showPreview={false}
           onSelect={photoUpload.pick}
           onRemove={photoUpload.clear}
         />

@@ -7,3 +7,16 @@ export function getInitials(name: string): string {
       .slice(0, 2) || '??';
   return initials;
 }
+export function getProviderPhotoURL(user: {
+  providerData: Array<{ providerId: string; photoURL: string | null }>;
+}): string | null {
+  const result =
+    user.providerData.find((info) => info.providerId === 'google.com')
+      ?.photoURL ?? null;
+  return result;
+}
+
+export function getAvatarStoragePath(uid: string): string {
+  const result = `users/${uid}/avatar`;
+  return result;
+}

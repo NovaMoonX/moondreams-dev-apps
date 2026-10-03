@@ -29,6 +29,7 @@ import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
+import { getProviderPhotoURL } from '@/utils/accountUtils';
 import { queryClient } from '@lib/query/queryClient';
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -86,7 +87,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             uid: firebaseUser.uid,
             email: firebaseUser.email ?? '',
             displayName: firebaseUser.displayName ?? firebaseUser.email ?? '',
-            photoURL: firebaseUser.photoURL ?? '',
+            photoURL: getProviderPhotoURL(firebaseUser) ?? '',
             isAdmin: isAdminUser,
           },
           { merge: true },
@@ -226,6 +227,36 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsDisplayNameUpdating(false);
   }, []);
 
+  const updatePhotoURL = useCallback(
+    async (photoURL: string | null) => {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        return;
+      }
+
+      const nextPhotoURL =
+        photoURL ?? getProviderPhotoURL(currentUser);
+
+      await updateProfile(currentUser, { photoURL: nextPhotoURL ?? '' });
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        customPhotoURL: photoURL,
+      });
+
+      dispatch(
+        setCurrentUser({
+          uid: currentUser.uid,
+          email: currentUser.email ?? null,
+          displayName: currentUser.displayName ?? null,
+          photoURL: nextPhotoURL,
+          isAdmin,
+        }),
+      );
+      setUser({ ...currentUser });
+    },
+    [dispatch, isAdmin],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -234,6 +265,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signInWithGoogle,
       logOut,
       updateDisplayName,
+      updatePhotoURL,
       setCurrentLocation,
       isDisplayNameUpdating,
     }),
@@ -244,6 +276,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signInWithGoogle,
       logOut,
       updateDisplayName,
+      updatePhotoURL,
       setCurrentLocation,
       isDisplayNameUpdating,
     ],
