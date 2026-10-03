@@ -38,6 +38,12 @@ The Vite app connects to local services only when `VITE_USE_FIREBASE_EMULATORS=t
 It disables the Firestore persistent cache in this mode so a reset cannot leave stale
 browser data behind. The Emulator Suite UI is available at `http://127.0.0.1:4001`.
 
+To try it on a phone, open the dev server's LAN address (the QR code `npm run dev` prints)
+on the same Wi-Fi. The emulators listen on all interfaces and the app reaches them through
+whatever host it was loaded from, so the fixture account buttons work there too. Restart the
+emulators after pulling this change, and treat the Auth emulator as open to your network
+while they run.
+
 ## Commands
 
 | Command | Purpose |
