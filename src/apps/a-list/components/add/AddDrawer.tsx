@@ -16,6 +16,7 @@ interface AddDrawerProps {
 }
 
 function AddDrawer({ onClose }: AddDrawerProps) {
+  const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<MovieSearchResult | null>(null);
   const details = useQuery({
     ...movieDetailsQueryOptions(picked?.movieKey ?? ''),
@@ -42,7 +43,11 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   return (
     <Drawer isOpen onClose={onClose} title='Movie'>
       {picked === null ? (
-        <MoviePicker onPick={setPicked} />
+        <MoviePicker
+          query={query}
+          onQueryChange={setQuery}
+          onPick={setPicked}
+        />
       ) : (
         <div className='space-y-4'>
           <Button

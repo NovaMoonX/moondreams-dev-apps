@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
@@ -11,11 +9,12 @@ import { movieSearchQueryOptions } from '@apps/a-list/queries/movieQueries';
 import type { MovieSearchResult } from '@apps/a-list/types';
 
 interface MoviePickerProps {
+  query: string;
+  onQueryChange: (query: string) => void;
   onPick: (movie: MovieSearchResult) => void;
 }
 
-function MoviePicker({ onPick }: MoviePickerProps) {
-  const [query, setQuery] = useState('');
+function MoviePicker({ query, onQueryChange, onPick }: MoviePickerProps) {
   const debouncedQuery = useDebouncedValue(
     query.trim(),
     DEBOUNCE_MS.autocomplete,
@@ -52,7 +51,7 @@ function MoviePicker({ onPick }: MoviePickerProps) {
         aria-label='Search movies'
         autoFocus
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => onQueryChange(event.target.value)}
       />
       {statusLine && (
         <p className='text-muted-foreground text-sm'>{statusLine}</p>
