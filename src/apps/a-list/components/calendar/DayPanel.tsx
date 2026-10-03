@@ -1,6 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { formatDate } from '@/utils/formatUtils';
+import { formatDate, formatTime } from '@/utils/formatUtils';
 import ViewingRow from '@apps/a-list/components/calendar/ViewingRow';
 import type { Viewing } from '@apps/a-list/types';
 
@@ -34,7 +34,7 @@ function DayPanel({ day, viewings, onAdd, onOpenViewing }: DayPanelProps) {
               <Button
                 type='button'
                 variant='tertiary'
-                aria-label={`Open ${viewing.movie.title}`}
+                aria-label={`Open ${viewing.movie.title}, ${formatTime(viewing.showtimeAt)}, ${viewing.status === 'SEEN' ? 'seen' : 'planned'}`}
                 className='h-auto w-full rounded-none p-0 text-left font-normal'
                 onClick={() => onOpenViewing(viewing.id)}
               >

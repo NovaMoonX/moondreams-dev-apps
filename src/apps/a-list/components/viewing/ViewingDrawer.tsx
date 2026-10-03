@@ -15,7 +15,10 @@ import {
   removeViewing,
   updateViewingShowtime,
 } from '@apps/a-list/store/actions/viewingActions';
-import { selectViewingById } from '@apps/a-list/store/selectors';
+import {
+  selectMembership,
+  selectViewingById,
+} from '@apps/a-list/store/selectors';
 
 interface ViewingDrawerProps {
   viewingId: string;
@@ -31,11 +34,12 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
   const viewing = useAppSelector((state) =>
     selectViewingById(state, viewingId),
   );
+  const membership = useAppSelector(selectMembership);
   const [view, setView] = useState<'details' | 'edit'>('details');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!viewing || !user) {
+  if (!viewing || !user || !membership) {
     return null;
   }
 
@@ -120,6 +124,7 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
           <EditViewingForm
             key={viewing.showtimeAt}
             viewing={viewing}
+            startDate={membership.startDate}
             now={now}
             isSaving={isSaving}
             onCancel={() => setView('details')}
