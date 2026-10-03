@@ -2,16 +2,24 @@ import { useState } from 'react';
 
 import { Badge, Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft, Pencil, Trash2 } from 'lucide-react';
+import {
+  ChevronLeft,
+  Pencil,
+  Ticket as TicketIcon,
+  Trash2,
+} from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate, formatTime } from '@/utils/formatUtils';
+import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import EditViewingForm from '@apps/a-list/components/viewing/EditViewingForm';
+import TicketForm from '@apps/a-list/components/viewing/TicketForm';
 import {
+  recordTicket,
   removeViewing,
   updateViewingShowtime,
 } from '@apps/a-list/store/actions/viewingActions';
@@ -19,6 +27,10 @@ import {
   selectMembership,
   selectViewingById,
 } from '@apps/a-list/store/selectors';
+import type { Ticket } from '@apps/a-list/types';
+import { formatCents } from '@apps/a-list/utils/money';
+
+type DrawerView = 'details' | 'edit' | 'ticket';
 
 interface ViewingDrawerProps {
   viewingId: string;
@@ -35,7 +47,7 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
     selectViewingById(state, viewingId),
   );
   const membership = useAppSelector(selectMembership);
-  const [view, setView] = useState<'details' | 'edit'>('details');
+  const [view, setView] = useState<DrawerView>('details');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,24 +55,56 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
     return null;
   }
 
-  const handleSaveShowtime = async (showtimeAt: number) => {
+  const ticket = viewing.ticket ?? null;
+  const isMissingTicket = !('ticket' in viewing);
+
+  const runSave = async (action: () => Promise<unknown>, fallback: string) => {
     setIsSaving(true);
     setError(null);
 
     try {
-      await dispatch(
-        updateViewingShowtime({
-          uid: user.uid,
-          id: viewing.id,
-          showtimeAt,
-          runtimeMinutes: viewing.movie.runtimeMinutes,
-        }),
-      ).unwrap();
+      await action();
       setView('details');
     } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to save this showing.'));
+      setError(getErrorMessage(saveError, fallback));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveShowtime = (showtimeAt: number) =>
+    runSave(
+      () =>
+        dispatch(
+          updateViewingShowtime({
+            uid: user.uid,
+            id: viewing.id,
+            showtimeAt,
+            runtimeMinutes: viewing.movie.runtimeMinutes,
+            isMissingTicket,
+          }),
+        ).unwrap(),
+      'Unable to save this showing.',
+    );
+
+  const handleSaveTicket = (nextTicket: Ticket | null) =>
+    runSave(
+      () =>
+        dispatch(
+          recordTicket({ uid: user.uid, id: viewing.id, ticket: nextTicket }),
+        ).unwrap(),
+      'Unable to save this ticket.',
+    );
+
+  const handleClearTicket = async () => {
+    const confirmed = await confirm({
+      title: 'Clear ticket',
+      message: `Clear the ticket details for ${viewing.movie.title}? Its savings stop counting until you add them again.`,
+      confirmText: 'Clear',
+      destructive: true,
+    });
+    if (confirmed) {
+      await handleSaveTicket(null);
     }
   };
 
@@ -97,29 +141,44 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
         <p className='text-muted-foreground text-sm'>
           {formatDate(viewing.showtimeAt)} · {formatTime(viewing.showtimeAt)}
         </p>
-        <Badge
-          variant={viewing.status === 'SEEN' ? 'success' : 'muted'}
-          size='xs'
-        >
-          {viewing.status === 'SEEN' ? 'Seen' : 'Planned'}
-        </Badge>
+        <div className='flex flex-wrap items-center gap-1.5'>
+          <Badge
+            variant={viewing.status === 'SEEN' ? 'success' : 'muted'}
+            size='xs'
+          >
+            {viewing.status === 'SEEN' ? 'Seen' : 'Planned'}
+          </Badge>
+          {ticket && <FormatBadge format={ticket.format} />}
+        </div>
+        {ticket && (
+          <p className='text-muted-foreground text-xs'>
+            {formatCents(ticket.priceCents)} +{' '}
+            {formatCents(ticket.feeAvoidedCents)} fee +{' '}
+            {formatCents(ticket.taxCents)} tax ={' '}
+            {formatCents(ticket.totalCents)}
+          </p>
+        )}
       </div>
     </div>
   );
 
-  return (
-    <Drawer isOpen onClose={onClose} title='Movie'>
-      {view === 'edit' ? (
+  const backLink = (
+    <Button
+      type='button'
+      variant='link'
+      size='sm'
+      className='gap-1 px-0'
+      onClick={() => setView('details')}
+    >
+      <ChevronLeft className='h-4 w-4' /> Back to movie
+    </Button>
+  );
+
+  const getContent = () => {
+    if (view === 'edit') {
+      return (
         <div className='space-y-4'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='gap-1 px-0'
-            onClick={() => setView('details')}
-          >
-            <ChevronLeft className='h-4 w-4' /> Back to movie
-          </Button>
+          {backLink}
           {header}
           <EditViewingForm
             key={viewing.showtimeAt}
@@ -130,32 +189,64 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
             onCancel={() => setView('details')}
             onSave={(showtimeAt) => void handleSaveShowtime(showtimeAt)}
           />
-          {error && <p className='text-destructive text-sm'>{error}</p>}
         </div>
-      ) : (
+      );
+    }
+
+    if (view === 'ticket') {
+      return (
         <div className='space-y-4'>
-          {header}
-          <div className='bg-muted/50 divide-border divide-y rounded-lg'>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='w-full justify-start gap-2 rounded-none'
-              onClick={() => setView('edit')}
-            >
-              <Pencil className='h-4 w-4' /> Edit
-            </Button>
-          </div>
+          {backLink}
+          <p className='font-semibold'>Ticket</p>
+          <TicketForm
+            ticket={ticket}
+            isSaving={isSaving}
+            onCancel={() => setView('details')}
+            onSave={(nextTicket) => void handleSaveTicket(nextTicket)}
+            onClear={() => void handleClearTicket()}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className='space-y-4'>
+        {header}
+        <div className='bg-muted/50 divide-border divide-y rounded-lg'>
           <Button
             type='button'
             variant='tertiary'
-            className='text-destructive! w-full justify-start gap-2'
-            onClick={() => void handleRemove()}
+            className='w-full justify-start gap-2 rounded-none'
+            onClick={() => setView('ticket')}
           >
-            <Trash2 className='h-4 w-4' /> Remove
+            <TicketIcon className='h-4 w-4' />{' '}
+            {ticket ? 'Edit ticket' : 'Mark paid'}
           </Button>
-          {error && <p className='text-destructive text-sm'>{error}</p>}
+          <Button
+            type='button'
+            variant='tertiary'
+            className='w-full justify-start gap-2 rounded-none'
+            onClick={() => setView('edit')}
+          >
+            <Pencil className='h-4 w-4' /> Edit
+          </Button>
         </div>
-      )}
+        <Button
+          type='button'
+          variant='tertiary'
+          className='text-destructive! w-full justify-start gap-2'
+          onClick={() => void handleRemove()}
+        >
+          <Trash2 className='h-4 w-4' /> Remove
+        </Button>
+      </div>
+    );
+  };
+
+  return (
+    <Drawer isOpen onClose={onClose} title='Movie'>
+      {getContent()}
+      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </Drawer>
   );
 }

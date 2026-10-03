@@ -33,7 +33,7 @@ import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime, formatTime } from '@/utils/formatUtils';
-import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import {

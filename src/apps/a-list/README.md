@@ -49,7 +49,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Rewatches: Every viewing is its own entry, so the same movie can appear many times.
 - [ ] Watchlist: Search and add movies with release date, preferred format, priority (Must See / Want to See / If I Have Time), seen status, and date watched or planned.
 - [ ] Opening Tab: The watchlist opens on a tab of movies releasing in the next seven days, with a count so they can't be missed.
-- [ ] Mark as Paid: Format and price (or an all-in total), standard-format price for premium showings, the convenience fee you skipped entered per ticket with your past fees as one-tap chips, and a tax rate chosen from chips built from your own history.
+- [x] Mark as Paid: Format and price (or an all-in total), standard-format price for premium showings, the convenience fee you skipped entered per ticket with your past fees as one-tap chips, and a tax rate chosen from chips built from your own history.
 - [ ] Edit & Remove Viewings: Fix a price, format, date or fee, or delete a viewing; the calendar, watchlist and savings update to match.
 - [ ] Mark as Seen: A prompt after a planned movie ends that updates the watchlist and takes an optional star rating.
 - [ ] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.

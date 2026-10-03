@@ -10,7 +10,12 @@ import {
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DEFAULT_WATCH_PRIORITY } from '@apps/a-list/constants';
-import type { MovieSnapshot, Viewing, WatchlistItem } from '@apps/a-list/types';
+import type {
+  MovieSnapshot,
+  Ticket,
+  Viewing,
+  WatchlistItem,
+} from '@apps/a-list/types';
 import {
   computeEndsAt,
   getInitialStatus,
@@ -21,6 +26,7 @@ interface AddViewingInput {
   movieKey: string;
   movie: MovieSnapshot;
   showtimeAt: number;
+  ticket: Ticket | null;
 }
 
 function toSnapshot(movie: MovieSnapshot): MovieSnapshot {
@@ -40,7 +46,7 @@ export const addViewing = createAsyncThunk<
   { rejectValue: string }
 >(
   'aList/viewings/add',
-  async ({ uid, movieKey, movie, showtimeAt }, { rejectWithValue }) => {
+  async ({ uid, movieKey, movie, showtimeAt, ticket }, { rejectWithValue }) => {
     const membershipPath = ['apps', 'a-list', 'memberships', uid] as const;
     const itemRef = doc(db, ...membershipPath, 'watchlist', movieKey);
     const viewingRef = doc(collection(db, ...membershipPath, 'viewings'));
@@ -71,6 +77,7 @@ export const addViewing = createAsyncThunk<
           showtimeAt,
           endsAt,
           status: getInitialStatus(endsAt, now),
+          ticket: ticket ?? null,
           createdAt: now,
           lastEditedAt: now,
         };
@@ -92,6 +99,8 @@ interface UpdateViewingShowtimeInput {
   id: string;
   showtimeAt: number;
   runtimeMinutes: number | null;
+  /** True for a document written before tickets existed: the edit adds the key. */
+  isMissingTicket: boolean;
 }
 
 /** Moves a showing: the showtime and its derived end are always written together. */
@@ -101,7 +110,10 @@ export const updateViewingShowtime = createAsyncThunk<
   { rejectValue: string }
 >(
   'aList/viewings/updateShowtime',
-  async ({ uid, id, showtimeAt, runtimeMinutes }, { rejectWithValue }) => {
+  async (
+    { uid, id, showtimeAt, runtimeMinutes, isMissingTicket },
+    { rejectWithValue },
+  ) => {
     try {
       await updateDoc(
         doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
@@ -109,6 +121,7 @@ export const updateViewingShowtime = createAsyncThunk<
           showtimeAt,
           endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
           lastEditedAt: Date.now(),
+          ...(isMissingTicket ? { ticket: null } : {}),
         },
       );
     } catch (error) {
@@ -140,3 +153,34 @@ export const removeViewing = createAsyncThunk<
     );
   }
 });
+
+interface RecordTicketInput {
+  uid: string;
+  id: string;
+  /** null clears the ticket. */
+  ticket: Ticket | null;
+}
+
+/** The ticket form owns the whole ticket object, so it's written in one field-scoped update. */
+export const recordTicket = createAsyncThunk<
+  void,
+  RecordTicketInput,
+  { rejectValue: string }
+>(
+  'aList/viewings/recordTicket',
+  async ({ uid, id, ticket }, { rejectWithValue }) => {
+    try {
+      await updateDoc(
+        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
+        {
+          ticket,
+          lastEditedAt: Date.now(),
+        },
+      );
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this ticket.'),
+      );
+    }
+  },
+);

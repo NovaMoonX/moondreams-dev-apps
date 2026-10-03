@@ -99,7 +99,9 @@ catalog (one opening in three days, one undated), and one added by title
 seen twice (a rewatch) and The Matrix seen in the past few weeks, and Starlight Harbor and
 Galaxy Drift planned after they open. Four more past days hold two, three, four and five movies
 (3, 9, 15 and 17 days ago), so every poster split and the "+N" badge show on the calendar. A sixth seen viewing, The Matrix at 11 pm LA time
-two days ago, checks that late showings count on the viewer's own day.
+two days ago, checks that late showings count on the viewer's own day. Three seen viewings carry tickets:
+The Matrix (Standard, $15.56 + $1.26 tax), Dune (Dolby Cinema with its standard price),
+and a Dune IMAX showing entered as an all-in $21.39 total.
 
 To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its

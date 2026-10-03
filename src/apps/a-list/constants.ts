@@ -65,3 +65,6 @@ export const PREVIEWS_BUFFER_MINUTES = 20;
 export const DEFAULT_SHOWTIME = '19:00';
 /** Weeks start on Sunday (0), matching the calendar grid. */
 export const WEEK_STARTS_ON = 0;
+
+export const MAX_FEE_CHIPS = 4;
+export const MAX_TAX_CHIPS = 4;
