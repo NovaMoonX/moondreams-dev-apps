@@ -32,7 +32,7 @@ function DayWeather({ forecast, hours, isMinimized }: DayWeatherProps) {
           <p className='text-sm font-medium'>{label}</p>
           <p className='text-muted-foreground text-xs'>
             High {formatTemp(forecast.tempMax)} · Low {formatTemp(forecast.tempMin)}
-            {forecast.precipChance !== null && forecast.precipChance > 0 && ` · ${forecast.precipChance}% chance of rain`}
+            {forecast.precipChance !== null && forecast.precipChance > 0 && ` · ${forecast.precipChance}% chance of precipitation`}
           </p>
         </div>
       </div>

@@ -286,6 +286,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             trip={trip}
             event={detail.event}
             zoneStyle='long'
+            weather={weather.getEvent(detail.event.id)}
             showTitle={false}
             showNotes
             canEdit={false}

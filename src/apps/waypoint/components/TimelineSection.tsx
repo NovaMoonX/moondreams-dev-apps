@@ -54,6 +54,7 @@ import {
   getDayLabel,
   getIndexBucket,
   groupByIndexBucket,
+  type IndexBucket,
 } from '@/utils/dateRangeUtils';
 import {
   canArchiveEvent,
@@ -354,7 +355,7 @@ export function TimelineSection({
       return event.dayIndex === scope;
     });
 
-    if (visibleEvents.length === 0) {
+    if (visibleEvents.length === 0 && (scope !== 'all' || !weather.hasWeather)) {
       return <p className='text-muted-foreground py-6 text-sm'>No events planned yet.</p>;
     }
 
@@ -377,9 +378,19 @@ export function TimelineSection({
       return <div className='space-y-3'>{renderEventItems(visibleEvents)}</div>;
     }
 
+    const eventDays = groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount);
+    const weatherOnlyDays = Array.from({ length: dayCount }, (_, day) => day)
+      .filter((day) => weather.getDay(day) && !eventDays.some(({ bucket }) => bucket === day))
+      .map((day) => ({ bucket: day as IndexBucket, items: [] as TimelineEvent[] }));
+    const getBucketOrder = (bucket: IndexBucket) =>
+      typeof bucket === 'number' ? bucket : bucket === 'outside' ? dayCount : dayCount + 1;
+    const days = [...eventDays, ...weatherOnlyDays].sort(
+      (first, second) => getBucketOrder(first.bucket) - getBucketOrder(second.bucket),
+    );
+
     return (
       <div className='space-y-3'>
-        {groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount).map(
+        {days.map(
           ({ bucket, items }) => (
             <div key={bucket} className='space-y-3'>
               {renderDivider(

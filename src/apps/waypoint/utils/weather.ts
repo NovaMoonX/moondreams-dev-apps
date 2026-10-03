@@ -29,7 +29,7 @@ export type WeatherForecasts = Record<string, WeatherForecast>;
 
 export function getWeatherDayIndexes(trip: TripSpace, todayIndex: number) {
   const dayCount = getDayCount(trip.startDate, trip.endDate);
-  if (todayIndex >= dayCount) {
+  if (trip.isArchived || todayIndex >= dayCount) {
     return [];
   }
 

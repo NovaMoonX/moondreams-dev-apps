@@ -13,17 +13,20 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
     <ul className='-mx-1 flex gap-1 overflow-x-auto px-1 pb-1' aria-label='Hour by hour weather'>
       {hours.map((hour, index) => {
         const { label, icon: Icon } = getWeatherCondition(hour.weatherCode);
+        const timeLabel = index === 0 ? 'Now' : formatClockTime(hour.time.slice(-5));
+        const tempLabel = hour.temp === null ? 'temperature unavailable' : `${Math.round(hour.temp)} degrees`;
         return (
           <li
             key={hour.time}
             title={label}
+            aria-label={`${timeLabel}: ${label}, ${tempLabel}`}
             className={join(
               'flex w-14 shrink-0 flex-col items-center gap-1 rounded-md px-1 py-1.5 text-xs',
               index === 0 && 'bg-primary/10',
             )}
           >
             <span className={join('text-muted-foreground', index === 0 && 'text-foreground font-medium')}>
-              {index === 0 ? 'Now' : formatClockTime(hour.time.slice(-5))}
+              {timeLabel}
             </span>
             <Icon className='h-4 w-4' aria-hidden='true' />
             <span className='font-medium'>{hour.temp === null ? '–' : `${Math.round(hour.temp)}°`}</span>
