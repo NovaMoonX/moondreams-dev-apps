@@ -1,0 +1,640 @@
+# A-List Tracker — Technical Design Document
+
+Built against `a-list-tracker-README.md` and `a-list-tracker-UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. Waypoint's `TECHNICAL.md` is the format reference. A-List is much smaller than Waypoint in one respect: **every byte of data is private to one signed-in member**. There is no sharing, no invite flow, no roles, no pending requests, and so no cross-user concurrency. That removes most of the atomic-write and rule complexity and puts the design weight on three things instead: the money/date math, the calendar read model, and a server-side movie lookup.
+
+## Decisions made in this document
+
+These shape everything below. Each is also listed under [Open questions](#open-questions-for-the-roadmap) where it needs the owner's confirmation.
+
+1. **Money is stored as integer cents** (`priceCents`, not `price`), US dollars only. The app sums many small amounts; integer cents make every total exact and every rule check simple.
+2. **Watchlist "Seen" is derived**, never stored: a movie is seen when any of its viewings has `status: 'SEEN'`. Editing or removing a viewing can't leave the watchlist wrong.
+3. **A viewing is an instant keyed by the viewer's local day.** The calendar, the counters and the week/month goals all key off `toLocalDateInputValue(showtimeAt)`. Release dates are date-only (UTC midnight).
+4. **Savings count what a non-member would have paid: price + convenience fee + tax.** Members pay no convenience fee, so the fee on a ticket is one *avoided*; it counts as value and is also totalled on its own as "fees avoided". (See [Savings and break-even](#5-savings-and-break-even).)
+5. **Aggregates are never stored.** Savings, break-even, counters, format splits and chips are all computed from the three collections by memoized selectors. A member has on the order of 150 viewings a year, so there is nothing to optimize and nothing to drift.
+6. **Movie data is OMDb, behind two `onCall` functions** that hold the key. The free tier allows about 1,000 lookups a day **for the whole app, not per member**, so the functions share a server-side cache and a daily budget guard, the browser debounces and caches, and a manual "add by title" path keeps the app usable when the budget is spent. A small **snapshot** of each movie is copied into the watchlist item and each viewing, so the calendar renders with no network.
+7. **There is no tax-rate source, so tax behaves like the convenience fee:** the membership's rate is gauged from the bill the member types in Setup (total ÷ cost − 1), and from then on ticket tax is a choice among chips built from the rates used on past tickets, the most-used one preselected. Each ticket stores its own rate and tax amount.
+8. **The membership start date is a required Setup field.** It anchors the billing cycle (cost so far and break-even) and is the earliest date a viewing can be given.
+9. **The app never tries to learn which formats a movie plays in.** Format is always the member's pick from a fixed list.
+10. **A ticket can be entered itemized or as one all-in total.** Either way the ticket stores price, fee, tax and total with `total = price + fee + tax`; an all-in ticket's price and tax are estimates, and it remembers it was entered that way.
+
+---
+
+## Data Schema
+
+Namespace root: `apps/a-list/`
+
+**Per-member private tree.** Everything lives under the member's own document, keyed by their `uid`:
+
+```
+apps/a-list/memberships/{uid}                    → MembershipProfile
+apps/a-list/memberships/{uid}/watchlist/{movieKey}  → WatchlistItem
+apps/a-list/memberships/{uid}/viewings/{viewingId}  → Viewing
+```
+
+Why nested under the `uid`, rather than three flat collections with an `ownerUid` field: the rule for every document is the same one-line path check (`request.auth.uid == uid`) with no body check to forget; every listener is a plain collection listener with no `where` and so no composite index; and nothing can leak across members through a mis-scoped query. Why `memberships/{uid}` rather than `users/{uid}`: the global `users` collection holds shared profile data, and an app's private data stays in the app's own namespace.
+
+**Every field is a required key typed `T | null`, never optional.** Absent values are written as explicit `null`; arrays default to `[]`. Timestamps are millisecond numbers.
+
+**Enums and constants** (fixed lists only the developer extends; options arrays are derived from `constants.ts` at render time, never redeclared):
+
+```typescript
+export type AmcFormat = 'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
+export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
+export type ViewingStatus = 'PLANNED' | 'SEEN';
+export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
+```
+
+```typescript
+// constants.ts (runtime values live here, never in types.ts)
+export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
+  STANDARD: 'Standard', DOLBY_CINEMA: 'Dolby Cinema', IMAX: 'IMAX',
+  PRIME: 'PRIME at AMC', REALD_3D: 'RealD 3D', LASER: 'Laser',
+};
+export const PREMIUM_FORMATS: AmcFormat[] = ['DOLBY_CINEMA', 'IMAX', 'PRIME', 'REALD_3D', 'LASER'];
+export const WATCH_PRIORITY_LABELS: Record<WatchPriority, string> = {
+  MUST_SEE: 'Must See', WANT_TO_SEE: 'Want to See', IF_I_HAVE_TIME: 'If I Have Time',
+};
+export const DEFAULT_WATCH_PRIORITY: WatchPriority = 'WANT_TO_SEE';
+export const OPENING_WINDOW_DAYS = 7;
+export const DEFAULT_RUNTIME_MINUTES = 120;   // when the provider has none
+export const PREVIEWS_BUFFER_MINUTES = 20;    // trailers before the feature; end = showtime + previews + runtime
+export const WEEK_STARTS_ON = 0;              // Sunday
+export const MAX_FEE_CHIPS = 4;
+export const MAX_TAX_CHIPS = 4;
+export const MOVIE_SEARCH_MIN_CHARS = 2;
+export const MOVIE_DETAILS_STALE_MS = 24 * 60 * 60 * 1000;
+```
+
+`PRIME`, `LASER` and the others are the keys in the data; the UI always shows the labels above ("PRIME at AMC", "Laser"). `STANDARD` is a real value so a ticket always has a format; "no preference" on a watchlist item is `null`.
+
+#### 1. Membership Profile
+
+Path: `apps/a-list/memberships/{uid}` (document id is the member's `uid`; one per member)
+
+```typescript
+interface MembershipProfile {
+  uid: string;                       // equals the document id; immutable
+  monthlyCostCents: number;          // before tax — what the member typed in Setup
+  monthlyTotalCents: number;         // tax included — the bill total; what "cost incurred" multiplies. Equals monthlyCostCents when no bill total was given
+  taxRate: number | null;            // decimal fraction gauged from the bill, 0.075 = 7.5%; null when no bill total was given. Seeds the ticket tax chips
+  startDate: number;                 // DATE-ONLY (UTC midnight): the day the membership started; required; anchors the billing cycle
+  weeklyGoal: number | null;         // the member's own target, not a rule the app enforces
+  monthlyGoal: number | null;
+  setupCompletedAt: number;          // instant; its presence is what "Setup is done" means. Immutable
+  createdAt: number;
+  lastEditedAt: number;
+}
+```
+
+- **The document is written once, at the end of Setup's third step** (a single `setDoc`). Setup's draft lives in component state, so there is never a half-finished membership document, and "no document yet" is exactly "first launch".
+- **`startDate` is required and may not be in the future** (the form enforces it). It is the one input the billing math cannot do without, and it is also the lower bound for a viewing's date, enforced in the add and edit forms (not in the rules, which would need a second document read for a convenience check).
+- **`monthlyTotalCents` is stored, not recomputed from cost × rate.** The member types the amount on their bill, and the rate is back-computed from it (e.g. `$27.94` on `$25.99` → `0.0750`), so the stored total is the bill's exact number and the stored rate is a rounded derivative. Recomputing the total from the rate would drift by a cent.
+- **`taxRate` is only a seed.** There is no free tax-rate source, so nothing is looked up: the rate gauged here becomes one chip on the ticket form, and ticket history (each ticket stores its own `taxRate`) takes over as the default once tickets exist (see Logic §9).
+- **Editing from Membership settings** uses a field-scoped `updateDoc` of only the fields the form owns, plus `lastEditedAt`. Two devices editing the same profile at once is the only race here, and last-write-wins on disjoint scalar fields is acceptable.
+- **Changing the monthly cost applies to the whole history**: the app holds a single monthly total, not a price history. Supporting a cost that changes over time is a planned later goal (see Logic §4, "Planned later").
+
+#### 2. Watchlist Item
+
+Path: `apps/a-list/memberships/{uid}/watchlist/{movieKey}` — the document id **is** the `movieKey`, so one movie can only ever be on the list once, by construction.
+
+```typescript
+interface WatchlistItem {
+  movieKey: string;                  // provider-namespaced id, e.g. "imdb-tt0133093", or "manual-<uuid>" for a movie added by title; equals the document id; immutable
+  movie: MovieSnapshot;
+  priority: WatchPriority;           // defaults to WANT_TO_SEE
+  preferredFormat: AmcFormat | null; // null = no preference
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+interface MovieSnapshot {
+  title: string;
+  releaseDate: number | null;        // DATE-ONLY (UTC midnight): the US theatrical release date; null if unknown
+  posterUrl: string | null;          // https URL from the provider; null for a manually added movie or when the provider has none
+  runtimeMinutes: number | null;
+  contentRating: string | null;      // "PG-13", "R", … ; null if unrated or unknown
+}
+```
+
+- **No `seen` field.** "Seen", "next planned date" and "latest watched date (×2)" are joined from viewings by `movieKey` in a selector. This also makes the watchlist drawer's "Remove" safe: removing an item doesn't touch its viewings, and the movie simply stops appearing in the list.
+- **No `priority` on the viewing**, and no free-text notes in the MVP.
+- The `movieKey` string is provider-namespaced on purpose. The `imdb-` id is the provider's own title id; `manual-` movies come from the "Add it by title" path and have no poster and no refresh. If OMDb's terms turn out not to allow what this design does (see [Movie Data Service](#movie-data-service)), the key format and the snapshot shape survive a provider swap; only the functions change.
+
+#### 3. Viewing
+
+Path: `apps/a-list/memberships/{uid}/viewings/{viewingId}` (client-generated id)
+
+```typescript
+interface Viewing {
+  id: string;
+  movieKey: string;                  // immutable; to change the movie, remove the viewing and add another
+  movie: MovieSnapshot;              // copied at creation and never refreshed, so a viewing outlives its watchlist item
+  showtimeAt: number;                // INSTANT: when the showing starts
+  endsAt: number;                    // INSTANT: showtimeAt + previews buffer + runtime (fallback runtime if null); recomputed whenever showtimeAt changes
+  status: ViewingStatus;             // PLANNED → SEEN; never back
+  rating: number | null;             // 1–5 whole stars; only meaningful when SEEN
+  ticket: Ticket | null;             // null until "Mark paid" or the inline "+ Add ticket details"
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+interface Ticket {
+  entryMode: TicketEntryMode;        // how the member entered it; reopening the ticket form restores this mode
+  format: AmcFormat;
+  priceCents: number;                // before tax. Exact when ITEMIZED; estimated from the total when ALL_IN
+  standardPriceCents: number | null; // what a Standard ticket for this showing costs before tax; null when format is STANDARD, or not known
+  feeAvoidedCents: number;           // the convenience fee a non-member would have been charged; members pay none. 0 if unknown/none
+  taxRate: number | null;            // the rate chosen on this ticket (a chip or "Other"); feeds the chips; null when none was chosen
+  taxCents: number;                  // tax on the price; round(price × taxRate) when ITEMIZED, the remainder when ALL_IN
+  totalCents: number;                // priceCents + feeAvoidedCents + taxCents, always. Exact as entered when ALL_IN
+}
+```
+
+- **Rewatches are just more viewings of the same `movieKey`.** Nothing else is needed.
+- **`endsAt` is stored**, not derived, so the Seen prompt and a later reminder (Stretch) work from one number that doesn't move if the provider later changes a runtime. The cost is that editing a showtime must rewrite both fields (it does, in the same `updateDoc`).
+- **`status` at creation:** `SEEN` when `endsAt ≤ now`, otherwise `PLANNED`. This refines the UX doc's "a date in the past saves as Seen": a movie that started an hour ago and is still running is still planned.
+- **Ticket fields are all required once a ticket exists**, which is why "Mark paid" writes the whole `ticket` object in one `updateDoc` (the form owns the whole object). `ticket: null` is the legitimate state of a back-filled movie with no prices entered yet.
+- **Premium savings need `standardPriceCents`.** If a premium ticket has `standardPriceCents: null` the ticket still counts in total savings but contributes nothing to premium savings (and the Dashboard says how many tickets that is).
+- **`totalCents` is stored even though it's a sum.** Itemized, it is just `price + fee + tax`; all-in, it is the one exact number the member typed and the other three are derived from it. Storing it lets the rules assert `totalCents == priceCents + feeAvoidedCents + taxCents` for every ticket, so the two entry modes can never disagree.
+- **Indexes:** none. All three listeners are whole-collection reads; no query filters or orders on the server. `firestore.indexes.json` is unchanged.
+
+#### Derived values (never stored)
+
+| Value | Computed from | Where |
+|---|---|---|
+| Watchlist "Seen", next planned date, latest watched date, rewatch count | viewings joined on `movieKey` | `selectWatchlistRows` |
+| Day → viewings map for the calendar | viewings keyed by local day | `selectViewingsByDay` |
+| Movies watched, movies this week, goal status | `SEEN` viewings by local day | `selectCounters` |
+| Billing cycles elapsed, membership cost incurred | `startDate`, `monthlyTotalCents`, today | `selectSavingsSummary` |
+| Total ticket savings, fees avoided, net savings, break-even, premium savings | `SEEN` viewings with tickets | `selectSavingsSummary` |
+| Opening tab contents and its count | watchlist release dates, local today | `selectOpeningRows` |
+| Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
+| Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
+| Format split (count and %), activity over time, rating groups, per-format premium averages (Next Steps) | viewings | `selectDashboardBreakdowns` |
+
+---
+
+## Movie Data Service
+
+**The problem:** the app needs search, release dates, runtimes, content ratings and posters from a free source. No free source knows which AMC formats or showtimes exist, and the app never tries to find out (formats and prices stay member-entered).
+
+**Provider: OMDb.** What I confirmed on its site: free keys exist, its content is licensed CC BY-NC 4.0, and a separate high-resolution Poster API exists but is patron-only. What I could **not** confirm from its pages, and am taking from the owner (the 1,000-lookups-a-day free limit) or from memory (everything else), so it is unverified until one real call is made before the mapper is written:
+
+- *Search* (`?s=<title>&type=movie`) returns up to 10 results per page with title, year, an id of the form `tt1234567`, and a poster URL. It carries **no release date and no runtime**, so every field the app needs beyond a title card costs a second call.
+- *By id* (`?i=<id>`) returns a release date as text (like `31 Mar 1999`, or `N/A`), a runtime as text (like `136 min`, or `N/A`), a rating (`PG-13`, `Not Rated`, `N/A`) and the poster URL. The mapper treats every `N/A` as `null`.
+- **Terms.** CC BY-NC 4.0 is a non-commercial license that requires credit; this is a personal, non-commercial app, so it fits, and the plan is an About row in Membership settings that credits OMDb. Whether OMDb separately allows caching results, or hot-linking its poster images, I could not confirm; both are gated before the movie-data PR merges (see Open questions).
+- **Release-date accuracy.** It isn't clear that OMDb's release date is the *US theatrical* date, or that it carries movies a week from release at all. The Opening tab depends on both, so this is a real risk to test early with a few upcoming titles. The mitigation is built in: the manual path takes a release date.
+
+**The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
+
+1. **The browser** debounces typing (`useDebouncedValue` with `DEBOUNCE_MS.autocomplete`), searches only from `MOVIE_SEARCH_MIN_CHARS`, never searches an empty box (it shows the watchlist), and remembers results with TanStack Query (persisted, so a repeat is free even offline). Search results never trigger per-result details calls; details are fetched only for the movie actually picked.
+2. **A shared server-side cache** (Firestore, written and read only by the functions through the admin SDK; clients have no access): `apps/a-list/searchCache/{key}` and `apps/a-list/movieCache/{movieKey}`, each `{ value, cachedAt }`. Search results live 7 days; details live 30 days for a movie already released and 1 day when the release date is null or in the future (those are the ones that change). A cache hit costs no lookup, and the second member to search for the same movie costs nothing.
+3. **A daily budget guard** in the functions: before any upstream call, a transaction increments `apps/a-list/lookupUsage/{yyyy-mm-dd}` (the whole app) and `apps/a-list/lookupUsage/{yyyy-mm-dd}_{uid}` (that member). The call is refused with `resource-exhausted` once the app total reaches 900 (headroom under 1,000, since the provider's own day boundary isn't documented; the guard uses UTC dates) or a member reaches 100. Cache hits are never counted.
+4. **A manual path.** When the guard refuses, or a movie isn't in the database, the picker's "Add it by title" link opens `ManualMovieForm`: a title and an optional release date. It builds the snapshot on the client with `movieKey: 'manual-<uuid>'`, no poster (the cover is a title tile) and no runtime (the fallback runtime applies). The picker's message on a refusal is one warm line, not an error.
+
+**Why a proxy and not a direct browser call (as Places does):** an OMDb key is passed as a query parameter, so a key shipped to the browser is a key anyone can take, and the shared cache and budget guard above can only live on the server anyway. A side benefit is privacy: OMDb sees the function's address, never the member's.
+
+**Two callables** (`functions/src/apps/a-list/`, exported from `functions/src/index.ts`):
+
+```typescript
+// searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 10)
+interface MovieSearchResult {
+  movieKey: string;                  // "imdb-tt0133093"
+  title: string;
+  year: number | null;
+  posterUrl: string | null;
+}
+
+// getMovie({ movieKey: string })   → MovieSnapshot
+//   release date and runtime parsed from text; every "N/A" becomes null
+```
+
+Both follow the existing callable conventions: reject without `request.auth?.uid`; validate and length-cap input (`query` ≤ 100 characters, `movieKey` matches `^imdb-tt[0-9]{7,10}$`); a hard timeout on the upstream call; `maxInstances` capped low. The provider key is a Functions secret (`OMDB_API_KEY`) and never appears in a response or a log, **including the upstream URL, since the key is in it**; the query text is not logged. Per `CLAUDE.md`, a newly added `onCall` may need its public-invoker grant (the symptom is a CORS error on the preflight); that step is in the wiring checklist at the end.
+
+**Client queries** (`src/apps/a-list/queries/movieQueries.ts`, `queryOptions` factories; keys include every parameter that changes the result and nothing else):
+
+```typescript
+export const movieQueryKeys = {
+  all: ['a-list', 'movies'] as const,
+  search: (query: string) => [...movieQueryKeys.all, 'search', normalizeString(query)] as const,
+  details: (movieKey: string) => [...movieQueryKeys.all, 'details', movieKey] as const,
+};
+// movieSearchQueryOptions(query):  staleTime DAY_MS,                 meta: { persist: true }
+// movieDetailsQueryOptions(key):   staleTime MOVIE_DETAILS_STALE_MS, meta: { persist: true }
+```
+
+`persist: true` is right for both: they reach a third party and hold nothing sensitive, so search and a re-opened movie work at the theater with poor signal. There is no tax query: nothing is looked up for tax.
+
+**Posters** load straight from the URL OMDb returns (`posterUrl`) with `referrerPolicy='no-referrer'`. They are small (OMDb's free posters are around 300 px wide), which is fine for a phone cell and soft on a large screen. `EnrichedImage` hides itself when an image fails, which is wrong for a calendar cell that has to stay filled, so `PosterCover` is its own small component: `<img loading="lazy">` with an `onError` fallback to a flat tile showing the title. That fallback also makes a hot-linking refusal degrade gracefully instead of breaking the calendar.
+
+**Keeping release dates honest.** The Opening tab is only as right as the stored release date, and studios move dates. A `useRefreshUnreleasedMovies` hook (mounted once in the orchestrator, no listener) takes the *unseen*, non-manual watchlist items whose `releaseDate` is null or not yet past (capped at 10 a session), and for each calls `queryClient.fetchQuery(movieDetailsQueryOptions(key))`. The query's 24-hour `staleTime` and the server's 1-day cache for unreleased movies mean a device asks at most once a day and the whole app asks OMDb at most once a day per movie. If the fresh snapshot differs from the stored one, it writes `{ movie, lastEditedAt }` to that watchlist item with a field-scoped `updateDoc`. Viewings' snapshots are never refreshed.
+
+---
+
+## State Machines & Logic
+
+#### 1. Viewing lifecycle
+
+```
+              add (endsAt > now)                         "Seen it" (optionally with stars)
+  (none) ───────────────────────────▶ PLANNED ───────────────────────────────────────▶ SEEN
+     │                                   │   ▲                                           │
+     │  add (endsAt ≤ now)               │   └── edit showtime / ticket (stays PLANNED)  │ edit anything, add/edit ticket,
+     └──────────────────────────────────────────────────────────────────────────▶ SEEN   │ edit/clear rating (stays SEEN)
+                                         │ "Didn't go" (destructive confirm)
+                                         ▼
+                                      (removed)         any state ── Remove (destructive confirm) ──▶ (removed)
+```
+
+What the member sees in each state (all derived from `status`, `showtimeAt`, `endsAt` and `now`; this is the UX table, made precise):
+
+| Stored | Derived | Shown as |
+|---|---|---|
+| `PLANNED` | `now < endsAt` | an ordinary row (covers "not started" and "in progress") |
+| `PLANNED` | `now ≥ endsAt` | "Did you catch it?" chip; joins the Seen-prompt queue |
+| `SEEN` | — | stars if rated; counts toward every counter |
+
+- **A viewing never goes from `SEEN` back to `PLANNED`.** Editing a seen viewing's date is allowed only to a time that has already started; the form validates it and the rules enforce it with the server's clock (`showtimeAt ≤ request.time`).
+- **"Didn't go"** deletes the viewing. The movie stays on the watchlist and its "Seen" is derived, so it is unseen again.
+- **Editing a showtime** recomputes `endsAt`. If the viewing is `PLANNED` it stays so, even if the new time is in the past and has ended; it then simply joins the prompt queue, which is the honest outcome.
+- **Marking seen** writes `{ status: 'SEEN', rating, lastEditedAt }` with a field-scoped `updateDoc`. It assigns literal values to disjoint scalar fields, so it needs no transaction; two devices answering the same prompt write the same thing.
+
+#### 2. Local-day keys (the calendar's only time model)
+
+A viewing is an instant, and everything on the calendar asks "which day?" in the **viewer's local timezone**. One tiny utility owns it:
+
+```typescript
+getDayKey(timestamp: number): string // = toLocalDateInputValue(timestamp), "YYYY-MM-DD"
+```
+
+- `selectViewingsByDay` builds `Record<dayKey, Viewing[]>`, each day sorted by `showtimeAt` ascending (the order covers are cut in).
+- The Calendar's `renderCell(date, …)` receives a `Date` for the cell; the key for it is `getDayKey(date.getTime())`. **To verify in the first calendar PR:** that Dreamer UI hands each cell a local-midnight `Date`. If it doesn't, convert with `toLocalDateInputValue` and `fromDateInputValue` before keying (same rule as the Waypoint date pickers).
+- Day keys compare correctly as strings (`'2026-10-03' < '2026-10-04'`), so week and month membership is string comparison, with no timezone arithmetic anywhere in the counters.
+- **Known edge:** a viewing is keyed by where the viewer is *now*, so a member who flies from Los Angeles to New York after a 10 pm showing will see it move a day later. For a theater membership used locally this is accepted; the alternative, storing a zone with every viewing, isn't worth it.
+- **Release dates are the other kind.** `movie.releaseDate` is date-only (UTC midnight), displayed with `formatDateUTC`, never `formatDate`. Showtimes display with `formatDateTime`/`formatTime`. The two never share a helper.
+- The Calendar has no month-change callback, so nothing here is scoped to the visible month. That is fine: all viewings are already loaded, and the counters are defined on *today*, not on the month on screen.
+
+#### 3. Counters and goals
+
+All counts are over `SEEN` viewings only (planned ones are future by definition, and an ended-but-unconfirmed one is not yet a watched movie), bucketed by `getDayKey(showtimeAt)`:
+
+- **Movies watched** — count of `SEEN` viewings. A rewatch counts again.
+- **Movies this week** — `SEEN` viewings with a day key in `[weekStartKey, weekEndKey]`, the viewer's local week starting on `WEEK_STARTS_ON` (Sunday). Shown as `count / weeklyGoal` (e.g. `1/4`), or just `count` when no goal is set.
+- **Weekly goal met** — `count ≥ weeklyGoal`. **Monthly goal met** — `SEEN` viewings whose key shares today's `YYYY-MM` prefix, `≥ monthlyGoal`. The month is the calendar month.
+- A goal is the member's own target, so `null` means "no goal" and the chip is hidden.
+
+#### 4. Billing cycles and membership cost incurred
+
+The membership bills monthly on the day-of-month of `startDate`. Cost incurred is `cyclesElapsed × monthlyTotalCents`, written as a sum over the cycle dates of `getMonthlyTotalAt(cycleDate)` so a future price history only has to replace that one function (see "Planned later" below).
+
+```
+todayDay      = fromDateInputValue(toLocalDateInputValue(now))   // UTC midnight of the viewer's local day
+cycle k date  = the start day-of-month in month (startMonth + k), clamped to that month's last day
+cyclesElapsed = number of k ≥ 0 whose cycle date ≤ todayDay      // the first charge is on the start date itself
+```
+
+- Each cycle date is computed **from the start date**, not chained from the previous one, so a membership that started on the 31st bills Feb 28, Mar 31, Apr 30 and never "drifts" to the 28th.
+- All of it is UTC day arithmetic on date-only values, in whole days from the anchor, consistent with the repo's date-only rule. The only local-time step is deriving `todayDay` from `now`.
+- The Setup form doesn't allow a `startDate` in the future; if one ever appeared, `cyclesElapsed` would simply be `0`.
+- There is no cancel/pause; out of scope (Open questions).
+
+**Planned later: membership cost that changes over time.** Today one `monthlyTotalCents` applies to every month, so editing it rewrites history. The planned fix is a `priceHistory` list on the membership, each entry `{ effectiveFrom (date-only), monthlyCostCents, monthlyTotalCents, taxRate }`, with cost incurred becoming the sum over each billing cycle of the total in effect on that cycle's date. It is additive: today's single total is the entry in effect now, and a profile with no history reads as a one-entry history. To keep that change small, `billing.ts` is written now as a sum over cycle dates of `getMonthlyTotalAt(cycleDate)`, which today just returns the single stored total, so the later issue only replaces that one function and adds the field and its form (the field itself is not added until that issue, per the no-pre-added-fields rule). It is a Beyond-tier roadmap item.
+
+#### 5. Savings and break-even
+
+Per viewing that is `SEEN` and has a ticket (a planned movie hasn't been used yet, so a pre-bought ticket is stored but counts once it's seen):
+
+```
+ticketValueCents    = totalCents                       // = price + fee avoided + tax: what a non-member would have paid
+premiumSavingsCents = priceCents − standardPriceCents  // only when format ≠ STANDARD and standardPriceCents ≠ null
+```
+
+Totals (`selectSavingsSummary`, all integers):
+
+```
+totalTicketSavings   = Σ totalCents
+feesAvoided          = Σ feeAvoidedCents                 // the fee part of the line above, shown as its own counter
+membershipCost       = cyclesElapsed × monthlyTotalCents
+netSavings           = totalTicketSavings − membershipCost
+isBrokenEven         = netSavings ≥ 0                    // shown as "Not yet" / "Broken even"
+premiumFormatSavings = Σ premiumSavingsCents
+unpricedCount        = SEEN viewings with ticket === null    // drives "N movies don't have prices yet"
+premiumUnpricedCount = SEEN premium tickets with standardPriceCents === null
+```
+
+- **Worked example from the spec**, as a test case: monthly total `$27.94` (`2794`), one cycle elapsed, one seen Standard ticket with price `$15.56`, fee `$0`, tax `$1.26` → `totalCents = 1682`. `netSavings = 1682 − 2794 = −1112` → **−$11.12**; `isBrokenEven = false` → "Not yet"; `premiumFormatSavings = 0` → **$0.00**; `feesAvoided = 0` → **$0.00**. Every number on the spec's dashboard reproduces.
+- **Itemized entry:** `taxCents = round(priceCents × taxRate)` (half-up, `Math.round`; `0` when no rate is chosen), `totalCents = priceCents + feeAvoidedCents + taxCents`. The fee is assumed untaxed.
+- **All-in entry:** the member types `totalCents`, picks a fee chip and a tax chip, and the split is derived: `priceCents = round((totalCents − feeAvoidedCents) / (1 + taxRate))` and `taxCents = totalCents − feeAvoidedCents − priceCents`, so the three always add back to the total exactly. With no rate chosen, `priceCents = totalCents − feeAvoidedCents` and `taxCents = 0`. Example: total `2139`, fee `150`, rate `0.075` → price `1850`, tax `139`. Total savings and fees avoided don't depend on the estimate; premium savings do, which is why the form suggests itemizing a premium ticket.
+- **Entry validation:** all amounts are non-negative; the all-in total can't be less than the fee. A saved ticket's `taxRate` is the chip or "Other" rate that was chosen (null if none), and is what the chips are built from later.
+- **Rounding** happens in exactly three places: the itemized tax, the all-in price split, and the bill-derived membership rate (`round(total / cost − 1, 4 decimal places)`). Everything else is integer addition.
+- **Changing the membership's rate later never rewrites old tickets**, because each ticket stores its own tax amount.
+
+#### 6. Setup branching
+
+```
+Step 1 Membership (confirm perks, read-only copy)
+  → Step 2 Cost & start date
+        cost before tax            required
+        start date                 required; today or earlier
+        total on your bill (tax in)  optional
+           left blank       → monthlyTotalCents = cost,  taxRate = null
+           ≥ cost           → monthlyTotalCents = total, taxRate = round(total / cost − 1, 4 dp)   // shown as "about 7.5%"
+           < cost           → inline error, Next disabled
+           implied rate > 0.25 → inline error (almost certainly a typo)
+  → Step 3 Goals (weekly, monthly; both optional) → one setDoc → "Add movies you've already seen?"
+        ├─ Add past movies → AddDrawer in past-movies mode (dates can't precede the start date)
+        └─ Skip            → empty Calendar (with its "Add your first movie" / "Add past movies" nudge)
+```
+
+There is no location step and no lookup; the rate comes from the member's own bill. The "Add movies you've already seen?" offer is ephemeral UI state in the orchestrator. If the member reloads while it's showing, they land on the empty Calendar with the nudge, which is the same destination as "Skip" and loses nothing.
+
+#### 7. Opening window
+
+A watchlist item is in the **Opening** tab when it is **unseen**, its `releaseDate` is not null, and
+
+```
+todayDay ≤ releaseDate ≤ todayDay + OPENING_WINDOW_DAYS × 86_400_000
+```
+
+where `todayDay` is the viewer's local day as a UTC-midnight value (as in §4). Both sides are date-only, so it's a plain comparison; no `endDate + 1 day` adjustment is needed (that rule is for comparing an *instant* against a date-only end). The window is today through seven days out, inclusive. The tab's badge is the number of rows, shown only when greater than zero. A movie in the window also appears in All and its priority tab.
+
+#### 8. Watchlist rows and tab filters
+
+`selectWatchlistRows` joins each item with its viewings: `isSeen` (any `SEEN` viewing), `seenCount`, `nextPlannedAt` (earliest `PLANNED` viewing with `showtimeAt ≥ now`), `lastWatchedAt` (latest `SEEN` showtime). Tabs are filters over the rows:
+
+| Tab | Rows |
+|---|---|
+| Opening (default) | §7 |
+| All | unseen first, ordered by priority then release date (nulls last); seen last |
+| Must See / Want to See / If I Have Time | unseen, that priority, ordered by release date |
+| Seen | seen only, latest watched first |
+
+#### 9. Fee chips and tax-rate chips
+
+Neither a fee nor a tax rate can be looked up, so both are offered as chips built from what the member has already entered.
+
+**Fee chips** (`selectFeeChips`): the distinct `ticket.feeAvoidedCents` across all viewings with a ticket, ordered by most recent `showtimeAt` using that value, the first `MAX_FEE_CHIPS` of them, with a `$0` chip always first and de-duplicated against it. "Other" reveals a money input.
+
+**Tax-rate chips and the default** (`selectTaxRateChips`):
+
+```
+used     = distinct non-null ticket.taxRate across viewings, each rounded to 4 dp, with use counts and last-used times
+default  = the most-used rate; ties go to the most recently used
+           no tickets yet → membership.taxRate
+           neither        → no default (the row shows only "Other")
+chips    = default first, then the remaining used rates by recency, with membership.taxRate included if not already there; at most MAX_TAX_CHIPS
+label    = the rate as a percent with up to three decimals, trimmed ("7.5%", "8.875%")
+```
+
+So the membership's gauged rate is where it starts, and the moment the member's tickets show a different rate being used more, that one becomes the preselected default. "Other" reveals a rate input (a percent, 0 – 25).
+
+Neither has a separate collection: chips are pure functions of viewings (and, for tax, the membership), so editing or deleting a ticket updates them.
+
+#### 10. The Seen-prompt queue
+
+`selectPendingSeenPrompts(state, now)` is every `PLANNED` viewing with `endsAt ≤ now`, oldest first. The host component shows the first one only when no other overlay is open, and keeps a session-local set of "Later" ids in its own state (not stored: "Later" means *until the next open*). Answering "Seen it" or "Didn't go" removes the viewing from the queue by changing or deleting the document, and the next one appears.
+
+---
+
+## Security Rules Design Criteria
+
+1. **Everything is owner-only.** Every path under `apps/a-list/memberships/{uid}` allows read and write only when `request.auth.uid == uid`. There is no member-of, admin, or role branch.
+2. **`isAdmin()` and `isDevUser()` get no access to member data.** They already gate the app *catalog* document (`apps/a-list`), as for every other app. Neither is added to these rules: a seeded dev fixture signs in as its own `uid` like anyone else.
+3. **The app document** `apps/a-list` follows the existing four-read-predicate shape (admin/dev, unrestricted-public, uid-allowed, email-allowed) and admin-only writes, and the block goes in alphabetical position, **above** `nine-lives`.
+4. **Shape validation covers every field on every type**, with the `T | null` convention (the key must exist; `null` is a legal value only where the type says so). Cents are integers `0 … 1,000,000`; `rating` is null or an integer `1 … 5`; goals are null or in a sane range; `taxRate` (membership and ticket) is null or `0 … 0.25`; enums are checked with `in [...]` against the same strings as `constants.ts`; strings have length caps.
+5. **Immutable fields only:** `uid`/`movieKey`/`id`, `createdAt`, and a viewing's `movie` snapshot, and the membership's `setupCompletedAt`. Everything the UI edits stays editable.
+6. **Cross-field integrity the client could get wrong:** `endsAt > showtimeAt`; `status == 'SEEN'` implies `showtimeAt ≤ request.time.toMillis()` (the server's clock, so a skewed device can't create a seen movie in the future); `status == 'PLANNED'` implies `rating == null`; `ticket.format == 'STANDARD'` implies `standardPriceCents == null`; `ticket.totalCents == priceCents + feeAvoidedCents + taxCents`; `monthlyTotalCents ≥ monthlyCostCents`.
+7. **Deletes:** the owner may delete viewings and watchlist items (both have UI). The membership document cannot be deleted (no UI; there is no "reset" in the MVP).
+8. **No cross-document rules.** A viewing doesn't require its watchlist item to exist: the app's "add viewing" writes both in one transaction for user-experience atomicity, but the data is the member's own, and nothing reads a viewing in a way that needs the watchlist document. This keeps the rules `get()`-free.
+9. **Rules tolerate older documents** the way every collection in this repo must: new fields added in future are read with `resource.data.get('field', default)`. (Nothing is legacy yet; this app is new.)
+10. **No `storage.rules` change.** The app stores no files.
+11. **The movie cache and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
+
+The shape of the block (helpers are declared in the `memberships/{uid}` match so the nested matches reuse them):
+
+```
+// --- App: a-list ---
+match /apps/a-list {
+  allow read: if isAdmin() || isDevUser();
+  allow read: if isUnrestrictedPublicApp(resource.data);
+  allow read: if isUidAllowedApp(resource.data);
+  allow read: if isEmailAllowedApp(resource.data);
+  allow create, update, delete: if isAdmin();
+}
+
+match /apps/a-list/memberships/{uid} {
+  function isOwner() { return request.auth != null && request.auth.uid == uid; }
+  function isCents(value) { return value is int && value >= 0 && value <= 1000000; }
+  function isNullOrIntBetween(value, low, high) { return value == null || (value is int && value >= low && value <= high); }
+
+  function isMembershipValid(data) {
+    return data.keys().hasOnly(['uid','monthlyCostCents','monthlyTotalCents','taxRate',
+                                'startDate','weeklyGoal','monthlyGoal','setupCompletedAt','createdAt','lastEditedAt'])
+      && data.keys().hasAll(['uid','monthlyCostCents','monthlyTotalCents','taxRate',
+                             'startDate','weeklyGoal','monthlyGoal','setupCompletedAt','createdAt','lastEditedAt'])
+      && data.uid == uid
+      && isCents(data.monthlyCostCents) && isCents(data.monthlyTotalCents)
+      && data.monthlyTotalCents >= data.monthlyCostCents
+      && (data.taxRate == null || (data.taxRate is number && data.taxRate >= 0 && data.taxRate <= 0.25))
+      && data.startDate is number
+      && isNullOrIntBetween(data.weeklyGoal, 1, 21) && isNullOrIntBetween(data.monthlyGoal, 1, 93)
+      && data.setupCompletedAt is number && data.createdAt is number && data.lastEditedAt is number;
+  }
+
+  function isMovieValid(m) {
+    return m.keys().hasOnly(['title','releaseDate','posterUrl','runtimeMinutes','contentRating'])
+      && m.keys().hasAll(['title','releaseDate','posterUrl','runtimeMinutes','contentRating'])
+      && m.title is string && m.title.size() > 0 && m.title.size() <= 200
+      && (m.releaseDate == null || m.releaseDate is number)
+      && (m.posterUrl == null || (m.posterUrl is string && m.posterUrl.size() <= 500 && m.posterUrl.matches('^https://[^\\s]+$')))
+      && isNullOrIntBetween(m.runtimeMinutes, 1, 1000)
+      && (m.contentRating == null || (m.contentRating is string && m.contentRating.size() <= 20));
+  }
+
+  allow read: if isOwner();
+  allow create: if isOwner() && isMembershipValid(request.resource.data);
+  allow update: if isOwner() && isMembershipValid(request.resource.data)
+    && request.resource.data.setupCompletedAt == resource.data.setupCompletedAt
+    && request.resource.data.createdAt == resource.data.createdAt;
+  allow delete: if false;
+
+  match /watchlist/{movieKey} {
+    // valid: exact keys; movieKey field == document id and matches ^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$; isMovieValid(movie);
+    //        priority in the three values; preferredFormat null or one of the six; createdAt/lastEditedAt numbers
+    allow read, delete: if isOwner();
+    allow create: if isOwner() /* && isWatchlistItemValid(request.resource.data) */;
+    allow update: if isOwner() /* && valid && movieKey and createdAt unchanged */;
+  }
+
+  match /viewings/{viewingId} {
+    // valid: exact keys; id == document id; isMovieValid(movie); endsAt > showtimeAt; the status/rating/showtime
+    //        rules in criterion 6; ticket null or isTicketValid (exact keys, format in the six, cents helpers,
+    //        STANDARD ⇒ standardPriceCents == null; entryMode in the two values; taxRate null or 0–0.25;
+    //        totalCents == priceCents + feeAvoidedCents + taxCents); createdAt/lastEditedAt numbers
+    allow read, delete: if isOwner();
+    allow create: if isOwner() /* && isViewingValid(request.resource.data) */;
+    allow update: if isOwner() /* && valid && id, movieKey, movie, createdAt unchanged */;
+  }
+}
+
+// Written and read only by the Cloud Functions (admin SDK); clients get nothing.
+match /apps/a-list/searchCache/{key}   { allow read, write: if false; }
+match /apps/a-list/movieCache/{key}    { allow read, write: if false; }
+match /apps/a-list/lookupUsage/{key}   { allow read, write: if false; }
+```
+
+(The commented placeholders are the helper calls the implementation PR writes out in full; the structure and every constraint are as listed in the criteria above.)
+
+---
+
+## Client State Management (Redux Toolkit)
+
+Per-app store under `src/apps/a-list/store/`, exposing `AListState` and `aListReducer`, mounted in the central `src/store/index.ts` as `aList` (next to `nineLives` and `waypoint`).
+
+```typescript
+interface MembershipState { membership: MembershipProfile | null; isLoaded: boolean }
+interface WatchlistState  { items: WatchlistItem[];                isLoaded: boolean }
+interface ViewingsState   { items: Viewing[];                      isLoaded: boolean }
+export interface AListState { membership: MembershipState; watchlist: WatchlistState; viewings: ViewingsState }
+```
+
+Every slice resets on the shared `resetAllState`, so a user switch never shows the previous member's data.
+
+**One listener tier.** Waypoint and Nine Lives need a second, per-open-resource tier; A-List has no "open resource", so there's a single effect scoped to the signed-in `uid`:
+
+- `startMembershipListener(uid, onChange)` → `onSnapshot(doc(memberships/{uid}))`
+- `startWatchlistListener(uid, onChange)` → `onSnapshot(collection(memberships/{uid}/watchlist))`
+- `startViewingsListener(uid, onChange)` → `onSnapshot(collection(memberships/{uid}/viewings))`
+
+All three live in `store/listeners/`, and are started once by `useAListSync(uid)`, called once from `AList.tsx` (the only orchestrator). No tab, panel or drawer has an `onSnapshot` of its own.
+
+**Loading and first-launch gate.** `AList.tsx` shows a skeleton until `membership.isLoaded && watchlist.isLoaded && viewings.isLoaded`. Then: `membership === null` → the Setup modal is open and can't be dismissed (nothing works without a monthly cost and start date); otherwise the app renders on the Calendar tab.
+
+**Actions (thunks)** in `store/actions/`, writing to the member's own paths:
+
+| Action | Write |
+|---|---|
+| `completeSetup(draft)` | one `setDoc` of the membership document, all keys, explicit `null`s (`taxRate` null when no bill total was given) |
+| `updateMembership(fields)` | field-scoped `updateDoc` (+ `lastEditedAt`) |
+| `addWatchlistItem(movie, priority, preferredFormat)` (a manual movie is just a snapshot built by `ManualMovieForm` with a `manual-<uuid>` key) | `setDoc` at `watchlist/{movieKey}`; **create-if-absent** inside a `runTransaction` so a double-tap or two devices can't overwrite an existing priority |
+| `updateWatchlistItem(movieKey, fields)` | field-scoped `updateDoc` |
+| `removeWatchlistItem(movieKey)` | `deleteDoc`, after `useActionModal().confirm({ destructive: true })`; viewings untouched |
+| `addViewing({ movie, showtimeAt, ticket })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action |
+| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`) |
+| `recordTicket(id, ticket)` | `updateDoc({ ticket, lastEditedAt })` — the form owns the whole object |
+| `markViewingSeen(id, rating)` | `updateDoc({ status: 'SEEN', rating, lastEditedAt })` |
+| `removeViewing(id)` | `deleteDoc` after a destructive confirm (also what "Didn't go" does) |
+
+No cached document is ever written back whole. A transaction is used only where one action must create two documents consistently or create-if-absent; the single-member data has no other concurrency hazard.
+
+**Selectors** (`store/selectors.ts`): `createSelector` for everything that builds a new array or object, so no `useAppSelector` returns a fresh reference without `shallowEqual`. Time-dependent selectors take `now` as an argument (`useNow()` supplies it in the screen). The ones listed under *Derived values* above, plus `selectViewingsByDay`'s per-day arrays, which are what `renderCell` reads.
+
+**Overlay coordination.** The orchestrator owns one discriminated-union state, `overlay: null | { kind: 'viewing'; id } | { kind: 'add'; mode: 'single' | 'past'; movie?; date? } | { kind: 'watchlistItem'; movieKey } | { kind: 'settings' }`, exposed through a small context. One value means "never an overlay on an overlay" is true by construction; the in-place swaps (Mark paid, Edit, Add to calendar) are internal view state of the drawer that's already open. The destructive confirm is the one thing rendered above it. The Seen prompt shows only when `overlay === null`.
+
+---
+
+## Component Encapsulation
+
+- **`AList.tsx`** — the only orchestrator: the auth uid, `useAListSync`, the loading/Setup gate, the bottom nav and active tab (`?tab=` like Waypoint), the overlay state, and the two hosts below. It renders no feature UI itself.
+- **`CalendarScreen`** — owns the selected day (local state, set from `onDateSelect`), the counters row, the Calendar, and the inline day panel. Reads `selectViewingsByDay` and `selectCounters`; knows nothing about tickets.
+- **`PosterCell`** — pure: `(dayViewings) → PosterSplit`. No store access; `renderCell` is a thin closure over the map.
+- **`ViewingDrawer`** — owns its internal view (`details | ticket | edit`) and the swap-in-place back link; calls actions and the destructive confirm. Everything else about a viewing (row, badges, stars) is a pure presentational component.
+- **`AddDrawer`** — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
+- **`SeenPromptHost`** and **`useRefreshUnreleasedMovies`** — the two background concerns, each mounted once in `AList.tsx`. Neither renders anything except the prompt drawer.
+- **Pure utilities** (`utils/`): `money.ts` (parse/format cents), `dayKeys.ts`, `billing.ts`, `savings.ts`, `viewingState.ts`, `tax.ts` (itemized tax, all-in split, bill-derived rate), `watchlistRows.ts`, `opening.ts`, `chips.ts` (fee and tax-rate chips). All are plain functions over plain data with no React or Firebase, so the arithmetic that decides "have I broken even?" is exercised without a UI.
+- **Reuse, not copy:** `useDebouncedValue`/`DEBOUNCE_MS`, `useNow`, `queryClient`/`DAY_MS`, `normalizeString`, `formatDateUTC`/`formatDate`/`formatTime`/`formatDateTime`, `fromDateInputValue`/`toLocalDateInputValue`/`fromLocalDateAndTimeInputValues`, `useActionModal`, and `AppToggle` if an immediate-effect toggle ever appears. **`SectionHeader`, `ModalFooterActions` and `DeleteIconButton` currently live in Waypoint's `components/`.** A-List is the second app that needs them, so they move to central `src/components/` in the first A-List PR that uses one, with Waypoint's imports updated in the same PR. A-List never imports from `@apps/waypoint`.
+
+---
+
+## UI Component Conventions Applied
+
+- **Overlays.** Setup and Membership settings are `Modal`s. Every movie flow (Add, viewing details, watchlist item, Seen prompt) is a `Drawer` at every width: the deliberate exception recorded in the UX doc. Mark paid, Edit and Add to calendar swap the open drawer's content in place with a "‹ Back" link. Only the destructive confirm (`useActionModal().confirm({ destructive: true })`) is ever stacked.
+- **Titles are plain nouns:** "Membership", "Movie", "Ticket", "Viewing", "Watchlist item". The verb belongs on the button ("Add", "Save", "Add + another", "Add & finish").
+- **Forms use `Form` + `FormFactories`.** Setup's three steps are three small `Form`s inside a stepper; the Ticket and Edit forms are `Form`s; the movie picker, fee chips, tax chips and star rating are `FormFactories.custom` fields. The Ticket form's itemized / all-in switch is local form state that decides which amount field renders. Money is entered through a text input with `inputMode="decimal"` and parsed by `parseMoneyToCents`; a number input's spinner and float parsing are wrong for money.
+- **Submit disables until valid** (`onDataChange` + `isValid`). Optional ticket details sit behind "+ Add ticket details"; a "Custom/Other" fee or tax-rate input renders only once "Other" is selected.
+- **Layout.** One border per card, flat rows inside; `StatTile` is the only card allowed on a screen. Counts appear only when greater than zero. Posters carry no border of their own; the cell is the frame.
+- **No raw `<button>/<input>/<select>/<textarea>/<a>`** anywhere, including the star rating (Dreamer UI `Button`s with an icon) and the cell tap target (the Calendar's own). `join()` for every conditional class.
+- **Date-only and instants never share a formatter** (see Logic §2). Every screen that shows a date is validated in a timezone behind UTC.
+- **Copy** is warm and short ("Not yet", never a red alarm; "Did you catch it?"). Footer labels stay short.
+
+---
+
+## Security & Privacy Requirements
+
+- **Private by construction.** One member's membership, watchlist and viewings are readable and writable only by them. There is no sharing and no admin read; the rules in Security Rules Design Criteria #1–2 are the whole access model.
+- **What leaves the app, and where it goes.** Movie search text and a chosen `movieKey` go to the app's own Cloud Functions, which forward them to the movie provider; the provider sees the function's address and the text, never the member's identity, and the functions don't log the text. The functions do keep a shared cache of results and per-member lookup counts (server-only, no text, no identity beyond a `uid` in a counter's document id). Nothing else leaves the app: there is no location, and tax is never looked up. Posters load straight from the host OMDb names in its response, which sees the viewer's address when they load, as with any image; the app sets `referrerPolicy='no-referrer'` as `EnrichedImage` does.
+- **The provider credential never reaches the browser, a response, or a log** (Functions secret). Inputs to the callables are validated and length-capped; every callable requires an authenticated caller.
+- **Stored data minimization.** No location of any kind is collected or stored. No ticket confirmation numbers, card data or showtime-venue details are ever collected.
+- **Persistence on the device.** Only the movie search/details queries are persisted to IndexedDB (public third-party data). Nothing from the member's own documents is persisted by the app beyond Firestore's own cache. The query cache is cleared on user switch in `AuthContext`, as everywhere.
+- **Attribution and terms** for the movie provider are an About row in Membership settings and a verification gate before the movie-data PR merges (see Movie Data Service).
+- **Rules are verified against the emulator, not by the UI hiding a control:** owner allowed and a second signed-in user denied on all three paths, signed-out denied; and one denied write per integrity rule (rating 6, negative cents, `SEEN` with a future showtime, `PLANNED` with a rating, changed `movieKey`).
+
+---
+
+## Component & File Architecture
+
+```
+src/apps/a-list/
+├── AList.tsx                    # sole orchestrator
+├── README.md  UX.md  TECHNICAL.md
+├── constants.ts  types.ts
+├── hooks/
+│   ├── useAListSync.ts
+│   ├── useRefreshUnreleasedMovies.ts
+│   └── useAListOverlay.tsx      # overlay state + context
+├── queries/
+│   └── movieQueries.ts
+├── store/
+│   ├── index.ts  selectors.ts
+│   ├── slices/     membershipSlice.ts  watchlistSlice.ts  viewingsSlice.ts
+│   ├── actions/    membershipActions.ts  watchlistActions.ts  viewingActions.ts
+│   └── listeners/  membershipListeners.ts  watchlistListeners.ts  viewingListeners.ts
+├── utils/
+│   ├── money.ts  dayKeys.ts  billing.ts  savings.ts  viewingState.ts
+│   ├── tax.ts  watchlistRows.ts  opening.ts  feeChips.ts
+└── components/
+    ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx
+    ├── setup/       SetupModal.tsx  SetupStepper.tsx  CostStep.tsx  MembershipSettingsModal.tsx
+    ├── calendar/    CalendarScreen.tsx  CounterRow.tsx  PosterCell.tsx  PosterSplit.tsx  DayPanel.tsx  ViewingRow.tsx
+    ├── viewing/     ViewingDrawer.tsx  TicketForm.tsx  EditViewingForm.tsx  FeeChips.tsx  TaxChips.tsx  SeenPromptHost.tsx  SeenPrompt.tsx
+    ├── add/         AddDrawer.tsx  MoviePicker.tsx  PastMoviesStrip.tsx
+    ├── watchlist/   WatchlistScreen.tsx  WatchlistTabs.tsx  WatchlistRow.tsx  WatchlistItemDrawer.tsx
+    ├── dashboard/   DashboardScreen.tsx  StatTile.tsx  (Next Steps: FormatSplit.tsx  ActivityChart.tsx  RatingsSpend.tsx  PremiumInsights.tsx)
+    └── shared/      PosterCover.tsx  StarRating.tsx  FormatBadge.tsx  PriorityBadge.tsx  GoalChip.tsx
+
+functions/src/apps/a-list/       searchMovies.ts  getMovie.ts  lookupBudget.ts  movieCache.ts
+scripts/seeds/aList.ts
+```
+
+Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineChart` pattern.
+
+**Wiring checklist** (everything a new mini-app has to touch; each item is in the roadmap):
+
+- `src/lib/types/appCatalog.ts`: `'a-list'` in `AppId`. `src/lib/app/app.registry.ts`: a registry entry (`status: 'draft'`, `path: '/a-list'`).
+- `src/routes/AppRoutes.tsx`: lazy route to `@apps/a-list/AList`.
+- `public/manifest-a-list.json`, a logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` (the registry's own comment lists exactly these). The root README's "Current apps" list is stale (it names only Worth the Wait), so this first PR rewrites it to list every app, each with an emoji; `CLAUDE.md` (Release hygiene) and `.github/copilot-instructions.md` (Documentation quality) each gain a rule that adding or renaming an app updates that list in the same PR.
+- `src/store/index.ts`: `aList` reducer and `RootState`.
+- `firestore.rules`: the block above (including the three server-only deny blocks), in alphabetical order, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
+- `functions/src/index.ts`: export `searchMovies` and `getMovie`; set the `OMDB_API_KEY` secret; after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
+- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, and one day with four movies. Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
+- `SITE_VERSION` bumped (minor) in `src/lib/app/app.constants.ts` in each PR; `README.md`, `UX.md`, `TECHNICAL.md` current.
+
+---
+
+## Open questions for the roadmap
+
+Each has a default the design already assumes; the owner can change any of them cheaply now and expensively later.
+
+1. **OMDb terms, free-tier limit and field formats are unverified.** The site confirms CC BY-NC 4.0 and a patron-only Poster API, and the 1,000-a-day limit comes from the owner; caching, hot-linking and the response fields are from memory. Gates the movie-data PR, not the schema or UI work, which can proceed against a stub.
+2. **OMDb's release dates and coverage of upcoming films are untested.** If its date isn't the US theatrical one, or it lacks movies a week out, the Opening tab leans on the manual path. Worth three real lookups of upcoming titles before the Opening issue.
+3. **The daily budget numbers** (stop at 900 app-wide, 100 per member, UTC day) are my choices; the provider's own day boundary is undocumented.
+4. **"Add it by title" is an addition beyond the UX doc** (now added to it), made because the shared lookup quota can run out. A manually added title can be duplicated if added twice.
+5. **Money in integer cents, US dollars.** Waypoint's expenses use a plain `amount` number; A-List uses cents because it sums many small amounts. A non-US member isn't supported.
+6. **Week starts on Sunday; the "month" is the calendar month; billing is anchored on the start date's day.** All three are constants.
+7. **Showtime end** = showtime + 20 minutes of previews + runtime (120 if unknown). The 20 minutes is my assumption.
+8. **"Spend per rating"** (a Next Steps chart) sums what the tickets would have cost (their totals), since members pay no fee and nothing else is spent. Say so if you want it to mean something else.
+9. **"Mark paid" is the name the spec uses,** but it now records what a non-member would have paid. The copy in the form says so; the action label can become "Add ticket details" if you'd rather it not suggest the member paid.
+10. **The fee is assumed untaxed.** Only affects how an all-in total is split into price and tax.
+11. **No test runner exists in the repo** (`package.json` has none). The savings, billing and day-key math is pure and worth real tests. Default: a throwaway `tsx` check of the worked examples above plus the timezone-pinned browser pass the repo already requires. Alternative: add Vitest, which is a repo-wide decision.
+12. **Cost changes over time are a planned later goal** (see Logic §4); until then, editing the monthly cost rewrites history, and there's no cancel/pause.
+13. **Two small additions beyond the UX doc:** the Dashboard's "N movies don't have prices yet" line (from `unpricedCount`) and an About/credits row for the movie provider in Membership settings.
