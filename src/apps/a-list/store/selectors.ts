@@ -5,6 +5,8 @@ import { WATCH_PRIORITIES, WEEK_STARTS_ON } from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
 import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
+import { getSavingsSummary } from '@apps/a-list/utils/savings';
+import { fromDateInputValue } from '@/utils/dateInputUtils';
 
 export const selectMembership = (state: RootState) =>
   state.aList.membership.membership;
@@ -122,4 +124,19 @@ export const selectTaxRateChips = createSelector(
   [selectViewingItems, selectMembership],
   (viewings, membership) =>
     getTaxRateChips(viewings, membership?.taxRate ?? null),
+);
+
+/** `now` becomes the viewer's local today as UTC midnight, the same kind of value as the start date. */
+export const selectSavingsSummary = createSelector(
+  [
+    selectViewingItems,
+    selectMembership,
+    (_state: RootState, now: number) => now,
+  ],
+  (viewings, membership, now) => {
+    if (!membership) return null;
+    const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
+    const result = getSavingsSummary(viewings, membership, todayDay);
+    return result;
+  },
 );
