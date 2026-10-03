@@ -9,6 +9,7 @@ import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
+import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
 import { SITE_VERSION } from '@lib/app';
 import { useAppCatalog } from '@hooks/useAppCatalog';
@@ -63,12 +64,13 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   }
 
   const displayName = user.displayName ?? user.email ?? 'User';
-  const normalizedLocationName =
-    appPathMap[pathname]?.name?.trim() ||
-    (pathname === '/'
-      ? 'Home'
-      : pathname.replace(/^\//, '').replace(/-/g, ' '));
-  const locationLabel = pathname === '/' ? 'Home' : normalizedLocationName;
+  const currentApp = Object.values(appPathMap).find(
+    (app) => pathname === app.path || pathname.startsWith(`${app.path}/`),
+  );
+  const firstSegment = pathname.split('/').filter(Boolean)[0] ?? '';
+  const locationLabel =
+    currentApp?.name?.trim() ||
+    (firstSegment ? firstSegment.replace(/-/g, ' ') : 'Home');
 
   const handleNameSave = async () => {
     const nextName = nameInput.trim();
@@ -134,16 +136,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     }
   };
 
-  const createdAt = user.metadata.creationTime;
-  const dateFromAuth = createdAt ? new Date(user.metadata.creationTime) : null;
-  const formattedDate = dateFromAuth
-    ? dateFromAuth.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : 'Unknown';
-
   return (
     <>
       <DropdownMenu
@@ -162,40 +154,9 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         className='w-80'
       />
 
-      <Modal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        title='Profile'
-        actions={[
-          {
-            label: 'Close',
-            variant: 'secondary',
-            onClick: () => setIsProfileModalOpen(false),
-          },
-        ]}
-      >
-        <div className='space-y-3'>
-          <p className='text-muted-foreground text-sm'>
-            This is your profile information.
-          </p>
-          <div className='flex items-center gap-3'>
-            <UserAvatar user={user} size='md' />
-            <div className='min-w-0'>
-              <div className='text-foreground truncate text-sm font-medium'>
-                {displayName}
-              </div>
-              <div className='text-muted-foreground truncate text-xs'>
-                {user.email}
-              </div>
-            </div>
-          </div>
-          {/* created at */}
-          <div className='text-muted-foreground text-sm'>
-            Account created at:{' '}
-            <span className='text-foreground font-medium'>{formattedDate}</span>
-          </div>
-        </div>
-      </Modal>
+      {isProfileModalOpen && (
+        <ProfileModal user={user} onClose={() => setIsProfileModalOpen(false)} />
+      )}
 
       <Modal
         isOpen={isNameModalOpen}

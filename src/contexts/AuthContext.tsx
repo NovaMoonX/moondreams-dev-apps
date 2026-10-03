@@ -226,6 +226,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsDisplayNameUpdating(false);
   }, []);
 
+  const updatePhotoURL = useCallback(
+    async (photoURL: string | null) => {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        return;
+      }
+
+      const nextPhotoURL =
+        photoURL ??
+        currentUser.providerData.find((info) => info.photoURL)?.photoURL ??
+        null;
+
+      await updateProfile(currentUser, { photoURL: nextPhotoURL });
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        photoURL: nextPhotoURL ?? '',
+      });
+
+      dispatch(
+        setCurrentUser({
+          uid: currentUser.uid,
+          email: currentUser.email ?? null,
+          displayName: currentUser.displayName ?? null,
+          photoURL: nextPhotoURL,
+          isAdmin,
+        }),
+      );
+      setUser({ ...currentUser });
+    },
+    [dispatch, isAdmin],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -234,6 +266,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signInWithGoogle,
       logOut,
       updateDisplayName,
+      updatePhotoURL,
       setCurrentLocation,
       isDisplayNameUpdating,
     }),
@@ -244,6 +277,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signInWithGoogle,
       logOut,
       updateDisplayName,
+      updatePhotoURL,
       setCurrentLocation,
       isDisplayNameUpdating,
     ],

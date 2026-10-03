@@ -8,6 +8,8 @@ export type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   logOut: () => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
+  /** Sets the account photo; `null` reverts to the sign-in provider's photo. */
+  updatePhotoURL: (photoURL: string | null) => Promise<void>;
   setCurrentLocation: (location: string) => void;
   isDisplayNameUpdating: boolean;
 };
