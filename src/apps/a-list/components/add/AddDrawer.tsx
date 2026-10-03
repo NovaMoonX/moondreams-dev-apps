@@ -73,7 +73,7 @@ interface ShowtimeValues {
   time: string;
 }
 
-type Selection =
+export type AddSelection =
   | { kind: 'search'; result: MovieSearchResult }
   | {
       kind: 'known';
@@ -131,7 +131,19 @@ interface AddDrawerProps {
   onClose: () => void;
 }
 
-function AddDrawer({ overlay, onClose }: AddDrawerProps) {
+interface AddFlowProps extends AddDrawerProps {
+  /** Starts on the details step with this movie, and its Back leaves the flow through `onBack`. */
+  initialSelection?: AddSelection;
+  onBack?: () => void;
+}
+
+/** The add steps without their drawer, so another drawer can swap them in as its content. */
+export function AddFlow({
+  overlay,
+  onClose,
+  initialSelection,
+  onBack,
+}: AddFlowProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -144,7 +156,9 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
   const [manualDraft, setManualDraft] =
     useState<ManualMovieDraft>(EMPTY_MANUAL_DRAFT);
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelection] = useState<AddSelection | null>(
+    initialSelection ?? null,
+  );
   const [watchlistValues, setWatchlistValues] =
     useState<WatchlistDetailsValues>(INITIAL_WATCHLIST_DETAILS);
   const [showtimeValues, setShowtimeValues] = useState<ShowtimeValues>({
@@ -305,6 +319,10 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   };
 
   const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
     setSelection(null);
     setWatchlistValues(INITIAL_WATCHLIST_DETAILS);
     setError(null);
@@ -357,6 +375,11 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     const rewatchNote =
       isCalendar && movieKey ? getRewatchNote(seenCounts[movieKey] ?? 0) : null;
     const isManual = selection.kind === 'known' && selection.isManual;
+    const getBackLabel = () => {
+      if (onBack) return 'Back to movie';
+      if (isManual) return 'Back';
+      return 'Back to results';
+    };
 
     return (
       <div className='space-y-4'>
@@ -367,8 +390,7 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
           className='gap-1 px-0'
           onClick={handleBack}
         >
-          <ChevronLeft className='h-4 w-4' />{' '}
-          {isManual ? 'Back' : 'Back to results'}
+          <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
         </Button>
         <div className='flex gap-3'>
           <span className='h-30 w-20 shrink-0 overflow-hidden rounded-md'>
@@ -494,7 +516,7 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   };
 
   return (
-    <Drawer isOpen onClose={onClose} title='Movie'>
+    <>
       {pastAdded && (
         <PastMoviesStrip
           count={pastAdded.count}
@@ -502,6 +524,14 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
         />
       )}
       {getContent()}
+    </>
+  );
+}
+
+function AddDrawer({ overlay, onClose }: AddDrawerProps) {
+  return (
+    <Drawer isOpen onClose={onClose} title='Movie'>
+      <AddFlow overlay={overlay} onClose={onClose} />
     </Drawer>
   );
 }

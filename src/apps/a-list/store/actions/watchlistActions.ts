@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, runTransaction } from 'firebase/firestore';
+import { deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -9,6 +9,19 @@ import type {
   WatchPriority,
 } from '@apps/a-list/types';
 import { getErrorMessage } from '@/utils/errorUtils';
+
+function getItemRef(uid: string, movieKey: string) {
+  const itemRef = doc(
+    db,
+    'apps',
+    'a-list',
+    'memberships',
+    uid,
+    'watchlist',
+    movieKey,
+  );
+  return itemRef;
+}
 
 interface AddWatchlistItemInput {
   uid: string;
@@ -29,15 +42,7 @@ export const addWatchlistItem = createAsyncThunk<
     { uid, movieKey, movie, priority, preferredFormat },
     { rejectWithValue },
   ) => {
-    const itemRef = doc(
-      db,
-      'apps',
-      'a-list',
-      'memberships',
-      uid,
-      'watchlist',
-      movieKey,
-    );
+    const itemRef = getItemRef(uid, movieKey);
 
     try {
       const created = await runTransaction(db, async (transaction) => {
@@ -73,3 +78,46 @@ export const addWatchlistItem = createAsyncThunk<
     }
   },
 );
+
+interface UpdateWatchlistItemInput {
+  uid: string;
+  movieKey: string;
+  priority: WatchPriority;
+  preferredFormat: AmcFormat | null;
+}
+
+export const updateWatchlistItem = createAsyncThunk<
+  void,
+  UpdateWatchlistItemInput,
+  { rejectValue: string }
+>(
+  'aList/watchlist/update',
+  async ({ uid, movieKey, priority, preferredFormat }, { rejectWithValue }) => {
+    try {
+      await updateDoc(getItemRef(uid, movieKey), {
+        priority,
+        preferredFormat,
+        lastEditedAt: Date.now(),
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this movie.'),
+      );
+    }
+  },
+);
+
+/** Takes the movie off the list only; its viewings stay on the calendar. */
+export const removeWatchlistItem = createAsyncThunk<
+  void,
+  { uid: string; movieKey: string },
+  { rejectValue: string }
+>('aList/watchlist/remove', async ({ uid, movieKey }, { rejectWithValue }) => {
+  try {
+    await deleteDoc(getItemRef(uid, movieKey));
+  } catch (error) {
+    return rejectWithValue(
+      getErrorMessage(error, 'Unable to remove this movie.'),
+    );
+  }
+});
