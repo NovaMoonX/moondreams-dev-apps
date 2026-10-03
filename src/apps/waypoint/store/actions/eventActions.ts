@@ -35,7 +35,7 @@ interface CreateEventInput {
   event: EventFields & { eventDetails: EventDetails | null; eventType: EventType };
 }
 
-type EventFields = Omit<
+export type EventFields = Omit<
   TimelineEvent,
   'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'
 >;
@@ -67,7 +67,7 @@ const RELATIVE_TRACKED_FIELDS = ['startTime', 'endTime', 'locationName', 'dayInd
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-function validateEventTime(trip: TripSpace, event: EventFields) {
+export function validateEventTime(trip: TripSpace, event: EventFields) {
   const message = 'Choose a valid event date and time.';
   if (!isRelativeTrip(trip)) {
     const isValid = event.startAt !== null && Number.isFinite(event.startAt);

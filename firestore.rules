@@ -2158,9 +2158,27 @@ service cloud.firestore {
             .hasOnly(['ideaType', 'title', 'notes', 'linkUrl', 'ideaDetails', 'lastEditedAt']);
       }
 
+      // Adding an idea to the itinerary is the same permission as creating an event, and only
+      // ever lands together with that event in one commit.
+      function isIdeaConversionValid() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember()
+          && (
+            hasTripStarted(trip)
+              ? trip.members[request.auth.uid].role == 'ADMIN'
+              : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+          )
+          && resource.data.get('convertedToEntityId', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convertedToEntityId'])
+          && request.resource.data.convertedToEntityId is string
+          && !exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
+          && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
+          && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid;
+      }
+
       allow read: if isTripSubcollectionMember();
       allow create: if isIdeaCreateValid();
-      allow update: if isIdeaVoteUpdateValid() || isIdeaEditValid();
+      allow update: if isIdeaVoteUpdateValid() || isIdeaEditValid() || isIdeaConversionValid();
       allow delete: if isIdeaDeleteAllowed();
     }
 

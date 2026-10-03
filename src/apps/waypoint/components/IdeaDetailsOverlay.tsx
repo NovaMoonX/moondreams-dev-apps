@@ -10,6 +10,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch } from '@/store';
 import { getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import IdeaToEventModal from '@apps/waypoint/components/IdeaToEventModal';
 import IdeaFormModal, { type IdeaFormFields } from '@apps/waypoint/components/IdeaFormModal';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import {
@@ -20,7 +21,7 @@ import {
 import { deleteIdea, updateIdea } from '@apps/waypoint/store/actions/ideaActions';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTiming } from '@apps/waypoint/utils/ideaLabels';
-import { canDeleteIdea, canEditIdea } from '@apps/waypoint/utils/roleGuards';
+import { canCreateItem, canDeleteIdea, canEditIdea } from '@apps/waypoint/utils/roleGuards';
 
 let openOverlayId: string | null = null;
 const openIdeaListeners = new Set<() => void>();
@@ -65,9 +66,18 @@ type IdeaDetailsBodyProps = Pick<IdeaDetailsOverlayProps, 'trip' | 'idea' | 'cur
   isDrawer: boolean;
   onEdit: (() => void) | null;
   onDelete: (() => void) | null;
+  onAddToItinerary: (() => void) | null;
 };
 
-function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit, onDelete }: IdeaDetailsBodyProps) {
+function IdeaDetailsBody({
+  trip,
+  idea,
+  currentUserId,
+  isDrawer,
+  onEdit,
+  onDelete,
+  onAddToItinerary,
+}: IdeaDetailsBodyProps) {
   const adderInfo = useUserInfo(idea.addedByUid);
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const tags = getIdeaTags(idea);
@@ -145,7 +155,12 @@ function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit, onDelete
       {details}
       <div className='border-border flex items-center justify-between gap-2 border-t pt-3'>
         <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
-        <div className='flex items-center gap-2'>
+        <div className='flex flex-wrap items-center justify-end gap-2'>
+          {onAddToItinerary && (
+            <Button type='button' size='sm' onClick={onAddToItinerary}>
+              Add to itinerary
+            </Button>
+          )}
           {onEdit && (
             <Button type='button' size='sm' variant='secondary' onClick={onEdit}>
               Modify
@@ -187,6 +202,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
   const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openOverlayId === overlayId);
   const setIsOpen = (open: boolean) => setOpenIdea(overlayId, open);
   const [isEditing, setIsEditing] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const canEdit = canEditIdea(trip, currentUserId, idea);
   const canDelete = canDeleteIdea(trip, currentUserId, idea);
@@ -202,6 +218,13 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
       }
     },
   };
+  const startConverting =
+    idea.convertedToEntityId === null && canCreateItem(trip, currentUserId)
+      ? () => {
+          setIsOpen(false);
+          setIsConverting(true);
+        }
+      : null;
   const startEditing = canEdit
     ? () => {
         setIsOpen(false);
@@ -274,6 +297,16 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
     />
   );
 
+  const convertModal = isConverting && (
+    <IdeaToEventModal
+      key={idea.id}
+      trip={trip}
+      idea={idea}
+      currentUserId={currentUserId}
+      onClose={() => setIsConverting(false)}
+    />
+  );
+
   if (isSmallScreen) {
     return (
       <>
@@ -284,8 +317,13 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
           title={idea.title}
           showCloseButton
           footer={
-            idea.linkUrl || startEditing || startAdminDelete ? (
+            idea.linkUrl || startConverting || startEditing || startAdminDelete ? (
               <div className='flex flex-col gap-2'>
+                {startConverting && (
+                  <Button type='button' size='lg' onClick={startConverting}>
+                    Add to itinerary
+                  </Button>
+                )}
                 {idea.linkUrl && (
                   <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='lg' variant='secondary'>
                     Visit site
@@ -319,10 +357,12 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
               isDrawer
               onEdit={null}
               onDelete={null}
+              onAddToItinerary={null}
             />
           )}
         </Drawer>
         {editModal}
+        {convertModal}
       </>
     );
   }
@@ -348,11 +388,13 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
               isDrawer={false}
               onEdit={startEditing}
               onDelete={startAdminDelete}
+              onAddToItinerary={startConverting}
             />
           )}
         </Popover>
       ))}
       {editModal}
+      {convertModal}
     </>
   );
 }

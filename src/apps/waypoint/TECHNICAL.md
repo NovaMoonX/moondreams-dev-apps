@@ -498,6 +498,8 @@ type IdeaDetails = RestaurantIdeaDetails | ActivityIdeaDetails | StayIdeaDetails
 
 Converting carries every known `ideaDetails` field straight across (see State Machines): Restaurant/Activity → a `TimelineEvent` with `eventDetails.cuisines`/`settings` copied directly, and `suggestedDays`/`suggestedTimeBlocks` used to pre-fill (not auto-commit) the day/time the conversion form opens to; Stay → a `Stay`, with `matchedCriteriaIds`/`perks` intentionally *not* carried over — they did their job during the decision and aren't needed once a place is booked.
 
+`convertIdeaToEvent` (Editor/Admin, same gate as creating an event) is one `runTransaction`: it re-reads the idea, aborts if it was removed or already converted, then creates the event and sets `convertedToEntityId` together; the reminder is scheduled first and cancelled if the transaction fails. `firestore.rules` allow that single-field idea update only when the event is created in the same commit by the same user.
+
 #### 8. Stay Criterion Document (shared trip-level stay preferences)
 
 Path: `apps/waypoint/trips/{tripId}/stayCriteria/{criterionId}`
