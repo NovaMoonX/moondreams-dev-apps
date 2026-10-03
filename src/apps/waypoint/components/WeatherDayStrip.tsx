@@ -61,7 +61,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
               aria-pressed={isSelected}
               aria-label={`${dateLabel}: ${condition.label}, high ${formatTemp(forecast.tempMax)}, low ${formatTemp(forecast.tempMin)}`}
               className={join(
-                'relative h-auto min-w-18 flex-1 flex-col gap-1 rounded-md px-1 py-2 text-xs font-normal focus:outline-transparent!',
+                'relative h-auto min-w-18 flex-1 flex-col gap-1 rounded-md px-1 py-2 text-xs font-normal focus:outline-transparent! focus-visible:outline-foreground!',
                 dayIndex < todayIndex && 'opacity-60',
                 isToday && 'bg-primary/10',
               )}

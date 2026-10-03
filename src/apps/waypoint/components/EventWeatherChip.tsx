@@ -10,9 +10,21 @@ function EventWeatherChip({ weather }: EventWeatherChipProps) {
   const condition = getWeatherCondition(weather.weatherCode);
   const { label } = condition;
   const hasRain = weather.precipChance !== null && weather.precipChance >= 30;
+  const accessibleLabel = [
+    label,
+    weather.temp === null ? null : `${Math.round(weather.temp)} degrees`,
+    weather.precipChance === null ? null : `${weather.precipChance}% chance of precipitation`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
-    <span className='text-muted-foreground inline-flex items-center gap-1 text-xs' title={label}>
+    <span
+      role='img'
+      aria-label={accessibleLabel}
+      title={label}
+      className='text-muted-foreground inline-flex items-center gap-1 text-xs'
+    >
       <WeatherEmoji condition={condition} className='text-sm leading-none' />
       {weather.temp === null ? label : `${Math.round(weather.temp)}°`}
       {hasRain && ` · ${weather.precipChance}%`}
