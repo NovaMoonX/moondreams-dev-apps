@@ -8,13 +8,13 @@ A-List Tracker's movie lookups go through two callables in `functions/src/apps/a
 
 ## Local development
 
-1. Build the Cloud Functions package first so the emulator loads the compiled `functions/lib/index.js`:
+1. Install the Cloud Functions package's dependencies:
 
    ```bash
-   cd functions && npm install && npm run build
+   npm --prefix functions install
    ```
 
-2. Start the local Firebase emulators for Auth, Firestore, Realtime Database, and Cloud Functions:
+2. Start the local Firebase emulators for Auth, Firestore, Realtime Database, and Cloud Functions. `npm run emulators` (and `emulators:seed`/`emulators:seed:reset`) first recompiles `functions/lib/`, which the emulator loads, so pulled function changes are always picked up:
 
    ```bash
    npm run emulators
