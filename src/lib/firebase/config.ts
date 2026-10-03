@@ -74,10 +74,14 @@ export const realtimeDb = getDatabase(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
 
+export const emulatorAuthOrigin = isUsingFirebaseEmulators
+  ? `http://${window.location.hostname}:9099`
+  : null;
+
 if (isUsingFirebaseEmulators) {
   // Not a hardcoded 127.0.0.1: a phone loading the dev server over the LAN would otherwise reach for itself.
   const emulatorHost = window.location.hostname;
-  connectAuthEmulator(auth, `http://${emulatorHost}:9099`);
+  connectAuthEmulator(auth, `http://${emulatorHost}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, emulatorHost, 8080);
   connectDatabaseEmulator(realtimeDb, emulatorHost, 9000);
   connectFunctionsEmulator(functions, emulatorHost, 5001);
