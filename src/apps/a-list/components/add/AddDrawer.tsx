@@ -132,12 +132,10 @@ interface AddDrawerProps {
 }
 
 interface AddFlowProps extends AddDrawerProps {
-  /** Starts on the details step with this movie, and its Back leaves the flow through `onBack`. */
   initialSelection?: AddSelection;
   onBack?: () => void;
 }
 
-/** The add steps without their drawer, so another drawer can swap them in as its content. */
 export function AddFlow({
   overlay,
   onClose,
