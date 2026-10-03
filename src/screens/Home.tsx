@@ -33,7 +33,9 @@ function Home() {
           <nav className='mt-12 space-y-3'>
             {apps.length === 0 ? (
               <div className='border-border bg-card text-foreground/70 rounded-2xl border px-4 py-3 text-sm'>
-                {user ? 'No apps available for your account.' : 'No apps generally available. Please sign in to see apps available for your account.'}
+                {user
+                  ? 'No apps available for your account.'
+                  : 'No apps generally available. Please sign in to see apps available for your account.'}
               </div>
             ) : (
               apps.map((app) => (
@@ -41,13 +43,20 @@ function Home() {
                   key={app.id}
                   className='border-border bg-card flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 shadow-sm'
                 >
-                  <div>
-                    <div className='text-foreground text-lg font-medium'>
-                      {app.name}
+                  <div className='flex min-w-0 items-center gap-3'>
+                    <img
+                      src={`/logos/by-app/logo-${app.id}.svg`}
+                      alt={`${app.name} logo`}
+                      className='h-11 w-11 shrink-0 rounded-xl'
+                    />
+                    <div className='min-w-0'>
+                      <div className='text-foreground text-lg font-medium'>
+                        {app.name}
+                      </div>
+                      <p className='text-foreground/60 text-sm'>
+                        {app.description}
+                      </p>
                     </div>
-                    <p className='text-foreground/60 text-sm'>
-                      {app.description}
-                    </p>
                   </div>
 
                   <NavButton href={app.path}>Open</NavButton>

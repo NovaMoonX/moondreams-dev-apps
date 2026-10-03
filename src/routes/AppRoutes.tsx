@@ -55,6 +55,14 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'a-list',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: AList } = await import('@apps/a-list/AList');
+          return { Component: AList };
+        },
+      },
+      {
         path: 'admin',
         HydrateFallback: Loading,
         lazy: async () => {
