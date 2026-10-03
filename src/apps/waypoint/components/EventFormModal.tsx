@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -22,7 +22,7 @@ import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import { findTopPlace } from '@/lib/places/placesLookup';
-import type { AirportOption } from '@/lib/airports/airportsQueries';
+import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
 import type {
   PlaceRef,
   PlaceSelectionBias,
@@ -77,6 +77,22 @@ import {
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
 
+export type EventFormValues = Omit<
+  TimelineEvent,
+  'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'
+>;
+
+export interface NextLegSeed {
+  previous: EventFormValues;
+  /** Where the previous leg lands, looked up when it was saved. */
+  arrivalPlace: PlaceSelectionResult | null;
+}
+
+export interface SubmitOptions {
+  addLeg: boolean;
+  arrivalPlace?: PlaceSelectionResult | null;
+}
+
 interface EventFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
@@ -87,12 +103,10 @@ interface EventFormModalProps {
    * results toward, so "starbucks" finds the one near this trip first. */
   placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
-  onSubmit: (
-    event: Omit<
-      TimelineEvent,
-      'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'
-    >,
-  ) => Promise<void> | void;
+  /** The leg just saved, when this form is opened to add the next one of the same flight. */
+  legFrom?: NextLegSeed;
+  /** `addLeg` saves this event and reopens the form for the next leg, departing from `arrivalPlace`. */
+  onSubmit: (event: EventFormValues, options?: SubmitOptions) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
@@ -221,7 +235,53 @@ function getDerivedTitle(draft: EventDraft): string {
   return EVENT_TYPE_LABELS[draft.eventType];
 }
 
-function getInitialDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
+/** The next leg of a flight starts where the last one landed, with the same airline, booking
+ * and travelers; only the flight itself still needs entering. */
+function getNextLegDraft(trip: TripSpace, { previous, arrivalPlace }: NextLegSeed): EventDraft {
+  const base = getBaseDraft(trip, undefined);
+  const time = getEventTime(trip, previous);
+  const details =
+    previous.eventDetails && 'transitDetails' in previous.eventDetails
+      ? (previous.eventDetails.transitDetails as unknown as Record<string, string | null> | null)
+      : null;
+  const carried = ['airline', 'airlineIataCode', 'airlineIcaoCode', 'confirmationCode'];
+  return {
+    ...base,
+    eventType: 'TRAVEL',
+    quickField: 'FLIGHT',
+    dayIndex: time.endDayIndex ?? time.dayIndex,
+    endDayIndex: time.endDayIndex ?? time.dayIndex,
+    time: time.endTime ?? time.startTime ?? base.time,
+    timezone: previous.timezone,
+    locationName: arrivalPlace?.name ?? '',
+    address: arrivalPlace?.address ?? '',
+    hasAddress: Boolean(arrivalPlace?.address),
+    latitude: arrivalPlace?.latitude ?? null,
+    longitude: arrivalPlace?.longitude ?? null,
+    place: arrivalPlace?.place ?? null,
+    isGrouped: true,
+    groupLabel: previous.groupLabel ?? '',
+    hasAttendeeOverride: previous.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
+    attendeeTargetType: previous.attendeeTargetType,
+    assignedMemberIds: previous.assignedMemberIds,
+    transit: {
+      ...EMPTY_TRANSIT_DRAFT,
+      values: {
+        ...Object.fromEntries(carried.map((key) => [key, details?.[key] ?? ''])),
+        departureAirportCode: details?.arrivalAirportCode ?? '',
+      },
+    },
+  };
+}
+
+function getInitialDraft(
+  trip: TripSpace,
+  event: TimelineEvent | undefined,
+  legFrom?: NextLegSeed,
+): EventDraft {
+  if (legFrom) {
+    return getNextLegDraft(trip, legFrom);
+  }
   const draft = getBaseDraft(trip, event);
   const mirrorKey =
     event?.eventType === 'TRAVEL'
@@ -322,6 +382,7 @@ function EventFormModal({
   memberOptions,
   event,
   events = [],
+  legFrom,
   placeBias,
   isSubmitting = false,
   onSubmit,
@@ -332,7 +393,7 @@ function EventFormModal({
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event));
+  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom));
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
@@ -387,24 +448,28 @@ function EventFormModal({
     });
   };
 
-  const fillLocationFromAirport = async (airport: AirportOption) => {
-    const result = await findTopPlace(
-      queryClient,
-      `${airport.name} ${airport.iataCode}`,
-      { latitude: airport.latitude, longitude: airport.longitude },
-      ['airport'],
-    ).catch(() => null);
-    if (result) {
-      updateDraft({
-        locationName: result.name,
-        address: result.address,
-        hasAddress: Boolean(result.address) || draft.hasAddress,
-        latitude: result.latitude,
-        longitude: result.longitude,
-        place: result.place,
-      });
-    }
-  };
+  const fillLocationFromAirport = useCallback(
+    async (airport: AirportOption) => {
+      const result = await findTopPlace(
+        queryClient,
+        `${airport.name} ${airport.iataCode}`,
+        { latitude: airport.latitude, longitude: airport.longitude },
+        ['airport'],
+      ).catch(() => null);
+      if (result) {
+        setDraft((current) => ({
+          ...current,
+          locationName: result.name,
+          address: result.address,
+          hasAddress: Boolean(result.address) || current.hasAddress,
+          latitude: result.latitude,
+          longitude: result.longitude,
+          place: result.place,
+        }));
+      }
+    },
+    [queryClient],
+  );
 
   const handleNext = () => {
     if (!draft.time || (draft.dayIndex === null && !isRelative)) {
@@ -432,7 +497,7 @@ function EventFormModal({
     timezone: draft.timezone,
   });
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (addLeg = false) => {
     if (!timeFields) {
       setError('Choose a valid day and start time.');
       return;
@@ -468,6 +533,42 @@ function EventFormModal({
     const eventDetails = getEventDetails();
     const title = draft.hasTitle && draft.title.trim() ? draft.title : getDerivedTitle(draft);
     const linkKinds = EVENT_LINK_KINDS_BY_TYPE[draft.eventType];
+    const getGroupLabel = () => {
+      if (draft.isGrouped && draft.groupLabel.trim()) {
+        return draft.groupLabel.trim();
+      }
+      if (!addLeg) {
+        return null;
+      }
+
+      const base = draft.transit.values.arrivalAirportCode
+        ? `Flights to ${draft.transit.values.arrivalAirportCode}`
+        : 'Flight legs';
+      const pick = (attempt: number): string => {
+        const candidate = attempt === 1 ? base : `${base} (${attempt})`;
+        return sameTypeGroupLabels.includes(candidate) ? pick(attempt + 1) : candidate;
+      };
+      return pick(1);
+    };
+    const groupLabel = getGroupLabel();
+    const getArrivalPlace = async () => {
+      const code = draft.transit.values.arrivalAirportCode;
+      if (!addLeg || !code) {
+        return null;
+      }
+
+      const airports = await queryClient.fetchQuery(airportsQueryOptions()).catch(() => []);
+      const airport = airports.find((candidate) => candidate.iataCode === code);
+      return airport
+        ? findTopPlace(
+            queryClient,
+            `${airport.name} ${airport.iataCode}`,
+            { latitude: airport.latitude, longitude: airport.longitude },
+            ['airport'],
+          ).catch(() => null)
+        : null;
+    };
+    const arrivalPlace = await getArrivalPlace();
 
     const assignedMemberIds =
       draft.attendeeTargetType === 'SPECIFIC_MEMBERS'
@@ -496,8 +597,8 @@ function EventFormModal({
         linkUrl: isLinkable ? draft.linkUrl : null,
         linkPreview: isLinkable ? draft.linkPreview : null,
         linkKind: isLinkable && draft.linkUrl.trim() ? (draft.linkKind ?? linkKinds[0] ?? null) : null,
-        groupLabel: draft.isGrouped ? draft.groupLabel.trim() || null : null,
-        stackLabel: event?.stackLabel ?? null,
+        groupLabel,
+        stackLabel: event?.stackLabel ?? legFrom?.previous.stackLabel ?? null,
         reminderMinutesBefore: draft.reminderMinutesBefore,
         reminderEnabled: draft.reminderEnabled,
         reminderId: event?.reminderId ?? null,
@@ -505,7 +606,7 @@ function EventFormModal({
         archivedBy: event?.archivedBy ?? null,
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
-      });
+      }, { addLeg, arrivalPlace });
       setStep(1);
       setError(null);
     } catch (submitError) {
@@ -665,6 +766,11 @@ function EventFormModal({
         <p className='text-muted-foreground text-sm'>
           Step {step} of 2 · {step === 1 ? 'What & when' : 'Details'}
         </p>
+        {legFrom && (
+          <p className='text-muted-foreground text-xs'>
+            Next leg of {legFrom.previous.groupLabel ?? 'this flight'}: the airline, booking and travelers carry over.
+          </p>
+        )}
         {step === 1 ? (
           <>
             <div className='space-y-1.5'>
@@ -1109,13 +1215,25 @@ function EventFormModal({
                 </>
               }
               rightActions={
-                <Button
-                  type='button'
-                  loading={isSubmitting}
-                  onClick={() => void handleSubmit()}
-                >
-                  {isSubmitting ? 'Saving…' : event ? 'Save' : 'Add'}
-                </Button>
+                <>
+                  {isTravel && transitType === 'FLIGHT' && (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      disabled={isSubmitting}
+                      onClick={() => void handleSubmit(true)}
+                    >
+                      Add another flight
+                    </Button>
+                  )}
+                  <Button
+                    type='button'
+                    loading={isSubmitting}
+                    onClick={() => void handleSubmit()}
+                  >
+                    {isSubmitting ? 'Saving…' : event ? 'Save' : 'Add'}
+                  </Button>
+                </>
               }
             />
           </>

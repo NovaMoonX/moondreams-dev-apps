@@ -21,7 +21,11 @@ import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
-import EventFormModal from '@apps/waypoint/components/EventFormModal';
+import EventFormModal, {
+  type EventFormValues,
+  type NextLegSeed,
+  type SubmitOptions,
+} from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import {
@@ -353,9 +357,10 @@ export function TimelineSection({
     editSuccessRef.current = undefined;
   };
 
-  const handleSubmit = async (
-    event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
-  ) => {
+  const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
+  const [legCount, setLegCount] = useState(0);
+
+  const handleSubmit = async (event: EventFormValues, options?: SubmitOptions) => {
     setIsSubmitting(true);
     try {
       if (editingEvent) {
@@ -371,8 +376,14 @@ export function TimelineSection({
       } else {
         await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
       }
-      setIsFormOpen(false);
       setEditingEvent(undefined);
+      if (options?.addLeg) {
+        setLegSeed({ previous: event, arrivalPlace: options.arrivalPlace ?? null });
+        setLegCount((count) => count + 1);
+      } else {
+        setLegSeed(undefined);
+        setIsFormOpen(false);
+      }
       resolveEditSuccess();
     } finally {
       setIsSubmitting(false);
@@ -506,8 +517,9 @@ export function TimelineSection({
         />
       )}
       <EventFormModal
-        key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}
+        key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}-${legCount}`}
         isOpen={isFormOpen}
+        legFrom={legSeed}
         trip={trip}
         memberOptions={memberOptions}
         event={editingEvent}
@@ -519,6 +531,7 @@ export function TimelineSection({
         onClose={() => {
           setIsFormOpen(false);
           setEditingEvent(undefined);
+          setLegSeed(undefined);
           // Canceling leaves the mobile drawer open, if it's the one that opened this modal.
           editSuccessRef.current = undefined;
         }}
