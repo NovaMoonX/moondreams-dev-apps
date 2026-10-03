@@ -9,6 +9,7 @@ import {
   Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { CalendarDays, Link2, StickyNote, Sun, Utensils } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -16,6 +17,7 @@ import LinkAttachField from '@/components/forms/LinkAttachField';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
+import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
@@ -30,6 +32,7 @@ import type {
   IdeaDetails,
   IdeaType,
   TimeBlock,
+  TripIdea,
   TripSpace,
 } from '@apps/waypoint/types';
 
@@ -64,8 +67,10 @@ interface IdeaFormModalProps {
   trip: TripSpace;
   defaultType: IdeaType;
   canPost: boolean;
+  idea?: TripIdea | null;
   isSubmitting?: boolean;
   onSubmit: (fields: IdeaFormFields) => Promise<void> | void;
+  onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -96,11 +101,30 @@ const parseCuisines = (value: string) =>
         all.findIndex((other) => other.toLowerCase() === cuisine.toLowerCase()) === index,
     );
 
-const getInitialData = (ideaType: IdeaType): IdeaFormData => ({
-  ideaType,
-  title: '',
-  extras: EMPTY_EXTRAS,
-});
+const getInitialData = (ideaType: IdeaType, idea: TripIdea | null): IdeaFormData => {
+  if (!idea) {
+    return { ideaType, title: '', extras: EMPTY_EXTRAS };
+  }
+
+  const details = idea.ideaDetails;
+  const days = details?.suggestedDays ?? [];
+  const blocks = details?.suggestedTimeBlocks ?? [];
+  const cuisines = details && 'cuisines' in details ? details.cuisines.join(', ') : '';
+  const settings = details && 'settings' in details ? details.settings : [];
+  return {
+    ideaType: idea.ideaType,
+    title: idea.title,
+    extras: {
+      link: { enabled: idea.linkUrl !== null, value: idea.linkUrl ?? '', draft: idea.linkUrl ?? '' },
+      details: {
+        enabled: cuisines !== '' || settings.length > 0,
+        value: { cuisines, settings },
+      },
+      when: { enabled: days.length > 0 || blocks.length > 0, value: { days, blocks } },
+      note: { enabled: idea.notes !== null, value: idea.notes ?? '' },
+    },
+  };
+};
 
 const getIdeaDetails = ({ ideaType, extras }: IdeaFormData): IdeaDetails => {
   const when = extras.when.enabled
@@ -282,11 +306,14 @@ function IdeaFormModal({
   trip,
   defaultType,
   canPost,
+  idea = null,
   isSubmitting = false,
   onSubmit,
+  onDelete,
   onClose,
 }: IdeaFormModalProps) {
-  const initialData = useMemo(() => getInitialData(defaultType), [defaultType]);
+  const { confirm } = useActionModal();
+  const initialData = useMemo(() => getInitialData(defaultType, idea), [defaultType, idea]);
   const [formData, setFormData] = useState<IdeaFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
 
@@ -320,6 +347,30 @@ function IdeaFormModal({
     [isRestaurant, trip],
   );
 
+  const handleDelete = async () => {
+    if (!onDelete || !idea) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete idea',
+      message:
+        idea.convertedToEntityId === null
+          ? `Delete "${idea.title}"? This action cannot be undone.`
+          : `Delete "${idea.title}"? It's already on the itinerary, and that event stays exactly as it is.`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await onDelete();
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError, 'Unable to delete this idea.'));
+    }
+  };
+
   const handleSubmit = async (data: IdeaFormData) => {
     setError(null);
     const { extras } = data;
@@ -332,7 +383,7 @@ function IdeaFormModal({
         ideaDetails: getIdeaDetails(data),
       });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to post this idea.'));
+      setError(getErrorMessage(submitError, idea ? 'Unable to save this idea.' : 'Unable to post this idea.'));
     }
   };
 
@@ -349,6 +400,10 @@ function IdeaFormModal({
         }}
         submitButton={
           <ModalFooterActions
+            leftActions={
+              idea &&
+              onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            }
             rightActions={
               <>
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
@@ -359,7 +414,7 @@ function IdeaFormModal({
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete || !canPost}
                 >
-                  Post
+                  {idea ? 'Save' : 'Post'}
                 </Button>
               </>
             }

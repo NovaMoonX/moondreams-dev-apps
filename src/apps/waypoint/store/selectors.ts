@@ -139,6 +139,20 @@ export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals => 
   return totals;
 };
 
+/** True once every trip-scoped listener has delivered its first snapshot for this trip, so
+ * a section never renders its empty state (or the previous trip's items) while data is in flight. */
+export const selectIsTripDataLoaded = (state: RootState, tripId: string) =>
+  [
+    state.waypoint.events,
+    state.waypoint.stays,
+    state.waypoint.rentals,
+    state.waypoint.ideas,
+    state.waypoint.checklist,
+    state.waypoint.expenses,
+    state.waypoint.eventSuggestions,
+    state.waypoint.announcements,
+  ].every((slice) => slice.loaded && slice.tripId === tripId);
+
 export const selectTimelineEvents = (state: RootState) => state.waypoint.events.items;
 
 export const selectStays = (state: RootState) => state.waypoint.stays.items;
