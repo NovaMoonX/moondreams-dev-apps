@@ -126,16 +126,16 @@ export const selectTaxRateChips = createSelector(
     getTaxRateChips(viewings, membership?.taxRate ?? null),
 );
 
-/** `now` becomes the viewer's local today as UTC midnight, the same kind of value as the start date. */
+/** Keyed on the local day rather than `now`, so the clock tick reuses the result; the day becomes UTC midnight like the start date. */
 export const selectSavingsSummary = createSelector(
   [
     selectViewingItems,
     selectMembership,
-    (_state: RootState, now: number) => now,
+    (_state: RootState, now: number) => getDayKey(now),
   ],
-  (viewings, membership, now) => {
+  (viewings, membership, todayKey) => {
     if (!membership) return null;
-    const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
+    const todayDay = fromDateInputValue(todayKey) ?? 0;
     const result = getSavingsSummary(viewings, membership, todayDay);
     return result;
   },
