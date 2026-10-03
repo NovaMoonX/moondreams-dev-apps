@@ -320,7 +320,6 @@ export interface LitterBox {
   /** How deep to fill the box with fresh litter; null means no depth target. Missing on boxes created before fill levels existed. */
   fillDepth: number | null;
   fillDepthUnit: LitterDepthUnit;
-  /** What the box should weigh once filled; null means no weight target. */
   fillWeight: number | null;
   fillWeightUnit: 'lb' | 'kg';
   /** When false, the box is retired (e.g. after switching litter) and hidden from new weigh-ins, but its history is kept. */
@@ -370,7 +369,6 @@ export interface LitterEntry {
   refillWeight: number | null;
   /** Only meaningful when `refillWeight` is set: true if the box was fully emptied before refilling, false if it was just topped off. */
   isFullChange: boolean;
-  /** Litter depth measured before and after adding litter during this check, in `depthUnit`. */
   depthBefore: number | null;
   depthAfter: number | null;
   depthUnit: LitterDepthUnit;
