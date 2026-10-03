@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Route } from 'lucide-react';
 
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
 import { getGroupBadge } from '@apps/waypoint/utils/eventBadge';
@@ -16,6 +16,8 @@ interface EventGroupCardProps {
   trip: TripSpace;
   group: EventGroup;
   showAttendees: boolean;
+  canEdit: boolean;
+  onManage: (event: TimelineEvent) => void;
   renderEvent: (event: TimelineEvent) => ReactNode;
 }
 
@@ -33,7 +35,7 @@ function formatLayover(trip: TripSpace, previous: TimelineEvent, next: TimelineE
   return label;
 }
 
-function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupCardProps) {
+function EventGroupCard({ trip, group, showAttendees, canEdit, onManage, renderEvent }: EventGroupCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const isTravel = group.eventType === 'TRAVEL';
@@ -63,6 +65,18 @@ function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupC
             <EventAttendeeAvatars trip={trip} events={group.events} includeEveryone />
           )}
         </div>
+        <div className='flex shrink-0 items-center gap-1'>
+        {canEdit && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label='Edit group'
+            onClick={() => onManage(group.events[0])}
+          >
+            <Route className='h-4 w-4' />
+          </Button>
+        )}
         <Button
           type='button'
           variant='tertiary'
@@ -75,6 +89,7 @@ function EventGroupCard({ trip, group, showAttendees, renderEvent }: EventGroupC
             className={join('ml-1 h-4 w-4 transition-transform', isExpanded && 'rotate-180')}
           />
         </Button>
+        </div>
       </div>
       {isExpanded && (
         <div className='ml-4 space-y-3 border-l-2 pl-4'>

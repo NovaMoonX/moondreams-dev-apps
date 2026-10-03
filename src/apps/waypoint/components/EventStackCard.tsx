@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Layers, Route } from 'lucide-react';
 
 import { getDayDateLabel } from '@/utils/dateRangeUtils';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
@@ -21,6 +21,7 @@ interface EventStackCardProps {
   showAttendees: boolean;
   canEdit: boolean;
   onManage: (event: TimelineEvent) => void;
+  onManageGroup: (event: TimelineEvent) => void;
   /** Renders one event as its full card. */
   renderEvent: (event: TimelineEvent) => ReactNode;
 }
@@ -63,17 +64,31 @@ interface ItineraryLegsProps {
   trip: TripSpace;
   member: EventStack['members'][number];
   renderEvent: (event: TimelineEvent) => ReactNode;
+  onManageGroup: ((event: TimelineEvent) => void) | null;
 }
 
 /** One traveler's itinerary: a single event, or every leg of their group laid out top to bottom. */
-function Itinerary({ trip, member, renderEvent }: ItineraryLegsProps) {
+function Itinerary({ trip, member, renderEvent, onManageGroup }: ItineraryLegsProps) {
   if (member.kind === 'event') {
     return <>{renderEvent(member.event)}</>;
   }
 
   return (
     <div className='space-y-2'>
-      <p className='text-muted-foreground px-1 text-sm font-medium'>{member.label}</p>
+      <div className='flex items-center justify-between gap-2 px-1'>
+        <p className='text-muted-foreground text-sm font-medium'>{member.label}</p>
+        {onManageGroup && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label='Edit group'
+            onClick={() => onManageGroup(member.events[0])}
+          >
+            <Route className='h-4 w-4' />
+          </Button>
+        )}
+      </div>
       {member.events.map((leg, index) => {
         const layover =
           index > 0 && member.eventType === 'TRAVEL' ? formatLayover(trip, member.events[index - 1], leg) : null;
@@ -88,7 +103,7 @@ function Itinerary({ trip, member, renderEvent }: ItineraryLegsProps) {
   );
 }
 
-function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, onManage, renderEvent }: EventStackCardProps) {
+function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, onManage, onManageGroup, renderEvent }: EventStackCardProps) {
   const memberIds = Object.keys(trip.members);
   const yourIndex = stack.members.findIndex((member) =>
     (member.kind === 'event' ? [member.event] : member.events).some((event) =>
@@ -178,8 +193,13 @@ function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, on
               </Button>
             </div>
           </div>
-          <Itinerary trip={trip} member={currentMember} renderEvent={renderEvent} />
-          <div className='flex items-center justify-center gap-1.5'>
+          <Itinerary
+            trip={trip}
+            member={currentMember}
+            renderEvent={renderEvent}
+            onManageGroup={canEdit ? onManageGroup : null}
+          />
+          <div className='flex items-center justify-center'>
             {stack.members.map((member, index) => (
               <Button
                 key={member.kind === 'event' ? member.event.id : member.key}
@@ -187,12 +207,16 @@ function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, on
                 variant='tertiary'
                 aria-label={`Show trip ${index + 1}`}
                 aria-current={index === currentIndex}
-                className={join(
-                  'h-1.5 min-h-0 w-1.5 min-w-0 rounded-full p-0',
-                  index === currentIndex ? 'bg-primary' : 'bg-muted-foreground/30',
-                )}
+                className='h-6 min-h-0 w-6 min-w-0 p-0'
                 onClick={() => goTo(index)}
-              />
+              >
+                <span
+                  className={join(
+                    'h-1.5 w-1.5 rounded-full',
+                    index === currentIndex ? 'bg-primary' : 'bg-muted-foreground/30',
+                  )}
+                />
+              </Button>
             ))}
           </div>
           <p className='text-muted-foreground text-center text-xs'>End of {stack.label}</p>

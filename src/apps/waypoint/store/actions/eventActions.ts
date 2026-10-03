@@ -375,6 +375,35 @@ export const setEventsStack = createAsyncThunk<
   await batch.commit();
 });
 
+interface SetEventsGroupInput {
+  uid: string;
+  trip: TripSpace;
+  events: TimelineEvent[];
+  /** The group's name, or `null` to take the events out of any group. */
+  groupName: string | null;
+}
+
+export const setEventsGroup = createAsyncThunk<
+  void,
+  SetEventsGroupInput,
+  { rejectValue: string }
+>('waypoint/events/setGroup', async ({ uid, trip, events, groupName }, { rejectWithValue }) => {
+  if (!canEditExistingItem(trip, uid)) {
+    return rejectWithValue('You do not have permission to edit timeline events.');
+  }
+
+  const name = groupName?.trim() || null;
+  const batch = writeBatch(db);
+  events.forEach((event) => {
+    batch.update(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), {
+      ...getMissingEventFields(event),
+      groupLabel: name,
+      lastEditedAt: Date.now(),
+    });
+  });
+  await batch.commit();
+});
+
 interface SetEventArchivedInput {
   uid: string;
   trip: TripSpace;

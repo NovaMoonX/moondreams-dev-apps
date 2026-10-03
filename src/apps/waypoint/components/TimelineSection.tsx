@@ -19,6 +19,7 @@ import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
+import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
 import EventFormModal, {
@@ -32,6 +33,7 @@ import {
   createEvent,
   deleteEvent,
   setEventArchived,
+  setEventsGroup,
   setEventsStack,
   updateEvent,
   updateEventNotes,
@@ -55,7 +57,7 @@ import {
   canEditExistingItem,
   hasTripStarted,
 } from '@apps/waypoint/utils/roleGuards';
-import { buildTimelineItems } from '@apps/waypoint/utils/eventGroups';
+import { buildTimelineItems, getGroupMembers, getStackMembers } from '@apps/waypoint/utils/eventGroups';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
@@ -151,17 +153,26 @@ export function TimelineSection({
   };
 
   // Stacking moves a whole trip: the event's group of legs travels together.
-  const getItinerary = (event: TimelineEvent) =>
-    event.groupLabel
-      ? events.filter(
-          (other) => other.eventType === event.eventType && other.groupLabel === event.groupLabel,
-        )
-      : [event];
+  const getItinerary = (event: TimelineEvent) => getGroupMembers(events, event);
 
-  const getStackMembers = (event: TimelineEvent) =>
-    events.filter(
-      (other) => other.eventType === event.eventType && other.stackLabel === event.stackLabel,
-    );
+  const [groupingEvent, setGroupingEvent] = useState<TimelineEvent | undefined>();
+  const [isGroupSubmitting, setIsGroupSubmitting] = useState(false);
+
+  const saveGroup = async (targets: TimelineEvent[], groupName: string | null) => {
+    setIsGroupSubmitting(true);
+    try {
+      await dispatch(setEventsGroup({ uid: currentUserId, trip, events: targets, groupName })).unwrap();
+      setGroupingEvent(undefined);
+    } catch (groupError) {
+      addToast({
+        title: 'Unable to update this group',
+        description: getErrorMessage(groupError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsGroupSubmitting(false);
+    }
+  };
 
   const handleUnstackAll = async (event: TimelineEvent) => {
     const confirmed = await confirm({
@@ -170,7 +181,7 @@ export function TimelineSection({
       destructive: true,
     });
     if (confirmed) {
-      await saveStack(getStackMembers(event), null);
+      await saveStack(getStackMembers(events, event), null);
     }
   };
 
@@ -285,6 +296,7 @@ export function TimelineSection({
               setIsStackHeaderOrigin(true);
               setStackingEvent(selectedEvent);
             }}
+            onManageGroup={(selectedEvent) => setGroupingEvent(selectedEvent)}
             renderEvent={renderEventCard}
           />
         );
@@ -296,6 +308,8 @@ export function TimelineSection({
             trip={trip}
             group={item}
             showAttendees={showAttendees}
+            canEdit={canEdit}
+            onManage={(selectedEvent) => setGroupingEvent(selectedEvent)}
             renderEvent={renderEventCard}
           />
         );
@@ -513,13 +527,25 @@ export function TimelineSection({
           isSubmitting={isStackSubmitting}
           canRemoveTrip={!isStackHeaderOrigin}
           onStack={(name) => void saveStack(getItinerary(stackingEvent), name)}
-          onRename={(name) => void saveStack(getStackMembers(stackingEvent), name)}
+          onRename={(name) => void saveStack(getStackMembers(events, stackingEvent), name)}
           onRemove={() => void saveStack(getItinerary(stackingEvent), null)}
           onUnstackAll={() => void handleUnstackAll(stackingEvent)}
           onClose={() => {
             setStackingEvent(undefined);
             stackSuccessRef.current = undefined;
           }}
+        />
+      )}
+      {groupingEvent && (
+        <EventGroupModal
+          key={`${groupingEvent.id}-${groupingEvent.groupLabel ?? 'none'}`}
+          isOpen
+          event={groupingEvent}
+          legCount={getGroupMembers(events, groupingEvent).length}
+          isSubmitting={isGroupSubmitting}
+          onRename={(name) => void saveGroup(getGroupMembers(events, groupingEvent), name)}
+          onUngroup={() => void saveGroup(getGroupMembers(events, groupingEvent), null)}
+          onClose={() => setGroupingEvent(undefined)}
         />
       )}
       <EventFormModal

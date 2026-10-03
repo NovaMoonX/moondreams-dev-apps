@@ -22,6 +22,7 @@ import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import { findTopPlace } from '@/lib/places/placesLookup';
+import { normalizeLabel } from '@apps/waypoint/utils/eventGroups';
 import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
 import type {
   PlaceRef,
@@ -397,13 +398,13 @@ function EventFormModal({
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
-      Array.from(
-        new Set(
-          events
-            .filter((other) => other.eventType === draft.eventType && other.groupLabel)
-            .map((other) => other.groupLabel as string),
+      events
+        .filter((other) => other.eventType === draft.eventType && other.groupLabel)
+        .map((other) => other.groupLabel as string)
+        .filter(
+          (label, index, all) =>
+            all.findIndex((candidate) => normalizeLabel(candidate) === normalizeLabel(label)) === index,
         ),
-      ),
     [events, draft.eventType],
   );
   const isTravel = draft.eventType === 'TRAVEL';
@@ -541,12 +542,13 @@ function EventFormModal({
         return null;
       }
 
-      const base = draft.transit.values.arrivalAirportCode
-        ? `Flights to ${draft.transit.values.arrivalAirportCode}`
-        : 'Flight legs';
+      const arrival = draft.transit.values.arrivalAirportCode;
+      const base = arrival ? `Flights to ${arrival}` : 'Flight legs';
       const pick = (attempt: number): string => {
         const candidate = attempt === 1 ? base : `${base} (${attempt})`;
-        return sameTypeGroupLabels.includes(candidate) ? pick(attempt + 1) : candidate;
+        return sameTypeGroupLabels.some((label) => normalizeLabel(label) === normalizeLabel(candidate))
+          ? pick(attempt + 1)
+          : candidate;
       };
       return pick(1);
     };
@@ -596,7 +598,12 @@ function EventFormModal({
         place: draft.place,
         linkUrl: isLinkable ? draft.linkUrl : null,
         linkPreview: isLinkable ? draft.linkPreview : null,
-        linkKind: isLinkable && draft.linkUrl.trim() ? (draft.linkKind ?? linkKinds[0] ?? null) : null,
+        linkKind:
+          isLinkable && draft.linkUrl.trim()
+            ? draft.linkKind && linkKinds.includes(draft.linkKind)
+              ? draft.linkKind
+              : (linkKinds[0] ?? null)
+            : null,
         groupLabel,
         stackLabel: event?.stackLabel ?? legFrom?.previous.stackLabel ?? null,
         reminderMinutesBefore: draft.reminderMinutesBefore,
@@ -654,7 +661,7 @@ function EventFormModal({
   const transitType = draft.quickField as TransitType;
   const isLocationVisible = isTravel
     ? transitType === 'FLIGHT'
-      ? Boolean(draft.transit.values.departureAirportCode) && !draft.locationName.trim()
+      ? Boolean(draft.transit.values.departureAirportCode) && !draft.place
       : true
     : isPlaceEvent || (draft.eventType === 'FREE_TIME' && draft.hasLocation);
   const isAddressShown = draft.hasAddress;
@@ -1029,16 +1036,16 @@ function EventFormModal({
                         { value: ADD_NEW_OPTION, text: 'New group…' },
                       ]}
                       value={
-                        sameTypeGroupLabels.includes(draft.groupLabel)
-                          ? draft.groupLabel
-                          : ADD_NEW_OPTION
+                        sameTypeGroupLabels.find(
+                          (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
+                        ) ?? ADD_NEW_OPTION
                       }
-                      onChange={(value) =>
-                        updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })
-                      }
+                      onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
                     />
                   )}
-                  {!sameTypeGroupLabels.includes(draft.groupLabel) && (
+                  {!sameTypeGroupLabels.some(
+                    (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
+                  ) && (
                     <Input
                       placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
                       value={draft.groupLabel}

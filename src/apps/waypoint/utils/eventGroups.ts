@@ -15,8 +15,25 @@ export interface SingleEvent {
 
 export type EventListItem = EventGroup | SingleEvent;
 
-const getGroupKey = (event: TimelineEvent) =>
-  event.groupLabel?.trim() ? `${event.eventType}::${event.groupLabel.trim().toLowerCase()}` : null;
+export const normalizeLabel = (label: string) => label.trim().toLowerCase();
+
+/** Groups and stacks match by type and label, ignoring case and surrounding spaces. */
+export const getGroupKey = (event: Pick<TimelineEvent, 'eventType' | 'groupLabel'>) =>
+  event.groupLabel?.trim() ? `${event.eventType}::${normalizeLabel(event.groupLabel)}` : null;
+
+export const getStackKey = (event: Pick<TimelineEvent, 'eventType' | 'stackLabel'>) =>
+  event.stackLabel?.trim() ? `${event.eventType}::${normalizeLabel(event.stackLabel)}` : null;
+
+/** Every event that belongs to the same group (or stack) as `event`, matched the way they render. */
+export const getGroupMembers = (events: TimelineEvent[], event: TimelineEvent) => {
+  const key = getGroupKey(event);
+  return key ? events.filter((other) => getGroupKey(other) === key) : [event];
+};
+
+export const getStackMembers = (events: TimelineEvent[], event: TimelineEvent) => {
+  const key = getStackKey(event);
+  return key ? events.filter((other) => getStackKey(other) === key) : [event];
+};
 
 /** Collapses events sharing a type and group label into one entry placed where the first
  * member sits. A label held by a single event stays a plain event — there is nothing to nest. */
@@ -60,8 +77,6 @@ export interface EventStack {
 
 export type TimelineItem = EventStack | EventGroup | SingleEvent;
 
-const getStackKey = (event: TimelineEvent) =>
-  event.stackLabel?.trim() ? `${event.eventType}::${event.stackLabel.trim().toLowerCase()}` : null;
 
 /** Stacks first, then groups among everything left over, all kept in timeline order. A stack
  * needs at least two itineraries to be worth showing as one; otherwise its events fall back. */

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button, Input, Label, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
+import { getStackKey, normalizeLabel } from '@apps/waypoint/utils/eventGroups';
 import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
 import type { TimelineEvent } from '@apps/waypoint/types';
 
@@ -34,18 +35,18 @@ function EventStackModal({
   onClose,
 }: EventStackModalProps) {
   const currentName = event.stackLabel ?? null;
-  const sameTypeStacks = Array.from(
-    new Set(
-      events
-        .filter((other) => other.eventType === event.eventType && other.stackLabel && other.id !== event.id)
-        .map((other) => other.stackLabel as string),
-    ),
-  );
+  const sameTypeStacks = events
+    .filter((other) => other.eventType === event.eventType && other.stackLabel && other.id !== event.id)
+    .map((other) => other.stackLabel as string)
+    .filter(
+      (label, index, all) =>
+        all.findIndex((candidate) => normalizeLabel(candidate) === normalizeLabel(label)) === index,
+    );
   const [choice, setChoice] = useState(sameTypeStacks[0] ?? ADD_NEW_OPTION);
   const [name, setName] = useState(currentName ?? '');
   const isNewStack = choice === ADD_NEW_OPTION;
   const stackedCount = currentName
-    ? events.filter((other) => other.eventType === event.eventType && other.stackLabel === currentName).length
+    ? events.filter((other) => getStackKey(other) === getStackKey(event)).length
     : 0;
   const trimmedName = name.trim();
 
