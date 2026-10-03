@@ -1,15 +1,15 @@
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import type { Viewing } from '@apps/a-list/types';
 
-// Three wedges meet at the centre, 120° apart, with one edge pointing straight up. In a 3:4
-// cell the other two edges meet the side walls at 50% + tan(30°) × 50% × ¾ ≈ 71.65% down.
+// Three wedges meet at the centre, 120° apart, with one edge pointing straight up. In a 2:3
+// cell the other two edges meet the side walls at 50% + tan(30°) × 50% × ⅔ ≈ 69.25% down.
 const SPLITS: Record<number, string[]> = {
   1: ['none'],
   2: ['polygon(0 0, 100% 0, 0 100%)', 'polygon(100% 0, 100% 100%, 0 100%)'],
   3: [
-    'polygon(50% 50%, 50% 0, 100% 0, 100% 71.65%)',
-    'polygon(50% 50%, 100% 71.65%, 100% 100%, 0 100%, 0 71.65%)',
-    'polygon(50% 50%, 0 71.65%, 0 0, 50% 0)',
+    'polygon(50% 50%, 50% 0, 100% 0, 100% 69.25%)',
+    'polygon(50% 50%, 100% 69.25%, 100% 100%, 0 100%, 0 69.25%)',
+    'polygon(50% 50%, 0 69.25%, 0 0, 50% 0)',
   ],
   4: [
     'inset(0 50% 50% 0)',

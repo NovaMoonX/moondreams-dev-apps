@@ -27,7 +27,7 @@ function PosterCell({
         {hasCovers && <PosterSplit viewings={viewings} />}
         <span
           className={join(
-            'absolute top-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold',
+            'absolute top-1 left-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
             isToday && 'bg-primary text-primary-foreground',
             !isToday && hasCovers && 'bg-black/50 text-white',
           )}

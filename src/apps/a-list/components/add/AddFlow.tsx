@@ -105,6 +105,8 @@ interface AddFlowProps {
   onClose: () => void;
   initialSelection?: AddSelection;
   onBack?: () => void;
+  /** Set when the flow is a screen of its own: it then draws its own header, whose back control steps back before it exits. */
+  title?: string;
 }
 
 export function AddFlow({
@@ -112,6 +114,7 @@ export function AddFlow({
   onClose,
   initialSelection,
   onBack,
+  title,
 }: AddFlowProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -346,16 +349,18 @@ export function AddFlow({
 
     return (
       <div className='space-y-4'>
-        <Button
-          type='button'
-          rounded='full'
-          variant='link'
-          size='sm'
-          className='gap-1 px-0'
-          onClick={handleBack}
-        >
-          <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
-        </Button>
+        {title === undefined && (
+          <Button
+            type='button'
+            rounded='full'
+            variant='link'
+            size='sm'
+            className='gap-1 px-0'
+            onClick={handleBack}
+          >
+            <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
+          </Button>
+        )}
         <div className='flex gap-3'>
           <span className='h-30 w-20 shrink-0 overflow-hidden rounded-xl shadow-sm'>
             <PosterCover
@@ -479,8 +484,36 @@ export function AddFlow({
     );
   };
 
+  const getHeader = () => {
+    if (selection !== null)
+      return {
+        label: selection.kind === 'known' && selection.isManual ? 'Back' : 'Back to results',
+        onClick: handleBack,
+      };
+    if (isAddingByTitle)
+      return { label: 'Back to search', onClick: () => setIsAddingByTitle(false) };
+    return { label: title ?? '', onClick: onClose };
+  };
+
+  const header = getHeader();
+
   return (
     <>
+      {title !== undefined && (
+        <div className='mb-4 flex items-center gap-2'>
+          <Button
+            type='button'
+            variant='secondary'
+            size='icon'
+            rounded='full'
+            aria-label={header.label}
+            onClick={header.onClick}
+          >
+            <ChevronLeft className='h-5 w-5' />
+          </Button>
+          <h1 className='text-xl font-semibold'>{header.label}</h1>
+        </div>
+      )}
       {pastAdded && (
         <PastMoviesStrip
           count={pastAdded.count}

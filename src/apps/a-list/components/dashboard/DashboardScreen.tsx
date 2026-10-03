@@ -104,28 +104,42 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
       />
       {summary && (
         <div className='space-y-4'>
-          <div
-            className={join(
-              'rounded-3xl p-5 shadow-md',
-              summary.isBrokenEven
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-secondary-foreground',
-            )}
-          >
-            <p className='flex items-center gap-2 text-sm font-medium opacity-90'>
-              <span aria-hidden='true'>💰</span> Net savings
+          <div className='border-border bg-card rounded-3xl border p-5 shadow-sm'>
+            <p className='text-muted-foreground flex items-center gap-2 text-sm font-medium'>
+              <span
+                className='bg-accent grid size-8 place-items-center rounded-full text-base'
+                aria-hidden='true'
+              >
+                💰
+              </span>
+              Net savings
             </p>
-            <p className='mt-1 text-5xl font-bold tracking-tight tabular-nums'>
+            <p
+              className={join(
+                'mt-2 text-5xl font-bold tracking-tight tabular-nums',
+                summary.isBrokenEven ? 'text-success' : 'text-foreground',
+              )}
+            >
               {formatCents(summary.netSavingsCents)}
             </p>
-            <p className='mt-2 text-sm opacity-90'>
+            <p className='text-muted-foreground mt-2 text-sm'>
               {formatCents(summary.totalTicketSavingsCents)} in tickets, after{' '}
               {formatCents(summary.membershipCostCents)} of membership
             </p>
-            <p className='mt-3 inline-block rounded-full bg-white/20 px-3 py-1 text-sm font-medium'>
+            <p
+              className={join(
+                'mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium',
+                summary.isBrokenEven
+                  ? 'bg-success/15 text-success'
+                  : 'bg-accent text-accent-foreground',
+              )}
+            >
+              <span aria-hidden='true'>
+                {summary.isBrokenEven ? '🎉' : '🎯'}
+              </span>
               {summary.isBrokenEven
-                ? '🎉 You have broken even'
-                : `🎯 ${formatCents(-summary.netSavingsCents)} to break even`}
+                ? 'You have broken even'
+                : `${formatCents(-summary.netSavingsCents)} to break even`}
             </p>
           </div>
           <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>

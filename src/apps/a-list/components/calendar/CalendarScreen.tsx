@@ -17,12 +17,12 @@ function getTodayStart() {
 }
 
 // The calendar's own cell padding, border and square size are cleared so a poster can run edge to
-// edge in a rounded 3:4 cell; PosterCell fills it absolutely and clips itself.
+// edge in a rounded 2:3 cell; PosterCell fills it absolutely and clips itself.
 const CALENDAR_STYLES = {
   containerClassName: 'border-0 bg-transparent p-0 shadow-none',
   monthGridClassName: 'gap-1.5',
   cellClassName:
-    'group relative aspect-[3/4] h-auto min-h-0 w-full rounded-xl border-0 p-0 bg-muted hover:bg-muted/70 focus:bg-muted',
+    'group relative aspect-[2/3] h-auto min-h-0 w-full rounded-xl border-0 p-0 bg-muted hover:bg-muted/70 focus:bg-muted',
   selectedCellClassName: 'bg-muted text-foreground',
   todayCellClassName: 'border-0',
 };

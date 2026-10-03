@@ -7,7 +7,7 @@ import {
 import type { WatchPriority } from '@apps/a-list/types';
 
 const PRIORITY_VARIANTS = {
-  MUST_SEE: 'primary',
+  MUST_SEE: 'warning',
   WANT_TO_SEE: 'accent',
   IF_I_HAVE_TIME: 'muted',
 } as const;

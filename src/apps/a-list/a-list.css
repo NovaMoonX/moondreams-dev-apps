@@ -25,15 +25,3 @@ html.a-list-theme.dark {
   --color-accent-foreground: var(--color-amber-100);
   --color-border: var(--color-zinc-800);
 }
-
-/* A marquee's row of bulbs, for the one hero moment on a screen. */
-.alist-marquee {
-  background-image: radial-gradient(
-    circle,
-    var(--color-amber-300) 0 2px,
-    transparent 2.5px
-  );
-  background-size: 14px 14px;
-  background-repeat: repeat-x;
-  background-position: center top;
-}

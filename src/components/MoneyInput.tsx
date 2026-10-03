@@ -33,31 +33,46 @@ function MoneyInput({
   };
 
   return (
-    <div className='relative'>
-      <span className='text-muted-foreground pointer-events-none absolute top-5 left-4 -translate-y-1/2 text-sm'>
-        $
-      </span>
-      <Input
-        type='text'
-        inputMode='decimal'
-        variant='outline'
-        rounded='full'
-        autoComplete='off'
-        className={join('pl-8!', className)}
-        value={value}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoFocus={autoFocus}
-        aria-label={ariaLabel}
-        errorMessage={errorMessage}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={settle}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            settle();
-          }
-        }}
-      />
+    <div className='space-y-1'>
+      <div
+        className={join(
+          'border-border bg-background flex items-center rounded-full border pl-4 focus-within:border-current/60',
+          errorMessage && 'border-destructive!',
+          disabled && 'opacity-60',
+        )}
+      >
+        <span className='text-muted-foreground' aria-hidden='true'>
+          $
+        </span>
+        <Input
+          type='text'
+          inputMode='decimal'
+          variant='base'
+          autoComplete='off'
+          className={join(
+            'min-w-0 flex-1 border-0! bg-transparent pl-2! focus:border-0!',
+            className,
+          )}
+          value={value}
+          placeholder={placeholder}
+          disabled={disabled}
+          autoFocus={autoFocus}
+          aria-label={ariaLabel}
+          aria-invalid={errorMessage ? true : undefined}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={settle}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              settle();
+            }
+          }}
+        />
+      </div>
+      {errorMessage && (
+        <p className='text-destructive px-3 text-sm' role='alert'>
+          {errorMessage}
+        </p>
+      )}
     </div>
   );
 }

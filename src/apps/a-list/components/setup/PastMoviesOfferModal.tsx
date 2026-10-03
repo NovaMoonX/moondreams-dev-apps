@@ -12,7 +12,6 @@ function PastMoviesOfferModal({ onSkip, onAccept }: PastMoviesOfferModalProps) {
     <Modal isOpen onClose={onSkip} title="You're in!">
       <div className='space-y-6'>
         <div className='space-y-3 text-center'>
-          <div className='alist-marquee mx-auto h-3 w-40' aria-hidden='true' />
           <p className='text-7xl' aria-hidden='true'>
             🎞️
           </p>

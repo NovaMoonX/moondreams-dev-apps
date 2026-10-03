@@ -48,7 +48,7 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
         </span>
       </span>
       <div className='min-w-0 flex-1 space-y-1 py-0.5'>
-        <p className='truncate font-medium'>{movie.title}</p>
+        <p className='line-clamp-2 font-medium'>{movie.title}</p>
         <p className='text-muted-foreground text-xs'>{getReleaseText()}</p>
         <div className='flex flex-wrap items-center gap-1.5'>
           {item.preferredFormat === null ? (

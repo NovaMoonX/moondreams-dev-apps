@@ -1,6 +1,7 @@
 import MoneyInput from '@/components/MoneyInput';
 import type { CostStepValues } from '@apps/a-list/utils/costStep';
 import { evaluateCostStep } from '@apps/a-list/utils/costStep';
+import { formatCents } from '@apps/a-list/utils/money';
 import { formatTaxRate } from '@apps/a-list/utils/tax';
 
 interface TaxStepProps {
@@ -10,7 +11,7 @@ interface TaxStepProps {
 }
 
 function TaxStep({ values, todayDay, onChange }: TaxStepProps) {
-  const { errors, taxRate } = evaluateCostStep(values, todayDay);
+  const { errors, taxRate, costCents } = evaluateCostStep(values, todayDay);
   const hasTaxRate = taxRate !== null && !errors.billTotal;
 
   return (
@@ -24,6 +25,12 @@ function TaxStep({ values, todayDay, onChange }: TaxStepProps) {
           With tax included. We'll use it to work out your tax rate and suggest
           it on your tickets. Not handy? You can skip this.
         </p>
+        {costCents !== null && (
+          <p className='text-sm'>
+            Your plan: <strong>{formatCents(costCents)}</strong> a month before
+            tax
+          </p>
+        )}
       </div>
       <div className='mx-auto max-w-xs text-left'>
         <MoneyInput
@@ -37,8 +44,8 @@ function TaxStep({ values, todayDay, onChange }: TaxStepProps) {
         />
       </div>
       {hasTaxRate && (
-        <p className='bg-accent text-accent-foreground mx-auto w-fit rounded-full px-4 py-1.5 text-sm font-medium'>
-          That's about {formatTaxRate(taxRate)} tax 🎉
+        <p className='text-sm'>
+          That works out to about <strong>{formatTaxRate(taxRate)}</strong> tax.
         </p>
       )}
     </div>

@@ -164,10 +164,6 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
       return {
         body: (
           <div className='space-y-4 text-center'>
-            <div
-              className='alist-marquee mx-auto h-3 w-48'
-              aria-hidden='true'
-            />
             <p className='py-2 text-8xl' aria-hidden='true'>
               🍿
             </p>
@@ -204,7 +200,7 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
               {A_LIST_PERKS.map((perk) => (
                 <li
                   key={perk.text}
-                  className='bg-secondary/60 flex items-center gap-3 rounded-full py-2 pr-4 pl-2 text-left text-sm'
+                  className='bg-secondary/60 flex min-h-14 items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm'
                 >
                   <span
                     className='bg-card grid size-9 shrink-0 place-items-center rounded-full text-lg'

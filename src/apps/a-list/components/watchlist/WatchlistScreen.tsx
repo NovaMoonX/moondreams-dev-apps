@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
@@ -9,6 +9,7 @@ import {
   fromDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
+import { normalizeString } from '@/utils/stringUtils';
 import WatchlistFilters from '@apps/a-list/components/watchlist/WatchlistFilters';
 import WatchlistRow from '@apps/a-list/components/watchlist/WatchlistRow';
 import { WATCH_PRIORITIES } from '@apps/a-list/constants';
@@ -26,6 +27,7 @@ function WatchlistScreen() {
   const rows = useAppSelector((state) => selectWatchlistRows(state, now));
   const openingRows = useAppSelector((state) => selectOpeningRows(state, now));
   const [filters, setFilters] = useState<WatchlistFilter[]>([]);
+  const [query, setQuery] = useState('');
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
   const toggleFilter = (filter: WatchlistFilter) =>
@@ -46,8 +48,10 @@ function WatchlistScreen() {
     );
     const isOpeningOn = filters.includes('opening');
     const isSeenOn = filters.includes('seen');
+    const normalizedQuery = normalizeString(query);
     const matches = rows.filter(
       (row) =>
+        normalizeString(row.item.movie.title).includes(normalizedQuery) &&
         (!isOpeningOn || row.item.movieKey in daysByMovie) &&
         (!isSeenOn || row.isSeen) &&
         (priorities.length === 0 ||
@@ -78,18 +82,21 @@ function WatchlistScreen() {
       return (
         <p>Nothing on your list yet. Add the movies you can't wait to see.</p>
       );
-    if (filters.length > 0)
+    if (filters.length > 0 || query.trim() !== '')
       return (
         <p>
-          Nothing matches those filters.{' '}
+          Nothing matches that.{' '}
           <Button
             type='button'
             variant='link'
             size='sm'
             className='h-auto p-0'
-            onClick={() => setFilters([])}
+            onClick={() => {
+              setFilters([]);
+              setQuery('');
+            }}
           >
-            Clear filters
+            Clear search and filters
           </Button>
         </p>
       );
@@ -113,6 +120,17 @@ function WatchlistScreen() {
           </Button>
         }
       />
+      {rows.length > 0 && (
+        <Input
+          type='search'
+          variant='outline'
+          rounded='full'
+          placeholder='Search your watchlist'
+          aria-label='Search your watchlist'
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      )}
       <WatchlistFilters
         value={filters}
         openingCount={openingRows.length}
@@ -127,8 +145,9 @@ function WatchlistScreen() {
               <Button
                 type='button'
                 variant='tertiary'
+                size='stripped'
                 aria-label={`Open ${row.item.movie.title}`}
-                className='text-foreground! h-auto w-full justify-start rounded-2xl p-0 text-left font-normal'
+                className='text-foreground! h-auto w-full justify-start rounded-2xl text-left font-normal'
                 onClick={() =>
                   openOverlay({
                     kind: 'watchlistItem',
