@@ -63,6 +63,22 @@ html:has(
   }
 }
 
+/* A tapped control keeps its focus outline/ring and the browser's tap flash after the
+   touch ends. Component focus styles are utilities, so only !important beats them. */
+@media (max-width: 639px) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus,
+  :focus-visible,
+  :active {
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+  }
+}
+
 /* Smooth height transitions for when keyboard appears on mobile */
 html, body {
   transition: height 0.3s ease;
