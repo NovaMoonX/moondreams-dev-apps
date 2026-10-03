@@ -6,7 +6,7 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
-import { House } from 'lucide-react';
+import { Camera, House, LogOut, Pencil, ShieldCheck, UserRound } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
@@ -89,6 +89,13 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     setIsNameModalOpen(false);
   };
 
+  const navItems = [
+    ...(isAwayFromHome && isBelow('sm')
+      ? [option({ label: 'Home', value: 'home', icon: <House className='size-4' /> })]
+      : []),
+    ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
+  ];
+
   const menuItems = [
     custom(() => (
       <div className='border-border border-b px-3 py-2'>
@@ -110,15 +117,13 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         </div>
       </div>
     )),
-    ...(isAwayFromHome && isBelow('sm')
-      ? [option({ label: 'Home', value: 'home', icon: <House /> })]
-      : []),
-    ...(isAdmin ? [option({ label: 'Admin', value: 'admin' })] : []),
-    option({ label: 'Profile', value: 'profile' }),
-    option({ label: 'Change name', value: 'change-name' }),
-    option({ label: 'Change photo', value: 'change-photo' }),
+    ...navItems,
+    ...(navItems.length > 0 ? [separator()] : []),
+    option({ label: 'Profile', value: 'profile', icon: <UserRound className='size-4' /> }),
+    option({ label: 'Change name', value: 'change-name', icon: <Pencil className='size-4' /> }),
+    option({ label: 'Change photo', value: 'change-photo', icon: <Camera className='size-4' /> }),
     separator(),
-    option({ label: 'Sign out', value: 'signout' }),
+    option({ label: 'Sign out', value: 'signout', icon: <LogOut className='size-4' /> }),
     custom(() => (
       <div className='border-border text-muted-foreground mt-1 border-t px-3 py-2 text-xs text-right'>
         Version {SITE_VERSION}
@@ -183,7 +188,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
               <ChevronDown className='h-4 w-4' />
             </Button>
           }
-          className='w-80'
+          className='w-80 max-w-[calc(100vw-1.5rem)]'
         />
       </div>
 
