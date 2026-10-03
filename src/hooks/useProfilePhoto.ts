@@ -15,13 +15,13 @@ export function useProfilePhoto() {
 
   const save = (file: File) =>
     storage.track(async () => {
-      const url = await storage.upload(file);
+      const url = await storage.put(file);
       await updatePhotoURL(url);
     });
 
   const remove = () =>
     storage.track(async () => {
-      await storage.remove();
+      await storage.del();
       await updatePhotoURL(null);
     });
 

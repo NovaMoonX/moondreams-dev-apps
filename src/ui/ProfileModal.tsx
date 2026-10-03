@@ -5,6 +5,7 @@ import PhotoPicker from '@/components/forms/PhotoPicker';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useProfilePhoto } from '@/hooks/useProfilePhoto';
 import { getInitials } from '@/utils/accountUtils';
+import { formatDate } from '@/utils/formatUtils';
 
 interface ProfileModalProps {
   user: User;
@@ -21,11 +22,7 @@ function ProfileModal({ user, onClose }: ProfileModalProps) {
     (photoUpload.previewUrl === null && Boolean(profilePhoto.customPhotoURL));
 
   const formattedDate = user.metadata.creationTime
-    ? new Date(user.metadata.creationTime).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+    ? formatDate(Date.parse(user.metadata.creationTime))
     : 'Unknown';
 
   const handleSave = async () => {

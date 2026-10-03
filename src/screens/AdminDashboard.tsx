@@ -73,7 +73,7 @@ function AppConfigEditor({
           return {
             key: profile.uid || value,
             displayName: profile.displayName ?? profile.email ?? value,
-            photoURL: profile.customPhotoURL || profile.photoURL,
+            photoURL: profile.photoURL,
             email: profile.email ?? value,
           };
         })
@@ -442,10 +442,14 @@ function AdminDashboard() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const allUsers = snapshot.docs.map((docSnap) => ({
-        uid: docSnap.id,
-        ...(docSnap.data() as Partial<UserProfile>),
-      })) as UserProfile[];
+      const allUsers = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Partial<UserProfile>;
+        return {
+          uid: docSnap.id,
+          ...data,
+          photoURL: data.customPhotoURL || data.photoURL,
+        };
+      }) as UserProfile[];
       const nextUsers = allUsers
         .filter((user) => user.email !== ADMIN_EMAIL)
         .sort((a, b) => a.email.localeCompare(b.email));
