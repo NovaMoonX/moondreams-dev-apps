@@ -7,6 +7,7 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
@@ -310,6 +311,15 @@ function MembershipSettingsModal({
             onDataChange={(data) => setGoalValues(data as GoalValues)}
           />
         </FormSection>
+        <div className='text-muted-foreground flex flex-wrap items-center gap-1 text-xs'>
+          <span>Movie details and posters come from</span>
+          <ExternalLinkText
+            href='https://www.omdbapi.com/'
+            label='OMDb'
+            className='text-xs'
+          />
+          <span>(CC BY-NC 4.0).</span>
+        </div>
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions
           rightActions={

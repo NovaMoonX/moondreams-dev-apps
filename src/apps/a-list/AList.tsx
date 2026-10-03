@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -8,6 +9,7 @@ import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
+import AddDrawer from '@apps/a-list/components/add/AddDrawer';
 import CalendarScreen from '@apps/a-list/components/calendar/CalendarScreen';
 import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
@@ -15,17 +17,19 @@ import BottomNav from '@apps/a-list/components/shell/BottomNav';
 import LoadingSkeleton from '@apps/a-list/components/shell/LoadingSkeleton';
 import WatchlistScreen from '@apps/a-list/components/watchlist/WatchlistScreen';
 import { A_LIST_TABS, DEFAULT_A_LIST_TAB } from '@apps/a-list/constants';
+import { AListOverlayContext } from '@apps/a-list/hooks/useAListOverlay';
 import { useAListSync } from '@apps/a-list/hooks/useAListSync';
 import {
   selectIsAListLoaded,
   selectMembership,
   selectMembershipLoadError,
 } from '@apps/a-list/store/selectors';
-import type { AListTab } from '@apps/a-list/types';
+import type { AListOverlay, AListTab } from '@apps/a-list/types';
 
 function AList() {
   const { user, loading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [overlay, setOverlay] = useState<AListOverlay | null>(null);
   const membership = useAppSelector(selectMembership);
   const isLoaded = useAppSelector(selectIsAListLoaded);
   const loadError = useAppSelector(selectMembershipLoadError);
@@ -93,16 +97,27 @@ function AList() {
     return <CalendarScreen />;
   };
 
+  const overlayContext = {
+    overlay,
+    openOverlay: setOverlay,
+    closeOverlay: () => setOverlay(null),
+  };
+
   return (
-    <div className='page pb-28'>
-      <div className='mx-auto max-w-4xl space-y-4 py-6'>
-        <NavButton href='/' variant='link'>
-          <ChevronLeft /> Back home
-        </NavButton>
-        {getScreen()}
+    <AListOverlayContext.Provider value={overlayContext}>
+      <div className='page pb-28'>
+        <div className='mx-auto max-w-4xl space-y-4 py-6'>
+          <NavButton href='/' variant='link'>
+            <ChevronLeft /> Back home
+          </NavButton>
+          {getScreen()}
+        </div>
+        <BottomNav value={activeTab} onChange={setActiveTab} />
       </div>
-      <BottomNav value={activeTab} onChange={setActiveTab} />
-    </div>
+      {overlay?.kind === 'add' && (
+        <AddDrawer onClose={() => setOverlay(null)} />
+      )}
+    </AListOverlayContext.Provider>
   );
 }
 

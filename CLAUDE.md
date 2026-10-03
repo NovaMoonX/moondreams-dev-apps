@@ -43,6 +43,7 @@ How Waypoint's phone-first redesign works; new features follow it. Design the ph
 - **Layout switches.** Swap components with `useMediaQuery().isBelow('sm')`; pure reflow uses `sm:` classes.
 - **Phone shell.** A trip's bottom nav is only Overview / Timeline / Expenses (`TripBottomNav`). Every other section is a nested screen reached *from Overview* by an entry point (a count pill in `TripEntryPoints`, or a chevron row like `StaysEntry`) — never a new bottom-nav slot. The nav keeps Overview highlighted (`matches`), the header chevron on every screen but Overview reads "Back to Overview" (only Overview's goes to My Trips), and the id goes in `TRIP_SECTION_TABS` so `?tab=` works. Desktop shows the same section as a `TabsList` tab.
 - **Overview is the phase-aware hub.** Show what needs action *now* (pre-trip: ideas, checklist, album; live: Active Now / Up Next / Today). One emphasized surface at a time (Active Now's emerald card is the reference); everything else is a quiet row.
+- **Never stack an overlay on an overlay:** whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a destructive confirm is the only thing allowed on top.
 - **Overlays.** Phone → `Drawer`, desktop → `Popover`/`DropdownMenu`, forms and confirmations → `Modal`/`useActionModal` at every size. Build the content once and render it in both. In a drawer's action list, group related actions in one `bg-muted/50` block, keep other actions standalone, and put destructive ones last in red.
 - **Screens and cards.** Every section opens with `SectionHeader` (title + at most one primary CTA, hidden when not permitted). Overview rows use the small uppercase eyebrow `h3`. One border per card — tint to group, never nest — with flat `divide-y` rows inside. An empty list is one muted line with the CTA in the header; an Overview entry with nothing yet is a tappable prompt row.
 - **Indicators.** Leading round icon chip with a soft tint; counts only when `> 0`, via `IconBadge` or the `bg-primary` pill.
@@ -77,6 +78,7 @@ How Waypoint's phone-first redesign works; new features follow it. Design the ph
 
 ## Cloud Functions
 
+- A third-party key that can't be domain-restricted is a Functions secret behind an `onCall` (never in the browser, a response or a log); a free-tier API shared by all users gets a server-side cache and a daily budget guard. Full rule in `copilot-instructions.md`.
 - A newly-added `onCall` function can deploy without its public-invoker IAM grant (symptom: browser CORS error; GCP Cloud Run request logs show a 403 on the `OPTIONS` preflight). See README's [Deployment](README.md#new-cloud-functions--cloud-run-invoker-access) section for the `gcloud run services update --no-invoker-iam-check` fix.
 
 ## Nine Lives placement
