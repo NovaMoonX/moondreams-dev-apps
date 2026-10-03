@@ -34,11 +34,12 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
         Your savings will add up here as you log movies and what their tickets
         would have cost.
       </p>
-      <MembershipSettingsModal
-        isOpen={isSettingsOpen}
-        membership={membership}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      {isSettingsOpen && (
+        <MembershipSettingsModal
+          membership={membership}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
     </section>
   );
 }

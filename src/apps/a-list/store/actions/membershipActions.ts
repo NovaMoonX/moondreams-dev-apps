@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { MembershipProfile } from '@apps/a-list/types';
@@ -52,3 +52,37 @@ export const completeSetup = createAsyncThunk<
     return membership;
   },
 );
+
+export type MembershipEditableFields = Pick<
+  MembershipProfile,
+  | 'monthlyCostCents'
+  | 'monthlyTotalCents'
+  | 'taxRate'
+  | 'startDate'
+  | 'weeklyGoal'
+  | 'monthlyGoal'
+>;
+
+interface UpdateMembershipInput {
+  uid: string;
+  fields: Partial<MembershipEditableFields>;
+}
+
+export const updateMembership = createAsyncThunk<
+  Partial<MembershipEditableFields>,
+  UpdateMembershipInput,
+  { rejectValue: string }
+>('aList/membership/update', async ({ uid, fields }, { rejectWithValue }) => {
+  try {
+    await updateDoc(doc(db, 'apps', 'a-list', 'memberships', uid), {
+      ...fields,
+      lastEditedAt: Date.now(),
+    });
+  } catch (error) {
+    return rejectWithValue(
+      getErrorMessage(error, 'Unable to save your membership.'),
+    );
+  }
+
+  return fields;
+});
