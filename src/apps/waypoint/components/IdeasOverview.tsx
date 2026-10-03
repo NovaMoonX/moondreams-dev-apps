@@ -6,6 +6,7 @@ import { ChevronRight, Lightbulb } from 'lucide-react';
 import { useAppSelector } from '@/store';
 import IdeaDetailsOverlay from '@apps/waypoint/components/IdeaDetailsOverlay';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
+import SectionEntryRow from '@apps/waypoint/components/SectionEntryRow';
 import { IDEA_TYPE_EMOJIS, IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
 import { selectSortedIdeas } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TripSpace } from '@apps/waypoint/types';
@@ -39,24 +40,13 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           }`;
 
     return (
-      <section className='space-y-1'>
-        <h3 className='text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase'>
-          Ideas
-        </h3>
-        <Button
-          type='button'
-          variant='tertiary'
-          onClick={onOpen}
-          className='border-border h-auto w-full justify-start gap-3 rounded-xl border px-3 py-3 text-left'
-        >
-          <Lightbulb className='text-muted-foreground h-5 w-5 shrink-0' />
-          <span className='min-w-0 flex-1'>
-            <span className='block truncate text-sm font-medium'>Trip ideas</span>
-            <span className='text-muted-foreground block text-xs'>{summary}</span>
-          </span>
-          <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
-        </Button>
-      </section>
+      <SectionEntryRow
+        heading='Ideas'
+        icon={<Lightbulb className='h-5 w-5' />}
+        title='Trip ideas'
+        summary={summary}
+        onOpen={onOpen}
+      />
     );
   }
 

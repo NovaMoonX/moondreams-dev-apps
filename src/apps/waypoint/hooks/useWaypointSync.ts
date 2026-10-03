@@ -14,6 +14,7 @@ import { startAnnouncementsListener } from '../store/listeners/announcementListe
 import { startIdeasListener } from '../store/listeners/ideaListeners';
 import { startChecklistListener } from '../store/listeners/checklistListeners';
 import { startTripStaysListener } from '../store/listeners/stayListeners';
+import { startTripRentalsListener } from '../store/listeners/rentalListeners';
 import {
   setMyPendingRequests,
   setTripPendingRequests,
@@ -32,6 +33,7 @@ import {
 import { clearIdeas, setIdeas } from '../store/slices/ideasSlice';
 import { setChecklist } from '../store/slices/checklistSlice';
 import { clearStays, setStays } from '../store/slices/staysSlice';
+import { clearRentals, setRentals } from '../store/slices/rentalsSlice';
 
 interface UseWaypointSyncOptions {
   tripId: string | null;
@@ -94,6 +96,17 @@ export function useWaypointSync(
 
     return startTripStaysListener(tripId, (stays) => {
       dispatch(setStays({ tripId, stays }));
+    });
+  }, [dispatch, tripId]);
+
+  useEffect(() => {
+    if (!tripId) {
+      dispatch(clearRentals());
+      return;
+    }
+
+    return startTripRentalsListener(tripId, (rentals) => {
+      dispatch(setRentals({ tripId, rentals }));
     });
   }, [dispatch, tripId]);
 

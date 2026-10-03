@@ -17,6 +17,8 @@ const STAY_DAY_FIELDS = [
   'plannedDepartureDayIndex',
 ] as const;
 
+const RENTAL_DAY_FIELDS = ['pickupDayIndex', 'returnDayIndex'] as const;
+
 interface ShiftTripDatesInput {
   tripId: string;
   title: string;
@@ -104,7 +106,7 @@ function rebaseIdeaDays(
 }
 
 /**
- * Moves a trip's dates while keeping every event, stay, expense, checklist item and idea's
+ * Moves a trip's dates while keeping every event, stay, rental, expense, checklist item and idea's
  * suggested days on the
  * calendar day it was already on: the trip's start moves, so each item's day number is
  * rebased by the same amount. Called only when someone opts into "keep original dates" —
@@ -158,15 +160,16 @@ export const shiftTripDates = onCall(
             throw new HttpsError('failed-precondition', "This trip's dates are fixed.");
           }
 
-          const [events, stays, expenses, checklist, ideas] = await Promise.all([
+          const [events, stays, rentals, expenses, checklist, ideas] = await Promise.all([
             transaction.get(tripRef.collection('events')),
             transaction.get(tripRef.collection('stays')),
+            transaction.get(tripRef.collection('rentals')),
             transaction.get(tripRef.collection('expenses')),
             transaction.get(tripRef.collection('checklist')),
             transaction.get(tripRef.collection('ideas')),
           ]);
           const itemCount =
-            events.size + stays.size + expenses.size + checklist.size + ideas.size;
+            events.size + stays.size + rentals.size + expenses.size + checklist.size + ideas.size;
           if (itemCount > MAX_ITEMS) {
             throw new HttpsError(
               'failed-precondition',
@@ -184,6 +187,10 @@ export const shiftTripDates = onCall(
             ...stays.docs.map((doc) => ({
               ref: doc.ref,
               data: rebaseDayFields(doc.data(), STAY_DAY_FIELDS, deltaDays),
+            })),
+            ...rentals.docs.map((doc) => ({
+              ref: doc.ref,
+              data: rebaseDayFields(doc.data(), RENTAL_DAY_FIELDS, deltaDays),
             })),
             ...expenses.docs.map((doc) => ({
               ref: doc.ref,

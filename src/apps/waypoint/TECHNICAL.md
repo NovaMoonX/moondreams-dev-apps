@@ -297,6 +297,42 @@ interface Stay {
 }
 ```
 
+#### Rental Document
+
+Path: `apps/waypoint/trips/{tripId}/rentals/{rentalId}` — surfaced like Stays: a Rentals tab on desktop, a Rentals entry under Stays on a phone's Overview. Cars only for now (`rentalType: 'CAR'`).
+
+```typescript
+interface Rental {
+  id: string;
+  tripId: string;
+  rentalType: 'CAR';
+  name: string; // the rental company
+  vehicle: string | null; // free text, e.g. "Toyota RAV4 or similar"
+  pickupAddress: string;
+  pickupLatitude: number | null;
+  pickupLongitude: number | null;
+  pickupPlace: PlaceRef | null;
+  returnAddress: string | null; // null = returned where it was picked up
+  returnLatitude: number | null;
+  returnLongitude: number | null;
+  returnPlace: PlaceRef | null;
+  pickupDayIndex: number; // trip day + "HH:mm", on every trip — absolute-model trips never move their dates
+  pickupTime: string;
+  returnDayIndex: number;
+  returnTime: string;
+  timezone: string | null; // zone override; null follows the trip's timezone
+  confirmationCode: string | null;
+  notes: string | null;
+  linkUrl: string | null;
+  linkPreview: LinkPreview | null;
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+```
+
+Write permissions match Stays (`canCreateItem` / `canEditExistingItem`, mirrored in `firestore.rules`), and `shiftTripDates` rebases `pickupDayIndex`/`returnDayIndex` like every other dated item. On a live trip Overview shows a card for each pickup and return that falls on today, right after the check-in cards, labelled "Picking up today" / "Returning today" and flipping to "Picked up" / "Returned" once the time passes. Rentals aren't part of the "What's new" notifications yet.
+
 #### Enrichment: place search and link previews
 
 Both `TimelineEvent` and `Stay` carry the same three enrichment fields:
@@ -542,7 +578,7 @@ A zone is only needed to turn a relative time into a real instant — for remind
 
 On a relative trip the default is one write to the trip document: every item keeps its day number, so everything moves with the trip. Items whose day is now past the last day (or before the first) are kept, not nulled — they render under an "Outside trip dates" group and come back if the trip is extended again; the edit form warns about how many will land there. Every date input that is part of a range (trip, event, stay) carries the end along when the start moves, keeping the range's length.
 
-When the start date moves, the edit form also offers **"Keep events and stays on their original dates"** (off by default). Checked, the client calls the `shiftTripDates` callable, which rebases every event, stay, expense and checklist item's day number, and each idea's suggested days, by the start-date delta inside one Admin SDK transaction — Admin because `firestore.rules` limit who can write events and stays on a live trip, and a transaction so a concurrent edit can't be half-applied. A trip with more than ~450 items is refused rather than half-rebased.
+When the start date moves, the edit form also offers **"Keep events and stays on their original dates"** (off by default). Checked, the client calls the `shiftTripDates` callable, which rebases every event, stay, rental, expense and checklist item's day number, and each idea's suggested days, by the start-date delta inside one Admin SDK transaction — Admin because `firestore.rules` limit who can write events and stays on a live trip, and a transaction so a concurrent edit can't be half-applied. A trip with more than ~450 items is refused rather than half-rebased.
 
 Reminders are absolute instants (the delivery function only reads `scheduledFor`), so they have to follow the trip: the `rescheduleTripReminders` Firestore trigger runs when a relative trip's `startDate`, `endDate` or `timezone` changes and re-derives every reminder from the stored events — moved when the event is still on the calendar, cancelled when it falls outside the trip or has no day, and re-created (with `reminderId` written back) when it returns to range after its reminder was cancelled or sent. Clients can only cancel a reminder, so this is the one place a reminder is rescheduled.
 

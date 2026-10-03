@@ -2,16 +2,15 @@ import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import type { Stay } from '@apps/waypoint/types';
-
-interface StayNotesButtonProps {
-  stay: Stay;
+interface NotesViewButtonProps {
+  title: string;
+  notes: string | null;
 }
 
-export function StayNotesButton({ stay }: StayNotesButtonProps) {
+export function NotesViewButton({ title, notes }: NotesViewButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  if (!stay.notes) {
+  if (!notes) {
     return null;
   }
 
@@ -26,11 +25,11 @@ export function StayNotesButton({ stay }: StayNotesButtonProps) {
       >
         View notes
       </Button>
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={stay.name}>
-        <p className='text-sm whitespace-pre-line'>{stay.notes}</p>
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
+        <p className='text-sm whitespace-pre-line'>{notes}</p>
       </Modal>
     </>
   );
 }
 
-export default StayNotesButton;
+export default NotesViewButton;

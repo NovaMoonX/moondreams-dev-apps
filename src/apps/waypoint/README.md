@@ -32,6 +32,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 - [ ] Day-by-Day Timeline & Directions: Structured timeline grouped by day with event times, transit types, locations, and 1-tap native map navigation.
 - [ ] Multi-Destination Itineraries: A trip isn't locked to one home base — a given day can be its own city, state, or leg of the journey, and the timeline reflects wherever that day actually is.
 - [ ] Multiple Stays: A trip can include more than one place to sleep, each with its own check-in/check-out dates, address, and 1-tap directions — so a lodging change partway through a multi-leg trip is tracked just as clearly as everything else.
+- [ ] Car Rentals: Track a rental car's company, vehicle, pickup and return spots, and times alongside your stays — and on pickup and return day, it shows up on the trip's live Overview so nobody has to hunt for the confirmation code.
 - [ ] Visible Itinerary Changes: Edits to an event's time, date, or location are clearly flagged (e.g. "Departure moved: 8:00 AM → 2:00 PM") so a change never slips by unnoticed.
 - [ ] Realtime Sync: Changes show up instantly for everyone in the trip — no refreshing needed.
 

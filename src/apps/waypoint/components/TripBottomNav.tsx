@@ -15,9 +15,9 @@ interface TripBottomNavProps {
   onChange: (value: string) => void;
 }
 
-// Stays, Members, Checklist and Ideas live behind Overview, so it stays highlighted while on them.
+// Stays, Rentals, Members, Checklist and Ideas live behind Overview, so it stays highlighted while on them.
 const NAV_ITEMS: { value: string; label: string; icon: ReactNode; matches: string[] }[] = [
-  { value: '', label: 'Overview', icon: <House className='h-5 w-5' />, matches: ['', 'stays', 'members', 'checklist', 'ideas'] },
+  { value: '', label: 'Overview', icon: <House className='h-5 w-5' />, matches: ['', 'stays', 'rentals', 'members', 'checklist', 'ideas'] },
   { value: 'overview', label: 'Timeline', icon: <CalendarDays className='h-5 w-5' />, matches: ['overview'] },
   { value: 'expenses', label: 'Expenses', icon: <Wallet className='h-5 w-5' />, matches: ['expenses'] },
 ];
