@@ -1,7 +1,7 @@
 import { useId, useState, useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
@@ -20,7 +20,7 @@ import {
 import { deleteIdea, updateIdea } from '@apps/waypoint/store/actions/ideaActions';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTiming } from '@apps/waypoint/utils/ideaLabels';
-import { canManageIdea } from '@apps/waypoint/utils/roleGuards';
+import { canDeleteIdea, canEditIdea } from '@apps/waypoint/utils/roleGuards';
 
 let openOverlayId: string | null = null;
 const openIdeaListeners = new Set<() => void>();
@@ -64,9 +64,10 @@ interface IdeaDetailsOverlayProps {
 type IdeaDetailsBodyProps = Pick<IdeaDetailsOverlayProps, 'trip' | 'idea' | 'currentUserId'> & {
   isDrawer: boolean;
   onEdit: (() => void) | null;
+  onDelete: (() => void) | null;
 };
 
-function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit }: IdeaDetailsBodyProps) {
+function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit, onDelete }: IdeaDetailsBodyProps) {
   const adderInfo = useUserInfo(idea.addedByUid);
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const tags = getIdeaTags(idea);
@@ -150,6 +151,17 @@ function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit }: IdeaDe
               Modify
             </Button>
           )}
+          {onDelete && (
+            <Button
+              type='button'
+              size='sm'
+              variant='secondary'
+              className='text-destructive'
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          )}
           {idea.linkUrl && (
             <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='sm' variant='secondary'>
               Visit site
@@ -166,6 +178,9 @@ function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit }: IdeaDe
 function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDetailsOverlayProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
+  const adderInfo = useUserInfo(idea.addedByUid);
+  const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const isSmallScreen = useMediaQuery().isBelow('sm');
   // Keyed per rendered card, not per idea: the same idea can sit on Overview and in the Ideas list.
   const overlayId = useId();
@@ -173,7 +188,8 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
   const setIsOpen = (open: boolean) => setOpenIdea(overlayId, open);
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const canManage = canManageIdea(trip, currentUserId, idea);
+  const canEdit = canEditIdea(trip, currentUserId, idea);
+  const canDelete = canDeleteIdea(trip, currentUserId, idea);
   const openProps: IdeaOpenProps = {
     role: 'button',
     tabIndex: 0,
@@ -186,7 +202,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
       }
     },
   };
-  const startEditing = canManage
+  const startEditing = canEdit
     ? () => {
         setIsOpen(false);
         setIsEditing(true);
@@ -219,6 +235,30 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
     }
   };
 
+  const deleteAsAdmin = async () => {
+    const confirmed = await confirm({
+      title: 'Delete idea',
+      message: `This is ${adderName}'s idea, not yours. Delete "${idea.title}" for everyone?${
+        idea.convertedToEntityId === null ? '' : " It's already on the itinerary, and that event stays exactly as it is."
+      }`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await handleDelete();
+    } catch (deleteError) {
+      addToast({
+        title: 'Unable to delete this idea',
+        description: getErrorMessage(deleteError, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
+  const startAdminDelete = canDelete && !canEdit ? () => void deleteAsAdmin() : null;
+
   const editModal = isEditing && (
     <IdeaFormModal
       key={idea.id}
@@ -244,7 +284,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
           title={idea.title}
           showCloseButton
           footer={
-            idea.linkUrl || startEditing ? (
+            idea.linkUrl || startEditing || startAdminDelete ? (
               <div className='flex flex-col gap-2'>
                 {idea.linkUrl && (
                   <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='lg' variant='secondary'>
@@ -254,6 +294,17 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
                 {startEditing && (
                   <Button type='button' size='lg' variant='secondary' onClick={startEditing}>
                     Modify
+                  </Button>
+                )}
+                {startAdminDelete && (
+                  <Button
+                    type='button'
+                    size='lg'
+                    variant='secondary'
+                    className='text-destructive'
+                    onClick={startAdminDelete}
+                  >
+                    Delete
                   </Button>
                 )}
               </div>
@@ -267,6 +318,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
               currentUserId={currentUserId}
               isDrawer
               onEdit={null}
+              onDelete={null}
             />
           )}
         </Drawer>
@@ -295,6 +347,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
               currentUserId={currentUserId}
               isDrawer={false}
               onEdit={startEditing}
+              onDelete={startAdminDelete}
             />
           )}
         </Popover>

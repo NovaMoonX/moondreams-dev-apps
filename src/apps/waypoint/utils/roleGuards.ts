@@ -62,12 +62,14 @@ export function canAddIdea(trip: TripSpace, uid: string, now = Date.now()) {
   return isTripMember(trip, uid) && !hasTripStarted(trip, now);
 }
 
-/** An idea's own poster, or any Editor/Admin, may change or remove it — in any trip phase. */
-export function canManageIdea(trip: TripSpace, uid: string, idea: { addedByUid: string }) {
-  return (
-    (idea.addedByUid === uid && isTripMember(trip, uid)) ||
-    hasTripRole(trip, uid, ['ADMIN', 'EDITOR'])
-  );
+/** Only an idea's own poster may edit it, in any trip phase. */
+export function canEditIdea(trip: TripSpace, uid: string, idea: { addedByUid: string }) {
+  return idea.addedByUid === uid && isTripMember(trip, uid);
+}
+
+/** The poster may delete their own idea; an Admin may also remove anyone's. */
+export function canDeleteIdea(trip: TripSpace, uid: string, idea: { addedByUid: string }) {
+  return canEditIdea(trip, uid, idea) || isTripAdmin(trip, uid);
 }
 
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to

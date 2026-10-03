@@ -4,7 +4,7 @@ import { arrayRemove, arrayUnion, collection, deleteDoc, doc, setDoc, updateDoc 
 import { db } from '@/lib/firebase/config';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import type { IdeaDetails, IdeaType, TripIdea, TripSpace } from '@apps/waypoint/types';
-import { canAddIdea, canManageIdea, isTripMember } from '@apps/waypoint/utils/roleGuards';
+import { canAddIdea, canDeleteIdea, canEditIdea, isTripMember } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateIdeaInput {
   uid: string;
@@ -83,8 +83,8 @@ interface UpdateIdeaInput extends CreateIdeaInput {
 export const updateIdea = createAsyncThunk<void, UpdateIdeaInput, { rejectValue: string }>(
   'waypoint/ideas/update',
   async ({ uid, trip, idea, ...fields }, { rejectWithValue }) => {
-    if (!canManageIdea(trip, uid, idea)) {
-      return rejectWithValue('Only the person who added this idea, or an Editor or Admin, can change it.');
+    if (!canEditIdea(trip, uid, idea)) {
+      return rejectWithValue('Only the person who added this idea can change it.');
     }
     if (!fields.title.trim()) {
       return rejectWithValue('Enter a name for this idea.');
@@ -113,8 +113,8 @@ interface DeleteIdeaInput {
 export const deleteIdea = createAsyncThunk<void, DeleteIdeaInput, { rejectValue: string }>(
   'waypoint/ideas/delete',
   async ({ uid, trip, idea }, { rejectWithValue }) => {
-    if (!canManageIdea(trip, uid, idea)) {
-      return rejectWithValue('Only the person who added this idea, or an Editor or Admin, can delete it.');
+    if (!canDeleteIdea(trip, uid, idea)) {
+      return rejectWithValue('Only the person who added this idea, or an Admin, can delete it.');
     }
     await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id));
   },
