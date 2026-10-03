@@ -519,6 +519,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
           </div>
         )}
+        {hasAppNav && sectionTab === '' && (
+          <div className='mt-5 space-y-3'>
+            <StaysEntry onOpen={() => setSectionTab('stays')} />
+            <RentalsEntry onOpen={() => setSectionTab('rentals')} />
+          </div>
+        )}
         {(hasAppNav ? sectionTab === '' : canAddIdeas) && (
           <div className='mt-5'>
             <IdeasOverview
@@ -528,12 +534,6 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               onOpen={() => setSectionTab('ideas')}
               onAdd={setIdeaFormType}
             />
-          </div>
-        )}
-        {hasAppNav && sectionTab === '' && (
-          <div className='mt-5 space-y-3'>
-            <StaysEntry onOpen={() => setSectionTab('stays')} />
-            <RentalsEntry onOpen={() => setSectionTab('rentals')} />
           </div>
         )}
         {!hasAppNav && <hr className='border-border mt-4' />}
