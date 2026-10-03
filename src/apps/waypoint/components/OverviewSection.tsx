@@ -46,7 +46,7 @@ import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 type OverviewDetail =
   | { type: 'event'; event: TimelineEvent }
   | { type: 'stay'; stay: Stay }
-  | { type: 'rental'; rental: Rental };
+  | { type: 'rental'; rental: Rental; leg: RentalLeg };
 
 type RentalLeg = 'pickup' | 'return';
 
@@ -156,8 +156,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     setDetail({ type: 'stay', stay });
   };
 
-  const openRentalDrawer = (rental: Rental) => {
-    setDetail({ type: 'rental', rental });
+  const openRentalDrawer = (rental: Rental, leg: RentalLeg) => {
+    setDetail({ type: 'rental', rental, leg });
   };
 
   return (
@@ -181,7 +181,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             leg={leg}
             now={now}
             isSmallScreen={isSmallScreen}
-            onOpenDetails={() => openRentalDrawer(rental)}
+            onOpenDetails={() => openRentalDrawer(rental, leg)}
           />
         ))}
         {activeEvent && (
@@ -302,7 +302,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           onClose={() => setDetail(null)}
           title={detail.rental.name}
           imageUrl={getDisplayImage({ place: detail.rental.pickupPlace, linkPreview: detail.rental.linkPreview })}
-          location={getRentalLocation(detail.rental, 'pickup')}
+          location={getRentalLocation(detail.rental, detail.leg)}
           linkUrl={detail.rental.linkUrl}
           onEdit={null}
         >
@@ -436,7 +436,7 @@ function RentalTodayCard({
   const legMs = isPickup ? pickupMs : returnMs;
   const isDone = legMs !== null && legMs <= now;
   const location = getRentalLocation(rental, leg);
-  const timezoneLabel = getRentalTimezoneLabel(trip, rental);
+  const timezoneLabel = getRentalTimezoneLabel(trip, rental, 'short', legMs);
   const label = isPickup
     ? isDone ? 'Picked up' : 'Picking up today'
     : isDone ? 'Returned' : 'Returning today';

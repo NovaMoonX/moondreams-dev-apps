@@ -15,7 +15,7 @@ import { compareDayTime, shiftRangeEnd } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import type { PlaceRef, PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
-import type { RentalFields } from '@apps/waypoint/store/actions/rentalActions';
+import type { RentalFormFields } from '@apps/waypoint/store/actions/rentalActions';
 import type { Rental, TripSpace } from '@apps/waypoint/types';
 
 interface RentalFormModalProps {
@@ -24,7 +24,7 @@ interface RentalFormModalProps {
   rental?: Rental;
   placeBias?: PlaceSelectionBias;
   isSubmitting?: boolean;
-  onSubmit: (rental: RentalFields) => Promise<void> | void;
+  onSubmit: (rental: RentalFormFields) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
@@ -113,10 +113,10 @@ type OptionalField = 'vehicle' | 'returnLocation' | 'timezone' | 'confirmationCo
 
 const OPTIONAL_FIELD_CHIPS: { key: OptionalField; label: string; icon: ReactNode }[] = [
   { key: 'vehicle', label: 'Vehicle', icon: <Car className='h-4 w-4' /> },
-  { key: 'returnLocation', label: 'Different return spot', icon: <MapPin className='h-4 w-4' /> },
+  { key: 'returnLocation', label: 'Return spot', icon: <MapPin className='h-4 w-4' /> },
   { key: 'timezone', label: 'Time zone', icon: <Globe className='h-4 w-4' /> },
-  { key: 'confirmationCode', label: 'Confirmation code', icon: <Hash className='h-4 w-4' /> },
-  { key: 'link', label: 'Reservation link', icon: <Link2 className='h-4 w-4' /> },
+  { key: 'confirmationCode', label: 'Confirmation', icon: <Hash className='h-4 w-4' /> },
+  { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
 ];
 
 interface DayTimeFieldProps {
@@ -218,7 +218,6 @@ export function RentalFormModal({
         returnTime: draft.returnTime,
         timezone: draft.timezone,
         confirmationCode: draft.confirmationCode,
-        notes: rental?.notes ?? null,
         linkUrl: draft.linkUrl,
         linkPreview: draft.linkPreview,
       });
@@ -321,7 +320,7 @@ export function RentalFormModal({
           </RemovableField>
         )}
         {revealed.includes('link') && (
-          <RemovableField label='Reservation link' removeLabel='Remove reservation link' onRemove={() => remove('link')}>
+          <RemovableField label='Link' removeLabel='Remove link' onRemove={() => remove('link')}>
             <LinkAttachField
               url={draft.linkUrl}
               preview={draft.linkPreview}

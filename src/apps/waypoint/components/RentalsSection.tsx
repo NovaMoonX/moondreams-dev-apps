@@ -11,7 +11,7 @@ import {
   deleteRental,
   updateRental,
   updateRentalNotes,
-  type RentalFields,
+  type RentalFormFields,
 } from '@apps/waypoint/store/actions/rentalActions';
 import {
   selectSortedRentals,
@@ -37,7 +37,6 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRental, setEditingRental] = useState<Rental | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // The mobile details drawer's own close, threaded through from whichever RentalCard opened
   // the edit form — invoked only once that edit actually succeeds, never on cancel.
   const editSuccessRef = useRef<(() => void) | undefined>(undefined);
@@ -54,9 +53,8 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
     editSuccessRef.current = undefined;
   };
 
-  const handleSubmit = async (rental: RentalFields) => {
+  const handleSubmit = async (rental: RentalFormFields) => {
     setIsSubmitting(true);
-    setError(null);
     try {
       if (editingRental) {
         await dispatch(
@@ -66,8 +64,6 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
         await dispatch(createRental({ uid: currentUserId, trip, rental })).unwrap();
       }
       closeModal();
-    } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to save this rental.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -126,7 +122,6 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
           ))}
         </div>
       )}
-      {error && <p className='text-destructive text-sm'>{error}</p>}
       <RentalFormModal
         key={`${editingRental?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}

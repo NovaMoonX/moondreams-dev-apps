@@ -6,19 +6,23 @@ import type { Rental, TripSpace } from '@apps/waypoint/types';
 import { compareDayTime } from '@/utils/dayTimeUtils';
 import { canCreateItem, canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 
-export type RentalFields = Omit<Rental, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
+/** Notes are edited on their own (`updateRentalNotes`), so the form never carries them. */
+export type RentalFormFields = Omit<
+  Rental,
+  'id' | 'tripId' | 'notes' | 'createdBy' | 'createdAt' | 'lastEditedAt'
+>;
 
 interface CreateRentalInput {
   uid: string;
   trip: TripSpace;
-  rental: RentalFields;
+  rental: RentalFormFields;
 }
 
 interface UpdateRentalInput {
   uid: string;
   trip: TripSpace;
   rentalId: string;
-  rental: RentalFields;
+  rental: RentalFormFields;
 }
 
 interface UpdateRentalNotesInput {
@@ -36,7 +40,7 @@ interface DeleteRentalInput {
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-function validateRental(rental: RentalFields) {
+function validateRental(rental: RentalFormFields) {
   if (!rental.name.trim() || !rental.pickupAddress.trim()) {
     return 'Rental company and pickup location are required.';
   }
@@ -53,7 +57,7 @@ function validateRental(rental: RentalFields) {
   return isValidTime ? null : 'Choose a return time after the pickup.';
 }
 
-function normalizeRental(rental: RentalFields): RentalFields {
+function normalizeRental(rental: RentalFormFields): RentalFormFields {
   const returnAddress = rental.returnAddress?.trim() || null;
   const linkUrl = rental.linkUrl?.trim() || null;
   return {
@@ -67,7 +71,6 @@ function normalizeRental(rental: RentalFields): RentalFields {
     returnPlace: returnAddress ? rental.returnPlace : null,
     timezone: rental.timezone?.trim() || null,
     confirmationCode: rental.confirmationCode?.trim() || null,
-    notes: rental.notes?.trim() || null,
     linkUrl,
     linkPreview: linkUrl ? rental.linkPreview : null,
   };
@@ -90,6 +93,7 @@ export const createRental = createAsyncThunk<
   const now = Date.now();
   const createdRental: Rental = {
     ...normalizeRental(rental),
+    notes: null,
     id: rentalRef.id,
     tripId: trip.id,
     createdBy: uid,
@@ -102,7 +106,7 @@ export const createRental = createAsyncThunk<
 });
 
 export const updateRental = createAsyncThunk<
-  RentalFields,
+  RentalFormFields,
   UpdateRentalInput,
   { rejectValue: string }
 >('waypoint/rentals/update', async ({ uid, trip, rentalId, rental }, { rejectWithValue }) => {

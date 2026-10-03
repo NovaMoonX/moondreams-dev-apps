@@ -355,12 +355,13 @@ export function getRentalTimezoneLabel(
   trip: TripSpace,
   rental: RentalTimeSource,
   zoneStyle: ZoneStyle = 'short',
+  at: number | null = null,
 ) {
   const zone = rental.timezone;
   if (!zone || zone === trip.timezone) {
     return null;
   }
-  return formatZone(zone, zoneStyle, getRentalTime(trip, rental).pickupMs);
+  return formatZone(zone, zoneStyle, at ?? getRentalTime(trip, rental).pickupMs);
 }
 
 export function formatStayTimeRange(trip: TripSpace, stay: StayTimeSource) {
