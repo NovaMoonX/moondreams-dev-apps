@@ -15,8 +15,10 @@ const formatHourLabel = (time: string) => {
 };
 
 function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
+  const showPrecip = hours.some((hour) => hour.precipChance !== null && hour.precipChance >= 20);
+
   return (
-    <ul className='-mx-1 flex gap-1 overflow-x-auto px-1 pb-1' aria-label='Hour by hour weather'>
+    <ul className='-mx-1 flex gap-1 overflow-x-auto px-1' aria-label='Hour by hour weather'>
       {hours.map((hour, index) => {
         const condition = getWeatherCondition(hour.weatherCode);
         const { label } = condition;
@@ -42,9 +44,11 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
             </span>
             <WeatherEmoji condition={condition} className='h-5 shrink-0 text-base leading-5' />
             <span className='leading-4 font-medium'>{hour.temp === null ? '–' : `${Math.round(hour.temp)}°`}</span>
-            <span className='text-muted-foreground h-3.5 text-[10px] leading-3.5'>
-              {hour.precipChance !== null && hour.precipChance >= 20 ? `${hour.precipChance}%` : ''}
-            </span>
+            {showPrecip && (
+              <span className='text-muted-foreground h-3.5 text-[10px] leading-3.5'>
+                {hour.precipChance !== null && hour.precipChance >= 20 ? `${hour.precipChance}%` : ''}
+              </span>
+            )}
           </li>
         );
       })}

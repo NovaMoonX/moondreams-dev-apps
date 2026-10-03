@@ -61,13 +61,15 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
               aria-pressed={isSelected}
               aria-label={`${dateLabel}: ${condition.label}, high ${formatTemp(forecast.tempMax)}, low ${formatTemp(forecast.tempMin)}`}
               className={join(
-                'h-auto min-w-18 flex-1 flex-col gap-1 rounded-md px-1 py-2 text-xs font-normal',
+                'relative h-auto min-w-18 flex-1 flex-col gap-1 rounded-md px-1 py-2 text-xs font-normal focus:outline-transparent!',
                 dayIndex < todayIndex && 'opacity-60',
                 isToday && 'bg-primary/10',
-                isSelected && (isToday ? 'bg-primary/20' : 'bg-muted'),
               )}
               onClick={() => onSelectDay(dayIndex)}
             >
+              {isSelected && (
+                <span aria-hidden='true' className='bg-foreground absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full' />
+              )}
               <span className={join('leading-4', isToday ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
                 {isToday ? 'Today' : weekday}
               </span>
