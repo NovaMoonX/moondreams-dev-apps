@@ -19,6 +19,10 @@ export interface MembershipProfile {
 
 export type AListTab = 'dashboard' | 'calendar' | 'watchlist';
 
+export type AmcFormat =
+  'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
+export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
+
 export interface MovieSnapshot {
   title: string;
   /** Date-only (UTC midnight): the US theatrical release date; null if unknown. */
@@ -39,3 +43,14 @@ export interface MovieSearchResult {
 }
 
 export type AListOverlay = { kind: 'add'; destination: 'watchlist' };
+
+export interface WatchlistItem {
+  /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */
+  movieKey: string;
+  movie: MovieSnapshot;
+  priority: WatchPriority;
+  /** null = no preference. */
+  preferredFormat: AmcFormat | null;
+  createdAt: number;
+  lastEditedAt: number;
+}

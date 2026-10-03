@@ -1,4 +1,4 @@
-import type { AListTab } from '@apps/a-list/types';
+import type { AListTab, AmcFormat, WatchPriority } from '@apps/a-list/types';
 
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';
@@ -25,3 +25,35 @@ export const MAX_MONTHLY_GOAL = 93;
 
 export const MOVIE_SEARCH_MIN_CHARS = 2;
 export const MOVIE_DETAILS_STALE_MS = 24 * 60 * 60 * 1000;
+
+export const AMC_FORMATS: AmcFormat[] = [
+  'STANDARD',
+  'DOLBY_CINEMA',
+  'IMAX',
+  'PRIME',
+  'REALD_3D',
+  'LASER',
+];
+
+export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
+  STANDARD: 'Standard',
+  DOLBY_CINEMA: 'Dolby Cinema',
+  IMAX: 'IMAX',
+  PRIME: 'PRIME at AMC',
+  REALD_3D: 'RealD 3D',
+  LASER: 'Laser',
+};
+
+export const WATCH_PRIORITIES: WatchPriority[] = [
+  'MUST_SEE',
+  'WANT_TO_SEE',
+  'IF_I_HAVE_TIME',
+];
+
+export const WATCH_PRIORITY_LABELS: Record<WatchPriority, string> = {
+  MUST_SEE: 'Must See',
+  WANT_TO_SEE: 'Want to See',
+  IF_I_HAVE_TIME: 'If I Have Time',
+};
+
+export const DEFAULT_WATCH_PRIORITY: WatchPriority = 'WANT_TO_SEE';
