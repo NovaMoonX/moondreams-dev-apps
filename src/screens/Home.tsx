@@ -1,7 +1,9 @@
+import { ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { APP_DESCRIPTION, APP_TITLE } from '@lib/app';
-import NavButton from '@ui/NavButton';
 
 function Home() {
   const { user } = useAuth();
@@ -9,8 +11,8 @@ function Home() {
 
   return (
     <div className='page flex items-center justify-center'>
-      <div className='w-full max-w-2xl'>
-        <header className='mb-10 flex items-center justify-between'>
+      <div className='w-full max-w-4xl'>
+        <header className='mb-10 flex items-center justify-center'>
           <div className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
             {APP_TITLE}
           </div>
@@ -26,43 +28,42 @@ function Home() {
         </main>
 
         {loading ? (
-          <div className='text-foreground/60 mt-12 text-sm'>
+          <div className='text-foreground/60 mt-12 text-center text-sm'>
             Loading apps...
           </div>
+        ) : apps.length === 0 ? (
+          <div className='border-border bg-card text-foreground/70 mx-auto mt-12 max-w-2xl rounded-3xl border px-5 py-4 text-center text-sm'>
+            {user
+              ? 'No apps available for your account.'
+              : 'No apps generally available. Please sign in to see apps available for your account.'}
+          </div>
         ) : (
-          <nav className='mt-12 space-y-3'>
-            {apps.length === 0 ? (
-              <div className='border-border bg-card text-foreground/70 rounded-2xl border px-4 py-3 text-sm'>
-                {user
-                  ? 'No apps available for your account.'
-                  : 'No apps generally available. Please sign in to see apps available for your account.'}
-              </div>
-            ) : (
-              apps.map((app) => (
-                <div
-                  key={app.id}
-                  className='border-border bg-card flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 shadow-sm'
-                >
-                  <div className='flex min-w-0 items-center gap-3'>
-                    <img
-                      src={`/logos/by-app/logo-${app.id}.svg`}
-                      alt={`${app.name} logo`}
-                      className='h-11 w-11 shrink-0 rounded-xl'
-                    />
-                    <div className='min-w-0'>
-                      <div className='text-foreground text-lg font-medium'>
-                        {app.name}
-                      </div>
-                      <p className='text-foreground/60 text-sm'>
-                        {app.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  <NavButton href={app.path}>Open</NavButton>
+          <nav className='mt-12 grid gap-4 sm:grid-cols-2'>
+            {apps.map((app) => (
+              <Link
+                key={app.id}
+                to={app.path}
+                aria-label={`Open ${app.name}`}
+                className='group border-border bg-card hover:border-primary/40 flex flex-col gap-4 rounded-3xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md'
+              >
+                <div className='flex items-center gap-4'>
+                  <img
+                    src={`/logos/by-app/logo-${app.id}.svg`}
+                    alt=''
+                    className='h-16 w-16 shrink-0 rounded-2xl shadow-sm'
+                  />
+                  <h2 className='text-foreground min-w-0 flex-1 text-xl font-semibold tracking-tight'>
+                    {app.name}
+                  </h2>
+                  <span className='bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground grid size-9 shrink-0 place-items-center rounded-full transition'>
+                    <ChevronRight className='h-5 w-5' />
+                  </span>
                 </div>
-              ))
-            )}
+                <p className='text-foreground/60 line-clamp-3 text-sm'>
+                  {app.description}
+                </p>
+              </Link>
+            ))}
           </nav>
         )}
       </div>

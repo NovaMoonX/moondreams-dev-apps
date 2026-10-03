@@ -1,11 +1,6 @@
 import { useState } from 'react';
 
-import {
-  Button,
-  Drawer,
-  Form,
-  FormFactories,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
@@ -31,15 +26,15 @@ import ManualMovieForm, {
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
+import SubviewHeader from '@apps/a-list/components/shell/SubviewHeader';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
+import WatchlistDetailsFields, {
+  type WatchlistDetailsValues,
+} from '@apps/a-list/components/watchlist/WatchlistDetailsFields';
 import {
-  AMC_FORMAT_LABELS,
-  AMC_FORMATS,
   DEFAULT_SHOWTIME,
   DEFAULT_WATCH_PRIORITY,
-  WATCH_PRIORITIES,
-  WATCH_PRIORITY_LABELS,
 } from '@apps/a-list/constants';
 import { movieDetailsQueryOptions } from '@apps/a-list/queries/movieQueries';
 import { addViewing } from '@apps/a-list/store/actions/viewingActions';
@@ -49,6 +44,7 @@ import {
   getInitialTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
+import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
@@ -57,16 +53,9 @@ import {
 } from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
-  AmcFormat,
   MovieSearchResult,
   MovieSnapshot,
-  WatchPriority,
 } from '@apps/a-list/types';
-
-interface WatchlistDetailsValues {
-  priority: WatchPriority;
-  preferredFormat: AmcFormat | 'NONE';
-}
 
 interface ShowtimeValues {
   date: string;
@@ -91,33 +80,19 @@ const EMPTY_MANUAL_DRAFT: ManualMovieDraft = {
   releaseDate: '',
   showReleaseDate: false,
 };
-const { radio, select } = FormFactories;
-
-const WATCHLIST_FIELDS = [
-  radio({
-    name: 'priority',
-    label: 'Priority',
-    options: WATCH_PRIORITIES.map((priority) => ({
-      value: priority,
-      label: WATCH_PRIORITY_LABELS[priority],
-    })),
-  }),
-  select({
-    name: 'preferredFormat',
-    label: 'Preferred format',
-    options: [
-      { value: 'NONE', label: 'No preference' },
-      ...AMC_FORMATS.map((format) => ({
-        value: format,
-        label: AMC_FORMAT_LABELS[format],
-      })),
-    ],
-  }),
-];
-
 const SHOWTIME_FIELDS = [
-  createDateInputField({ name: 'date', label: 'Date', variant: 'outline' }),
-  createTimeInputField({ name: 'time', label: 'Showtime', variant: 'outline' }),
+  createDateInputField({
+    name: 'date',
+    label: 'Date',
+    variant: 'outline',
+    rounded: 'full',
+  }),
+  createTimeInputField({
+    name: 'time',
+    label: 'Showtime',
+    variant: 'outline',
+    rounded: 'full',
+  }),
 ];
 
 function getRewatchNote(seenCount: number) {
@@ -126,14 +101,13 @@ function getRewatchNote(seenCount: number) {
   return `↺ Seen ${seenCount} times before. This will be a rewatch.`;
 }
 
-interface AddDrawerProps {
+interface AddFlowProps {
   overlay: Extract<AListOverlay, { kind: 'add' }>;
   onClose: () => void;
-}
-
-interface AddFlowProps extends AddDrawerProps {
   initialSelection?: AddSelection;
   onBack?: () => void;
+  /** Set when the flow is a screen of its own: it then draws its own header, whose back control steps back before it exits. */
+  title?: string;
 }
 
 export function AddFlow({
@@ -141,6 +115,7 @@ export function AddFlow({
   onClose,
   initialSelection,
   onBack,
+  title,
 }: AddFlowProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -209,18 +184,12 @@ export function AddFlow({
     movieKey !== null &&
     (!isCalendar || (showtimeAt !== undefined && showtimeValues.time !== ''));
 
-  const getReleaseLabel = (releaseDate: number | null) => {
-    if (releaseDate === null) return 'Release date not announced';
-    if (releaseDate > todayDay) return `Opens ${formatDateUTC(releaseDate)}`;
-    return `Released ${formatDateUTC(releaseDate)}`;
-  };
-
   const getDetailsLine = () => {
     if (selection?.kind === 'search' && details.isPending)
       return 'Getting the details…';
     if (!movie) return "We couldn't load this movie's details just now.";
     const parts = [
-      getReleaseLabel(movie.releaseDate),
+      getReleaseLabel(movie.releaseDate, todayDay),
       movie.runtimeMinutes === null
         ? null
         : formatDuration(movie.runtimeMinutes * 60_000),
@@ -381,17 +350,20 @@ export function AddFlow({
 
     return (
       <div className='space-y-4'>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='gap-1 px-0'
-          onClick={handleBack}
-        >
-          <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
-        </Button>
+        {title === undefined && (
+          <Button
+            type='button'
+            rounded='full'
+            variant='link'
+            size='sm'
+            className='gap-1 px-0'
+            onClick={handleBack}
+          >
+            <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
+          </Button>
+        )}
         <div className='flex gap-3'>
-          <span className='h-30 w-20 shrink-0 overflow-hidden rounded-md'>
+          <span className='h-30 w-20 shrink-0 overflow-hidden rounded-xl shadow-sm'>
             <PosterCover
               title={movie?.title ?? fallbackTitle}
               posterUrl={movie?.posterUrl ?? fallbackPoster}
@@ -415,15 +387,9 @@ export function AddFlow({
             onDataChange={(data) => setShowtimeValues(data as ShowtimeValues)}
           />
         ) : (
-          <Form
-            id='a-list-add-watchlist'
-            form={WATCHLIST_FIELDS}
-            initialData={watchlistValues}
-            columns={1}
-            spacing='normal'
-            onDataChange={(data) =>
-              setWatchlistValues(data as WatchlistDetailsValues)
-            }
+          <WatchlistDetailsFields
+            values={watchlistValues}
+            onChange={setWatchlistValues}
           />
         )}
         {isCalendar &&
@@ -432,6 +398,7 @@ export function AddFlow({
               <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
               <Button
                 type='button'
+                rounded='full'
                 variant='link'
                 size='sm'
                 className='px-0'
@@ -443,6 +410,7 @@ export function AddFlow({
           ) : (
             <Button
               type='button'
+              rounded='full'
               variant='link'
               size='sm'
               className='px-0'
@@ -472,6 +440,7 @@ export function AddFlow({
               <>
                 <Button
                   type='button'
+                  rounded='full'
                   variant='secondary'
                   disabled={!canSave || isSaving}
                   onClick={() => void handleAdd(false)}
@@ -480,6 +449,7 @@ export function AddFlow({
                 </Button>
                 <Button
                   type='button'
+                  rounded='full'
                   loading={isSaving}
                   disabled={!canSave || isSaving}
                   onClick={() => void handleAdd(true)}
@@ -491,6 +461,7 @@ export function AddFlow({
               <>
                 <Button
                   type='button'
+                  rounded='full'
                   variant='secondary'
                   disabled={isSaving}
                   onClick={onClose}
@@ -499,6 +470,7 @@ export function AddFlow({
                 </Button>
                 <Button
                   type='button'
+                  rounded='full'
                   loading={isSaving}
                   disabled={!canSave || isSaving}
                   onClick={() => void handleAdd(false)}
@@ -513,8 +485,24 @@ export function AddFlow({
     );
   };
 
+  const getHeader = () => {
+    if (selection !== null)
+      return {
+        label: selection.kind === 'known' && selection.isManual ? 'Back' : 'Back to results',
+        onClick: handleBack,
+      };
+    if (isAddingByTitle)
+      return { label: 'Back to search', onClick: () => setIsAddingByTitle(false) };
+    return { label: title ?? '', onClick: onClose };
+  };
+
+  const header = getHeader();
+
   return (
     <>
+      {title !== undefined && (
+        <SubviewHeader title={header.label} onBack={header.onClick} />
+      )}
       {pastAdded && (
         <PastMoviesStrip
           count={pastAdded.count}
@@ -525,13 +513,3 @@ export function AddFlow({
     </>
   );
 }
-
-function AddDrawer({ overlay, onClose }: AddDrawerProps) {
-  return (
-    <Drawer isOpen onClose={onClose} title='Movie'>
-      <AddFlow overlay={overlay} onClose={onClose} />
-    </Drawer>
-  );
-}
-
-export default AddDrawer;

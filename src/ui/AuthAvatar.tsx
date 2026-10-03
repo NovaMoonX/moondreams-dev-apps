@@ -6,6 +6,7 @@ import {
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
+import { Camera, House, LogOut, Pencil, ShieldCheck, UserRound } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
@@ -15,6 +16,7 @@ import UserAvatar from '@/ui/UserAvatar';
 import { SITE_VERSION } from '@lib/app';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
+import { useMediaQuery } from '@hooks/useMediaQuery';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 type AuthAvatarProps = {
@@ -39,6 +41,8 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { isBelow } = useMediaQuery();
+  const isAwayFromHome = pathname !== '/';
 
   if (loading) {
     return (
@@ -85,6 +89,13 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     setIsNameModalOpen(false);
   };
 
+  const navItems = [
+    ...(isAwayFromHome && isBelow('sm')
+      ? [option({ label: 'Home', value: 'home', icon: <House className='size-4' /> })]
+      : []),
+    ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
+  ];
+
   const menuItems = [
     custom(() => (
       <div className='border-border border-b px-3 py-2'>
@@ -106,12 +117,13 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         </div>
       </div>
     )),
-    ...(isAdmin ? [option({ label: 'Admin', value: 'admin' })] : []),
-    option({ label: 'Profile', value: 'profile' }),
-    option({ label: 'Change name', value: 'change-name' }),
-    option({ label: 'Change photo', value: 'change-photo' }),
+    ...navItems,
+    ...(navItems.length > 0 ? [separator()] : []),
+    option({ label: 'Profile', value: 'profile', icon: <UserRound className='size-4' /> }),
+    option({ label: 'Change name', value: 'change-name', icon: <Pencil className='size-4' /> }),
+    option({ label: 'Change photo', value: 'change-photo', icon: <Camera className='size-4' /> }),
     separator(),
-    option({ label: 'Sign out', value: 'signout' }),
+    option({ label: 'Sign out', value: 'signout', icon: <LogOut className='size-4' /> }),
     custom(() => (
       <div className='border-border text-muted-foreground mt-1 border-t px-3 py-2 text-xs text-right'>
         Version {SITE_VERSION}
@@ -120,6 +132,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   ];
 
   const handleItemSelect = async (value: string) => {
+    if (value === 'home') {
+      navigate('/');
+      return;
+    }
     if (value === 'admin') {
       navigate('/admin');
       return;
@@ -146,21 +162,35 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
   return (
     <>
-      <DropdownMenu
-        items={menuItems}
-        onItemSelect={handleItemSelect}
-        placement='bottom'
-        alignment='end'
-        offset={12}
-        trigger={
-          <Button variant='base' size='sm' className={join('gap-2', className)}>
-            <UserAvatar user={user} size='sm' />
-            <span className='hidden sm:inline'>{displayName}</span>
-            <ChevronDown className='h-4 w-4' />
+      <div className='flex items-center gap-2'>
+        {isAwayFromHome && (
+          <Button
+            variant='base'
+            size='sm'
+            aria-label='Home'
+            title='Home'
+            className='max-sm:hidden'
+            onClick={() => navigate('/')}
+          >
+            <House className='h-4 w-4' />
           </Button>
-        }
-        className='w-80'
-      />
+        )}
+        <DropdownMenu
+          items={menuItems}
+          onItemSelect={handleItemSelect}
+          placement='bottom'
+          alignment='end'
+          offset={12}
+          trigger={
+            <Button variant='base' size='sm' className={join('gap-2', className)}>
+              <UserAvatar user={user} size='sm' />
+              <span className='hidden sm:inline'>{displayName}</span>
+              <ChevronDown className='h-4 w-4' />
+            </Button>
+          }
+          className='w-80 max-w-[calc(100vw-1.5rem)]'
+        />
+      </div>
 
       {isProfileModalOpen && (
         <ProfileModal user={user} onClose={() => setIsProfileModalOpen(false)} />

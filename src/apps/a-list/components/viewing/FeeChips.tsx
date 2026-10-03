@@ -1,6 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
+import MoneyInput from '@/components/MoneyInput';
 import type { FeeValue } from '@apps/a-list/utils/ticketDraft';
 import { formatCents } from '@apps/a-list/utils/money';
 

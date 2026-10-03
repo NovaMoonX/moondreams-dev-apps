@@ -1,11 +1,10 @@
-import { Badge } from '@moondreamsdev/dreamer-ui/components';
-
 import { formatTime } from '@/utils/formatUtils';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
-import StarRating from '@apps/a-list/components/shared/StarRating';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
-import { formatCents } from '@apps/a-list/utils/money';
+import StarRating from '@apps/a-list/components/shared/StarRating';
+import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import type { Viewing } from '@apps/a-list/types';
+import { formatCents } from '@apps/a-list/utils/money';
 
 interface ViewingRowProps {
   viewing: Viewing;
@@ -13,49 +12,29 @@ interface ViewingRowProps {
 }
 
 function ViewingRow({ viewing, now }: ViewingRowProps) {
-  const isAwaitingAnswer =
-    viewing.status === 'PLANNED' && viewing.endsAt <= now;
-
   return (
-    <div className='flex items-center gap-3 py-2.5'>
-      <span className='h-14 w-10 shrink-0 overflow-hidden rounded'>
+    <div className='flex w-full items-center gap-3 py-2.5'>
+      <span className='h-16 w-11 shrink-0 overflow-hidden rounded-lg shadow-sm'>
         <PosterCover
           title={viewing.movie.title}
           posterUrl={viewing.movie.posterUrl}
           compact
         />
       </span>
-      <div className='min-w-0 flex-1'>
+      <div className='min-w-0 flex-1 space-y-1 text-left'>
         <p className='truncate font-medium'>{viewing.movie.title}</p>
         <p className='text-muted-foreground text-xs'>
           {formatTime(viewing.showtimeAt)}
+          {viewing.ticket && ` · ${formatCents(viewing.ticket.totalCents)}`}
         </p>
-        {viewing.ticket && (
-          <div className='mt-0.5 flex items-center gap-1.5'>
-            <FormatBadge format={viewing.ticket.format} />
-            <span className='text-muted-foreground text-xs'>
-              {formatCents(viewing.ticket.totalCents)}
-            </span>
-          </div>
-        )}
-      </div>
-      {isAwaitingAnswer ? (
-        <Badge variant='warning' size='xs'>
-          Did you catch it?
-        </Badge>
-      ) : (
-        <div className='flex flex-col items-end gap-1'>
-          <Badge
-            variant={viewing.status === 'SEEN' ? 'success' : 'muted'}
-            size='xs'
-          >
-            {viewing.status === 'SEEN' ? 'Seen' : 'Planned'}
-          </Badge>
+        <div className='flex flex-wrap items-center gap-1.5'>
+          <ViewingStatusBadge viewing={viewing} now={now} />
+          {viewing.ticket && <FormatBadge format={viewing.ticket.format} />}
           {viewing.status === 'SEEN' && viewing.rating ? (
             <StarRating value={viewing.rating} />
           ) : null}
         </div>
-      )}
+      </div>
     </div>
   );
 }

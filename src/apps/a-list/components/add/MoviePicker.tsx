@@ -65,21 +65,55 @@ function MoviePicker({
     (search.error.code === 'functions/resource-exhausted' ||
       search.error.code === 'functions/failed-precondition');
 
-  const getStatusLine = () => {
+  const trimmedQuery = query.trim();
+
+  const getEmptyState = () => {
+    if (watchlistMatches.length > 0 && !canSearch) return null;
+    if (trimmedQuery === '')
+      return {
+        emoji: '🍿',
+        title: 'What are we watching?',
+        body: 'Search by title to find a movie.',
+        offerManual: false,
+      };
     if (!canSearch)
-      return watchlistMatches.length === 0
-        ? 'Search for a movie by its title.'
-        : null;
-    if (search.isPending) return 'Searching…';
+      return {
+        emoji: '🔎',
+        title: 'Keep typing',
+        body: `Give us at least ${MOVIE_SEARCH_MIN_CHARS} letters to search with.`,
+        offerManual: false,
+      };
+    if (search.isPending)
+      return {
+        emoji: '🎞️',
+        title: 'Searching…',
+        body: null,
+        offerManual: false,
+      };
+    if (results.length > 0 || watchlistMatches.length > 0) return null;
     if (isSearchResting)
-      return 'Movie search is resting for today, but you can still add a movie by its title.';
-    if (search.error) return "Search isn't available right now.";
-    if (results.length === 0 && watchlistMatches.length === 0)
-      return 'No movies match that title.';
-    return null;
+      return {
+        emoji: '😴',
+        title: 'Movie search is resting for today',
+        body: 'You can still add a movie by its title.',
+        offerManual: true,
+      };
+    if (search.error)
+      return {
+        emoji: '🛠️',
+        title: "Search isn't available right now",
+        body: 'You can still add a movie by its title.',
+        offerManual: true,
+      };
+    return {
+      emoji: '🤔',
+      title: `No movies match “${trimmedQuery}”`,
+      body: 'Check the spelling, or add it yourself.',
+      offerManual: true,
+    };
   };
 
-  const statusLine = getStatusLine();
+  const emptyState = getEmptyState();
 
   const renderRow = (
     key: string,
@@ -93,9 +127,9 @@ function MoviePicker({
         type='button'
         variant='tertiary'
         onClick={onClick}
-        className='h-auto w-full justify-start gap-3 rounded-none px-0 py-2 text-left'
+        className='text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left'
       >
-        <span className='h-14 w-10 shrink-0 overflow-hidden rounded'>
+        <span className='h-14 w-10 shrink-0 overflow-hidden rounded-lg shadow-sm'>
           <PosterCover title={title} posterUrl={posterUrl} compact />
         </span>
         <span className='min-w-0'>
@@ -115,6 +149,7 @@ function MoviePicker({
       <Input
         type='search'
         variant='outline'
+        rounded='full'
         placeholder='Search movies or your watchlist'
         aria-label='Search movies'
         autoFocus
@@ -126,7 +161,7 @@ function MoviePicker({
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             On your watchlist
           </h3>
-          <ul className='divide-border divide-y'>
+          <ul className='space-y-0.5'>
             {watchlistMatches.map((item) =>
               renderRow(
                 item.movieKey,
@@ -146,15 +181,35 @@ function MoviePicker({
           </ul>
         </div>
       )}
-      {statusLine && (
-        <p className='text-muted-foreground text-sm'>{statusLine}</p>
+      {emptyState && (
+        <div className='space-y-3 py-8 text-center'>
+          <p className='text-5xl' aria-hidden='true'>
+            {emptyState.emoji}
+          </p>
+          <div className='space-y-1'>
+            <p className='font-semibold'>{emptyState.title}</p>
+            {emptyState.body && (
+              <p className='text-muted-foreground text-sm'>{emptyState.body}</p>
+            )}
+          </div>
+          {emptyState.offerManual && (
+            <Button
+              type='button'
+              rounded='full'
+              variant={isSearchResting ? 'primary' : 'secondary'}
+              onClick={onAddByTitle}
+            >
+              + Can't find it? Add it by title
+            </Button>
+          )}
+        </div>
       )}
       {results.length > 0 && (
         <div className='space-y-1'>
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             From search
           </h3>
-          <ul className='divide-border divide-y'>
+          <ul className='space-y-0.5'>
             {results.map((movie) =>
               renderRow(
                 movie.movieKey,
@@ -172,15 +227,6 @@ function MoviePicker({
           </ul>
         </div>
       )}
-      <Button
-        type='button'
-        variant={isSearchResting ? 'primary' : 'link'}
-        size='sm'
-        className={isSearchResting ? undefined : 'px-0'}
-        onClick={onAddByTitle}
-      >
-        + Can't find it? Add it by title
-      </Button>
     </div>
   );
 }

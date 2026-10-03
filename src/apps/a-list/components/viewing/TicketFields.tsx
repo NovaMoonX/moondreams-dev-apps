@@ -5,7 +5,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
+import MoneyInput from '@/components/MoneyInput';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import TaxChips from '@apps/a-list/components/viewing/TaxChips';
 import { AMC_FORMAT_LABELS, AMC_FORMATS } from '@apps/a-list/constants';
@@ -25,8 +25,8 @@ import {
 const { custom, select } = FormFactories;
 
 const MODES: { value: TicketEntryMode; label: string }[] = [
-  { value: 'ITEMIZED', label: 'Itemized' },
-  { value: 'ALL_IN', label: 'All-in total' },
+  { value: 'ITEMIZED', label: 'Before tax' },
+  { value: 'ALL_IN', label: 'With tax & fee' },
 ];
 
 interface TicketFieldsProps {
@@ -86,6 +86,9 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
     custom({
       name: 'fee',
       label: 'Convenience fee you skipped',
+      description: isAllIn
+        ? 'We take this out of your total to find the ticket price.'
+        : undefined,
       renderComponent: (props) => (
         <FeeChips
           value={props.value as FeeValue}
@@ -98,6 +101,9 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
     custom({
       name: 'rate',
       label: 'Tax rate',
+      description: isAllIn
+        ? 'We use this to work out how much of your total was tax.'
+        : undefined,
       renderComponent: (props) => (
         <TaxChips
           value={props.value as RateValue}
@@ -142,6 +148,11 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
           </Button>
         ))}
       </div>
+      <p className='text-muted-foreground text-sm'>
+        {isAllIn
+          ? "Type the one total a non-member would have paid. We split it into price, fee and tax using the two answers below."
+          : 'Type the ticket price before tax. We add the fee and tax below to get the full total.'}
+      </p>
       <Form
         key={`${draft.entryMode}-${isPremium ? 'premium' : 'standard'}`}
         id='a-list-ticket'

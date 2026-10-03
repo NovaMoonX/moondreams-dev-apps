@@ -12,7 +12,7 @@
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Modal`, `Drawer`, `Tabs`, `Badge` — custom only where the catalog has nothing: the poster split and the star rating |
 | Log in a tap or two | defaults, chips and pickers over typing; anything optional waits behind a "+ Add X" link |
 | Never overlay on overlay | tapping a day opens nothing (its movies show in a panel under the grid); tapping a movie opens a `Drawer`; whatever continues inside an open drawer — Mark paid, Edit, Add to calendar from the watchlist — swaps that drawer's content in place with a "‹ Back" link. Only a destructive confirm may sit on top |
-| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup and Membership settings are `Modal`s. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
+| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup is a `Modal`. Adding a movie and Membership settings are full-page subviews with their own back button. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
 | Never offer what can't be done | "Mark seen" appears only once the showtime has ended; "Standard price" appears only for a premium format |
 | Honest, kind math | negative net savings reads "Not yet" in a plain tone, never an alarm |
 
@@ -475,7 +475,7 @@ block-beta
   style O1 fill:transparent,stroke:#888888,stroke-width:1px;
   style O2 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Six tabs sit right under the header, in this order: Opening, All, Must See, Want to See, If I Have Time, Seen. Opening is the default and the watchlist's one emphasized surface: its label carries an accent and a count whenever something opens in the next seven days. It lists only unseen movies releasing between today and a week out, soonest first, with "in N days" on each row. With nothing opening it shows one muted line and a link to All. On a phone the strip scrolls sideways with the full names.*
+*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows everything, unseen first; each pill narrows the list (priorities combine with "or", Opening and Seen with "and"). Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
 
 **Watchlist — All**
 ```mermaid
@@ -507,7 +507,7 @@ block-beta
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
   style R4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The three priority tabs list only unseen movies of that priority; Seen lists the ones you have; All shows everything — unseen first, by priority and then release date, seen ones last. A movie opening this week also appears in All and in its priority tab. Each row shows release date, preferred format, a priority badge, a Seen check once watched, and the next planned date — or the latest watched date, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
+*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and the latest watched date for seen movies, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
 
 **Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above)
 ```mermaid
@@ -576,11 +576,11 @@ block-beta
 | PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
-| GoalChip | Calendar | weekly or monthly goal: met / not yet |
+| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
-| AddDrawer | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details `Drawer` for either destination; past-movies mode makes "Add + another" the primary action and keeps a running count |
-| ViewingRow | day panel | poster thumb, title, time, format badge, stars, price, state |
-| ViewingDrawer | day panel | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
+| AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
+| ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |
+| ViewingDrawer | day drawer (swaps in place from the day's list) | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
 | SeenPrompt | auto, after a showtime | `Drawer` with stars plus Seen it / Didn't go / Later; queues one at a time |
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |

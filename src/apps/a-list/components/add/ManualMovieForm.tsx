@@ -40,6 +40,7 @@ function ManualMovieForm({
       label: 'Title',
       placeholder: 'Dune: Part Three',
       variant: 'outline',
+      rounded: 'full',
     }),
     ...(showReleaseDate
       ? [
@@ -47,6 +48,7 @@ function ManualMovieForm({
             name: 'releaseDate',
             label: 'Release date',
             variant: 'outline',
+            rounded: 'full',
           }),
         ]
       : []),
@@ -115,10 +117,20 @@ function ManualMovieForm({
       <ModalFooterActions
         rightActions={
           <>
-            <Button type='button' variant='secondary' onClick={onCancel}>
+            <Button
+              type='button'
+              variant='secondary'
+              rounded='full'
+              onClick={onCancel}
+            >
               Back
             </Button>
-            <Button type='button' disabled={!title} onClick={handleContinue}>
+            <Button
+              type='button'
+              rounded='full'
+              disabled={!title}
+              onClick={handleContinue}
+            >
               Next
             </Button>
           </>

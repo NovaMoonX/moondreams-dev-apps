@@ -10,10 +10,10 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 
 ## How it Works
 
-1. **Set up your membership** — Confirm the perks, then enter your monthly cost before tax, the total on your bill with tax, and the day your membership started. The app gauges your tax rate from those two numbers and tracks the total as your monthly cost. Then set your weekly and monthly watch goals.
+1. **Set up your membership** — A short welcome, the perks your membership covers, then one question per step: your monthly cost before tax, the total on your bill with tax (skippable), and the day your membership started (it tells you how long you've been a member). The app gauges your tax rate from the first two and tracks the total as your monthly cost. Then set your weekly and monthly watch goals. Closing the setup lands on the app's entry page, where you can re-enter or go home.
 2. **Add what you've already seen** — A short first-time flow to backfill movies since you joined, so your savings start accurate instead of from zero. Each movie you add nudges you to add another, until you say you're done.
-3. **Build a watchlist** — Search for a movie, pick it, and set a priority and preferred format. Nothing to browse, nothing recommended: just your list. Anything opening in the next week gets its own tab — the first thing you see.
-4. **Put movies on the calendar** — Add a movie you saw or plan to see, from your watchlist or a fresh search (new ones join your watchlist automatically). Each day shows the posters of what you watched; tap a day to see the details. Seeing a movie twice is just two entries.
+3. **Build a watchlist** — Search for a movie on a full-page screen, pick it, and set a priority and preferred format. Nothing to browse, nothing recommended: just your list. Rounded filter pills (Opening, Must See, Want to See, If I Have Time, Seen) narrow the list; anything opening in the next week is one tap away.
+4. **Put movies on the calendar** — Add a movie you saw or plan to see, from your watchlist or a fresh search (new ones join your watchlist automatically). Each day shows the posters of what you watched; tap a day to see its movies in a drawer (on a computer, hover a day for a peek). Seeing a movie twice is just two entries.
 5. **Record what it would have cost** — Mark a movie paid with its format and price, or just the all-in total if that's all you have. For a premium format, add what a standard ticket would have cost so the upcharge you skipped is counted. Members pay no convenience fee, so the fee you enter is one you skipped; it varies by format and showing, so it's entered each time, and the fees you've entered before show up as chips so repeating one is a single tap. Tax works the same way: your past rates appear as chips, and the one you use most is already selected.
 6. **Mark it seen** — When a planned movie's showtime ends, a prompt asks if you saw it. One tap updates your watchlist, and you can leave a star rating.
 7. **Watch the numbers** — The top of the calendar tracks movies watched, movies this week, and whether your goals are met. The dashboard shows your savings, the convenience fees you've skipped, and whether you've broken even, with breakdowns by format, activity over time, and ratings to follow.
@@ -28,7 +28,8 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 
 ## How it Feels
 
-- **App-like, thumb-first** — A phone-shaped app: a bottom bar with Dashboard, Calendar and Watchlist — Calendar in the middle, where the app opens — and details in drawers, no page-hopping.
+- **App-like, thumb-first** — A phone-shaped app: a bottom bar with Dashboard, Calendar and Watchlist — Calendar in the middle, where the app opens — and details in drawers, no page-hopping. Home is in the avatar menu, not on the page.
+- **Playful, a little theatrical** — AMC red and marquee gold, round inputs and pills, and an emoji wherever it says something.
 - **Posters first** — The calendar is the star, and each poster fills its whole day like a photo calendar. Two movies on a day split corner to corner, three are cut like a pizza in thirds, four make quadrants — a month of movies reads like a collage.
 - **Low effort to log** — Quick prompts, sensible defaults, and as little typing as possible. Anything optional waits behind a "+ Add" link.
 - **Honest math, friendly tone** — A negative net-savings number is shown plainly but kindly ("not yet" beats a red alarm).

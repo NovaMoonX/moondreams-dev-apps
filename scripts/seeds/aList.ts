@@ -216,7 +216,7 @@ function getViewingFixtures(now: number) {
     { id: 'seed-viewing-galaxy', movieKey: 'imdb-tt99000003', daysFromNow: 25 },
   ];
 
-  // One day each with two, three, four and five movies, to show every poster split.
+  // One day each with two, three, four and five movies, to show every poster split, past and ahead.
   const DUNE = 'imdb-tt15239678';
   const MATRIX = 'imdb-tt0133093';
   const MIDNIGHT = 'imdb-tt99000004';
@@ -226,10 +226,13 @@ function getViewingFixtures(now: number) {
     [-9, [MIDNIGHT, MATRIX, DUNE]],
     [-15, [HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
     [-17, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
+    // Planned days ahead, so the current month shows a split of three and of five too.
+    [8, [MATRIX, DUNE, MIDNIGHT]],
+    [11, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
   ];
   const multiPlan = multiDays.flatMap(([daysFromNow, movieKeys]) =>
     movieKeys.map((movieKey, index) => ({
-      id: `seed-viewing-day${-daysFromNow}-${index + 1}`,
+      id: `seed-viewing-day${daysFromNow < 0 ? -daysFromNow : `ahead${daysFromNow}`}-${index + 1}`,
       movieKey,
       daysFromNow,
       hour: 11 + index * 3,

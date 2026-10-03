@@ -9,7 +9,11 @@ interface FormatBadgeProps {
 
 function FormatBadge({ format }: FormatBadgeProps) {
   return (
-    <Badge variant={format === 'STANDARD' ? 'muted' : 'secondary'} size='xs'>
+    <Badge
+      variant={format === 'STANDARD' ? 'muted' : 'secondary'}
+      size='xs'
+      className='rounded-full! whitespace-nowrap'
+    >
       {AMC_FORMAT_LABELS[format]}
     </Badge>
   );

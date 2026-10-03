@@ -104,6 +104,12 @@ export const selectCounters = createSelector(
 
     const result = {
       watched: seenDayKeys.length,
+      watchedMinutes: viewings
+        .filter((viewing) => viewing.status === 'SEEN')
+        .reduce(
+          (total, viewing) => total + (viewing.movie.runtimeMinutes ?? 0),
+          0,
+        ),
       thisWeek,
       thisMonth,
       weeklyGoal,
@@ -139,6 +145,21 @@ export const selectSavingsSummary = createSelector(
     if (!membership) return null;
     const todayDay = fromDateInputValue(todayKey) ?? 0;
     const result = getSavingsSummary(viewings, membership, todayDay);
+    return result;
+  },
+);
+
+/** Seen viewings split by whether a ticket is on record, newest first: what the dashboard's ticket lists read. */
+export const selectSeenTicketGroups = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const seen = viewings
+      .filter((viewing) => viewing.status === 'SEEN')
+      .sort((left, right) => right.showtimeAt - left.showtimeAt);
+    const result = {
+      paid: seen.filter((viewing) => viewing.ticket),
+      unpriced: seen.filter((viewing) => !viewing.ticket),
+    };
     return result;
   },
 );

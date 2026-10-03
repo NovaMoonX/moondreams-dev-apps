@@ -6,7 +6,7 @@ The shared rules (imports/aliases, Firestore data contracts, listeners, TanStack
 
 @.github/copilot-instructions.md
 
-This file adds the norms specific to how Claude works in this repo, plus the review checklist that `.claude/skills/finish-feature-pr` runs. When a rule appears in both places, `copilot-instructions.md` is the source of truth and this file only points at it.
+Per-mini-app rules live in `.github/instructions/<app>.instructions.md` (Copilot, `applyTo`) with an identical `.claude/rules/<app>.md` (Claude, `paths`); read the one for the app you are touching. This file adds the norms specific to how Claude works in this repo, plus the review checklist that `.claude/skills/finish-feature-pr` runs. When a rule appears in both places, `copilot-instructions.md` is the source of truth and this file only points at it.
 
 ## Code style
 
@@ -40,10 +40,14 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 
 How Waypoint's phone-first redesign works; new features follow it. Design the phone screen first, then widen.
 
+- **Playful by default.** Rounded shapes, pills over radios and tab strips, an emoji where it carries meaning, warm copy. A mini-app may theme itself further (A-List's AMC red lives in its own `a-list.css`).
+- **No "Back home" in a mini-app's page.** Home is the header's home icon (sm and up) or the avatar menu's "Home" (phones), shown whenever the route isn't `/`. Only a mini-app's landing page (`AppEntryFallback`) says "Back home".
+- **Alignment is not optional.** Everything in a column shares one left edge: a line that starts with an emoji or icon gets a fixed-width icon column (`w-5 shrink-0 text-center`) so its text lines up with its siblings, never an inline emoji that shifts the first word. Counts and dates in a row are a `whitespace-nowrap` badge or their own cell, never a trailing `· ×3` that wraps onto a line alone. Containers pad consistently, and a row with nothing to say is omitted rather than filled with a placeholder like "No format preference". Check every new screen at narrow phone width before calling it done.
 - **Layout switches.** Swap components with `useMediaQuery().isBelow('sm')`; pure reflow uses `sm:` classes.
 - **Phone shell.** A trip's bottom nav is only Overview / Timeline / Expenses (`TripBottomNav`). Every other section is a nested screen reached *from Overview* by an entry point (a count pill in `TripEntryPoints`, or a chevron row like `StaysEntry`) — never a new bottom-nav slot. The nav keeps Overview highlighted (`matches`), the header chevron on every screen but Overview reads "Back to Overview" (only Overview's goes to My Trips), and the id goes in `TRIP_SECTION_TABS` so `?tab=` works. Desktop shows the same section as a `TabsList` tab.
 - **Overview is the phase-aware hub.** Show what needs action *now* (pre-trip: ideas, checklist, album; live: Active Now / Up Next / Today). One emphasized surface at a time (Active Now's emerald card is the reference); everything else is a quiet row.
 - **Never stack an overlay on an overlay:** whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a destructive confirm is the only thing allowed on top.
+- **Subviews: a full-page screen that takes over the mini-app (A-List's `Subview`, `AddSubview`, `MembershipSettingsSubview`).** Use one when the task is a search or a long settings-style form, when its content changes height as the user works (results appearing, fields revealing) so a drawer or modal would jump, or when it is a sequence the user should leave only through its own back control. It renders its own header (round back button + noun title), hides the app's tab bar, and brings its own way out, so the app shell's navigation is never involved. The screens underneath stay mounted (hidden) so filters, scroll-independent state and the selected day survive the trip. A step inside it changes the back button's label ("Back to results") instead of adding a second control. Don't use one for a quick detail view, a short list or a confirm (drawer/modal), and never open a modal or drawer on top of one except a destructive confirm.
 - **Overlays.** Phone → `Drawer`, desktop → `Popover`/`DropdownMenu`, forms and confirmations → `Modal`/`useActionModal` at every size. Build the content once and render it in both. In a drawer's action list, group related actions in one `bg-muted/50` block, keep other actions standalone, and put destructive ones last in red.
 - **Screens and cards.** Every section opens with `SectionHeader` (title + at most one primary CTA, hidden when not permitted). Overview rows use the small uppercase eyebrow `h3`. One border per card — tint to group, never nest — with flat `divide-y` rows inside. An empty list is one muted line with the CTA in the header; an Overview entry with nothing yet is a tappable prompt row.
 - **Indicators.** Leading round icon chip with a soft tint; counts only when `> 0`, via `IconBadge` or the `bg-primary` pill.
@@ -51,6 +55,16 @@ How Waypoint's phone-first redesign works; new features follow it. Design the ph
 - **Copy** reads like a friend: notification sentences ("Alex added Lunch at Salt Creek"), warm one-line prompts, concrete placeholders ("Dinner at Ichiran").
 - **Never offer an action the user can't complete.** Gate every button, reveal and submit with the same predicate as the rule behind it (`canAddIdea`, with `now` from `useNow()`), hide it rather than show-then-fail, and when state can flip while a form is open, disable its submit and say why.
 - **Trip-phase gating has two clocks.** Display uses the viewer's local day (`getTripStatus`); write gating uses UTC to match `firestore.rules` (`roleGuards.ts`: `hasTripStarted`). A UI gate and the rule that backs it use the same one — never mix them.
+
+## Designing a mini-app's look
+
+Each mini-app may have its own personality on top of the shared playful base; A-List (`src/apps/a-list`) is the reference.
+
+- **Theme through tokens, in one stylesheet.** The app owns `<app>.css` that overrides Dreamer UI's semantic color tokens (`--color-primary`, `secondary`, `accent`, `muted`, `border`, light and dark) on a class (`html.a-list-theme`) that a `useXTheme()` hook adds to `<html>` only while the app is mounted, so portaled modals and drawers pick it up and other apps are untouched. Components then use semantic classes (`bg-primary`, `bg-accent`), never raw palette colors, so a later re-theme is a CSS edit.
+- **Pick the metaphor first and let it name everything.** A-List is "AMC and the theater": red primary, marquee-gold accent, ticket/popcorn/film emoji, copy like "Did you catch it?". Write the metaphor, palette roles and shape language (what is round, what is a pill) in the app's rules file.
+- **Shared pieces stay general; app flavor lives in the app.** Pills, badges (`PriorityBadge`, `ViewingStatusBadge`), tiles (`StatTile`) and subviews are built in the app's `components/shared` or `components/shell` against the app's tokens. Anything a second app needs moves to `src/components` in that PR.
+- **Write the app's rules down.** Add `.github/instructions/<app>.instructions.md` and the identical `.claude/rules/<app>.md` (see `a-list.instructions.md` for the shape: theme, shape language, emoji meaning, subview use, anything app-specific like a money input). Update them whenever the app's design vocabulary changes, in the same PR.
+- **Colors must not fight their emoji.** Don't put an emoji on a background of its own hue (🔥 on red); give it a neutral or complementary chip. Solid red/primary fills are for the one primary action on a screen, not for status chips.
 
 ## State, data, and performance
 

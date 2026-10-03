@@ -345,7 +345,7 @@ Step 1 Membership (confirm perks, read-only copy)
            < cost           → inline error, Next disabled
            implied rate > 0.25 → inline error (almost certainly a typo)
   → Step 3 Goals (weekly, monthly; both optional) → one setDoc → "Add movies you've already seen?"
-        ├─ Add past movies → AddDrawer in past-movies mode (dates can't precede the start date)
+        ├─ Add past movies → the add subview in past-movies mode (dates can't precede the start date)
         └─ Skip            → empty Calendar (with its "Add your first movie" / "Add past movies" nudge)
 ```
 
@@ -542,7 +542,7 @@ No cached document is ever written back whole. A transaction is used only where 
 - **`CalendarScreen`** — owns the selected day (local state, set from `onDateSelect`), the counters row, the Calendar, and the inline day panel. Reads `selectViewingsByDay` and `selectCounters`; knows nothing about tickets.
 - **`PosterCell`** — pure: `(dayViewings) → PosterSplit`. No store access; `renderCell` is a thin closure over the map.
 - **`ViewingDrawer`** — owns its internal view (`details | ticket | edit`) and the swap-in-place back link; calls actions and the destructive confirm. Everything else about a viewing (row, badges, stars) is a pure presentational component.
-- **`AddDrawer`** — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
+- **`AddFlow`** (shown full-page by `AddSubview`, or inside the watchlist drawer for "Add to calendar") — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
 - **`SeenPromptHost`** and **`useRefreshUnreleasedMovies`** — the two background concerns, each mounted once in `AList.tsx`. Neither renders anything except the prompt drawer.
 - **Pure utilities** (`utils/`): `money.ts` (parse/format cents), `dayKeys.ts`, `billing.ts`, `savings.ts`, `viewingState.ts`, `tax.ts` (itemized tax, all-in split, bill-derived rate), `watchlistRows.ts`, `opening.ts`, `chips.ts` (fee and tax-rate chips). All are plain functions over plain data with no React or Firebase, so the arithmetic that decides "have I broken even?" is exercised without a UI.
 - **Reuse, not copy:** `useDebouncedValue`/`DEBOUNCE_MS`, `useNow`, `queryClient`/`DAY_MS`, `normalizeString`, `formatDateUTC`/`formatDate`/`formatTime`/`formatDateTime`, `fromDateInputValue`/`toLocalDateInputValue`/`fromLocalDateAndTimeInputValues`, `useActionModal`, and `AppToggle` if an immediate-effect toggle ever appears. **`SectionHeader`, `ModalFooterActions` and `DeleteIconButton` currently live in Waypoint's `components/`.** A-List is the second app that needs them, so they move to central `src/components/` in the first A-List PR that uses one, with Waypoint's imports updated in the same PR. A-List never imports from `@apps/waypoint`.
@@ -598,12 +598,12 @@ src/apps/a-list/
 └── components/
     ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx
     ├── setup/       SetupModal.tsx  SetupStepper.tsx  CostStep.tsx  MembershipSettingsModal.tsx
-    ├── calendar/    CalendarScreen.tsx  CounterRow.tsx  PosterCell.tsx  PosterSplit.tsx  DayPanel.tsx  ViewingRow.tsx
+    ├── calendar/    CalendarScreen.tsx  CounterRow.tsx  PosterCell.tsx  PosterSplit.tsx  DayDrawer.tsx  DayHoverCard.tsx  ViewingRow.tsx
     ├── viewing/     ViewingDrawer.tsx  TicketForm.tsx  EditViewingForm.tsx  FeeChips.tsx  TaxChips.tsx  SeenPromptHost.tsx  SeenPrompt.tsx
-    ├── add/         AddDrawer.tsx  MoviePicker.tsx  PastMoviesStrip.tsx
-    ├── watchlist/   WatchlistScreen.tsx  WatchlistTabs.tsx  WatchlistRow.tsx  WatchlistItemDrawer.tsx
+    ├── add/         AddFlow.tsx  AddSubview.tsx  MoviePicker.tsx  PastMoviesStrip.tsx
+    ├── watchlist/   WatchlistScreen.tsx  WatchlistFilters.tsx  WatchlistDetailsFields.tsx  WatchlistRow.tsx  WatchlistItemDrawer.tsx
     ├── dashboard/   DashboardScreen.tsx  StatTile.tsx  (Next Steps: FormatSplit.tsx  ActivityChart.tsx  RatingsSpend.tsx  PremiumInsights.tsx)
-    └── shared/      PosterCover.tsx  StarRating.tsx  FormatBadge.tsx  PriorityBadge.tsx  GoalChip.tsx
+    └── shared/      PosterCover.tsx  StarRating.tsx  FormatBadge.tsx  PriorityBadge.tsx  ViewingStatusBadge.tsx  Pill.tsx  StatTile.tsx
 
 functions/src/apps/a-list/       searchMovies.ts  getMovie.ts  lookupBudget.ts  movieCache.ts
 scripts/seeds/aList.ts
