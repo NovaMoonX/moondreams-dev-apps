@@ -1,22 +1,86 @@
+import { useSearchParams } from 'react-router-dom';
+
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
+import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
+import AuthRequiredState from '@/ui/AuthRequiredState';
+import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
+import CalendarScreen from '@apps/a-list/components/calendar/CalendarScreen';
+import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
+import SetupModal from '@apps/a-list/components/setup/SetupModal';
+import BottomNav from '@apps/a-list/components/shell/BottomNav';
+import LoadingSkeleton from '@apps/a-list/components/shell/LoadingSkeleton';
+import WatchlistScreen from '@apps/a-list/components/watchlist/WatchlistScreen';
+import { A_LIST_TABS, DEFAULT_A_LIST_TAB } from '@apps/a-list/constants';
+import { useAListSync } from '@apps/a-list/hooks/useAListSync';
+import {
+  selectIsAListLoaded,
+  selectMembership,
+} from '@apps/a-list/store/selectors';
+import type { AListTab } from '@apps/a-list/types';
 
 function AList() {
+  const { user, loading } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const membership = useAppSelector(selectMembership);
+  const isLoaded = useAppSelector(selectIsAListLoaded);
+
+  useAListSync(user?.uid ?? null);
+
+  const requestedTab = searchParams.get('tab');
+  const activeTab: AListTab =
+    A_LIST_TABS.find((tab) => tab === requestedTab) ?? DEFAULT_A_LIST_TAB;
+
+  const setActiveTab = (tab: AListTab) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (tab === DEFAULT_A_LIST_TAB) {
+      nextSearchParams.delete('tab');
+    } else {
+      nextSearchParams.set('tab', tab);
+    }
+    setSearchParams(nextSearchParams);
+  };
+
+  if (loading) {
+    return <Loading />;
+  }
+
+  if (!user) {
+    return (
+      <AuthRequiredState message='Please sign in to use A-List Tracker.' />
+    );
+  }
+
+  if (!isLoaded) {
+    return <LoadingSkeleton />;
+  }
+
+  if (!membership) {
+    return (
+      <div className='page'>
+        <SetupModal uid={user.uid} />
+      </div>
+    );
+  }
+
+  const getScreen = () => {
+    if (activeTab === 'dashboard')
+      return <DashboardScreen membership={membership} />;
+    if (activeTab === 'watchlist') return <WatchlistScreen />;
+    return <CalendarScreen />;
+  };
+
   return (
-    <div className='page'>
-      <div className='mx-auto max-w-4xl space-y-6 py-8'>
+    <div className='page pb-28'>
+      <div className='mx-auto max-w-4xl space-y-4 py-6'>
         <NavButton href='/' variant='link'>
           <ChevronLeft /> Back home
         </NavButton>
-
-        <div>
-          <h1 className='text-3xl font-semibold'>A-List Tracker</h1>
-          <p className='text-muted-foreground mt-1'>
-            Your movie calendar is getting its popcorn ready. Check back soon.
-          </p>
-        </div>
+        {getScreen()}
       </div>
+      <BottomNav value={activeTab} onChange={setActiveTab} />
     </div>
   );
 }

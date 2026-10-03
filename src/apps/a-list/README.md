@@ -2,7 +2,7 @@
 
 ## The short
 
-A-List Tracker is a phone-first companion for an AMC Stubs A-List membership. It turns a calendar of movie nights into an answer to the one question every member eventually asks: *is this membership actually paying for itself?* Log what you watched (and what you plan to watch), keep a running watchlist, and see your ticket savings, premium-format savings, and break-even status at a glance — each movie night shown as a poster on the calendar.
+A-List Tracker is a phone-first companion for an AMC Stubs A-List membership. It turns a calendar of movie nights into an answer to the one question every member eventually asks: _is this membership actually paying for itself?_ Log what you watched (and what you plan to watch), keep a running watchlist, and see your ticket savings, premium-format savings, and break-even status at a glance — each movie night shown as a poster on the calendar.
 
 ## The story
 
@@ -24,7 +24,7 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 - **Convenience fees avoided** is the fee part of that total on its own, so you can see what the membership spares you in fees alone.
 - **Net savings** is total ticket savings minus the membership cost you've incurred (tax included), counted in monthly bills from the day you started. Negative means you haven't broken even yet; **break-even** flips once net savings reaches zero.
 - **Premium format savings** is the extra you would have paid for IMAX, Dolby Cinema and the like versus a standard ticket for the same showing, which is why the standard price is requested whenever the format isn't standard.
-- Goals are *your* targets, not rules the app enforces: the weekly counter reads "watched / goal" (e.g. 1/4), and the monthly goal shows met or not yet.
+- Goals are _your_ targets, not rules the app enforces: the weekly counter reads "watched / goal" (e.g. 1/4), and the monthly goal shows met or not yet.
 
 ## How it Feels
 
@@ -35,12 +35,13 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 
 ## Why this isn't just another movie tracker
 
-Generic trackers log what you watched; this one logs what it *cost* and what the membership *saved*. That changes what gets built: format and price are first-class fields on every viewing, premium formats come with a "what would a standard ticket have been" step, fees and tax come from your own history, and watch goals and break-even sit at the top of the calendar. And because the membership is the point, there's no browsing catalog or recommendations — your watchlist is a personal queue, not a storefront.
+Generic trackers log what you watched; this one logs what it _cost_ and what the membership _saved_. That changes what gets built: format and price are first-class fields on every viewing, premium formats come with a "what would a standard ticket have been" step, fees and tax come from your own history, and watch goals and break-even sit at the top of the calendar. And because the membership is the point, there's no browsing catalog or recommendations — your watchlist is a personal queue, not a storefront.
 
 ## The Build Plan
 
 **Core MVP**
-- [ ] Membership Setup: Confirm perks, enter the monthly cost before tax, the bill total with tax and the start date; see the tax rate gauged from them; set weekly and monthly watch goals.
+
+- [x] Membership Setup: Confirm perks, enter the monthly cost before tax, the bill total with tax and the start date; see the tax rate gauged from them; set weekly and monthly watch goals.
 - [ ] Backfill Past Movies: A first-time flow to add movies already watched since joining, one after another with "Add + another" as the main button.
 - [ ] Poster Calendar: Month calendar where each day is filled by the poster(s) of what was watched or is planned — one, a corner-to-corner split, pizza-style thirds, or quadrants.
 - [ ] Day Details: Tap a day to see its movies with format, rating, and price.
@@ -55,12 +56,14 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [ ] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
 **Next Steps**
+
 - [ ] Dashboard — Formats: Movies watched by format, as a count and a percent.
 - [ ] Dashboard — Activity: Movies watched over time.
 - [ ] Dashboard — Ratings & Spend: Movies grouped by your star rating, with what was spent per rating.
 - [ ] Dashboard — Premium Insights: Average premium difference and savings for each premium format.
 
 **Stretch Goals**
+
 - [ ] Showtime Reminders: A nudge before a planned showing (time to head out) and after it ends (mark it seen, log what you paid).
 - [ ] Convenience Fee Estimates: Suggest a likely fee for a new payment based on factors like format and past entries, shown alongside the one-tap chips.
 - [ ] Monthly Recap: A shareable summary card of your month in movies.

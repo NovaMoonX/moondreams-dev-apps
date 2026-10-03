@@ -17,7 +17,7 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import {
   selectRentals,

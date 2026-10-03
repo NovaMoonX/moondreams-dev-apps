@@ -18,7 +18,7 @@ import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
   IDEA_TYPE_EMOJIS,

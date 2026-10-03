@@ -21,7 +21,7 @@ export const FIXTURE_USERS = {
     email: 'alex@example.test',
     displayName: 'Alex Rivera',
     label: 'Alex',
-    apps: ['Worth the Wait', 'Waypoint'],
+    apps: ['Worth the Wait', 'Waypoint', 'A-List Tracker'],
   },
   partnerTwo: {
     uid: 'seed-worth-the-wait-two',

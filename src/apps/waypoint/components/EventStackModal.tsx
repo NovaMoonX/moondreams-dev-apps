@@ -4,7 +4,7 @@ import { Button, Input, Label, Modal, Select } from '@moondreamsdev/dreamer-ui/c
 
 import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
 import { getStackKey, normalizeLabel } from '@apps/waypoint/utils/eventGroups';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import type { TimelineEvent } from '@apps/waypoint/types';
 
 interface EventStackModalProps {

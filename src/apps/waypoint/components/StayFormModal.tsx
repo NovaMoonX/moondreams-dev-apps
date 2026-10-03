@@ -13,7 +13,7 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   fromLocalDateAndTimeInputValues,
   toLocalDateInputValue,

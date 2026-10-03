@@ -14,7 +14,7 @@ import {
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
 import type { AnnouncementSeverity } from '@apps/waypoint/types';
 

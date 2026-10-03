@@ -5,7 +5,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import RentalCard from '@apps/waypoint/components/RentalCard';
 import RentalFormModal from '@apps/waypoint/components/RentalFormModal';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import {
   createRental,
   deleteRental,

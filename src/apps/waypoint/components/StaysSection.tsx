@@ -4,7 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import StayCard from '@apps/waypoint/components/StayCard';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import StayFormModal from '@apps/waypoint/components/StayFormModal';
 import {
   createStay,

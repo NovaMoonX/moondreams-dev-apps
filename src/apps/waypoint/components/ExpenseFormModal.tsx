@@ -17,7 +17,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,

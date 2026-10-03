@@ -81,6 +81,59 @@ service cloud.firestore {
     // rules stay isolated, kept in alphabetical order by app id. A generic
     // /apps/{appId} fallback for apps without a block yet is at the bottom.
 
+    // --- App: a-list ---
+
+    match /apps/a-list {
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Every A-List document is private to one member and nests under their uid.
+    match /apps/a-list/memberships/{uid} {
+      function isMembershipOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function isCents(value) {
+        return value is int && value >= 0 && value <= 1000000;
+      }
+
+      function isNullOrIntBetween(value, low, high) {
+        return value == null || (value is int && value >= low && value <= high);
+      }
+
+      function isNullOrTaxRate(value) {
+        return value == null || (value is number && value >= 0 && value <= 0.25);
+      }
+
+      function isMembershipValid(data) {
+        let keys = ['uid', 'monthlyCostCents', 'monthlyTotalCents', 'taxRate', 'startDate',
+                    'weeklyGoal', 'monthlyGoal', 'setupCompletedAt', 'createdAt', 'lastEditedAt'];
+        return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          && data.uid == uid
+          && isCents(data.monthlyCostCents) && data.monthlyCostCents > 0
+          && isCents(data.monthlyTotalCents)
+          && data.monthlyTotalCents >= data.monthlyCostCents
+          && isNullOrTaxRate(data.taxRate)
+          && data.startDate is int
+          && isNullOrIntBetween(data.weeklyGoal, 1, 21)
+          && isNullOrIntBetween(data.monthlyGoal, 1, 93)
+          && data.setupCompletedAt is int
+          && data.createdAt is int
+          && data.lastEditedAt is int;
+      }
+
+      allow read: if isMembershipOwner();
+      allow create: if isMembershipOwner() && isMembershipValid(request.resource.data);
+      allow update: if isMembershipOwner() && isMembershipValid(request.resource.data)
+        && request.resource.data.setupCompletedAt == resource.data.setupCompletedAt
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+
     // --- App: nine-lives ---
 
     match /apps/nine-lives {

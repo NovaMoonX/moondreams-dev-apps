@@ -1,4 +1,5 @@
 import { createSeedContext, resetEmulatorData } from './seeds/client.ts';
+import { seedAList } from './seeds/aList.ts';
 import { seedCore } from './seeds/core.ts';
 import {
   combineSeedResults,
@@ -18,13 +19,14 @@ function readScope(args: string[]): SeedScope {
     scope === 'core' ||
     scope === 'worth-the-wait' ||
     scope === 'nine-lives' ||
-    scope === 'waypoint'
+    scope === 'waypoint' ||
+    scope === 'a-list'
   ) {
     return scope;
   }
 
   throw new Error(
-    'Use --scope all, core, worth-the-wait, nine-lives, or waypoint.',
+    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, or a-list.',
   );
 }
 
@@ -45,7 +47,8 @@ async function main() {
     scope === 'core' ||
     scope === 'worth-the-wait' ||
     scope === 'nine-lives' ||
-    scope === 'waypoint'
+    scope === 'waypoint' ||
+    scope === 'a-list'
   ) {
     results.push(await seedCore(context));
   }
@@ -60,6 +63,10 @@ async function main() {
 
   if (scope === 'all' || scope === 'waypoint') {
     results.push(await seedWaypoint(context));
+  }
+
+  if (scope === 'all' || scope === 'a-list') {
+    results.push(await seedAList(context));
   }
 
   const result = combineSeedResults(...results);

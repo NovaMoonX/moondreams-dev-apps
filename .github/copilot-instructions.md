@@ -92,6 +92,9 @@ src/
 
 - **A date/time range input preserves its range.** Wherever a start and an end are entered together (trip dates, an event's or stay's start/end), moving the start moves an already-chosen end by the same amount; moving the end only changes the length. Reuse `DateRangeField` / `shiftDateRangeStart` (dates) and `shiftRangeEnd` (day + time).
 - **Reserve superseded Firestore fields, don't delete them.** When a field is replaced, it stays in the type with a `/** @deprecated … */` note naming its replacement (existing documents still return it, and it records history); new writes set it to `null` and the rules keep accepting it.
+- **Per-member private data nests under `apps/{appId}/<root>/{uid}/…`** (e.g. A-List's `apps/a-list/memberships/{uid}/viewings/{id}`) with a one-line `request.auth.uid == uid` rule: no `ownerUid` body check, no `where` query, no composite index.
+- **Sums of money are stored as integer minor units** (`priceCents`, `monthlyTotalCents`) and formatted only at the edge (a `formatCents`-style helper); never store or add floating-point dollars.
+- **When a second mini-app needs a component or hook, move it to central `src/components`, `src/ui` or `src/hooks` in that same PR** and update the first app's imports. Never import across `src/apps/*`.
 - **Utilities: share what's general, keep what isn't.** A helper that could serve other mini-apps goes in `src/utils` (or `src/components`) with a general name and general parameters (no app entities in its signature). A helper that only makes sense for one mini-app lives in that app's `utils/`.
 
 ### Invite / join / pending-request pattern

@@ -48,11 +48,12 @@ browser data behind. The Emulator Suite UI is available at `http://127.0.0.1:400
 | `npm run seed:nine-lives` | Upsert core data and Nine Lives household/cat fixtures. |
 | `npm run seed:worth-the-wait` | Upsert core data and Worth the Wait fixtures. |
 | `npm run seed:waypoint` | Upsert core data and Waypoint trip fixtures. |
+| `npm run seed:a-list` | Upsert core data and A-List Tracker fixtures. |
 | `npm run seed:reset` | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures. |
 | `npm run emulators:seed` | Start emulators, seed all fixtures, and exit. |
 | `npm run emulators:seed:reset` | Start emulators, clear all fixtures, reseed, and exit. |
 
-Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, or `all` to select a scope.
+Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, or `all` to select a scope.
 Normal runs are idempotent upserts and retain records created manually during local
 development. `--reset` is the explicit destructive local reset.
 
@@ -87,6 +88,11 @@ is repeatable.
 `nine-lives` writes a shared household at
 `apps/nine-lives/households/seed-nine-lives-household` plus two representative cat
 profiles with insurance, origin, and key-date data for local CRUD and detail testing.
+
+`a-list` writes Alex's private A-List membership at
+`apps/a-list/memberships/seed-worth-the-wait-one` (a $25.99 plan billed at $27.94, started
+60 days ago, with weekly and monthly goals). Every other fixture account has no
+membership, so signing in as one opens A-List's Setup.
 
 To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its

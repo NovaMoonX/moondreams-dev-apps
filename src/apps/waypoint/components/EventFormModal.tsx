@@ -34,7 +34,7 @@ import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtil
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import {
   ACTIVITY_SETTING_LABELS,
