@@ -1,32 +1,22 @@
-import {
-  Cloud,
-  CloudDrizzle,
-  CloudFog,
-  CloudLightning,
-  CloudRain,
-  CloudSnow,
-  CloudSun,
-  Sun,
-  type LucideIcon,
-} from 'lucide-react';
-
 export interface WeatherCondition {
   label: string;
-  icon: LucideIcon;
+  emoji: string;
+  /** The fog emoji reads as a smudged square, so fog is a cloud with mist lines drawn under it. */
+  hasMist?: boolean;
 }
 
-const UNKNOWN: WeatherCondition = { label: 'Forecast', icon: Cloud };
+const UNKNOWN: WeatherCondition = { label: 'Forecast', emoji: '🌡️' };
 
 const CONDITIONS: { codes: number[]; condition: WeatherCondition }[] = [
-  { codes: [0], condition: { label: 'Clear skies', icon: Sun } },
-  { codes: [1, 2], condition: { label: 'Partly sunny', icon: CloudSun } },
-  { codes: [3], condition: { label: 'Overcast', icon: Cloud } },
-  { codes: [45, 48], condition: { label: 'Foggy', icon: CloudFog } },
-  { codes: [51, 53, 55, 56, 57], condition: { label: 'Drizzle', icon: CloudDrizzle } },
-  { codes: [61, 63, 80, 81], condition: { label: 'Rain', icon: CloudRain } },
-  { codes: [65, 66, 67, 82], condition: { label: 'Heavy rain', icon: CloudRain } },
-  { codes: [71, 73, 75, 77, 85, 86], condition: { label: 'Snow', icon: CloudSnow } },
-  { codes: [95, 96, 99], condition: { label: 'Thunderstorms', icon: CloudLightning } },
+  { codes: [0], condition: { label: 'Clear skies', emoji: '☀️' } },
+  { codes: [1, 2], condition: { label: 'Partly sunny', emoji: '⛅' } },
+  { codes: [3], condition: { label: 'Overcast', emoji: '☁️' } },
+  { codes: [45, 48], condition: { label: 'Foggy', emoji: '☁️', hasMist: true } },
+  { codes: [51, 53, 55, 56, 57], condition: { label: 'Drizzle', emoji: '🌦️' } },
+  { codes: [61, 63, 80, 81], condition: { label: 'Rain', emoji: '🌧️' } },
+  { codes: [65, 66, 67, 82], condition: { label: 'Heavy rain', emoji: '🌧️' } },
+  { codes: [71, 73, 75, 77, 85, 86], condition: { label: 'Snow', emoji: '🌨️' } },
+  { codes: [95, 96, 99], condition: { label: 'Thunderstorms', emoji: '⛈️' } },
 ];
 
 export function getWeatherCondition(code: number | null): WeatherCondition {

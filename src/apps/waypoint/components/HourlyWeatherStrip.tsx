@@ -2,6 +2,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { HourForecast } from '@/lib/weather/types';
 import { getWeatherCondition } from '@/lib/weather/weatherCodes';
+import WeatherEmoji from '@apps/waypoint/components/WeatherEmoji';
 
 interface HourlyWeatherStripProps {
   hours: HourForecast[];
@@ -17,7 +18,8 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
   return (
     <ul className='-mx-1 flex gap-1 overflow-x-auto px-1 pb-1' aria-label='Hour by hour weather'>
       {hours.map((hour, index) => {
-        const { label, icon: Icon } = getWeatherCondition(hour.weatherCode);
+        const condition = getWeatherCondition(hour.weatherCode);
+        const { label } = condition;
         const timeLabel = index === 0 ? 'Now' : formatHourLabel(hour.time);
         const tempLabel = hour.temp === null ? 'temperature unavailable' : `${Math.round(hour.temp)} degrees`;
         return (
@@ -38,7 +40,7 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
             >
               {timeLabel}
             </span>
-            <Icon className='h-4 w-4 shrink-0' aria-hidden='true' />
+            <WeatherEmoji condition={condition} className='h-5 shrink-0 text-base leading-5' />
             <span className='leading-4 font-medium'>{hour.temp === null ? '–' : `${Math.round(hour.temp)}°`}</span>
             <span className='text-muted-foreground h-3.5 text-[10px] leading-3.5'>
               {hour.precipChance !== null && hour.precipChance >= 20 ? `${hour.precipChance}%` : ''}
