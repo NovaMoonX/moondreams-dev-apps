@@ -2,15 +2,21 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { WATCH_PRIORITIES } from '@apps/a-list/constants';
+import type { Viewing } from '@apps/a-list/types';
+import { getDayKey } from '@apps/a-list/utils/dayKeys';
 
 export const selectMembership = (state: RootState) =>
   state.aList.membership.membership;
 
 export const selectAListLoadError = (state: RootState) =>
-  state.aList.membership.loadError ?? state.aList.watchlist.loadError;
+  state.aList.membership.loadError ??
+  state.aList.watchlist.loadError ??
+  state.aList.viewings.loadError;
 
 export const selectIsAListLoaded = (state: RootState) =>
-  state.aList.membership.isLoaded && state.aList.watchlist.isLoaded;
+  state.aList.membership.isLoaded &&
+  state.aList.watchlist.isLoaded &&
+  state.aList.viewings.isLoaded;
 
 const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 
@@ -28,6 +34,43 @@ export const selectWatchlistItems = createSelector(
       if (leftDate !== rightDate) return leftDate < rightDate ? -1 : 1;
       return left.movie.title.localeCompare(right.movie.title);
     });
+    return result;
+  },
+);
+
+const selectViewingItems = (state: RootState) => state.aList.viewings.items;
+
+/** Day key → that day's viewings in showtime order: what each calendar cell and the day panel read. */
+export const selectViewingsByDay = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const sorted = [...viewings].sort(
+      (left, right) => left.showtimeAt - right.showtimeAt,
+    );
+    const result = sorted.reduce<Record<string, Viewing[]>>(
+      (byDay, viewing) => {
+        const dayKey = getDayKey(viewing.showtimeAt);
+        return { ...byDay, [dayKey]: [...(byDay[dayKey] ?? []), viewing] };
+      },
+      {},
+    );
+    return result;
+  },
+);
+
+/** movieKey → how many times it has been seen. */
+export const selectSeenCountByMovieKey = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const result = viewings
+      .filter((viewing) => viewing.status === 'SEEN')
+      .reduce<Record<string, number>>(
+        (counts, viewing) => ({
+          ...counts,
+          [viewing.movieKey]: (counts[viewing.movieKey] ?? 0) + 1,
+        }),
+        {},
+      );
     return result;
   },
 );

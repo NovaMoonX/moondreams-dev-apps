@@ -57,3 +57,9 @@ export const WATCH_PRIORITY_LABELS: Record<WatchPriority, string> = {
 };
 
 export const DEFAULT_WATCH_PRIORITY: WatchPriority = 'WANT_TO_SEE';
+
+/** Used when the provider has no runtime. */
+export const DEFAULT_RUNTIME_MINUTES = 120;
+/** Trailers before the feature: a showing ends at showtime + previews + runtime. */
+export const PREVIEWS_BUFFER_MINUTES = 20;
+export const DEFAULT_SHOWTIME = '19:00';

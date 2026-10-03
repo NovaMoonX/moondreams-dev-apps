@@ -3,12 +3,18 @@ import { useEffect } from 'react';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { startMembershipListener } from '@apps/a-list/store/listeners/membershipListeners';
+import { startViewingsListener } from '@apps/a-list/store/listeners/viewingListeners';
 import { startWatchlistListener } from '@apps/a-list/store/listeners/watchlistListeners';
 import {
   clearMembership,
   setMembership,
   setMembershipLoadError,
 } from '@apps/a-list/store/slices/membershipSlice';
+import {
+  clearViewings,
+  setViewings,
+  setViewingsLoadError,
+} from '@apps/a-list/store/slices/viewingsSlice';
 import {
   clearWatchlist,
   setWatchlist,
@@ -22,6 +28,7 @@ export function useAListSync(uid: string | null) {
     if (!uid) {
       dispatch(clearMembership());
       dispatch(clearWatchlist());
+      dispatch(clearViewings());
       return;
     }
 
@@ -46,9 +53,21 @@ export function useAListSync(uid: string | null) {
         ),
     );
 
+    const unsubscribeViewings = startViewingsListener(
+      uid,
+      (viewings) => dispatch(setViewings(viewings)),
+      (error) =>
+        dispatch(
+          setViewingsLoadError(
+            getErrorMessage(error, 'Unable to load your movies.'),
+          ),
+        ),
+    );
+
     return () => {
       unsubscribeMembership();
       unsubscribeWatchlist();
+      unsubscribeViewings();
     };
   }, [dispatch, uid]);
 }

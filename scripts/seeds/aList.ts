@@ -63,7 +63,12 @@ function getWatchlistFixtures(now: number) {
     },
     {
       movieKey: 'manual-seed-0001-hometown',
-      movie: movie('Hometown Film Fest Shorts', getDayUtcAhead(now, 12), null, null),
+      movie: movie(
+        'Hometown Film Fest Shorts',
+        getDayUtcAhead(now, 12),
+        null,
+        null,
+      ),
       priority: 'IF_I_HAVE_TIME',
       preferredFormat: null,
     },
@@ -74,6 +79,92 @@ function getWatchlistFixtures(now: number) {
       preferredFormat: 'LASER',
     },
   ];
+}
+
+const PREVIEWS_MINUTES = 20;
+const DEFAULT_RUNTIME = 120;
+
+const SEED_TIMEZONE = 'America/Los_Angeles';
+
+/** Wall-clock fields of an instant in `timeZone`. */
+function readWallClock(epoch: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(epoch));
+  const read = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute'),
+  };
+}
+
+/** 7 pm Los Angeles time on the LA calendar day `daysFromNow` days from LA's today, DST included. */
+function getEveningShowtime(now: number, daysFromNow: number) {
+  const today = readWallClock(now, SEED_TIMEZONE);
+  const target = new Date(
+    Date.UTC(today.year, today.month - 1, today.day + daysFromNow, 19, 0),
+  );
+  const wallAsUtc = target.getTime();
+  const offsetOf = (epoch: number) => {
+    const wall = readWallClock(epoch, SEED_TIMEZONE);
+    return (
+      Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute) -
+      epoch
+    );
+  };
+  const firstGuess = wallAsUtc - offsetOf(wallAsUtc);
+  const result = wallAsUtc - offsetOf(firstGuess);
+  return result;
+}
+
+function getViewingFixtures(now: number) {
+  const items = getWatchlistFixtures(now);
+  const find = (movieKey: string) =>
+    items.find((item) => item.movieKey === movieKey)!;
+  const plan = [
+    {
+      id: 'seed-viewing-dune-1',
+      movieKey: 'imdb-tt15239678',
+      daysFromNow: -20,
+    },
+    { id: 'seed-viewing-matrix', movieKey: 'imdb-tt0133093', daysFromNow: -12 },
+    { id: 'seed-viewing-dune-2', movieKey: 'imdb-tt15239678', daysFromNow: -6 },
+    {
+      id: 'seed-viewing-starlight',
+      movieKey: 'imdb-tt99000001',
+      daysFromNow: 4,
+    },
+    { id: 'seed-viewing-galaxy', movieKey: 'imdb-tt99000003', daysFromNow: 25 },
+  ];
+
+  return plan.map(({ id, movieKey, daysFromNow }) => {
+    const { movie: snapshot } = find(movieKey);
+    const showtimeAt = getEveningShowtime(now, daysFromNow);
+    const endsAt =
+      showtimeAt +
+      (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *
+        60_000;
+    return {
+      id,
+      movieKey,
+      movie: snapshot,
+      showtimeAt,
+      endsAt,
+      status: endsAt <= now ? 'SEEN' : 'PLANNED',
+      createdAt: Math.min(now, showtimeAt),
+      lastEditedAt: Math.min(now, showtimeAt),
+    };
+  });
 }
 
 // Alex has a finished membership; every other fixture account lands on Setup.
@@ -113,8 +204,15 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const viewings = getViewingFixtures(context.now);
+  await Promise.all(
+    viewings.map((viewing) =>
+      membershipRef.collection('viewings').doc(viewing.id).set(viewing),
+    ),
+  );
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + watchlist.length,
+    firestoreDocuments: 1 + watchlist.length + viewings.length,
   };
 }

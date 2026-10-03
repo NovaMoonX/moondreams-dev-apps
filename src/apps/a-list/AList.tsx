@@ -113,7 +113,7 @@ function AList() {
         <BottomNav value={activeTab} onChange={setActiveTab} />
       </div>
       {overlay?.kind === 'add' && (
-        <AddDrawer onClose={() => setOverlay(null)} />
+        <AddDrawer overlay={overlay} onClose={() => setOverlay(null)} />
       )}
     </AListOverlayContext.Provider>
   );

@@ -41,7 +41,7 @@ block-beta
   style GoodLabel fill:transparent,stroke:#888888,stroke-width:1px;
   style GoodContent fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Honest caveats: (1) Dreamer UI's `Calendar` hands `renderCell` only the date and offers no month-change callback, so cell contents come from a day-keyed lookup the app builds up front, not a per-cell fetch. (2) Edge-to-edge posters need the calendar's own cell padding and border cleared and its cells made taller than square (about 3:4, so a 2:3 poster fills them with a light crop) through `customStyles`; whether the component lets cell height be set that freely is the first thing to prove out when building. The cost of taller cells is fewer rows on screen, which is why the day panel scrolls into view when a day is tapped.*
+*Honest caveats, and what building it showed: (1) Dreamer UI's `Calendar` hands `renderCell` only the date (a local-midnight `Date`, confirmed in its source) and offers no month-change callback, so cell contents come from a day-keyed lookup the app builds up front, not a per-cell fetch. (2) Edge-to-edge posters work through `customStyles` alone: `cellClassName` clears the cell's padding, rounding and square size and sets `aspect-[3/4]`, `monthGridClassName` sets a hairline gap, and the cell content is absolutely positioned to fill the cell. No workaround was needed. The cost of taller cells is fewer rows on screen, which is why the day panel sits right under the grid.*
 
 ## Sitemap
 
