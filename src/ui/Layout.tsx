@@ -94,10 +94,10 @@ function Layout() {
 
       <OfflineBanner />
 
-      {/* header — shifted down while the offline banner occupies the top of the screen */}
+      {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only */}
       <div
         className={join(
-          'pointer-events-none absolute inset-x-0 z-10 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 md:px-6',
+          'pointer-events-none fixed inset-x-0 z-10 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
           isBannerVisible ? 'top-9' : 'top-0',
         )}
       >

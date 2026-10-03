@@ -32,5 +32,6 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   photoURL?: string;
+  customPhotoURL?: string | null;
   isAdmin?: boolean;
 }
