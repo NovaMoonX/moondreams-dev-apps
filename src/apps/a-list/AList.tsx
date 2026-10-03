@@ -9,6 +9,7 @@ import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
+import MembershipSettingsModal from '@apps/a-list/components/dashboard/MembershipSettingsModal';
 import AddDrawer from '@apps/a-list/components/add/AddDrawer';
 import SeenPromptHost from '@apps/a-list/components/viewing/SeenPromptHost';
 import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
@@ -141,6 +142,12 @@ function AList() {
         <WatchlistItemDrawer
           key={overlay.movieKey}
           movieKey={overlay.movieKey}
+          onClose={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === 'membership' && (
+        <MembershipSettingsModal
+          membership={membership}
           onClose={() => setOverlay(null)}
         />
       )}

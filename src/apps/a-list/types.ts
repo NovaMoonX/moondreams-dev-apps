@@ -56,7 +56,8 @@ export type AListOverlay =
       mode: 'single' | 'past';
     }
   | { kind: 'viewing'; id: string }
-  | { kind: 'watchlistItem'; movieKey: string };
+  | { kind: 'watchlistItem'; movieKey: string }
+  | { kind: 'membership' };
 
 export interface WatchlistItem {
   /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */
