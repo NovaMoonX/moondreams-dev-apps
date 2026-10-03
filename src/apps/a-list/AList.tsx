@@ -22,7 +22,7 @@ import { useAListSync } from '@apps/a-list/hooks/useAListSync';
 import {
   selectIsAListLoaded,
   selectMembership,
-  selectMembershipLoadError,
+  selectAListLoadError,
 } from '@apps/a-list/store/selectors';
 import type { AListOverlay, AListTab } from '@apps/a-list/types';
 
@@ -32,7 +32,7 @@ function AList() {
   const [overlay, setOverlay] = useState<AListOverlay | null>(null);
   const membership = useAppSelector(selectMembership);
   const isLoaded = useAppSelector(selectIsAListLoaded);
-  const loadError = useAppSelector(selectMembershipLoadError);
+  const loadError = useAppSelector(selectAListLoadError);
 
   useAListSync(user?.uid ?? null);
 
@@ -68,9 +68,7 @@ function AList() {
     return (
       <div className='page flex items-center justify-center'>
         <div className='max-w-sm space-y-3 text-center'>
-          <p className='font-medium'>
-            We couldn't load your membership just now.
-          </p>
+          <p className='font-medium'>We couldn't load your A-List just now.</p>
           <p className='text-muted-foreground text-sm'>
             Check your connection and give it another try.
           </p>

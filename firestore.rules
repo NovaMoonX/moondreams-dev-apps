@@ -132,6 +132,40 @@ service cloud.firestore {
         && request.resource.data.setupCompletedAt == resource.data.setupCompletedAt
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
+
+      function isMovieValid(movie) {
+        let keys = ['title', 'releaseDate', 'posterUrl', 'runtimeMinutes', 'contentRating'];
+        return movie is map && movie.keys().hasOnly(keys) && movie.keys().hasAll(keys)
+          && movie.title is string && movie.title.size() > 0 && movie.title.size() <= 200
+          && (movie.releaseDate == null || movie.releaseDate is int)
+          && (movie.posterUrl == null || (movie.posterUrl is string && movie.posterUrl.size() <= 500
+            && movie.posterUrl.matches('^https://[^\\s]+$')))
+          && isNullOrIntBetween(movie.runtimeMinutes, 1, 1000)
+          && (movie.contentRating == null || (movie.contentRating is string && movie.contentRating.size() <= 20));
+      }
+
+      function isFormat(value) {
+        return value in ['STANDARD', 'DOLBY_CINEMA', 'IMAX', 'PRIME', 'REALD_3D', 'LASER'];
+      }
+
+      match /watchlist/{movieKey} {
+        function isWatchlistItemValid(data) {
+          let keys = ['movieKey', 'movie', 'priority', 'preferredFormat', 'createdAt', 'lastEditedAt'];
+          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+            && data.movieKey == movieKey
+            && movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
+            && isMovieValid(data.movie)
+            && data.priority in ['MUST_SEE', 'WANT_TO_SEE', 'IF_I_HAVE_TIME']
+            && (data.preferredFormat == null || isFormat(data.preferredFormat))
+            && data.createdAt is int
+            && data.lastEditedAt is int;
+        }
+
+        allow read, delete: if isMembershipOwner();
+        allow create: if isMembershipOwner() && isWatchlistItemValid(request.resource.data);
+        allow update: if isMembershipOwner() && isWatchlistItemValid(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
     }
 
     // Written and read only by the movie-lookup Cloud Functions (admin SDK), so no client
