@@ -1,14 +1,8 @@
-import { useState } from 'react';
-
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { Badge } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarDays, Pencil } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { useAppDispatch } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
-import IdeaFormModal, { type IdeaFormFields } from '@apps/waypoint/components/IdeaFormModal';
 import IdeaDetailsOverlay, { type IdeaAnchor, type IdeaOpenProps } from '@apps/waypoint/components/IdeaDetailsOverlay';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import {
@@ -16,10 +10,8 @@ import {
   IDEA_TYPE_EMOJIS,
   IDEA_TYPE_LABELS,
 } from '@apps/waypoint/constants';
-import { deleteIdea, updateIdea } from '@apps/waypoint/store/actions/ideaActions';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTimingSummary } from '@apps/waypoint/utils/ideaLabels';
-import { canManageIdea } from '@apps/waypoint/utils/roleGuards';
 
 interface IdeaCardProps {
   trip: TripSpace;
@@ -32,37 +24,6 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const timing = getIdeaTimingSummary(trip, idea);
   const tags = getIdeaTags(idea);
-  const dispatch = useAppDispatch();
-  const { addToast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const canManage = canManageIdea(trip, currentUserId, idea);
-
-  const handleSave = async (fields: IdeaFormFields) => {
-    setIsSubmitting(true);
-    try {
-      await dispatch(updateIdea({ uid: currentUserId, trip, idea, ...fields })).unwrap();
-      setIsEditing(false);
-    } catch (saveError) {
-      addToast({
-        title: 'Unable to save this idea',
-        description: getErrorMessage(saveError, 'Please try again.'),
-        type: 'error',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    setIsSubmitting(true);
-    try {
-      await dispatch(deleteIdea({ uid: currentUserId, trip, idea })).unwrap();
-      setIsEditing(false);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const renderCard = (openProps: IdeaOpenProps, anchor: IdeaAnchor) => (
     <div
@@ -93,21 +54,7 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
           </div>,
           )}
         </div>
-        <span
-          className='flex shrink-0 items-center gap-1'
-          onClick={(clickEvent) => clickEvent.stopPropagation()}
-        >
-          {canManage && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='icon'
-              aria-label={`Edit ${idea.title}`}
-              onClick={() => setIsEditing(true)}
-            >
-              <Pencil className='h-3.5 w-3.5' />
-            </Button>
-          )}
+        <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
           <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
         </span>
       </div>
@@ -124,28 +71,12 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
   );
 
   return (
-    <>
-      <IdeaDetailsOverlay
-        trip={trip}
-        idea={idea}
-        currentUserId={currentUserId}
-        renderTrigger={renderCard}
-      />
-      {isEditing && (
-        <IdeaFormModal
-          key={idea.id}
-          isOpen
-          trip={trip}
-          defaultType={idea.ideaType}
-          idea={idea}
-          canPost
-          isSubmitting={isSubmitting}
-          onSubmit={handleSave}
-          onDelete={handleDelete}
-          onClose={() => setIsEditing(false)}
-        />
-      )}
-    </>
+    <IdeaDetailsOverlay
+      trip={trip}
+      idea={idea}
+      currentUserId={currentUserId}
+      renderTrigger={renderCard}
+    />
   );
 }
 

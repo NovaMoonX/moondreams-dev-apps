@@ -746,8 +746,8 @@ src/apps/waypoint/
 │   │   ├── ExpenseFormModal.tsx   (DreamerUI Form — Add only: title/amount-or-range/payer/day)
 │   │   └── ExpenseSplitModal.tsx  (DreamerUI Form — the distinct Split action: target type + members + splitAmounts)
 │   ├── IdeasSection.tsx           (type filter: All/Restaurants/Activities; nested screen on phones)
-│   │   ├── IdeaCard.tsx           (pencil for the poster/Editor/Admin opens IdeaFormModal in edit mode, with a guarded delete; tap opens IdeaDetailsOverlay; timing line, tags, vote; converted ideas sit under an "Already on the itinerary" divider)
-│   │   ├── IdeaDetailsOverlay.tsx (full idea: a drawer with a big centered vote on phones, a hover popover beside the idea's text, one at a time, with the compact vote on wider screens)
+│   │   ├── IdeaCard.tsx           (tap opens IdeaDetailsOverlay; timing line, tags, vote; converted ideas sit under an "Already on the itinerary" divider)
+│   │   ├── IdeaDetailsOverlay.tsx (full idea, with Modify for the poster/Editor/Admin opening IdeaFormModal in edit mode and its guarded delete: a drawer with a big centered vote on phones, a hover popover beside the idea's text, one at a time, with the compact vote on wider screens)
 │   │   ├── IdeaVoteButton.tsx
 │   │   ├── IdeaFormModal.tsx      (DreamerUI Form, create or edit: type + name up front; optional fields appear from a grid of add-chips, `AddFieldChips`)
 │   │   └── StayCriteriaPanel.tsx  (DreamerUI Form — Editor/Admin-managed must-have/nice-to-have list)
