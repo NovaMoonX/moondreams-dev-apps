@@ -9,9 +9,10 @@ interface DayPanelProps {
   day: Date;
   viewings: Viewing[];
   onAdd: () => void;
+  onOpenViewing: (id: string) => void;
 }
 
-function DayPanel({ day, viewings, onAdd }: DayPanelProps) {
+function DayPanel({ day, viewings, onAdd, onOpenViewing }: DayPanelProps) {
   return (
     <section className='space-y-1' aria-label='Movies on the selected day'>
       <div className='flex items-center justify-between gap-3'>
@@ -30,7 +31,15 @@ function DayPanel({ day, viewings, onAdd }: DayPanelProps) {
         <ul className='divide-border divide-y'>
           {viewings.map((viewing) => (
             <li key={viewing.id}>
-              <ViewingRow viewing={viewing} />
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-label={`Open ${viewing.movie.title}`}
+                className='h-auto w-full rounded-none p-0 text-left font-normal'
+                onClick={() => onOpenViewing(viewing.id)}
+              >
+                <ViewingRow viewing={viewing} />
+              </Button>
             </li>
           ))}
         </ul>

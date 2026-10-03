@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, doc, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  runTransaction,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -80,3 +86,57 @@ export const addViewing = createAsyncThunk<
     }
   },
 );
+
+interface UpdateViewingShowtimeInput {
+  uid: string;
+  id: string;
+  showtimeAt: number;
+  runtimeMinutes: number | null;
+}
+
+/** Moves a showing: the showtime and its derived end are always written together. */
+export const updateViewingShowtime = createAsyncThunk<
+  void,
+  UpdateViewingShowtimeInput,
+  { rejectValue: string }
+>(
+  'aList/viewings/updateShowtime',
+  async ({ uid, id, showtimeAt, runtimeMinutes }, { rejectWithValue }) => {
+    try {
+      await updateDoc(
+        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
+        {
+          showtimeAt,
+          endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
+          lastEditedAt: Date.now(),
+        },
+      );
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this showing.'),
+      );
+    }
+  },
+);
+
+interface RemoveViewingInput {
+  uid: string;
+  id: string;
+}
+
+/** Removes only the viewing; the movie stays on the watchlist. */
+export const removeViewing = createAsyncThunk<
+  void,
+  RemoveViewingInput,
+  { rejectValue: string }
+>('aList/viewings/remove', async ({ uid, id }, { rejectWithValue }) => {
+  try {
+    await deleteDoc(
+      doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
+    );
+  } catch (error) {
+    return rejectWithValue(
+      getErrorMessage(error, 'Unable to remove this showing.'),
+    );
+  }
+});

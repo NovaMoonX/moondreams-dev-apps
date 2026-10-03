@@ -46,7 +46,8 @@ export interface MovieSearchResult {
 export type AListOverlay =
   | { kind: 'add'; destination: 'watchlist' }
   /** `date` is a local "YYYY-MM-DD" the date field starts on. */
-  | { kind: 'add'; destination: 'calendar'; date: string };
+  | { kind: 'add'; destination: 'calendar'; date: string }
+  | { kind: 'viewing'; id: string };
 
 export interface WatchlistItem {
   /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */

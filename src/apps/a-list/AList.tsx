@@ -10,6 +10,7 @@ import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
 import AddDrawer from '@apps/a-list/components/add/AddDrawer';
+import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
 import CalendarScreen from '@apps/a-list/components/calendar/CalendarScreen';
 import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
@@ -114,6 +115,13 @@ function AList() {
       </div>
       {overlay?.kind === 'add' && (
         <AddDrawer overlay={overlay} onClose={() => setOverlay(null)} />
+      )}
+      {overlay?.kind === 'viewing' && (
+        <ViewingDrawer
+          key={overlay.id}
+          viewingId={overlay.id}
+          onClose={() => setOverlay(null)}
+        />
       )}
     </AListOverlayContext.Provider>
   );
