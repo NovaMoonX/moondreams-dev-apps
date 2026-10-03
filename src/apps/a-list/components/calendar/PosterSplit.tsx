@@ -1,0 +1,80 @@
+import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import type { Viewing } from '@apps/a-list/types';
+
+// Three wedges meet at the centre with one edge pointing straight up, at 120° apart; in a
+// 3:4 cell the 120° and 240° edges leave the side walls 78.9% of the way down.
+const SPLITS: Record<number, string[]> = {
+  1: ['none'],
+  2: ['polygon(0 0, 100% 0, 0 100%)', 'polygon(100% 0, 100% 100%, 0 100%)'],
+  3: [
+    'polygon(50% 50%, 50% 0, 100% 0, 100% 78.9%)',
+    'polygon(50% 50%, 100% 78.9%, 100% 100%, 0 100%, 0 78.9%)',
+    'polygon(50% 50%, 0 78.9%, 0 0, 50% 0)',
+  ],
+  4: [
+    'inset(0 50% 50% 0)',
+    'inset(0 0 50% 50%)',
+    'inset(50% 50% 0 0)',
+    'inset(50% 0 0 50%)',
+  ],
+};
+
+// Each piece's title-tile text is pulled toward that piece, away from the cut lines.
+const TILE_TEXT: Record<number, string[]> = {
+  1: [''],
+  2: [
+    'items-start justify-start text-left pt-6 pr-[40%]',
+    'items-end justify-end text-right pl-[40%]',
+  ],
+  3: [
+    'items-start justify-end text-right pt-6 pl-[52%]',
+    'items-end justify-center text-center pt-[80%]',
+    'items-start justify-start text-left pt-6 pr-[52%]',
+  ],
+  4: [
+    'items-start justify-start text-left pt-6 pr-[52%] pb-[52%]',
+    'items-start justify-end text-right pl-[52%] pb-[52%]',
+    'items-end justify-start text-left pr-[52%] pt-[52%]',
+    'items-end justify-end text-right pl-[52%] pt-[52%] pb-4',
+  ],
+};
+
+interface PosterSplitProps {
+  /** The day's viewings in showtime order. */
+  viewings: Viewing[];
+}
+
+/** One to four covers, each filling the whole cell and clipped to its piece; past four, the rest are a "+N". */
+function PosterSplit({ viewings }: PosterSplitProps) {
+  const shown = viewings.slice(0, 4);
+  const clips = SPLITS[shown.length] ?? [];
+  const hiddenCount = viewings.length - shown.length;
+
+  return (
+    <span className='absolute inset-0 block'>
+      {shown.map((viewing, index) => (
+        <span
+          key={viewing.id}
+          className='absolute inset-0 block'
+          style={{ clipPath: clips[index] }}
+        >
+          <PosterCover
+            title={viewing.movie.title}
+            posterUrl={viewing.movie.posterUrl}
+            compact
+            tileTextClassName={
+              shown.length > 1 ? TILE_TEXT[shown.length]?.[index] : undefined
+            }
+          />
+        </span>
+      ))}
+      {hiddenCount > 0 && (
+        <span className='absolute right-0.5 bottom-0.5 rounded-full bg-black/60 px-1 text-[10px] font-semibold text-white'>
+          +{hiddenCount}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export default PosterSplit;
