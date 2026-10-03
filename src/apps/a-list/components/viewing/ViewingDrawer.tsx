@@ -1,0 +1,163 @@
+import { useState } from 'react';
+
+import { Badge, Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronLeft, Pencil, Trash2 } from 'lucide-react';
+
+import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDate, formatTime } from '@/utils/formatUtils';
+import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import EditViewingForm from '@apps/a-list/components/viewing/EditViewingForm';
+import {
+  removeViewing,
+  updateViewingShowtime,
+} from '@apps/a-list/store/actions/viewingActions';
+import {
+  selectMembership,
+  selectViewingById,
+} from '@apps/a-list/store/selectors';
+
+interface ViewingDrawerProps {
+  viewingId: string;
+  onClose: () => void;
+}
+
+function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
+  const { user } = useAuth();
+  const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
+  const { addToast } = useToast();
+  const now = useNow();
+  const viewing = useAppSelector((state) =>
+    selectViewingById(state, viewingId),
+  );
+  const membership = useAppSelector(selectMembership);
+  const [view, setView] = useState<'details' | 'edit'>('details');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!viewing || !user || !membership) {
+    return null;
+  }
+
+  const handleSaveShowtime = async (showtimeAt: number) => {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await dispatch(
+        updateViewingShowtime({
+          uid: user.uid,
+          id: viewing.id,
+          showtimeAt,
+          runtimeMinutes: viewing.movie.runtimeMinutes,
+        }),
+      ).unwrap();
+      setView('details');
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, 'Unable to save this showing.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    const confirmed = await confirm({
+      title: 'Remove showing',
+      message: `Remove ${viewing.movie.title} on ${formatDate(viewing.showtimeAt)}? It stays on your watchlist.`,
+      confirmText: 'Remove',
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await dispatch(removeViewing({ uid: user.uid, id: viewing.id })).unwrap();
+      addToast({ title: 'Showing removed', description: viewing.movie.title });
+      onClose();
+    } catch (removeError) {
+      setError(getErrorMessage(removeError, 'Unable to remove this showing.'));
+    }
+  };
+
+  const header = (
+    <div className='flex gap-3'>
+      <span className='h-24 w-16 shrink-0 overflow-hidden rounded-md'>
+        <PosterCover
+          title={viewing.movie.title}
+          posterUrl={viewing.movie.posterUrl}
+        />
+      </span>
+      <div className='min-w-0 space-y-1'>
+        <p className='font-semibold'>{viewing.movie.title}</p>
+        <p className='text-muted-foreground text-sm'>
+          {formatDate(viewing.showtimeAt)} · {formatTime(viewing.showtimeAt)}
+        </p>
+        <Badge
+          variant={viewing.status === 'SEEN' ? 'success' : 'muted'}
+          size='xs'
+        >
+          {viewing.status === 'SEEN' ? 'Seen' : 'Planned'}
+        </Badge>
+      </div>
+    </div>
+  );
+
+  return (
+    <Drawer isOpen onClose={onClose} title='Movie'>
+      {view === 'edit' ? (
+        <div className='space-y-4'>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='gap-1 px-0'
+            onClick={() => setView('details')}
+          >
+            <ChevronLeft className='h-4 w-4' /> Back to movie
+          </Button>
+          {header}
+          <EditViewingForm
+            key={viewing.showtimeAt}
+            viewing={viewing}
+            startDate={membership.startDate}
+            now={now}
+            isSaving={isSaving}
+            onCancel={() => setView('details')}
+            onSave={(showtimeAt) => void handleSaveShowtime(showtimeAt)}
+          />
+          {error && <p className='text-destructive text-sm'>{error}</p>}
+        </div>
+      ) : (
+        <div className='space-y-4'>
+          {header}
+          <div className='bg-muted/50 divide-border divide-y rounded-lg'>
+            <Button
+              type='button'
+              variant='tertiary'
+              className='w-full justify-start gap-2 rounded-none'
+              onClick={() => setView('edit')}
+            >
+              <Pencil className='h-4 w-4' /> Edit
+            </Button>
+          </div>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-destructive! w-full justify-start gap-2'
+            onClick={() => void handleRemove()}
+          >
+            <Trash2 className='h-4 w-4' /> Remove
+          </Button>
+          {error && <p className='text-destructive text-sm'>{error}</p>}
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+export default ViewingDrawer;

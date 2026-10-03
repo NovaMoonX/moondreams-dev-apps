@@ -109,3 +109,6 @@ export const selectCounters = createSelector(
     return result;
   },
 );
+
+export const selectViewingById = (state: RootState, id: string) =>
+  state.aList.viewings.items.find((viewing) => viewing.id === id) ?? null;

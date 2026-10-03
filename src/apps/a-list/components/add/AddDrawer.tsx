@@ -17,6 +17,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import {
   fromDateInputValue,
   fromLocalDateAndTimeInputValues,
+  toDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -41,7 +42,10 @@ import {
 import { movieDetailsQueryOptions } from '@apps/a-list/queries/movieQueries';
 import { addViewing } from '@apps/a-list/store/actions/viewingActions';
 import { addWatchlistItem } from '@apps/a-list/store/actions/watchlistActions';
-import { selectSeenCountByMovieKey } from '@apps/a-list/store/selectors';
+import {
+  selectMembership,
+  selectSeenCountByMovieKey,
+} from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
   AmcFormat,
@@ -124,6 +128,7 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   const { addToast } = useToast();
   const now = useNow();
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
+  const membership = useAppSelector(selectMembership);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
   const [manualDraft, setManualDraft] =
@@ -156,7 +161,13 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     showtimeValues.time,
   );
   const isCalendar = overlay.destination === 'calendar';
+  const startDateKey = membership ? toDateInputValue(membership.startDate) : '';
+  const isBeforeStart =
+    isCalendar &&
+    showtimeValues.date !== '' &&
+    showtimeValues.date < startDateKey;
   const canSave =
+    !isBeforeStart &&
     movie !== undefined &&
     movieKey !== null &&
     (!isCalendar || (showtimeAt !== undefined && showtimeValues.time !== ''));
@@ -342,6 +353,12 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
               setWatchlistValues(data as WatchlistDetailsValues)
             }
           />
+        )}
+        {isBeforeStart && membership && (
+          <p className='text-destructive text-sm'>
+            Your membership started {formatDateUTC(membership.startDate)}, so
+            pick that day or later.
+          </p>
         )}
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions

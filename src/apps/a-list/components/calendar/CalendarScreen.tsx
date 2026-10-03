@@ -67,6 +67,7 @@ function CalendarScreen() {
         day={selectedDay}
         viewings={viewingsByDay[selectedDayKey] ?? []}
         onAdd={openAdd}
+        onOpenViewing={(id) => openOverlay({ kind: 'viewing', id })}
       />
     </section>
   );
