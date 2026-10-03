@@ -104,6 +104,12 @@ export const selectCounters = createSelector(
 
     const result = {
       watched: seenDayKeys.length,
+      watchedMinutes: viewings
+        .filter((viewing) => viewing.status === 'SEEN')
+        .reduce(
+          (total, viewing) => total + (viewing.movie.runtimeMinutes ?? 0),
+          0,
+        ),
       thisWeek,
       thisMonth,
       weeklyGoal,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { CalendarPlus, ChevronLeft, Pencil, Trash2 } from 'lucide-react';
 
@@ -218,21 +219,35 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       );
     }
 
-    const facts = [
-      getReleaseLabel(item.movie.releaseDate, todayDay),
-      item.movie.runtimeMinutes === null
-        ? null
-        : formatDuration(item.movie.runtimeMinutes * 60_000),
-      item.movie.contentRating,
-    ].filter(Boolean);
-    const activityLines = [
-      row.nextPlannedAt === null
-        ? null
-        : `📅 Planned for ${formatDate(row.nextPlannedAt)}`,
-      row.lastWatchedAt === null
-        ? null
-        : `🍿 Seen ${formatDate(row.lastWatchedAt)}${row.seenCount > 1 ? ` · ×${row.seenCount}` : ''}`,
-    ].filter(Boolean);
+    const detailLines = [
+      {
+        emoji: '🎬',
+        parts: [
+          getReleaseLabel(item.movie.releaseDate, todayDay),
+          item.movie.runtimeMinutes === null
+            ? null
+            : formatDuration(item.movie.runtimeMinutes * 60_000),
+          item.movie.contentRating,
+        ].filter((part): part is string => part !== null),
+      },
+      ...(row.nextPlannedAt === null
+        ? []
+        : [
+            {
+              emoji: '📅',
+              parts: [`Planned for ${formatDate(row.nextPlannedAt)}`],
+            },
+          ]),
+      ...(row.lastWatchedAt === null
+        ? []
+        : [
+            {
+              emoji: '🍿',
+              parts: [`Seen ${formatDate(row.lastWatchedAt)}`],
+              count: row.seenCount > 1 ? `×${row.seenCount}` : null,
+            },
+          ]),
+    ];
 
     return (
       <div className='space-y-5'>
@@ -247,20 +262,37 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
             <p className='text-xl leading-tight font-semibold'>
               {item.movie.title}
             </p>
-            <p className='text-muted-foreground text-sm'>
-              {facts.join(' · ')}
-            </p>
             <div className='flex flex-wrap items-center gap-1.5'>
               <PriorityBadge priority={item.priority} />
               {item.preferredFormat !== null && (
                 <FormatBadge format={item.preferredFormat} />
               )}
             </div>
-            {activityLines.map((line) => (
-              <p key={line} className='text-sm'>
-                {line}
-              </p>
-            ))}
+            <ul className='space-y-1.5 pt-1'>
+              {detailLines.map((line) => (
+                <li
+                  key={line.emoji}
+                  className='text-muted-foreground flex items-start gap-2 text-sm'
+                >
+                  <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+                    {line.emoji}
+                  </span>
+                  <span className='min-w-0 flex-1'>
+                    {line.parts.map((part, index) => (
+                      <span key={part} className={join(index > 0 && 'whitespace-nowrap')}>
+                        {index > 0 && '· '}
+                        {part}{' '}
+                      </span>
+                    ))}
+                  </span>
+                  {line.count && (
+                    <span className='bg-muted shrink-0 rounded-full px-2 text-xs font-medium whitespace-nowrap'>
+                      {line.count}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
         <div className='bg-muted/50 divide-border divide-y overflow-hidden rounded-2xl'>

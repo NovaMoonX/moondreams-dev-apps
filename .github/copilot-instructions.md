@@ -9,6 +9,7 @@
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check Dreamer UI first before building custom UI.
 - **Keep the look playful: rounded shapes, pills over radios/tab strips, meaningful emoji, warm copy. Mini-app-specific rules live in `.github/instructions/<app>.instructions.md` (mirrored in `.claude/rules/<app>.md`).**
+- **Alignment: items in a column share one left edge; an emoji/icon line uses a fixed-width icon column (`w-5 shrink-0 text-center`); counts and dates are `whitespace-nowrap` badges, never a wrapping trailing `· ×3`; omit empty rows instead of placeholder text. Check new screens at narrow phone width.**
 - **No "Back home" link inside a mini-app's page; Home is in the header (icon on sm+, avatar menu on phones). Only `AppEntryFallback` says "Back home".**
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
 - **Never call `setState` synchronously inside a `useEffect` body or during render to mirror props/derive values — see "React and state patterns" below.**

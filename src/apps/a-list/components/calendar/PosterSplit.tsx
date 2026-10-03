@@ -20,6 +20,20 @@ const SPLITS: Record<number, string[]> = {
 };
 
 // Each piece's title-tile text is pulled toward that piece, away from the cut lines.
+// The cut lines between pieces, in the same percentages as the clips above.
+const SEAMS: Record<number, Array<[number, number, number, number]>> = {
+  2: [[100, 0, 0, 100]],
+  3: [
+    [50, 50, 50, 0],
+    [50, 50, 100, 69.25],
+    [50, 50, 0, 69.25],
+  ],
+  4: [
+    [50, 0, 50, 100],
+    [0, 50, 100, 50],
+  ],
+};
+
 const TILE_TEXT: Record<number, string[]> = {
   1: ['items-center justify-center pt-5 text-center'],
   2: [
@@ -68,6 +82,27 @@ function PosterSplit({ viewings }: PosterSplitProps) {
           />
         </span>
       ))}
+      {(SEAMS[shown.length] ?? []).length > 0 && (
+        <svg
+          className='pointer-events-none absolute inset-0 h-full w-full'
+          viewBox='0 0 100 100'
+          preserveAspectRatio='none'
+          aria-hidden='true'
+        >
+          {(SEAMS[shown.length] ?? []).map(([x1, y1, x2, y2]) => (
+            <line
+              key={`${x1}-${y1}-${x2}-${y2}`}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke='var(--color-background)'
+              strokeWidth={1.5}
+              vectorEffect='non-scaling-stroke'
+            />
+          ))}
+        </svg>
+      )}
       {hiddenCount > 0 && (
         <span className='absolute right-0.5 bottom-0.5 rounded-full bg-black/60 px-1 text-[10px] font-semibold text-white'>
           +{hiddenCount}

@@ -135,6 +135,7 @@ function WatchlistScreen() {
         value={filters}
         openingCount={openingRows.length}
         onToggle={toggleFilter}
+        onClear={() => setFilters([])}
       />
       {visibleRows.length === 0 ? (
         <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>

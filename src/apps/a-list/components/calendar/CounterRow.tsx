@@ -1,6 +1,7 @@
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
+import { formatDuration } from '@/utils/formatUtils';
 import StatTile from '@apps/a-list/components/shared/StatTile';
 import { selectCounters } from '@apps/a-list/store/selectors';
 
@@ -24,6 +25,11 @@ function CounterRow({ now }: CounterRowProps) {
         icon='🎞️'
         value={counters.watched}
         label='Watched'
+        detail={
+          counters.watchedMinutes > 0
+            ? `${formatDuration(counters.watchedMinutes * 60_000)} in theaters`
+            : undefined
+        }
       />
       <StatTile
         isStacked

@@ -25,3 +25,11 @@ html.a-list-theme.dark {
   --color-accent-foreground: var(--color-amber-100);
   --color-border: var(--color-zinc-800);
 }
+
+/* A click leaves a button focused, and the library's focus: outline and ring flash on it.
+   Keyboard focus (:focus-visible) keeps its cue. */
+html.a-list-theme :focus:not(:focus-visible) {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}

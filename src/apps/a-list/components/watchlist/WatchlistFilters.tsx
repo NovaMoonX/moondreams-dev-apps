@@ -1,3 +1,6 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { X } from 'lucide-react';
+
 import Pill from '@apps/a-list/components/shared/Pill';
 import {
   WATCH_PRIORITY_EMOJIS,
@@ -10,6 +13,7 @@ interface WatchlistFiltersProps {
   value: WatchlistFilter[];
   openingCount: number;
   onToggle: (filter: WatchlistFilter) => void;
+  onClear: () => void;
 }
 
 function getFilterView(filter: WatchlistFilter) {
@@ -23,6 +27,7 @@ function WatchlistFilters({
   value,
   openingCount,
   onToggle,
+  onClear,
 }: WatchlistFiltersProps) {
   return (
     <div
@@ -30,6 +35,18 @@ function WatchlistFilters({
       role='group'
       aria-label='Filter your watchlist'
     >
+      {value.length > 0 && (
+        <Button
+          type='button'
+          size='sm'
+          rounded='full'
+          variant='outline'
+          className='shrink-0 gap-1 whitespace-nowrap'
+          onClick={onClear}
+        >
+          <X className='h-3.5 w-3.5' /> Clear
+        </Button>
+      )}
       {WATCHLIST_FILTERS.map((filter) => {
         const { emoji, label } = getFilterView(filter);
         return (

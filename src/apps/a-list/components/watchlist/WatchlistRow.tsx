@@ -1,4 +1,10 @@
-import { formatDate, formatDateUTC } from '@/utils/formatUtils';
+import { Badge } from '@moondreamsdev/dreamer-ui/components';
+
+import {
+  formatDate,
+  formatDateShort,
+  formatDateUTC,
+} from '@/utils/formatUtils';
 import DateChip from '@apps/a-list/components/shared/DateChip';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
@@ -31,10 +37,6 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
     return `Opens ${formatDateUTC(movie.releaseDate)} · ${when}`;
   };
 
-  const activityLine =
-    lastWatchedAt === null
-      ? null
-      : `🍿 Seen ${formatDate(lastWatchedAt)}${seenCount > 1 ? ` · ×${seenCount}` : ''}`;
 
   return (
     <div className='border-border bg-card flex w-full items-stretch gap-3 rounded-2xl border p-2.5 text-left'>
@@ -50,17 +52,23 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
       <div className='min-w-0 flex-1 space-y-1 py-0.5'>
         <p className='line-clamp-2 font-medium'>{movie.title}</p>
         <p className='text-muted-foreground text-xs'>{getReleaseText()}</p>
-        <div className='flex flex-wrap items-center gap-1.5'>
-          {item.preferredFormat === null ? (
-            <span className='text-muted-foreground text-xs'>
-              No format preference
-            </span>
-          ) : (
-            <FormatBadge format={item.preferredFormat} />
-          )}
-        </div>
-        {activityLine && (
-          <p className='text-muted-foreground text-xs'>{activityLine}</p>
+        {(item.preferredFormat !== null || lastWatchedAt !== null) && (
+          <div className='flex flex-wrap items-center gap-1.5'>
+            {item.preferredFormat !== null && (
+              <FormatBadge format={item.preferredFormat} />
+            )}
+            {lastWatchedAt !== null && (
+              <Badge
+                variant='muted'
+                size='xs'
+                className='gap-1 rounded-full! whitespace-nowrap'
+              >
+                <span aria-hidden='true'>🍿</span>
+                Seen {formatDateShort(lastWatchedAt)}
+                {seenCount > 1 && ` · ×${seenCount}`}
+              </Badge>
+            )}
+          </div>
         )}
       </div>
       {(hasPriorityBadge || nextPlannedAt !== null) && (
