@@ -32,15 +32,11 @@ function getPrefill(trip: TripSpace, idea: TripIdea): EventPrefill {
     dayIndex: getIdeaTiming(trip, idea).days[0] ?? 0,
     time: (timeBlock && TIME_BLOCK_START_TIMES[timeBlock]) || '12:00',
   };
-  if (ideaDetails && 'cuisines' in ideaDetails) {
-    return { ...base, eventType: 'DINING', cuisines: ideaDetails.cuisines, settings: [] };
-  }
-  return {
-    ...base,
-    eventType: 'ACTIVITY',
-    cuisines: [],
-    settings: ideaDetails && 'settings' in ideaDetails ? ideaDetails.settings : [],
-  };
+  const cuisines = ideaDetails && 'cuisines' in ideaDetails ? ideaDetails.cuisines : [];
+  const settings = ideaDetails && 'settings' in ideaDetails ? ideaDetails.settings : [];
+  return idea.ideaType === 'RESTAURANT'
+    ? { ...base, eventType: 'DINING', cuisines, settings: [] }
+    : { ...base, eventType: 'ACTIVITY', cuisines: [], settings };
 }
 
 function IdeaToEventModal({ trip, idea, currentUserId, onClose }: IdeaToEventModalProps) {

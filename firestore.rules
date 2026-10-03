@@ -2171,6 +2171,7 @@ service cloud.firestore {
           && resource.data.get('convertedToEntityId', null) == null
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convertedToEntityId'])
           && request.resource.data.convertedToEntityId is string
+          && !exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
           && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
           && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid;
       }
