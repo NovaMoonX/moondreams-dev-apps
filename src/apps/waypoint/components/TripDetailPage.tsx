@@ -367,6 +367,18 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     </Button>
   );
 
+  const ideasOverview = (hasAppNav ? sectionTab === '' : canAddIdeas) && (
+    <div className='mt-5'>
+      <IdeasOverview
+        trip={trip}
+        currentUserId={currentUserId}
+        canAdd={canAddIdeas}
+        onOpen={() => setSectionTab('ideas')}
+        onAdd={setIdeaFormType}
+      />
+    </div>
+  );
+
   return (
     <div className='page'>
       <div
@@ -519,23 +531,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
           </div>
         )}
+        {canAddIdeas && ideasOverview}
         {hasAppNav && sectionTab === '' && (
           <div className='mt-5 space-y-3'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
             <RentalsEntry onOpen={() => setSectionTab('rentals')} />
           </div>
         )}
-        {(hasAppNav ? sectionTab === '' : canAddIdeas) && (
-          <div className='mt-5'>
-            <IdeasOverview
-              trip={trip}
-              currentUserId={currentUserId}
-              canAdd={canAddIdeas}
-              onOpen={() => setSectionTab('ideas')}
-              onAdd={setIdeaFormType}
-            />
-          </div>
-        )}
+        {!canAddIdeas && ideasOverview}
         {!hasAppNav && <hr className='border-border mt-4' />}
         <Tabs
           value={sectionTab}
