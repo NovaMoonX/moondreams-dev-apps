@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useStore } from 'react-redux';
 
-import { queryClient } from '@/lib/query/queryClient';
+import { DAY_MS, queryClient } from '@/lib/query/queryClient';
 import { useAppDispatch, type RootState } from '@/store';
 import {
   fromDateInputValue,
@@ -13,7 +13,6 @@ import { refreshWatchlistMovie } from '@apps/a-list/store/actions/watchlistActio
 import { selectWatchlistRows } from '@apps/a-list/store/selectors';
 import type { MovieSnapshot } from '@apps/a-list/types';
 
-const DAY_MS = 86_400_000;
 const SNAPSHOT_FIELDS: (keyof MovieSnapshot)[] = [
   'title',
   'releaseDate',
@@ -47,7 +46,6 @@ function isSnapshotChanged(stored: MovieSnapshot, fresh: MovieSnapshot) {
   return result;
 }
 
-/** Re-checks unreleased watchlist movies once a session, since studios move release dates. */
 export function useRefreshUnreleasedMovies(
   uid: string | null,
   isReady: boolean,
@@ -92,7 +90,7 @@ export function useRefreshUnreleasedMovies(
             ).unwrap();
           }
         } catch {
-          // A failed check just leaves the stored snapshot for a later session.
+          return;
         }
       }, Promise.resolve());
     };
