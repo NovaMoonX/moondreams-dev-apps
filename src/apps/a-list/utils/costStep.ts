@@ -1,5 +1,5 @@
 import { fromDateInputValue } from '@/utils/dateInputUtils';
-import { MAX_TAX_RATE } from '@apps/a-list/constants';
+import { MAX_AMOUNT_CENTS, MAX_TAX_RATE } from '@apps/a-list/constants';
 import { parseMoneyToCents } from '@apps/a-list/utils/money';
 import { getTaxRateFromBill } from '@apps/a-list/utils/tax';
 
@@ -49,12 +49,16 @@ export function evaluateCostStep(
     if (values.cost.trim() === '') return undefined;
     if (costCents === null) return 'Enter an amount like 25.99.';
     if (costCents <= 0) return 'Your membership has to cost something.';
+    if (costCents > MAX_AMOUNT_CENTS)
+      return "That's more than $10,000. Double-check it?";
     return undefined;
   };
 
   const getBillError = () => {
     if (!hasBillTotal) return undefined;
     if (billTotalCents === null) return 'Enter an amount like 27.94.';
+    if (billTotalCents > MAX_AMOUNT_CENTS)
+      return "That's more than $10,000. Double-check it?";
     if (costCents !== null && billTotalCents < costCents) {
       return "A bill can't be lower than the cost before tax.";
     }

@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +19,7 @@ import { useAListSync } from '@apps/a-list/hooks/useAListSync';
 import {
   selectIsAListLoaded,
   selectMembership,
+  selectMembershipLoadError,
 } from '@apps/a-list/store/selectors';
 import type { AListTab } from '@apps/a-list/types';
 
@@ -26,6 +28,7 @@ function AList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const membership = useAppSelector(selectMembership);
   const isLoaded = useAppSelector(selectIsAListLoaded);
+  const loadError = useAppSelector(selectMembershipLoadError);
 
   useAListSync(user?.uid ?? null);
 
@@ -55,6 +58,24 @@ function AList() {
 
   if (!isLoaded) {
     return <LoadingSkeleton />;
+  }
+
+  if (loadError) {
+    return (
+      <div className='page flex items-center justify-center'>
+        <div className='max-w-sm space-y-3 text-center'>
+          <p className='font-medium'>
+            We couldn't load your membership just now.
+          </p>
+          <p className='text-muted-foreground text-sm'>
+            Check your connection and give it another try.
+          </p>
+          <Button type='button' onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (!membership) {

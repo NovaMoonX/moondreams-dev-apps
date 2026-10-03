@@ -5,7 +5,9 @@ import { startMembershipListener } from '@apps/a-list/store/listeners/membership
 import {
   clearMembership,
   setMembership,
+  setMembershipLoadError,
 } from '@apps/a-list/store/slices/membershipSlice';
+import { getErrorMessage } from '@/utils/errorUtils';
 
 export function useAListSync(uid: string | null) {
   const dispatch = useAppDispatch();
@@ -16,8 +18,18 @@ export function useAListSync(uid: string | null) {
       return;
     }
 
-    return startMembershipListener(uid, (membership) => {
-      dispatch(setMembership(membership));
-    });
+    return startMembershipListener(
+      uid,
+      (membership) => {
+        dispatch(setMembership(membership));
+      },
+      (error) => {
+        dispatch(
+          setMembershipLoadError(
+            getErrorMessage(error, 'Unable to load your membership.'),
+          ),
+        );
+      },
+    );
   }, [dispatch, uid]);
 }

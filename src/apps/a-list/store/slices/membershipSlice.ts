@@ -6,11 +6,13 @@ import type { MembershipProfile } from '@apps/a-list/types';
 export interface MembershipState {
   membership: MembershipProfile | null;
   isLoaded: boolean;
+  loadError: string | null;
 }
 
 const initialState: MembershipState = {
   membership: null,
   isLoaded: false,
+  loadError: null,
 };
 
 export const membershipSlice = createSlice({
@@ -20,6 +22,11 @@ export const membershipSlice = createSlice({
     setMembership(state, action: PayloadAction<MembershipProfile | null>) {
       state.membership = action.payload;
       state.isLoaded = true;
+      state.loadError = null;
+    },
+    setMembershipLoadError(state, action: PayloadAction<string>) {
+      state.isLoaded = true;
+      state.loadError = action.payload;
     },
     clearMembership: () => initialState,
   },
@@ -28,7 +35,8 @@ export const membershipSlice = createSlice({
   },
 });
 
-export const { setMembership, clearMembership } = membershipSlice.actions;
+export const { setMembership, setMembershipLoadError, clearMembership } =
+  membershipSlice.actions;
 export const membershipReducer = membershipSlice.reducer;
 
 export default membershipReducer;

@@ -6,6 +6,7 @@ import type { MembershipProfile } from '@apps/a-list/types';
 export function startMembershipListener(
   uid: string,
   onChange: (membership: MembershipProfile | null) => void,
+  onError: (error: Error) => void,
 ): Unsubscribe {
   const membershipRef = doc(db, 'apps', 'a-list', 'memberships', uid);
 
@@ -17,6 +18,6 @@ export function startMembershipListener(
         : null;
       onChange(membership);
     },
-    () => onChange(null),
+    onError,
   );
 }
