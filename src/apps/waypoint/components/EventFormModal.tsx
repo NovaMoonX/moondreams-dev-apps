@@ -94,11 +94,24 @@ export interface SubmitOptions {
   arrivalPlace?: PlaceSelectionResult | null;
 }
 
+/** Known fields to open a new event already filled in (e.g. from an idea); the form still asks for day and time. */
+export interface EventPrefill {
+  eventType: Extract<EventType, 'DINING' | 'ACTIVITY'>;
+  title: string;
+  notes: string | null;
+  linkUrl: string | null;
+  cuisines: string[];
+  settings: ActivitySetting[];
+  dayIndex: number;
+  time: string;
+}
+
 interface EventFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
+  prefill?: EventPrefill;
   events?: TimelineEvent[];
   /** A rough center point (from an existing trip event/stay) to bias place search
    * results toward, so "starbucks" finds the one near this trip first. */
@@ -275,13 +288,37 @@ function getNextLegDraft(trip: TripSpace, { previous, arrivalPlace }: NextLegSee
   };
 }
 
+function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
+  const base = getBaseDraft(trip, undefined);
+  return {
+    ...base,
+    eventType: prefill.eventType,
+    hasTitle: true,
+    title: prefill.title,
+    dayIndex: prefill.dayIndex,
+    endDayIndex: prefill.dayIndex,
+    time: prefill.time,
+    quickField: getDefaultSubtype(prefill.eventType, prefill.time),
+    settings: prefill.settings,
+    hasSettings: prefill.settings.length > 0,
+    cuisines: prefill.cuisines.join(', '),
+    hasCuisines: prefill.cuisines.length > 0,
+    linkUrl: prefill.linkUrl ?? '',
+    hasLink: Boolean(prefill.linkUrl),
+  };
+}
+
 function getInitialDraft(
   trip: TripSpace,
   event: TimelineEvent | undefined,
   legFrom?: NextLegSeed,
+  prefill?: EventPrefill,
 ): EventDraft {
   if (legFrom) {
     return getNextLegDraft(trip, legFrom);
+  }
+  if (prefill && !event) {
+    return getPrefilledDraft(trip, prefill);
   }
   const draft = getBaseDraft(trip, event);
   const mirrorKey =
@@ -382,6 +419,7 @@ function EventFormModal({
   trip,
   memberOptions,
   event,
+  prefill,
   events = [],
   legFrom,
   placeBias,
@@ -394,7 +432,7 @@ function EventFormModal({
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom));
+  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
@@ -589,7 +627,7 @@ function EventFormModal({
         latitude: draft.latitude,
         longitude: draft.longitude,
         eventDetails,
-        notes: event?.notes ?? null,
+        notes: event?.notes ?? prefill?.notes ?? null,
         attendeeTargetType: draft.attendeeTargetType,
         assignedMemberIds,
         venueOpenTime: draft.hasVenueHours ? draft.venueOpenTime || null : null,
