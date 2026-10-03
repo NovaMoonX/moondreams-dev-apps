@@ -9,6 +9,7 @@ import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
+import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
 import { SITE_VERSION } from '@lib/app';
@@ -35,6 +36,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
@@ -107,6 +109,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     ...(isAdmin ? [option({ label: 'Admin', value: 'admin' })] : []),
     option({ label: 'Profile', value: 'profile' }),
     option({ label: 'Change name', value: 'change-name' }),
+    option({ label: 'Change photo', value: 'change-photo' }),
     separator(),
     option({ label: 'Sign out', value: 'signout' }),
     custom(() => (
@@ -128,6 +131,11 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     if (value === 'change-name') {
       setNameInput(displayName);
       setIsNameModalOpen(true);
+      return;
+    }
+
+    if (value === 'change-photo') {
+      setIsPhotoModalOpen(true);
       return;
     }
 
@@ -156,6 +164,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
       {isProfileModalOpen && (
         <ProfileModal user={user} onClose={() => setIsProfileModalOpen(false)} />
+      )}
+
+      {isPhotoModalOpen && (
+        <ChangePhotoModal user={user} onClose={() => setIsPhotoModalOpen(false)} />
       )}
 
       <Modal
