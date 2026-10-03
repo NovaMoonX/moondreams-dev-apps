@@ -142,6 +142,7 @@ interface TimelineEvent {
   linkUrl: string | null; // booking/menu/listing link — any type but FREE_TIME
   linkKind: 'WEBSITE' | 'RESERVATION' | 'MENU' | 'BOOKING' | null; // what the link is; null on events saved before it existed
   groupLabel: string | null; // free-text group name — events of the same eventType sharing a label render as one collapsible group; derived at render time, no group document
+  stackLabel: string | null; // free-text stack name — several itineraries (groups of legs, or single events) of one eventType shown as one swipeable stack; stacking a leg stacks its whole group
   linkPreview: LinkPreview | null; // scraped from linkUrl by the fetchLinkMetadata cloud function
   createdBy: string;
   createdAt: number;

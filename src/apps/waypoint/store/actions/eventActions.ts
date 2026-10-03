@@ -1,5 +1,14 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { arrayUnion, collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  runTransaction,
+  setDoc,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -185,6 +194,7 @@ export const createEvent = createAsyncThunk<
     linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
     linkKind: event.linkUrl?.trim() ? event.linkKind : null,
     groupLabel: event.groupLabel?.trim() || null,
+    stackLabel: event.stackLabel?.trim() || null,
     notes: null,
     changeHistory: [],
     reminderId,
@@ -246,6 +256,7 @@ export const updateEvent = createAsyncThunk<
       linkPreview: event.linkUrl?.trim() ? event.linkPreview : null,
       linkKind: event.linkUrl?.trim() ? event.linkKind : null,
       groupLabel: event.groupLabel?.trim() || null,
+      stackLabel: event.stackLabel?.trim() || null,
       reminderId,
       lastEditedAt: Date.now(),
     };
@@ -294,6 +305,7 @@ function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
     linkPreview: null,
     linkKind: null,
     groupLabel: null,
+    stackLabel: null,
     reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
     reminderEnabled: true,
     reminderId: null,
@@ -331,6 +343,36 @@ export const updateEventNotes = createAsyncThunk<
   };
   await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), changes);
   return { ...event, ...changes };
+});
+
+interface SetEventsStackInput {
+  uid: string;
+  trip: TripSpace;
+  events: TimelineEvent[];
+  /** The stack's name, or `null` to take the events out of any stack. */
+  stackName: string | null;
+}
+
+// Each event's stack label is its own field, so these are independent writes.
+export const setEventsStack = createAsyncThunk<
+  void,
+  SetEventsStackInput,
+  { rejectValue: string }
+>('waypoint/events/setStack', async ({ uid, trip, events, stackName }, { rejectWithValue }) => {
+  if (!canEditExistingItem(trip, uid)) {
+    return rejectWithValue('You do not have permission to edit timeline events.');
+  }
+
+  const name = stackName?.trim() || null;
+  const batch = writeBatch(db);
+  events.forEach((event) => {
+    batch.update(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', event.id), {
+      ...getMissingEventFields(event),
+      stackLabel: name,
+      lastEditedAt: Date.now(),
+    });
+  });
+  await batch.commit();
 });
 
 interface SetEventArchivedInput {

@@ -19,6 +19,8 @@ import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
+import EventStackCard from '@apps/waypoint/components/EventStackCard';
+import EventStackModal from '@apps/waypoint/components/EventStackModal';
 import EventFormModal from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
@@ -26,6 +28,7 @@ import {
   createEvent,
   deleteEvent,
   setEventArchived,
+  setEventsStack,
   updateEvent,
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
@@ -48,7 +51,7 @@ import {
   canEditExistingItem,
   hasTripStarted,
 } from '@apps/waypoint/utils/roleGuards';
-import { groupEventsByLabel } from '@apps/waypoint/utils/eventGroups';
+import { buildTimelineItems } from '@apps/waypoint/utils/eventGroups';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
@@ -117,6 +120,54 @@ export function TimelineSection({
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId));
+
+  const [stackingEvent, setStackingEvent] = useState<TimelineEvent | undefined>();
+  const stackSuccessRef = useRef<(() => void) | undefined>(undefined);
+  const [isStackSubmitting, setIsStackSubmitting] = useState(false);
+
+  const saveStack = async (targets: TimelineEvent[], stackName: string | null) => {
+    setIsStackSubmitting(true);
+    try {
+      await dispatch(
+        setEventsStack({ uid: currentUserId, trip, events: targets, stackName }),
+      ).unwrap();
+      setStackingEvent(undefined);
+      stackSuccessRef.current?.();
+      stackSuccessRef.current = undefined;
+    } catch (stackError) {
+      addToast({
+        title: 'Unable to update this stack',
+        description: getErrorMessage(stackError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsStackSubmitting(false);
+    }
+  };
+
+  // Stacking moves a whole trip: the event's group of legs travels together.
+  const getItinerary = (event: TimelineEvent) =>
+    event.groupLabel
+      ? events.filter(
+          (other) => other.eventType === event.eventType && other.groupLabel === event.groupLabel,
+        )
+      : [event];
+
+  const getStackMembers = (event: TimelineEvent) =>
+    events.filter(
+      (other) => other.eventType === event.eventType && other.stackLabel === event.stackLabel,
+    );
+
+  const handleUnstackAll = async (event: TimelineEvent) => {
+    const confirmed = await confirm({
+      title: 'Unstack all',
+      message: `Take every trip out of "${event.stackLabel}"? The events stay on the timeline.`,
+      destructive: true,
+    });
+    if (confirmed) {
+      await saveStack(getStackMembers(event), null);
+    }
+  };
 
   const handleToggleArchived = async (event: TimelineEvent, onSuccess?: () => void) => {
     if (!event.isArchived) {
@@ -189,6 +240,11 @@ export function TimelineSection({
         canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
         showAttendees={showAttendees}
+        isStacked={Boolean(event.stackLabel)}
+        onStack={(selectedEvent, onSuccess) => {
+          setStackingEvent(selectedEvent);
+          stackSuccessRef.current = onSuccess;
+        }}
         showArchiveToggle={hasTripStarted(trip)}
         onEdit={(selectedEvent, onSuccess) => {
           setEditingEvent(selectedEvent);
@@ -209,19 +265,34 @@ export function TimelineSection({
   );
 
   const renderEventItems = (items: TimelineEvent[]) =>
-    groupEventsByLabel(items).map((item) =>
-      item.kind === 'group' ? (
-        <EventGroupCard
-          key={item.key}
-          trip={trip}
-          group={item}
-          showAttendees={showAttendees}
-          renderEvent={renderEventCard}
-        />
-      ) : (
-        renderEventCard(item.event)
-      ),
-    );
+    buildTimelineItems(items).map((item) => {
+      if (item.kind === 'stack') {
+        return (
+          <EventStackCard
+            key={item.key}
+            trip={trip}
+            stack={item}
+            currentUserId={currentUserId}
+            showAttendees={showAttendees}
+            canEdit={canEdit}
+            onManage={(selectedEvent) => setStackingEvent(selectedEvent)}
+            renderEvent={renderEventCard}
+          />
+        );
+      }
+      if (item.kind === 'group') {
+        return (
+          <EventGroupCard
+            key={item.key}
+            trip={trip}
+            group={item}
+            showAttendees={showAttendees}
+            renderEvent={renderEventCard}
+          />
+        );
+      }
+      return renderEventCard(item.event);
+    });
 
   const renderDivider = (label: string) => (
     <div className='flex items-center gap-3'>
@@ -417,6 +488,23 @@ export function TimelineSection({
           )}
         </Tabs>
       </section>
+      {stackingEvent && (
+        <EventStackModal
+          key={`${stackingEvent.id}-${stackingEvent.stackLabel ?? 'none'}`}
+          isOpen
+          event={stackingEvent}
+          events={events}
+          isSubmitting={isStackSubmitting}
+          onStack={(name) => void saveStack(getItinerary(stackingEvent), name)}
+          onRename={(name) => void saveStack(getStackMembers(stackingEvent), name)}
+          onRemove={() => void saveStack(getItinerary(stackingEvent), null)}
+          onUnstackAll={() => void handleUnstackAll(stackingEvent)}
+          onClose={() => {
+            setStackingEvent(undefined);
+            stackSuccessRef.current = undefined;
+          }}
+        />
+      )}
       <EventFormModal
         key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}
         isOpen={isFormOpen}

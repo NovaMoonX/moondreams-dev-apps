@@ -10,7 +10,7 @@ import { formatClockTime } from '@/utils/formatUtils';
 
 import { getEventStatus, selectEventsByDay } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { groupEventsByLabel, type EventGroup } from '@apps/waypoint/utils/eventGroups';
+import { buildTimelineItems, type EventGroup } from '@apps/waypoint/utils/eventGroups';
 import { getEventTime } from '@apps/waypoint/utils/tripTime';
 import { getEventBadge, getGroupBadge } from '@apps/waypoint/utils/eventBadge';
 
@@ -26,7 +26,7 @@ interface TodayAgendaProps {
 
 function TodayAgenda({ trip, title, dayIndex, now, limit, onViewAll, onOpenEvent }: TodayAgendaProps) {
   const dayEvents = useAppSelector(selectEventsByDay(dayIndex), shallowEqual);
-  const items = groupEventsByLabel(
+  const items = buildTimelineItems(
     dayEvents
       .filter((event) => !event.isArchived)
       .sort((a, b) => (getEventTime(trip, a).startMs ?? 0) - (getEventTime(trip, b).startMs ?? 0)),
@@ -110,7 +110,14 @@ function TodayAgenda({ trip, title, dayIndex, now, limit, onViewAll, onOpenEvent
       </div>
       <ul className='divide-border border-border divide-y rounded-xl border'>
         {items.map((item) =>
-          item.kind === 'group' ? (
+          item.kind === 'stack' ? (
+            <AgendaGroup
+              key={item.key}
+              group={{ kind: 'group', key: item.key, label: item.label, eventType: item.eventType, events: item.events }}
+              summary={`${item.members.length} trips`}
+              renderRow={renderRow}
+            />
+          ) : item.kind === 'group' ? (
             <AgendaGroup key={item.key} group={item} renderRow={renderRow} />
           ) : (
             renderRow(item.event)
@@ -123,10 +130,11 @@ function TodayAgenda({ trip, title, dayIndex, now, limit, onViewAll, onOpenEvent
 
 interface AgendaGroupProps {
   group: EventGroup;
+  summary?: string;
   renderRow: (event: TimelineEvent, isNested?: boolean) => React.ReactNode;
 }
 
-function AgendaGroup({ group, renderRow }: AgendaGroupProps) {
+function AgendaGroup({ group, summary, renderRow }: AgendaGroupProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -146,7 +154,7 @@ function AgendaGroup({ group, renderRow }: AgendaGroupProps) {
         </span>
         <span className='min-w-0 flex-1'>
           <span className='block truncate text-sm font-medium'>{group.label}</span>
-          <span className='text-muted-foreground block text-xs'>{group.events.length} events</span>
+          <span className='text-muted-foreground block text-xs'>{summary ?? `${group.events.length} events`}</span>
         </span>
         <ChevronDown
           className={join('h-4 w-4 shrink-0 transition-transform', isExpanded && 'rotate-180')}

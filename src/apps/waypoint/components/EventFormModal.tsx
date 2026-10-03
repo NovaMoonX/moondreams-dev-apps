@@ -11,7 +11,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Layers, Link2, MapPin, Sun, Type, Users, Utensils, X } from 'lucide-react';
+import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Users, Utensils, X } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -497,6 +497,7 @@ function EventFormModal({
         linkPreview: isLinkable ? draft.linkPreview : null,
         linkKind: isLinkable && draft.linkUrl.trim() ? (draft.linkKind ?? linkKinds[0] ?? null) : null,
         groupLabel: draft.isGrouped ? draft.groupLabel.trim() || null : null,
+        stackLabel: event?.stackLabel ?? null,
         reminderMinutesBefore: draft.reminderMinutesBefore,
         reminderEnabled: draft.reminderEnabled,
         reminderId: event?.reminderId ?? null,
@@ -589,7 +590,7 @@ function EventFormModal({
       icon: <Clock className='h-4 w-4' />,
       isShown: !isPlaceEvent || draft.hasVenueHours,
     },
-    { key: 'group', label: 'Group', icon: <Layers className='h-4 w-4' />, isShown: draft.isGrouped },
+    { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: draft.isGrouped },
     {
       key: 'reminder',
       label: 'Reminder',

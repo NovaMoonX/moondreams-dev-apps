@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Archive, ArchiveRestore } from 'lucide-react';
+import { Archive, ArchiveRestore, Layers } from 'lucide-react';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
@@ -37,6 +37,9 @@ interface EventCardProps {
   canArchive: boolean;
   showCover: boolean;
   showAttendees: boolean;
+  isStacked: boolean;
+  /** Opens the stack editor for this event; `onSuccess` closes the mobile drawer once it's done. */
+  onStack: (event: TimelineEvent, onSuccess?: () => void) => void;
   /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
   showArchiveToggle: boolean;
   /** `onSuccess`, when given, is the mobile details drawer's own close — call it only once
@@ -196,6 +199,8 @@ export function EventCard({
   canArchive,
   showCover,
   showAttendees,
+  isStacked,
+  onStack,
   showArchiveToggle,
   onEdit,
   onSaveNotes,
@@ -272,6 +277,17 @@ export function EventCard({
                 </Button>
               )}
               {canModify && (
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='secondary'
+                  aria-label={isStacked ? 'Edit stack' : 'Stack event'}
+                  onClick={() => onStack(event)}
+                >
+                  <Layers className={join('h-4 w-4', isStacked && 'fill-current text-primary')} />
+                </Button>
+              )}
+              {canModify && (
                 <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
                   Modify
                 </Button>
@@ -301,6 +317,8 @@ export function EventCard({
           location={event}
           linkUrl={event.linkUrl}
           onEdit={canModify ? () => onEdit(event, closeDrawer) : null}
+          stackLabel={isStacked ? 'Edit stack' : 'Stack event'}
+          onStack={canModify ? () => onStack(event, closeDrawer) : null}
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >

@@ -47,3 +47,51 @@ export function groupEventsByLabel(events: TimelineEvent[]): EventListItem[] {
   });
   return items;
 }
+
+export interface EventStack {
+  kind: 'stack';
+  key: string;
+  label: string;
+  eventType: EventType;
+  /** One itinerary per entry: a group of legs, or a single event. */
+  members: (EventGroup | SingleEvent)[];
+  events: TimelineEvent[];
+}
+
+export type TimelineItem = EventStack | EventGroup | SingleEvent;
+
+const getStackKey = (event: TimelineEvent) =>
+  event.stackLabel?.trim() ? `${event.eventType}::${event.stackLabel.trim().toLowerCase()}` : null;
+
+/** Stacks first, then groups among everything left over, all kept in timeline order. A stack
+ * needs at least two itineraries to be worth showing as one; otherwise its events fall back. */
+export function buildTimelineItems(events: TimelineEvent[]): TimelineItem[] {
+  const byStack = events.reduce<Record<string, TimelineEvent[]>>((acc, event) => {
+    const key = getStackKey(event);
+    return key ? { ...acc, [key]: [...(acc[key] ?? []), event] } : acc;
+  }, {});
+  const stacks = Object.entries(byStack).flatMap<EventStack>(([key, stackEvents]) => {
+    const members = groupEventsByLabel(stackEvents);
+    return members.length < 2
+      ? []
+      : [
+          {
+            kind: 'stack',
+            key,
+            label: stackEvents[0].stackLabel?.trim() ?? '',
+            eventType: stackEvents[0].eventType,
+            members,
+            events: stackEvents,
+          },
+        ];
+  });
+  const stackedIds = new Set(stacks.flatMap((stack) => stack.events.map((event) => event.id)));
+  const rest = groupEventsByLabel(events.filter((event) => !stackedIds.has(event.id)));
+
+  const firstIndex = (item: TimelineItem) =>
+    events.findIndex((event) =>
+      item.kind === 'event' ? event.id === item.event.id : event.id === item.events[0].id,
+    );
+  const items = [...stacks, ...rest].sort((first, second) => firstIndex(first) - firstIndex(second));
+  return items;
+}

@@ -330,6 +330,8 @@ export interface TimelineEvent {
   linkPreview: LinkPreview | null;
   linkKind: EventLinkKind | null;
   groupLabel: string | null;
+  /** Free-text stack name — several itineraries (groups or single events) of one event type shown together. */
+  stackLabel: string | null;
   /** Minutes before `startAt` to send a reminder. Always a real value (defaults to
    * `DEFAULT_REMINDER_MINUTES_BEFORE`) — an event with no reminder configured yet
    * reads as "default lead time, enabled" rather than "no reminder." */
