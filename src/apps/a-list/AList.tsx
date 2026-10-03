@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -26,11 +26,20 @@ import {
   selectAListLoadError,
 } from '@apps/a-list/store/selectors';
 import type { AListOverlay, AListTab } from '@apps/a-list/types';
+import { getDayKey } from '@apps/a-list/utils/dayKeys';
+
+function getYesterdayKey() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return getDayKey(yesterday.getTime());
+}
 
 function AList() {
   const { user, loading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [overlay, setOverlay] = useState<AListOverlay | null>(null);
+  // Ephemeral: a reload simply lands on the empty calendar, whose nudge offers the same thing.
+  const [isPastOfferOpen, setIsPastOfferOpen] = useState(false);
   const membership = useAppSelector(selectMembership);
   const isLoaded = useAppSelector(selectIsAListLoaded);
   const loadError = useAppSelector(selectAListLoadError);
@@ -84,7 +93,10 @@ function AList() {
   if (!membership) {
     return (
       <div className='page'>
-        <SetupModal uid={user.uid} />
+        <SetupModal
+          uid={user.uid}
+          onComplete={() => setIsPastOfferOpen(true)}
+        />
       </div>
     );
   }
@@ -122,6 +134,43 @@ function AList() {
           viewingId={overlay.id}
           onClose={() => setOverlay(null)}
         />
+      )}
+      {isPastOfferOpen && overlay === null && (
+        <Modal
+          isOpen
+          onClose={() => setIsPastOfferOpen(false)}
+          title='Add movies you have already seen?'
+        >
+          <div className='space-y-4'>
+            <p className='text-muted-foreground text-sm'>
+              Backfill what you've watched since you joined, and your savings
+              start out accurate instead of at zero.
+            </p>
+            <div className='flex justify-end gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => setIsPastOfferOpen(false)}
+              >
+                Skip
+              </Button>
+              <Button
+                type='button'
+                onClick={() => {
+                  setIsPastOfferOpen(false);
+                  setOverlay({
+                    kind: 'add',
+                    destination: 'calendar',
+                    date: getYesterdayKey(),
+                    mode: 'past',
+                  });
+                }}
+              >
+                Add past movies
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </AListOverlayContext.Provider>
   );

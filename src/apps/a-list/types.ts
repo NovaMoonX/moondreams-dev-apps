@@ -47,7 +47,13 @@ export interface MovieSearchResult {
 export type AListOverlay =
   | { kind: 'add'; destination: 'watchlist' }
   /** `date` is a local "YYYY-MM-DD" the date field starts on. */
-  | { kind: 'add'; destination: 'calendar'; date: string }
+  /** `past` is the backfill loop: "Add + another" keeps the drawer open for the next movie. */
+  | {
+      kind: 'add';
+      destination: 'calendar';
+      date: string;
+      mode: 'single' | 'past';
+    }
   | { kind: 'viewing'; id: string };
 
 export interface WatchlistItem {
