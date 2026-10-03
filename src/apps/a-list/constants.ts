@@ -30,7 +30,6 @@ export const MAX_MONTHLY_GOAL = 93;
 
 export const MOVIE_SEARCH_MIN_CHARS = 2;
 export const MOVIE_DETAILS_STALE_MS = 24 * 60 * 60 * 1000;
-/** Unreleased watchlist movies re-checked per session. */
 export const REFRESH_BATCH_SIZE = 10;
 
 export const AMC_FORMATS: AmcFormat[] = [
