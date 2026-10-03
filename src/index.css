@@ -51,6 +51,37 @@ html:has(
   overflow: hidden;
 }
 
+/* The page scrollbar lives on the root, and overlays render outside any page
+   container, so phone widths hide every scrollbar here; touch scrolling still works. */
+@media (max-width: 639px) {
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* A tapped control keeps its focus outline/ring and the browser's tap flash after the
+   touch ends. Keyboard focus (:focus-visible) keeps its cue; text fields keep only their
+   border change. Component focus styles are utilities, so only !important beats them. */
+@media (max-width: 639px) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus:not(:focus-visible),
+  input:focus,
+  textarea:focus,
+  select:focus,
+  :active {
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+  }
+}
+
 /* Smooth height transitions for when keyboard appears on mobile */
 html, body {
   transition: height 0.3s ease;

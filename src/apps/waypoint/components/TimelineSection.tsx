@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   Button,
@@ -12,11 +12,11 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { shallowEqual } from 'react-redux';
 
-import AppToggle from '@/components/AppToggle';
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
+import DayWeather from '@apps/waypoint/components/DayWeather';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
@@ -29,6 +29,9 @@ import EventFormModal, {
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
+import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
+import WeatherDayStrip from '@apps/waypoint/components/WeatherDayStrip';
 import {
   createEvent,
   deleteEvent,
@@ -41,6 +44,8 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
+import { useNow } from '@/hooks/useNow';
+import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
@@ -50,6 +55,7 @@ import {
   getDayLabel,
   getIndexBucket,
   groupByIndexBucket,
+  type IndexBucket,
 } from '@/utils/dateRangeUtils';
 import {
   canArchiveEvent,
@@ -121,7 +127,10 @@ export function TimelineSection({
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
+  const [minimizeWeather, setMinimizeWeather] = useLocalStoragePreference('waypoint:minimizeWeather', false);
   const stays = useAppSelector(selectStays);
+  const now = useNow(60_000);
+  const weather = useTripWeather(trip, events, stays, now);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
@@ -256,6 +265,7 @@ export function TimelineSection({
         canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
         showAttendees={showAttendees}
+        weather={weather.getEvent(event.id)}
         isStacked={Boolean(event.stackLabel)}
         onStack={(selectedEvent, onSuccess) => {
           setIsStackHeaderOrigin(false);
@@ -317,13 +327,21 @@ export function TimelineSection({
       return renderEventCard(item.event);
     });
 
-  const renderDivider = (label: string) => (
+  const renderDivider = (label: string, trailing?: ReactNode) => (
     <div className='flex items-center gap-3'>
       <div className='border-border flex-1 border-t' />
       <span className='text-muted-foreground text-sm font-medium'>{label}</span>
+      {trailing}
       <div className='border-border flex-1 border-t' />
     </div>
   );
+
+  const renderDayWeather = (dayIndex: number) => {
+    const forecast = weather.getDay(dayIndex);
+    return forecast ? (
+      <DayWeather forecast={forecast} isMinimized={minimizeWeather} />
+    ) : null;
+  };
 
   const renderEvents = (scope: 'all' | 'outside' | number = 'all') => {
     const visibleEvents = attendanceFilteredEvents.filter((event) => {
@@ -334,7 +352,7 @@ export function TimelineSection({
       return event.dayIndex === scope;
     });
 
-    if (visibleEvents.length === 0) {
+    if (visibleEvents.length === 0 && (scope !== 'all' || !weather.hasWeather)) {
       return <p className='text-muted-foreground py-6 text-sm'>No events planned yet.</p>;
     }
 
@@ -357,12 +375,26 @@ export function TimelineSection({
       return <div className='space-y-3'>{renderEventItems(visibleEvents)}</div>;
     }
 
+    const eventDays = groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount);
+    const weatherOnlyDays = Array.from({ length: dayCount }, (_, day) => day)
+      .filter((day) => weather.getDay(day) && !eventDays.some(({ bucket }) => bucket === day))
+      .map((day) => ({ bucket: day as IndexBucket, items: [] as TimelineEvent[] }));
+    const getBucketOrder = (bucket: IndexBucket) =>
+      typeof bucket === 'number' ? bucket : bucket === 'outside' ? dayCount : dayCount + 1;
+    const days = [...eventDays, ...weatherOnlyDays].sort(
+      (first, second) => getBucketOrder(first.bucket) - getBucketOrder(second.bucket),
+    );
+
     return (
       <div className='space-y-3'>
-        {groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount).map(
+        {days.map(
           ({ bucket, items }) => (
             <div key={bucket} className='space-y-3'>
-              {renderDivider(getBucketLabel(bucket, trip.startDate))}
+              {renderDivider(
+                getBucketLabel(bucket, trip.startDate),
+                typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
+              )}
+              {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
               {renderEventItems(items)}
             </div>
           ),
@@ -427,6 +459,54 @@ export function TimelineSection({
     }
   };
 
+  const weatherDays = Array.from({ length: dayCount }, (_, dayIndex) => ({
+    dayIndex,
+    forecast: weather.getDay(dayIndex),
+  })).flatMap(({ dayIndex, forecast }) => (forecast ? [{ dayIndex, forecast }] : []));
+  const selectedDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? null : Number(selectedTab);
+
+  const viewOptionGroups = [
+    {
+      heading: 'On each card',
+      options: [
+        { label: 'Show covers', checked: showCovers, onChange: setShowCovers, isCustomized: !showCovers },
+        {
+          label: "Show who's attending",
+          checked: showAttendees,
+          onChange: setShowAttendees,
+          isCustomized: !showAttendees,
+        },
+      ],
+    },
+    ...(weather.hasWeather
+      ? [
+          {
+            heading: 'Weather',
+            options: [
+              {
+                label: 'Compact weather',
+                checked: minimizeWeather,
+                onChange: setMinimizeWeather,
+                isCustomized: minimizeWeather,
+              },
+            ],
+          },
+        ]
+      : []),
+    {
+      heading: 'Filters',
+      options: [
+        {
+          label: "Only events I'm attending",
+          checked: attendingOnly,
+          onChange: setAttendingOnly,
+          isCustomized: attendingOnly,
+        },
+        { label: 'Show archived', checked: showArchived, onChange: setShowArchived, isCustomized: showArchived },
+      ],
+    },
+  ];
+
   return (
     <>
       <section className='space-y-4 pt-4'>
@@ -446,9 +526,21 @@ export function TimelineSection({
             )
           }
         />
-        <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-          View by day
-        </p>
+        {weatherDays.length > 0 && (
+          <WeatherDayStrip
+            days={weatherDays}
+            startDate={trip.startDate}
+            todayIndex={weather.todayIndex}
+            selectedDayIndex={selectedDayIndex}
+            onSelectDay={(day) => onActiveDayTabChange(day === selectedDayIndex ? 'all' : String(day))}
+          />
+        )}
+        <div className='flex items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+            View by day
+          </p>
+          <TimelineViewOptions groups={viewOptionGroups} />
+        </div>
         <Select
           className='sm:hidden'
           options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}
@@ -468,45 +560,12 @@ export function TimelineSection({
               </TabsTrigger>
             ))}
           </TabsList>
-          <div className='mt-3 flex flex-wrap items-center gap-4'>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showCovers}
-                onCheckedChange={setShowCovers}
-              />
-              Show covers
-            </label>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showAttendees}
-                onCheckedChange={setShowAttendees}
-              />
-              Show who&apos;s attending
-            </label>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={attendingOnly}
-                onCheckedChange={setAttendingOnly}
-              />
-              Only events I&apos;m attending
-            </label>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showArchived}
-                onCheckedChange={setShowArchived}
-              />
-              Show archived
-            </label>
-          </div>
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>
           {Array.from({ length: dayCount }, (_, index) => (
             <TabsContent key={index} value={String(index)} className='pt-4 space-y-2'>
+              {renderDayWeather(index)}
               {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>
@@ -517,6 +576,7 @@ export function TimelineSection({
             </TabsContent>
           )}
         </Tabs>
+        {weather.hasWeather && <WeatherAttribution />}
       </section>
       {stackingEvent && (
         <EventStackModal

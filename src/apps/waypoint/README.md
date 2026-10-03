@@ -54,7 +54,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 - [ ] General Booking Link Metadata: Parse hotel and activity booking links for rich preview cards.
 - [ ] Printable Trip Summary: Generate a clean, printable version of the itinerary.
 - [ ] Covered-By Toggle & Multi-Currency: Toggle "Expense covered by [Blank]" per item and live currency conversion rates.
-- [ ] Weather Forecast Integration: Pull in a weather forecast for each day or leg of the trip from a weather API.
+- [x] Weather Forecast Integration: Each Timeline day shows its forecast (from two weeks out, and through a live trip), with an hour-by-hour view for today on Overview and a small forecast beside events that have a saved location.
 - [ ] Daily Travel Effort Summary: A collapsible total at the top of each day — travel time now, potentially broader effort factors like walking or standing later — with an icon reflecting whatever travel method dominates that day.
 
 ## Under the Hood

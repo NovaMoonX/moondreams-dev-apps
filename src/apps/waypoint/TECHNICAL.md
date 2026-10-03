@@ -333,6 +333,15 @@ interface Rental {
 
 Write permissions match Stays (`canCreateItem` / `canEditExistingItem`, mirrored in `firestore.rules`), and `shiftTripDates` rebases `pickupDayIndex`/`returnDayIndex` like every other dated item. On a live trip Overview shows a card for each pickup and return that falls on today, right after the check-in cards, labelled "Picking up today" / "Returning today" and flipping to "Picked up" / "Returned" once the time passes. Rentals aren't part of the "What's new" notifications yet.
 
+#### Weather
+
+Forecasts come from Open-Meteo (`src/lib/weather/`, keyless, CC BY 4.0 — `WeatherAttribution` credits it wherever weather shows). Nothing is stored in Firestore: `useTripWeather` plans what to fetch from data the trip already has and reads it through TanStack Query (`weatherForecastQueryOptions`, 30 minute `staleTime`, persisted offline).
+
+- **When:** `getWeatherDayIndexes` shows an upcoming trip's days only within the 14-day forecast window, every day of a live trip (elapsed days use the provider's past data), and nothing once the trip is over.
+- **Where:** a day's location is its first non-archived event with coordinates, else a stay covering the day. A day with neither borrows the nearest located day's place: always for today, so the live forecast never depends on what's planned, and for other days only when every located event and stay on the trip is within ~100 km of the others (a multi-city trip shows no weather rather than guess the city). An event gets its own hourly chip only on a `RELATIVE` trip with coordinates and a start time; its floating `"HH:mm"` matches the provider's zone-local hours directly.
+- **Requests:** places are keyed by coordinates rounded to ~10 km and zone, and each key is one request spanning the dates that need it. A loading or failed request reads as "no weather" and never blocks the Timeline.
+- **UI:** `WeatherDayStrip` heads the Timeline with every day that has a forecast (past days dimmed, today highlighted and centred); tapping a day jumps the Timeline to it. `DayWeather` tops each Timeline day (its header fades in a sky photo from `public/by-app/waypoint/weather/`, picked per condition by `WEATHER_BANNER_IMAGES`) (compact in the day header when "Compact weather" is on in the Timeline's View options, remembered in `localStorage`); the hour-by-hour `HourlyWeatherStrip` for today appears only in Overview's "Today's weather".
+
 #### Enrichment: place search and link previews
 
 Both `TimelineEvent` and `Stay` carry the same three enrichment fields:
