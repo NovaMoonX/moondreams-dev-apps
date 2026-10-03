@@ -63,7 +63,12 @@ function getWatchlistFixtures(now: number) {
     },
     {
       movieKey: 'manual-seed-0001-hometown',
-      movie: movie('Hometown Film Fest Shorts', getDayUtcAhead(now, 12), null, null),
+      movie: movie(
+        'Hometown Film Fest Shorts',
+        getDayUtcAhead(now, 12),
+        null,
+        null,
+      ),
       priority: 'IF_I_HAVE_TIME',
       preferredFormat: null,
     },
@@ -74,6 +79,55 @@ function getWatchlistFixtures(now: number) {
       preferredFormat: 'LASER',
     },
   ];
+}
+
+const HOUR_MS = 3_600_000;
+const PREVIEWS_MINUTES = 20;
+const DEFAULT_RUNTIME = 120;
+
+/** 7 pm in Los Angeles (02:00 UTC the next day) on the calendar day `daysFromNow` away. */
+function getEveningShowtime(now: number, daysFromNow: number) {
+  return getDayUtcAhead(now, daysFromNow) + 26 * HOUR_MS;
+}
+
+function getViewingFixtures(now: number) {
+  const items = getWatchlistFixtures(now);
+  const find = (movieKey: string) =>
+    items.find((item) => item.movieKey === movieKey)!;
+  const plan = [
+    {
+      id: 'seed-viewing-dune-1',
+      movieKey: 'imdb-tt15239678',
+      daysFromNow: -20,
+    },
+    { id: 'seed-viewing-matrix', movieKey: 'imdb-tt0133093', daysFromNow: -12 },
+    { id: 'seed-viewing-dune-2', movieKey: 'imdb-tt15239678', daysFromNow: -6 },
+    {
+      id: 'seed-viewing-starlight',
+      movieKey: 'imdb-tt99000001',
+      daysFromNow: 4,
+    },
+    { id: 'seed-viewing-galaxy', movieKey: 'imdb-tt99000003', daysFromNow: 25 },
+  ];
+
+  return plan.map(({ id, movieKey, daysFromNow }) => {
+    const { movie: snapshot } = find(movieKey);
+    const showtimeAt = getEveningShowtime(now, daysFromNow);
+    const endsAt =
+      showtimeAt +
+      (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *
+        60_000;
+    return {
+      id,
+      movieKey,
+      movie: snapshot,
+      showtimeAt,
+      endsAt,
+      status: endsAt <= now ? 'SEEN' : 'PLANNED',
+      createdAt: Math.min(now, showtimeAt),
+      lastEditedAt: Math.min(now, showtimeAt),
+    };
+  });
 }
 
 // Alex has a finished membership; every other fixture account lands on Setup.
@@ -113,8 +167,15 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const viewings = getViewingFixtures(context.now);
+  await Promise.all(
+    viewings.map((viewing) =>
+      membershipRef.collection('viewings').doc(viewing.id).set(viewing),
+    ),
+  );
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + watchlist.length,
+    firestoreDocuments: 1 + watchlist.length + viewings.length,
   };
 }

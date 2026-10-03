@@ -95,7 +95,9 @@ profiles with insurance, origin, and key-date data for local CRUD and detail tes
 membership, so signing in as one opens A-List's Setup. Alex's watchlist holds six
 movies across all three priorities: five whose keys match the emulator's OMDb fixture
 catalog (one opening in three days, one undated), and one added by title
-(`manual-seed-0001-hometown`, no poster).
+(`manual-seed-0001-hometown`, no poster). Alex also has five viewings at 7 pm Los Angeles time: Dune
+seen twice (a rewatch) and The Matrix seen in the past few weeks, and Starlight Harbor and
+Galaxy Drift planned after they open.
 
 To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its

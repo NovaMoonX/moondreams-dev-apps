@@ -166,6 +166,40 @@ service cloud.firestore {
         allow update: if isMembershipOwner() && isWatchlistItemValid(request.resource.data)
           && request.resource.data.createdAt == resource.data.createdAt;
       }
+
+      match /viewings/{viewingId} {
+        function isViewingValid(data) {
+          let keys = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
+          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+            && data.id == viewingId
+            && data.movieKey is string
+            && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
+            && isMovieValid(data.movie)
+            && data.showtimeAt is int
+            && data.endsAt is int && data.endsAt > data.showtimeAt
+            && data.status in ['PLANNED', 'SEEN']
+            // The server's clock, so a skewed device can't record a future showing as seen.
+            && (data.status == 'PLANNED' || data.showtimeAt <= request.time.toMillis())
+            && data.createdAt is int
+            && data.lastEditedAt is int;
+        }
+
+        function arrivesAsSeen(data) {
+          return data.status == 'SEEN' && data.endsAt <= request.time.toMillis();
+        }
+
+        allow read, delete: if isMembershipOwner();
+        allow create: if isMembershipOwner() && isViewingValid(request.resource.data)
+          && (request.resource.data.status == 'PLANNED' || arrivesAsSeen(request.resource.data));
+        allow update: if isMembershipOwner() && isViewingValid(request.resource.data)
+          && request.resource.data.movieKey == resource.data.movieKey
+          && request.resource.data.movie == resource.data.movie
+          && request.resource.data.createdAt == resource.data.createdAt
+          // A seen viewing never goes back to planned; planned only becomes seen once it has ended.
+          && (resource.data.status == 'SEEN'
+            ? request.resource.data.status == 'SEEN'
+            : (request.resource.data.status == 'PLANNED' || arrivesAsSeen(request.resource.data)));
+      }
     }
 
     // Written and read only by the movie-lookup Cloud Functions (admin SDK), so no client

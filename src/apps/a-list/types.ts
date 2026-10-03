@@ -22,6 +22,7 @@ export type AListTab = 'dashboard' | 'calendar' | 'watchlist';
 export type AmcFormat =
   'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
+export type ViewingStatus = 'PLANNED' | 'SEEN';
 
 export interface MovieSnapshot {
   title: string;
@@ -42,7 +43,10 @@ export interface MovieSearchResult {
   posterUrl: string | null;
 }
 
-export type AListOverlay = { kind: 'add'; destination: 'watchlist' };
+export type AListOverlay =
+  | { kind: 'add'; destination: 'watchlist' }
+  /** `date` is a local "YYYY-MM-DD" the date field starts on. */
+  | { kind: 'add'; destination: 'calendar'; date: string };
 
 export interface WatchlistItem {
   /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */
@@ -51,6 +55,22 @@ export interface WatchlistItem {
   priority: WatchPriority;
   /** null = no preference. */
   preferredFormat: AmcFormat | null;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+export interface Viewing {
+  id: string;
+  /** Immutable; to change the movie, remove the viewing and add another. */
+  movieKey: string;
+  /** Copied at creation and never refreshed, so a viewing outlives its watchlist item. */
+  movie: MovieSnapshot;
+  /** Instant: when the showing starts. */
+  showtimeAt: number;
+  /** Instant: showtime + previews + runtime; recomputed whenever the showtime changes. */
+  endsAt: number;
+  /** PLANNED → SEEN; never back. */
+  status: ViewingStatus;
   createdAt: number;
   lastEditedAt: number;
 }
