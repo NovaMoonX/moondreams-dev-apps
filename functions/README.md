@@ -34,6 +34,28 @@ Every callable requires a signed-in caller.
 - Locally, put a real key in `functions/.secret.local` (`OMDB_API_KEY=…`) to call OMDb from the emulator. Leave the value empty (`OMDB_API_KEY=`) to use the built-in sample movies instead.
 - **Restart the emulators after editing either file.** They read `.env.local` and `.secret.local` only at startup.
 
+## Service accounts
+
+Three accounts show up under IAM & Admin → Service Accounts. Only the first two matter to us.
+
+| Account | Role in this repo | When it needs a grant |
+| --- | --- | --- |
+| `github-action-…@moondreams-dev-apps.iam.gserviceaccount.com` ("GitHub Actions") | **Deployer.** Its key is the GitHub secret `FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS`, used by `firebase-hosting-merge.yml`. | A deploy fails with `secretmanager.secrets.getIamPolicy` / `setIamPolicy`. It must be able to set a secret's IAM policy. |
+| `<project-number>-compute@developer.gserviceaccount.com` ("Default compute service account") | **Runtime.** Our 2nd-gen functions set no `serviceAccount`, so every function runs as this account and reads secrets as it. | A function logs permission denied reading a secret. The deploy normally grants this itself. |
+| `firebase-adminsdk-…@moondreams-dev-apps.iam.gserviceaccount.com` | Firebase's downloadable Admin SDK identity. Nothing here uses it. | Never. |
+
+Grant access to one secret only, never project-wide:
+
+```bash
+# deployer: needs to set the secret's IAM policy
+gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-apps \
+  --member="serviceAccount:<github-action-account-email>" --role="roles/secretmanager.admin"
+
+# runtime: needs to read the secret
+gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-apps \
+  --member="serviceAccount:<project-number>-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+```
+
 ## Per-function notes
 
 ### A-List Tracker: `searchMovies` and `getMovie`
@@ -99,7 +121,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
   - the table row;
   - a "Secrets and config" row for any new secret or env var;
   - a note if it caches, budgets, or fetches on a user's behalf.
-- **New secret:** create it in production *before* the PR merges, or the CI functions deploy fails and nothing ships.
+- **New secret:** create it in production *before* the PR merges, or the CI functions deploy fails and nothing ships. If the first deploy then fails on a Secret Manager permission, see [Service accounts](#service-accounts).
 - **New callable:** if the browser reports a CORS error after its first deploy, run the invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
 - **Server-only collection:** give it a deny-all block in `firestore.rules`.
 
@@ -110,5 +132,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | Emulator says a function isn't found, or `lib/index.js` doesn't exist | `functions/lib/` wasn't built. Start through `npm run emulators` (it builds first), or run `npm --prefix functions run build`. |
 | Browser CORS error on a callable in production | Missing public-invoker grant. See the root README's invoker section. |
 | CI deploy fails on functions with a secret error | The secret doesn't exist in production yet. Set it with `firebase functions:secrets:set`. |
+| CI deploy fails with `secretmanager.secrets.getIamPolicy` or `setIamPolicy` | The deployer account can't manage that secret. Grant it per [Service accounts](#service-accounts). |
+| A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |
 | A-List search shows sample movies locally | `OMDB_API_KEY` in `functions/.secret.local` is missing or empty, so the emulator uses its fixture catalog. If you just added the key, restart the emulators. |
 | A changed `.env.local` cap or `.secret.local` key has no effect | The emulators read these files only at startup. Restart them. |
