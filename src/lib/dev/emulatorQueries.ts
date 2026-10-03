@@ -11,7 +11,7 @@ export function emulatorStatusQueryOptions(authOrigin: string, projectId: string
   return queryOptions({
     queryKey: emulatorQueryKeys.status(authOrigin, projectId),
     queryFn: async () => {
-      // Throws when the emulators aren't reachable; `Bearer owner` is the emulator's admin bypass.
+      // `Bearer owner` is the emulator's admin bypass.
       const response = await fetch(
         `${authOrigin}/identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:query`,
         {
