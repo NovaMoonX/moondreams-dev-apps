@@ -576,7 +576,7 @@ block-beta
 | PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
-| GoalChip | Calendar | weekly or monthly goal: met / not yet |
+| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
 | AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
 | ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |

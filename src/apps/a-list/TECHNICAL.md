@@ -603,7 +603,7 @@ src/apps/a-list/
     ├── add/         AddFlow.tsx  AddSubview.tsx  MoviePicker.tsx  PastMoviesStrip.tsx
     ├── watchlist/   WatchlistScreen.tsx  WatchlistFilters.tsx  WatchlistDetailsFields.tsx  WatchlistRow.tsx  WatchlistItemDrawer.tsx
     ├── dashboard/   DashboardScreen.tsx  StatTile.tsx  (Next Steps: FormatSplit.tsx  ActivityChart.tsx  RatingsSpend.tsx  PremiumInsights.tsx)
-    └── shared/      PosterCover.tsx  StarRating.tsx  FormatBadge.tsx  PriorityBadge.tsx  GoalChip.tsx
+    └── shared/      PosterCover.tsx  StarRating.tsx  FormatBadge.tsx  PriorityBadge.tsx  ViewingStatusBadge.tsx  Pill.tsx  StatTile.tsx
 
 functions/src/apps/a-list/       searchMovies.ts  getMovie.ts  lookupBudget.ts  movieCache.ts
 scripts/seeds/aList.ts
