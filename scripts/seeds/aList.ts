@@ -145,6 +145,13 @@ function getViewingFixtures(now: number) {
     },
     { id: 'seed-viewing-matrix', movieKey: 'imdb-tt0133093', daysFromNow: -12 },
     { id: 'seed-viewing-dune-2', movieKey: 'imdb-tt15239678', daysFromNow: -6 },
+    // 11 pm in Los Angeles is already the next day in UTC; it must count on the LA day.
+    {
+      id: 'seed-viewing-late',
+      movieKey: 'imdb-tt0133093',
+      daysFromNow: -1,
+      hour: 23,
+    },
     {
       id: 'seed-viewing-starlight',
       movieKey: 'imdb-tt99000001',

@@ -1,9 +1,9 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { WATCH_PRIORITIES } from '@apps/a-list/constants';
+import { WATCH_PRIORITIES, WEEK_STARTS_ON } from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
-import { getDayKey } from '@apps/a-list/utils/dayKeys';
+import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
 
 export const selectMembership = (state: RootState) =>
   state.aList.membership.membership;
@@ -71,6 +71,41 @@ export const selectSeenCountByMovieKey = createSelector(
         }),
         {},
       );
+    return result;
+  },
+);
+
+/** Seen viewings only, bucketed by the viewer's local day; a rewatch counts again. */
+export const selectCounters = createSelector(
+  [
+    selectViewingItems,
+    selectMembership,
+    (_state: RootState, now: number) => now,
+  ],
+  (viewings, membership, now) => {
+    const seenDayKeys = viewings
+      .filter((viewing) => viewing.status === 'SEEN')
+      .map((viewing) => getDayKey(viewing.showtimeAt));
+    const { startKey, endKey } = getWeekBounds(now, WEEK_STARTS_ON);
+    const monthPrefix = getDayKey(now).slice(0, 7);
+    const thisWeek = seenDayKeys.filter(
+      (key) => key >= startKey && key <= endKey,
+    ).length;
+    const thisMonth = seenDayKeys.filter((key) =>
+      key.startsWith(monthPrefix),
+    ).length;
+    const weeklyGoal = membership?.weeklyGoal ?? null;
+    const monthlyGoal = membership?.monthlyGoal ?? null;
+
+    const result = {
+      watched: seenDayKeys.length,
+      thisWeek,
+      thisMonth,
+      weeklyGoal,
+      monthlyGoal,
+      isWeeklyGoalMet: weeklyGoal !== null && thisWeek >= weeklyGoal,
+      isMonthlyGoalMet: monthlyGoal !== null && thisMonth >= monthlyGoal,
+    };
     return result;
   },
 );
