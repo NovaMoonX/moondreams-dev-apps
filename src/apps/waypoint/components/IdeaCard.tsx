@@ -55,8 +55,13 @@ function IdeaCard({ trip, idea, currentUserId }: IdeaCardProps) {
   };
 
   const handleDelete = async () => {
-    await dispatch(deleteIdea({ uid: currentUserId, trip, idea })).unwrap();
-    setIsEditing(false);
+    setIsSubmitting(true);
+    try {
+      await dispatch(deleteIdea({ uid: currentUserId, trip, idea })).unwrap();
+      setIsEditing(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderCard = (openProps: IdeaOpenProps, anchor: IdeaAnchor) => (
