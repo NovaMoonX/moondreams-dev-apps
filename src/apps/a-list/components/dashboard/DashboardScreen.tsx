@@ -153,7 +153,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
               label='Monthly cost'
               value={formatCents(summary.monthlyTotalCents)}
               detail={
-                membership.taxRate === null ? 'before tax' : 'tax included'
+                membership.taxRate === null ? '(before tax)' : '(tax included)'
               }
             />
             <StatTile

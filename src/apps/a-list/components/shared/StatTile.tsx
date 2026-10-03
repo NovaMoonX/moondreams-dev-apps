@@ -76,8 +76,8 @@ function StatTile({
         {(isGoalMet || detail) && (
           <p
             className={join(
-              'mt-1 text-xs',
-              isGoalMet ? 'text-success font-medium' : 'text-muted-foreground',
+              'text-xs',
+              isGoalMet ? 'text-success font-medium mt-1' : 'text-muted-foreground',
             )}
           >
             {isGoalMet ? '🏆 Goal met' : detail}
