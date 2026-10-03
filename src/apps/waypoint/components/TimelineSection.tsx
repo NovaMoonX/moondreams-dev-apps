@@ -126,6 +126,7 @@ export function TimelineSection({
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId));
 
   const [stackingEvent, setStackingEvent] = useState<TimelineEvent | undefined>();
+  const [isStackHeaderOrigin, setIsStackHeaderOrigin] = useState(false);
   const stackSuccessRef = useRef<(() => void) | undefined>(undefined);
   const [isStackSubmitting, setIsStackSubmitting] = useState(false);
 
@@ -246,6 +247,7 @@ export function TimelineSection({
         showAttendees={showAttendees}
         isStacked={Boolean(event.stackLabel)}
         onStack={(selectedEvent, onSuccess) => {
+          setIsStackHeaderOrigin(false);
           setStackingEvent(selectedEvent);
           stackSuccessRef.current = onSuccess;
         }}
@@ -279,7 +281,10 @@ export function TimelineSection({
             currentUserId={currentUserId}
             showAttendees={showAttendees}
             canEdit={canEdit}
-            onManage={(selectedEvent) => setStackingEvent(selectedEvent)}
+            onManage={(selectedEvent) => {
+              setIsStackHeaderOrigin(true);
+              setStackingEvent(selectedEvent);
+            }}
             renderEvent={renderEventCard}
           />
         );
@@ -506,6 +511,7 @@ export function TimelineSection({
           event={stackingEvent}
           events={events}
           isSubmitting={isStackSubmitting}
+          canRemoveTrip={!isStackHeaderOrigin}
           onStack={(name) => void saveStack(getItinerary(stackingEvent), name)}
           onRename={(name) => void saveStack(getStackMembers(stackingEvent), name)}
           onRemove={() => void saveStack(getItinerary(stackingEvent), null)}

@@ -12,6 +12,8 @@ interface EventStackModalProps {
   /** Every other event in the trip, to offer stacks of the same type and size the current one. */
   events: TimelineEvent[];
   isSubmitting?: boolean;
+  /** Taking one trip out only makes sense from that trip's own card, not the stack header. */
+  canRemoveTrip?: boolean;
   onStack: (stackName: string) => void;
   onRename: (stackName: string) => void;
   onRemove: () => void;
@@ -24,6 +26,7 @@ function EventStackModal({
   event,
   events,
   isSubmitting = false,
+  canRemoveTrip = true,
   onStack,
   onRename,
   onRemove,
@@ -58,9 +61,11 @@ function EventStackModal({
             <Input value={name} onChange={(changeEvent) => setName(changeEvent.target.value)} />
           </div>
           <div className='flex flex-wrap gap-2'>
-            <Button type='button' variant='secondary' size='sm' disabled={isSubmitting} onClick={onRemove}>
-              Take this trip out
-            </Button>
+            {canRemoveTrip && (
+              <Button type='button' variant='secondary' size='sm' disabled={isSubmitting} onClick={onRemove}>
+                Take this trip out
+              </Button>
+            )}
             <Button type='button' variant='tertiary' size='sm' disabled={isSubmitting} onClick={onUnstackAll}>
               Unstack all
             </Button>
