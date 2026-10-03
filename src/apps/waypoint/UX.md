@@ -445,7 +445,7 @@ flowchart LR
 | Entity | Initial (create) | Later (edit only) | Grouping |
 |---|---|---|---|
 | Trip Space | title, start/end dates (framed as estimates) | destination labels, tags, currency, cover image | none |
-| Timeline Event | `eventType` (category: Travel/Dining/Activity/Free Time), title, day, start time, that category's one quick field (see below), location, assignees (which members are involved) | end time/day, address, notes, finer transit/dining fields | **Steps** |
+| Timeline Event | **Step 1, what & when:** `eventType`, its sub-type (transit type; meal type, defaulted from the start time), day, departs/starts time, time zone. **Step 2, details:** a section per type — flight/train/ferry carrier + route (the departing place *is* the location), a drive/walk/bike/scooter's "going to" (the location), dining/activity location first | end/arrival time, title (derived when left out), address, travel time (only without an end time), notes, cuisines, indoor/outdoor, hours, link kind, group, reminder, attendees — as add-detail chips; a flight's **Next leg** button saves it and reopens the form with the same airline, booking, travelers and group, departing from where it landed | **Steps** |
 | Stay | name, address, official check-in/out | confirmation code, notes¹ | none |
 | Checklist Item | title, category (incl. a custom "Other" option with its own label), assignees | — | none |
 | Expense | title, amount (or a min-max range), currency (defaulted), payer, day (or "Other" for none) | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |

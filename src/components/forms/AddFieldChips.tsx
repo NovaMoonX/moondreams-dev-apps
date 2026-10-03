@@ -12,18 +12,19 @@ export interface AddFieldChip {
 interface AddFieldChipsProps {
   chips: AddFieldChip[];
   onAdd: (key: string) => void;
+  heading?: string;
 }
 
 /** A grid of rounded chips for optional fields that aren't on the form yet; tapping one
  * reveals its field in place and the chip goes away. */
-function AddFieldChips({ chips, onAdd }: AddFieldChipsProps) {
+function AddFieldChips({ chips, onAdd, heading = 'Add more details' }: AddFieldChipsProps) {
   if (chips.length === 0) {
     return null;
   }
 
   return (
     <div className='space-y-2'>
-      <p className='text-muted-foreground text-xs font-medium'>Add more details</p>
+      <p className='text-muted-foreground text-xs font-medium'>{heading}</p>
       <div className='grid grid-cols-2 gap-2'>
         {chips.map((chip) => (
           <Button

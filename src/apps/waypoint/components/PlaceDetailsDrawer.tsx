@@ -16,6 +16,8 @@ interface PlaceDetailsDrawerProps {
   onEdit: (() => void) | null;
   archiveLabel?: string | null;
   onArchive?: (() => void) | null;
+  stackLabel?: string | null;
+  onStack?: (() => void) | null;
   children: ReactNode;
 }
 
@@ -29,6 +31,8 @@ export function PlaceDetailsDrawer({
   onEdit,
   archiveLabel,
   onArchive,
+  stackLabel,
+  onStack,
   children,
 }: PlaceDetailsDrawerProps) {
   const canNavigate = getMapNavigationUrl(location) !== null;
@@ -59,6 +63,11 @@ export function PlaceDetailsDrawer({
               onClick={() => onEdit()}
             >
               Modify
+            </Button>
+          )}
+          {onStack && (
+            <Button type='button' size='lg' variant='secondary' onClick={() => onStack()}>
+              {stackLabel}
             </Button>
           )}
           {onArchive && (

@@ -1785,6 +1785,9 @@ service cloud.firestore {
             'place',
             'linkUrl',
             'linkPreview',
+            'linkKind',
+            'groupLabel',
+            'stackLabel',
             'reminderMinutesBefore',
             'reminderEnabled',
             'reminderId',
@@ -1824,9 +1827,12 @@ service cloud.firestore {
             && request.resource.data.linkUrl.matches('^https?://.*')
           ))
           && (request.resource.data.linkPreview == null || request.resource.data.linkPreview is map)
+          && request.resource.data.get('linkKind', null) in [null, 'WEBSITE', 'RESERVATION', 'MENU', 'BOOKING']
+          && (request.resource.data.get('groupLabel', null) == null || isNonEmptyString(request.resource.data.get('groupLabel', null)))
+          && (request.resource.data.get('stackLabel', null) == null || isNonEmptyString(request.resource.data.get('stackLabel', null)))
           && request.resource.data.reminderMinutesBefore is int
           && request.resource.data.reminderMinutesBefore >= 5
-          && request.resource.data.reminderMinutesBefore <= 60
+          && request.resource.data.reminderMinutesBefore <= 180
           && request.resource.data.reminderMinutesBefore % 5 == 0
           && request.resource.data.reminderEnabled is bool
           && (request.resource.data.reminderId == null || request.resource.data.reminderId is string)
@@ -2354,6 +2360,144 @@ service cloud.firestore {
         && isStayEditKeySetValid()
         && isStayShapeValid()
       ) || isStaySeenByUpdateValid();
+      allow delete: if isTripAdminOnlyWhileActive();
+    }
+
+    match /apps/waypoint/trips/{tripId}/rentals/{rentalId} {
+      function isTripSubcollectionMember() {
+        return request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+      }
+
+      // Creating a brand-new rental stays open to Editors before the trip starts, but
+      // narrows to Admin-only once it has — same rule as stays.
+      function isTripCreateAllowed() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return isTripSubcollectionMember()
+          && (
+            hasTripStarted(trip)
+              ? trip.members[request.auth.uid].role == 'ADMIN'
+              : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+          );
+      }
+
+      function isTripAdminOnlyWhileActive() {
+        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        return request.auth != null && request.auth.uid in trip.members && (
+          isTripActive(trip)
+            ? trip.members[request.auth.uid].role == 'ADMIN'
+            : trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+        );
+      }
+
+      // Pickup and return are always a trip day offset + "HH:mm", whatever the trip's time model.
+      function isRentalTimeValid(data) {
+        return data.pickupDayIndex is int
+          && data.returnDayIndex is int
+          && isClockTime(data.pickupTime)
+          && isClockTime(data.returnTime)
+          && (data.returnDayIndex > data.pickupDayIndex
+            || (data.returnDayIndex == data.pickupDayIndex && data.returnTime > data.pickupTime));
+      }
+
+      function isNullableNumber(value) {
+        return value == null || value is number;
+      }
+
+      function isNullablePlace(value) {
+        return value == null || (value is map && value.placeId is string);
+      }
+
+      function isRentalShapeValid() {
+        let data = request.resource.data;
+        return data.keys().hasOnly([
+            'id',
+            'tripId',
+            'rentalType',
+            'name',
+            'vehicle',
+            'pickupAddress',
+            'pickupLatitude',
+            'pickupLongitude',
+            'pickupPlace',
+            'returnAddress',
+            'returnLatitude',
+            'returnLongitude',
+            'returnPlace',
+            'pickupDayIndex',
+            'pickupTime',
+            'returnDayIndex',
+            'returnTime',
+            'timezone',
+            'confirmationCode',
+            'notes',
+            'linkUrl',
+            'linkPreview',
+            'createdBy',
+            'createdAt',
+            'lastEditedAt'
+          ])
+          && data.id == rentalId
+          && data.tripId == tripId
+          && data.rentalType in ['CAR']
+          && isNonEmptyString(data.name)
+          && (data.vehicle == null || isNonEmptyString(data.vehicle))
+          && isNonEmptyString(data.pickupAddress)
+          && isNullableNumber(data.pickupLatitude)
+          && isNullableNumber(data.pickupLongitude)
+          && isNullablePlace(data.pickupPlace)
+          && (data.returnAddress == null || isNonEmptyString(data.returnAddress))
+          && isNullableNumber(data.returnLatitude)
+          && isNullableNumber(data.returnLongitude)
+          && isNullablePlace(data.returnPlace)
+          && isRentalTimeValid(data)
+          && (data.timezone == null || isNonEmptyString(data.timezone))
+          && (data.confirmationCode == null || isNonEmptyString(data.confirmationCode))
+          && (data.notes == null || data.notes is string)
+          && (data.linkUrl == null || (
+            data.linkUrl is string
+            && data.linkUrl.size() <= 2048
+            && data.linkUrl.matches('^https?://.*')
+          ))
+          && (data.linkPreview == null || data.linkPreview is map)
+          && data.createdBy is string
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      function isRentalEditKeySetValid() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'rentalType',
+          'name',
+          'vehicle',
+          'pickupAddress',
+          'pickupLatitude',
+          'pickupLongitude',
+          'pickupPlace',
+          'returnAddress',
+          'returnLatitude',
+          'returnLongitude',
+          'returnPlace',
+          'pickupDayIndex',
+          'pickupTime',
+          'returnDayIndex',
+          'returnTime',
+          'timezone',
+          'confirmationCode',
+          'notes',
+          'linkUrl',
+          'linkPreview',
+          'lastEditedAt'
+        ]);
+      }
+
+      allow read: if isTripSubcollectionMember();
+      allow create: if isTripCreateAllowed()
+        && isRentalShapeValid()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isTripAdminOnlyWhileActive()
+        && isRentalEditKeySetValid()
+        && isRentalShapeValid();
       allow delete: if isTripAdminOnlyWhileActive();
     }
 
