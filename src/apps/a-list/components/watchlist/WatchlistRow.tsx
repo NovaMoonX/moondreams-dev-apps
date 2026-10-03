@@ -44,7 +44,7 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
   const activityLine = getActivityLine();
 
   return (
-    <div className='flex items-center gap-3 py-2.5'>
+    <div className='flex w-full items-center gap-3 py-2.5'>
       <span className='h-16 w-11 shrink-0 overflow-hidden rounded'>
         <PosterCover title={movie.title} posterUrl={movie.posterUrl} compact />
       </span>

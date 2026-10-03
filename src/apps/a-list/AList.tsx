@@ -18,6 +18,7 @@ import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
 import BottomNav from '@apps/a-list/components/shell/BottomNav';
 import LoadingSkeleton from '@apps/a-list/components/shell/LoadingSkeleton';
+import WatchlistItemDrawer from '@apps/a-list/components/watchlist/WatchlistItemDrawer';
 import WatchlistScreen from '@apps/a-list/components/watchlist/WatchlistScreen';
 import { A_LIST_TABS, DEFAULT_A_LIST_TAB } from '@apps/a-list/constants';
 import { AListOverlayContext } from '@apps/a-list/hooks/useAListOverlay';
@@ -134,6 +135,13 @@ function AList() {
         <ViewingDrawer
           key={overlay.id}
           viewingId={overlay.id}
+          onClose={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === 'watchlistItem' && (
+        <WatchlistItemDrawer
+          key={overlay.movieKey}
+          movieKey={overlay.movieKey}
           onClose={() => setOverlay(null)}
         />
       )}

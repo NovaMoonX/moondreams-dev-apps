@@ -113,13 +113,28 @@ function WatchlistScreen() {
         <ul className='divide-border divide-y'>
           {tabRows.map((row) => (
             <li key={row.item.movieKey}>
-              <WatchlistRow
-                row={row}
-                todayDay={todayDay}
-                daysUntil={
-                  tab === 'opening' ? daysByMovie[row.item.movieKey] : undefined
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-label={`Open ${row.item.movie.title}`}
+                className='h-auto w-full justify-start rounded-none p-0 text-left font-normal'
+                onClick={() =>
+                  openOverlay({
+                    kind: 'watchlistItem',
+                    movieKey: row.item.movieKey,
+                  })
                 }
-              />
+              >
+                <WatchlistRow
+                  row={row}
+                  todayDay={todayDay}
+                  daysUntil={
+                    tab === 'opening'
+                      ? daysByMovie[row.item.movieKey]
+                      : undefined
+                  }
+                />
+              </Button>
             </li>
           ))}
         </ul>

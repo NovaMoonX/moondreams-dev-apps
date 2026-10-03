@@ -56,6 +56,7 @@ export type AListOverlay =
       mode: 'single' | 'past';
     }
   | { kind: 'viewing'; id: string }
+  | { kind: 'watchlistItem'; movieKey: string }
   | { kind: 'membership' };
 
 export interface WatchlistItem {
