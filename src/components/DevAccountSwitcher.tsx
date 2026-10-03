@@ -78,6 +78,8 @@ export function DevAccountSwitcher() {
     (account) => account.email === user?.email,
   );
 
+  const mobileLabel = currentAccount?.displayName.split(' ')[0] ?? 'Dev';
+
   return (
     <div className='pointer-events-auto'>
       <DropdownMenu
@@ -100,7 +102,7 @@ export function DevAccountSwitcher() {
             <span className='hidden sm:inline'>
               {currentAccount ? currentAccount.label : 'Dev sign-in'}
             </span>
-            <span className='sm:hidden'>Dev</span>
+            <span className='sm:hidden'>{mobileLabel}</span>
             <ChevronDown className='h-4 w-4' />
           </Button>
         }
