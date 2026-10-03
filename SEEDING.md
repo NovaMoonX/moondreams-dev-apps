@@ -38,17 +38,25 @@ The Vite app connects to local services only when `VITE_USE_FIREBASE_EMULATORS=t
 It disables the Firestore persistent cache in this mode so a reset cannot leave stale
 browser data behind. The Emulator Suite UI is available at `http://127.0.0.1:4001`.
 
-To try it on a phone, open the dev server's LAN address (the QR code `npm run dev` prints)
-on the same Wi-Fi. The emulators listen on all interfaces and the app reaches them through
-whatever host it was loaded from, so the fixture account buttons work there too. Restart the
-emulators after pulling this change, and treat the Auth emulator as open to your network
-while they run.
+## Phone testing
+
+`npm run dev` and `npm run emulators` only listen on this machine. To use a phone on the
+same Wi-Fi, run `npm run lan:trust` once on your home network, then
+`npm run emulators:lan`, `npm run seed:reset` and `npm run dev:lan`, and scan the QR code.
+The app reaches the emulators through whatever host the page was loaded from, so the fixture
+account buttons work there too.
+
+The `:lan` commands refuse to start on a network you haven't trusted: the emulators accept
+`Bearer owner` and open signups, and the dev server's bundle carries the App Check debug
+token. Re-run `npm run seed:reset` after every emulator restart; they keep no data.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `npm run emulators` | Start Auth, Firestore, and RTDB emulators with their UI. |
+| `npm run emulators:lan` / `dev:lan` | The same, reachable from a phone on a trusted network. |
+| `npm run lan:trust` | Trust the current network for the `:lan` commands. |
 | `npm run seed` | Upsert all named fixtures into an already-running emulator. |
 | `npm run seed:core` | Upsert Auth users, profiles, app registry records, and presence. |
 | `npm run seed:nine-lives` | Upsert core data and Nine Lives household/cat fixtures. |
