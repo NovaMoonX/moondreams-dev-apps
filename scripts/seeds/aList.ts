@@ -133,6 +133,40 @@ function getShowtime(now: number, daysFromNow: number, hour = 19, minute = 0) {
   return result;
 }
 
+// The spec's Standard example, a premium ticket with its standard price, and an all-in total.
+const SEED_TICKETS: Record<string, object> = {
+  'seed-viewing-matrix': {
+    entryMode: 'ITEMIZED',
+    format: 'STANDARD',
+    priceCents: 1556,
+    standardPriceCents: null,
+    feeAvoidedCents: 0,
+    taxRate: 0.081,
+    taxCents: 126,
+    totalCents: 1682,
+  },
+  'seed-viewing-dune-1': {
+    entryMode: 'ITEMIZED',
+    format: 'DOLBY_CINEMA',
+    priceCents: 1999,
+    standardPriceCents: 1449,
+    feeAvoidedCents: 150,
+    taxRate: 0.075,
+    taxCents: 150,
+    totalCents: 2299,
+  },
+  'seed-viewing-day9-3': {
+    entryMode: 'ALL_IN',
+    format: 'IMAX',
+    priceCents: 1850,
+    standardPriceCents: 1400,
+    feeAvoidedCents: 150,
+    taxRate: 0.075,
+    taxCents: 139,
+    totalCents: 2139,
+  },
+};
+
 function getViewingFixtures(now: number) {
   const items = getWatchlistFixtures(now);
   const find = (movieKey: string) =>
@@ -208,6 +242,7 @@ function getViewingFixtures(now: number) {
         showtimeAt,
         endsAt,
         status: endsAt <= now ? 'SEEN' : 'PLANNED',
+        ticket: SEED_TICKETS[id] ?? null,
         createdAt: Math.min(now, showtimeAt),
         lastEditedAt: Math.min(now, showtimeAt),
       };

@@ -31,6 +31,7 @@ import ManualMovieForm, {
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import {
   AMC_FORMAT_LABELS,
   AMC_FORMATS,
@@ -43,8 +44,14 @@ import { movieDetailsQueryOptions } from '@apps/a-list/queries/movieQueries';
 import { addViewing } from '@apps/a-list/store/actions/viewingActions';
 import { addWatchlistItem } from '@apps/a-list/store/actions/watchlistActions';
 import {
+  evaluateTicketDraft,
+  getInitialTicketDraft,
+  type TicketDraft,
+} from '@apps/a-list/utils/ticketDraft';
+import {
   selectMembership,
   selectSeenCountByMovieKey,
+  selectTaxRateChips,
 } from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
@@ -129,6 +136,8 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   const now = useNow();
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
+  const { defaultRate } = useAppSelector(selectTaxRateChips);
+  const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
   const [manualDraft, setManualDraft] =
@@ -166,8 +175,10 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     isCalendar &&
     showtimeValues.date !== '' &&
     showtimeValues.date < startDateKey;
+  const ticketResult = ticketDraft ? evaluateTicketDraft(ticketDraft) : null;
   const canSave =
     !isBeforeStart &&
+    (ticketResult === null || ticketResult.isValid) &&
     movie !== undefined &&
     movieKey !== null &&
     (!isCalendar || (showtimeAt !== undefined && showtimeValues.time !== ''));
@@ -222,7 +233,13 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     at: number,
   ) => {
     const viewing = await dispatch(
-      addViewing({ uid, movieKey: key, movie: snapshot, showtimeAt: at }),
+      addViewing({
+        uid,
+        movieKey: key,
+        movie: snapshot,
+        showtimeAt: at,
+        ticket: ticketResult?.ticket ?? null,
+      }),
     ).unwrap();
     addToast({
       title:
@@ -354,6 +371,33 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
             }
           />
         )}
+        {isCalendar &&
+          (ticketDraft ? (
+            <div className='space-y-2'>
+              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='px-0'
+                onClick={() => setTicketDraft(null)}
+              >
+                Remove ticket details
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='px-0'
+              onClick={() =>
+                setTicketDraft(getInitialTicketDraft(null, defaultRate))
+              }
+            >
+              + Add ticket details
+            </Button>
+          ))}
         {isBeforeStart && membership && (
           <p className='text-destructive text-sm'>
             Your membership started {formatDateUTC(membership.startDate)}, so

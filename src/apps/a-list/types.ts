@@ -23,6 +23,7 @@ export type AmcFormat =
   'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
+export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
 
 export interface MovieSnapshot {
   title: string;
@@ -72,6 +73,26 @@ export interface Viewing {
   endsAt: number;
   /** PLANNED → SEEN; never back. */
   status: ViewingStatus;
+  /** null until "Mark paid" or "+ Add ticket details". Documents written before tickets existed lack the key. */
+  ticket: Ticket | null;
   createdAt: number;
   lastEditedAt: number;
+}
+
+/** What a non-member would have paid. Always `totalCents = priceCents + feeAvoidedCents + taxCents`. */
+export interface Ticket {
+  /** How the member entered it; reopening the form restores this mode. */
+  entryMode: TicketEntryMode;
+  format: AmcFormat;
+  /** Before tax. Exact when itemized; estimated from the total when all-in. */
+  priceCents: number;
+  /** A Standard ticket for the same showing, before tax; null for a Standard ticket or when unknown. */
+  standardPriceCents: number | null;
+  /** The convenience fee a non-member would have paid; members pay none. */
+  feeAvoidedCents: number;
+  /** The rate chosen on this ticket; null when none was chosen. */
+  taxRate: number | null;
+  taxCents: number;
+  /** Exact as entered when all-in. */
+  totalCents: number;
 }

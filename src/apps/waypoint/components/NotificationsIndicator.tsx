@@ -13,7 +13,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
-import DeleteIconButton from '@apps/waypoint/components/DeleteIconButton';
+import DeleteIconButton from '@/components/DeleteIconButton';
 import DismissIconButton from '@apps/waypoint/components/DismissIconButton';
 import { LocationLink } from '@apps/waypoint/components/LocationLink';
 import {

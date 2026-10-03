@@ -1,7 +1,9 @@
 import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatTime } from '@/utils/formatUtils';
+import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import { formatCents } from '@apps/a-list/utils/money';
 import type { Viewing } from '@apps/a-list/types';
 
 interface ViewingRowProps {
@@ -23,6 +25,14 @@ function ViewingRow({ viewing }: ViewingRowProps) {
         <p className='text-muted-foreground text-xs'>
           {formatTime(viewing.showtimeAt)}
         </p>
+        {viewing.ticket && (
+          <div className='mt-0.5 flex items-center gap-1.5'>
+            <FormatBadge format={viewing.ticket.format} />
+            <span className='text-muted-foreground text-xs'>
+              {formatCents(viewing.ticket.totalCents)}
+            </span>
+          </div>
+        )}
       </div>
       <Badge
         variant={viewing.status === 'SEEN' ? 'success' : 'muted'}

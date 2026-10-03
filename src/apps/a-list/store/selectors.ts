@@ -3,6 +3,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { WATCH_PRIORITIES, WEEK_STARTS_ON } from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
+import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
 
 export const selectMembership = (state: RootState) =>
@@ -112,3 +113,13 @@ export const selectCounters = createSelector(
 
 export const selectViewingById = (state: RootState, id: string) =>
   state.aList.viewings.items.find((viewing) => viewing.id === id) ?? null;
+
+export const selectFeeChips = createSelector([selectViewingItems], (viewings) =>
+  getFeeChips(viewings),
+);
+
+export const selectTaxRateChips = createSelector(
+  [selectViewingItems, selectMembership],
+  (viewings, membership) =>
+    getTaxRateChips(viewings, membership?.taxRate ?? null),
+);
