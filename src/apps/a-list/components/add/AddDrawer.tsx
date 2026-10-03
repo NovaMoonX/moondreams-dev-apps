@@ -20,7 +20,9 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC, formatDuration } from '@/utils/formatUtils';
-import ManualMovieForm from '@apps/a-list/components/add/ManualMovieForm';
+import ManualMovieForm, {
+  type ManualMovieDraft,
+} from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import {
@@ -87,6 +89,11 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   const now = useNow();
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
+  const [manualDraft, setManualDraft] = useState<ManualMovieDraft>({
+    title: '',
+    releaseDate: '',
+    showReleaseDate: false,
+  });
   const [selection, setSelection] = useState<Selection | null>(null);
   const [detailsValues, setDetailsValues] =
     useState<WatchlistDetailsValues>(INITIAL_DETAILS);
@@ -176,7 +183,8 @@ function AddDrawer({ onClose }: AddDrawerProps) {
     if (selection === null && isAddingByTitle) {
       return (
         <ManualMovieForm
-          initialTitle={query.trim()}
+          draft={manualDraft}
+          onDraftChange={setManualDraft}
           onCancel={() => setIsAddingByTitle(false)}
           onContinue={(manualKey, manualMovie) =>
             setSelection({
@@ -195,7 +203,12 @@ function AddDrawer({ onClose }: AddDrawerProps) {
           query={query}
           onQueryChange={setQuery}
           onPick={(result) => setSelection({ kind: 'search', result })}
-          onAddByTitle={() => setIsAddingByTitle(true)}
+          onAddByTitle={() => {
+            setManualDraft((draft) =>
+              draft.title ? draft : { ...draft, title: query.trim() },
+            );
+            setIsAddingByTitle(true);
+          }}
         />
       );
     }

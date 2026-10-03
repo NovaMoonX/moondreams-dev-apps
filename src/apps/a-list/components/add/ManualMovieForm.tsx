@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import {
   Button,
   Form,
@@ -11,13 +9,15 @@ import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
 import type { MovieSnapshot } from '@apps/a-list/types';
 
-interface ManualMovieValues {
+export interface ManualMovieDraft {
   title: string;
   releaseDate: string;
+  showReleaseDate: boolean;
 }
 
 interface ManualMovieFormProps {
-  initialTitle: string;
+  draft: ManualMovieDraft;
+  onDraftChange: (draft: ManualMovieDraft) => void;
   onCancel: () => void;
   onContinue: (movieKey: string, movie: MovieSnapshot) => void;
 }
@@ -25,15 +25,13 @@ interface ManualMovieFormProps {
 const { input } = FormFactories;
 
 function ManualMovieForm({
-  initialTitle,
+  draft,
+  onDraftChange,
   onCancel,
   onContinue,
 }: ManualMovieFormProps) {
-  const [values, setValues] = useState<ManualMovieValues>({
-    title: initialTitle,
-    releaseDate: '',
-  });
-  const [showReleaseDate, setShowReleaseDate] = useState(false);
+  const values = draft;
+  const showReleaseDate = draft.showReleaseDate;
   const title = values.title.trim();
 
   const fields = [
@@ -84,7 +82,7 @@ function ManualMovieForm({
         columns={1}
         spacing='normal'
         onDataChange={(data) =>
-          setValues({ ...values, ...(data as Partial<ManualMovieValues>) })
+          onDraftChange({ ...values, ...(data as Partial<ManualMovieDraft>) })
         }
       />
       {showReleaseDate ? (
@@ -93,10 +91,13 @@ function ManualMovieForm({
           variant='link'
           size='sm'
           className='px-0'
-          onClick={() => {
-            setValues({ ...values, releaseDate: '' });
-            setShowReleaseDate(false);
-          }}
+          onClick={() =>
+            onDraftChange({
+              ...values,
+              releaseDate: '',
+              showReleaseDate: false,
+            })
+          }
         >
           Remove release date
         </Button>
@@ -106,7 +107,7 @@ function ManualMovieForm({
           variant='link'
           size='sm'
           className='px-0'
-          onClick={() => setShowReleaseDate(true)}
+          onClick={() => onDraftChange({ ...values, showReleaseDate: true })}
         >
           + Add release date
         </Button>
