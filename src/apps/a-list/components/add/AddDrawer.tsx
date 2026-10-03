@@ -49,6 +49,7 @@ import {
   getInitialTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
+import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
   selectSeenCountByMovieKey,
@@ -176,7 +177,12 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   );
   const isCalendar = overlay.destination === 'calendar';
   const isPast = overlay.destination === 'calendar' && overlay.mode === 'past';
-  const isNotYetShown = isPast && showtimeAt !== undefined && showtimeAt > now;
+  // Past mode only adds seen movies, so the showing must have ended, not just started.
+  const isNotYetShown =
+    isPast &&
+    showtimeAt !== undefined &&
+    movie !== undefined &&
+    computeEndsAt(showtimeAt, movie.runtimeMinutes) > now;
   const startDateKey = membership ? toDateInputValue(membership.startDate) : '';
   const isBeforeStart =
     isCalendar &&
@@ -430,7 +436,7 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
         {isNotYetShown && (
           <p className='text-destructive text-sm'>
             These are movies you've already seen, so pick a showing that has
-            already happened.
+            already ended.
           </p>
         )}
         {isBeforeStart && membership && (
