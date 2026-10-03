@@ -30,6 +30,7 @@ import ManualMovieForm, {
   type ManualMovieDraft,
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
+import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import {
@@ -150,6 +151,10 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     time: DEFAULT_SHOWTIME,
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [pastAdded, setPastAdded] = useState<{
+    count: number;
+    lastTitle: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const searchedKey =
     selection?.kind === 'search' ? selection.result.movieKey : null;
@@ -170,6 +175,8 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     showtimeValues.time,
   );
   const isCalendar = overlay.destination === 'calendar';
+  const isPast = overlay.destination === 'calendar' && overlay.mode === 'past';
+  const isNotYetShown = isPast && showtimeAt !== undefined && showtimeAt > now;
   const startDateKey = membership ? toDateInputValue(membership.startDate) : '';
   const isBeforeStart =
     isCalendar &&
@@ -178,6 +185,7 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
   const ticketResult = ticketDraft ? evaluateTicketDraft(ticketDraft) : null;
   const canSave =
     !isBeforeStart &&
+    !isNotYetShown &&
     (ticketResult === null || ticketResult.isValid) &&
     movie !== undefined &&
     movieKey !== null &&
@@ -248,7 +256,24 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
     });
   };
 
-  const handleAdd = async () => {
+  const resetForNextMovie = (addedTitle: string) => {
+    setPastAdded((previous) => ({
+      count: (previous?.count ?? 0) + 1,
+      lastTitle: addedTitle,
+    }));
+    setSelection(null);
+    setQuery('');
+    setIsAddingByTitle(false);
+    setManualDraft(EMPTY_MANUAL_DRAFT);
+    setTicketDraft(null);
+    setShowtimeValues({
+      date: overlay.destination === 'calendar' ? overlay.date : '',
+      time: DEFAULT_SHOWTIME,
+    });
+    setIsSaving(false);
+  };
+
+  const handleAdd = async (keepGoing: boolean) => {
     if (!user || !movieKey || !movie || !canSave) {
       return;
     }
@@ -262,7 +287,11 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
       } else {
         await saveToWatchlist(user.uid, movieKey, movie);
       }
-      onClose();
+      if (keepGoing) {
+        resetForNextMovie(movie.title);
+      } else {
+        onClose();
+      }
     } catch (addError) {
       setError(getErrorMessage(addError, 'Unable to save this movie.'));
       setIsSaving(false);
@@ -398,6 +427,12 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
               + Add ticket details
             </Button>
           ))}
+        {isNotYetShown && (
+          <p className='text-destructive text-sm'>
+            These are movies you've already seen, so pick a showing that has
+            already happened.
+          </p>
+        )}
         {isBeforeStart && membership && (
           <p className='text-destructive text-sm'>
             Your membership started {formatDateUTC(membership.startDate)}, so
@@ -407,24 +442,45 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions
           rightActions={
-            <>
-              <Button
-                type='button'
-                variant='secondary'
-                disabled={isSaving}
-                onClick={onClose}
-              >
-                Cancel
-              </Button>
-              <Button
-                type='button'
-                loading={isSaving}
-                disabled={!canSave || isSaving}
-                onClick={() => void handleAdd()}
-              >
-                Add
-              </Button>
-            </>
+            isPast ? (
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  disabled={!canSave || isSaving}
+                  onClick={() => void handleAdd(false)}
+                >
+                  Add & finish
+                </Button>
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={!canSave || isSaving}
+                  onClick={() => void handleAdd(true)}
+                >
+                  Add + another
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  disabled={isSaving}
+                  onClick={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={!canSave || isSaving}
+                  onClick={() => void handleAdd(false)}
+                >
+                  Add
+                </Button>
+              </>
+            )
           }
         />
       </div>
@@ -433,6 +489,12 @@ function AddDrawer({ overlay, onClose }: AddDrawerProps) {
 
   return (
     <Drawer isOpen onClose={onClose} title='Movie'>
+      {pastAdded && (
+        <PastMoviesStrip
+          count={pastAdded.count}
+          lastTitle={pastAdded.lastTitle}
+        />
+      )}
       {getContent()}
     </Drawer>
   );

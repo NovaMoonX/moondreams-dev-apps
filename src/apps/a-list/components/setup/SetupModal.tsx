@@ -54,9 +54,10 @@ function parseGoal(
 
 interface SetupModalProps {
   uid: string;
+  onComplete: () => void;
 }
 
-function SetupModal({ uid }: SetupModalProps) {
+function SetupModal({ uid, onComplete }: SetupModalProps) {
   const dispatch = useAppDispatch();
   const now = useNow();
   const [step, setStep] = useState(0);
@@ -135,6 +136,7 @@ function SetupModal({ uid }: SetupModalProps) {
           },
         }),
       ).unwrap();
+      onComplete();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save your membership.'));
       setIsSubmitting(false);

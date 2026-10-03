@@ -35,7 +35,25 @@ function CalendarScreen() {
   const selectedDayKey = getDayKey(selectedDay.getTime());
 
   const openAdd = () =>
-    openOverlay({ kind: 'add', destination: 'calendar', date: selectedDayKey });
+    openOverlay({
+      kind: 'add',
+      destination: 'calendar',
+      date: selectedDayKey,
+      mode: 'single',
+    });
+
+  const openPastMovies = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    openOverlay({
+      kind: 'add',
+      destination: 'calendar',
+      date: getDayKey(yesterday.getTime()),
+      mode: 'past',
+    });
+  };
+
+  const hasViewings = Object.keys(viewingsByDay).length > 0;
 
   return (
     <section className='space-y-4'>
@@ -48,6 +66,31 @@ function CalendarScreen() {
         }
       />
       <CounterRow now={now} />
+      {!hasViewings && (
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+          <p className='text-muted-foreground text-sm'>
+            Your calendar is waiting for its first movie.
+          </p>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='px-0'
+            onClick={openAdd}
+          >
+            Add your first movie
+          </Button>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='px-0'
+            onClick={openPastMovies}
+          >
+            Add past movies
+          </Button>
+        </div>
+      )}
       <Calendar
         mode='single'
         size='auto'
