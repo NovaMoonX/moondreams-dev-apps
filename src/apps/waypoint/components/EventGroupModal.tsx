@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import type { TimelineEvent } from '@apps/waypoint/types';
 
 interface EventGroupModalProps {

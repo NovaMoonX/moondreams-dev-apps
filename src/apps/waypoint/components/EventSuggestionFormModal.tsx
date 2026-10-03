@@ -16,7 +16,7 @@ import { fromLocalDateAndTimeInputValues, toLocalTimeInputValue } from '@/utils/
 import { getDayCount, getDayIndex, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
-import ModalFooterActions from '@apps/waypoint/components/ModalFooterActions';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 

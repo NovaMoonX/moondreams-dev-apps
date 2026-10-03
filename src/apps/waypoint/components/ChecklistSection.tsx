@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import { CHECKLIST_CATEGORY_LABELS } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,

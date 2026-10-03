@@ -4,7 +4,7 @@ import { Button, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/c
 
 import { useAppSelector } from '@/store';
 import IdeaCard from '@apps/waypoint/components/IdeaCard';
-import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import SectionHeader from '@/components/SectionHeader';
 import { IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
 import { filterIdeasByType, selectSortedIdeas } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TripSpace } from '@apps/waypoint/types';
