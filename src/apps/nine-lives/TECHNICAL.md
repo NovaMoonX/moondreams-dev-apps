@@ -360,6 +360,10 @@ interface LitterBox {
   householdId: string;
   name: string;
   location: string | null;
+  fillDepth: number | null; // how deep to fill a fresh box; null = no depth target (boxes created before this existed lack the key and read as 3 in)
+  fillDepthUnit: 'in' | 'cm';
+  fillWeight: number | null; // what the box should weigh once filled; null = no weight target
+  fillWeightUnit: 'lb' | 'kg';
   isActive: boolean; // false once retired (e.g. after switching litter); history is kept, but it's hidden from new weigh-ins
   reminderIds: string[]; // pending "litter change coming up" reminder, recomputed from the box's latest full change whenever a litter entry affecting it changes
   createdBy: string;
@@ -409,13 +413,20 @@ interface LitterEntry {
   weightUnit: 'lb' | 'kg';
   refillWeight: number | null; // weight after adding litter this check; null if nothing was added
   isFullChange: boolean; // only meaningful when refillWeight is set: true if the box was fully emptied first
-  loggedAt: number;
+  depthBefore: number | null; // optional litter depth measured before / after adding litter, in depthUnit
+  depthAfter: number | null;
+  depthUnit: 'in' | 'cm';
+  loggedAt: number; // an instant: the weigh-in's local date plus the time it was logged
   notes: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;
 }
 ```
+
+`weightBefore` may be 0: a brand-new or freshly emptied box has nothing in it yet. Entries and boxes written before depth and fill levels existed lack the new keys; readers default them (`getLitterFillTarget` in `litterCalculators.ts`) and update actions backfill them with their empty values in the same write, and the rules read them with `.get(field, default)`.
+
+The weigh-in form walks through a step-by-step guide (`LITTER_WEIGH_IN_STEPS` in `constants/litter.ts`) that opens automatically the first time on a device (remembered in `localStorage`, skippable) and is always reachable from the form's "How to weigh in" link. A box's fill level feeds that guide and the form's hints. Usage is measured between consecutive weigh-ins, so the usage chart needs at least two measured intervals (three weigh-ins).
 
 This shape covers three real workflows without any of them needing a different entity: a routine check (`refillWeight: null`, e.g. weighing after sifting), topping off without fully emptying the box (`refillWeight` set, `isFullChange: false`), and a full change (`refillWeight` set, `isFullChange: true`).
 

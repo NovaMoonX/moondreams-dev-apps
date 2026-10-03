@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button, DropdownMenu, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
-import { Activity, Pill, Scale, Stethoscope, Syringe } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -14,14 +13,11 @@ import CatAvatarItem from './CatAvatarItem';
 import CatDetailsModal from './CatDetailsModal';
 import CatDetailsPrompt from './CatDetailsPrompt';
 import type { CatQuickAddValues } from './CatQuickAddForm';
-import QuickAddConditionModal from './QuickAddConditionModal';
-import QuickAddPreventiveModal from './QuickAddPreventiveModal';
-import QuickAddSymptomModal from './QuickAddSymptomModal';
-import QuickAddVaccinationModal from './QuickAddVaccinationModal';
-import QuickAddWeightEntryModal from './QuickAddWeightEntryModal';
+import { CatLogModals } from './CatQuickLog';
 import SelectedCatPanel from './SelectedCatPanel';
 import { createCat, deleteCat, updateCat } from '../store/actions/catsActions';
 import { selectCatsByHousehold } from '../store/selectors';
+import { CAT_LOG_OPTIONS, type CatLogKind } from '../constants/catLog';
 import type { Cat } from '../types';
 
 interface CatsSectionProps {
@@ -37,11 +33,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddCatModal, setShowAddCatModal] = useState(false);
-  const [showQuickAddVaccination, setShowQuickAddVaccination] = useState(false);
-  const [showQuickAddPreventive, setShowQuickAddPreventive] = useState(false);
-  const [showQuickAddWeightEntry, setShowQuickAddWeightEntry] = useState(false);
-  const [showQuickAddCondition, setShowQuickAddCondition] = useState(false);
-  const [showQuickAddSymptom, setShowQuickAddSymptom] = useState(false);
+  const [activeLog, setActiveLog] = useState<CatLogKind | null>(null);
   const [pendingDetailsCat, setPendingDetailsCat] = useState<Cat | null>(null);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
@@ -110,34 +102,9 @@ function CatsSection({ householdId }: CatsSectionProps) {
 
   const detailsCat = editingCat ?? pendingDetailsCat;
   const { option } = DropdownMenuFactories;
-  const iconClassName = 'h-4 w-4';
-  const logMenuItems = [
-    option({
-      label: 'Vaccination',
-      value: 'log-vaccination',
-      icon: <Syringe className={iconClassName} />,
-    }),
-    option({
-      label: 'Preventive / med',
-      value: 'log-preventive',
-      icon: <Pill className={iconClassName} />,
-    }),
-    option({
-      label: 'Weight',
-      value: 'log-weight',
-      icon: <Scale className={iconClassName} />,
-    }),
-    option({
-      label: 'Condition',
-      value: 'log-condition',
-      icon: <Stethoscope className={iconClassName} />,
-    }),
-    option({
-      label: 'Symptom',
-      value: 'log-symptom',
-      icon: <Activity className={iconClassName} />,
-    }),
-  ];
+  const logMenuItems = CAT_LOG_OPTIONS.map(({ value, label, icon: Icon }) =>
+    option({ label, value, icon: <Icon className='h-4 w-4' /> }),
+  );
 
   return (
     <section ref={sectionRef} className='rounded-lg border border-border bg-card p-4'>
@@ -146,19 +113,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
         <div className='flex items-center gap-2'>
           <DropdownMenu
             items={logMenuItems}
-            onItemSelect={(value) => {
-              if (value === 'log-vaccination') {
-                setShowQuickAddVaccination(true);
-              } else if (value === 'log-preventive') {
-                setShowQuickAddPreventive(true);
-              } else if (value === 'log-weight') {
-                setShowQuickAddWeightEntry(true);
-              } else if (value === 'log-condition') {
-                setShowQuickAddCondition(true);
-              } else if (value === 'log-symptom') {
-                setShowQuickAddSymptom(true);
-              }
-            }}
+            onItemSelect={(value) => setActiveLog(value as CatLogKind)}
             placement='bottom'
             alignment='end'
             offset={8}
@@ -230,40 +185,7 @@ function CatsSection({ householdId }: CatsSectionProps) {
         }}
       />
 
-      <QuickAddVaccinationModal
-        isOpen={showQuickAddVaccination}
-        householdId={householdId}
-        cats={cats}
-        onClose={() => setShowQuickAddVaccination(false)}
-      />
-
-      <QuickAddPreventiveModal
-        isOpen={showQuickAddPreventive}
-        householdId={householdId}
-        cats={cats}
-        onClose={() => setShowQuickAddPreventive(false)}
-      />
-
-      <QuickAddWeightEntryModal
-        isOpen={showQuickAddWeightEntry}
-        householdId={householdId}
-        cats={cats}
-        onClose={() => setShowQuickAddWeightEntry(false)}
-      />
-
-      <QuickAddConditionModal
-        isOpen={showQuickAddCondition}
-        householdId={householdId}
-        cats={cats}
-        onClose={() => setShowQuickAddCondition(false)}
-      />
-
-      <QuickAddSymptomModal
-        isOpen={showQuickAddSymptom}
-        householdId={householdId}
-        cats={cats}
-        onClose={() => setShowQuickAddSymptom(false)}
-      />
+      <CatLogModals householdId={householdId} cats={cats} activeLog={activeLog} onClose={() => setActiveLog(null)} />
     </section>
   );
 }

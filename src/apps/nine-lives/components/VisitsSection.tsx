@@ -66,6 +66,12 @@ function VisitsSection({ householdId }: VisitsSectionProps) {
     }
   }
 
+  if (focusRequest?.kind === 'visit-new' && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
+    setSelectedVisit(null);
+    setModalMode('create');
+  }
+
   const closeModal = () => {
     setModalMode(null);
     setSelectedVisit(null);

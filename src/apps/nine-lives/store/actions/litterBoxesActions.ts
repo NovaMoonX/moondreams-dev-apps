@@ -3,6 +3,10 @@ import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestor
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
+import {
+  DEFAULT_LITTER_FILL_DEPTH,
+  DEFAULT_LITTER_FILL_DEPTH_UNIT,
+} from '@apps/nine-lives/constants/litter';
 import type { LitterBox, LitterEntry } from '@apps/nine-lives/types';
 
 import {
@@ -14,6 +18,17 @@ import { getLatestFullChangeByBox, LITTER_OVERDUE_DAYS } from '../../utils/atten
 import { cancelEntityReminders, ONE_DAY_MS, scheduleEntityReminders } from '../../utils/reminders';
 
 const LITTER_REMINDER_LEAD_DAYS = 2;
+
+function getMissingFillFields(box: LitterBox): Partial<LitterBox> {
+  const defaults: Pick<LitterBox, 'fillDepth' | 'fillDepthUnit' | 'fillWeight' | 'fillWeightUnit'> = {
+    fillDepth: DEFAULT_LITTER_FILL_DEPTH,
+    fillDepthUnit: DEFAULT_LITTER_FILL_DEPTH_UNIT,
+    fillWeight: null,
+    fillWeightUnit: 'lb',
+  };
+
+  return Object.fromEntries(Object.entries(defaults).filter(([key]) => !(key in box)));
+}
 
 const getLitterBoxDocRef = (householdId: string, litterBoxId: string) =>
   doc(db, 'apps', 'nine-lives', 'households', householdId, 'litterBoxes', litterBoxId);
@@ -85,6 +100,10 @@ export const createLitterBox = createAsyncThunk<
       householdId,
       name: trimmedName,
       location: litterBox.location?.trim() || null,
+      fillDepth: litterBox.fillDepth === undefined ? DEFAULT_LITTER_FILL_DEPTH : litterBox.fillDepth,
+      fillDepthUnit: litterBox.fillDepthUnit ?? DEFAULT_LITTER_FILL_DEPTH_UNIT,
+      fillWeight: litterBox.fillWeight ?? null,
+      fillWeightUnit: litterBox.fillWeightUnit ?? 'lb',
       isActive: litterBox.isActive ?? true,
       reminderIds: [],
       createdBy: uid,
@@ -127,6 +146,7 @@ export const updateLitterBox = createAsyncThunk<
 
     const nextLitterBox: LitterBox = {
       ...current,
+      ...getMissingFillFields(current),
       ...sanitizedChanges,
       id: litterBoxId,
       householdId,
@@ -142,6 +162,7 @@ export const updateLitterBox = createAsyncThunk<
 
     try {
       await updateDoc(getLitterBoxDocRef(householdId, litterBoxId), {
+        ...getMissingFillFields(current),
         ...sanitizedChanges,
         reminderIds: nextLitterBox.reminderIds,
         lastEditedAt: nextLitterBox.lastEditedAt,

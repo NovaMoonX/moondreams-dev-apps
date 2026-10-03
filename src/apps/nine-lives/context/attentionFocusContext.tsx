@@ -2,6 +2,8 @@ import { createContext, useContext } from 'react';
 
 export type AttentionFocusRequest =
   | { kind: 'visit-complete'; requestedAt: number; visitId: string }
+  | { kind: 'visit-new'; requestedAt: number }
+  | { kind: 'expense-new'; requestedAt: number }
   | { kind: 'litter-log'; requestedAt: number; litterBoxId: string }
   | { kind: 'vaccination-log-dose'; requestedAt: number; catId: string; vaccinationId: string }
   | { kind: 'preventive-log-dose'; requestedAt: number; catId: string; preventiveId: string };

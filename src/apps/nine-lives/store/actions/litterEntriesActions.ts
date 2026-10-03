@@ -34,6 +34,16 @@ function normalizeLitterEntryInput(value: Partial<LitterEntry>): Partial<LitterE
   return next;
 }
 
+function getMissingDepthFields(entry: LitterEntry): Partial<LitterEntry> {
+  const defaults: Pick<LitterEntry, 'depthBefore' | 'depthAfter' | 'depthUnit'> = {
+    depthBefore: null,
+    depthAfter: null,
+    depthUnit: 'in',
+  };
+
+  return Object.fromEntries(Object.entries(defaults).filter(([key]) => !(key in entry)));
+}
+
 const getLitterEntryDocRef = (householdId: string, entryId: string) =>
   doc(
     db,
@@ -81,6 +91,9 @@ export const createLitterEntry = createAsyncThunk<
       weightUnit: litterEntry.weightUnit,
       refillWeight: normalizedEntry.refillWeight == null ? null : Number(normalizedEntry.refillWeight),
       isFullChange: normalizedEntry.isFullChange ?? false,
+      depthBefore: normalizedEntry.depthBefore ?? null,
+      depthAfter: normalizedEntry.depthAfter ?? null,
+      depthUnit: normalizedEntry.depthUnit ?? 'in',
       loggedAt: litterEntry.loggedAt,
       notes: normalizedEntry.notes ?? null,
       createdBy: uid,
@@ -128,6 +141,7 @@ export const updateLitterEntry = createAsyncThunk<
     const sanitizedChanges = normalizeLitterEntryInput(changes);
     const nextEntry: LitterEntry = {
       ...current,
+      ...getMissingDepthFields(current),
       ...sanitizedChanges,
       id: entryId,
       householdId,
@@ -151,6 +165,7 @@ export const updateLitterEntry = createAsyncThunk<
 
     try {
       await updateDoc(getLitterEntryDocRef(householdId, entryId), {
+        ...getMissingDepthFields(current),
         ...sanitizedChanges,
         weightBefore: nextEntry.weightBefore,
         refillWeight: nextEntry.refillWeight,
