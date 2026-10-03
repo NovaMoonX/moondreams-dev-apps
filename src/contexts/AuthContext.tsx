@@ -87,7 +87,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             uid: firebaseUser.uid,
             email: firebaseUser.email ?? '',
             displayName: firebaseUser.displayName ?? firebaseUser.email ?? '',
-            photoURL: firebaseUser.photoURL ?? '',
+            photoURL: getProviderPhotoURL(firebaseUser) ?? '',
             isAdmin: isAdminUser,
           },
           { merge: true },
@@ -240,7 +240,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       await updateProfile(currentUser, { photoURL: nextPhotoURL ?? '' });
       await updateDoc(doc(db, 'users', currentUser.uid), {
-        photoURL: nextPhotoURL ?? '',
+        customPhotoURL: photoURL,
       });
 
       dispatch(

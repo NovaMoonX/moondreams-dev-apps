@@ -17,6 +17,10 @@ export type UserInfoMapResult = {
   users: UserInfo[];
 };
 
+function getStringField(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 function normalizeUserInfo(uid: string, value: unknown): UserInfo {
   const data =
     value && typeof value === 'object'
@@ -28,7 +32,8 @@ function normalizeUserInfo(uid: string, value: unknown): UserInfo {
     email: typeof data?.email === 'string' ? data.email : undefined,
     displayName:
       typeof data?.displayName === 'string' ? data.displayName : undefined,
-    photoURL: typeof data?.photoURL === 'string' ? data.photoURL : undefined,
+    photoURL:
+      getStringField(data?.customPhotoURL) ?? getStringField(data?.photoURL),
     isAdmin: data?.isAdmin === true,
   };
 }

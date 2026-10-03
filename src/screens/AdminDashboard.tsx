@@ -73,7 +73,7 @@ function AppConfigEditor({
           return {
             key: profile.uid || value,
             displayName: profile.displayName ?? profile.email ?? value,
-            photoURL: profile.photoURL,
+            photoURL: profile.customPhotoURL || profile.photoURL,
             email: profile.email ?? value,
           };
         })
