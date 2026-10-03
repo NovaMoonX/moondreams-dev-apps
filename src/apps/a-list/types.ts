@@ -18,3 +18,24 @@ export interface MembershipProfile {
 }
 
 export type AListTab = 'dashboard' | 'calendar' | 'watchlist';
+
+export interface MovieSnapshot {
+  title: string;
+  /** Date-only (UTC midnight): the US theatrical release date; null if unknown. */
+  releaseDate: number | null;
+  /** https URL from the provider; null for a manually added movie or when the provider has none. */
+  posterUrl: string | null;
+  runtimeMinutes: number | null;
+  /** "PG-13", "R", …; null if unrated or unknown. */
+  contentRating: string | null;
+}
+
+export interface MovieSearchResult {
+  /** Provider-namespaced id, e.g. "imdb-tt0133093". */
+  movieKey: string;
+  title: string;
+  year: number | null;
+  posterUrl: string | null;
+}
+
+export type AListOverlay = { kind: 'add'; destination: 'watchlist' };

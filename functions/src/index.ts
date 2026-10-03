@@ -1,3 +1,5 @@
+export { getMovie } from './apps/a-list/getMovie.js';
+export { searchMovies } from './apps/a-list/searchMovies.js';
 export { triggerBoxAction } from './apps/worth-the-wait/triggerBoxAction.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { rescheduleTripReminders } from './apps/waypoint/rescheduleTripReminders.js';

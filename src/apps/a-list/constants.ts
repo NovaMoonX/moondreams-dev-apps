@@ -22,3 +22,6 @@ export const MAX_TAX_RATE = 0.25;
 export const MAX_AMOUNT_CENTS = 1_000_000;
 export const MAX_WEEKLY_GOAL = 21;
 export const MAX_MONTHLY_GOAL = 93;
+
+export const MOVIE_SEARCH_MIN_CHARS = 2;
+export const MOVIE_DETAILS_STALE_MS = 24 * 60 * 60 * 1000;

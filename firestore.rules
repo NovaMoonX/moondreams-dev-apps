@@ -134,6 +134,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Written and read only by the movie-lookup Cloud Functions (admin SDK), so no client
+    // can read another member's usage counters or poison the shared cache.
+    match /apps/a-list/searchCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/a-list/movieCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/a-list/lookupUsage/{key} {
+      allow read, write: if false;
+    }
+
     // --- App: nine-lives ---
 
     match /apps/nine-lives {
