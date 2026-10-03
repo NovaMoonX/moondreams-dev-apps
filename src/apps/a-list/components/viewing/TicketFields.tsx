@@ -5,7 +5,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
+import MoneyInput from '@/components/MoneyInput';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import TaxChips from '@apps/a-list/components/viewing/TaxChips';
 import { AMC_FORMAT_LABELS, AMC_FORMATS } from '@apps/a-list/constants';

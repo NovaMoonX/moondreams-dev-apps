@@ -8,6 +8,8 @@
 - **No loose `let` variables assigned across `if`/`else` branches, and no `for` loops that build up a result. Wrap the branching in a small function that returns the value (early returns), and build collections with `.reduce`/`.map`/`.filter`/`Object.fromEntries`. Keep related logic colocated and compact — see "Functions over loose variables" under Coding Styles.**
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check Dreamer UI first before building custom UI.
+- **Keep the look playful: rounded shapes, pills over radios/tab strips, meaningful emoji, warm copy. Mini-app-specific rules live in `.github/instructions/<app>.instructions.md` (mirrored in `.claude/rules/<app>.md`).**
+- **No "Back home" link inside a mini-app's page; Home is in the header (icon on sm+, avatar menu on phones). Only `AppEntryFallback` says "Back home".**
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
 - **Never call `setState` synchronously inside a `useEffect` body or during render to mirror props/derive values — see "React and state patterns" below.**
 - Always use the project import aliases instead of relative paths when available.

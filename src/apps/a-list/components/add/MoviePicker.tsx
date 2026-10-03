@@ -93,9 +93,9 @@ function MoviePicker({
         type='button'
         variant='tertiary'
         onClick={onClick}
-        className='h-auto w-full justify-start gap-3 rounded-none px-0 py-2 text-left'
+        className='text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left'
       >
-        <span className='h-14 w-10 shrink-0 overflow-hidden rounded'>
+        <span className='h-14 w-10 shrink-0 overflow-hidden rounded-lg shadow-sm'>
           <PosterCover title={title} posterUrl={posterUrl} compact />
         </span>
         <span className='min-w-0'>
@@ -115,6 +115,7 @@ function MoviePicker({
       <Input
         type='search'
         variant='outline'
+        rounded='full'
         placeholder='Search movies or your watchlist'
         aria-label='Search movies'
         autoFocus
@@ -126,7 +127,7 @@ function MoviePicker({
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             On your watchlist
           </h3>
-          <ul className='divide-border divide-y'>
+          <ul className='space-y-0.5'>
             {watchlistMatches.map((item) =>
               renderRow(
                 item.movieKey,
@@ -154,7 +155,7 @@ function MoviePicker({
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             From search
           </h3>
-          <ul className='divide-border divide-y'>
+          <ul className='space-y-0.5'>
             {results.map((movie) =>
               renderRow(
                 movie.movieKey,
@@ -176,6 +177,7 @@ function MoviePicker({
         type='button'
         variant={isSearchResting ? 'primary' : 'link'}
         size='sm'
+        rounded='full'
         className={isSearchResting ? undefined : 'px-0'}
         onClick={onAddByTitle}
       >

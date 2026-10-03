@@ -6,7 +6,7 @@ The shared rules (imports/aliases, Firestore data contracts, listeners, TanStack
 
 @.github/copilot-instructions.md
 
-This file adds the norms specific to how Claude works in this repo, plus the review checklist that `.claude/skills/finish-feature-pr` runs. When a rule appears in both places, `copilot-instructions.md` is the source of truth and this file only points at it.
+Per-mini-app rules live in `.github/instructions/<app>.instructions.md` (Copilot, `applyTo`) with an identical `.claude/rules/<app>.md` (Claude, `paths`); read the one for the app you are touching. This file adds the norms specific to how Claude works in this repo, plus the review checklist that `.claude/skills/finish-feature-pr` runs. When a rule appears in both places, `copilot-instructions.md` is the source of truth and this file only points at it.
 
 ## Code style
 
@@ -40,6 +40,8 @@ This file adds the norms specific to how Claude works in this repo, plus the rev
 
 How Waypoint's phone-first redesign works; new features follow it. Design the phone screen first, then widen.
 
+- **Playful by default.** Rounded shapes, pills over radios and tab strips, an emoji where it carries meaning, warm copy. A mini-app may theme itself further (A-List's AMC red lives in its own `a-list.css`).
+- **No "Back home" in a mini-app's page.** Home is the header's home icon (sm and up) or the avatar menu's "Home" (phones), shown whenever the route isn't `/`. Only a mini-app's landing page (`AppEntryFallback`) says "Back home".
 - **Layout switches.** Swap components with `useMediaQuery().isBelow('sm')`; pure reflow uses `sm:` classes.
 - **Phone shell.** A trip's bottom nav is only Overview / Timeline / Expenses (`TripBottomNav`). Every other section is a nested screen reached *from Overview* by an entry point (a count pill in `TripEntryPoints`, or a chevron row like `StaysEntry`) — never a new bottom-nav slot. The nav keeps Overview highlighted (`matches`), the header chevron on every screen but Overview reads "Back to Overview" (only Overview's goes to My Trips), and the id goes in `TRIP_SECTION_TABS` so `?tab=` works. Desktop shows the same section as a `TabsList` tab.
 - **Overview is the phase-aware hub.** Show what needs action *now* (pre-trip: ideas, checklist, album; live: Active Now / Up Next / Today). One emphasized surface at a time (Active Now's emerald card is the reference); everything else is a quiet row.

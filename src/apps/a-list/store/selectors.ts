@@ -143,6 +143,21 @@ export const selectSavingsSummary = createSelector(
   },
 );
 
+/** Seen viewings split by whether a ticket is on record, newest first: what the dashboard's ticket lists read. */
+export const selectSeenTicketGroups = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const seen = viewings
+      .filter((viewing) => viewing.status === 'SEEN')
+      .sort((left, right) => right.showtimeAt - left.showtimeAt);
+    const result = {
+      paid: seen.filter((viewing) => viewing.ticket),
+      unpriced: seen.filter((viewing) => !viewing.ticket),
+    };
+    return result;
+  },
+);
+
 /** Planned showings that have ended and still need an answer, oldest first. */
 export const selectPendingSeenPrompts = createSelector(
   [selectViewingItems, (_state: RootState, now: number) => now],

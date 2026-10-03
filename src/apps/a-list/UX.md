@@ -475,7 +475,7 @@ block-beta
   style O1 fill:transparent,stroke:#888888,stroke-width:1px;
   style O2 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Six tabs sit right under the header, in this order: Opening, All, Must See, Want to See, If I Have Time, Seen. Opening is the default and the watchlist's one emphasized surface: its label carries an accent and a count whenever something opens in the next seven days. It lists only unseen movies releasing between today and a week out, soonest first, with "in N days" on each row. With nothing opening it shows one muted line and a link to All. On a phone the strip scrolls sideways with the full names.*
+*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows everything, unseen first; each pill narrows the list (priorities combine with "or", Opening and Seen with "and"). Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
 
 **Watchlist — All**
 ```mermaid
@@ -507,7 +507,7 @@ block-beta
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
   style R4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The three priority tabs list only unseen movies of that priority; Seen lists the ones you have; All shows everything — unseen first, by priority and then release date, seen ones last. A movie opening this week also appears in All and in its priority tab. Each row shows release date, preferred format, a priority badge, a Seen check once watched, and the next planned date — or the latest watched date, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
+*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and the latest watched date for seen movies, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
 
 **Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above)
 ```mermaid
@@ -578,9 +578,9 @@ block-beta
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
 | GoalChip | Calendar | weekly or monthly goal: met / not yet |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
-| AddDrawer | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details `Drawer` for either destination; past-movies mode makes "Add + another" the primary action and keeps a running count |
-| ViewingRow | day panel | poster thumb, title, time, format badge, stars, price, state |
-| ViewingDrawer | day panel | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
+| AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
+| ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |
+| ViewingDrawer | day drawer (swaps in place from the day's list) | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
 | SeenPrompt | auto, after a showtime | `Drawer` with stars plus Seen it / Didn't go / Later; queues one at a time |
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |

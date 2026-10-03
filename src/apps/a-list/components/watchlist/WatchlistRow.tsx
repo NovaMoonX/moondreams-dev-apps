@@ -1,65 +1,56 @@
 import { formatDate, formatDateUTC } from '@/utils/formatUtils';
+import DateChip from '@apps/a-list/components/shared/DateChip';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import PriorityBadge from '@apps/a-list/components/shared/PriorityBadge';
+import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 interface WatchlistRowProps {
   row: WatchlistRowData;
   /** The viewer's local today as UTC midnight, the same kind of value as a release date. */
   todayDay: number;
-  /** Set on the Opening tab: days until the release. */
+  /** Set when the Opening filter is on: days until the release. */
   daysUntil?: number;
 }
 
 function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
-  const { item, isSeen, seenCount, nextPlannedAt, lastWatchedAt } = row;
+  const { item, seenCount, nextPlannedAt, lastWatchedAt } = row;
   const { movie } = item;
+  const hasPriorityBadge = item.priority !== 'IF_I_HAVE_TIME';
 
-  const getReleaseLabel = () => {
-    if (movie.releaseDate === null) return 'Release date not announced';
-    if (daysUntil !== undefined) {
-      const when =
-        daysUntil === 0
-          ? 'today'
-          : daysUntil === 1
-            ? 'tomorrow'
-            : `in ${daysUntil} days`;
-      return `Opens ${formatDateUTC(movie.releaseDate)} · ${when}`;
-    }
-    if (movie.releaseDate >= todayDay)
-      return `Opens ${formatDateUTC(movie.releaseDate)}`;
-    return `Released ${formatDateUTC(movie.releaseDate)}`;
+  const getReleaseText = () => {
+    if (movie.releaseDate === null || daysUntil === undefined)
+      return getReleaseLabel(movie.releaseDate, todayDay);
+    const when =
+      daysUntil === 0
+        ? 'today'
+        : daysUntil === 1
+          ? 'tomorrow'
+          : `in ${daysUntil} days`;
+    return `Opens ${formatDateUTC(movie.releaseDate)} · ${when}`;
   };
 
-  const getActivityLine = () => {
-    if (nextPlannedAt !== null)
-      return `📅 Planned ${formatDate(nextPlannedAt)}`;
-    if (lastWatchedAt !== null) {
-      return `✓ Seen ${formatDate(lastWatchedAt)}${seenCount > 1 ? ` · ×${seenCount}` : ''}`;
-    }
-    return null;
-  };
-
-  const activityLine = getActivityLine();
+  const activityLine =
+    lastWatchedAt === null
+      ? null
+      : `🍿 Seen ${formatDate(lastWatchedAt)}${seenCount > 1 ? ` · ×${seenCount}` : ''}`;
 
   return (
-    <div className='flex w-full items-center gap-3 py-2.5'>
-      <span className='h-16 w-11 shrink-0 overflow-hidden rounded'>
-        <PosterCover title={movie.title} posterUrl={movie.posterUrl} compact />
+    <div className='border-border bg-card flex w-full items-stretch gap-3 rounded-2xl border p-2.5 text-left'>
+      <span className='relative min-h-24 w-16 shrink-0 self-stretch'>
+        <span className='absolute inset-0 overflow-hidden rounded-xl shadow-sm'>
+          <PosterCover
+            title={movie.title}
+            posterUrl={movie.posterUrl}
+            compact
+          />
+        </span>
       </span>
-      <div className='min-w-0 flex-1 space-y-1'>
-        <p className='truncate font-medium'>
-          {isSeen && (
-            <span className='text-success mr-1' aria-label='Seen'>
-              ✓
-            </span>
-          )}
-          {movie.title}
-        </p>
-        <p className='text-muted-foreground text-xs'>{getReleaseLabel()}</p>
+      <div className='min-w-0 flex-1 space-y-1 py-0.5'>
+        <p className='truncate font-medium'>{movie.title}</p>
+        <p className='text-muted-foreground text-xs'>{getReleaseText()}</p>
         <div className='flex flex-wrap items-center gap-1.5'>
-          <PriorityBadge priority={item.priority} />
           {item.preferredFormat === null ? (
             <span className='text-muted-foreground text-xs'>
               No format preference
@@ -72,6 +63,20 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
           <p className='text-muted-foreground text-xs'>{activityLine}</p>
         )}
       </div>
+      {(hasPriorityBadge || nextPlannedAt !== null) && (
+        <div className='flex shrink-0 flex-col items-end justify-between gap-2'>
+          {hasPriorityBadge ? (
+            <PriorityBadge priority={item.priority} />
+          ) : (
+            <span />
+          )}
+          {nextPlannedAt !== null && (
+            <span aria-label={`Planned ${formatDate(nextPlannedAt)}`}>
+              <DateChip timestamp={nextPlannedAt} />
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

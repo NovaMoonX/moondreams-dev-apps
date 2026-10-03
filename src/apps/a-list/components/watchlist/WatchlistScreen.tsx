@@ -9,80 +9,90 @@ import {
   fromDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
+import WatchlistFilters from '@apps/a-list/components/watchlist/WatchlistFilters';
 import WatchlistRow from '@apps/a-list/components/watchlist/WatchlistRow';
-import WatchlistTabs from '@apps/a-list/components/watchlist/WatchlistTabs';
 import { WATCH_PRIORITIES } from '@apps/a-list/constants';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectOpeningRows,
   selectWatchlistRows,
 } from '@apps/a-list/store/selectors';
-import type { WatchlistTab } from '@apps/a-list/types';
+import type { WatchlistFilter } from '@apps/a-list/types';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
-
-const byReleaseDate = (left: WatchlistRowData, right: WatchlistRowData) =>
-  (left.item.movie.releaseDate ?? Number.POSITIVE_INFINITY) -
-  (right.item.movie.releaseDate ?? Number.POSITIVE_INFINITY);
 
 function WatchlistScreen() {
   const { openOverlay } = useAListOverlay();
   const now = useNow();
   const rows = useAppSelector((state) => selectWatchlistRows(state, now));
   const openingRows = useAppSelector((state) => selectOpeningRows(state, now));
-  const [tab, setTab] = useState<WatchlistTab>('opening');
+  const [filters, setFilters] = useState<WatchlistFilter[]>([]);
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
-  // Rows arrive in priority order; each tab filters (and, for some, re-sorts) them.
-  const getTabRows = (): WatchlistRowData[] => {
-    if (tab === 'all') {
-      return [
-        ...rows.filter((row) => !row.isSeen),
-        ...rows.filter((row) => row.isSeen),
-      ];
-    }
-    if (tab === 'seen') {
-      return rows
-        .filter((row) => row.isSeen)
-        .sort(
-          (left, right) =>
-            (right.lastWatchedAt ?? 0) - (left.lastWatchedAt ?? 0),
-        );
-    }
-    if (WATCH_PRIORITIES.includes(tab as (typeof WATCH_PRIORITIES)[number])) {
-      return rows
-        .filter((row) => !row.isSeen && row.item.priority === tab)
-        .sort(byReleaseDate);
-    }
-    return openingRows;
-  };
+  const toggleFilter = (filter: WatchlistFilter) =>
+    setFilters((current) =>
+      current.includes(filter)
+        ? current.filter((candidate) => candidate !== filter)
+        : [...current, filter],
+    );
 
-  const tabRows = getTabRows();
   const daysByMovie = Object.fromEntries(
     openingRows.map((row) => [row.item.movieKey, row.daysUntil]),
   );
+
+  // Rows arrive in priority order. No pills means everything, unseen first; each pill narrows it.
+  const getVisibleRows = (): WatchlistRowData[] => {
+    const priorities = filters.filter((filter) =>
+      WATCH_PRIORITIES.includes(filter as (typeof WATCH_PRIORITIES)[number]),
+    );
+    const isOpeningOn = filters.includes('opening');
+    const isSeenOn = filters.includes('seen');
+    const matches = rows.filter(
+      (row) =>
+        (!isOpeningOn || row.item.movieKey in daysByMovie) &&
+        (!isSeenOn || row.isSeen) &&
+        (priorities.length === 0 ||
+          (priorities as string[]).includes(row.item.priority)),
+    );
+
+    if (isOpeningOn) {
+      return [...matches].sort(
+        (left, right) =>
+          daysByMovie[left.item.movieKey] - daysByMovie[right.item.movieKey],
+      );
+    }
+    if (isSeenOn) {
+      return [...matches].sort(
+        (left, right) => (right.lastWatchedAt ?? 0) - (left.lastWatchedAt ?? 0),
+      );
+    }
+    return [
+      ...matches.filter((row) => !row.isSeen),
+      ...matches.filter((row) => row.isSeen),
+    ];
+  };
+
+  const visibleRows = getVisibleRows();
 
   const getEmptyState = () => {
     if (rows.length === 0)
       return (
         <p>Nothing on your list yet. Add the movies you can't wait to see.</p>
       );
-    if (tab === 'opening') {
+    if (filters.length > 0)
       return (
         <p>
-          Nothing opens in the next week.{' '}
+          Nothing matches those filters.{' '}
           <Button
             type='button'
             variant='link'
             size='sm'
             className='h-auto p-0'
-            onClick={() => setTab('all')}
+            onClick={() => setFilters([])}
           >
-            See everything
+            Clear filters
           </Button>
         </p>
       );
-    }
-    if (tab === 'seen') return <p>Movies you've watched will land here.</p>;
     return <p>Nothing here right now.</p>;
   };
 
@@ -94,6 +104,7 @@ function WatchlistScreen() {
           <Button
             type='button'
             size='sm'
+            rounded='full'
             onClick={() =>
               openOverlay({ kind: 'add', destination: 'watchlist' })
             }
@@ -102,22 +113,22 @@ function WatchlistScreen() {
           </Button>
         }
       />
-      <WatchlistTabs
-        value={tab}
+      <WatchlistFilters
+        value={filters}
         openingCount={openingRows.length}
-        onChange={setTab}
+        onToggle={toggleFilter}
       />
-      {tabRows.length === 0 ? (
+      {visibleRows.length === 0 ? (
         <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>
       ) : (
-        <ul className='divide-border divide-y'>
-          {tabRows.map((row) => (
+        <ul className='space-y-3'>
+          {visibleRows.map((row) => (
             <li key={row.item.movieKey}>
               <Button
                 type='button'
                 variant='tertiary'
                 aria-label={`Open ${row.item.movie.title}`}
-                className='h-auto w-full justify-start rounded-none p-0 text-left font-normal'
+                className='text-foreground! h-auto w-full justify-start rounded-2xl p-0 text-left font-normal'
                 onClick={() =>
                   openOverlay({
                     kind: 'watchlistItem',
@@ -129,7 +140,7 @@ function WatchlistScreen() {
                   row={row}
                   todayDay={todayDay}
                   daysUntil={
-                    tab === 'opening'
+                    filters.includes('opening')
                       ? daysByMovie[row.item.movieKey]
                       : undefined
                   }

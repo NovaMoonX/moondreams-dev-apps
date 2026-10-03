@@ -1,11 +1,6 @@
 import { useState } from 'react';
 
-import {
-  Button,
-  Drawer,
-  Form,
-  FormFactories,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { CalendarPlus, ChevronLeft, Pencil, Trash2 } from 'lucide-react';
 
@@ -19,51 +14,22 @@ import {
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { AddFlow } from '@apps/a-list/components/add/AddDrawer';
-import WatchlistRow from '@apps/a-list/components/watchlist/WatchlistRow';
-import {
-  AMC_FORMAT_LABELS,
-  AMC_FORMATS,
-  WATCH_PRIORITIES,
-  WATCH_PRIORITY_LABELS,
-} from '@apps/a-list/constants';
+import { formatDate, formatDuration } from '@/utils/formatUtils';
+import { AddFlow } from '@apps/a-list/components/add/AddFlow';
+import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
+import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import PriorityBadge from '@apps/a-list/components/shared/PriorityBadge';
+import WatchlistDetailsFields, {
+  type WatchlistDetailsValues,
+} from '@apps/a-list/components/watchlist/WatchlistDetailsFields';
 import {
   removeWatchlistItem,
   updateWatchlistItem,
 } from '@apps/a-list/store/actions/watchlistActions';
 import { selectWatchlistRows } from '@apps/a-list/store/selectors';
-import type { AmcFormat, WatchPriority } from '@apps/a-list/types';
+import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 
 type DrawerView = 'details' | 'addToCalendar' | 'edit';
-
-interface EditValues {
-  priority: WatchPriority;
-  preferredFormat: AmcFormat | 'NONE';
-}
-
-const { radio, select } = FormFactories;
-
-const EDIT_FIELDS = [
-  radio({
-    name: 'priority',
-    label: 'Priority',
-    options: WATCH_PRIORITIES.map((priority) => ({
-      value: priority,
-      label: WATCH_PRIORITY_LABELS[priority],
-    })),
-  }),
-  select({
-    name: 'preferredFormat',
-    label: 'Preferred format',
-    options: [
-      { value: 'NONE', label: 'No preference' },
-      ...AMC_FORMATS.map((format) => ({
-        value: format,
-        label: AMC_FORMAT_LABELS[format],
-      })),
-    ],
-  }),
-];
 
 interface WatchlistItemDrawerProps {
   movieKey: string;
@@ -83,7 +49,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       ) ?? null,
   );
   const [view, setView] = useState<DrawerView>('details');
-  const [editValues, setEditValues] = useState<EditValues | null>(null);
+  const [editValues, setEditValues] = useState<WatchlistDetailsValues | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +81,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       : toDateInputValue(item.movie.releaseDate);
   const startDate =
     releaseKey !== null && releaseKey > todayKey ? releaseKey : todayKey;
-  const savedValues: EditValues = {
+  const savedValues: WatchlistDetailsValues = {
     priority: item.priority,
     preferredFormat: item.preferredFormat ?? 'NONE',
   };
@@ -211,20 +177,25 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
           >
             <ChevronLeft className='h-4 w-4' /> Back to movie
           </Button>
-          <p className='font-semibold'>{item.movie.title}</p>
-          <Form
-            id='a-list-edit-watchlist-item'
-            form={EDIT_FIELDS}
-            initialData={draft}
-            columns={1}
-            spacing='normal'
-            onDataChange={(data) => setEditValues(data as EditValues)}
-          />
+          <div className='flex items-center gap-3'>
+            <span className='h-24 w-16 shrink-0 overflow-hidden rounded-xl shadow-md'>
+              <PosterCover
+                title={item.movie.title}
+                posterUrl={item.movie.posterUrl}
+                compact
+              />
+            </span>
+            <p className='text-lg leading-tight font-semibold'>
+              {item.movie.title}
+            </p>
+          </div>
+          <WatchlistDetailsFields values={draft} onChange={setEditValues} />
           <ModalFooterActions
             rightActions={
               <>
                 <Button
                   type='button'
+                  rounded='full'
                   variant='secondary'
                   disabled={isSaving}
                   onClick={() => showView('details')}
@@ -233,6 +204,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
                 </Button>
                 <Button
                   type='button'
+                  rounded='full'
                   loading={isSaving}
                   disabled={!hasChanges || isSaving}
                   onClick={() => void handleSave()}
@@ -246,10 +218,52 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       );
     }
 
+    const facts = [
+      getReleaseLabel(item.movie.releaseDate, todayDay),
+      item.movie.runtimeMinutes === null
+        ? null
+        : formatDuration(item.movie.runtimeMinutes * 60_000),
+      item.movie.contentRating,
+    ].filter(Boolean);
+    const activityLines = [
+      row.nextPlannedAt === null
+        ? null
+        : `📅 Planned for ${formatDate(row.nextPlannedAt)}`,
+      row.lastWatchedAt === null
+        ? null
+        : `🍿 Seen ${formatDate(row.lastWatchedAt)}${row.seenCount > 1 ? ` · ×${row.seenCount}` : ''}`,
+    ].filter(Boolean);
+
     return (
-      <div className='space-y-4'>
-        <WatchlistRow row={row} todayDay={todayDay} />
-        <div className='bg-muted/50 divide-border divide-y rounded-lg'>
+      <div className='space-y-5'>
+        <div className='flex gap-4'>
+          <span className='h-44 w-30 shrink-0 overflow-hidden rounded-2xl shadow-lg'>
+            <PosterCover
+              title={item.movie.title}
+              posterUrl={item.movie.posterUrl}
+            />
+          </span>
+          <div className='min-w-0 flex-1 space-y-2'>
+            <p className='text-xl leading-tight font-semibold'>
+              {item.movie.title}
+            </p>
+            <p className='text-muted-foreground text-sm'>
+              {facts.join(' · ')}
+            </p>
+            <div className='flex flex-wrap items-center gap-1.5'>
+              <PriorityBadge priority={item.priority} />
+              {item.preferredFormat !== null && (
+                <FormatBadge format={item.preferredFormat} />
+              )}
+            </div>
+            {activityLines.map((line) => (
+              <p key={line} className='text-sm'>
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
+        <div className='bg-muted/50 divide-border divide-y overflow-hidden rounded-2xl'>
           <Button
             type='button'
             variant='tertiary'

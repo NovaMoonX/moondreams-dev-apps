@@ -21,7 +21,7 @@ const SPLITS: Record<number, string[]> = {
 
 // Each piece's title-tile text is pulled toward that piece, away from the cut lines.
 const TILE_TEXT: Record<number, string[]> = {
-  1: [''],
+  1: ['items-center justify-center pt-5 text-center'],
   2: [
     'items-start justify-start text-left pt-6 pr-[40%]',
     'items-end justify-end text-right pl-[40%]',
@@ -63,7 +63,7 @@ function PosterSplit({ viewings }: PosterSplitProps) {
             posterUrl={viewing.movie.posterUrl}
             compact
             tileTextClassName={
-              shown.length > 1 ? TILE_TEXT[shown.length]?.[index] : undefined
+              TILE_TEXT[shown.length]?.[index]
             }
           />
         </span>

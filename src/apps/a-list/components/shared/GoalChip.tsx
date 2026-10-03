@@ -13,7 +13,11 @@ function GoalChip({ label, goal, isMet }: GoalChipProps) {
   }
 
   return (
-    <Badge variant={isMet ? 'success' : 'muted'} size='sm'>
+    <Badge
+      variant={isMet ? 'success' : 'muted'}
+      size='sm'
+      className='rounded-full!'
+    >
       🎯 {label}: {isMet ? 'met' : 'not yet'}
     </Badge>
   );

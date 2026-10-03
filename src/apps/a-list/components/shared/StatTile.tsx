@@ -15,22 +15,27 @@ function StatTile({ label, value, icon, detail, className }: StatTileProps) {
   return (
     <div
       className={join(
-        'border-border bg-card rounded-xl border px-3 py-2.5',
+        'border-border bg-card flex items-center gap-3 rounded-2xl border px-3 py-3',
         className,
       )}
     >
-      <div className='flex items-center gap-2'>
-        {icon && (
-          <span className='text-lg' aria-hidden='true'>
-            {icon}
-          </span>
-        )}
-        <span className='text-xl font-semibold tabular-nums'>{value}</span>
-      </div>
-      <p className='text-muted-foreground text-xs'>{label}</p>
-      {detail && (
-        <p className='text-muted-foreground mt-0.5 text-xs'>{detail}</p>
+      {icon && (
+        <span
+          className='bg-secondary text-secondary-foreground grid size-10 shrink-0 place-items-center rounded-full text-xl'
+          aria-hidden='true'
+        >
+          {icon}
+        </span>
       )}
+      <div className='min-w-0'>
+        <p className='text-xl leading-tight font-semibold tabular-nums'>
+          {value}
+        </p>
+        <p className='text-muted-foreground text-xs'>{label}</p>
+        {detail && (
+          <p className='text-muted-foreground mt-0.5 text-xs'>{detail}</p>
+        )}
+      </div>
     </div>
   );
 }

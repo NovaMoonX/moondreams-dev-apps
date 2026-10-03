@@ -7,21 +7,22 @@ interface SetupStepperProps {
 
 function SetupStepper({ step, total }: SetupStepperProps) {
   return (
-    <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wide uppercase'>
-      <span>
-        Step {step + 1} of {total}
-      </span>
-      <span className='flex items-center gap-1' aria-hidden='true'>
-        {Array.from({ length: total }, (_, index) => (
-          <span
-            key={index}
-            className={join(
-              'h-1.5 w-1.5 rounded-full',
-              index <= step ? 'bg-primary' : 'bg-muted-foreground/30',
-            )}
-          />
-        ))}
-      </span>
+    <div
+      className='flex items-center justify-center gap-1.5'
+      role='img'
+      aria-label={`Step ${step + 1} of ${total}`}
+    >
+      {Array.from({ length: total }, (_, index) => (
+        <span
+          key={index}
+          className={join(
+            'h-1.5 rounded-full transition-all',
+            index === step ? 'bg-primary w-6' : 'w-1.5',
+            index < step && 'bg-primary/60',
+            index > step && 'bg-muted-foreground/30',
+          )}
+        />
+      ))}
     </div>
   );
 }

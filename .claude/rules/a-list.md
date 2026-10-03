@@ -1,0 +1,18 @@
+---
+paths:
+  - "src/apps/a-list/**"
+---
+
+# A-List Tracker rules
+
+Applies on top of CLAUDE.md to everything under `src/apps/a-list/`. Keep `.github/instructions/a-list.instructions.md` (the source of truth) identical to this body.
+
+- **Theme: AMC and the theater.** Casual, warm and playful, never corporate or masculine. The palette (AMC red primary, theater-gold accent, rose-tinted neutrals) lives in `a-list.css` as tokens on `html.a-list-theme`, switched on by `useAListTheme()` while the app is mounted so portaled modals and drawers match. Change the look there, not per component, and use semantic tokens (`bg-primary`, `bg-secondary`, `bg-accent`) rather than raw colors.
+- **Round everything.** Inputs are `rounded='full'` (also on `FormFactories` fields), buttons that are pills or CTAs are `rounded='full'`, cards and sheets `rounded-2xl`, badges `rounded-full!`. Options a user toggles or picks among are `Pill`s, never radio buttons or tab strips.
+- **Emoji carry meaning.** Every status, priority, stat and empty state gets its own fitting emoji (`WATCH_PRIORITY_EMOJIS`, `ViewingStatusBadge`); never reuse one emoji across a list. No green check marks for "seen".
+- **Badges are ours.** Use `PriorityBadge`, `ViewingStatusBadge` and `FormatBadge` from `components/shared`, not a stock `Badge` with ad-hoc text.
+- **Subviews, not tall drawers.** A flow that needs search or several steps (adding a movie) is a full-page subview that renders its own back control (`AddSubview`); the app's screens stay mounted underneath. Short lists and details use a `Drawer` that swaps its content in place with a "‹ Back" link (`DayDrawer`); never stack one overlay on another.
+- **No "Back home" in the page.** The app shell gives Home through the avatar menu and the header's home icon. Only the app's landing page (`AppEntryFallback`) says "Back home".
+- **Setup can be dismissed.** Closing the setup modal lands on `AppEntryFallback` (Enter app / Back home), like the other mini-apps.
+- **Money inputs** use the shared `@/components/MoneyInput`, which settles to two decimals on blur. Date-only fields that can't be in the future get `max` set to the viewer's local today.
+- **Pointer vs touch.** Hover-only affordances (the calendar's day peek) are `max-sm:hidden` and never the only way to reach something; touch goes through the day's drawer.
