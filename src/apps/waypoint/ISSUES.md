@@ -1259,7 +1259,7 @@ Pull a weather forecast per day/leg from a weather API.
 2. Render forecast inline on `TimelineSection.tsx`'s day view.
 
 ### Success Criteria
-- [ ] Forecast renders per day without blocking the rest of the Timeline from loading if the API call fails.
+- [x] Forecast renders per day without blocking the rest of the Timeline from loading if the API call fails.
 
 ---
 

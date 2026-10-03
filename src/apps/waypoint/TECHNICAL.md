@@ -333,6 +333,15 @@ interface Rental {
 
 Write permissions match Stays (`canCreateItem` / `canEditExistingItem`, mirrored in `firestore.rules`), and `shiftTripDates` rebases `pickupDayIndex`/`returnDayIndex` like every other dated item. On a live trip Overview shows a card for each pickup and return that falls on today, right after the check-in cards, labelled "Picking up today" / "Returning today" and flipping to "Picked up" / "Returned" once the time passes. Rentals aren't part of the "What's new" notifications yet.
 
+#### Weather
+
+Forecasts come from Open-Meteo (`src/lib/weather/`, keyless, CC BY 4.0 — `WeatherAttribution` credits it wherever weather shows). Nothing is stored in Firestore: `useTripWeather` plans what to fetch from data the trip already has and reads it through TanStack Query (`weatherForecastQueryOptions`, 30 minute `staleTime`, persisted offline).
+
+- **When:** `getWeatherDayIndexes` shows an upcoming trip's days only within the 14-day forecast window, every day of a live trip (elapsed days use the provider's past data), and nothing once the trip is over.
+- **Where:** a day's location is its first non-archived event with coordinates, else a stay covering the day — never a guess from elsewhere on the trip, so a day with neither shows no weather. An event gets its own hourly chip only on a `RELATIVE` trip with coordinates and a start time; its floating `"HH:mm"` matches the provider's zone-local hours directly.
+- **Requests:** places are keyed by coordinates rounded to ~10 km and zone, and each key is one request spanning the dates that need it. A loading or failed request reads as "no weather" and never blocks the Timeline.
+- **UI:** `DayWeather` tops each Timeline day (compact in the day header when "Compact weather" is on, remembered in `localStorage`); on a live trip today also gets `HourlyWeatherStrip`, mirrored on Overview.
+
 #### Enrichment: place search and link previews
 
 Both `TimelineEvent` and `Stay` carry the same three enrichment fields:

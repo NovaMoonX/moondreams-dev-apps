@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   Button,
@@ -17,6 +17,7 @@ import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
+import DayWeather from '@apps/waypoint/components/DayWeather';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
@@ -29,6 +30,7 @@ import EventFormModal, {
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
 import {
   createEvent,
   deleteEvent,
@@ -41,6 +43,8 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
+import { useNow } from '@/hooks/useNow';
+import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
@@ -121,7 +125,10 @@ export function TimelineSection({
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
+  const [minimizeWeather, setMinimizeWeather] = useLocalStoragePreference('waypoint:minimizeWeather', false);
   const stays = useAppSelector(selectStays);
+  const now = useNow(60_000);
+  const weather = useTripWeather(trip, events, stays, now);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
@@ -256,6 +263,7 @@ export function TimelineSection({
         canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
         showAttendees={showAttendees}
+        weather={weather.getEvent(event.id)}
         isStacked={Boolean(event.stackLabel)}
         onStack={(selectedEvent, onSuccess) => {
           setIsStackHeaderOrigin(false);
@@ -317,13 +325,25 @@ export function TimelineSection({
       return renderEventCard(item.event);
     });
 
-  const renderDivider = (label: string) => (
+  const renderDivider = (label: string, trailing?: ReactNode) => (
     <div className='flex items-center gap-3'>
       <div className='border-border flex-1 border-t' />
       <span className='text-muted-foreground text-sm font-medium'>{label}</span>
+      {trailing}
       <div className='border-border flex-1 border-t' />
     </div>
   );
+
+  const renderDayWeather = (dayIndex: number) => {
+    const forecast = weather.getDay(dayIndex);
+    return forecast ? (
+      <DayWeather
+        forecast={forecast}
+        hours={weather.getRemainingHoursToday(dayIndex)}
+        isMinimized={minimizeWeather}
+      />
+    ) : null;
+  };
 
   const renderEvents = (scope: 'all' | 'outside' | number = 'all') => {
     const visibleEvents = attendanceFilteredEvents.filter((event) => {
@@ -362,7 +382,11 @@ export function TimelineSection({
         {groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount).map(
           ({ bucket, items }) => (
             <div key={bucket} className='space-y-3'>
-              {renderDivider(getBucketLabel(bucket, trip.startDate))}
+              {renderDivider(
+                getBucketLabel(bucket, trip.startDate),
+                typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
+              )}
+              {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
               {renderEventItems(items)}
             </div>
           ),
@@ -501,12 +525,28 @@ export function TimelineSection({
               />
               Show archived
             </label>
+            {weather.hasWeather && (
+              <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+                <AppToggle
+                  size='sm'
+                  checked={minimizeWeather}
+                  onCheckedChange={setMinimizeWeather}
+                />
+                Compact weather
+              </label>
+            )}
           </div>
+          {weather.hasWeather && (
+            <div className='mt-2'>
+              <WeatherAttribution />
+            </div>
+          )}
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>
           {Array.from({ length: dayCount }, (_, index) => (
             <TabsContent key={index} value={String(index)} className='pt-4 space-y-2'>
+              {renderDayWeather(index)}
               {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>

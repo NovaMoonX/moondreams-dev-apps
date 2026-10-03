@@ -14,6 +14,7 @@ import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 
+import DayWeather from '@apps/waypoint/components/DayWeather';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { RentalDetailLines } from '@apps/waypoint/components/RentalCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
@@ -23,11 +24,14 @@ import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import NotesViewButton from '@apps/waypoint/components/NotesViewButton';
 import TodayAgenda from '@apps/waypoint/components/TodayAgenda';
+import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
+import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
   getTripStatus,
   selectActiveEvent,
   selectRentals,
+  selectSortedTimelineEvents,
   selectStays,
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
@@ -113,6 +117,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const activeEvent = useAppSelector(selectActiveEvent(trip, now));
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now));
   const stays = useAppSelector(selectStays);
+  const events = useAppSelector(selectSortedTimelineEvents);
+  const weather = useTripWeather(trip, events, stays, now);
   const rentals = useAppSelector(selectRentals);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -122,6 +128,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   }
 
   const todayIndex = getLocalDayIndex(trip.startDate, now);
+  const todayWeather = weather.getDay(todayIndex);
   const hasTomorrow = todayIndex + 1 < getDayCount(trip.startDate, trip.endDate);
   const isCheckInToday = (stay: Stay) =>
     isRelativeTrip(trip)
@@ -201,6 +208,19 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             isSmallScreen={isSmallScreen}
             onOpenDetails={() => openEventDrawer(upNextEvent)}
           />
+        )}
+        {todayWeather && (
+          <section className='space-y-2'>
+            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              Today&apos;s weather
+            </h3>
+            <DayWeather
+              forecast={todayWeather}
+              hours={weather.getRemainingHoursToday(todayIndex)}
+              isMinimized={false}
+            />
+            <WeatherAttribution />
+          </section>
         )}
         {isDoneForToday && (
           <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='banner' />

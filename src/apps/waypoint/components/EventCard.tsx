@@ -6,6 +6,7 @@ import { Archive, ArchiveRestore, Layers } from 'lucide-react';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
+import EventWeatherChip from '@apps/waypoint/components/EventWeatherChip';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -13,6 +14,7 @@ import NotesField from '@apps/waypoint/components/NotesField';
 import EnrichedImage from '@/components/EnrichedImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
+import type { HourForecast } from '@/lib/weather/types';
 import { formatClockTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -47,6 +49,8 @@ interface EventCardProps {
   onEdit: (event: TimelineEvent, onSuccess?: () => void) => void;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
   onToggleArchived: (event: TimelineEvent, onSuccess?: () => void) => void;
+  /** The forecast for the event's hour; `null` when it has no reliable location or time. */
+  weather?: HourForecast | null;
 }
 
 function getQuickField(event: TimelineEvent): string | null {
@@ -76,6 +80,7 @@ export interface EventDetailLinesProps {
   showAttendees?: boolean;
   /** Cards abbreviate the zone ("PDT"); the full details view spells it out. */
   zoneStyle?: ZoneStyle;
+  weather?: HourForecast | null;
   canEdit: boolean;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
@@ -89,6 +94,7 @@ export function EventDetailLines({
   showChangeHistory = true,
   showAttendees = true,
   zoneStyle = 'short',
+  weather = null,
   canEdit,
   onSaveNotes,
 }: EventDetailLinesProps) {
@@ -125,6 +131,7 @@ export function EventDetailLines({
         <span className='text-muted-foreground text-sm'>
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
+        {weather && <EventWeatherChip weather={weather} />}
         {showNotesIndicator && event.notes && (
           <span
             className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
@@ -205,6 +212,7 @@ export function EventCard({
   onEdit,
   onSaveNotes,
   onToggleArchived,
+  weather = null,
 }: EventCardProps) {
   // An archived event is read-only for everyone but an admin, who may only unarchive it.
   const canModify = canEdit && !event.isArchived;
@@ -254,6 +262,7 @@ export function EventCard({
               showNotes={false}
               showNotesIndicator={isSmallScreen}
               showAttendees={showAttendees}
+              weather={weather}
               canEdit={canModify}
               onSaveNotes={onSaveNotes}
             />
@@ -326,6 +335,7 @@ export function EventCard({
             trip={trip}
             event={event}
             zoneStyle='long'
+            weather={weather}
             showTitle={false}
             showNotes
             canEdit={canModify}
