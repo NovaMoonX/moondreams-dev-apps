@@ -266,13 +266,13 @@ The Calendar tab shows a month grid where each day holding a movie is filled by 
 
 ### Possible Approach
 1. **Prove cell sizing first** (the first commit): with Dreamer UI `Calendar`'s `customStyles` and `renderCell`, clear cell padding and border and make cells about 3:4. If the component can't, record the workaround (an absolutely positioned fill inside `renderCell`, for example) and update `UX.md`'s caveat honestly.
-2. `getDayKey(timestamp)` = `toLocalDateInputValue(timestamp)`; `selectViewingsByDay` (a `createSelector`) builds the day map sorted by `showtimeAt`; `PosterCell` keys its date by `getDayKey(date.getTime())` and verifies the cell `Date` is local midnight (convert with `toLocalDateInputValue` + `fromDateInputValue` if not). Until Issue 8 a day with several movies shows its first cover.
+2. `getDayKey(timestamp)` = `toLocalDateInputValue(timestamp)`; `selectViewingsByDay` (a `createSelector`) builds the day map sorted by `showtimeAt`; `PosterCell` keys its date by `getDayKey(date.getTime())` and verifies the cell `Date` is local midnight (if it isn't, key it from the date the component means with the matching getters, e.g. `toDateInputValue` for UTC midnight; never round-trip through `fromDateInputValue` and a local read). Until Issue 8 a day with several movies shows its first cover.
 3. `viewingState.ts`: `computeEndsAt(showtimeAt, runtimeMinutes)` (showtime + previews buffer + runtime, falling back to the default), and the creation rule (`SEEN` when `endsAt <= now`, else `PLANNED`).
 4. `addViewing`: one `runTransaction` that reads the watchlist item, creates it if absent (default priority, no preferred format) and creates the viewing, with `movie` copied from the picked snapshot. `ticket` and `rating` don't exist yet.
 5. The details step: date (defaults to the selected day) and showtime (`fromLocalDateAndTimeInputValues`), in a `Form`; the picker is watchlist-first and shows "↺ Seen once before — this will be a rewatch" using a selector over `SEEN` viewings of the same `movieKey`.
 6. The day panel lists the selected day's movies (poster thumb, title, time, a Seen or Planned state) and a "+ Add" that pre-fills the date. A tapped row opens its drawer in Issue 10; until then it's not interactive.
-7. Rules: the viewings block with the integrity checks from the criteria (`endsAt > showtimeAt`; `SEEN` implies `showtimeAt <= request.time`; `movieKey`, `movie`, `createdAt` immutable). Seed viewings on past and future days. Verify allowed and denied writes on the emulator.
-8. `copilot-instructions.md`: add **a Calendar `renderCell` reads a prebuilt day-keyed map (built once in a `createSelector`); the key is the viewer's local day via `toLocalDateInputValue`, and a date-only value is converted with `toLocalDateInputValue` + `fromDateInputValue` before keying**.
+7. Rules: the viewings block with the integrity checks from the criteria (`endsAt > showtimeAt`; `SEEN` implies `showtimeAt <= request.time`; arriving at `SEEN` needs `endsAt <= request.time`; a stored `SEEN` stays `SEEN`; `movieKey`, `movie`, `createdAt` immutable). Seed viewings on past and future days. Verify allowed and denied writes on the emulator.
+8. `copilot-instructions.md`: add **a Calendar `renderCell` reads a prebuilt day-keyed map (built once in a `createSelector`); the key is the viewer's local day via `toLocalDateInputValue`, and a date-only (UTC-midnight) value is keyed with `toDateInputValue`, never read in local time**.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** a viewing is added from the Calendar's "+ Add" (and from the day panel's "+ Add", pre-filled), from the watchlist or a search; a new movie joins the watchlist.
@@ -400,7 +400,7 @@ Tapping a movie in the day panel opens its drawer: poster, title, date and time,
 "Mark paid" on a viewing swaps its drawer to the Ticket form: itemized (format, price before tax, standard price when the format isn't Standard) or all-in total; the convenience fee you skipped as chips (the fees entered before, plus $0, plus Other); and a tax rate as chips (the rates used on past tickets and the one gauged from your membership bill, the most-used preselected, plus Other). The same fields can be revealed when adding a viewing. The ticket shows on the row and in the drawer.
 
 ### Possible Approach
-1. Add the `ticket` key to `Viewing`. Existing documents lack it: readers use `viewing.ticket ?? null`, the action writes it with a field-scoped `updateDoc`, and the rules read it with `resource.data.get('ticket', null)`. Prove it against a viewing document written without the key.
+1. Add the `ticket` key to `Viewing`. Existing documents lack it: readers use `viewing.ticket ?? null`; every viewing edit action (`recordTicket`, `updateViewing`) writes `ticket` in its field-scoped `updateDoc`, so a legacy document gains the key on its first edit; and the rules validate the incoming value with `request.resource.data.get('ticket', null)` (never the stored `resource.data`). Prove it against a viewing document written without the key.
 2. `utils/tax.ts`: itemized tax (`Math.round(price × rate)`) and the all-in split (`price = round((total − fee) / (1 + rate))`, `tax = total − fee − price`; with no rate, tax is 0). Check `src/utils` first; keep these app-scoped.
 3. `utils/chips.ts`: `selectFeeChips` and `selectTaxRateChips` as in Logic §9, as pure functions behind `createSelector`s.
 4. `TicketForm` (a `Form`): the mode toggle is local state that picks which amount field renders; the standard price field appears only for a premium format; validation per Logic §5; the footer follows the form conventions (Cancel, Save), with a trash icon bottom-left when editing (clearing a ticket sets it back to `null`, behind a destructive confirm). Promote `DeleteIconButton` to central here, as this is its second consumer.
@@ -502,7 +502,7 @@ The Dashboard shows monthly cost with tax (and how many months have been billed 
 The next time the app is open after a planned showing ends, a drawer asks "Did you catch it?" with optional stars and Seen it / Didn't go / Later. Several prompts queue one at a time and wait for any open drawer to close. A "Did you catch it?" chip marks such rows, "Mark seen" appears in the drawer, and stars can be edited later.
 
 ### Possible Approach
-1. Add `rating` (null or 1–5) to `Viewing`; existing documents lack it, so readers default `viewing.rating ?? null`; rules read it with `.get`.
+1. Add `rating` (null or 1–5) to `Viewing`; existing documents lack it, so readers default `viewing.rating ?? null`, every viewing edit action (`updateViewing`, `recordTicket`, `markViewingSeen`) writes `rating` (backfilling `null` when absent), and the rules validate the incoming value with `request.resource.data.get('rating', null)`.
 2. `selectPendingSeenPrompts(state, now)`: `PLANNED` viewings with `endsAt <= now`, oldest first. `SeenPromptHost` (mounted once in the orchestrator) shows the first only when no overlay is open and keeps a session-local set for "Later".
 3. `markViewingSeen` is a field-scoped `updateDoc({ status: 'SEEN', rating, lastEditedAt })`. "Didn't go" reuses `removeViewing` with its destructive confirm.
 4. `StarRating` is custom (Dreamer UI has none), built on Dreamer UI `Button`s; read-only on rows, editable in the prompt and the edit form.
@@ -599,7 +599,7 @@ Tapping a watchlist row opens a drawer. Add to calendar swaps its content to the
 Studios move release dates, and the Opening tab is only as right as the stored one. Once per session, unseen, non-manual watchlist items that haven't released yet are re-checked, and a changed snapshot is written back.
 
 ### Possible Approach
-1. Take unseen, non-manual items whose `releaseDate` is null or not yet past, capped at 10; fetch each through `queryClient.fetchQuery(movieDetailsQueryOptions(key))` (24-hour `staleTime`; the server's 1-day cache for unreleased movies bounds the whole app to one lookup per movie per day).
+1. Take unseen, non-manual items whose `releaseDate` is null or not yet past, capped at 10 and picked by a daily rotation (sorted by `movieKey`, starting at `(days since epoch × 10) mod count`, wrapping) so no eligible movie is starved; fetch each through `queryClient.fetchQuery(movieDetailsQueryOptions(key))` (24-hour `staleTime`; the server's 1-day cache for unreleased movies bounds the whole app to one lookup per movie per day).
 2. When the fresh snapshot differs, write `{ movie, lastEditedAt }` with a field-scoped `updateDoc`. Never touch a viewing's snapshot.
 3. Mount the hook once in the orchestrator; it renders nothing.
 
@@ -815,7 +815,7 @@ A shareable summary card of a month in movies: posters, movies watched, savings,
 A member's monthly cost can change (a price rise). They record when it changed and what it became, and cost incurred and break-even are computed month by month at the price in force, instead of applying today's price to every month.
 
 ### Possible Approach
-1. Add `priceHistory` (a list of `{ effectiveFrom (date-only), monthlyCostCents, monthlyTotalCents, taxRate }`) to the membership. Existing documents lack it: readers treat a missing list as a single entry built from the current cost and the start date; rules read it with `.get`; `updateMembership` backfills it with the empty list.
+1. Add `priceHistory` (a list of `{ effectiveFrom (date-only), monthlyCostCents, monthlyTotalCents, taxRate }`) to the membership. Existing documents lack it: readers treat a missing *or empty* list as a single entry built from the current cost and the start date; rules validate the incoming value with `request.resource.data.get('priceHistory', [])`; `updateMembership` backfills a missing list with that synthesized current-price entry, so billing never sees an empty history.
 2. Replace only `getMonthlyTotalAt(cycleDate)` in `billing.ts` to look up the entry in force; everything that sums cost stays as written.
 3. Membership settings gains a "Price changes" group: add a change (effective date, new cost and bill total), edit one, remove one with a destructive confirm. Update `UX.md` and `TECHNICAL.md` (their "single monthly cost" statements) in this PR.
 4. Revisit how the tax-rate seed for ticket chips treats the latest entry.

@@ -589,7 +589,7 @@ block-beta
 | OpeningTab | Watchlist | the first and default tab; carries an accent and a count when something opens in the next seven days; its empty state links to All |
 | BottomNav | shell | Dashboard · Calendar · Watchlist with Calendar centred and prominent; new, because Waypoint's `TripBottomNav` is trip-specific |
 | SetupStepper | Setup | a local step index, not a library component; `StepThroughModal` pages through dismissable items and doesn't fit |
-| `SectionHeader`, `ModalFooterActions`, `DeleteIconButton` | every tab and form | the phone-shell basics. Today they live in Waypoint's folder; a second app using them means moving them to central `src/ui` |
+| `SectionHeader`, `ModalFooterActions`, `DeleteIconButton` | every tab and form | the phone-shell basics. Today they live in Waypoint's folder; a second app using them means moving them to central `src/components` |
 | Chart blocks | Dashboard (Next Steps) | built on `recharts` (already installed); Nine Lives' `TrendLineChart` is app-scoped and line-only, so bars and share charts are new |
 | `FormSection` (central `src/ui`) | Membership settings | the shared `Disclosure` group shell |
 | Empty state | each list, and the empty Calendar | an icon, one muted line, and the CTA in the header |
