@@ -1067,9 +1067,21 @@ service cloud.firestore {
           && request.resource.data.householdId == householdId;
       }
 
+      function isOptionalPositiveNumber(value) {
+        return value == null || (value is number && value > 0);
+      }
+
+      function isLitterBoxFillLevelValid() {
+        return isOptionalPositiveNumber(request.resource.data.get('fillDepth', null))
+          && request.resource.data.get('fillDepthUnit', 'in') in ['in', 'cm']
+          && isOptionalPositiveNumber(request.resource.data.get('fillWeight', null))
+          && request.resource.data.get('fillWeightUnit', 'lb') in ['lb', 'kg'];
+      }
+
       function isLitterBoxBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
           && (request.resource.data.location == null || request.resource.data.location is string)
+          && isLitterBoxFillLevelValid()
           && request.resource.data.isActive is bool
           && request.resource.data.createdBy is string
           && isTimestampNumber(request.resource.data.createdAt)
@@ -1184,11 +1196,22 @@ service cloud.firestore {
           && request.resource.data.householdId == householdId;
       }
 
+      function isOptionalNonNegativeNumber(value) {
+        return value == null || (value is number && value >= 0);
+      }
+
+      function isLitterEntryDepthValid() {
+        return isOptionalNonNegativeNumber(request.resource.data.get('depthBefore', null))
+          && isOptionalNonNegativeNumber(request.resource.data.get('depthAfter', null))
+          && request.resource.data.get('depthUnit', 'in') in ['in', 'cm'];
+      }
+
       function isLitterEntryBaseShapeValid() {
         return isNonEmptyString(request.resource.data.litterBoxId)
           && isNonEmptyString(request.resource.data.litterId)
           && request.resource.data.weightBefore is number
-          && request.resource.data.weightBefore > 0
+          && request.resource.data.weightBefore >= 0
+          && isLitterEntryDepthValid()
           && request.resource.data.weightUnit in ['lb', 'kg']
           && (request.resource.data.refillWeight == null || (request.resource.data.refillWeight is number && request.resource.data.refillWeight > 0))
           && request.resource.data.isFullChange is bool

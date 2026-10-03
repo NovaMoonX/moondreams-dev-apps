@@ -16,6 +16,7 @@ import {
   selectExpensesByHousehold,
   selectIngestionDraftCountByHousehold,
 } from '../store/selectors';
+import { useAttentionFocus } from '../context/attentionFocusContext';
 import type { Expense } from '../types';
 import CountBadge from './CountBadge';
 import DetailsDisclosure from './DetailsDisclosure';
@@ -30,6 +31,7 @@ interface ExpensesSectionProps {
 function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
+  const { focusRequest } = useAttentionFocus();
   const cats = useAppSelector(selectCatsByHousehold(householdId), shallowEqual);
   const expenses = useAppSelector(selectExpensesByHousehold(householdId), shallowEqual);
   const pendingDraftCount = useAppSelector(selectIngestionDraftCountByHousehold(householdId));
@@ -40,6 +42,13 @@ function ExpensesSection({ householdId }: ExpensesSectionProps) {
   const [isIngestionOpen, setIsIngestionOpen] = useState(false);
 
   const catOptions = useMemo(() => cats.map((cat) => ({ label: cat.name, value: cat.id })), [cats]);
+  const [handledFocusRequestedAt, setHandledFocusRequestedAt] = useState<number | undefined>(undefined);
+
+  if (focusRequest?.kind === 'expense-new' && focusRequest.requestedAt !== handledFocusRequestedAt) {
+    setHandledFocusRequestedAt(focusRequest.requestedAt);
+    setEditingExpense(null);
+    setIsFormOpen(true);
+  }
 
   const closeModal = () => {
     setIsFormOpen(false);

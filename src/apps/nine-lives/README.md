@@ -26,13 +26,14 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 6. **Track symptoms**: quick-tag cat behavior changes like litter box changes, appetite shifts, hiding, playfulness, and grooming, or write your own note; log either quick tags, free text, or both, and link them to a visit or condition so the timeline connects.
 7. **Track preventives**: log each flea, tick, mite, heartworm, or dewormer dose, including when it was administered and when the next dose is due. Records can be edited or deleted from the cat's Preventives tab.
 8. **Budget**: log expenses with sensible presets (adoption fee, insurance, food, vet, litter, grooming...) and see both monthly and lifetime totals.
-9. **Track litter usage**: log household litter weigh-ins by box and type, see usage between weigh-ins, and track how long each box has been since its last change.
+9. **Track litter usage**: log household litter weigh-ins by box and type (with an optional litter depth and a per-box fill level), follow a built-in step-by-step weigh-in guide, see usage between weigh-ins, and track how long each box has been since its last change.
 10. **Stay emergency-ready**: the app nudges you to record an emergency/after-hours vet and confirm insurance is on file until both are done.
 11. **Browse resources and the glossary**: look up unfamiliar terms (what's FVRCP?) with definitions linked to relevant resource articles.
 12. **See what's coming up, at a glance**: a household-wide timeline of visits, vaccination due dates, and preventive due dates — past and upcoming, out to about a year — without opening a specific cat first, similar to the printed summary you get at the end of a vet visit.
 13. **Get reminders**: push notifications for upcoming visits, vaccination due dates, and preventive due dates, once that infrastructure is built (see Stretch Goals — the visibility in #11 doesn't depend on it).
 14. **Upload and review a document**: the dashboard, Expenses, and Records sections can send a PDF or photo to Firebase AI Logic. The resulting `IngestionDraft` is household-scoped and contains optional cat, clinic, visit, vaccination, preventive, weight, symptom, condition, and expense proposals. Reviewers can edit or exclude each proposal, choose an existing cat or clinic, keep the file as a health record, then confirm the linked writes or discard the draft.
-15. **Use voice quick entry**: the dashboard microphone button transcribes a short note on-device with the browser's Web Speech API, then sends the transcript through the same extraction, matching, duplicate detection, and review flow as uploaded documents. Browsers without `SpeechRecognition` support show the action as disabled; Safari support varies by version.
+15. **Log in one tap**: icon shortcuts under the dashboard actions (also tucked behind a "+" in the floating buttons) open the visit, expense, litter weigh-in, and per-cat log forms without scrolling to their sections.
+16. **Use voice quick entry**: the dashboard microphone button transcribes a short note on-device with the browser's Web Speech API, then sends the transcript through the same extraction, matching, duplicate detection, and review flow as uploaded documents. Browsers without `SpeechRecognition` support show the action as disabled; Safari support varies by version.
 
 ## How it Feels
 
