@@ -1,4 +1,9 @@
-import type { AListTab, AmcFormat, WatchPriority } from '@apps/a-list/types';
+import type {
+  AListTab,
+  AmcFormat,
+  WatchlistTab,
+  WatchPriority,
+} from '@apps/a-list/types';
 
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';
@@ -68,3 +73,15 @@ export const WEEK_STARTS_ON = 0;
 
 export const MAX_FEE_CHIPS = 4;
 export const MAX_TAX_CHIPS = 4;
+
+/** The Opening tab lists unseen movies releasing from today through this many days out. */
+export const OPENING_WINDOW_DAYS = 7;
+
+export const WATCHLIST_TABS: WatchlistTab[] = [
+  'opening',
+  'all',
+  'MUST_SEE',
+  'WANT_TO_SEE',
+  'IF_I_HAVE_TIME',
+  'seen',
+];

@@ -5,7 +5,9 @@ import { WATCH_PRIORITIES, WEEK_STARTS_ON } from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
 import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
+import { getDaysUntilOpening } from '@apps/a-list/utils/opening';
 import { getSavingsSummary } from '@apps/a-list/utils/savings';
+import { buildWatchlistRows } from '@apps/a-list/utils/watchlistRows';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 
 export const selectMembership = (state: RootState) =>
@@ -150,6 +152,33 @@ export const selectPendingSeenPrompts = createSelector(
         (viewing) => viewing.status === 'PLANNED' && viewing.endsAt <= now,
       )
       .sort((left, right) => left.endsAt - right.endsAt);
+    return result;
+  },
+);
+
+/** Watchlist items joined with their viewings, in the watchlist's priority order. */
+export const selectWatchlistRows = createSelector(
+  [
+    selectWatchlistItems,
+    selectViewingItems,
+    (_state: RootState, now: number) => now,
+  ],
+  (items, viewings, now) => buildWatchlistRows(items, viewings, now),
+);
+
+/** Unseen movies opening from today through a week out, soonest first. */
+export const selectOpeningRows = createSelector(
+  [selectWatchlistRows, (_state: RootState, now: number) => now],
+  (rows, now) => {
+    const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
+    const result = rows
+      .flatMap((row) => {
+        const daysUntil = row.isSeen
+          ? null
+          : getDaysUntilOpening(row.item.movie.releaseDate, todayDay);
+        return daysUntil === null ? [] : [{ ...row, daysUntil }];
+      })
+      .sort((left, right) => left.daysUntil - right.daysUntil);
     return result;
   },
 );

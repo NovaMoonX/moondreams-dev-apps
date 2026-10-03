@@ -23,6 +23,7 @@ export type AmcFormat =
   'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
+export type WatchlistTab = 'opening' | 'all' | WatchPriority | 'seen';
 export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
 
 export interface MovieSnapshot {
