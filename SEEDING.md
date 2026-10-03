@@ -92,8 +92,9 @@ profiles with insurance, origin, and key-date data for local CRUD and detail tes
 `a-list` writes Alex's private A-List membership at
 `apps/a-list/memberships/seed-worth-the-wait-one` (a $25.99 plan billed at $27.94, started
 60 days ago, with weekly and monthly goals). Every other fixture account has no
-membership, so signing in as one opens A-List's Setup. Alex's watchlist holds five
-movies across all three priorities (one opening in three days, one undated) whose keys
+membership, so signing in as one opens A-List's Setup. Alex's watchlist holds six
+movies across all three priorities (one opening in three days, one undated, one added
+by title with no poster) whose keys
 match the emulator's OMDb fixture catalog.
 
 To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
