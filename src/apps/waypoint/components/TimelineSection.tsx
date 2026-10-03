@@ -338,11 +338,7 @@ export function TimelineSection({
   const renderDayWeather = (dayIndex: number) => {
     const forecast = weather.getDay(dayIndex);
     return forecast ? (
-      <DayWeather
-        forecast={forecast}
-        hours={weather.getRemainingHoursToday(dayIndex)}
-        isMinimized={minimizeWeather}
-      />
+      <DayWeather forecast={forecast} isMinimized={minimizeWeather} />
     ) : null;
   };
 

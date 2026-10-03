@@ -4,13 +4,13 @@ import HourlyWeatherStrip from '@apps/waypoint/components/HourlyWeatherStrip';
 
 interface DayWeatherProps {
   forecast: DayForecast;
-  hours: HourForecast[];
+  hours?: HourForecast[];
   isMinimized: boolean;
 }
 
 const formatTemp = (value: number | null) => (value === null ? '–' : `${Math.round(value)}°`);
 
-function DayWeather({ forecast, hours, isMinimized }: DayWeatherProps) {
+function DayWeather({ forecast, hours = [], isMinimized }: DayWeatherProps) {
   const { label, icon: Icon } = getWeatherCondition(forecast.weatherCode);
 
   if (isMinimized) {
