@@ -38,11 +38,33 @@ The Vite app connects to local services only when `VITE_USE_FIREBASE_EMULATORS=t
 It disables the Firestore persistent cache in this mode so a reset cannot leave stale
 browser data behind. The Emulator Suite UI is available at `http://127.0.0.1:4001`.
 
+While the emulators are in use, a thin strip pins to the top of the page: green when they're
+running and seeded, amber when they're running but empty (run `npm run seed:reset`), red when
+they can't be reached. It re-checks every few seconds while the tab is visible, and the offline
+banner slides over it when both apply.
+
+## Phone testing
+
+`npm run dev` and `npm run emulators` only listen on this machine. To use a phone on the
+same Wi-Fi, run `npm run lan:trust -- Home` once on your home network (the name is optional
+to pass; it asks otherwise), then
+`npm run emulators:lan`, `npm run seed:reset` and `npm run dev:lan`, and scan the QR code.
+The app reaches the emulators through whatever host the page was loaded from, so the fixture
+account buttons work there too.
+
+The `:lan` commands refuse to start on a network you haven't trusted: the emulators accept
+`Bearer owner` and open signups, and the dev server's bundle carries the App Check debug
+token. Trusted networks live in the gitignored `.lan-trusted.local`, one `name  mac` line each;
+`npm run lan:list` shows them and `npm run lan:untrust -- Home` (or no name, for the current
+network) removes one. Re-run `npm run seed:reset` after every emulator restart; they keep no data.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `npm run emulators` | Start Auth, Firestore, and RTDB emulators with their UI. |
+| `npm run emulators:lan` / `dev:lan` | The same, reachable from a phone on a trusted network. |
+| `npm run lan:trust` / `lan:untrust` / `lan:list` | Name and trust the current network for the `:lan` commands, remove one, or list them. |
 | `npm run seed` | Upsert all named fixtures into an already-running emulator. |
 | `npm run seed:core` | Upsert Auth users, profiles, app registry records, and presence. |
 | `npm run seed:nine-lives` | Upsert core data and Nine Lives household/cat fixtures. |

@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_PATH_MAP, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
+import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
@@ -93,6 +94,7 @@ function Layout() {
       <PostLoginRedirectHandler />
 
       <OfflineBanner />
+      <EmulatorStatus />
 
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only */}
       <div

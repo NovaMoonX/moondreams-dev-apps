@@ -21,6 +21,8 @@ npm run dev
 
 Then open the local Vite app in your browser to explore the collection.
 
+`npm run dev` only listens on your machine. To try the app (and the emulators) from a phone on your home Wi-Fi, run `npm run lan:trust -- Home` once (`lan:list` and `lan:untrust` manage the list), then `npm run dev:lan` and `npm run emulators:lan`; they refuse to start on a network you haven't trusted. See [SEEDING.md](SEEDING.md#phone-testing).
+
 For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For every Cloud Function (what it does, its secrets, and local testing), see [functions/README.md](functions/README.md).
 
 For a production build:
