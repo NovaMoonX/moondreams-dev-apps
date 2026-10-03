@@ -62,6 +62,12 @@ function getWatchlistFixtures(now: number) {
       preferredFormat: null,
     },
     {
+      movieKey: 'manual-seed-0001-hometown',
+      movie: movie('Hometown Film Fest Shorts', getDayUtcAhead(now, 12), null, null),
+      priority: 'IF_I_HAVE_TIME',
+      preferredFormat: null,
+    },
+    {
       movieKey: 'imdb-tt0133093',
       movie: movie('The Matrix', Date.UTC(1999, 2, 31), 136, 'R'),
       priority: 'IF_I_HAVE_TIME',

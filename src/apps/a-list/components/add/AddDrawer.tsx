@@ -20,6 +20,9 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC, formatDuration } from '@/utils/formatUtils';
+import ManualMovieForm, {
+  type ManualMovieDraft,
+} from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import {
@@ -34,6 +37,7 @@ import { addWatchlistItem } from '@apps/a-list/store/actions/watchlistActions';
 import type {
   AmcFormat,
   MovieSearchResult,
+  MovieSnapshot,
   WatchPriority,
 } from '@apps/a-list/types';
 
@@ -74,23 +78,40 @@ interface AddDrawerProps {
   onClose: () => void;
 }
 
+type Selection =
+  | { kind: 'search'; result: MovieSearchResult }
+  | { kind: 'manual'; movieKey: string; movie: MovieSnapshot };
+
 function AddDrawer({ onClose }: AddDrawerProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const now = useNow();
   const [query, setQuery] = useState('');
-  const [picked, setPicked] = useState<MovieSearchResult | null>(null);
+  const [isAddingByTitle, setIsAddingByTitle] = useState(false);
+  const [manualDraft, setManualDraft] = useState<ManualMovieDraft>({
+    title: '',
+    releaseDate: '',
+    showReleaseDate: false,
+  });
+  const [selection, setSelection] = useState<Selection | null>(null);
   const [detailsValues, setDetailsValues] =
     useState<WatchlistDetailsValues>(INITIAL_DETAILS);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchedKey =
+    selection?.kind === 'search' ? selection.result.movieKey : null;
   const details = useQuery({
-    ...movieDetailsQueryOptions(picked?.movieKey ?? ''),
-    enabled: picked !== null,
+    ...movieDetailsQueryOptions(searchedKey ?? ''),
+    enabled: searchedKey !== null,
   });
-  const movie = details.data;
-
+  const movie = selection?.kind === 'manual' ? selection.movie : details.data;
+  const movieKey =
+    selection?.kind === 'manual' ? selection.movieKey : searchedKey;
+  const fallbackTitle =
+    selection?.kind === 'search' ? selection.result.title : '';
+  const fallbackPoster =
+    selection?.kind === 'search' ? selection.result.posterUrl : null;
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
   const getReleaseLabel = (releaseDate: number | null) => {
@@ -100,9 +121,9 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   };
 
   const getDetailsLine = () => {
-    if (details.isPending) return 'Getting the details…';
-    if (details.error || !movie)
-      return "We couldn't load this movie's details just now.";
+    if (selection?.kind === 'search' && details.isPending)
+      return 'Getting the details…';
+    if (!movie) return "We couldn't load this movie's details just now.";
     const parts = [
       getReleaseLabel(movie.releaseDate),
       movie.runtimeMinutes === null
@@ -114,7 +135,7 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   };
 
   const handleAdd = async () => {
-    if (!user || !picked || !movie) {
+    if (!user || !movieKey || !movie) {
       return;
     }
 
@@ -125,7 +146,7 @@ function AddDrawer({ onClose }: AddDrawerProps) {
       const { created } = await dispatch(
         addWatchlistItem({
           uid: user.uid,
-          movieKey: picked.movieKey,
+          movieKey,
           movie,
           priority: detailsValues.priority,
           preferredFormat:
@@ -153,79 +174,109 @@ function AddDrawer({ onClose }: AddDrawerProps) {
   };
 
   const handleBack = () => {
-    setPicked(null);
+    setSelection(null);
     setDetailsValues(INITIAL_DETAILS);
     setError(null);
   };
 
-  return (
-    <Drawer isOpen onClose={onClose} title='Movie'>
-      {picked === null ? (
+  const getContent = () => {
+    if (selection === null && isAddingByTitle) {
+      return (
+        <ManualMovieForm
+          draft={manualDraft}
+          onDraftChange={setManualDraft}
+          onCancel={() => setIsAddingByTitle(false)}
+          onContinue={(manualKey, manualMovie) =>
+            setSelection({
+              kind: 'manual',
+              movieKey: manualKey,
+              movie: manualMovie,
+            })
+          }
+        />
+      );
+    }
+
+    if (selection === null) {
+      return (
         <MoviePicker
           query={query}
           onQueryChange={setQuery}
-          onPick={setPicked}
+          onPick={(result) => setSelection({ kind: 'search', result })}
+          onAddByTitle={() => {
+            setManualDraft((draft) =>
+              draft.title ? draft : { ...draft, title: query.trim() },
+            );
+            setIsAddingByTitle(true);
+          }}
         />
-      ) : (
-        <div className='space-y-4'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='gap-1 px-0'
-            onClick={handleBack}
-          >
-            <ChevronLeft className='h-4 w-4' /> Back to results
-          </Button>
-          <div className='flex gap-3'>
-            <span className='h-30 w-20 shrink-0 overflow-hidden rounded-md'>
-              <PosterCover
-                title={movie?.title ?? picked.title}
-                posterUrl={movie?.posterUrl ?? picked.posterUrl}
-              />
-            </span>
-            <div className='min-w-0 space-y-1'>
-              <p className='font-semibold'>{movie?.title ?? picked.title}</p>
-              <p className='text-muted-foreground text-sm'>
-                {getDetailsLine()}
-              </p>
-            </div>
+      );
+    }
+
+    return (
+      <div className='space-y-4'>
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className='gap-1 px-0'
+          onClick={handleBack}
+        >
+          <ChevronLeft className='h-4 w-4' />{' '}
+          {selection.kind === 'manual' ? 'Back' : 'Back to results'}
+        </Button>
+        <div className='flex gap-3'>
+          <span className='h-30 w-20 shrink-0 overflow-hidden rounded-md'>
+            <PosterCover
+              title={movie?.title ?? fallbackTitle}
+              posterUrl={movie?.posterUrl ?? fallbackPoster}
+            />
+          </span>
+          <div className='min-w-0 space-y-1'>
+            <p className='font-semibold'>{movie?.title ?? fallbackTitle}</p>
+            <p className='text-muted-foreground text-sm'>{getDetailsLine()}</p>
           </div>
-          <Form
-            id='a-list-add-watchlist'
-            form={DETAILS_FIELDS}
-            initialData={detailsValues}
-            columns={1}
-            spacing='normal'
-            onDataChange={(data) =>
-              setDetailsValues(data as WatchlistDetailsValues)
-            }
-          />
-          {error && <p className='text-destructive text-sm'>{error}</p>}
-          <ModalFooterActions
-            rightActions={
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  disabled={isSaving}
-                  onClick={onClose}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type='button'
-                  loading={isSaving}
-                  disabled={!movie || isSaving}
-                  onClick={() => void handleAdd()}
-                >
-                  Add
-                </Button>
-              </>
-            }
-          />
         </div>
-      )}
+        <Form
+          id='a-list-add-watchlist'
+          form={DETAILS_FIELDS}
+          initialData={detailsValues}
+          columns={1}
+          spacing='normal'
+          onDataChange={(data) =>
+            setDetailsValues(data as WatchlistDetailsValues)
+          }
+        />
+        {error && <p className='text-destructive text-sm'>{error}</p>}
+        <ModalFooterActions
+          rightActions={
+            <>
+              <Button
+                type='button'
+                variant='secondary'
+                disabled={isSaving}
+                onClick={onClose}
+              >
+                Cancel
+              </Button>
+              <Button
+                type='button'
+                loading={isSaving}
+                disabled={!movie || isSaving}
+                onClick={() => void handleAdd()}
+              >
+                Add
+              </Button>
+            </>
+          }
+        />
+      </div>
+    );
+  };
+
+  return (
+    <Drawer isOpen onClose={onClose} title='Movie'>
+      {getContent()}
     </Drawer>
   );
 }

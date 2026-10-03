@@ -12,9 +12,15 @@ interface MoviePickerProps {
   query: string;
   onQueryChange: (query: string) => void;
   onPick: (movie: MovieSearchResult) => void;
+  onAddByTitle: () => void;
 }
 
-function MoviePicker({ query, onQueryChange, onPick }: MoviePickerProps) {
+function MoviePicker({
+  query,
+  onQueryChange,
+  onPick,
+  onAddByTitle,
+}: MoviePickerProps) {
   const debouncedQuery = useDebouncedValue(
     query.trim(),
     DEBOUNCE_MS.autocomplete,
@@ -26,14 +32,16 @@ function MoviePicker({ query, onQueryChange, onPick }: MoviePickerProps) {
   });
   const results = search.data ?? [];
 
+  const isSearchResting =
+    search.error instanceof FirebaseError &&
+    (search.error.code === 'functions/resource-exhausted' ||
+      search.error.code === 'functions/failed-precondition');
+
   const getStatusLine = () => {
     if (!canSearch) return 'Search for a movie by its title.';
     if (search.isPending) return 'Searching…';
-    if (
-      search.error instanceof FirebaseError &&
-      search.error.code === 'functions/resource-exhausted'
-    ) {
-      return 'Movie search is resting for today. Try again tomorrow.';
+    if (isSearchResting) {
+      return 'Movie search is resting for today, but you can still add a movie by its title.';
     }
     if (search.error) return "Search isn't available right now.";
     if (results.length === 0) return 'No movies match that title.';
@@ -93,6 +101,15 @@ function MoviePicker({ query, onQueryChange, onPick }: MoviePickerProps) {
           </ul>
         </div>
       )}
+      <Button
+        type='button'
+        variant={isSearchResting ? 'primary' : 'link'}
+        size='sm'
+        className={isSearchResting ? undefined : 'px-0'}
+        onClick={onAddByTitle}
+      >
+        + Can't find it? Add it by title
+      </Button>
     </div>
   );
 }
