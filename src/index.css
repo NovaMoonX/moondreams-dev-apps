@@ -51,6 +51,18 @@ html:has(
   overflow: hidden;
 }
 
+/* The page scrollbar lives on the root, and overlays render outside any page
+   container, so phone widths hide every scrollbar here; touch scrolling still works. */
+@media (max-width: 639px) {
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Smooth height transitions for when keyboard appears on mobile */
 html, body {
   transition: height 0.3s ease;

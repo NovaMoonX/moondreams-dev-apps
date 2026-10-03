@@ -210,7 +210,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           />
         )}
         {todayWeather && (
-          <section className='space-y-2'>
+          <section className='border-border mt-5 space-y-2 border-t pt-5'>
             <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
               Today&apos;s weather
             </h3>
