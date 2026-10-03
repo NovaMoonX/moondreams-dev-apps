@@ -134,6 +134,7 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
             variant={draft.entryMode === mode.value ? 'primary' : 'tertiary'}
             aria-pressed={draft.entryMode === mode.value}
             onClick={() =>
+              mode.value !== draft.entryMode &&
               onChange({ ...draft, entryMode: mode.value, amount: '' })
             }
           >

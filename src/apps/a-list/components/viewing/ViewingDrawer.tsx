@@ -56,7 +56,6 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
   }
 
   const ticket = viewing.ticket ?? null;
-  const isMissingTicket = !('ticket' in viewing);
 
   const runSave = async (action: () => Promise<unknown>, fallback: string) => {
     setIsSaving(true);
@@ -81,7 +80,6 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
             id: viewing.id,
             showtimeAt,
             runtimeMinutes: viewing.movie.runtimeMinutes,
-            isMissingTicket,
           }),
         ).unwrap(),
       'Unable to save this showing.',

@@ -10,7 +10,7 @@ interface TaxChipsProps {
   onChange: (value: RateValue) => void;
 }
 
-/** Tapping the selected rate again clears it (no tax). */
+/** Tapping the selected rate (or Other) again clears it: no tax. */
 function TaxChips({ value, chips, error, onChange }: TaxChipsProps) {
   const options = Array.from(
     new Set(
@@ -43,7 +43,13 @@ function TaxChips({ value, chips, error, onChange }: TaxChipsProps) {
           size='sm'
           variant={value.selected === 'OTHER' ? 'primary' : 'secondary'}
           aria-pressed={value.selected === 'OTHER'}
-          onClick={() => onChange({ selected: 'OTHER', other: value.other })}
+          onClick={() =>
+            onChange(
+              value.selected === 'OTHER'
+                ? { selected: 'NONE', other: '' }
+                : { selected: 'OTHER', other: value.other },
+            )
+          }
         >
           Other
         </Button>

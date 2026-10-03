@@ -381,7 +381,7 @@ Neither a fee nor a tax rate can be looked up, so both are offered as chips buil
 **Tax-rate chips and the default** (`selectTaxRateChips`):
 
 ```
-used     = distinct non-null ticket.taxRate across viewings, each rounded to 4 dp, with use counts and last-used times
+used     = distinct non-null ticket.taxRate across viewings, each rounded to 5 dp (so a three-decimal percent like 8.875% survives), with use counts and last-used times
 default  = the most-used rate; ties go to the most recently used
            no tickets yet → membership.taxRate
            neither        → no default (the row shows only "Other")

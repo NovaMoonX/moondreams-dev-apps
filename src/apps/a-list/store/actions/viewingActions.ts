@@ -99,31 +99,44 @@ interface UpdateViewingShowtimeInput {
   id: string;
   showtimeAt: number;
   runtimeMinutes: number | null;
-  /** True for a document written before tickets existed: the edit adds the key. */
-  isMissingTicket: boolean;
 }
 
-/** Moves a showing: the showtime and its derived end are always written together. */
+/**
+ * Moves a showing: the showtime and its derived end are written together. A document written
+ * before tickets existed gains `ticket: null`, decided from a fresh read so a ticket saved
+ * meanwhile in another tab is never cleared.
+ */
 export const updateViewingShowtime = createAsyncThunk<
   void,
   UpdateViewingShowtimeInput,
   { rejectValue: string }
 >(
   'aList/viewings/updateShowtime',
-  async (
-    { uid, id, showtimeAt, runtimeMinutes, isMissingTicket },
-    { rejectWithValue },
-  ) => {
+  async ({ uid, id, showtimeAt, runtimeMinutes }, { rejectWithValue }) => {
+    const viewingRef = doc(
+      db,
+      'apps',
+      'a-list',
+      'memberships',
+      uid,
+      'viewings',
+      id,
+    );
+
     try {
-      await updateDoc(
-        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
-        {
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(viewingRef);
+        if (!snapshot.exists()) {
+          throw new Error('This showing was removed.');
+        }
+
+        transaction.update(viewingRef, {
           showtimeAt,
           endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
           lastEditedAt: Date.now(),
-          ...(isMissingTicket ? { ticket: null } : {}),
-        },
-      );
+          ...('ticket' in snapshot.data() ? {} : { ticket: null }),
+        });
+      });
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to save this showing.'),
