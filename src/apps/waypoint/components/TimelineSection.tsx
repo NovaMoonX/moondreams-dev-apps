@@ -31,6 +31,7 @@ import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
+import WeatherDayStrip from '@apps/waypoint/components/WeatherDayStrip';
 import {
   createEvent,
   deleteEvent,
@@ -458,6 +459,12 @@ export function TimelineSection({
     }
   };
 
+  const weatherDays = Array.from({ length: dayCount }, (_, dayIndex) => ({
+    dayIndex,
+    forecast: weather.getDay(dayIndex),
+  })).flatMap(({ dayIndex, forecast }) => (forecast ? [{ dayIndex, forecast }] : []));
+  const selectedDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? null : Number(selectedTab);
+
   const viewOptionGroups = [
     {
       heading: 'On each card',
@@ -519,6 +526,15 @@ export function TimelineSection({
             )
           }
         />
+        {weatherDays.length > 0 && (
+          <WeatherDayStrip
+            days={weatherDays}
+            startDate={trip.startDate}
+            todayIndex={weather.todayIndex}
+            selectedDayIndex={selectedDayIndex}
+            onSelectDay={(day) => onActiveDayTabChange(day === selectedDayIndex ? 'all' : String(day))}
+          />
+        )}
         <div className='flex items-center justify-between gap-3'>
           <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             View by day
