@@ -16,6 +16,8 @@ interface PosterCoverProps {
   className?: string;
   /** Smaller type for thumbnails. */
   compact?: boolean;
+  /** Where a title tile's text sits, so it stays inside the visible piece of a split cell. */
+  tileTextClassName?: string;
 }
 
 /** A poster that falls back to a tinted title tile, so a cell or row is never left with a hole. */
@@ -24,6 +26,7 @@ function PosterCover({
   posterUrl,
   className,
   compact = false,
+  tileTextClassName,
 }: PosterCoverProps) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const showImage = posterUrl !== null && failedUrl !== posterUrl;
@@ -51,7 +54,10 @@ function PosterCover({
       role='img'
       aria-label={`${title} poster`}
       className={join(
-        'flex h-full w-full items-center justify-center overflow-hidden p-1 text-center',
+        tileTextClassName
+          ? 'flex h-full w-full overflow-hidden p-1'
+          : 'flex h-full w-full items-center justify-center overflow-hidden p-1 text-center',
+        tileTextClassName,
         tint,
         className,
       )}

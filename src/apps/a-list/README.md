@@ -42,7 +42,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 **Core MVP**
 - [x] Membership Setup: Confirm perks, enter the monthly cost before tax, the bill total with tax and the start date; see the tax rate gauged from them; set weekly and monthly watch goals.
 - [ ] Backfill Past Movies: A first-time flow to add movies already watched since joining, one after another with "Add + another" as the main button.
-- [ ] Poster Calendar: Month calendar where each day is filled by the poster(s) of what was watched or is planned — one, a corner-to-corner split, pizza-style thirds, or quadrants.
+- [x] Poster Calendar: Month calendar where each day is filled by the poster(s) of what was watched or is planned — one, a corner-to-corner split, pizza-style thirds, or quadrants.
 - [ ] Day Details: Tap a day to see its movies with format, rating, and price.
 - [ ] Top-of-Calendar Counters: Total movies watched, movies this week (watched/goal), and weekly and monthly goal status.
 - [x] Add to Calendar: Add a watched or planned movie from your watchlist or a search; new movies join the watchlist automatically.

@@ -108,11 +108,17 @@ function readWallClock(epoch: number, timeZone: string) {
   };
 }
 
-/** 7 pm Los Angeles time on the LA calendar day `daysFromNow` days from LA's today, DST included. */
-function getEveningShowtime(now: number, daysFromNow: number) {
+/** A Los Angeles wall time on the LA calendar day `daysFromNow` days from LA's today, DST included. */
+function getShowtime(now: number, daysFromNow: number, hour = 19, minute = 0) {
   const today = readWallClock(now, SEED_TIMEZONE);
   const target = new Date(
-    Date.UTC(today.year, today.month - 1, today.day + daysFromNow, 19, 0),
+    Date.UTC(
+      today.year,
+      today.month - 1,
+      today.day + daysFromNow,
+      hour,
+      minute,
+    ),
   );
   const wallAsUtc = target.getTime();
   const offsetOf = (epoch: number) => {
@@ -147,24 +153,58 @@ function getViewingFixtures(now: number) {
     { id: 'seed-viewing-galaxy', movieKey: 'imdb-tt99000003', daysFromNow: 25 },
   ];
 
-  return plan.map(({ id, movieKey, daysFromNow }) => {
-    const { movie: snapshot } = find(movieKey);
-    const showtimeAt = getEveningShowtime(now, daysFromNow);
-    const endsAt =
-      showtimeAt +
-      (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *
-        60_000;
-    return {
+  // One day each with two, three, four and five movies, to show every poster split.
+  const DUNE = 'imdb-tt15239678';
+  const MATRIX = 'imdb-tt0133093';
+  const MIDNIGHT = 'imdb-tt99000004';
+  const HOMETOWN = 'manual-seed-0001-hometown';
+  const multiDays: Array<[number, string[]]> = [
+    [-3, [MATRIX, DUNE]],
+    [-9, [MIDNIGHT, MATRIX, DUNE]],
+    [-15, [HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
+    [-17, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
+  ];
+  const multiPlan = multiDays.flatMap(([daysFromNow, movieKeys]) =>
+    movieKeys.map((movieKey, index) => ({
+      id: `seed-viewing-day${-daysFromNow}-${index + 1}`,
+      movieKey,
+      daysFromNow,
+      hour: 11 + index * 3,
+    })),
+  );
+
+  return [...plan, ...multiPlan].map(
+    ({
       id,
       movieKey,
-      movie: snapshot,
-      showtimeAt,
-      endsAt,
-      status: endsAt <= now ? 'SEEN' : 'PLANNED',
-      createdAt: Math.min(now, showtimeAt),
-      lastEditedAt: Math.min(now, showtimeAt),
-    };
-  });
+      daysFromNow,
+      hour = 19,
+      minute = 0,
+    }: {
+      id: string;
+      movieKey: string;
+      daysFromNow: number;
+      hour?: number;
+      minute?: number;
+    }) => {
+      const { movie: snapshot } = find(movieKey);
+      const showtimeAt = getShowtime(now, daysFromNow, hour, minute);
+      const endsAt =
+        showtimeAt +
+        (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *
+          60_000;
+      return {
+        id,
+        movieKey,
+        movie: snapshot,
+        showtimeAt,
+        endsAt,
+        status: endsAt <= now ? 'SEEN' : 'PLANNED',
+        createdAt: Math.min(now, showtimeAt),
+        lastEditedAt: Math.min(now, showtimeAt),
+      };
+    },
+  );
 }
 
 // Alex has a finished membership; every other fixture account lands on Setup.
