@@ -45,8 +45,8 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [ ] Poster Calendar: Month calendar where each day is filled by the poster(s) of what was watched or is planned — one, a corner-to-corner split, pizza-style thirds, or quadrants.
 - [ ] Day Details: Tap a day to see its movies with format, rating, and price.
 - [ ] Top-of-Calendar Counters: Total movies watched, movies this week (watched/goal), and weekly and monthly goal status.
-- [ ] Add to Calendar: Add a watched or planned movie from your watchlist or a search; new movies join the watchlist automatically.
-- [ ] Rewatches: Every viewing is its own entry, so the same movie can appear many times.
+- [x] Add to Calendar: Add a watched or planned movie from your watchlist or a search; new movies join the watchlist automatically.
+- [x] Rewatches: Every viewing is its own entry, so the same movie can appear many times.
 - [ ] Watchlist: Search and add movies with release date, preferred format, priority (Must See / Want to See / If I Have Time), seen status, and date watched or planned.
 - [ ] Opening Tab: The watchlist opens on a tab of movies releasing in the next seven days, with a count so they can't be missed.
 - [ ] Mark as Paid: Format and price (or an all-in total), standard-format price for premium showings, the convenience fee you skipped entered per ticket with your past fees as one-tap chips, and a tax rate chosen from chips built from your own history.
