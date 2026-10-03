@@ -340,7 +340,7 @@ Forecasts come from Open-Meteo (`src/lib/weather/`, keyless, CC BY 4.0 — `Weat
 - **When:** `getWeatherDayIndexes` shows an upcoming trip's days only within the 14-day forecast window, every day of a live trip (elapsed days use the provider's past data), and nothing once the trip is over.
 - **Where:** a day's location is its first non-archived event with coordinates, else a stay covering the day — never a guess from elsewhere on the trip, so a day with neither shows no weather. An event gets its own hourly chip only on a `RELATIVE` trip with coordinates and a start time; its floating `"HH:mm"` matches the provider's zone-local hours directly.
 - **Requests:** places are keyed by coordinates rounded to ~10 km and zone, and each key is one request spanning the dates that need it. A loading or failed request reads as "no weather" and never blocks the Timeline.
-- **UI:** `DayWeather` tops each Timeline day (compact in the day header when "Compact weather" is on, remembered in `localStorage`); the hour-by-hour `HourlyWeatherStrip` for today appears only in Overview's "Today's weather".
+- **UI:** `DayWeather` tops each Timeline day (compact in the day header when "Compact weather" is on in the Timeline's View options, remembered in `localStorage`); the hour-by-hour `HourlyWeatherStrip` for today appears only in Overview's "Today's weather".
 
 #### Enrichment: place search and link previews
 

@@ -12,7 +12,6 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { shallowEqual } from 'react-redux';
 
-import AppToggle from '@/components/AppToggle';
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
 import EnrichedImage from '@/components/EnrichedImage';
@@ -30,6 +29,7 @@ import EventFormModal, {
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
+import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
 import {
   createEvent,
@@ -458,6 +458,48 @@ export function TimelineSection({
     }
   };
 
+  const viewOptionGroups = [
+    {
+      heading: 'On each card',
+      options: [
+        { label: 'Show covers', checked: showCovers, onChange: setShowCovers, isCustomized: !showCovers },
+        {
+          label: "Show who's attending",
+          checked: showAttendees,
+          onChange: setShowAttendees,
+          isCustomized: !showAttendees,
+        },
+      ],
+    },
+    ...(weather.hasWeather
+      ? [
+          {
+            heading: 'Weather',
+            options: [
+              {
+                label: 'Compact weather',
+                checked: minimizeWeather,
+                onChange: setMinimizeWeather,
+                isCustomized: minimizeWeather,
+              },
+            ],
+          },
+        ]
+      : []),
+    {
+      heading: 'Filters',
+      options: [
+        {
+          label: "Only events I'm attending",
+          checked: attendingOnly,
+          onChange: setAttendingOnly,
+          isCustomized: attendingOnly,
+        },
+        { label: 'Show archived', checked: showArchived, onChange: setShowArchived, isCustomized: showArchived },
+      ],
+    },
+  ];
+
   return (
     <>
       <section className='space-y-4 pt-4'>
@@ -477,9 +519,12 @@ export function TimelineSection({
             )
           }
         />
-        <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-          View by day
-        </p>
+        <div className='flex items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+            View by day
+          </p>
+          <TimelineViewOptions groups={viewOptionGroups} />
+        </div>
         <Select
           className='sm:hidden'
           options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}
@@ -499,55 +544,6 @@ export function TimelineSection({
               </TabsTrigger>
             ))}
           </TabsList>
-          <div className='mt-3 flex flex-wrap items-center gap-4'>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showCovers}
-                onCheckedChange={setShowCovers}
-              />
-              Show covers
-            </label>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showAttendees}
-                onCheckedChange={setShowAttendees}
-              />
-              Show who&apos;s attending
-            </label>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={attendingOnly}
-                onCheckedChange={setAttendingOnly}
-              />
-              Only events I&apos;m attending
-            </label>
-            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-              <AppToggle
-                size='sm'
-                checked={showArchived}
-                onCheckedChange={setShowArchived}
-              />
-              Show archived
-            </label>
-            {weather.hasWeather && (
-              <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-                <AppToggle
-                  size='sm'
-                  checked={minimizeWeather}
-                  onCheckedChange={setMinimizeWeather}
-                />
-                Compact weather
-              </label>
-            )}
-          </div>
-          {weather.hasWeather && (
-            <div className='mt-2'>
-              <WeatherAttribution />
-            </div>
-          )}
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>
@@ -564,6 +560,7 @@ export function TimelineSection({
             </TabsContent>
           )}
         </Tabs>
+        {weather.hasWeather && <WeatherAttribution />}
       </section>
       {stackingEvent && (
         <EventStackModal
