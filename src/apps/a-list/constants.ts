@@ -63,3 +63,5 @@ export const DEFAULT_RUNTIME_MINUTES = 120;
 /** Trailers before the feature: a showing ends at showtime + previews + runtime. */
 export const PREVIEWS_BUFFER_MINUTES = 20;
 export const DEFAULT_SHOWTIME = '19:00';
+/** Weeks start on Sunday (0), matching the calendar grid. */
+export const WEEK_STARTS_ON = 0;

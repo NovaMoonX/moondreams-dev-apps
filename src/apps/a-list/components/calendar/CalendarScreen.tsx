@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
 
 import SectionHeader from '@/components/SectionHeader';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import CounterRow from '@apps/a-list/components/calendar/CounterRow';
 import DayPanel from '@apps/a-list/components/calendar/DayPanel';
 import PosterCell from '@apps/a-list/components/calendar/PosterCell';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
@@ -28,6 +30,7 @@ const CALENDAR_STYLES = {
 function CalendarScreen() {
   const { openOverlay } = useAListOverlay();
   const viewingsByDay = useAppSelector(selectViewingsByDay);
+  const now = useNow();
   const [selectedDay, setSelectedDay] = useState(getTodayStart);
   const selectedDayKey = getDayKey(selectedDay.getTime());
 
@@ -44,6 +47,7 @@ function CalendarScreen() {
           </Button>
         }
       />
+      <CounterRow now={now} />
       <Calendar
         mode='single'
         size='auto'
