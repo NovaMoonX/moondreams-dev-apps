@@ -1,0 +1,16 @@
+<!-- sample rectangle -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <mask id="a-list-ticket" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect x="212" y="342" width="600" height="340" rx="32" fill="#fff"/>
+      <circle cx="642" cy="342" r="34" fill="#000"/>
+      <circle cx="642" cy="682" r="34" fill="#000"/>
+      <line x1="642" y1="400" x2="642" y2="624" stroke="#000" stroke-width="12" stroke-linecap="round" stroke-dasharray="16 24"/>
+      <path fill="#000" fill-rule="evenodd" d="M352 612 L402 412 H452 L502 612 H458 L447 568 H407 L396 612 Z M417 528 H437 L427 488 Z"/>
+      <path fill="#000" d="M727.0 456.0 L739.9 494.2 L780.3 494.7 L747.9 518.8 L759.9 557.3 L727.0 534.0 L694.1 557.3 L706.1 518.8 L673.7 494.7 L714.1 494.2 Z"/>
+    </mask>
+  </defs>
+  <g transform="translate(512 512) scale(1.2) rotate(-10) translate(-512 -512)">
+    <rect x="212" y="342" width="600" height="340" fill="#FEFEFE" mask="url(#a-list-ticket)"/>
+  </g>
+</svg>
