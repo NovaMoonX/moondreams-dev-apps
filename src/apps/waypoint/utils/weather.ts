@@ -201,7 +201,7 @@ export function getDayForecast(
   return result;
 }
 
-/** The rest of the location's current day, from its current hour — independent of the trip's dates and events. */
+/** The next 24 hours from the location's current hour — independent of the trip's dates and events. */
 export function getRemainingHours(
   plan: WeatherPlan,
   forecasts: WeatherForecasts,
@@ -215,7 +215,7 @@ export function getRemainingHours(
     return [];
   }
 
-  const result = forecast.hours.filter((hour) => hour.time >= nowKey && hour.time.startsWith(nowKey.slice(0, 10)));
+  const result = forecast.hours.filter((hour) => hour.time >= nowKey).slice(0, 24);
   return result;
 }
 
