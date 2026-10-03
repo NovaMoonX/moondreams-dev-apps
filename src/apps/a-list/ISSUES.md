@@ -1,6 +1,6 @@
 # A-List Tracker — Issue Roadmap
 
-Tiers mirror the README's Core MVP / Next Steps / Stretch Goals. Within a tier, issues are ordered by prerequisite, and each issue adds only the fields, types and rules clauses it uses. On GitHub, Issue N is #(187 + N): the MVP is #188–#204, Next Steps #205–#208 and Beyond #209–#213, all labeled `A-List (App)` plus their tier.
+Tiers mirror the README's Core MVP / Next Steps / Stretch Goals. Within a tier, issues are ordered by prerequisite, and each issue adds only the fields, types and rules clauses it uses. On GitHub, Issue N is #(187 + N): the MVP is #188–#204, Next Steps #205–#208 and Beyond #209–#213, all labeled with their tier and set to A-List on the board's Apps field.
 
 ## MVP
 

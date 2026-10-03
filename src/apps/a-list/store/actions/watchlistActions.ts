@@ -121,3 +121,30 @@ export const removeWatchlistItem = createAsyncThunk<
     );
   }
 });
+
+/** Writes a fresher provider snapshot onto the watchlist item; viewings keep their own copy. */
+export const refreshWatchlistMovie = createAsyncThunk<
+  void,
+  { uid: string; movieKey: string; movie: MovieSnapshot },
+  { rejectValue: string }
+>(
+  'aList/watchlist/refreshMovie',
+  async ({ uid, movieKey, movie }, { rejectWithValue }) => {
+    try {
+      await updateDoc(getItemRef(uid, movieKey), {
+        movie: {
+          title: movie.title,
+          releaseDate: movie.releaseDate ?? null,
+          posterUrl: movie.posterUrl ?? null,
+          runtimeMinutes: movie.runtimeMinutes ?? null,
+          contentRating: movie.contentRating ?? null,
+        },
+        lastEditedAt: Date.now(),
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to refresh this movie.'),
+      );
+    }
+  },
+);

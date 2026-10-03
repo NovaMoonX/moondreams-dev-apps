@@ -170,6 +170,8 @@ useEffect(() => {
 - Keep the root `README.md` and relevant mini-app docs current and minimal whenever code or behavior changes.
 - Preserve the existing structure and tone of existing docs; do not rewrite them into a different format or voice.
 - Update, remove, or compress stale content instead of adding long commentary.
+- **`functions/README.md` mirrors `functions/src/index.ts`:** every exported function has a row in its Functions table (trigger, app, purpose), and every secret or env var a function reads has a "Secrets and config" row. Update both in the same PR that adds, renames, removes or reconfigures a function. A new secret must exist in production before the PR merges, because CI deploys every function on merge and a missing secret fails the deploy.
+- **A setup step every developer must repeat is a script, not a README instruction.** Build it into `package.json` (a script or a `pre*` hook, like the `preemulators*` hooks that compile `functions/lib/` before the emulators load it), then document the command.
 - **The root `README.md` "Current apps" list mirrors `APP_REGISTRY`:** every app has one line (an emoji, its name, its registry description), added in the same PR that registers the app and updated whenever an app is renamed or its description changes.
 
 ### Critical reminders

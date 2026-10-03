@@ -23,6 +23,7 @@ import WatchlistScreen from '@apps/a-list/components/watchlist/WatchlistScreen';
 import { A_LIST_TABS, DEFAULT_A_LIST_TAB } from '@apps/a-list/constants';
 import { AListOverlayContext } from '@apps/a-list/hooks/useAListOverlay';
 import { useAListSync } from '@apps/a-list/hooks/useAListSync';
+import { useRefreshUnreleasedMovies } from '@apps/a-list/hooks/useRefreshUnreleasedMovies';
 import {
   selectIsAListLoaded,
   selectMembership,
@@ -48,6 +49,10 @@ function AList() {
   const loadError = useAppSelector(selectAListLoadError);
 
   useAListSync(user?.uid ?? null);
+  useRefreshUnreleasedMovies(
+    user?.uid ?? null,
+    isLoaded && !loadError && membership !== null,
+  );
 
   const requestedTab = searchParams.get('tab');
   const activeTab: AListTab =
