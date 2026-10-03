@@ -37,11 +37,7 @@ import {
   getStayTimezoneLabel,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
-import {
-  EVENT_TYPE_BADGE_CLASSES,
-  EVENT_TYPE_EMOJIS,
-  EVENT_TYPE_LABELS,
-} from '@apps/waypoint/constants';
+import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 
 type OverviewDetail = { type: 'event'; event: TimelineEvent } | { type: 'stay'; stay: Stay };
 
@@ -250,9 +246,10 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
 
 function EventTypeBadge({ event }: { event: TimelineEvent }) {
+  const badge = getEventBadge(event);
   return (
-    <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
-      {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
+    <Badge variant='base' className={badge.className}>
+      {badge.emoji} {badge.label}
     </Badge>
   );
 }

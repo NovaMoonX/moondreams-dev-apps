@@ -4,6 +4,7 @@ import type {
   ChecklistCategory,
   EventAttendeeTargetType,
   EventFieldChange,
+  EventLinkKind,
   EventType,
   ExpenseCategory,
   ExpenseSortBy,
@@ -97,6 +98,123 @@ export const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {
   OTHER: 'Other',
 };
 
+// A travel event wears its transit type's color instead of the generic travel blue, kept
+// clear of the dining, activity and free-time hues.
+export const TRANSIT_TYPE_BADGE_CLASSES: Record<TransitType, string> = {
+  FLIGHT: 'bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-100',
+  DRIVE: 'bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100',
+  FERRY: 'bg-cyan-200 text-cyan-900 dark:bg-cyan-900 dark:text-cyan-100',
+  TRAIN: 'bg-indigo-200 text-indigo-900 dark:bg-indigo-900 dark:text-indigo-100',
+  WALK: 'bg-lime-200 text-lime-900 dark:bg-lime-900 dark:text-lime-100',
+  BIKE: 'bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-100',
+  SCOOTER: 'bg-pink-200 text-pink-900 dark:bg-pink-900 dark:text-pink-100',
+  OTHER: 'bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100',
+};
+
+export const TRANSIT_TYPE_EMOJIS: Record<TransitType, string> = {
+  FLIGHT: '✈️',
+  DRIVE: '🚗',
+  FERRY: '⛴️',
+  TRAIN: '🚆',
+  WALK: '🚶',
+  BIKE: '🚲',
+  SCOOTER: '🛴',
+  OTHER: '🧭',
+};
+
+export interface TransitFieldSpec {
+  key: string;
+  label: string;
+  placeholder: string;
+  /** Essential fields show up front, in their section; the rest wait behind a chip. */
+  essential: boolean;
+  /** Where an essential field sits; defaults to the carrier section. */
+  section?: 'route';
+  /** Stored with the leg but never shown as an input of its own. */
+  hidden?: boolean;
+}
+
+const START_FIELDS: TransitFieldSpec[] = [
+  { key: 'startLocation', label: 'Starting from', placeholder: 'Defaults to your previous event', essential: false },
+  { key: 'endLocation', label: 'Destination', placeholder: '', essential: false, hidden: true },
+];
+
+export const TRANSIT_FIELD_SPECS: Record<TransitType, TransitFieldSpec[]> = {
+  FLIGHT: [
+    { key: 'airline', label: 'Airline', placeholder: 'Delta Air Lines', essential: true },
+    { key: 'airlineIataCode', label: 'Airline IATA code', placeholder: '', essential: false, hidden: true },
+    { key: 'airlineIcaoCode', label: 'Airline ICAO code', placeholder: '', essential: false, hidden: true },
+    { key: 'flightNumber', label: 'Flight number', placeholder: 'DL 482', essential: true },
+    { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'XK7P2Q', essential: true },
+    { key: 'departureAirportCode', label: 'Departing airport', placeholder: 'JFK', essential: true, section: 'route' },
+    { key: 'arrivalAirportCode', label: 'Arriving airport', placeholder: 'LAX', essential: true, section: 'route' },
+  ],
+  TRAIN: [
+    { key: 'operator', label: 'Operator', placeholder: 'Amtrak', essential: true },
+    { key: 'trainNumber', label: 'Train number', placeholder: '171', essential: true },
+    { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
+    { key: 'departureStation', label: 'Departing station', placeholder: '', essential: false, hidden: true },
+    { key: 'arrivalStation', label: 'Arriving station', placeholder: 'Union Station', essential: true, section: 'route' },
+  ],
+  FERRY: [
+    { key: 'operator', label: 'Operator', placeholder: 'Washington State Ferries', essential: true },
+    { key: 'confirmationCode', label: 'Confirmation code', placeholder: 'ABC123', essential: true },
+    { key: 'departurePort', label: 'Departing port', placeholder: '', essential: false, hidden: true },
+    { key: 'arrivalPort', label: 'Arriving port', placeholder: 'Bainbridge Island', essential: true, section: 'route' },
+  ],
+  DRIVE: [
+    { key: 'vehicleInfo', label: 'Vehicle', placeholder: 'Blue Subaru Outback', essential: false },
+    ...START_FIELDS,
+  ],
+  WALK: START_FIELDS,
+  BIKE: [
+    { key: 'operator', label: 'Bike share or shop', placeholder: 'Citi Bike', essential: false },
+    ...START_FIELDS,
+  ],
+  SCOOTER: [
+    { key: 'operator', label: 'Scooter company', placeholder: 'Lime', essential: false },
+    ...START_FIELDS,
+  ],
+  OTHER: [],
+};
+
+// What the event's location is for each kind of leg: where you head to catch it, or
+// where a short trip ends. A flight takes its location from the departing airport instead.
+export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
+  FLIGHT: null,
+  TRAIN: 'Departing station',
+  FERRY: 'Departing port',
+  DRIVE: 'Going to',
+  WALK: 'Going to',
+  BIKE: 'Going to',
+  SCOOTER: 'Going to',
+  OTHER: 'Where to navigate',
+};
+
+// The stored route field that mirrors the event's location, so the place is entered once.
+export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {
+  TRAIN: 'departureStation',
+  FERRY: 'departurePort',
+  DRIVE: 'endLocation',
+  WALK: 'endLocation',
+  BIKE: 'endLocation',
+  SCOOTER: 'endLocation',
+};
+
+export const EVENT_LINK_KIND_LABELS: Record<EventLinkKind, string> = {
+  WEBSITE: 'Website',
+  RESERVATION: 'Reservation',
+  MENU: 'Menu',
+  BOOKING: 'Booking',
+};
+
+export const EVENT_LINK_KINDS_BY_TYPE: Record<EventType, readonly EventLinkKind[]> = {
+  TRAVEL: ['BOOKING', 'WEBSITE'],
+  DINING: ['MENU', 'RESERVATION', 'WEBSITE'],
+  ACTIVITY: ['BOOKING', 'WEBSITE'],
+  FREE_TIME: [],
+};
+
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Breakfast',
   LUNCH: 'Lunch',
@@ -139,10 +257,9 @@ export const TIME_BLOCK_LABELS: Record<TimeBlock, string> = {
   EVENING: 'Evening',
 };
 
-// 5-minute increments, 5-60 minutes before an event starts.
-export const REMINDER_MINUTES_BEFORE_OPTIONS: readonly number[] = [
-  5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
-];
+// Reminders go out 5 minutes to 3 hours (airport time) before an event, in 5-minute steps.
+export const REMINDER_STEP_MINUTES = 5;
+export const MAX_REMINDER_MINUTES_BEFORE = 180;
 
 export const DEFAULT_REMINDER_MINUTES_BEFORE = 20;
 

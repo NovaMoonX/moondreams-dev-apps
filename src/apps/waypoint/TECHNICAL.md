@@ -124,7 +124,7 @@ interface TimelineEvent {
   eventType: EventType;
   dayIndex: number | null; // null = "no specific day" (RELATIVE trips only)
   endDayIndex: number | null; // equal to dayIndex for the common single-day case; higher for events spanning multiple days
-  title: string;
+  title: string; // always stored non-empty, but the form never requires one — a blank title is derived on save ("Flight DL 482", the location name, or the event type)
   startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
   endTime: string | null;
   timezone: string | null; // zone override for this event's times; null follows the trip's timezone
@@ -139,7 +139,10 @@ interface TimelineEvent {
   assignedMemberIds: string[]; // []
   changeHistory: EventChangeSnapshot[]; // [] — every post-trip-start edit, appended, never overwritten
   place: PlaceRef | null; // set by a Google Places pick — see "Enrichment: place search and link previews" below
-  linkUrl: string | null; // booking/listing link — DINING and ACTIVITY only; other event types leave this null
+  linkUrl: string | null; // booking/menu/listing link — any type but FREE_TIME
+  linkKind: 'WEBSITE' | 'RESERVATION' | 'MENU' | 'BOOKING' | null; // what the link is; null on events saved before it existed
+  groupLabel: string | null; // free-text group name — events of the same eventType sharing a label render as one collapsible group; derived at render time, no group document
+  stackLabel: string | null; // free-text stack name — several itineraries (groups of legs, or single events) of one eventType shown as one stack; stacking a leg stacks its whole group
   linkPreview: LinkPreview | null; // scraped from linkUrl by the fetchLinkMetadata cloud function
   createdBy: string;
   createdAt: number;
@@ -158,8 +161,7 @@ interface TravelEventDetails {
 
 interface DiningEventDetails {
   mealType: MealType;
-  menuLink: string | null;
-  cuisines: string[]; // []
+  cuisines: string[]; // [] — the menu is just the event's `linkUrl` with `linkKind: 'MENU'`
 }
 
 interface ActivityEventDetails {
@@ -179,16 +181,18 @@ type EventDetails = TravelEventDetails | DiningEventDetails | ActivityEventDetai
 ```typescript
 interface TransitDetailsBase {
   notes: string | null;
-  estimatedTravelTimeMs: number | null; // duration, not a point in time — milliseconds for consistency with every other time field
+  estimatedTravelTimeMs: number | null; // duration, not a point in time — milliseconds for consistency with every other time field; only asked when the leg has no end time (an end time implies the duration)
 }
 
 interface PointToPointTransitDetails extends TransitDetailsBase {
-  startLocation: string | null; // free text — not every trip has a "city"
-  endLocation: string | null;
+  startLocation: string | null; // free text — null means "from the previous event"
+  endLocation: string | null; // null means "to the next event"
 }
 
 interface FlightTransitDetails extends TransitDetailsBase {
   airline: string | null;
+  airlineIataCode: string | null; // set when the airline is picked from the list; null for a custom one
+  airlineIcaoCode: string | null; // FlightAware links use this 3-letter code, not the IATA one
   flightNumber: string | null;
   confirmationCode: string | null;
   departureAirportCode: string | null;
@@ -196,7 +200,7 @@ interface FlightTransitDetails extends TransitDetailsBase {
 }
 
 interface DriveTransitDetails extends PointToPointTransitDetails {
-  confirmationCode: string | null;
+  // no confirmationCode — a rental's code belongs to the planned Rentals section, not a leg
   vehicleInfo: string | null;
 }
 
@@ -232,6 +236,9 @@ interface OtherTransitDetails extends TransitDetailsBase {
 type TransitDetails =
   | FlightTransitDetails | DriveTransitDetails | FerryTransitDetails | TrainTransitDetails
   | WalkTransitDetails | BikeTransitDetails | ScooterTransitDetails | OtherTransitDetails;
+// The event's own location is entered once and mirrored into the route on save: `endLocation` for
+// Drive/Walk/Bike/Scooter ("going to"), `departureStation`/`departurePort` for Train/Ferry; a Flight's
+// location comes from its departing airport.
 // startLocation/endLocation only apply to Drive/Walk/Bike/Scooter — Flight/Ferry/Train already
 // have their own departure/arrival pair, so a generic start/end there would be a second way to
 // say the same thing. Which variant applies is read off the sibling `transitType` field.

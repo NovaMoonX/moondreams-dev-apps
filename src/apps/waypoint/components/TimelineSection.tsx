@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -9,19 +9,32 @@ import {
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useQueryClient } from '@tanstack/react-query';
 import { shallowEqual } from 'react-redux';
 
 import AppToggle from '@/components/AppToggle';
+import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
+import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import EventCard from '@apps/waypoint/components/EventCard';
-import EventFormModal from '@apps/waypoint/components/EventFormModal';
+import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
+import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
+import EventStackCard from '@apps/waypoint/components/EventStackCard';
+import EventStackModal from '@apps/waypoint/components/EventStackModal';
+import EventFormModal, {
+  type EventFormValues,
+  type NextLegSeed,
+  type SubmitOptions,
+} from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import SectionHeader from '@apps/waypoint/components/SectionHeader';
 import {
   createEvent,
   deleteEvent,
   setEventArchived,
+  setEventsGroup,
+  setEventsStack,
   updateEvent,
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
@@ -44,6 +57,7 @@ import {
   canEditExistingItem,
   hasTripStarted,
 } from '@apps/waypoint/utils/roleGuards';
+import { buildTimelineItems, getGroupMembers, getStackMembers } from '@apps/waypoint/utils/eventGroups';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
@@ -95,13 +109,81 @@ export function TimelineSection({
   }));
   const canEdit = canEditExistingItem(trip, currentUserId);
   const canAddEvents = canCreateItem(trip, currentUserId);
+  const queryClient = useQueryClient();
+
+  // The flight form's airline and airport pickers read these, so have them cached before it opens.
+  useEffect(() => {
+    if (canAddEvents || canEdit) {
+      void queryClient.prefetchQuery(airlinesQueryOptions());
+      void queryClient.prefetchQuery(airportsQueryOptions());
+    }
+  }, [canAddEvents, canEdit, queryClient]);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
+  const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
   const stays = useAppSelector(selectStays);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId));
+
+  const [stackingEvent, setStackingEvent] = useState<TimelineEvent | undefined>();
+  const [isStackHeaderOrigin, setIsStackHeaderOrigin] = useState(false);
+  const stackSuccessRef = useRef<(() => void) | undefined>(undefined);
+  const [isStackSubmitting, setIsStackSubmitting] = useState(false);
+
+  const saveStack = async (targets: TimelineEvent[], stackName: string | null) => {
+    setIsStackSubmitting(true);
+    try {
+      await dispatch(
+        setEventsStack({ uid: currentUserId, trip, events: targets, stackName }),
+      ).unwrap();
+      setStackingEvent(undefined);
+      stackSuccessRef.current?.();
+      stackSuccessRef.current = undefined;
+    } catch (stackError) {
+      addToast({
+        title: 'Unable to update this stack',
+        description: getErrorMessage(stackError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsStackSubmitting(false);
+    }
+  };
+
+  // Stacking moves a whole trip: the event's group of legs travels together.
+  const getItinerary = (event: TimelineEvent) => getGroupMembers(events, event);
+
+  const [groupingEvent, setGroupingEvent] = useState<TimelineEvent | undefined>();
+  const [isGroupSubmitting, setIsGroupSubmitting] = useState(false);
+
+  const saveGroup = async (targets: TimelineEvent[], groupName: string | null) => {
+    setIsGroupSubmitting(true);
+    try {
+      await dispatch(setEventsGroup({ uid: currentUserId, trip, events: targets, groupName })).unwrap();
+      setGroupingEvent(undefined);
+    } catch (groupError) {
+      addToast({
+        title: 'Unable to update this group',
+        description: getErrorMessage(groupError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsGroupSubmitting(false);
+    }
+  };
+
+  const handleUnstackAll = async (event: TimelineEvent) => {
+    const confirmed = await confirm({
+      title: 'Unstack all',
+      message: `Take every trip out of "${event.stackLabel}"? The events stay on the timeline.`,
+      destructive: true,
+    });
+    if (confirmed) {
+      await saveStack(getStackMembers(events, event), null);
+    }
+  };
 
   const handleToggleArchived = async (event: TimelineEvent, onSuccess?: () => void) => {
     if (!event.isArchived) {
@@ -173,6 +255,13 @@ export function TimelineSection({
         canEdit={canEdit}
         canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
+        showAttendees={showAttendees}
+        isStacked={Boolean(event.stackLabel)}
+        onStack={(selectedEvent, onSuccess) => {
+          setIsStackHeaderOrigin(false);
+          setStackingEvent(selectedEvent);
+          stackSuccessRef.current = onSuccess;
+        }}
         showArchiveToggle={hasTripStarted(trip)}
         onEdit={(selectedEvent, onSuccess) => {
           setEditingEvent(selectedEvent);
@@ -191,6 +280,42 @@ export function TimelineSection({
       <EventSuggestionsList trip={trip} event={event} currentUserId={currentUserId} />
     </div>
   );
+
+  const renderEventItems = (items: TimelineEvent[]) =>
+    buildTimelineItems(items).map((item) => {
+      if (item.kind === 'stack') {
+        return (
+          <EventStackCard
+            key={item.key}
+            trip={trip}
+            stack={item}
+            currentUserId={currentUserId}
+            showAttendees={showAttendees}
+            canEdit={canEdit}
+            onManage={(selectedEvent) => {
+              setIsStackHeaderOrigin(true);
+              setStackingEvent(selectedEvent);
+            }}
+            onManageGroup={(selectedEvent) => setGroupingEvent(selectedEvent)}
+            renderEvent={renderEventCard}
+          />
+        );
+      }
+      if (item.kind === 'group') {
+        return (
+          <EventGroupCard
+            key={item.key}
+            trip={trip}
+            group={item}
+            showAttendees={showAttendees}
+            canEdit={canEdit}
+            onManage={(selectedEvent) => setGroupingEvent(selectedEvent)}
+            renderEvent={renderEventCard}
+          />
+        );
+      }
+      return renderEventCard(item.event);
+    });
 
   const renderDivider = (label: string) => (
     <div className='flex items-center gap-3'>
@@ -221,7 +346,7 @@ export function TimelineSection({
             .map((day) => (
               <div key={day} className='space-y-3'>
                 {renderDivider(getDayDateLabel(trip.startDate, day))}
-                {visibleEvents.filter((event) => event.dayIndex === day).map(renderEventCard)}
+                {renderEventItems(visibleEvents.filter((event) => event.dayIndex === day))}
               </div>
             ))}
         </div>
@@ -229,7 +354,7 @@ export function TimelineSection({
     }
 
     if (scope !== 'all') {
-      return <div className='space-y-3'>{visibleEvents.map(renderEventCard)}</div>;
+      return <div className='space-y-3'>{renderEventItems(visibleEvents)}</div>;
     }
 
     return (
@@ -238,7 +363,7 @@ export function TimelineSection({
           ({ bucket, items }) => (
             <div key={bucket} className='space-y-3'>
               {renderDivider(getBucketLabel(bucket, trip.startDate))}
-              {items.map(renderEventCard)}
+              {renderEventItems(items)}
             </div>
           ),
         )}
@@ -251,9 +376,10 @@ export function TimelineSection({
     editSuccessRef.current = undefined;
   };
 
-  const handleSubmit = async (
-    event: Omit<TimelineEvent, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>,
-  ) => {
+  const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
+  const [legCount, setLegCount] = useState(0);
+
+  const handleSubmit = async (event: EventFormValues, options?: SubmitOptions) => {
     setIsSubmitting(true);
     try {
       if (editingEvent) {
@@ -269,8 +395,14 @@ export function TimelineSection({
       } else {
         await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
       }
-      setIsFormOpen(false);
       setEditingEvent(undefined);
+      if (options?.addLeg) {
+        setLegSeed({ previous: event, arrivalPlace: options.arrivalPlace ?? null });
+        setLegCount((count) => count + 1);
+      } else {
+        setLegSeed(undefined);
+        setIsFormOpen(false);
+      }
       resolveEditSuccess();
     } finally {
       setIsSubmitting(false);
@@ -348,6 +480,14 @@ export function TimelineSection({
             <label className='text-muted-foreground flex items-center gap-2 text-sm'>
               <AppToggle
                 size='sm'
+                checked={showAttendees}
+                onCheckedChange={setShowAttendees}
+              />
+              Show who&apos;s attending
+            </label>
+            <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <AppToggle
+                size='sm'
                 checked={attendingOnly}
                 onCheckedChange={setAttendingOnly}
               />
@@ -378,12 +518,44 @@ export function TimelineSection({
           )}
         </Tabs>
       </section>
+      {stackingEvent && (
+        <EventStackModal
+          key={`${stackingEvent.id}-${stackingEvent.stackLabel ?? 'none'}`}
+          isOpen
+          event={stackingEvent}
+          events={events}
+          isSubmitting={isStackSubmitting}
+          canRemoveTrip={!isStackHeaderOrigin}
+          onStack={(name) => void saveStack(getItinerary(stackingEvent), name)}
+          onRename={(name) => void saveStack(getStackMembers(events, stackingEvent), name)}
+          onRemove={() => void saveStack(getItinerary(stackingEvent), null)}
+          onUnstackAll={() => void handleUnstackAll(stackingEvent)}
+          onClose={() => {
+            setStackingEvent(undefined);
+            stackSuccessRef.current = undefined;
+          }}
+        />
+      )}
+      {groupingEvent && (
+        <EventGroupModal
+          key={`${groupingEvent.id}-${groupingEvent.groupLabel ?? 'none'}`}
+          isOpen
+          event={groupingEvent}
+          legCount={getGroupMembers(events, groupingEvent).length}
+          isSubmitting={isGroupSubmitting}
+          onRename={(name) => void saveGroup(getGroupMembers(events, groupingEvent), name)}
+          onUngroup={() => void saveGroup(getGroupMembers(events, groupingEvent), null)}
+          onClose={() => setGroupingEvent(undefined)}
+        />
+      )}
       <EventFormModal
-        key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}
+        key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}-${legCount}`}
         isOpen={isFormOpen}
+        legFrom={legSeed}
         trip={trip}
         memberOptions={memberOptions}
         event={editingEvent}
+        events={events}
         placeBias={placeBias}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
@@ -391,6 +563,7 @@ export function TimelineSection({
         onClose={() => {
           setIsFormOpen(false);
           setEditingEvent(undefined);
+          setLegSeed(undefined);
           // Canceling leaves the mobile drawer open, if it's the one that opened this modal.
           editSuccessRef.current = undefined;
         }}
