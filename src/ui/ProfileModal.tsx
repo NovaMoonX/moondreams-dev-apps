@@ -37,7 +37,7 @@ function ProfileModal({ user, onClose }: ProfileModalProps) {
       }
       onClose();
     } catch {
-      // surfaced via profilePhoto.error
+      return;
     }
   };
 

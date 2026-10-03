@@ -29,6 +29,7 @@ import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
+import { getProviderPhotoURL } from '@/utils/accountUtils';
 import { queryClient } from '@lib/query/queryClient';
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -235,11 +236,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       const nextPhotoURL =
-        photoURL ??
-        currentUser.providerData.find((info) => info.photoURL)?.photoURL ??
-        null;
+        photoURL ?? getProviderPhotoURL(currentUser);
 
-      await updateProfile(currentUser, { photoURL: nextPhotoURL });
+      await updateProfile(currentUser, { photoURL: nextPhotoURL ?? '' });
       await updateDoc(doc(db, 'users', currentUser.uid), {
         photoURL: nextPhotoURL ?? '',
       });

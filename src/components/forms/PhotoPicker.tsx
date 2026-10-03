@@ -6,9 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 export type PhotoPickerVariant = 'minimal' | 'enhanced';
 
 interface PhotoPickerProps {
-  /** The chosen photo; drives the Change/Remove buttons. */
   photoUrl: string | null;
-  /** Shown in the preview while there is no `photoUrl` (e.g. an account photo that a chosen one would override). */
   fallbackUrl?: string | null;
   initials?: string;
   error?: string | null;
@@ -22,7 +20,6 @@ interface PhotoPickerProps {
   onRemove: () => void;
 }
 
-/** Reusable photo picker: preview + change/remove, backed by `useImageUpload`. */
 function PhotoPicker({
   photoUrl,
   fallbackUrl = null,

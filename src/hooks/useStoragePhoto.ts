@@ -10,6 +10,8 @@ export interface UseStoragePhotoResult {
   upload: (file: File) => Promise<string>;
   /** Deletes the photo at `path`; a missing photo is not an error. */
   remove: () => Promise<void>;
+  /** Runs `task` with the same busy/error tracking as `upload` and `remove`. */
+  track: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
 /** Storage side of a single-photo slot at a fixed path. Pair with `useImageUpload` for picking and previewing. */
@@ -44,5 +46,5 @@ export function useStoragePhoto(path: string): UseStoragePhotoResult {
 
   const remove = useCallback(() => run(() => deleteFile(path)), [path, run]);
 
-  return { isWorking, error, upload, remove };
+  return { isWorking, error, upload, remove, track: run };
 }

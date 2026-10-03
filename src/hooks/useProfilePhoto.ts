@@ -1,25 +1,29 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useStoragePhoto } from '@/hooks/useStoragePhoto';
+import { getAvatarStoragePath, getProviderPhotoURL } from '@/utils/accountUtils';
 
 /** Create/replace/delete the signed-in user's custom photo, which overrides the sign-in provider's photo. */
 export function useProfilePhoto() {
   const { user, updatePhotoURL } = useAuth();
-  const storage = useStoragePhoto(`users/${user?.uid ?? 'anonymous'}/avatar`);
+  const storage = useStoragePhoto(getAvatarStoragePath(user?.uid ?? 'anonymous'));
 
-  const providerPhotoURL =
-    user?.providerData.find((info) => info.photoURL)?.photoURL ?? null;
+  const providerPhotoURL = user ? getProviderPhotoURL(user) : null;
   const customPhotoURL =
-    user?.photoURL && user.photoURL !== providerPhotoURL ? user.photoURL : null;
+    user?.photoURL?.includes(encodeURIComponent(getAvatarStoragePath(user.uid)))
+      ? user.photoURL
+      : null;
 
-  const save = async (file: File) => {
-    const url = await storage.upload(file);
-    await updatePhotoURL(url);
-  };
+  const save = (file: File) =>
+    storage.track(async () => {
+      const url = await storage.upload(file);
+      await updatePhotoURL(url);
+    });
 
-  const remove = async () => {
-    await storage.remove();
-    await updatePhotoURL(null);
-  };
+  const remove = () =>
+    storage.track(async () => {
+      await storage.remove();
+      await updatePhotoURL(null);
+    });
 
   return {
     customPhotoURL,
