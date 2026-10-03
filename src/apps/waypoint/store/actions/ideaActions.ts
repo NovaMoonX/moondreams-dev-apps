@@ -1,10 +1,10 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { arrayRemove, arrayUnion, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import type { IdeaDetails, IdeaType, TripIdea, TripSpace } from '@apps/waypoint/types';
-import { canAddIdea, isTripMember } from '@apps/waypoint/utils/roleGuards';
+import { canAddIdea, canDeleteIdea, canEditIdea, isTripMember } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateIdeaInput {
   uid: string;
@@ -73,5 +73,49 @@ export const toggleIdeaVote = createAsyncThunk<void, ToggleIdeaVoteInput, { reje
     await updateDoc(ideaRef, {
       voterUids: hasVoted ? arrayRemove(uid) : arrayUnion(uid),
     });
+  },
+);
+
+interface UpdateIdeaInput extends CreateIdeaInput {
+  idea: TripIdea;
+}
+
+export const updateIdea = createAsyncThunk<void, UpdateIdeaInput, { rejectValue: string }>(
+  'waypoint/ideas/update',
+  async ({ uid, trip, idea, ...fields }, { rejectWithValue }) => {
+    if (!canEditIdea(trip, uid, idea)) {
+      return rejectWithValue('Only the person who added this idea can change it.');
+    }
+    if (!fields.title.trim()) {
+      return rejectWithValue('Enter a name for this idea.');
+    }
+    if (fields.linkUrl?.trim() && !isValidHttpUrl(fields.linkUrl)) {
+      return rejectWithValue('Enter a valid link, like https://example.com.');
+    }
+
+    await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id), {
+      ideaType: fields.ideaType,
+      title: fields.title.trim(),
+      notes: fields.notes?.trim() || null,
+      linkUrl: fields.linkUrl?.trim() || null,
+      ideaDetails: fields.ideaDetails ?? null,
+      lastEditedAt: Date.now(),
+    });
+  },
+);
+
+interface DeleteIdeaInput {
+  uid: string;
+  trip: TripSpace;
+  idea: TripIdea;
+}
+
+export const deleteIdea = createAsyncThunk<void, DeleteIdeaInput, { rejectValue: string }>(
+  'waypoint/ideas/delete',
+  async ({ uid, trip, idea }, { rejectWithValue }) => {
+    if (!canDeleteIdea(trip, uid, idea)) {
+      return rejectWithValue('Only the person who added this idea, or an Admin, can delete it.');
+    }
+    await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id));
   },
 );

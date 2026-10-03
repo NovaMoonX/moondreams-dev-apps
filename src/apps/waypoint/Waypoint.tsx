@@ -24,6 +24,7 @@ import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipAction
 import { createTrip } from '@apps/waypoint/store/actions/tripActions';
 import {
   getTripStatus,
+  selectIsTripDataLoaded,
   selectTrips,
   selectSortedTimelineEvents,
 } from '@apps/waypoint/store/selectors';
@@ -50,6 +51,9 @@ function Waypoint() {
   const now = useNow();
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
   const selectedTripId = searchParams.get('trip');
+  const isTripDataLoaded = useAppSelector((state) =>
+    selectedTripId ? selectIsTripDataLoaded(state, selectedTripId) : true,
+  );
   const selectedTrip = trips.find((trip) => trip.id === selectedTripId) ?? null;
   const isSelectedTripMissing = Boolean(selectedTripId) && !selectedTrip;
   const isSelectedTripAdmin =
@@ -181,6 +185,10 @@ function Waypoint() {
       </section>
     );
   };
+
+  if (selectedTrip && !isTripDataLoaded) {
+    return <Loading />;
+  }
 
   if (selectedTrip) {
     return (

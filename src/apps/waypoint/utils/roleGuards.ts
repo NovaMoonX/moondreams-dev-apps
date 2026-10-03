@@ -62,6 +62,16 @@ export function canAddIdea(trip: TripSpace, uid: string, now = Date.now()) {
   return isTripMember(trip, uid) && !hasTripStarted(trip, now);
 }
 
+/** Only an idea's own poster may edit it, in any trip phase. */
+export function canEditIdea(trip: TripSpace, uid: string, idea: { addedByUid: string }) {
+  return idea.addedByUid === uid && isTripMember(trip, uid);
+}
+
+/** The poster may delete their own idea; an Admin may also remove anyone's. */
+export function canDeleteIdea(trip: TripSpace, uid: string, idea: { addedByUid: string }) {
+  return canEditIdea(trip, uid, idea) || isTripAdmin(trip, uid);
+}
+
 /** Editing/deleting an already-existing item (event, stay, checklist item) narrows to
  * Admin-only while the trip is active — creating a new one follows `canCreateItem` instead. */
 export function canEditExistingItem(trip: TripSpace, uid: string) {

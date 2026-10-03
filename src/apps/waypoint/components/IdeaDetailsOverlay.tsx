@@ -1,22 +1,28 @@
-import { useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useId, useState, useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
+import { useAppDispatch } from '@/store';
 import { getDayLabel } from '@/utils/dateRangeUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
+import IdeaFormModal, { type IdeaFormFields } from '@apps/waypoint/components/IdeaFormModal';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import {
   IDEA_TYPE_CHIP_CLASSES,
   IDEA_TYPE_EMOJIS,
   IDEA_TYPE_LABELS,
 } from '@apps/waypoint/constants';
+import { deleteIdea, updateIdea } from '@apps/waypoint/store/actions/ideaActions';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTiming } from '@apps/waypoint/utils/ideaLabels';
+import { canDeleteIdea, canEditIdea } from '@apps/waypoint/utils/roleGuards';
 
-let openIdeaId: string | null = null;
+let openOverlayId: string | null = null;
 const openIdeaListeners = new Set<() => void>();
 
 const subscribeToOpenIdea = (listener: () => void) => {
@@ -26,11 +32,11 @@ const subscribeToOpenIdea = (listener: () => void) => {
   };
 };
 
-const setOpenIdea = (ideaId: string, isOpen: boolean) => {
+const setOpenIdea = (overlayId: string, isOpen: boolean) => {
   if (isOpen) {
-    openIdeaId = ideaId;
-  } else if (openIdeaId === ideaId) {
-    openIdeaId = null;
+    openOverlayId = overlayId;
+  } else if (openOverlayId === overlayId) {
+    openOverlayId = null;
   } else {
     return;
   }
@@ -57,9 +63,11 @@ interface IdeaDetailsOverlayProps {
 
 type IdeaDetailsBodyProps = Pick<IdeaDetailsOverlayProps, 'trip' | 'idea' | 'currentUserId'> & {
   isDrawer: boolean;
+  onEdit: (() => void) | null;
+  onDelete: (() => void) | null;
 };
 
-function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer }: IdeaDetailsBodyProps) {
+function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer, onEdit, onDelete }: IdeaDetailsBodyProps) {
   const adderInfo = useUserInfo(idea.addedByUid);
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const tags = getIdeaTags(idea);
@@ -137,11 +145,29 @@ function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer }: IdeaDetailsBod
       {details}
       <div className='border-border flex items-center justify-between gap-2 border-t pt-3'>
         <IdeaVoteButton trip={trip} idea={idea} currentUserId={currentUserId} />
-        {idea.linkUrl && (
-          <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='sm' variant='secondary'>
-            Visit site
-          </Button>
-        )}
+        <div className='flex items-center gap-2'>
+          {onEdit && (
+            <Button type='button' size='sm' variant='secondary' onClick={onEdit}>
+              Modify
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              type='button'
+              size='sm'
+              variant='secondary'
+              className='text-destructive'
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          )}
+          {idea.linkUrl && (
+            <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='sm' variant='secondary'>
+              Visit site
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -150,10 +176,20 @@ function IdeaDetailsBody({ trip, idea, currentUserId, isDrawer }: IdeaDetailsBod
 /** Phones get a bottom drawer with a big centered vote; wider screens a popover that opens on
  * hover, beside the idea's text. */
 function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDetailsOverlayProps) {
+  const dispatch = useAppDispatch();
+  const { addToast } = useToast();
+  const { confirm } = useActionModal();
+  const adderInfo = useUserInfo(idea.addedByUid);
+  const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const isSmallScreen = useMediaQuery().isBelow('sm');
-  // One details view is open at a time, so moving between ideas never leaves two showing.
-  const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openIdeaId === idea.id);
-  const setIsOpen = (open: boolean) => setOpenIdea(idea.id, open);
+  // Keyed per rendered card, not per idea: the same idea can sit on Overview and in the Ideas list.
+  const overlayId = useId();
+  const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openOverlayId === overlayId);
+  const setIsOpen = (open: boolean) => setOpenIdea(overlayId, open);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const canEdit = canEditIdea(trip, currentUserId, idea);
+  const canDelete = canDeleteIdea(trip, currentUserId, idea);
   const openProps: IdeaOpenProps = {
     role: 'button',
     tabIndex: 0,
@@ -166,6 +202,77 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
       }
     },
   };
+  const startEditing = canEdit
+    ? () => {
+        setIsOpen(false);
+        setIsEditing(true);
+      }
+    : null;
+
+  const handleSave = async (fields: IdeaFormFields) => {
+    setIsSubmitting(true);
+    try {
+      await dispatch(updateIdea({ uid: currentUserId, trip, idea, ...fields })).unwrap();
+      setIsEditing(false);
+    } catch (saveError) {
+      addToast({
+        title: 'Unable to save this idea',
+        description: getErrorMessage(saveError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsSubmitting(true);
+    try {
+      await dispatch(deleteIdea({ uid: currentUserId, trip, idea })).unwrap();
+      setIsEditing(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const deleteAsAdmin = async () => {
+    const confirmed = await confirm({
+      title: 'Delete idea',
+      message: `This is ${adderName}'s idea, not yours. Delete "${idea.title}" for everyone?${
+        idea.convertedToEntityId === null ? '' : " It's already on the itinerary, and that event stays exactly as it is."
+      }`,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await handleDelete();
+    } catch (deleteError) {
+      addToast({
+        title: 'Unable to delete this idea',
+        description: getErrorMessage(deleteError, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
+  const startAdminDelete = canDelete && !canEdit ? () => void deleteAsAdmin() : null;
+
+  const editModal = isEditing && (
+    <IdeaFormModal
+      key={idea.id}
+      isOpen
+      trip={trip}
+      defaultType={idea.ideaType}
+      idea={idea}
+      canPost
+      isSubmitting={isSubmitting}
+      onSubmit={handleSave}
+      onDelete={handleDelete}
+      onClose={() => setIsEditing(false)}
+    />
+  );
 
   if (isSmallScreen) {
     return (
@@ -177,35 +284,77 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
           title={idea.title}
           showCloseButton
           footer={
-            idea.linkUrl ? (
-              <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='lg' variant='secondary'>
-                Visit site
-              </Button>
+            idea.linkUrl || startEditing || startAdminDelete ? (
+              <div className='flex flex-col gap-2'>
+                {idea.linkUrl && (
+                  <Button href={idea.linkUrl} target='_blank' rel='noreferrer' size='lg' variant='secondary'>
+                    Visit site
+                  </Button>
+                )}
+                {startEditing && (
+                  <Button type='button' size='lg' variant='secondary' onClick={startEditing}>
+                    Modify
+                  </Button>
+                )}
+                {startAdminDelete && (
+                  <Button
+                    type='button'
+                    size='lg'
+                    variant='secondary'
+                    className='text-destructive'
+                    onClick={startAdminDelete}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
             ) : undefined
           }
         >
-          {isOpen && <IdeaDetailsBody trip={trip} idea={idea} currentUserId={currentUserId} isDrawer />}
+          {isOpen && (
+            <IdeaDetailsBody
+              trip={trip}
+              idea={idea}
+              currentUserId={currentUserId}
+              isDrawer
+              onEdit={null}
+              onDelete={null}
+            />
+          )}
         </Drawer>
+        {editModal}
       </>
     );
   }
 
-  return renderTrigger(openProps, (content) => (
-    <Popover
-      trigger={<div>{content}</div>}
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
-      hoverable
-      placement='right'
-      alignment='start'
-      offset={12}
-      className='border-border w-80 cursor-default rounded-xl border p-4 shadow-xl'
-    >
-      {isOpen && (
-        <IdeaDetailsBody trip={trip} idea={idea} currentUserId={currentUserId} isDrawer={false} />
-      )}
-    </Popover>
-  ));
+  return (
+    <>
+      {renderTrigger(openProps, (content) => (
+        <Popover
+          trigger={<div>{content}</div>}
+          isOpen={isOpen && !isEditing}
+          onOpenChange={(open) => !isEditing && setIsOpen(open)}
+          hoverable
+          placement='right'
+          alignment='start'
+          offset={12}
+          className='border-border w-80 cursor-default rounded-xl border p-4 shadow-xl'
+        >
+          {isOpen && (
+            <IdeaDetailsBody
+              trip={trip}
+              idea={idea}
+              currentUserId={currentUserId}
+              isDrawer={false}
+              onEdit={startEditing}
+              onDelete={startAdminDelete}
+            />
+          )}
+        </Popover>
+      ))}
+      {editModal}
+    </>
+  );
 }
 
 export default IdeaDetailsOverlay;
