@@ -208,6 +208,8 @@ export type TransitType =
   | 'OTHER';
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type ActivitySetting = 'INDOOR' | 'OUTDOOR';
+export type IdeaType = 'RESTAURANT' | 'ACTIVITY';
+export type TimeBlock = 'MORNING' | 'AFTERNOON' | 'EVENING';
 export type EventStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
 export type TripStatus = 'UPCOMING' | 'ACTIVE' | 'PAST';
 export type EventAttendeeTargetType =
@@ -215,12 +217,82 @@ export type EventAttendeeTargetType =
   | 'EVERYONE_INCLUDING_FUTURE'
   | 'SPECIFIC_MEMBERS';
 
+export type EventLinkKind = 'WEBSITE' | 'RESERVATION' | 'MENU' | 'BOOKING';
+
+export interface TransitDetailsBase {
+  notes: string | null;
+  /** A duration (ms), not a point in time. */
+  estimatedTravelTimeMs: number | null;
+}
+
+/** `null` start/end means "from the previous event" / "to the next event". */
+export interface PointToPointTransitDetails extends TransitDetailsBase {
+  startLocation: string | null;
+  endLocation: string | null;
+}
+
+export interface FlightTransitDetails extends TransitDetailsBase {
+  airline: string | null;
+  airlineIataCode: string | null;
+  airlineIcaoCode: string | null;
+  flightNumber: string | null;
+  confirmationCode: string | null;
+  departureAirportCode: string | null;
+  arrivalAirportCode: string | null;
+}
+
+export interface DriveTransitDetails extends PointToPointTransitDetails {
+  vehicleInfo: string | null;
+}
+
+export interface FerryTransitDetails extends TransitDetailsBase {
+  operator: string | null;
+  confirmationCode: string | null;
+  departurePort: string | null;
+  arrivalPort: string | null;
+}
+
+export interface TrainTransitDetails extends TransitDetailsBase {
+  operator: string | null;
+  trainNumber: string | null;
+  confirmationCode: string | null;
+  departureStation: string | null;
+  arrivalStation: string | null;
+}
+
+export type WalkTransitDetails = PointToPointTransitDetails;
+
+export interface BikeTransitDetails extends PointToPointTransitDetails {
+  operator: string | null;
+}
+
+export interface ScooterTransitDetails extends PointToPointTransitDetails {
+  operator: string | null;
+}
+
+export interface OtherTransitDetails extends TransitDetailsBase {
+  customFields: Record<string, string> | null;
+}
+
+/** Which variant applies is read off the sibling `transitType`. */
+export type TransitDetails =
+  | FlightTransitDetails
+  | DriveTransitDetails
+  | FerryTransitDetails
+  | TrainTransitDetails
+  | WalkTransitDetails
+  | BikeTransitDetails
+  | ScooterTransitDetails
+  | OtherTransitDetails;
+
 export interface TravelEventDetails {
   transitType: TransitType;
+  transitDetails: TransitDetails | null;
 }
 
 export interface DiningEventDetails {
   mealType: MealType;
+  cuisines: string[];
 }
 
 export interface ActivityEventDetails {
@@ -288,9 +360,13 @@ export interface TimelineEvent {
   venueCloseTime: string | null;
   changeHistory: EventChangeSnapshot[];
   place: PlaceRef | null;
-  /** Only meaningful for DINING and ACTIVITY events; other types leave this null. */
+  /** Not meaningful for FREE_TIME events, which leave this null. */
   linkUrl: string | null;
   linkPreview: LinkPreview | null;
+  linkKind: EventLinkKind | null;
+  groupLabel: string | null;
+  /** Free-text stack name — several itineraries (groups or single events) of one event type shown together. */
+  stackLabel: string | null;
   /** Minutes before `startAt` to send a reminder. Always a real value (defaults to
    * `DEFAULT_REMINDER_MINUTES_BEFORE`) — an event with no reminder configured yet
    * reads as "default lead time, enabled" rather than "no reminder." */
@@ -356,6 +432,41 @@ export interface Announcement {
   dismissedBy: Record<string, number>;
   createdBy: string;
   createdAt: number;
+}
+
+/** Shared by ideas that happen once, on one day, at roughly one time of day. */
+export interface SingleOccasionIdeaDetails {
+  /** `dayIndex` values; empty means no day preference. */
+  suggestedDays: number[];
+  suggestedTimeBlocks: TimeBlock[];
+}
+
+export interface RestaurantIdeaDetails extends SingleOccasionIdeaDetails {
+  cuisines: string[];
+}
+
+export interface ActivityIdeaDetails extends SingleOccasionIdeaDetails {
+  settings: ActivitySetting[];
+}
+
+export type IdeaDetails = RestaurantIdeaDetails | ActivityIdeaDetails;
+
+/** A place or thing a member suggests for the trip — anyone can post one until the trip starts
+ * and anyone can vote on it at any time. */
+export interface TripIdea {
+  id: string;
+  tripId: string;
+  ideaType: IdeaType;
+  title: string;
+  notes: string | null;
+  linkUrl: string | null;
+  ideaDetails: IdeaDetails | null;
+  addedByUid: string;
+  voterUids: string[];
+  /** The timeline event this idea became, once converted. */
+  convertedToEntityId: string | null;
+  createdAt: number;
+  lastEditedAt: number;
 }
 
 export interface ChecklistItem {

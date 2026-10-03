@@ -13,6 +13,17 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const WATCHED_TRIP_FIELDS = ['startDate', 'endDate', 'timezone'] as const;
 
+function formatLead(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return [
+    hours ? `${hours} ${hours === 1 ? 'hour' : 'hours'}` : '',
+    rest ? `${rest} minutes` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 function getReminderInstant(trip: DocumentData, event: DocumentData): number | null {
   const dayCount = Math.max(1, Math.floor((trip.endDate - trip.startDate) / DAY_MS) + 1);
   const { dayIndex, startTime } = event;
@@ -100,7 +111,7 @@ export const rescheduleTripReminders = onDocumentUpdated(
                 appId: 'waypoint',
                 targetUids,
                 title: event.title,
-                body: `Starting in ${event.reminderMinutesBefore} minutes.`,
+                body: `Starting in ${formatLead(event.reminderMinutesBefore)}.`,
                 scheduledFor,
                 status: 'pending',
                 channels: ['push'],

@@ -119,14 +119,14 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 1
-  Ideas["💡 Ideas →"]
+  Ideas["💡 Ideas for the trip<br/>🍣 Sushi Dai ▲12 · 🥾 Rattlesnake Ledge ▲7<br/>+ Add an idea · See all ›"]
   Checklist["▓▓▓▓▓░░░ Checklist progress"]
   Album["🔗 Shared album link"]
   style Ideas fill:transparent,stroke:#888888,stroke-width:1px;
   style Checklist fill:transparent,stroke:#888888,stroke-width:1px;
   style Album fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Just an entry point now, not a duplicated mini-list — the Ideas screen already separates by type, so nothing here needs to repeat that.*
+*A prominent card with an Activities / Restaurants toggle (Activities first), the top three undecided ideas of that type with inline voting, and an add button; tapping an idea opens its details (a drawer with a big centered vote on phones, a popover on wider screens) — pre-trip is when ideas matter, so Overview asks people to act on them right here. New ideas close once the trip starts; the card then becomes a quiet "Ideas" row (phones) and the Ideas tab (desktop), and voting stays open.*
 
 **Overview — live**
 ```mermaid
@@ -142,7 +142,7 @@ block-beta
   style StatusCollapsed fill:transparent,stroke:#888888,stroke-width:1px;
   style Next fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Ideas and travel status moved up right below the Active Now hero — both collapsed by default (▸), expanding on tap rather than a persistent inline feed. I read "near the top" as "right below the hero," not literally above it, since Active Now is still the screen's whole reason for existing in live mode — flag it if you meant above.*
+*Ideas and travel status moved up right below the Active Now hero — both collapsed by default (▸), expanding on tap rather than a persistent inline feed. Ideas can no longer be added at this point; an idea already on the itinerary is badged. I read "near the top" as "right below the hero," not literally above it, since Active Now is still the screen's whole reason for existing in live mode — flag it if you meant above.*
 
 **Timeline**
 ```mermaid
@@ -445,7 +445,7 @@ flowchart LR
 | Entity | Initial (create) | Later (edit only) | Grouping |
 |---|---|---|---|
 | Trip Space | title, start/end dates (framed as estimates) | destination labels, tags, currency, cover image | none |
-| Timeline Event | `eventType` (category: Travel/Dining/Activity/Free Time), title, day, start time, that category's one quick field (see below), location, assignees (which members are involved) | end time/day, address, notes, finer transit/dining fields | **Steps** |
+| Timeline Event | **Step 1, what & when:** `eventType`, its sub-type (transit type; meal type, defaulted from the start time), day, departs/starts time, time zone. **Step 2, details:** a section per type — flight/train/ferry carrier + route (the departing place *is* the location), a drive/walk/bike/scooter's "going to" (the location), dining/activity location first | end/arrival time, title (derived when left out), address, travel time (only without an end time), notes, cuisines, indoor/outdoor, hours, link kind, group, reminder, attendees — as add-detail chips; a flight's **Next leg** button saves it and reopens the form with the same airline, booking, travelers and group, departing from where it landed | **Steps** |
 | Stay | name, address, official check-in/out | confirmation code, notes¹ | none |
 | Checklist Item | title, category (incl. a custom "Other" option with its own label), assignees | — | none |
 | Expense | title, amount (or a min-max range), currency (defaulted), payer, day (or "Other" for none) | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |

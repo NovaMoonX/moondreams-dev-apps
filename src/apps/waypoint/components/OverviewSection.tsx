@@ -46,11 +46,7 @@ import {
   getStayTimezoneLabel,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
-import {
-  EVENT_TYPE_BADGE_CLASSES,
-  EVENT_TYPE_EMOJIS,
-  EVENT_TYPE_LABELS,
-} from '@apps/waypoint/constants';
+import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 
 type OverviewDetail =
   | { type: 'event'; event: TimelineEvent }
@@ -74,15 +70,6 @@ function stopPropagation(clickEvent: MouseEvent) {
   clickEvent.stopPropagation();
 }
 
-function getStayLocation(stay: Stay) {
-  return {
-    locationName: stay.stayType === 'HOTEL' ? stay.name : null,
-    address: stay.address,
-    latitude: stay.latitude,
-    longitude: stay.longitude,
-  };
-}
-
 function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
   return {
     role: 'button' as const,
@@ -95,6 +82,15 @@ function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
         onOpenDetails();
       }
     },
+  };
+}
+
+function getStayLocation(stay: Stay) {
+  return {
+    locationName: stay.stayType === 'HOTEL' ? stay.name : null,
+    address: stay.address,
+    latitude: stay.latitude,
+    longitude: stay.longitude,
   };
 }
 
@@ -315,9 +311,10 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
 
 function EventTypeBadge({ event }: { event: TimelineEvent }) {
+  const badge = getEventBadge(event);
   return (
-    <Badge variant='base' className={EVENT_TYPE_BADGE_CLASSES[event.eventType]}>
-      {EVENT_TYPE_EMOJIS[event.eventType]} {EVENT_TYPE_LABELS[event.eventType]}
+    <Badge variant='base' className={badge.className}>
+      {badge.emoji} {badge.label}
     </Badge>
   );
 }

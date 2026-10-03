@@ -84,15 +84,38 @@ function rebaseDayFields(data: DocumentData, fields: readonly string[], deltaDay
   return result;
 }
 
+// An idea's suggested days are only a hint: any that land outside the new range are cleared
+// from the idea (which is always kept, with none left it just has no day preference).
+function rebaseIdeaDays(
+  data: DocumentData,
+  deltaDays: number,
+  dayCount: number,
+): Record<string, number[]> {
+  const days: unknown = data.ideaDetails?.suggestedDays;
+  if (!Array.isArray(days) || days.length === 0) {
+    return {};
+  }
+
+  const rebasedDays = days
+    .filter((day): day is number => typeof day === 'number')
+    .map((day) => day - deltaDays)
+    .filter((day) => day >= 0 && day < dayCount);
+  const hasChanged =
+    rebasedDays.length !== days.length || rebasedDays.some((day, index) => day !== days[index]);
+  return hasChanged ? { 'ideaDetails.suggestedDays': rebasedDays } : {};
+}
+
 /**
- * Moves a trip's dates while keeping every event, stay, rental, expense and checklist item on the
+ * Moves a trip's dates while keeping every event, stay, rental, expense, checklist item and idea's
+ * suggested days on the
  * calendar day it was already on: the trip's start moves, so each item's day number is
  * rebased by the same amount. Called only when someone opts into "keep original dates" —
  * the default (items travel with the trip) is a plain trip-document write on the client.
  *
  * Runs with the Admin SDK because Firestore rules limit who can write events and stays
  * while a trip is live, and inside one transaction so a concurrent edit can't be half-applied.
- * Items pushed outside the new range keep their out-of-range number rather than being clamped.
+ * Items pushed outside the new range keep their out-of-range number rather than being clamped;
+ * the exception is an idea's suggested days, which are cleared (the idea itself is kept).
  */
 export const shiftTripDates = onCall(
   {
@@ -137,15 +160,16 @@ export const shiftTripDates = onCall(
             throw new HttpsError('failed-precondition', "This trip's dates are fixed.");
           }
 
-          const [events, stays, rentals, expenses, checklist] = await Promise.all([
+          const [events, stays, rentals, expenses, checklist, ideas] = await Promise.all([
             transaction.get(tripRef.collection('events')),
             transaction.get(tripRef.collection('stays')),
             transaction.get(tripRef.collection('rentals')),
             transaction.get(tripRef.collection('expenses')),
             transaction.get(tripRef.collection('checklist')),
+            transaction.get(tripRef.collection('ideas')),
           ]);
           const itemCount =
-            events.size + stays.size + rentals.size + expenses.size + checklist.size;
+            events.size + stays.size + rentals.size + expenses.size + checklist.size + ideas.size;
           if (itemCount > MAX_ITEMS) {
             throw new HttpsError(
               'failed-precondition',
@@ -154,7 +178,8 @@ export const shiftTripDates = onCall(
           }
 
           const deltaDays = Math.round((input.startDate - trip.startDate) / DAY_MS);
-          const rebased: { ref: DocumentReference; data: Record<string, number> }[] = [
+          const newDayCount = Math.max(1, Math.floor((input.endDate - input.startDate) / DAY_MS) + 1);
+          const rebased: { ref: DocumentReference; data: Record<string, number | unknown[]> }[] = [
             ...events.docs.map((doc) => ({
               ref: doc.ref,
               data: rebaseDayFields(doc.data(), ['dayIndex', 'endDayIndex'], deltaDays),
@@ -174,6 +199,10 @@ export const shiftTripDates = onCall(
             ...checklist.docs.map((doc) => ({
               ref: doc.ref,
               data: rebaseDayFields(doc.data(), ['completeByDayIndex'], deltaDays),
+            })),
+            ...ideas.docs.map((doc) => ({
+              ref: doc.ref,
+              data: rebaseIdeaDays(doc.data(), deltaDays, newDayCount),
             })),
           ].filter(({ data }) => Object.keys(data).length > 0);
 

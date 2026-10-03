@@ -4,6 +4,8 @@ import { ExternalLink } from 'lucide-react';
 interface ExternalLinkTextProps {
   href: string;
   className?: string;
+  /** Shown in place of the URL. */
+  label?: string;
 }
 
 function formatLinkLabel(href: string) {
@@ -17,7 +19,7 @@ function formatLinkLabel(href: string) {
 }
 
 /** A single-line, truncated outbound link. The parent needs `min-w-0` for truncation to kick in inside flex layouts. */
-function ExternalLinkText({ href, className }: ExternalLinkTextProps) {
+function ExternalLinkText({ href, className, label }: ExternalLinkTextProps) {
   return (
     <a
       href={href}
@@ -28,7 +30,7 @@ function ExternalLinkText({ href, className }: ExternalLinkTextProps) {
         className,
       )}
     >
-      <span className='truncate'>{formatLinkLabel(href)}</span>
+      <span className='truncate'>{label ?? formatLinkLabel(href)}</span>
       <ExternalLink className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
     </a>
   );

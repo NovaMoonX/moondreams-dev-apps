@@ -29,11 +29,8 @@ import {
   selectUnseenActivityEvents,
   selectUnseenActivityStays,
 } from '@apps/waypoint/store/selectors';
-import {
-  ANNOUNCEMENT_SEVERITY_LABELS,
-  EVENT_TYPE_BADGE_CLASSES,
-  EVENT_TYPE_EMOJIS,
-} from '@apps/waypoint/constants';
+import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
+import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 import type { Announcement, AnnouncementSeverity, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import {
@@ -64,11 +61,8 @@ function Chip({ children, className }: { children: ReactNode; className?: string
 
 function getUpdateItemChip(item: UpdateItem) {
   if (item.kind === 'event') {
-    return (
-      <Chip className={EVENT_TYPE_BADGE_CLASSES[item.data.eventType]}>
-        {EVENT_TYPE_EMOJIS[item.data.eventType]}
-      </Chip>
-    );
+    const badge = getEventBadge(item.data);
+    return <Chip className={badge.className}>{badge.emoji}</Chip>;
   }
   return (
     <Chip className='bg-muted text-muted-foreground'>

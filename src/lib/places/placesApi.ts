@@ -59,12 +59,16 @@ export async function autocomplete(
   input: string,
   sessionToken: string,
   bias?: PlaceSelectionBias,
+  primaryTypes?: string[],
 ): Promise<PlaceSuggestion[]> {
   if (!PLACES_API_KEY || !input.trim()) {
     return [];
   }
 
   const body: Record<string, unknown> = { input, sessionToken };
+  if (primaryTypes?.length) {
+    body.includedPrimaryTypes = primaryTypes;
+  }
   if (bias) {
     body.locationBias = {
       circle: {
