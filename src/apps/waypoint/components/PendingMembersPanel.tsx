@@ -253,7 +253,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                 type='button'
                 size='lg'
                 variant='secondary'
-                className='text-destructive'
+                className='text-destructive!'
                 disabled={busyRequestId !== null}
                 onClick={() => handleDecline(activeRequest)}
               >
