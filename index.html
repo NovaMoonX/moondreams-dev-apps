@@ -6,6 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Moondreams Dev Apps</title>
 
+    <!-- Redirect from Firebase hosting to custom domain if not on a preview channel -->
+    <script>
+      (function () {
+        const host = window.location.hostname;
+        const isFirebaseHost =
+          host.includes('firebaseapp.com') || host.includes('web.app');
+        const isPreviewChannel = host.includes('--'); // Preview channels always use 'site--channel-hash' format
+
+        if (isFirebaseHost && !isPreviewChannel) {
+          window.location.replace(
+            'https://apps.moondreams.dev' +
+              window.location.pathname +
+              window.location.search +
+              window.location.hash,
+          );
+        }
+      })();
+    </script>
+
     <!-- Primary Meta Tags -->
     <meta name="title" content="Moondreams Dev Apps" />
     <meta
@@ -56,10 +75,7 @@
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta
-      property="twitter:url"
-      content="https://apps.moondreams.dev/"
-    />
+    <meta property="twitter:url" content="https://apps.moondreams.dev/" />
     <meta property="twitter:title" content="Moondreams Dev Apps" />
     <meta
       property="twitter:description"

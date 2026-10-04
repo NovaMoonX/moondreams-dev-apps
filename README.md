@@ -38,7 +38,7 @@ Create a `.env.local` at the repo root (gitignored) with:
 ```bash
 # Firebase web config — Firebase Console > Project Settings > General > Your apps. Public by design.
 VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_AUTH_DOMAIN_CUSTOM=
 VITE_FIREBASE_DATABASE_URL=
 VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_STORAGE_BUCKET=
