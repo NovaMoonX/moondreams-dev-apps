@@ -2,7 +2,7 @@ import type { User } from 'firebase/auth';
 
 import { app, emulatorAuthOrigin, isUsingFirebaseEmulators } from '@lib/firebase/config';
 
-/** Gives a fake-Google user the `dev` claim seeded fixtures carry, so the rules let them see every app. Emulators only. */
+// The rules only show every app to tokens with a `dev` claim, which only seeded fixtures have.
 export async function grantEmulatorDevAccess(user: User) {
   if (!isUsingFirebaseEmulators || !emulatorAuthOrigin) {
     return;
