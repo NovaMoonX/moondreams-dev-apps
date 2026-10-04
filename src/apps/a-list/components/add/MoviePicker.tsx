@@ -76,14 +76,15 @@ function MoviePicker({
         body: 'Search by title to find a movie.',
         offerManual: false,
       };
-    if (!canSearch)
+    if (trimmedQuery.length < MOVIE_SEARCH_MIN_CHARS)
       return {
         emoji: '🔎',
         title: 'Keep typing',
         body: `Give us at least ${MOVIE_SEARCH_MIN_CHARS} letters to search with.`,
         offerManual: false,
       };
-    if (search.isPending)
+    // Enough letters are typed but the debounce hasn't released the search yet.
+    if (!canSearch || search.isPending)
       return {
         emoji: '🎞️',
         title: 'Searching…',

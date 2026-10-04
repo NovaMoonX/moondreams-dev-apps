@@ -1,21 +1,19 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft } from 'lucide-react';
 
-import { SubviewContext } from '@/contexts/SubviewContext';
+import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
 import { useSubviewHistory } from '@/hooks/useSubviewHistory';
 
 interface SubviewHeaderProps {
   title: string;
   onBack: () => void;
-  /** Callback ref for the right-hand slot a section's primary action is sent to. */
-  actionRef?: (element: HTMLDivElement | null) => void;
 }
 
 /** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
-export function SubviewHeader({ title, onBack, actionRef }: SubviewHeaderProps) {
+export function SubviewHeader({ title, onBack }: SubviewHeaderProps) {
   return (
     <div className='mb-3 flex items-center gap-2'>
       <Button
@@ -31,7 +29,6 @@ export function SubviewHeader({ title, onBack, actionRef }: SubviewHeaderProps) 
       <h1 className='min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight'>
         {title}
       </h1>
-      <div ref={actionRef} className='flex shrink-0 items-center gap-2' />
     </div>
   );
 }
@@ -50,7 +47,6 @@ interface SubviewProps {
  * closes on the browser's back gesture rather than leaving the page beneath it.
  */
 function Subview({ children, onClose, title, className }: SubviewProps) {
-  const [actionTarget, setActionTarget] = useState<HTMLElement | null>(null);
   useSubviewHistory(onClose);
 
   useEffect(() => {
@@ -61,17 +57,11 @@ function Subview({ children, onClose, title, className }: SubviewProps) {
     <div className='page'>
       <div className={join('mx-auto max-w-2xl py-6', className)}>
         {title !== undefined && (
-          <SubviewHeader
-            title={title}
-            onBack={onClose}
-            actionRef={setActionTarget}
-          />
+          <SubviewHeader title={title} onBack={onClose} />
         )}
-        <SubviewContext.Provider
-          value={{ title: title ?? null, actionTarget }}
-        >
+        <SubviewTitleContext.Provider value={title ?? null}>
           {children}
-        </SubviewContext.Provider>
+        </SubviewTitleContext.Provider>
       </div>
     </div>
   );

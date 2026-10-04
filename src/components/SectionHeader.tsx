@@ -1,7 +1,6 @@
 import { useContext, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 
-import { SubviewContext } from '@/contexts/SubviewContext';
+import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
 
 interface SectionHeaderProps {
   title: string;
@@ -10,17 +9,19 @@ interface SectionHeaderProps {
 }
 
 function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
-  const subview = useContext(SubviewContext);
+  const subviewTitle = useContext(SubviewTitleContext);
 
-  // Inside a subview whose header already shows this title, the title and the action move up there.
-  if (subview?.title === title) {
+  // A subview's header already shows this title, so only the subtitle and the action remain.
+  if (subviewTitle === title) {
+    if (!subtitle && !action) {
+      return null;
+    }
+
     return (
-      <>
-        {action && subview.actionTarget
-          ? createPortal(action, subview.actionTarget)
-          : null}
-        {subtitle && <p className='text-muted-foreground text-sm'>{subtitle}</p>}
-      </>
+      <div className='flex items-center justify-between gap-3'>
+        <p className='text-muted-foreground min-w-0 text-sm'>{subtitle}</p>
+        {action}
+      </div>
     );
   }
 
