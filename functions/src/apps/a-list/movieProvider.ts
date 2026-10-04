@@ -9,7 +9,6 @@ export const TMDB_API_KEY = defineSecret('TMDB_API_KEY');
 
 export interface MovieProvider {
   id: 'tmdb' | 'omdb';
-  /** Only OMDb's free key is rationed; see lookupBudget.ts. */
   isBudgeted: boolean;
   getKey: () => string;
   search: (apiKey: string, query: string, beforeUpstreamCall: () => Promise<void>) => Promise<MovieSearchResult[]>;
