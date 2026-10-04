@@ -7,7 +7,7 @@
 - **No IIFEs: never write an anonymous function that is immediately invoked in place (`(() => { ... })()`). Arrow functions passed as arguments to another call (`.map()`, `onClick={() => ...}`, etc.) are fine and idiomatic — the rule is about self-invoking anonymous functions, not callbacks.**
 - **No loose `let` variables assigned across `if`/`else` branches, and no `for` loops that build up a result. Wrap the branching in a small function that returns the value (early returns), and build collections with `.reduce`/`.map`/`.filter`/`Object.fromEntries`. Keep related logic colocated and compact — see "Functions over loose variables" under Coding Styles.**
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
-- Check Dreamer UI first before building custom UI.
+- Check the repo's shared components (`src/components`, `src/ui`) first, then Dreamer UI, before building custom UI.
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
 - **Never call `setState` synchronously inside a `useEffect` body or during render to mirror props/derive values — see "React and state patterns" below.**
 - Always use the project import aliases instead of relative paths when available.
@@ -393,8 +393,8 @@ className={join('base-class', isActive ? 'active' : 'inactive')}
 ```
 
 ### Component library priority
-- Check Dreamer UI first before creating custom components.
-- **Before writing any UI behavior by hand, check two places: Dreamer UI's exported components, then the repo's shared components (`src/components`, `src/ui`).** If one already does the job, use it — never re-implement it with `Button` + `useState` + a timeout. Copy-to-clipboard with a copied state is `CopyButton` (`@moondreamsdev/dreamer-ui/components`); other examples already here: `AppToggle`, `UserAvatar`, `IconBadge`, `SectionHeader`, `DeleteIconButton`. Skim the component list (`node_modules/@moondreamsdev/dreamer-ui/dist/src/components`) and `grep` the repo for the behavior before building it.
+- Check the repo's shared components first, then Dreamer UI, before creating custom components.
+- **Before writing any UI behavior by hand, check two places in this order: the repo's shared components (`src/components`, `src/ui`), then Dreamer UI's exported components.** A shared component wins over the raw Dreamer UI one because it already carries this repo's fixes and conventions (`AppToggle` over `Toggle`). If one already does the job, use it — never re-implement it with `Button` + `useState` + a timeout. Examples: `AppToggle`, `UserAvatar`, `IconBadge`, `SectionHeader`, `DeleteIconButton` (shared); `CopyButton` for copy-to-clipboard with a copied state (Dreamer UI, `@moondreamsdev/dreamer-ui/components`). `grep` the repo for the behavior and skim `node_modules/@moondreamsdev/dreamer-ui/dist/src/components` before building it.
 - Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, and `/utils` when possible.
 - Review existing Dreamer UI props before applying custom styling or behavior.
 - **No raw HTML form/interactive elements.** Never write `<button>`, `<input>`, `<select>`, `<textarea>`, or `<a>` directly — always use the Dreamer UI equivalent (`Button`, `Input`, `Select`, `Textarea`, a `Button` with `href`). This applies even to small/internal-looking components (list-item toggles, filter chips, category pickers) — there is no size threshold under which raw HTML becomes acceptable.
