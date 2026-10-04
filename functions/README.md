@@ -10,7 +10,7 @@ Server-side code for the mini-apps. Every function:
 
 | Function | Trigger | App | What it does |
 | --- | --- | --- | --- |
-| `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 10) from OMDb |
+| `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from OMDb |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, reminders, cover) |

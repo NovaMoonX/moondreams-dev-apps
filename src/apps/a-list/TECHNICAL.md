@@ -180,7 +180,7 @@ interface Ticket {
 
 **Provider: OMDb.** What I confirmed on its site: free keys exist, its content is licensed CC BY-NC 4.0, and a separate high-resolution Poster API exists but is patron-only. What I could **not** confirm from its pages, and am taking from the owner (the 1,000-lookups-a-day free limit) or from memory (everything else), so it is unverified until one real call is made before the mapper is written:
 
-- *Search* (`?s=<title>&type=movie`) returns up to 10 results per page with title, year, an id of the form `tt1234567`, and a poster URL. It carries **no release date and no runtime**, so every field the app needs beyond a title card costs a second call.
+- *Search* (`?s=<title>&type=movie&page=<n>`) returns up to 10 results per page with title, year, an id of the form `tt1234567`, and a poster URL, in no useful order and with no sort option. The function fetches a second page only when `totalResults` is over 10, merges, drops duplicates, sorts newest year first and keeps 20. It carries **no release date and no runtime**, so every field the app needs beyond a title card costs a second call.
 - *By id* (`?i=<id>`) returns a release date as text (like `31 Mar 1999`, or `N/A`), a runtime as text (like `136 min`, or `N/A`), a rating (`PG-13`, `Not Rated`, `N/A`) and the poster URL. The mapper treats every `N/A` as `null`.
 - **Terms.** CC BY-NC 4.0 is a non-commercial license that requires credit; this is a personal, non-commercial app, so it fits, and the plan is an About row in Membership settings that credits OMDb. Whether OMDb separately allows caching results, or hot-linking its poster images, I could not confirm; both are gated before the movie-data PR merges (see Open questions).
 - **What a real response confirms** (the owner's sample by-id response for `tt3896198`): `Released` is `"05 May 2017"`, `Runtime` is `"136 min"`, `Rated` is `"PG-13"`, `Poster` is an `https://m.media-amazon.com/…` URL, and `imdbID` is `tt` plus digits. The mapper (`functions/src/apps/a-list/omdb.ts`) parses exactly these shapes and maps `N/A` (and "Not Rated"/"Unrated" for the rating) to `null`.
@@ -188,7 +188,7 @@ interface Ticket {
 - **Still unverified, because the build sandbox can't reach `omdbapi.com` or the poster host (a pre-merge gate for the owner):** a live search and by-id call, whether OMDb's terms allow caching and hot-linking, and how a spent daily limit is reported (handled as HTTP 401 → `resource-exhausted`). Make one real search and one by-id call after setting the key. Until a key is set, the **local emulator** answers from an OMDb-shaped fixture catalog in the same module (a deployed function never does), so the whole flow runs offline.
 - **Release-date accuracy.** It isn't clear that OMDb's release date is the *US theatrical* date, or that it carries movies a week from release at all. The Opening tab depends on both, so this is a real risk to test early with a few upcoming titles. The mitigation is built in: the manual path takes a release date.
 
-**The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
+**The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call, so a search with more than 10 matches costs two. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
 
 1. **The browser** debounces typing (`useDebouncedValue` with `DEBOUNCE_MS.autocomplete`), searches only from `MOVIE_SEARCH_MIN_CHARS`, never searches an empty box (it shows the watchlist), and remembers results with TanStack Query (persisted, so a repeat is free even offline). Search results never trigger per-result details calls; details are fetched only for the movie actually picked.
 2. **A shared server-side cache** (Firestore, written and read only by the functions through the admin SDK; clients have no access): `apps/a-list/searchCache/{key}` and `apps/a-list/movieCache/{movieKey}`, each `{ value, cachedAt }`. Search results live 7 days; details live 30 days for a movie already released and 1 day when the release date is null or in the future (those are the ones that change). A cache hit costs no lookup, and the second member to search for the same movie costs nothing.
@@ -200,7 +200,7 @@ interface Ticket {
 **Two callables** (`functions/src/apps/a-list/`, exported from `functions/src/index.ts`):
 
 ```typescript
-// searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 10)
+// searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 20, newest year first)
 interface MovieSearchResult {
   movieKey: string;                  // "imdb-tt0133093"
   title: string;

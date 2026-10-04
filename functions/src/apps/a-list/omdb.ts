@@ -5,6 +5,8 @@ import type { MovieSearchResult, MovieSnapshot } from './types.js';
 const OMDB_URL = 'https://www.omdbapi.com/';
 const FETCH_TIMEOUT_MS = 6000;
 const DAY_MS = 86_400_000;
+const SEARCH_PAGE_SIZE = 10;
+const MAX_SEARCH_RESULTS = 20;
 
 interface OmdbSearchItem {
   Title: string;
@@ -17,6 +19,7 @@ interface OmdbSearchItem {
 interface OmdbSearchResponse {
   Response: 'True' | 'False';
   Search?: OmdbSearchItem[];
+  totalResults?: string;
   Error?: string;
 }
 
@@ -160,12 +163,33 @@ async function callOmdb<T>(apiKey: string, params: Record<string, string>): Prom
   }
 }
 
-export async function searchOmdb(apiKey: string, query: string): Promise<MovieSearchResult[]> {
-  const data = isFixtureMode(apiKey)
-    ? fixtureSearch(query)
-    : await callOmdb<OmdbSearchResponse>(requireKey(apiKey), { s: query, type: 'movie' });
+/**
+ * Newest first, up to 20: OMDb can't sort and returns 10 a page, so a second page is fetched only when
+ * there are more matches. `beforeUpstreamCall` runs before each upstream request, to count it.
+ */
+export async function searchOmdb(
+  apiKey: string,
+  query: string,
+  beforeUpstreamCall: () => Promise<void>,
+): Promise<MovieSearchResult[]> {
+  const fetchPage = async (page: number): Promise<OmdbSearchResponse> => {
+    await beforeUpstreamCall();
+    return isFixtureMode(apiKey)
+      ? fixtureSearch(query)
+      : callOmdb<OmdbSearchResponse>(requireKey(apiKey), { s: query, type: 'movie', page: String(page) });
+  };
 
-  const result = data.Response === 'True' ? (data.Search ?? []).filter((item) => item.Type === 'movie').slice(0, 10).map(toSearchResult) : [];
+  const first = await fetchPage(1);
+  const hasMore = Number(first.totalResults) > SEARCH_PAGE_SIZE;
+  // A failed second page (budget, timeout) still returns the first.
+  const second = hasMore ? await fetchPage(2).catch(() => null) : null;
+
+  const items = [first, second].flatMap((data) => (data?.Response === 'True' ? (data.Search ?? []) : []));
+  const result = items
+    .filter((item, index) => item.Type === 'movie' && items.findIndex((other) => other.imdbID === item.imdbID) === index)
+    .map(toSearchResult)
+    .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+    .slice(0, MAX_SEARCH_RESULTS);
   return result;
 }
 

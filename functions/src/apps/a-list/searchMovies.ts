@@ -14,6 +14,8 @@ if (getApps().length === 0) {
 export const OMDB_API_KEY = defineSecret('OMDB_API_KEY');
 
 const SEARCH_CACHE_MS = 7 * 86_400_000;
+// Bump when the shape or order of results changes, so older cached searches are not served.
+const SEARCH_CACHE_VERSION = 2;
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
 
@@ -37,14 +39,13 @@ export const searchMovies = onCall(
       throw new HttpsError('invalid-argument', 'Search for a title between 2 and 100 characters.');
     }
 
-    const cacheId = toCacheId(query);
+    const cacheId = toCacheId(`v${SEARCH_CACHE_VERSION}:${query}`);
     const cached = await readCache<MovieSearchResult[]>('searchCache', cacheId);
     if (cached && isFresh(cached, SEARCH_CACHE_MS)) {
       return { results: cached.value };
     }
 
-    await reserveLookup(uid);
-    const results = await searchOmdb(OMDB_API_KEY.value(), query);
+    const results = await searchOmdb(OMDB_API_KEY.value(), query, () => reserveLookup(uid));
     await writeCache('searchCache', cacheId, results);
     return { results };
   },
