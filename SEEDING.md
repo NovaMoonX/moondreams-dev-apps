@@ -60,30 +60,55 @@ network) removes one. Re-run `npm run seed:reset` after every emulator restart; 
 
 ## Sharing with a friend
 
-`npm run share` starts everything and prints one link to send: it builds the functions, starts the
-LAN emulators, resets the fixtures, starts the dev server, and copies `http://<your Tailscale address>:5173`
-to your clipboard. Press Ctrl+C to stop sharing (the emulators keep no data, so nothing lingers).
+Let a friend try the app on their phone, with the seeded fixtures, without putting anything on the public internet.
+It uses [Tailscale](https://tailscale.com/download): only people on your tailnet, or people you've shared your Mac with,
+can reach the link.
 
-It uses [Tailscale](https://tailscale.com/download) so nothing is public: only people on your tailnet, or
-people you've shared your Mac with, can reach the link.
+### Every time: `npm run share`
 
-One-time setup:
+1. Stop anything already running (`npm run dev`, `npm run emulators`; `npm run emulators:kill` clears stray emulators).
+   `share` starts its own, and it needs the same ports.
+2. Run `npm run share`. It checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for
+   them, runs `seed:reset`, starts the dev server on port 5173, then prints a link like
+   `http://100.x.y.z:5173` and copies it to your clipboard.
+3. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
+   (Alex has the A-List and Waypoint data) from the dev switcher at the top.
+4. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing lingers.
 
-1. Install Tailscale on your Mac and sign in.
-2. Share your Mac with your friend: Tailscale admin console, Machines, your Mac, Share, and send them the
-   invite. They install Tailscale on their phone, sign in with their own free account and accept. They then
-   see only your Mac. Remove the share there when you're done.
-3. At home, `npm run lan:trust -- Home` (once per network).
+`npm run share -- --dry` prints the link it would use without starting anything, which is a quick way to check Tailscale
+and the network check are fine. `SHARE_HOST=<address>` overrides the host in the link.
 
-After that it's just `npm run share` and sending the link. Your friend opens it in Safari or Chrome with the
-Tailscale app on, and picks a fixture account from the dev switcher.
+### One-time setup
 
-The same safety check as `dev:lan` applies: `share` refuses to start on a network you haven't trusted, because
-the emulators bind to every interface. The check guards the network you start on; Tailscale's sharing controls who
-on your friend's side can reach it. They can reach every emulator, owner bypass included, so share only with someone
-you trust. It runs in a normal browser tab (not an installable PWA, since the emulators are plain HTTP). Don't use a
-Tailscale exit node while sharing, as it can confuse the network check. Set `SHARE_HOST=<address>` to print a different
-host in the link, and `npm run share -- --dry` to see what it would do without starting anything.
+1. **You:** install Tailscale on your Mac and sign in. `tailscale ip -4` prints your address (the `100.x.y.z` in the link).
+2. **You:** share your Mac with your friend. In the Tailscale admin console (https://login.tailscale.com/admin/machines)
+   open your Mac's menu, choose Share, and send them the invite link. They only ever see that one machine.
+3. **Your friend:** install Tailscale on their phone, sign in with their own (free) account, and accept the invite.
+4. **You, at home, once per network:** `npm run lan:trust -- Home`.
+
+When you're finished with a friend, remove the share in the same admin console page.
+
+### Good to know
+
+- **Two safeguards.** `share` refuses to start on a network you haven't trusted (see "Phone testing" above): the emulators
+  bind to every interface, so the check protects the network you start on. Tailscale's sharing controls who on the
+  friend's side can reach your Mac.
+- **They get full access to the fake data.** Anyone who can open the link can reach every emulator, owner bypass
+  included, and can see the dev App Check token in the page. That only touches seeded local data, so share with someone you trust.
+- **Not installable.** It runs in a normal browser tab; the PWA can't be installed because the emulators are plain HTTP.
+- **Keep your Mac awake** and the terminal open while they're using it.
+- **No exit node.** Don't route your traffic through a Tailscale exit node while sharing; it can confuse the network check.
+
+### If something's off
+
+| Symptom | Fix |
+| --- | --- |
+| "Couldn't find a Tailscale address" | Open the Tailscale app and sign in; `tailscale ip -4` should print an address. |
+| "This network isn't trusted" | At home, run `npm run lan:trust -- Home`. |
+| A port is already in use | Stop `npm run dev` and any running emulators first (`npm run emulators:kill`). |
+| The link doesn't load for your friend | They need the Tailscale app on and signed in, with your invite accepted. Check you can open the link yourself first. |
+| The page loads but sign-in or data fails | The emulators aren't running or seeded. Look for errors in the `npm run share` terminal. |
+| Seeding fails | `share` stops instead of serving an empty app. Fix the error shown, then run it again. |
 
 ## Commands
 
