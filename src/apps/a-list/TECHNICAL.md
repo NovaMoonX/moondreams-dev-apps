@@ -133,7 +133,7 @@ interface Viewing {
   endsAt: number;                    // INSTANT: showtimeAt + previews buffer + runtime (fallback runtime if null); recomputed whenever showtimeAt changes
   status: ViewingStatus;             // PLANNED → SEEN; never back
   rating: number | null;             // 1–5 whole stars; only meaningful when SEEN
-  ticket: Ticket | null;             // null until "Mark paid" or the inline "+ Add ticket details"
+  ticket: Ticket | null;             // null until "Mark paid" or the add form's "Yes, I paid"
   createdAt: number;
   lastEditedAt: number;
 }
@@ -554,7 +554,7 @@ No cached document is ever written back whole. A transaction is used only where 
 - **Overlays.** Setup and Membership settings are `Modal`s. Every movie flow (Add, viewing details, watchlist item, Seen prompt) is a `Drawer` at every width: the deliberate exception recorded in the UX doc. Mark paid, Edit and Add to calendar swap the open drawer's content in place with a "‹ Back" link. Only the destructive confirm (`useActionModal().confirm({ destructive: true })`) is ever stacked.
 - **Titles are plain nouns:** "Membership", "Movie", "Ticket", "Viewing", "Watchlist item". The verb belongs on the button ("Add", "Save", "Add + another", "Add & finish").
 - **Forms use `Form` + `FormFactories`.** Setup's three steps are three small `Form`s inside a stepper; the Ticket and Edit forms are `Form`s; the movie picker, fee chips, tax chips and star rating are `FormFactories.custom` fields. The Ticket form's itemized / all-in switch is local form state that decides which amount field renders. Money is entered through a text input with `inputMode="decimal"` and parsed by `parseMoneyToCents`; a number input's spinner and float parsing are wrong for money.
-- **Submit disables until valid** (`onDataChange` + `isValid`). Optional ticket details sit behind "+ Add ticket details"; a "Custom/Other" fee or tax-rate input renders only once "Other" is selected.
+- **Submit disables until valid** (`onDataChange` + `isValid`). Ticket details sit behind the "Already bought your ticket?" question (pills: "Yes, I paid" / "Not yet"); a "Custom/Other" fee or tax-rate input renders only once "Other" is selected.
 - **Layout.** One border per card, flat rows inside; `StatTile` is the only card allowed on a screen. Counts appear only when greater than zero. Posters carry no border of their own; the cell is the frame.
 - **No raw `<button>/<input>/<select>/<textarea>/<a>`** anywhere, including the star rating (Dreamer UI `Button`s with an icon) and the cell tap target (the Calendar's own). `join()` for every conditional class.
 - **Date-only and instants never share a formatter** (see Logic §2). Every screen that shows a date is validated in a timezone behind UTC.

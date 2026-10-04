@@ -84,7 +84,7 @@ export interface Viewing {
   endsAt: number;
   /** PLANNED → SEEN; never back. */
   status: ViewingStatus;
-  /** null until "Mark paid" or "+ Add ticket details". Documents written before tickets existed lack the key. */
+  /** null until "Mark paid" or "Yes, I paid" in the add form. Documents written before tickets existed lack the key. */
   ticket: Ticket | null;
   /** 1–5 whole stars, only once seen. Documents written before ratings existed lack the key. */
   rating: number | null;

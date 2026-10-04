@@ -300,7 +300,7 @@ block-beta
   Picked["🖼️ Movie Title · 2h 10m · PG-13<br/>↺ Seen once before — this will be a rewatch"]:2
   Date["Fri, Oct 2"]:1
   Time["7:10 PM"]:1
-  Reveal["+ Add ticket details"]:2
+  Reveal["Already bought your ticket?"]:2
   Cancel["Cancel"]:1
   Add["Add"]:1
   style Back fill:transparent,stroke:#888888,stroke-width:1px;
@@ -311,7 +311,7 @@ block-beta
   style Cancel fill:transparent,stroke:#888888,stroke-width:1px;
   style Add fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A date in the past saves as Seen with no prompt; a future date saves as Planned. A movie not on your watchlist joins it automatically. "+ Add ticket details" reveals the Ticket fields in place, which suits backfilling and pre-bought tickets. Add past movies is this same drawer in a past-movies mode, shown next. From the watchlist drawer, "Add to calendar" skips the pick step because the movie is already chosen. The edit form is this same step, prefilled.*
+*A date in the past saves as Seen with no prompt; a future date saves as Planned. A movie not on your watchlist joins it automatically. "Already bought your ticket?" is a question in the form, answered with two pills; "Yes, I paid" reveals the Ticket fields in place, which suits backfilling and pre-bought tickets. Add past movies is this same drawer in a past-movies mode, shown next. From the watchlist drawer, "Add to calendar" skips the pick step because the movie is already chosen. The edit form is this same step, prefilled.*
 
 **Add past movies — details** (the same drawer in past-movies mode, from Setup or the empty Calendar)
 ```mermaid
@@ -323,7 +323,7 @@ block-beta
   Picked["🖼️ Another Title · 2h 10m · PG-13"]:2
   Date["Sat, Sep 6"]:1
   Time["4:30 PM"]:1
-  Reveal["+ Add ticket details"]:2
+  Reveal["Already bought your ticket?"]:2
   Finish["Add & finish"]:1
   More["Add + another"]:1
   style Count fill:transparent,stroke:#888888,stroke-width:1px;
@@ -578,7 +578,7 @@ block-beta
 | PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
-| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached |
+| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached; with no goal set, a tile turns dashed and muted with a "Set a goal" button that opens Membership settings |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
 | AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
 | ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |

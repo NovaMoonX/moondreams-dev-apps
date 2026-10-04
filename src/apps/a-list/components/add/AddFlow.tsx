@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
+import Pill from '@/components/Pill';
 import { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -392,35 +393,40 @@ export function AddFlow({
             onChange={setWatchlistValues}
           />
         )}
-        {isCalendar &&
-          (ticketDraft ? (
-            <div className='space-y-2'>
-              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
-              <Button
-                type='button'
-                rounded='full'
-                variant='link'
-                size='sm'
-                className='px-0'
+        {isCalendar && (
+          <div className='space-y-3'>
+            <div>
+              <p className='font-medium'>🎟️ Already bought your ticket?</p>
+              <p className='text-muted-foreground text-sm'>
+                Add what you paid and your savings count right away.
+              </p>
+            </div>
+            <div className='flex gap-2'>
+              <Pill
+                emoji='💳'
+                isSelected={ticketDraft !== null}
+                onClick={() =>
+                  setTicketDraft(
+                    (current) =>
+                      current ?? getInitialTicketDraft(null, feeChips[1] ?? 0),
+                  )
+                }
+              >
+                Yes, I paid
+              </Pill>
+              <Pill
+                emoji='🕒'
+                isSelected={ticketDraft === null}
                 onClick={() => setTicketDraft(null)}
               >
-                Remove ticket details
-              </Button>
+                Not yet
+              </Pill>
             </div>
-          ) : (
-            <Button
-              type='button'
-              rounded='full'
-              variant='link'
-              size='sm'
-              className='px-0'
-              onClick={() =>
-                setTicketDraft(getInitialTicketDraft(null, feeChips[1] ?? 0))
-              }
-            >
-              + Add ticket details
-            </Button>
-          ))}
+            {ticketDraft && (
+              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
+            )}
+          </div>
+        )}
         {isNotYetShown && (
           <p className='text-destructive text-sm'>
             These are movies you've already seen, so pick a showing that has

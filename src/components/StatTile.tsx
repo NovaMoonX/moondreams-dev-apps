@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface StatTileProps {
@@ -11,6 +12,8 @@ interface StatTileProps {
   isStacked?: boolean;
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
+  /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
+  prompt?: { label: string; onClick: () => void };
   className?: string;
 }
 
@@ -22,6 +25,7 @@ function StatTile({
   detail,
   isStacked = false,
   goal,
+  prompt,
   className,
 }: StatTileProps) {
   const isGoalMet = goal !== undefined && goal.current >= goal.target;
@@ -35,6 +39,7 @@ function StatTile({
         'border-border bg-card flex gap-3 rounded-2xl border px-3 py-3',
         isStacked ? 'flex-col items-center text-center' : 'items-center',
         isGoalMet && 'border-success/40 bg-success/10',
+        prompt && 'border-dashed bg-transparent',
         className,
       )}
     >
@@ -51,11 +56,24 @@ function StatTile({
           className={join(
             'leading-tight font-semibold tabular-nums',
             isStacked ? 'text-xl' : 'text-lg sm:text-xl',
+            prompt && 'text-muted-foreground',
           )}
         >
           {value}
         </p>
         <p className='text-muted-foreground text-xs'>{label}</p>
+        {prompt && (
+          <Button
+            type='button'
+            size='sm'
+            rounded='full'
+            variant='secondary'
+            className='mt-2 w-full text-xs'
+            onClick={prompt.onClick}
+          >
+            {prompt.label}
+          </Button>
+        )}
         {goal && (
           <div
             className='bg-muted mt-2 h-1.5 w-full overflow-hidden rounded-full'

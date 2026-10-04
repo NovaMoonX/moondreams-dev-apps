@@ -3,6 +3,7 @@ import { shallowEqual } from 'react-redux';
 import { useAppSelector } from '@/store';
 import { formatDuration } from '@/utils/formatUtils';
 import StatTile from '@/components/StatTile';
+import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import { selectCounters } from '@apps/a-list/store/selectors';
 
 interface CounterRowProps {
@@ -14,6 +15,12 @@ function CounterRow({ now }: CounterRowProps) {
     (state) => selectCounters(state, now),
     shallowEqual,
   );
+
+  const { openOverlay } = useAListOverlay();
+  const setGoalPrompt = {
+    label: '🎯 Set a goal',
+    onClick: () => openOverlay({ kind: 'membership' }),
+  };
 
   const getGoalValue = (current: number, goal: number | null) =>
     goal === null ? current : `${current}/${goal}`;
@@ -41,6 +48,7 @@ function CounterRow({ now }: CounterRowProps) {
             ? undefined
             : { current: counters.thisWeek, target: counters.weeklyGoal }
         }
+        prompt={counters.weeklyGoal === null ? setGoalPrompt : undefined}
       />
       <StatTile
         isStacked
@@ -52,6 +60,7 @@ function CounterRow({ now }: CounterRowProps) {
             ? undefined
             : { current: counters.thisMonth, target: counters.monthlyGoal }
         }
+        prompt={counters.monthlyGoal === null ? setGoalPrompt : undefined}
       />
     </div>
   );
