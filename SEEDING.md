@@ -22,17 +22,14 @@ version 21+ before starting the Emulator Suite.
 
 1. Keep the real Firebase client configuration in your local `.env` file and set:
 
-  ```dotenv
-  VITE_USE_FIREBASE_EMULATORS=true
-  ```
+```dotenv
+VITE_USE_FIREBASE_EMULATORS=true
+```
 
-  The Auth, Firestore, and Realtime Database SDKs connect to local emulators while
-  retaining the project's real `VITE_FIREBASE_*` values. The project ID must remain
-  `moondreams-dev-apps` so emulator Auth tokens, Firestore rules, RTDB data, and the
-  seed runner share one project identity.
-2. Run `npm run emulators` in one terminal.
-3. Run `npm run seed:reset` in another terminal to create the full fixture set.
-4. Run `npm run dev` in a third terminal.
+The Auth, Firestore, and Realtime Database SDKs connect to local emulators while
+retaining the project's real `VITE_FIREBASE_*` values. The project ID must remain
+`moondreams-dev-apps` so emulator Auth tokens, Firestore rules, RTDB data, and the
+seed runner share one project identity. 2. Run `npm run emulators` in one terminal. 3. Run `npm run seed:reset` in another terminal to create the full fixture set. 4. Run `npm run dev` in a third terminal.
 
 The Vite app connects to local services only when `VITE_USE_FIREBASE_EMULATORS=true`.
 It disables the Firestore persistent cache in this mode so a reset cannot leave stale
@@ -66,17 +63,16 @@ can reach the link.
 
 ### Every time: `npm run share`
 
-1. Stop anything already running (`npm run dev`, `npm run emulators`; `npm run emulators:kill` clears stray emulators).
-   `share` starts its own, and it needs the same ports.
-2. Run `npm run share`. It checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for
-   them, runs `seed:reset`, starts the dev server on port 5173, then prints a link like
-   `http://100.x.y.z:5173` and copies it to your clipboard.
-3. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
+1. Run `npm run share`. First, a `preshare` step stops any leftover dev server or emulators of ours that are holding
+   the ports it needs (5173, the emulators' ports, and the hub/logging ports beside them) and says what it stopped, for
+   example `Stopped pid 4821 (port 5173): node …/vite --host`. If something that isn't ours holds a port, it leaves that
+   alone, names it, and stops so you can deal with it. Then it checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for them, runs `seed:reset`, starts the dev server on port 5173, then prints a link like `http://100.x.y.z:5173` and copies it to your clipboard.
+2. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
    (Alex has the A-List and Waypoint data) from the dev switcher at the top.
-4. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing lingers.
+3. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing lingers.
 
-`npm run share -- --dry` prints the link it would use without starting anything, which is a quick way to check Tailscale
-and the network check are fine. `SHARE_HOST=<address>` overrides the host in the link.
+`npm run share:check` prints the link it would use without stopping or starting anything, which is a quick way to check
+Tailscale and the network check are fine. To only free the ports, run `npx tsx scripts/lan.ts cleanup`. `SHARE_HOST=<address>` overrides the host in the link.
 
 ### One-time setup
 
@@ -101,32 +97,32 @@ When you're finished with a friend, remove the share in the same admin console p
 
 ### If something's off
 
-| Symptom | Fix |
-| --- | --- |
-| "Couldn't find a Tailscale address" | Open the Tailscale app and sign in; `tailscale ip -4` should print an address. |
-| "This network isn't trusted" | At home, run `npm run lan:trust -- Home`. |
-| A port is already in use | Stop `npm run dev` and any running emulators first (`npm run emulators:kill`). |
-| The link doesn't load for your friend | They need the Tailscale app on and signed in, with your invite accepted. Check you can open the link yourself first. |
-| The page loads but sign-in or data fails | The emulators aren't running or seeded. Look for errors in the `npm run share` terminal. |
-| Seeding fails | `share` stops instead of serving an empty app. Fix the error shown, then run it again. |
+| Symptom                                  | Fix                                                                                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| "Couldn't find a Tailscale address"      | Open the Tailscale app and sign in; `tailscale ip -4` should print an address.                                       |
+| "This network isn't trusted"             | At home, run `npm run lan:trust -- Home`.                                                                            |
+| "Left alone … it isn't ours" | Another program is on a port `share` needs (8080 is a common one). Quit it and run `npm run share` again. |
+| The link doesn't load for your friend    | They need the Tailscale app on and signed in, with your invite accepted. Check you can open the link yourself first. |
+| The page loads but sign-in or data fails | The emulators aren't running or seeded. Look for errors in the `npm run share` terminal.                             |
+| Seeding fails                            | `share` stops instead of serving an empty app. Fix the error shown, then run it again.                               |
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `npm run emulators` | Start Auth, Firestore, and RTDB emulators with their UI. |
-| `npm run emulators:lan` / `dev:lan` | The same, reachable from a phone on a trusted network. |
-| `npm run share` | Start the LAN emulators, seed, start the dev server, and copy a Tailscale link to send a friend. |
-| `npm run lan:trust` / `lan:untrust` / `lan:list` | Name and trust the current network for the `:lan` commands, remove one, or list them. |
-| `npm run seed` | Upsert all named fixtures into an already-running emulator. |
-| `npm run seed:core` | Upsert Auth users, profiles, app registry records, and presence. |
-| `npm run seed:nine-lives` | Upsert core data and Nine Lives household/cat fixtures. |
-| `npm run seed:worth-the-wait` | Upsert core data and Worth the Wait fixtures. |
-| `npm run seed:waypoint` | Upsert core data and Waypoint trip fixtures. |
-| `npm run seed:a-list` | Upsert core data and A-List Tracker fixtures. |
-| `npm run seed:reset` | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures. |
-| `npm run emulators:seed` | Start emulators, seed all fixtures, and exit. |
-| `npm run emulators:seed:reset` | Start emulators, clear all fixtures, reseed, and exit. |
+| Command                                          | Purpose                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `npm run emulators`                              | Start Auth, Firestore, and RTDB emulators with their UI.                                         |
+| `npm run emulators:lan` / `dev:lan`              | The same, reachable from a phone on a trusted network.                                           |
+| `npm run share`                                  | Start the LAN emulators, seed, start the dev server, and copy a Tailscale link to send a friend. |
+| `npm run lan:trust` / `lan:untrust` / `lan:list` | Name and trust the current network for the `:lan` commands, remove one, or list them.            |
+| `npm run seed`                                   | Upsert all named fixtures into an already-running emulator.                                      |
+| `npm run seed:core`                              | Upsert Auth users, profiles, app registry records, and presence.                                 |
+| `npm run seed:nine-lives`                        | Upsert core data and Nine Lives household/cat fixtures.                                          |
+| `npm run seed:worth-the-wait`                    | Upsert core data and Worth the Wait fixtures.                                                    |
+| `npm run seed:waypoint`                          | Upsert core data and Waypoint trip fixtures.                                                     |
+| `npm run seed:a-list`                            | Upsert core data and A-List Tracker fixtures.                                                    |
+| `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
+| `npm run emulators:seed`                         | Start emulators, seed all fixtures, and exit.                                                    |
+| `npm run emulators:seed:reset`                   | Start emulators, clear all fixtures, reseed, and exit.                                           |
 
 Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, or `all` to select a scope.
 Normal runs are idempotent upserts and retain records created manually during local
@@ -137,12 +133,12 @@ development. `--reset` is the explicit destructive local reset.
 All seeded accounts use password `local-fixture-password` and are only valid in the
 Auth Emulator:
 
-| Account | Email | UID | Role |
-| --- | --- | --- | --- |
-| Admin | `nova@moondreams.dev` | `seed-admin` | Admin app catalog access |
-| Alex | `alex@example.test` | `seed-worth-the-wait-one` | Worth the Wait partner and space creator |
-| Jamie | `jamie@example.test` | `seed-worth-the-wait-two` | Worth the Wait partner |
-| Taylor | `taylor@example.test` | `seed-nine-lives-caretaker` | Nine Lives household creator |
+| Account | Email                 | UID                         | Role                                     |
+| ------- | --------------------- | --------------------------- | ---------------------------------------- |
+| Admin   | `nova@moondreams.dev` | `seed-admin`                | Admin app catalog access                 |
+| Alex    | `alex@example.test`   | `seed-worth-the-wait-one`   | Worth the Wait partner and space creator |
+| Jamie   | `jamie@example.test`  | `seed-worth-the-wait-two`   | Worth the Wait partner                   |
+| Taylor  | `taylor@example.test` | `seed-nine-lives-caretaker` | Nine Lives household creator             |
 
 When Vite uses the emulator configuration, the header provides local account buttons
 for these identities. This uses email/password so the selected account always owns the

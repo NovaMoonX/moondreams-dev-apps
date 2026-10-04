@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "tsx scripts/lan.ts dev",
+    "preshare": "tsx scripts/lan.ts cleanup",
     "share": "tsx scripts/lan.ts share",
+    "share:check": "tsx scripts/lan.ts share --dry",
     "lan:trust": "tsx scripts/lan.ts trust",
     "lan:untrust": "tsx scripts/lan.ts untrust",
     "lan:list": "tsx scripts/lan.ts list",

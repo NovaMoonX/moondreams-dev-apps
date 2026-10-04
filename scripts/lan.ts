@@ -108,6 +108,98 @@ const EMULATOR_READY_URLS = [
   'http://127.0.0.1:9000',
 ];
 
+// Only processes that look like ours are stopped; anything else on these ports is left alone and reported.
+const OUR_PROCESS = /vite|firebase|emulator|cloud-storage-rules|pubsub/i;
+// The emulators' own ports, plus the hub, logging and Firestore websocket ports they open beside them.
+const EXTRA_EMULATOR_PORTS = [4400, 4500, 9150];
+
+interface Listener {
+  pid: number;
+  ports: number[];
+  command: string;
+}
+
+function getListeners(ports: number[]): Listener[] {
+  const found = ports.flatMap((port) => {
+    try {
+      const out = execFileSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      return out
+        .split('\n')
+        .filter((line) => line.startsWith('p'))
+        .map((line) => ({ pid: Number(line.slice(1)), port }));
+    } catch {
+      return [];
+    }
+  });
+  const byPid = found.reduce<Record<number, number[]>>(
+    (groups, { pid, port }) => ({ ...groups, [pid]: [...(groups[pid] ?? []), port] }),
+    {},
+  );
+
+  return Object.entries(byPid)
+    .map(([pid, pidPorts]) => ({
+      pid: Number(pid),
+      ports: pidPorts,
+      command: execFileSync('ps', ['-p', pid, '-o', 'args='], { encoding: 'utf8' }).trim(),
+    }))
+    .filter(({ pid }) => pid !== process.pid);
+}
+
+const isAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+async function stopProcess(pid: number) {
+  process.kill(pid, 'SIGTERM');
+  for (let waited = 0; waited < 30 && isAlive(pid); waited += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (isAlive(pid)) {
+    process.kill(pid, 'SIGKILL');
+  }
+}
+
+/** Stops our own leftover dev server and emulators, saying what it stopped; fails if something else holds a port. */
+async function freePorts() {
+  const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+  const override = process.env.SHARE_CLEANUP_PORTS;
+  const ports = override
+    ? override.split(',').map(Number)
+    : [
+        VITE_PORT,
+        ...EXTRA_EMULATOR_PORTS,
+        ...Object.values<{ port?: number }>(config.emulators).flatMap(({ port }) => (port ? [port] : [])),
+      ];
+  const listeners = getListeners(ports);
+  const ours = listeners.filter(({ command }) => OUR_PROCESS.test(command));
+  const others = listeners.filter(({ command }) => !OUR_PROCESS.test(command));
+
+  if (listeners.length === 0) {
+    console.log('Nothing is in the way: the ports are free.');
+    return;
+  }
+
+  await Promise.all(ours.map(({ pid }) => stopProcess(pid)));
+  ours.forEach(({ pid, ports: pidPorts, command }) =>
+    console.log(`Stopped pid ${pid} (port ${pidPorts.join(', ')}): ${command.slice(0, 90)}`),
+  );
+
+  if (others.length > 0) {
+    others.forEach(({ pid, ports: pidPorts, command }) =>
+      console.error(`Left alone pid ${pid} (port ${pidPorts.join(', ')}), it isn't ours: ${command.slice(0, 90)}`),
+    );
+    throw new Error('Something else is using a port we need. Stop it, then run this again.');
+  }
+}
+
 /** Your Mac's Tailscale address, which only people on (or shared into) your tailnet can reach. */
 function getTailscaleHost() {
   const override = process.env.SHARE_HOST;
@@ -250,6 +342,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
     const only = writeLanEmulatorConfig();
     run('firebase', ['emulators:start', '--only', only, '--config', LAN_CONFIG]);
   },
+  cleanup: () => freePorts(),
   share: (args) => share(args.includes('--dry')),
 };
 
