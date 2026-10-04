@@ -394,6 +394,7 @@ className={join('base-class', isActive ? 'active' : 'inactive')}
 
 ### Component library priority
 - Check Dreamer UI first before creating custom components.
+- **Before writing any UI behavior by hand, check two places: Dreamer UI's exported components, then the repo's shared components (`src/components`, `src/ui`).** If one already does the job, use it — never re-implement it with `Button` + `useState` + a timeout. Copy-to-clipboard with a copied state is `CopyButton` (`@moondreamsdev/dreamer-ui/components`); other examples already here: `AppToggle`, `UserAvatar`, `IconBadge`, `SectionHeader`, `DeleteIconButton`. Skim the component list (`node_modules/@moondreamsdev/dreamer-ui/dist/src/components`) and `grep` the repo for the behavior before building it.
 - Import from `@moondreamsdev/dreamer-ui/components`, `/hooks`, `/symbols`, and `/utils` when possible.
 - Review existing Dreamer UI props before applying custom styling or behavior.
 - **No raw HTML form/interactive elements.** Never write `<button>`, `<input>`, `<select>`, `<textarea>`, or `<a>` directly — always use the Dreamer UI equivalent (`Button`, `Input`, `Select`, `Textarea`, a `Button` with `href`). This applies even to small/internal-looking components (list-item toggles, filter chips, category pickers) — there is no size threshold under which raw HTML becomes acceptable.

@@ -7,7 +7,6 @@ import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
-import { copyToClipboard } from '@/utils/clipboardUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AppToggle from '@/components/AppToggle';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -128,22 +127,18 @@ function Waypoint() {
     setSearchParams(nextSearchParams, { replace: true });
   };
 
-  const handleCopyInviteLink = async (tripInviteCode: string) => {
-    await copyToClipboard(
-      `${window.location.origin}/waypoint?inviteCode=${tripInviteCode}`,
+  const handleInviteCopied = (kind: 'code' | 'link') => {
+    addToast(
+      kind === 'link'
+        ? {
+            title: 'Invite link copied',
+            description: 'Share the link with someone you want to invite.',
+          }
+        : {
+            title: 'Invite code copied',
+            description: 'Send it to someone you want on this trip.',
+          },
     );
-    addToast({
-      title: 'Invite link copied',
-      description: 'Share the link with someone you want to invite.',
-    });
-  };
-
-  const handleCopyInviteCode = async (tripInviteCode: string) => {
-    await copyToClipboard(tripInviteCode);
-    addToast({
-      title: 'Invite code copied',
-      description: 'Send it to someone you want on this trip.',
-    });
   };
 
   const handleSubmitJoinCode = (code: string) => {
@@ -197,10 +192,7 @@ function Waypoint() {
               trip={trip}
               now={now}
               onOpen={setSelectedTripId}
-              onCopyInviteLink={(inviteLinkCode) =>
-                void handleCopyInviteLink(inviteLinkCode)
-              }
-              onCopyInviteCode={(code) => void handleCopyInviteCode(code)}
+              onInviteCopied={handleInviteCopied}
             />
           ))}
         </div>

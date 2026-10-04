@@ -1,9 +1,4 @@
-import { useState, type ComponentType } from 'react';
-
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
-import { Check, Copy } from '@moondreamsdev/dreamer-ui/symbols';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-
+import { Badge, Button, CopyButton } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
@@ -13,45 +8,16 @@ interface TripCardProps {
   trip: TripSpace;
   now: number;
   onOpen: (tripId: string) => void;
-  onCopyInviteLink: (inviteCode: string) => void;
-  onCopyInviteCode: (inviteCode: string) => void;
-}
-
-function CopiedIcon({
-  icon: Icon,
-  isCopied,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  isCopied: boolean;
-}) {
-  const Shown = isCopied ? Check : Icon;
-  return <Shown className={join('h-3.5 w-3.5', isCopied && 'text-success')} />;
+  onInviteCopied: (kind: 'code' | 'link') => void;
 }
 
 function TripCard({
   trip,
   now,
   onOpen,
-  onCopyInviteLink,
-  onCopyInviteCode,
+  onInviteCopied,
 }: TripCardProps) {
-  const [copiedKind, setCopiedKind] = useState<'code' | 'link' | null>(null);
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
-
-  const handleCopy = async (kind: 'code' | 'link') => {
-    if (!trip.inviteCode) {
-      return;
-    }
-
-    if (kind === 'code') {
-      onCopyInviteCode(trip.inviteCode);
-    } else {
-      onCopyInviteLink(trip.inviteCode);
-    }
-
-    setCopiedKind(kind);
-    window.setTimeout(() => setCopiedKind(null), 2000);
-  };
 
   return (
     <div className='border-border bg-card rounded-lg border p-4'>
@@ -87,27 +53,24 @@ function TripCard({
               <code className='text-foreground text-base font-semibold tracking-[0.2em]'>
                 {trip.inviteCode}
               </code>
-              <Button
-                type='button'
+              <CopyButton
+                textToCopy={trip.inviteCode}
                 variant='tertiary'
-                size='sm'
+                size='icon'
                 className='-my-1'
-                aria-label='Copy invite code'
-                onClick={() => handleCopy('code')}
-              >
-                <CopiedIcon icon={Copy} isCopied={copiedKind === 'code'} />
-              </Button>
+                onClick={() => onInviteCopied('code')}
+              />
             </div>
           </div>
-          <Button
-            type='button'
+          <CopyButton
+            textToCopy={`${window.location.origin}/waypoint?inviteCode=${trip.inviteCode}`}
             variant='secondary'
             size='sm'
             className='shrink-0'
-            onClick={() => handleCopy('link')}
+            onClick={() => onInviteCopied('link')}
           >
-            {copiedKind === 'link' ? 'Copied' : 'Copy link'}
-          </Button>
+            Copy link
+          </CopyButton>
         </div>
       )}
 
