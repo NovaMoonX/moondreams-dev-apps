@@ -142,13 +142,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
       <section className='space-y-3'>
         <SectionHeader
           title='Members'
-          action={
-            <span className='flex h-10 items-center'>
-              <span className='bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold'>
-                {memberIds.length}
-              </span>
-            </span>
-          }
+          subtitle={`${memberIds.length} ${memberIds.length === 1 ? 'member' : 'members'}`}
         />
         <ul className={join('divide-border', !isSmallScreen && 'divide-y')}>
           {memberIds.map((memberId) => {

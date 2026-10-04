@@ -14,10 +14,10 @@ interface SubviewHeaderProps {
   actionRef?: (element: HTMLDivElement | null) => void;
 }
 
-/** The round back button and large title that open every subview, set off from section subheaders by a rule beneath. */
+/** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
 export function SubviewHeader({ title, onBack, actionRef }: SubviewHeaderProps) {
   return (
-    <div className='border-border mb-5 flex items-center gap-2 border-b pb-3'>
+    <div className='mb-3 flex items-center gap-2'>
       <Button
         type='button'
         variant='secondary'
