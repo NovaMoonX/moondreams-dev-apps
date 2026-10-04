@@ -15,7 +15,6 @@ import {
 type Phase = 'online' | 'offline' | 'reconnecting' | 'reconnected';
 
 type Action =
-  | { type: 'went-offline' }
   | { type: 'verifying' }
   | { type: 'verified' }
   | { type: 'verify-failed' }
@@ -23,8 +22,6 @@ type Action =
 
 function reducer(phase: Phase, action: Action): Phase {
   switch (action.type) {
-    case 'went-offline':
-      return 'offline';
     case 'verifying':
       // Only offline/reconnected phases route through verification — a
       // steady 'online' phase has nothing to re-verify.
@@ -36,12 +33,6 @@ function reducer(phase: Phase, action: Action): Phase {
     case 'reconnected-timeout':
       return phase === 'reconnected' ? 'online' : phase;
   }
-}
-
-function initialPhase(): Phase {
-  return typeof navigator !== 'undefined' && !navigator.onLine
-    ? 'offline'
-    : 'online';
 }
 
 const PROBE_TIMEOUT_MS = 5_000;
@@ -70,16 +61,18 @@ function getConnection(): NetworkInformationLike | undefined {
 }
 
 export function NetworkStatusProvider({ children }: PropsWithChildren) {
-  const [phase, dispatch] = useReducer(reducer, undefined, initialPhase);
+  const [phase, dispatch] = useReducer(reducer, 'online');
   const [isSlow, setIsSlow] = useState(false);
   const probeTokenRef = useRef(0);
 
-  const verifyConnection = useCallback(() => {
+  const verifyConnection = useCallback((isSilent = false) => {
     const token = ++probeTokenRef.current;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
-    dispatch({ type: 'verifying' });
+    if (!isSilent) {
+      dispatch({ type: 'verifying' });
+    }
 
     probeConnectivity(controller.signal)
       .then((ok) => {
@@ -93,12 +86,15 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     function handleOffline() {
-      probeTokenRef.current++;
-      dispatch({ type: 'went-offline' });
+      verifyConnection(true);
     }
 
     function handleOnline() {
       verifyConnection();
+    }
+
+    if (!navigator.onLine) {
+      verifyConnection(true);
     }
 
     window.addEventListener('offline', handleOffline);
@@ -110,18 +106,14 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     };
   }, [verifyConnection]);
 
-  // Captive-portal fallback: some networks never fire a fresh 'online'
-  // event once real connectivity returns, so keep re-probing while offline.
+  // The browser's online flag can stay wrong (VPN or network switches, captive portals), so
+  // keep re-probing while offline instead of waiting on it.
   useEffect(() => {
     if (phase !== 'offline') {
       return;
     }
 
-    const interval = setInterval(() => {
-      if (navigator.onLine) {
-        verifyConnection();
-      }
-    }, OFFLINE_RETRY_INTERVAL_MS);
+    const interval = setInterval(() => verifyConnection(true), OFFLINE_RETRY_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [phase, verifyConnection]);
