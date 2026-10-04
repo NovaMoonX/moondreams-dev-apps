@@ -68,8 +68,13 @@ function MoviePicker({
 
   const trimmedQuery = query.trim();
 
+  const hasQuery = trimmedQuery.length >= MOVIE_SEARCH_MIN_CHARS;
+  // Results belong to the query that fetched them, so they never outlive the text that asked for them.
+  const visibleResults = hasQuery ? results : [];
+  const hasItems = watchlistMatches.length > 0 || visibleResults.length > 0;
+
   const getEmptyState = () => {
-    if (watchlistMatches.length > 0 && !canSearch) return null;
+    if (hasItems) return null;
     if (trimmedQuery === '')
       return {
         emoji: '🍿',
@@ -77,22 +82,21 @@ function MoviePicker({
         body: 'Search by title to find a movie.',
         offerManual: false,
       };
-    if (trimmedQuery.length < MOVIE_SEARCH_MIN_CHARS)
+    if (!hasQuery)
       return {
         emoji: '🔎',
         title: 'Keep typing',
         body: `Give us at least ${MOVIE_SEARCH_MIN_CHARS} letters to search with.`,
         offerManual: false,
       };
-    // Enough letters are typed but the debounce hasn't released the search yet.
-    if (!canSearch || search.isPending)
+    // The debounce or the request hasn't caught up with what is typed.
+    if (!canSearch || debouncedQuery !== trimmedQuery || search.isPending)
       return {
         emoji: '🎞️',
         title: 'Searching…',
         body: null,
         offerManual: false,
       };
-    if (results.length > 0 || watchlistMatches.length > 0) return null;
     if (isSearchResting)
       return {
         emoji: '😴',
@@ -203,13 +207,13 @@ function MoviePicker({
           )}
         </div>
       )}
-      {results.length > 0 && (
+      {visibleResults.length > 0 && (
         <div className='space-y-1'>
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             From search
           </h3>
           <ul className='space-y-0.5'>
-            {results.map((movie) =>
+            {visibleResults.map((movie) =>
               renderRow(
                 movie.movieKey,
                 movie.title,
