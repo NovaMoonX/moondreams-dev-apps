@@ -62,52 +62,56 @@ function MyPendingTrips({ requests, loading }: MyPendingTripsProps) {
   }
 
   return (
-    <section className='border-border bg-card rounded-lg border p-4'>
-      <div className='mb-3 flex items-center justify-between gap-3'>
-        <h2 className='text-lg font-semibold'>
-          Pending requests you&apos;ve sent
+    <section className='border-border bg-card rounded-xl border'>
+      <div className='flex items-center justify-between gap-3 px-4 pt-4 pb-2'>
+        <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+          Waiting on a reply
         </h2>
         {!loading && (
-          <span className='text-muted-foreground text-sm'>
+          <span className='bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold'>
             {requests.length}
           </span>
         )}
       </div>
 
       {loading ? (
-        <p className='text-muted-foreground text-sm'>
-          Loading pending requests…
+        <p className='text-muted-foreground px-4 pb-4 text-sm'>
+          Checking on your requests…
         </p>
       ) : (
-        <ul className='space-y-3'>
+        <ul className='divide-border divide-y'>
           {requests.map((request) => {
             const requestId = `${request.uid}_${request.tripId}`;
 
             return (
               <li
                 key={requestId}
-                className='border-border flex items-center justify-between gap-3 rounded-md border p-3'
+                className='flex items-center gap-3 px-4 py-3'
               >
-                <div>
-                  <p className='font-medium'>
-                    {tripTitles[request.tripId] ?? `Trip ${request.tripId}`}
+                <span
+                  aria-hidden
+                  className='bg-primary/10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base'
+                >
+                  ⏳
+                </span>
+                <div className='min-w-0 flex-1'>
+                  <p className='truncate font-medium'>
+                    {tripTitles[request.tripId] ?? 'A trip'}
                   </p>
-                  <p className='text-muted-foreground text-sm'>
-                    Requested {formatDateTime(request.requestedAt)}
+                  <p className='text-muted-foreground text-xs'>
+                    Asked {formatDateTime(request.requestedAt)} · an Admin will
+                    pick your role
                   </p>
                 </div>
-                <div className='flex items-center gap-3'>
-                  <span className='text-muted-foreground text-sm'>Pending</span>
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    disabled={busyRequestId !== null}
-                    onClick={() => handleCancel(request)}
-                  >
-                    Withdraw
-                  </Button>
-                </div>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  disabled={busyRequestId !== null}
+                  onClick={() => handleCancel(request)}
+                >
+                  Withdraw
+                </Button>
               </li>
             );
           })}
