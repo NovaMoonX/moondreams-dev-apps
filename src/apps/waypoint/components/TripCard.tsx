@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { Check, Copy } from '@moondreamsdev/dreamer-ui/symbols';
@@ -17,9 +17,33 @@ interface TripCardProps {
   onCopyInviteCode: (inviteCode: string) => void;
 }
 
-function CopyIcon({ isCopied }: { isCopied: boolean }) {
-  const Icon = isCopied ? Check : Copy;
-  return <Icon className={join('h-3.5 w-3.5', isCopied && 'text-success')} />;
+function LinkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox='0 0 24 24'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='2'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      className={className}
+      aria-hidden
+    >
+      <path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71' />
+      <path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' />
+    </svg>
+  );
+}
+
+function CopiedIcon({
+  icon: Icon,
+  isCopied,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  isCopied: boolean;
+}) {
+  const Shown = isCopied ? Check : Icon;
+  return <Shown className={join('h-3.5 w-3.5', isCopied && 'text-success')} />;
 }
 
 function TripCard({
@@ -77,30 +101,32 @@ function TripCard({
             <p className='text-muted-foreground text-[10px] font-semibold tracking-wide uppercase'>
               Invite code
             </p>
-            <code className='text-foreground text-base font-semibold tracking-[0.2em]'>
-              {trip.inviteCode}
-            </code>
+            <div className='flex items-center gap-1'>
+              <code className='text-foreground text-base font-semibold tracking-[0.2em]'>
+                {trip.inviteCode}
+              </code>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className='-my-1'
+                aria-label='Copy invite code'
+                onClick={() => handleCopy('code')}
+              >
+                <CopiedIcon icon={Copy} isCopied={copiedKind === 'code'} />
+              </Button>
+            </div>
           </div>
-          <div className='flex shrink-0 items-center gap-1'>
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              aria-label='Copy invite code'
-              onClick={() => handleCopy('code')}
-            >
-              <CopyIcon isCopied={copiedKind === 'code'} />
-            </Button>
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => handleCopy('link')}
-            >
-              <CopyIcon isCopied={copiedKind === 'link'} />
-              {copiedKind === 'link' ? 'Copied' : 'Copy link'}
-            </Button>
-          </div>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            className='shrink-0'
+            onClick={() => handleCopy('link')}
+          >
+            {copiedKind === 'link' ? 'Copied' : 'Copy link'}
+            <CopiedIcon icon={LinkIcon} isCopied={copiedKind === 'link'} />
+          </Button>
         </div>
       )}
 
