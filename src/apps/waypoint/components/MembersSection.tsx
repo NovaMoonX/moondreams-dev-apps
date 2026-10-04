@@ -140,7 +140,16 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   return (
     <div className='space-y-6 pt-4'>
       <section className='space-y-3'>
-        <SectionHeader title='Members' />
+        <SectionHeader
+          title='Members'
+          action={
+            <span className='flex h-10 items-center'>
+              <span className='bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold'>
+                {memberIds.length}
+              </span>
+            </span>
+          }
+        />
         <ul className={join('divide-border', !isSmallScreen && 'divide-y')}>
           {memberIds.map((memberId) => {
             const member = members[memberId];
