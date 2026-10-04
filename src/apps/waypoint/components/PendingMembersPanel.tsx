@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { shallowEqual } from 'react-redux';
 
-import { Button, Select, Separator } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Drawer,
+  RadioGroup,
+  Select,
+  Separator,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import UserAvatar from '@/ui/UserAvatar';
@@ -35,6 +44,8 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
     {},
   );
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const isSmallScreen = useMediaQuery().isBelow('sm');
   const requests = useAppSelector(
     (state) =>
       state.waypoint.pendingRequests.tripRequests.filter(
@@ -47,6 +58,14 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
   );
   const userInfo = useUserInfo(requests.map((request) => request.uid));
   const members = userInfo?.users ?? [];
+  const getDisplayName = (uid: string) => {
+    const member = members.find((user) => user.uid === uid);
+    return member?.displayName?.trim() || member?.email || 'Trip member';
+  };
+  const activeRequest =
+    requests.find(
+      (request) => `${request.uid}_${request.tripId}` === activeRequestId,
+    ) ?? null;
 
   const handleApprove = async (request: TripJoinRequest) => {
     const requestId = `${request.uid}_${request.tripId}`;
@@ -121,12 +140,46 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
           No one is waiting to join this trip.
         </p>
       ) : (
-        <ul className='space-y-3'>
+        <ul
+          className={join(
+            isSmallScreen
+              ? 'divide-border border-border divide-y rounded-lg border'
+              : 'space-y-3',
+          )}
+        >
           {requests.map((request) => {
             const member = members.find((user) => user.uid === request.uid);
             const displayName =
               member?.displayName?.trim() || member?.email || 'Trip member';
             const requestId = `${request.uid}_${request.tripId}`;
+
+            if (isSmallScreen) {
+              return (
+                <li key={requestId}>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    className='h-auto w-full justify-between gap-3 px-3 py-3 text-left'
+                    onClick={() => setActiveRequestId(requestId)}
+                  >
+                    <span className='flex min-w-0 items-center gap-3'>
+                      <span className='shrink-0'>
+                        <UserAvatar user={member ?? null} size='md' />
+                      </span>
+                      <span className='min-w-0'>
+                        <span className='block truncate font-medium'>
+                          {displayName}
+                        </span>
+                        <span className='text-muted-foreground block text-xs font-normal'>
+                          Requested {formatDateTime(request.requestedAt)}
+                        </span>
+                      </span>
+                    </span>
+                    <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
+                  </Button>
+                </li>
+              );
+            }
 
             return (
               <li
@@ -179,6 +232,59 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
           })}
         </ul>
       )}
+
+      <Drawer
+        isOpen={activeRequest !== null}
+        onClose={() => setActiveRequestId(null)}
+        title={activeRequest ? getDisplayName(activeRequest.uid) : 'Request'}
+        showCloseButton
+        footer={
+          activeRequest && (
+            <div className='flex flex-col gap-2'>
+              <Button
+                type='button'
+                size='lg'
+                disabled={busyRequestId !== null}
+                onClick={() => handleApprove(activeRequest)}
+              >
+                Approve
+              </Button>
+              <Button
+                type='button'
+                size='lg'
+                variant='secondary'
+                className='text-destructive'
+                disabled={busyRequestId !== null}
+                onClick={() => handleDecline(activeRequest)}
+              >
+                Decline
+              </Button>
+            </div>
+          )
+        }
+      >
+        {activeRequest && (
+          <div className='space-y-3 pb-2'>
+            <p className='text-muted-foreground text-sm'>
+              Asked {formatDateTime(activeRequest.requestedAt)}. Pick what they
+              can do once they&apos;re in.
+            </p>
+            <RadioGroup
+              value={selectedRoles[activeRequest.uid] ?? 'VIEWER'}
+              onChange={(value) =>
+                setSelectedRoles((current) => ({
+                  ...current,
+                  [activeRequest.uid]: value as UserRole,
+                }))
+              }
+              options={ROLE_OPTIONS.map((option) => ({
+                label: option.text,
+                value: option.value,
+              }))}
+            />
+          </div>
+        )}
+      </Drawer>
     </section>
   );
 }
