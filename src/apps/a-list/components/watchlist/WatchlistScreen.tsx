@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -174,14 +175,10 @@ function WatchlistScreen() {
         }
       />
       {rows.length > 0 && (
-        <Input
-          type='search'
-          variant='outline'
-          rounded='full'
+        <SearchInput
           placeholder='Search your watchlist'
-          aria-label='Search your watchlist'
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={setQuery}
         />
       )}
       <WatchlistFilters

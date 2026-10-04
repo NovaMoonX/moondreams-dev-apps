@@ -2,7 +2,7 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { formatDuration } from '@/utils/formatUtils';
-import StatTile from '@apps/a-list/components/shared/StatTile';
+import StatTile from '@/components/StatTile';
 import { selectCounters } from '@apps/a-list/store/selectors';
 
 interface CounterRowProps {

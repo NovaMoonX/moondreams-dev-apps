@@ -4,7 +4,7 @@ import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
-import StarRating from '@apps/a-list/components/shared/StarRating';
+import StarRating from '@/components/StarRating';
 import type { Viewing } from '@apps/a-list/types';
 
 interface SeenPromptProps {

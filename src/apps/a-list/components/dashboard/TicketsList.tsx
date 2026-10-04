@@ -6,7 +6,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDate } from '@/utils/formatUtils';
 import ViewingRow from '@apps/a-list/components/calendar/ViewingRow';
-import Pill from '@apps/a-list/components/shared/Pill';
+import Pill from '@/components/Pill';
 import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
 import { selectSeenTicketGroups } from '@apps/a-list/store/selectors';
 

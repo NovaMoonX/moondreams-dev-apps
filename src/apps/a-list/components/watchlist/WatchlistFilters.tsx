@@ -1,7 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { X } from 'lucide-react';
 
-import Pill from '@apps/a-list/components/shared/Pill';
+import Pill from '@/components/Pill';
 import {
   WATCH_PRIORITY_EMOJIS,
   WATCH_PRIORITY_LABELS,

@@ -31,7 +31,7 @@ function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
         <h2 className='flex h-10 items-center text-xl font-semibold'>{title}</h2>
         {subtitle && <p className='text-muted-foreground -mt-1 text-sm'>{subtitle}</p>}
       </div>
-      {action}
+      {action && <div className='flex h-10 shrink-0 items-center'>{action}</div>}
     </div>
   );
 }

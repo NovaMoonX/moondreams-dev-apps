@@ -1,7 +1,8 @@
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 
+import SearchInput from '@/components/SearchInput';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -148,15 +149,11 @@ function MoviePicker({
 
   return (
     <div className='space-y-3'>
-      <Input
-        type='search'
-        variant='outline'
-        rounded='full'
-        placeholder='Search movies or your watchlist'
-        aria-label='Search movies'
+      <SearchInput
         autoFocus
+        placeholder='Search movies or your watchlist'
         value={query}
-        onChange={(event) => onQueryChange(event.target.value)}
+        onChange={onQueryChange}
       />
       {watchlistMatches.length > 0 && (
         <div className='space-y-1'>
@@ -201,7 +198,7 @@ function MoviePicker({
               variant={isSearchResting ? 'primary' : 'secondary'}
               onClick={onAddByTitle}
             >
-              + Can't find it? Add it by title
+              Can't find it? Add it by title
             </Button>
           )}
         </div>

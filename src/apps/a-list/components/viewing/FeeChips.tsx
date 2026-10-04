@@ -1,4 +1,4 @@
-import Pill from '@apps/a-list/components/shared/Pill';
+import Pill from '@/components/Pill';
 import { formatCents, parseMoneyToCents } from '@apps/a-list/utils/money';
 
 interface FeeChipsProps {

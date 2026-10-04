@@ -17,7 +17,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
-import StarRating from '@apps/a-list/components/shared/StarRating';
+import StarRating from '@/components/StarRating';
 import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import EditViewingForm from '@apps/a-list/components/viewing/EditViewingForm';
 import TicketForm from '@apps/a-list/components/viewing/TicketForm';

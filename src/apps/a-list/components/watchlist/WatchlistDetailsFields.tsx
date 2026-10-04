@@ -1,6 +1,6 @@
 import { Label, Select } from '@moondreamsdev/dreamer-ui/components';
 
-import Pill from '@apps/a-list/components/shared/Pill';
+import Pill from '@/components/Pill';
 import {
   AMC_FORMAT_LABELS,
   AMC_FORMATS,

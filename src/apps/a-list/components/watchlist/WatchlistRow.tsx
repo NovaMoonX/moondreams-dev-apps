@@ -5,7 +5,7 @@ import {
   formatDateShort,
   formatDateUTC,
 } from '@/utils/formatUtils';
-import DateChip from '@apps/a-list/components/shared/DateChip';
+import DateChip from '@/components/DateChip';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import PriorityBadge from '@apps/a-list/components/shared/PriorityBadge';

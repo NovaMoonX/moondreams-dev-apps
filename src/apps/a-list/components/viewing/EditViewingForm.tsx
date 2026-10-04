@@ -14,7 +14,7 @@ import {
   createDateInputField,
   createTimeInputField,
 } from '@/utils/formFactoryHelpers';
-import StarRating from '@apps/a-list/components/shared/StarRating';
+import StarRating from '@/components/StarRating';
 import type { Viewing } from '@apps/a-list/types';
 
 interface ShowtimeValues {

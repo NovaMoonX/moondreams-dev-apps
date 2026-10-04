@@ -6,7 +6,7 @@ import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
-import StatTile from '@apps/a-list/components/shared/StatTile';
+import StatTile from '@/components/StatTile';
 import type { TicketsView } from '@apps/a-list/components/dashboard/TicketsList';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
