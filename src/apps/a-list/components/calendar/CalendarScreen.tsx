@@ -32,6 +32,7 @@ function CalendarScreen() {
   const viewingsByDay = useAppSelector(selectViewingsByDay);
   const now = useNow();
   const [selectedDay, setSelectedDay] = useState(getTodayStart);
+  const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
   const selectedDayKey = getDayKey(selectedDay.getTime());
 
   const openAdd = () =>
@@ -44,6 +45,7 @@ function CalendarScreen() {
 
   const handleDateSelect = (date: Date) => {
     setSelectedDay(date);
+    setPeekDayKey(null);
     openOverlay({ kind: 'day', dayKey: getDayKey(date.getTime()) });
   };
 
@@ -82,15 +84,26 @@ function CalendarScreen() {
         initialDate={selectedDay}
         onDateSelect={handleDateSelect}
         customStyles={CALENDAR_STYLES}
-        renderCell={(date, isSelected, _isDisabled, isToday) => (
-          <PosterCell
-            date={date}
-            viewings={viewingsByDay[getDayKey(date.getTime())] ?? []}
-            isSelected={isSelected}
-            isToday={isToday}
-            now={now}
-          />
-        )}
+        renderCell={(date, isSelected, _isDisabled, isToday) => {
+          const dayKey = getDayKey(date.getTime());
+          // Opening a day's peek closes any other at once; a late close from the day just left is ignored.
+          return (
+            <PosterCell
+              date={date}
+              viewings={viewingsByDay[dayKey] ?? []}
+              isSelected={isSelected}
+              isToday={isToday}
+              now={now}
+              isPeekOpen={peekDayKey === dayKey}
+              onPeekOpenChange={(isOpen) =>
+                setPeekDayKey((current) => {
+                  if (isOpen) return dayKey;
+                  return current === dayKey ? null : current;
+                })
+              }
+            />
+          );
+        }}
       />
     </section>
   );

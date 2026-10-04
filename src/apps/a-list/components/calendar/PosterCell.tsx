@@ -11,6 +11,9 @@ interface PosterCellProps {
   isSelected: boolean;
   isToday: boolean;
   now: number;
+  /** Controlled by the calendar so only one day's peek is ever open. */
+  isPeekOpen: boolean;
+  onPeekOpenChange: (isOpen: boolean) => void;
 }
 
 function getPopoverAlignment(date: Date) {
@@ -25,6 +28,8 @@ function PosterCell({
   isSelected,
   isToday,
   now,
+  isPeekOpen,
+  onPeekOpenChange,
 }: PosterCellProps) {
   const hasCovers = viewings.length > 0;
 
@@ -52,6 +57,8 @@ function PosterCell({
       {hasCovers ? (
         <Popover
           hoverable
+          isOpen={isPeekOpen}
+          onOpenChange={onPeekOpenChange}
           placement='bottom'
           alignment={getPopoverAlignment(date)}
           className='w-64 p-3 max-sm:hidden!'
