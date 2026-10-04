@@ -19,6 +19,7 @@ import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRan
 import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
+import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
@@ -636,14 +637,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     </div>
   );
 
-  const renderDivider = (label: string) => (
-    <div className='flex items-center gap-3'>
-      <div className='border-border flex-1 border-t' />
-      <span className='text-muted-foreground text-sm font-medium'>{label}</span>
-      <div className='border-border flex-1 border-t' />
-    </div>
-  );
-
   return (
     <section className='space-y-5 pt-4'>
       <SectionHeader
@@ -838,7 +831,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {dayGroups ? (
             dayGroups.map(({ bucket, items }) => (
               <div key={bucket} className='space-y-3'>
-                {renderDivider(getBucketLabel(bucket, trip.startDate))}
+                <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
                 <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
               </div>
             ))

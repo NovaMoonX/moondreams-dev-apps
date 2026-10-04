@@ -28,6 +28,7 @@ import EventFormModal, {
   type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
+import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
@@ -328,12 +329,7 @@ export function TimelineSection({
     });
 
   const renderDivider = (label: string, trailing?: ReactNode) => (
-    <div className='flex items-center gap-3'>
-      <div className='border-border flex-1 border-t' />
-      <span className='text-muted-foreground text-sm font-medium'>{label}</span>
-      {trailing}
-      <div className='border-border flex-1 border-t' />
-    </div>
+    <SectionDivider label={label} trailing={trailing} />
   );
 
   const renderDayWeather = (dayIndex: number) => {

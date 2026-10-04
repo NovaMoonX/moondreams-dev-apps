@@ -51,6 +51,7 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
                 <Button
                   type='button'
                   variant='tertiary'
+                  size='stripped'
                   aria-label={`Open ${viewing.movie.title}`}
                   className='text-foreground! hover:bg-muted/60 h-auto w-full justify-start rounded-2xl px-2 py-0 text-left font-normal'
                   onClick={() => setViewingId(viewing.id)}

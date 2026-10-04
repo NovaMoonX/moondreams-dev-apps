@@ -337,6 +337,8 @@ block-beta
 ```
 *Here the primary button is "Add + another": it saves, shows the "✓ added · N so far" strip (it appears after the first one), and drops back to the search with the form cleared, ready for the next movie. "Add & finish" saves and closes. Closing the drawer ends the loop and loses nothing, since each movie saves the moment it's added. The normal "+ Add" from the Calendar keeps a single Add button. A viewing can't be dated before your membership start date, so the date picker starts there.*
 
+*Revision: the Ticket form below no longer has the Itemized / All-in toggle or the tax-rate chips. It is one form: format, ticket price, the convenience fee (with past fees as one-tap chips) and the tax amount in dollars, matching what AMC shows on every ticket.*
+
 **Ticket** (swaps in place inside the viewing drawer; premium format shown, itemized)
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%

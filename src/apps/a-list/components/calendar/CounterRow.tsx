@@ -27,7 +27,7 @@ function CounterRow({ now }: CounterRowProps) {
         label='Watched'
         detail={
           counters.watchedMinutes > 0
-            ? `${formatDuration(counters.watchedMinutes * 60_000)} in theaters`
+            ? formatDuration(counters.watchedMinutes * 60_000)
             : undefined
         }
       />

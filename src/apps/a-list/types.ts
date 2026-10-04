@@ -58,6 +58,7 @@ export type AListOverlay =
   | { kind: 'day'; dayKey: string }
   | { kind: 'viewing'; id: string }
   | { kind: 'watchlistItem'; movieKey: string }
+  | { kind: 'tickets'; view: 'paid' | 'unpriced' }
   | { kind: 'membership' };
 
 export interface WatchlistItem {

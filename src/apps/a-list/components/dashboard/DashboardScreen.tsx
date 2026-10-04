@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Settings } from 'lucide-react';
@@ -9,9 +7,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import StatTile from '@apps/a-list/components/shared/StatTile';
-import TicketsList, {
-  type TicketsView,
-} from '@apps/a-list/components/dashboard/TicketsList';
+import type { TicketsView } from '@apps/a-list/components/dashboard/TicketsList';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectSavingsSummary,
@@ -29,17 +25,6 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
   const now = useNow();
   const summary = useAppSelector((state) => selectSavingsSummary(state, now));
   const { paid, unpriced } = useAppSelector(selectSeenTicketGroups);
-  const [ticketsView, setTicketsView] = useState<TicketsView | null>(null);
-
-  if (ticketsView !== null) {
-    return (
-      <TicketsList
-        key={ticketsView}
-        initialView={ticketsView}
-        onBack={() => setTicketsView(null)}
-      />
-    );
-  }
 
   const getMonthsLine = () => {
     if (!summary || summary.cyclesElapsed === 0)
@@ -62,7 +47,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
       type='button'
       variant='tertiary'
       className='text-foreground! h-auto w-full justify-start gap-3 rounded-none px-3 py-2.5 font-normal'
-      onClick={() => setTicketsView(view)}
+      onClick={() => openOverlay({ kind: 'tickets', view })}
     >
       <span
         className='bg-secondary grid size-9 shrink-0 place-items-center rounded-full text-lg'

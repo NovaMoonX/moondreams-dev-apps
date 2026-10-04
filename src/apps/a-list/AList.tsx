@@ -13,6 +13,7 @@ import AddSubview from '@apps/a-list/components/add/AddSubview';
 import CalendarScreen from '@apps/a-list/components/calendar/CalendarScreen';
 import DayDrawer from '@apps/a-list/components/calendar/DayDrawer';
 import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
+import TicketsList from '@apps/a-list/components/dashboard/TicketsList';
 import MembershipSettingsSubview from '@apps/a-list/components/dashboard/MembershipSettingsSubview';
 import PastMoviesOfferModal from '@apps/a-list/components/setup/PastMoviesOfferModal';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
@@ -140,12 +141,20 @@ function AList() {
   };
 
   const isSubviewOpen =
-    overlay?.kind === 'add' || overlay?.kind === 'membership';
+    overlay?.kind === 'add' ||
+    overlay?.kind === 'membership' ||
+    overlay?.kind === 'tickets';
 
   return (
     <AListOverlayContext.Provider value={overlayContext}>
       {overlay?.kind === 'add' && (
         <AddSubview overlay={overlay} onClose={() => setOverlay(null)} />
+      )}
+      {overlay?.kind === 'tickets' && (
+        <TicketsList
+          initialView={overlay.view}
+          onClose={() => setOverlay(null)}
+        />
       )}
       {overlay?.kind === 'membership' && (
         <MembershipSettingsSubview

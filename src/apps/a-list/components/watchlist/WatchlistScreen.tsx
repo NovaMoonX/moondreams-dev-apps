@@ -10,6 +10,7 @@ import {
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { normalizeString } from '@/utils/stringUtils';
+import SectionDivider from '@/components/SectionDivider';
 import WatchlistFilters from '@apps/a-list/components/watchlist/WatchlistFilters';
 import WatchlistRow from '@apps/a-list/components/watchlist/WatchlistRow';
 import { WATCH_PRIORITIES } from '@apps/a-list/constants';
@@ -77,6 +78,58 @@ function WatchlistScreen() {
 
   const visibleRows = getVisibleRows();
 
+  // With no filters on, what opens this week sits above everything else, each under its own divider.
+  const getSections = () => {
+    const opening = visibleRows.filter(
+      (row) => row.item.movieKey in daysByMovie,
+    );
+    if (filters.length > 0 || opening.length === 0)
+      return [{ label: null, rows: visibleRows }];
+    return [
+      {
+        label: 'Opening this week',
+        rows: [...opening].sort(
+          (left, right) =>
+            daysByMovie[left.item.movieKey] - daysByMovie[right.item.movieKey],
+        ),
+      },
+      {
+        label: 'Everything else',
+        rows: visibleRows.filter((row) => !(row.item.movieKey in daysByMovie)),
+      },
+    ].filter(({ rows: sectionRows }) => sectionRows.length > 0);
+  };
+
+  const sections = getSections();
+
+  const renderRows = (sectionRows: WatchlistRowData[]) => (
+    <ul className='space-y-3'>
+      {sectionRows.map((row) => (
+        <li key={row.item.movieKey}>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='stripped'
+            aria-label={`Open ${row.item.movie.title}`}
+            className='text-foreground! h-auto w-full justify-start rounded-2xl text-left font-normal'
+            onClick={() =>
+              openOverlay({
+                kind: 'watchlistItem',
+                movieKey: row.item.movieKey,
+              })
+            }
+          >
+            <WatchlistRow
+              row={row}
+              todayDay={todayDay}
+              daysUntil={daysByMovie[row.item.movieKey]}
+            />
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+
   const getEmptyState = () => {
     if (rows.length === 0)
       return (
@@ -140,35 +193,12 @@ function WatchlistScreen() {
       {visibleRows.length === 0 ? (
         <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>
       ) : (
-        <ul className='space-y-3'>
-          {visibleRows.map((row) => (
-            <li key={row.item.movieKey}>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='stripped'
-                aria-label={`Open ${row.item.movie.title}`}
-                className='text-foreground! h-auto w-full justify-start rounded-2xl text-left font-normal'
-                onClick={() =>
-                  openOverlay({
-                    kind: 'watchlistItem',
-                    movieKey: row.item.movieKey,
-                  })
-                }
-              >
-                <WatchlistRow
-                  row={row}
-                  todayDay={todayDay}
-                  daysUntil={
-                    filters.includes('opening')
-                      ? daysByMovie[row.item.movieKey]
-                      : undefined
-                  }
-                />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        sections.map(({ label, rows: sectionRows }) => (
+          <div key={label ?? 'all'} className='space-y-3'>
+            {label && <SectionDivider label={label} />}
+            {renderRows(sectionRows)}
+          </div>
+        ))
       )}
     </section>
   );

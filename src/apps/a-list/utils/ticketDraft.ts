@@ -1,63 +1,47 @@
 import { MAX_AMOUNT_CENTS, MAX_TAX_RATE } from '@apps/a-list/constants';
-import type { AmcFormat, Ticket, TicketEntryMode } from '@apps/a-list/types';
+import type { AmcFormat, Ticket } from '@apps/a-list/types';
 import { centsToInputValue, parseMoneyToCents } from '@apps/a-list/utils/money';
-import { getItemizedTaxCents, splitAllInTotal } from '@apps/a-list/utils/tax';
 
-export interface FeeValue {
-  selected: number | 'OTHER';
-  other: string;
-}
-
-export interface RateValue {
-  selected: number | 'NONE' | 'OTHER';
-  /** A percent, e.g. "8.875". */
-  other: string;
-}
-
+/** The three amounts AMC itemizes on every ticket, in dollars as typed, plus its format. */
 export interface TicketDraft {
-  entryMode: TicketEntryMode;
   format: AmcFormat;
-  /** The price before tax when itemized, the total when all-in. */
-  amount: string;
+  /** Before tax. */
+  price: string;
   standardPrice: string;
-  fee: FeeValue;
-  rate: RateValue;
+  fee: string;
+  tax: string;
 }
 
 export function getInitialTicketDraft(
   ticket: Ticket | null,
-  defaultRate: number | null,
+  defaultFeeCents: number,
 ): TicketDraft {
   if (ticket) {
     return {
-      entryMode: ticket.entryMode,
       format: ticket.format,
-      amount: centsToInputValue(
-        ticket.entryMode === 'ITEMIZED' ? ticket.priceCents : ticket.totalCents,
-      ),
+      price: centsToInputValue(ticket.priceCents),
       standardPrice: centsToInputValue(ticket.standardPriceCents),
-      fee: { selected: ticket.feeAvoidedCents, other: '' },
-      rate: { selected: ticket.taxRate ?? 'NONE', other: '' },
+      fee: centsToInputValue(ticket.feeAvoidedCents),
+      tax: centsToInputValue(ticket.taxCents),
     };
   }
 
   return {
-    entryMode: 'ITEMIZED',
     format: 'STANDARD',
-    amount: '',
+    price: '',
     standardPrice: '',
-    fee: { selected: 0, other: '' },
-    rate: { selected: defaultRate ?? 'NONE', other: '' },
+    fee: centsToInputValue(defaultFeeCents),
+    tax: '',
   };
 }
 
 export interface TicketDraftResult {
   ticket: Ticket | null;
   errors: {
-    amount?: string;
+    price?: string;
     standardPrice?: string;
     fee?: string;
-    rate?: string;
+    tax?: string;
   };
   isValid: boolean;
 }
@@ -73,73 +57,55 @@ function parseAmount(value: string): { cents: number | null; error?: string } {
   return { cents };
 }
 
-function resolveRate(rate: RateValue): { rate: number | null; error?: string } {
-  if (rate.selected === 'NONE') return { rate: null };
-  if (rate.selected !== 'OTHER') return { rate: rate.selected };
-  const percent = Number(rate.other.trim().replace(/%$/, ''));
-  if (rate.other.trim() === '' || !Number.isFinite(percent))
-    return { rate: null, error: 'Enter a rate like 8.875.' };
-  if (percent < 0 || percent / 100 > MAX_TAX_RATE)
-    return { rate: null, error: 'Pick a rate from 0% to 25%.' };
-  return { rate: Math.round(percent * 1000) / 100_000 };
-}
-
 export function evaluateTicketDraft(draft: TicketDraft): TicketDraftResult {
-  const amount = parseAmount(draft.amount);
+  const price = parseAmount(draft.price);
+  const fee = parseAmount(draft.fee);
+  const tax = parseAmount(draft.tax);
   const isPremium = draft.format !== 'STANDARD';
   const standard = isPremium
     ? parseAmount(draft.standardPrice)
     : { cents: null };
-  const fee =
-    draft.fee.selected === 'OTHER'
-      ? parseAmount(draft.fee.other)
-      : { cents: draft.fee.selected };
-  const feeError =
-    draft.fee.selected === 'OTHER' && draft.fee.other.trim() === ''
-      ? 'Enter the fee, or pick $0.'
-      : fee.error;
-  const rate = resolveRate(draft.rate);
-  const isAllIn = draft.entryMode === 'ALL_IN';
-  const amountError =
-    amount.error ??
-    (isAllIn &&
-    amount.cents !== null &&
-    fee.cents !== null &&
-    amount.cents < fee.cents
-      ? "The total can't be less than the fee."
-      : undefined);
+  const isTaxTooHigh =
+    price.cents !== null &&
+    price.cents > 0 &&
+    tax.cents !== null &&
+    tax.cents / price.cents > MAX_TAX_RATE;
   const errors = {
-    amount: amountError,
+    price: price.error,
     standardPrice: standard.error,
-    fee: feeError,
-    rate: rate.error,
+    fee: fee.error,
+    tax: isTaxTooHigh
+      ? "That's more than 25% of the price. Double-check the tax?"
+      : tax.error,
   };
   const hasError = Object.values(errors).some(Boolean);
 
-  if (hasError || amount.cents === null || fee.cents === null) {
+  if (
+    hasError ||
+    price.cents === null ||
+    fee.cents === null ||
+    tax.cents === null
+  ) {
     return { ticket: null, errors, isValid: false };
   }
 
-  const split = isAllIn
-    ? splitAllInTotal(amount.cents, fee.cents, rate.rate)
-    : {
-        priceCents: amount.cents,
-        taxCents: getItemizedTaxCents(amount.cents, rate.rate),
-      };
   const ticket: Ticket = {
-    entryMode: draft.entryMode,
+    entryMode: 'ITEMIZED',
     format: draft.format,
-    priceCents: split.priceCents,
+    priceCents: price.cents,
     standardPriceCents: isPremium ? standard.cents : null,
     feeAvoidedCents: fee.cents,
-    taxRate: rate.rate,
-    taxCents: split.taxCents,
-    totalCents: split.priceCents + fee.cents + split.taxCents,
+    taxRate:
+      price.cents > 0
+        ? Math.round((tax.cents / price.cents) * 10_000) / 10_000
+        : null,
+    taxCents: tax.cents,
+    totalCents: price.cents + fee.cents + tax.cents,
   };
   const isValid = ticket.totalCents <= MAX_AMOUNT_CENTS;
   return {
     ticket: isValid ? ticket : null,
-    errors: isValid ? errors : { ...errors, amount: TOO_BIG },
+    errors: isValid ? errors : { ...errors, price: TOO_BIG },
     isValid,
   };
 }

@@ -14,9 +14,9 @@ function getStatusView(viewing: Viewing, now: number) {
     return {
       emoji: '🎟️',
       label: 'Did you catch it?',
-      variant: 'primary',
+      variant: 'accent',
     } as const;
-  return { emoji: '📅', label: 'Planned', variant: 'accent' } as const;
+  return { emoji: '📅', label: 'Planned', variant: 'muted' } as const;
 }
 
 function ViewingStatusBadge({ viewing, now }: ViewingStatusBadgeProps) {

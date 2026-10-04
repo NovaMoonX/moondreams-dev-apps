@@ -226,6 +226,8 @@ function getViewingFixtures(now: number) {
     [-9, [MIDNIGHT, MATRIX, DUNE]],
     [-15, [HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
     [-17, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
+    // Yesterday: six seen movies, past the four a cell can split, so the "+N" shows in the current month.
+    [-1, [MATRIX, DUNE, MIDNIGHT, HOMETOWN, MATRIX, DUNE]],
     // Planned days ahead, so the current month shows a split of three and of five too.
     [8, [MATRIX, DUNE, MIDNIGHT]],
     [11, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
@@ -235,7 +237,7 @@ function getViewingFixtures(now: number) {
       id: `seed-viewing-day${daysFromNow < 0 ? -daysFromNow : `ahead${daysFromNow}`}-${index + 1}`,
       movieKey,
       daysFromNow,
-      hour: 11 + index * 3,
+      hour: daysFromNow === -1 ? 7 + index : 11 + index * 3,
     })),
   );
 

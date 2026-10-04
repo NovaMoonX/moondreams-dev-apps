@@ -15,7 +15,7 @@ These shape everything below. Each is also listed under [Open questions](#open-q
 7. **There is no tax-rate source, so tax behaves like the convenience fee:** the membership's rate is gauged from the bill the member types in Setup (total ÷ cost − 1), and from then on ticket tax is a choice among chips built from the rates used on past tickets, the most-used one preselected. Each ticket stores its own rate and tax amount.
 8. **The membership start date is a required Setup field.** It anchors the billing cycle (cost so far and break-even) and is the earliest date a viewing can be given.
 9. **The app never tries to learn which formats a movie plays in.** Format is always the member's pick from a fixed list.
-10. **A ticket can be entered itemized or as one all-in total.** Either way the ticket stores price, fee, tax and total with `total = price + fee + tax`; an all-in ticket's price and tax are estimates, and it remembers it was entered that way.
+10. **A ticket is entered as the three amounts AMC itemizes: price, fee and tax in dollars.** It stores them with `total = price + fee + tax`, and `taxRate = tax ÷ price` for history. The old all-in entry mode was dropped; tickets saved that way keep `entryMode: 'ALL_IN'` and reopen as the same three amounts, and every save writes `'ITEMIZED'`.
 
 ---
 

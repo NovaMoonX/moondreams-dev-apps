@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -26,7 +27,6 @@ import ManualMovieForm, {
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
-import SubviewHeader from '@apps/a-list/components/shell/SubviewHeader';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import WatchlistDetailsFields, {
@@ -49,7 +49,7 @@ import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
   selectSeenCountByMovieKey,
-  selectTaxRateChips,
+  selectFeeChips,
 } from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
@@ -123,7 +123,7 @@ export function AddFlow({
   const now = useNow();
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
-  const { defaultRate } = useAppSelector(selectTaxRateChips);
+  const feeChips = useAppSelector(selectFeeChips);
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
@@ -415,7 +415,7 @@ export function AddFlow({
               size='sm'
               className='px-0'
               onClick={() =>
-                setTicketDraft(getInitialTicketDraft(null, defaultRate))
+                setTicketDraft(getInitialTicketDraft(null, feeChips[1] ?? 0))
               }
             >
               + Add ticket details

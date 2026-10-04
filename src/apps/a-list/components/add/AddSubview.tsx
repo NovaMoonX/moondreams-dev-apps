@@ -1,5 +1,5 @@
 import { AddFlow } from '@apps/a-list/components/add/AddFlow';
-import Subview from '@apps/a-list/components/shell/Subview';
+import Subview from '@/components/Subview';
 import type { AListOverlay } from '@apps/a-list/types';
 
 interface AddSubviewProps {
@@ -12,7 +12,7 @@ function AddSubview({ overlay, onClose }: AddSubviewProps) {
   const title = isPast ? 'Movies you have seen' : 'Find a movie';
 
   return (
-    <Subview>
+    <Subview onClose={onClose}>
       <AddFlow overlay={overlay} onClose={onClose} title={title} />
     </Subview>
   );

@@ -49,6 +49,7 @@ import MembersSection from '@apps/waypoint/components/MembersSection';
 import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndicator';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
+import Subview from '@/components/Subview';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
@@ -57,7 +58,11 @@ import RentalsSection from '@apps/waypoint/components/RentalsSection';
 import RentalsEntry from '@apps/waypoint/components/RentalsEntry';
 import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
-import { TRIP_SECTION_TABS, type TripSectionTab } from '@apps/waypoint/constants';
+import {
+  TRIP_SECTION_TABS,
+  TRIP_SUBVIEW_LABELS,
+  type TripSectionTab,
+} from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
 import { createIdea } from '@apps/waypoint/store/actions/ideaActions';
 import {
@@ -106,6 +111,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const showHeaderExtras = !hasAppNav || sectionTab === '';
   const isNestedScreen = hasAppNav && sectionTab !== '';
+  const subviewTitle = hasAppNav ? TRIP_SUBVIEW_LABELS[sectionTab as TripSectionTab] : undefined;
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
   const setSectionTab = (value: string) => {
@@ -379,7 +385,33 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     </div>
   );
 
+  const renderSubviewSection = () => {
+    if (sectionTab === 'members')
+      return <MembersSection trip={trip} currentUserId={currentUserId} />;
+    if (sectionTab === 'stays')
+      return <StaysSection trip={trip} currentUserId={currentUserId} />;
+    if (sectionTab === 'rentals')
+      return <RentalsSection trip={trip} currentUserId={currentUserId} />;
+    if (sectionTab === 'checklist')
+      return <ChecklistSection trip={trip} currentUserId={currentUserId} />;
+    return (
+      <IdeasSection
+        trip={trip}
+        currentUserId={currentUserId}
+        canAdd={canAddIdeas}
+        onAdd={setIdeaFormType}
+      />
+    );
+  };
+
   return (
+    <>
+      {subviewTitle !== undefined && (
+        <Subview title={subviewTitle} onClose={() => setSectionTab('')}>
+          {renderSubviewSection()}
+        </Subview>
+      )}
+      {subviewTitle === undefined && (
     <div className='page'>
       <div
         className={join(
@@ -619,6 +651,8 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </div>
         )
       )}
+    </div>
+      )}
       <AnnouncementFormModal
         key={isAnnouncementFormOpen ? 'open' : 'closed'}
         isOpen={isAnnouncementFormOpen}
@@ -694,7 +728,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           )}
         </div>
       </Drawer>
-    </div>
+    </>
   );
 }
 

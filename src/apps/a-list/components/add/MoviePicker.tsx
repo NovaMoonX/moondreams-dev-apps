@@ -126,6 +126,7 @@ function MoviePicker({
       <Button
         type='button'
         variant='tertiary'
+        size='stripped'
         onClick={onClick}
         className='text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left'
       >

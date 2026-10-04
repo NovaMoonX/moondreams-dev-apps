@@ -1,28 +1,28 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 
+import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDate } from '@/utils/formatUtils';
 import ViewingRow from '@apps/a-list/components/calendar/ViewingRow';
 import Pill from '@apps/a-list/components/shared/Pill';
-import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
+import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
 import { selectSeenTicketGroups } from '@apps/a-list/store/selectors';
 
 export type TicketsView = 'paid' | 'unpriced';
 
 interface TicketsListProps {
   initialView: TicketsView;
-  onBack: () => void;
+  onClose: () => void;
 }
 
 /** Every movie that has been seen, sorted by whether its ticket price is on record yet. */
-function TicketsList({ initialView, onBack }: TicketsListProps) {
-  const { openOverlay } = useAListOverlay();
+function TicketsList({ initialView, onClose }: TicketsListProps) {
   const now = useNow();
   const { paid, unpriced } = useAppSelector(selectSeenTicketGroups);
   const [view, setView] = useState<TicketsView>(initialView);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const viewings = view === 'paid' ? paid : unpriced;
 
   const getEmptyText = () => {
@@ -32,20 +32,8 @@ function TicketsList({ initialView, onBack }: TicketsListProps) {
   };
 
   return (
-    <section className='space-y-4'>
-      <div className='flex items-center gap-2'>
-        <Button
-          type='button'
-          variant='secondary'
-          size='icon'
-          rounded='full'
-          aria-label='Back to the dashboard'
-          onClick={onBack}
-        >
-          <ChevronLeft className='h-5 w-5' />
-        </Button>
-        <h2 className='text-xl font-semibold'>Tickets</h2>
-      </div>
+    <Subview title='Tickets' onClose={onClose}>
+      <div className='space-y-4'>
       <div className='flex flex-wrap gap-2'>
         <Pill
           emoji='🧾'
@@ -71,9 +59,10 @@ function TicketsList({ initialView, onBack }: TicketsListProps) {
               <Button
                 type='button'
                 variant='tertiary'
+                size='stripped'
                 aria-label={`Open ${viewing.movie.title}, ${formatDate(viewing.showtimeAt)}`}
                 className='text-foreground! hover:bg-muted/60 h-auto w-full justify-start rounded-2xl px-2 py-0 text-left font-normal'
-                onClick={() => openOverlay({ kind: 'viewing', id: viewing.id })}
+                onClick={() => setViewingId(viewing.id)}
               >
                 <ViewingRow viewing={viewing} now={now} />
               </Button>
@@ -81,7 +70,15 @@ function TicketsList({ initialView, onBack }: TicketsListProps) {
           ))}
         </ul>
       )}
-    </section>
+      </div>
+      {viewingId !== null && (
+        <ViewingDrawer
+          key={viewingId}
+          viewingId={viewingId}
+          onClose={() => setViewingId(null)}
+        />
+      )}
+    </Subview>
   );
 }
 

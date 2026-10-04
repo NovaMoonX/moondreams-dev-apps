@@ -15,7 +15,7 @@ import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Users, Utensils, X } from
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
-import SectionDivider from '@/components/forms/SectionDivider';
+import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
@@ -979,13 +979,13 @@ function EventFormModal({
             )}
             {isPlaceEvent && (
               <>
-                <SectionDivider label='Where to navigate' />
+                <SectionDivider label='Where to navigate' className='pt-2' />
                 {locationField('Location')}
               </>
             )}
             {draft.eventType === 'FREE_TIME' && draft.hasLocation && (
               <>
-                <SectionDivider label='Where to navigate' />
+                <SectionDivider label='Where to navigate' className='pt-2' />
                 <RemovableField
                   label='Location'
                   removeLabel='Remove location'
@@ -1003,7 +1003,7 @@ function EventFormModal({
                 </RemovableField>
               </>
             )}
-            <SectionDivider label='More details' />
+            <SectionDivider label='More details' className='pt-2' />
             {draft.hasTitle && (
               <RemovableField
                 label='Title'

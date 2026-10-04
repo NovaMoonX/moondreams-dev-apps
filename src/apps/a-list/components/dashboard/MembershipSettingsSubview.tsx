@@ -10,7 +10,8 @@ import {
 
 import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import SectionDivider from '@/components/forms/SectionDivider';
+import SectionDivider from '@/components/SectionDivider';
+import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
 import {
@@ -21,7 +22,6 @@ import {
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import MoneyInput from '@/components/MoneyInput';
-import Subview from '@apps/a-list/components/shell/Subview';
 import { MAX_MONTHLY_GOAL, MAX_WEEKLY_GOAL } from '@apps/a-list/constants';
 import {
   updateMembership,
@@ -221,7 +221,7 @@ function MembershipSettingsSubview({
   ];
 
   return (
-    <Subview header={{ title: 'Membership', onBack: onClose }}>
+    <Subview title='Membership' onClose={onClose}>
       <div className='space-y-4'>
         <div className='bg-secondary/60 flex items-center gap-3 rounded-2xl px-4 py-3'>
           <span className='text-3xl' aria-hidden='true'>
