@@ -140,13 +140,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
           No one is waiting to join this trip.
         </p>
       ) : (
-        <ul
-          className={join(
-            isSmallScreen
-              ? 'divide-border border-border divide-y rounded-lg border'
-              : 'space-y-3',
-          )}
-        >
+        <ul className={join(!isSmallScreen && 'space-y-3')}>
           {requests.map((request) => {
             const member = members.find((user) => user.uid === request.uid);
             const displayName =
@@ -159,7 +153,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                   <Button
                     type='button'
                     variant='tertiary'
-                    className='h-auto w-full justify-between gap-3 px-3 py-3 text-left'
+                    className='h-auto w-full justify-between gap-3 px-0! py-3! text-left'
                     onClick={() => setActiveRequestId(requestId)}
                   >
                     <span className='flex min-w-0 flex-1 items-center gap-3 text-left'>
@@ -253,7 +247,6 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                 type='button'
                 size='lg'
                 variant='secondary'
-                className='text-destructive!'
                 disabled={busyRequestId !== null}
                 onClick={() => handleDecline(activeRequest)}
               >
@@ -269,7 +262,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
               Asked {formatDateTime(activeRequest.requestedAt)}. Pick what they
               can do once they&apos;re in.
             </p>
-            <div className='flex justify-center py-2'>
+            <div className='flex justify-center pt-2'>
               <RadioGroup
                 value={selectedRoles[activeRequest.uid] ?? 'VIEWER'}
                 onChange={(value) =>

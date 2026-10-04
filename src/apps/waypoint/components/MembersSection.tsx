@@ -9,6 +9,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch } from '@/store';
@@ -140,7 +141,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
     <div className='space-y-6 pt-4'>
       <section className='space-y-3'>
         <SectionHeader title='Members' />
-        <ul className='divide-border divide-y'>
+        <ul className={join('divide-border', !isSmallScreen && 'divide-y')}>
           {memberIds.map((memberId) => {
             const member = members[memberId];
             const displayName =
@@ -258,18 +259,20 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
         footer={
           activeMemberUid &&
           canRemoveMembers(trip, currentUserId, activeMemberUid) && (
-            <Button
-              type='button'
-              size='lg'
-              variant='secondary'
-              className='text-destructive!'
-              disabled={busyMemberId !== null}
-              onClick={() =>
-                handleRemove(activeMemberUid, getDisplayName(activeMemberUid))
-              }
-            >
-              Remove from trip
-            </Button>
+            <div className='flex flex-col gap-2'>
+              <Button
+                type='button'
+                size='lg'
+                variant='secondary'
+                className='text-destructive!'
+                disabled={busyMemberId !== null}
+                onClick={() =>
+                  handleRemove(activeMemberUid, getDisplayName(activeMemberUid))
+                }
+              >
+                Remove from trip
+              </Button>
+            </div>
           )
         }
       >
