@@ -694,7 +694,7 @@ flowchart LR
 - **Calendar cells** — prove that `customStyles` can clear padding and border and make cells taller than square before committing to the layout.
 - **Tabs** — the Watchlist now has six (Opening, All, Must See, Want to See, If I Have Time, Seen), up from the five first asked for; confirm Dreamer UI's `Tabs` can scroll sideways on a phone.
 - **Opening window** — today through seven days out, judged against the viewer's local today; a release date is date-only (UTC midnight), so it follows the repo's date-only rules, not a plain timestamp comparison.
-- **Movie database** — OMDb, with a limited number of lookups a day shared by every member, so search is debounced and cached and a manual "add by title" path exists; search results carry no release date.
+- **Movie database** — TMDB when its key is set, otherwise OMDb. OMDb has a limited number of lookups a day shared by every member, so search is debounced and cached, and a manual "add by title" path exists; results are the newest 20, and the credits (TMDB's notice and logo, plus OMDb) sit in Membership settings.
 - **Formats** — settled: the app never looks up which formats a movie plays in; the member picks from the fixed list.
 - **Perks copy** — the exact A-List perk wording for the confirm step needs to come from AMC's own page.
 - **Membership cost over time** — not modelled yet: one monthly cost applies to the whole history. Supporting price changes is a planned future goal.

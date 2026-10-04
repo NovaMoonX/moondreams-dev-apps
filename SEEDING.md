@@ -167,10 +167,10 @@ profiles with insurance, origin, and key-date data for local CRUD and detail tes
 `a-list` writes Alex's private A-List membership at
 `apps/a-list/memberships/seed-worth-the-wait-one` (a $25.99 plan billed at $27.94, started
 60 days ago, with weekly and monthly goals). Every other fixture account has no
-membership, so signing in as one opens A-List's Setup. Alex's watchlist holds six
+membership, so signing in as one opens A-List's Setup. Alex's watchlist holds seven
 movies across all three priorities: five whose keys match the emulator's OMDb fixture
-catalog (one opening in three days, one undated), and one added by title
-(`manual-seed-0001-hometown`, no poster). Alex also has five viewings at 7 pm Los Angeles time: Dune
+catalog (one opening in three days, one undated), one with a TMDB key (`tmdb-438631`,
+already released), and one added by title (`manual-seed-0001-hometown`, no poster). Alex also has five viewings at 7 pm Los Angeles time: Dune
 seen twice (a rewatch) and The Matrix seen in the past few weeks, and Starlight Harbor and
 Galaxy Drift planned after they open. Four more past days hold two, three, four and five movies
 (3, 9, 15 and 17 days ago), so every poster split and the "+N" badge show on the calendar. A sixth seen viewing, The Matrix at 11 pm LA time

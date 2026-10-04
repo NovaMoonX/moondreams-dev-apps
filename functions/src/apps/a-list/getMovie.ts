@@ -3,8 +3,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { reserveLookup } from './lookupBudget.js';
 import { isFresh, readCache, writeCache } from './movieCache.js';
-import { getOmdbTitle } from './omdb.js';
-import { OMDB_API_KEY } from './searchMovies.js';
+import { OMDB_API_KEY, resolveMovieKey, TMDB_API_KEY } from './movieProvider.js';
 import type { MovieSnapshot } from './types.js';
 
 if (getApps().length === 0) {
@@ -15,7 +14,6 @@ const DAY_MS = 86_400_000;
 const RELEASED_CACHE_MS = 30 * DAY_MS;
 // Unreleased (or undated) movies are the ones whose dates move, so they're re-checked daily.
 const UNRELEASED_CACHE_MS = DAY_MS;
-const MOVIE_KEY_PATTERN = /^imdb-(tt[0-9]{7,10})$/;
 
 function getCacheAge(movie: MovieSnapshot) {
   const isReleased = movie.releaseDate !== null && movie.releaseDate <= Date.now();
@@ -27,7 +25,7 @@ export const getMovie = onCall(
     region: 'us-central1',
     maxInstances: 5,
     timeoutSeconds: 20,
-    secrets: [OMDB_API_KEY],
+    secrets: [OMDB_API_KEY, TMDB_API_KEY],
     cors: ['https://apps.moondreams.dev', /^https:\/\/moondreams-dev-apps.*\.web\.app$/],
   },
   async (request): Promise<MovieSnapshot> => {
@@ -37,8 +35,8 @@ export const getMovie = onCall(
     }
 
     const movieKey = typeof request.data?.movieKey === 'string' ? request.data.movieKey : '';
-    const imdbId = movieKey.match(MOVIE_KEY_PATTERN)?.[1];
-    if (!imdbId) {
+    const resolved = resolveMovieKey(movieKey);
+    if (!resolved) {
       throw new HttpsError('invalid-argument', 'That movie id is not valid.');
     }
 
@@ -47,8 +45,11 @@ export const getMovie = onCall(
       return cached.value;
     }
 
-    await reserveLookup(uid);
-    const movie = await getOmdbTitle(OMDB_API_KEY.value(), imdbId);
+    const { provider, providerId } = resolved;
+    if (provider.isBudgeted) {
+      await reserveLookup(uid);
+    }
+    const movie = await provider.getTitle(provider.getKey(), providerId);
     await writeCache('movieCache', movieKey, movie);
     return movie;
   },

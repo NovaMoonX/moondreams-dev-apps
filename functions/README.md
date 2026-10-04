@@ -10,8 +10,8 @@ Server-side code for the mini-apps. Every function:
 
 | Function | Trigger | App | What it does |
 | --- | --- | --- | --- |
-| `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from OMDb |
-| `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) |
+| `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
+| `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every item on its calendar day ("keep original dates") |
@@ -25,13 +25,16 @@ Every callable requires a signed-in caller.
 
 | Name | Kind | Used by | Set it with |
 | --- | --- | --- | --- |
+| `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |
 | `OMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set OMDB_API_KEY --project moondreams-dev-apps` |
+| `MOVIE_PROVIDER` | env, optional (`tmdb` or `omdb`) | `searchMovies` | `functions/.env.local` locally. Forces a provider; unset, TMDB is used whenever its key is set. |
+| `TMDB_API_BASE` | env, optional | TMDB calls | `functions/.env.local`. Points TMDB calls at another server; a test aid, never set in production. |
 | `A_LIST_APP_DAILY_LOOKUP_CAP` | env, optional (default 900) | A-List lookups | `functions/.env.local` locally |
 | `A_LIST_MEMBER_DAILY_LOOKUP_CAP` | env, optional (default 100) | A-List lookups | `functions/.env.local` locally |
 
 - A secret never reaches the browser, a response, or a log.
 - `functions/.env.local` and `functions/.secret.local` are git-ignored (`*.local`).
-- Locally, put a real key in `functions/.secret.local` (`OMDB_API_KEY=…`) to call OMDb from the emulator. Leave the value empty (`OMDB_API_KEY=`) to use the built-in sample movies instead.
+- Locally, the emulator reads a secret from `functions/.secret.local` when it has a value, and otherwise fetches it from production Secret Manager with your Google credentials, so once a secret exists in production the emulator uses it with no local step. To use a different key locally, put it in `functions/.secret.local` (`TMDB_API_KEY=…`). The built-in sample movies are used only when no key can be read at all.
 - **Restart the emulators after editing either file.** They read `.env.local` and `.secret.local` only at startup.
 
 ## Service accounts
@@ -60,14 +63,18 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 
 ### A-List Tracker: `searchMovies` and `getMovie`
 
-- **Upstream:** [OMDb](https://www.omdbapi.com/). The free tier is about 1,000 lookups a day for the whole app.
+- **Providers:** [TMDB](https://www.themoviedb.org/) is used whenever `TMDB_API_KEY` is set, otherwise [OMDb](https://www.omdbapi.com/) (free tier, about 1,000 lookups a day for the whole app). `MOVIE_PROVIDER` forces one. TMDB lists unreleased films; OMDb mostly does not.
+  - **Keys:** new movies are saved as `tmdb-<id>`; older ones stay `imdb-tt…` and keep refreshing through OMDb, so keep `OMDB_API_KEY` set. `getMovie` asks the provider that issued the key.
+  - **TMDB credential:** either the v4 "API Read Access Token" (sent as a Bearer header) or the v3 API key (sent as `api_key`); it is detected from the value.
+  - **Search:** up to 20 results, newest release first (a second page is fetched when there is one). **Details:** US theatrical date, US rating, runtime, poster.
+  - **Terms:** TMDB is free for non-commercial use only and requires its credit line and logo (shown in Membership settings); cached data must be under 6 months old (ours is 7 days or less).
 - **Server cache:**
   - `apps/a-list/searchCache`: 7 days.
   - `apps/a-list/movieCache`: 30 days once a movie is released, 1 day before that (unreleased dates move).
-- **Budget:** `lookupBudget.ts` counts every upstream call in `apps/a-list/lookupUsage`. It refuses with `resource-exhausted` at 900 a day app-wide or 100 per member.
+- **Budget:** for OMDb only, `lookupBudget.ts` counts every upstream call in `apps/a-list/lookupUsage`. It refuses with `resource-exhausted` at 900 a day app-wide or 100 per member. TMDB has no practical daily limit, so it is not budgeted (the cache still applies).
 - **Access:** clients can't read or write `searchCache`, `movieCache` or `lookupUsage`.
 - **Offline fixtures:**
-  - In the emulator with no key set, both callables answer from a built-in OMDb-shaped catalog (try "galaxy", "matrix" or "starlight").
+  - In the emulator with no key readable at all, both callables answer from a built-in OMDb-shaped catalog (try "galaxy", "matrix" or "starlight").
   - Unknown ids return `not-found`.
 
 ### `fetchLinkMetadata`
@@ -134,5 +141,5 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | CI deploy fails on functions with a secret error | The secret doesn't exist in production yet. Set it with `firebase functions:secrets:set`. |
 | CI deploy fails with `secretmanager.secrets.getIamPolicy` or `setIamPolicy` | The deployer account can't manage that secret. Grant it per [Service accounts](#service-accounts). |
 | A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |
-| A-List search shows sample movies locally | `OMDB_API_KEY` in `functions/.secret.local` is missing or empty, so the emulator uses its fixture catalog. If you just added the key, restart the emulators. |
+| A-List search shows sample movies locally | The emulator couldn't read any movie key: `.secret.local` has no value and Secret Manager access failed (not signed in to Google, or no access to the secret). Add a key to `functions/.secret.local` and restart the emulators. |
 | A changed `.env.local` cap or `.secret.local` key has no effect | The emulators read these files only at startup. Restart them. |

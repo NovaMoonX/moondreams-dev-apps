@@ -312,14 +312,27 @@ function MembershipSettingsSubview({
           spacing='normal'
           onDataChange={(data) => setGoalValues(data as GoalValues)}
         />
-        <div className='text-muted-foreground flex flex-wrap items-center gap-1 pt-2 text-xs'>
-          <span>Movie details and posters come from</span>
-          <ExternalLinkText
-            href='https://www.omdbapi.com/'
-            label='OMDb'
-            className='text-xs'
-          />
-          <span>(CC BY-NC 4.0).</span>
+        <div className='text-muted-foreground space-y-2 pt-2 text-xs'>
+          <div className='flex items-center gap-3'>
+            <img
+              src='/logos/tmdb.svg'
+              alt='TMDB'
+              className='h-3 w-auto shrink-0'
+            />
+            <span>
+              This product uses the TMDB API but is not endorsed or certified
+              by TMDB.
+            </span>
+          </div>
+          <div className='flex flex-wrap items-center gap-1'>
+            <span>Some movie details and posters come from</span>
+            <ExternalLinkText
+              href='https://www.omdbapi.com/'
+              label='OMDb'
+              className='text-xs'
+            />
+            <span>(CC BY-NC 4.0).</span>
+          </div>
         </div>
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions

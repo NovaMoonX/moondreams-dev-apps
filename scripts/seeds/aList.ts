@@ -34,7 +34,8 @@ function movie(
 }
 
 // Keys and snapshots match the emulator's OMDb fixture catalog, so a seeded movie and a
-// searched one are the same movie. Posters are null so seeds work offline.
+// searched one are the same movie; one `tmdb-` key (already released, so never refreshed)
+// covers the TMDB key shape. Posters are null so seeds work offline.
 function getWatchlistFixtures(now: number) {
   return [
     {
@@ -77,6 +78,12 @@ function getWatchlistFixtures(now: number) {
       movie: movie('The Matrix', Date.UTC(1999, 2, 31), 136, 'R'),
       priority: 'IF_I_HAVE_TIME',
       preferredFormat: 'LASER',
+    },
+    {
+      movieKey: 'tmdb-438631',
+      movie: movie('Dune', Date.UTC(2021, 9, 22), 155, 'PG-13'),
+      priority: 'WANT_TO_SEE',
+      preferredFormat: null,
     },
   ];
 }

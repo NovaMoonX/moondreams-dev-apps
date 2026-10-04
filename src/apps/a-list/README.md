@@ -71,7 +71,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 ## Under the Hood
 
 - **Frontend:** React + TypeScript + Tailwind CSS, built on Dreamer UI — the calendar is Dreamer UI's `Calendar` with a custom `renderCell` for the poster split.
-- **Movie Data:** OMDb for search, posters, release dates and content ratings. Its free tier allows about 1,000 lookups a day for everyone combined, so lookups go through a thin server-side proxy that remembers results, search waits for a pause in typing, and a manual "add by title" path covers an empty quota. AMC-specific details (formats, prices, tax) are never looked up; you pick or enter them.
+- **Movie Data:** TMDB (including upcoming films) for search, posters, US release dates and content ratings, with OMDb as the alternative when no TMDB key is set. OMDb's free tier allows about 1,000 lookups a day for everyone combined, so lookups go through a thin server-side proxy that remembers results, search waits for a pause in typing, and a manual "add by title" path covers an empty quota or a film neither source has. AMC-specific details (formats, prices, tax) are never looked up; you pick or enter them.
 - **Backend & Realtime:** Firebase (Firestore, Auth, Cloud Functions), private to each member — no sharing or invites.
 - **State Management:** Redux Toolkit, consistent with the platform's other mini apps.
 - **Deployment:** Ships as a mini-app within the existing platform, under `src/apps/a-list`.

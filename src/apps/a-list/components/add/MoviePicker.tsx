@@ -56,10 +56,31 @@ function MoviePicker({
     return normalizeString(item.movie.title).includes(normalizedQuery);
   };
   const watchlistMatches = watchlist.filter(isWatchlistMatch);
+  // The same film can be saved under another provider's key, so title and year count as the same movie too.
+  const getIdentity = (title: string, year: number | null) =>
+    `${normalizeString(title)}|${year ?? ''}`;
+  const getIdentities = (items: WatchlistItem[]) =>
+    new Set(
+      items.map((item) =>
+        getIdentity(
+          item.movie.title,
+          item.movie.releaseDate === null
+            ? null
+            : new Date(item.movie.releaseDate).getUTCFullYear(),
+        ),
+      ),
+    );
   const listedKeys = new Set(watchlist.map((item) => item.movieKey));
+  const listedIdentities = getIdentities(watchlist);
   const watchlistKeys = new Set(watchlistMatches.map((item) => item.movieKey));
+  const shownIdentities = getIdentities(watchlistMatches);
+  const isListed = (movie: MovieSearchResult) =>
+    listedKeys.has(movie.movieKey) ||
+    listedIdentities.has(getIdentity(movie.title, movie.year));
   const results = (search.data ?? []).filter(
-    (movie) => !watchlistKeys.has(movie.movieKey),
+    (movie) =>
+      !watchlistKeys.has(movie.movieKey) &&
+      !shownIdentities.has(getIdentity(movie.title, movie.year)),
   );
   const isSearchResting =
     search.error instanceof FirebaseError &&
@@ -220,7 +241,7 @@ function MoviePicker({
                 movie.posterUrl,
                 [
                   movie.year,
-                  listedKeys.has(movie.movieKey) ? 'On your watchlist' : null,
+                  isListed(movie) ? 'On your watchlist' : null,
                 ]
                   .filter(Boolean)
                   .join(' · ') || null,

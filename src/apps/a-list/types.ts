@@ -38,7 +38,7 @@ export interface MovieSnapshot {
 }
 
 export interface MovieSearchResult {
-  /** Provider-namespaced id, e.g. "imdb-tt0133093". */
+  /** Provider-namespaced id, e.g. "tmdb-438631", "imdb-tt0133093". */
   movieKey: string;
   title: string;
   year: number | null;

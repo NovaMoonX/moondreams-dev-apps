@@ -65,7 +65,7 @@ export function useRefreshUnreleasedMovies(
     const eligible = rows.filter(
       ({ item, isSeen }) =>
         !isSeen &&
-        item.movieKey.startsWith('imdb-') &&
+        /^(imdb|tmdb)-/.test(item.movieKey) &&
         (item.movie.releaseDate === null || item.movie.releaseDate >= todayDay),
     );
     const picked = pickDailyRotation(
