@@ -101,7 +101,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
                 name: app.name,
                 description: app.description,
                 path: app.path,
-                status: app.status ?? 'draft',
+                status: 'draft',
                 isRestricted: false,
                 allowedUsers: [],
                 createdAt: app.createdAt

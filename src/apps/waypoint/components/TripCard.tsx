@@ -1,4 +1,4 @@
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, CopyButton } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
@@ -8,14 +8,14 @@ interface TripCardProps {
   trip: TripSpace;
   now: number;
   onOpen: (tripId: string) => void;
-  onCopyInviteLink: (inviteCode: string) => void;
+  onInviteCopied: (kind: 'code' | 'link') => void;
 }
 
 function TripCard({
   trip,
   now,
   onOpen,
-  onCopyInviteLink,
+  onInviteCopied,
 }: TripCardProps) {
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
 
@@ -44,18 +44,33 @@ function TripCard({
       </div>
 
       {trip.inviteCode && (
-        <div className='mt-4 flex items-center justify-between gap-3'>
-          <code className='text-muted-foreground text-sm'>
-            Invite: {trip.inviteCode}
-          </code>
-          <Button
-            type='button'
+        <div className='bg-muted/50 mt-4 flex items-center justify-between gap-2 rounded-lg p-2 pl-3'>
+          <div className='min-w-0'>
+            <p className='text-muted-foreground text-[10px] font-semibold tracking-wide uppercase'>
+              Invite code
+            </p>
+            <div className='flex items-center gap-1'>
+              <code className='text-foreground text-base font-semibold tracking-[0.2em]'>
+                {trip.inviteCode}
+              </code>
+              <CopyButton
+                textToCopy={trip.inviteCode}
+                variant='tertiary'
+                size='icon'
+                className='-my-1'
+                onClick={() => onInviteCopied('code')}
+              />
+            </div>
+          </div>
+          <CopyButton
+            textToCopy={`${window.location.origin}/waypoint?inviteCode=${trip.inviteCode}`}
             variant='secondary'
             size='sm'
-            onClick={() => onCopyInviteLink(trip.inviteCode as string)}
+            className='shrink-0'
+            onClick={() => onInviteCopied('link')}
           >
-            Copy invite link
-          </Button>
+            Copy link
+          </CopyButton>
         </div>
       )}
 

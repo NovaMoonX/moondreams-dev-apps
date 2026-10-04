@@ -9,6 +9,7 @@ import { useTripInvite } from '@apps/waypoint/hooks/useTripInvite';
 
 interface JoinTripModalProps {
   inviteCode: string;
+  isEnteredCode: boolean;
   myTrips: TripSpace[];
   pendingRequests: TripJoinRequest[];
   isSubmitting: boolean;
@@ -19,6 +20,7 @@ interface JoinTripModalProps {
 
 function JoinTripModal({
   inviteCode,
+  isEnteredCode,
   myTrips,
   pendingRequests,
   isSubmitting,
@@ -114,12 +116,21 @@ function JoinTripModal({
     }
 
     return {
-      title: "You've been invited",
+      title: isEnteredCode ? 'Found your trip' : "You've been invited",
       body: (
         <>
           <p className='text-muted-foreground text-sm'>
-            Request access to {tripName}. An Admin will choose your role before
-            you can view it.
+            {isEnteredCode ? (
+              <>
+                That code belongs to {tripName}. Send a request and an Admin
+                will pick your role before you can see it.
+              </>
+            ) : (
+              <>
+                Request access to {tripName}. An Admin will choose your role
+                before you can view it.
+              </>
+            )}
           </p>
           {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
         </>

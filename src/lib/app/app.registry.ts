@@ -1,11 +1,10 @@
-import type { AppId, AppStatus } from '../types/appCatalog';
+import type { AppId } from '../types/appCatalog';
 
 export type AppRegistryEntry = {
   id: AppId;
   name: string;
   path: string;
   description: string;
-  status?: AppStatus;
   createdAt?: string; // YYYY-MM-DD
 };
 
@@ -21,7 +20,6 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     path: '/worth-the-wait',
     description:
       'A private space for companions to place thoughts, feelings, hopes, and desires until the right moment to share them arrives.',
-    status: 'public',
     createdAt: '2026-08-16',
   },
   {
@@ -30,7 +28,6 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     path: '/nine-lives',
     description:
       'A private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.',
-    status: 'draft',
     createdAt: '2026-09-10',
   },
   {
@@ -39,7 +36,6 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     path: '/waypoint',
     description:
       'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
-    status: 'draft',
     createdAt: '2026-09-15',
   },
   {
@@ -48,7 +44,6 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     path: '/a-list',
     description:
       'A personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.',
-    status: 'draft',
     createdAt: '2026-10-03',
   },
 ];

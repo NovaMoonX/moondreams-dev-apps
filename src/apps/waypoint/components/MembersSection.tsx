@@ -1,7 +1,16 @@
 import { useState } from 'react';
 
-import { Badge, Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Badge,
+  Button,
+  Drawer,
+  RadioGroup,
+  Select,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch } from '@/store';
 import UserAvatar from '@/ui/UserAvatar';
@@ -31,10 +40,18 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
+  const isSmallScreen = useMediaQuery().isBelow('sm');
   const memberIds = Object.keys(trip.members);
   const userInfo = useUserInfo(memberIds);
   const members = userInfo?.map ?? {};
   const isAdmin = trip.members[currentUserId]?.role === 'ADMIN';
+  const activeMemberUid =
+    activeMemberId && trip.members[activeMemberId] ? activeMemberId : null;
+  const getDisplayName = (memberId: string) =>
+    members[memberId]?.displayName?.trim() ||
+    members[memberId]?.email ||
+    'Trip member';
   const roleOptions = Object.entries(MEMBER_ROLE_LABELS).map(
     ([value, text]) => ({ value, text }),
   );
@@ -123,12 +140,72 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   return (
     <div className='space-y-6 pt-4'>
       <section className='space-y-3'>
-        <SectionHeader title='Members' />
-        <ul className='divide-border divide-y'>
+        <SectionHeader
+          title='Members'
+          action={
+            <span className='flex h-10 items-center'>
+              <span className='bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold'>
+                {memberIds.length}
+              </span>
+            </span>
+          }
+        />
+        <ul className={join('divide-border', !isSmallScreen && 'divide-y')}>
           {memberIds.map((memberId) => {
             const member = members[memberId];
             const displayName =
               member?.displayName?.trim() || member?.email || 'Trip member';
+
+            if (isSmallScreen) {
+              const canManage =
+                canChangeRole(trip, currentUserId, memberId) ||
+                canRemoveMembers(trip, currentUserId, memberId);
+              const roleLine = [
+                MEMBER_ROLE_LABELS[trip.members[memberId].role],
+                memberId === trip.createdBy ? 'Trip creator' : null,
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              const content = (
+                <>
+                  <span className='flex min-w-0 flex-1 items-center gap-3 text-left'>
+                    <span className='shrink-0'>
+                      <UserAvatar user={member ?? null} size='md' />
+                    </span>
+                    <span className='min-w-0'>
+                      <span className='block truncate font-medium'>
+                        {displayName}
+                      </span>
+                      <span className='text-muted-foreground block text-xs font-normal'>
+                        {roleLine}
+                      </span>
+                    </span>
+                  </span>
+                  {canManage && (
+                    <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
+                  )}
+                </>
+              );
+
+              return (
+                <li key={memberId}>
+                  {canManage ? (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      className='h-auto w-full justify-between gap-3 px-0! py-3!'
+                      onClick={() => setActiveMemberId(memberId)}
+                    >
+                      {content}
+                    </Button>
+                  ) : (
+                    <div className='flex items-center justify-between gap-3 py-3'>
+                      {content}
+                    </div>
+                  )}
+                </li>
+              );
+            }
 
             return (
               <li
@@ -182,6 +259,56 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
       </section>
 
       {isAdmin && <PendingMembersPanel tripId={trip.id} />}
+
+      <Drawer
+        isOpen={activeMemberUid !== null}
+        onClose={() => setActiveMemberId(null)}
+        title={activeMemberUid ? getDisplayName(activeMemberUid) : 'Member'}
+        showCloseButton
+        footer={
+          activeMemberUid &&
+          canRemoveMembers(trip, currentUserId, activeMemberUid) && (
+            <div className='flex flex-col gap-2'>
+              <Button
+                type='button'
+                size='lg'
+                variant='secondary'
+                className='text-destructive!'
+                disabled={busyMemberId !== null}
+                onClick={() =>
+                  handleRemove(activeMemberUid, getDisplayName(activeMemberUid))
+                }
+              >
+                Remove from trip
+              </Button>
+            </div>
+          )
+        }
+      >
+        {activeMemberUid && canChangeRole(trip, currentUserId, activeMemberUid) && (
+          <div className='space-y-3 pb-2'>
+            <p className='text-muted-foreground text-sm'>
+              Pick what they can do on this trip.
+            </p>
+            <div className='flex justify-center py-2'>
+              <RadioGroup
+                value={trip.members[activeMemberUid].role}
+                onChange={(value) =>
+                  void handleRoleChange(
+                    activeMemberUid,
+                    value as UserRole,
+                    getDisplayName(activeMemberUid),
+                  )
+                }
+                options={roleOptions.map((option) => ({
+                  label: option.text,
+                  value: option.value,
+                }))}
+              />
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }
