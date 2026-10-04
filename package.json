@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "tsx scripts/lan.ts dev",
+    "share": "tsx scripts/lan.ts share",
     "lan:trust": "tsx scripts/lan.ts trust",
     "lan:untrust": "tsx scripts/lan.ts untrust",
     "lan:list": "tsx scripts/lan.ts list",

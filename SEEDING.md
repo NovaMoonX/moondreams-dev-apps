@@ -58,12 +58,40 @@ token. Trusted networks live in the gitignored `.lan-trusted.local`, one `name  
 `npm run lan:list` shows them and `npm run lan:untrust -- Home` (or no name, for the current
 network) removes one. Re-run `npm run seed:reset` after every emulator restart; they keep no data.
 
+## Sharing with a friend
+
+`npm run share` starts everything and prints one link to send: it builds the functions, starts the
+LAN emulators, resets the fixtures, starts the dev server, and copies `http://<your Tailscale address>:5173`
+to your clipboard. Press Ctrl+C to stop sharing (the emulators keep no data, so nothing lingers).
+
+It uses [Tailscale](https://tailscale.com/download) so nothing is public: only people on your tailnet, or
+people you've shared your Mac with, can reach the link.
+
+One-time setup:
+
+1. Install Tailscale on your Mac and sign in.
+2. Share your Mac with your friend: Tailscale admin console, Machines, your Mac, Share, and send them the
+   invite. They install Tailscale on their phone, sign in with their own free account and accept. They then
+   see only your Mac. Remove the share there when you're done.
+3. At home, `npm run lan:trust -- Home` (once per network).
+
+After that it's just `npm run share` and sending the link. Your friend opens it in Safari or Chrome with the
+Tailscale app on, and picks a fixture account from the dev switcher.
+
+The same safety check as `dev:lan` applies: `share` refuses to start on a network you haven't trusted, because
+the emulators bind to every interface. The check guards the network you start on; Tailscale's sharing controls who
+on your friend's side can reach it. They can reach every emulator, owner bypass included, so share only with someone
+you trust. It runs in a normal browser tab (not an installable PWA, since the emulators are plain HTTP). Don't use a
+Tailscale exit node while sharing, as it can confuse the network check. Set `SHARE_HOST=<address>` to print a different
+host in the link, and `npm run share -- --dry` to see what it would do without starting anything.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `npm run emulators` | Start Auth, Firestore, and RTDB emulators with their UI. |
 | `npm run emulators:lan` / `dev:lan` | The same, reachable from a phone on a trusted network. |
+| `npm run share` | Start the LAN emulators, seed, start the dev server, and copy a Tailscale link to send a friend. |
 | `npm run lan:trust` / `lan:untrust` / `lan:list` | Name and trust the current network for the `:lan` commands, remove one, or list them. |
 | `npm run seed` | Upsert all named fixtures into an already-running emulator. |
 | `npm run seed:core` | Upsert Auth users, profiles, app registry records, and presence. |

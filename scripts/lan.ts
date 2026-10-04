@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import readline from 'node:readline/promises';
 
@@ -86,6 +86,113 @@ function run(command: string, args: string[]) {
   );
 }
 
+/** Every emulator listens on all interfaces; returns the `--only` list (the UI stays off). */
+function writeLanEmulatorConfig() {
+  const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+  const emulators = Object.fromEntries(
+    Object.entries(config.emulators).map(([name, settings]) => [
+      name,
+      { ...(settings as object), host: '0.0.0.0' },
+    ]),
+  );
+  fs.writeFileSync(LAN_CONFIG, JSON.stringify({ ...config, emulators }, null, 2));
+  const only = Object.keys(emulators).filter((name) => name !== 'ui').join(',');
+  return only;
+}
+
+const TAILSCALE_CLIS = ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'];
+const VITE_PORT = 5173;
+const EMULATOR_READY_URLS = [
+  'http://127.0.0.1:8080',
+  'http://127.0.0.1:9099',
+  'http://127.0.0.1:9000',
+];
+
+/** Your Mac's Tailscale address, which only people on (or shared into) your tailnet can reach. */
+function getTailscaleHost() {
+  const override = process.env.SHARE_HOST;
+  if (override) {
+    return override;
+  }
+
+  const ips = TAILSCALE_CLIS.flatMap((cli) => {
+    try {
+      return [execFileSync(cli, ['ip', '-4'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0]];
+    } catch {
+      return [];
+    }
+  }).filter(Boolean);
+
+  if (ips.length === 0) {
+    throw new Error(
+      "Couldn't find a Tailscale address. Install Tailscale (https://tailscale.com/download), sign in, and try again. See SEEDING.md, \"Sharing with a friend\".",
+    );
+  }
+  return ips[0];
+}
+
+async function waitUntilUp(url: string, attempts = 120) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const isUp = await fetch(url).then(() => true, () => false);
+    if (isUp) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`${url} never came up.`);
+}
+
+function waitForExit(child: ChildProcess) {
+  return new Promise<number>((resolve) => child.on('exit', (code) => resolve(code ?? 1)));
+}
+
+/** One command: emulators, seeded fixtures and the dev server, then the link to send. */
+async function share(isDry: boolean) {
+  assertTrustedNetwork();
+  const url = `http://${getTailscaleHost()}:${VITE_PORT}`;
+
+  if (isDry) {
+    console.log(`Would start the LAN emulators, run seed:reset, start Vite, and share ${url}`);
+    return;
+  }
+
+  const only = writeLanEmulatorConfig();
+  console.log('Building functions…');
+  execFileSync('npm', ['--prefix', 'functions', 'run', 'build'], { stdio: 'inherit' });
+
+  const children: ChildProcess[] = [];
+  const stopAll = () => children.forEach((child) => child.kill('SIGINT'));
+  process.on('SIGINT', () => {
+    stopAll();
+    process.exit(0);
+  });
+  const start = (command: string, args: string[]) => {
+    const child = spawn('npx', ['--no-install', command, ...args], { stdio: 'inherit' });
+    children.push(child);
+    return child;
+  };
+
+  start('firebase', ['emulators:start', '--only', only, '--config', LAN_CONFIG]);
+  await Promise.all(EMULATOR_READY_URLS.map((readyUrl) => waitUntilUp(readyUrl)));
+
+  const seedCode = await waitForExit(spawn('npm', ['run', 'seed:reset'], { stdio: 'inherit' }));
+  if (seedCode !== 0) {
+    stopAll();
+    throw new Error('Seeding failed, so nothing is being shared.');
+  }
+
+  try {
+    execFileSync('pbcopy', { input: url });
+  } catch {
+    // No clipboard: the link is printed below anyway.
+  }
+  console.log(`\n  Send this link (copied to your clipboard):\n\n    ${url}\n\n  They need the Tailscale app, signed in to an account your machine is shared with.\n  Press Ctrl+C to stop sharing.\n`);
+
+  const code = await waitForExit(start('vite', ['--host', '--port', String(VITE_PORT), '--strictPort']));
+  stopAll();
+  process.exit(code);
+}
+
 const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 const commands: Record<string, (args: string[]) => void | Promise<void>> = {
@@ -140,17 +247,10 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   },
   emulators: () => {
     assertTrustedNetwork();
-    const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
-    const emulators = Object.fromEntries(
-      Object.entries(config.emulators).map(([name, settings]) => [
-        name,
-        { ...(settings as object), host: '0.0.0.0' },
-      ]),
-    );
-    fs.writeFileSync(LAN_CONFIG, JSON.stringify({ ...config, emulators }, null, 2));
-    const only = Object.keys(emulators).filter((name) => name !== 'ui').join(',');
+    const only = writeLanEmulatorConfig();
     run('firebase', ['emulators:start', '--only', only, '--config', LAN_CONFIG]);
   },
+  share: (args) => share(args.includes('--dry')),
 };
 
 const command = commands[process.argv[2]];
