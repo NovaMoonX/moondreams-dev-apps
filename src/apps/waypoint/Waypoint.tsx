@@ -15,6 +15,7 @@ import Loading from '@/ui/Loading';
 import NavButton from '@/ui/NavButton';
 
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
+import JoinWithCodeModal from '@apps/waypoint/components/JoinWithCodeModal';
 import JoinTripModal from '@apps/waypoint/components/JoinTripModal';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
@@ -38,6 +39,7 @@ function Waypoint() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [isJoinCodeModalOpen, setIsJoinCodeModalOpen] = useState(false);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
   const trips = useAppSelector(selectTrips);
   const timelineEvents = useAppSelector(selectSortedTimelineEvents);
@@ -133,6 +135,21 @@ function Waypoint() {
     });
   };
 
+  const handleCopyInviteCode = async (tripInviteCode: string) => {
+    await copyToClipboard(tripInviteCode);
+    addToast({
+      title: 'Invite code copied',
+      description: 'Send it to someone you want on this trip.',
+    });
+  };
+
+  const handleSubmitJoinCode = (code: string) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('inviteCode', code);
+    setSearchParams(nextSearchParams);
+    setIsJoinCodeModalOpen(false);
+  };
+
   const hasArchivedTrips = trips.some((trip) => trip.isArchived);
   const visibleTrips = trips.filter(
     (trip) => showArchived || !trip.isArchived,
@@ -179,6 +196,7 @@ function Waypoint() {
               onCopyInviteLink={(inviteLinkCode) =>
                 void handleCopyInviteLink(inviteLinkCode)
               }
+              onCopyInviteCode={(code) => void handleCopyInviteCode(code)}
             />
           ))}
         </div>
@@ -216,9 +234,9 @@ function Waypoint() {
               Create a trip to start planning together.
             </p>
           </div>
-          <div className='flex items-center gap-3 justify-center'>
+          <div className='flex flex-col-reverse gap-3 sm:flex-row sm:items-center'>
             {hasArchivedTrips && (
-              <label className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <label className='text-muted-foreground flex items-center justify-center gap-2 text-sm'>
                 <AppToggle
                   size='sm'
                   checked={showArchived}
@@ -227,9 +245,21 @@ function Waypoint() {
                 Show archived
               </label>
             )}
-            <Button onClick={() => setIsCreateModalOpen(true)}>
-              Create trip
-            </Button>
+            <div className='grid grid-cols-2 gap-3 sm:flex'>
+              <Button
+                variant='secondary'
+                className='whitespace-nowrap'
+                onClick={() => setIsJoinCodeModalOpen(true)}
+              >
+                Join with code
+              </Button>
+              <Button
+                className='whitespace-nowrap'
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                Create trip
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -274,6 +304,11 @@ function Waypoint() {
         isSubmitting={isSubmitting}
         onSubmit={handleCreateTrip}
         onClose={() => setIsCreateModalOpen(false)}
+      />
+      <JoinWithCodeModal
+        isOpen={isJoinCodeModalOpen}
+        onSubmit={handleSubmitJoinCode}
+        onClose={() => setIsJoinCodeModalOpen(false)}
       />
       {inviteCode && (
         <JoinTripModal

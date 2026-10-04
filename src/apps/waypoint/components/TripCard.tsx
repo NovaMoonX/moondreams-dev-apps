@@ -1,4 +1,9 @@
+import { useState } from 'react';
+
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Check, Copy } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
@@ -9,6 +14,12 @@ interface TripCardProps {
   now: number;
   onOpen: (tripId: string) => void;
   onCopyInviteLink: (inviteCode: string) => void;
+  onCopyInviteCode: (inviteCode: string) => void;
+}
+
+function CopyIcon({ isCopied }: { isCopied: boolean }) {
+  const Icon = isCopied ? Check : Copy;
+  return <Icon className={join('h-3.5 w-3.5', isCopied && 'text-success')} />;
 }
 
 function TripCard({
@@ -16,8 +27,25 @@ function TripCard({
   now,
   onOpen,
   onCopyInviteLink,
+  onCopyInviteCode,
 }: TripCardProps) {
+  const [copiedKind, setCopiedKind] = useState<'code' | 'link' | null>(null);
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
+
+  const handleCopy = async (kind: 'code' | 'link') => {
+    if (!trip.inviteCode) {
+      return;
+    }
+
+    if (kind === 'code') {
+      onCopyInviteCode(trip.inviteCode);
+    } else {
+      onCopyInviteLink(trip.inviteCode);
+    }
+
+    setCopiedKind(kind);
+    window.setTimeout(() => setCopiedKind(null), 2000);
+  };
 
   return (
     <div className='border-border bg-card rounded-lg border p-4'>
@@ -44,18 +72,35 @@ function TripCard({
       </div>
 
       {trip.inviteCode && (
-        <div className='mt-4 flex items-center justify-between gap-3'>
-          <code className='text-muted-foreground text-sm'>
-            Invite: {trip.inviteCode}
-          </code>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            onClick={() => onCopyInviteLink(trip.inviteCode as string)}
-          >
-            Copy invite link
-          </Button>
+        <div className='bg-muted/50 mt-4 flex items-center justify-between gap-2 rounded-lg p-2 pl-3'>
+          <div className='min-w-0'>
+            <p className='text-muted-foreground text-[10px] font-semibold tracking-wide uppercase'>
+              Invite code
+            </p>
+            <code className='text-foreground text-base font-semibold tracking-[0.2em]'>
+              {trip.inviteCode}
+            </code>
+          </div>
+          <div className='flex shrink-0 items-center gap-1'>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              aria-label='Copy invite code'
+              onClick={() => handleCopy('code')}
+            >
+              <CopyIcon isCopied={copiedKind === 'code'} />
+            </Button>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={() => handleCopy('link')}
+            >
+              <CopyIcon isCopied={copiedKind === 'link'} />
+              {copiedKind === 'link' ? 'Copied' : 'Copy link'}
+            </Button>
+          </div>
         </div>
       )}
 
