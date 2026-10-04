@@ -56,6 +56,7 @@ function PosterCell({
           alignment={getPopoverAlignment(date)}
           className='w-64 p-3 max-sm:hidden!'
           trigger={face}
+          offset={4}
         >
           <DayHoverCard date={date} viewings={viewings} now={now} />
         </Popover>
