@@ -63,16 +63,22 @@ can reach the link.
 
 ### Every time: `npm run share`
 
-1. Run `npm run share`. First, a `preshare` step stops any leftover dev server or emulators of ours that are holding
-   the ports it needs (5173, the emulators' ports, and the hub/logging ports beside them) and says what it stopped, for
-   example `Stopped pid 4821 (port 5173): node …/vite --host`. If something that isn't ours holds a port, it leaves that
-   alone, names it, and stops so you can deal with it. Then it checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for them, runs `seed:reset`, starts the dev server on port 5173, then prints a link like `http://100.x.y.z:5173` and copies it to your clipboard.
-2. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
+1. Run `npm run share`. A `preshare` step runs first: it stops any leftover dev server or emulators of ours that are
+   holding the ports `share` needs (5173, the emulators' ports, and the hub and logging ports beside them) and says what
+   it stopped, for example `Stopped pid 4821 (port 5173): node …/vite --host`. If something that isn't ours holds a
+   port, it leaves that alone, names it, and stops so you can deal with it.
+2. `share` then checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for them, runs
+   `seed:reset` and starts the dev server on port 5173.
+3. It prints the link to send, like `http://100.x.y.z:5173`, and copies it to your clipboard. The link is printed again
+   at the bottom of the terminal once the dev server is ready, so it never scrolls away under the logs.
+4. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
    (Alex has the A-List and Waypoint data) from the dev switcher at the top.
-3. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing lingers.
+5. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing
+   lingers.
 
 `npm run share:check` prints the link it would use without stopping or starting anything, which is a quick way to check
-Tailscale and the network check are fine. To only free the ports, run `npx tsx scripts/lan.ts cleanup`. `SHARE_HOST=<address>` overrides the host in the link.
+that Tailscale and the network check are fine. To only free the ports, run `npx tsx scripts/lan.ts cleanup`. Set
+`SHARE_HOST=<address>` to use a different host in the link.
 
 ### One-time setup
 
@@ -101,7 +107,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | "Couldn't find a Tailscale address"      | Open the Tailscale app and sign in; `tailscale ip -4` should print an address.                                       |
 | "This network isn't trusted"             | At home, run `npm run lan:trust -- Home`.                                                                            |
-| "Left alone … it isn't ours" | Another program is on a port `share` needs (8080 is a common one). Quit it and run `npm run share` again. |
+| "Left alone … it isn't ours"             | Another program is on a port `share` needs (8080 is a common one). Quit it and run `npm run share` again.            |
 | The link doesn't load for your friend    | They need the Tailscale app on and signed in, with your invite accepted. Check you can open the link yourself first. |
 | The page loads but sign-in or data fails | The emulators aren't running or seeded. Look for errors in the `npm run share` terminal.                             |
 | Seeding fails                            | `share` stops instead of serving an empty app. Fix the error shown, then run it again.                               |

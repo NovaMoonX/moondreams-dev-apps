@@ -276,11 +276,30 @@ async function share(isDry: boolean) {
   try {
     execFileSync('pbcopy', { input: url });
   } catch {
-    // No clipboard: the link is printed below anyway.
+    // No clipboard: the link is printed anyway.
   }
-  console.log(`\n  Send this link (copied to your clipboard):\n\n    ${url}\n\n  They need the Tailscale app, signed in to an account your machine is shared with.\n  Press Ctrl+C to stop sharing.\n`);
 
-  const code = await waitForExit(start('vite', ['--host', '--port', String(VITE_PORT), '--strictPort']));
+  const announce = () =>
+    console.log(
+      `\n  Send this link (copied to your clipboard):\n\n    ${url}\n\n  They need the Tailscale app, signed in to an account your Mac is shared with.\n  Press Ctrl+C to stop sharing.\n`,
+    );
+  announce();
+
+  // Vite's own output follows the first announcement, so it is repeated once Vite says it's ready.
+  const vite = spawn(
+    'npx',
+    ['--no-install', 'vite', '--host', '--port', String(VITE_PORT), '--strictPort'],
+    { stdio: ['inherit', 'pipe', 'inherit'] },
+  );
+  children.push(vite);
+  vite.stdout?.on('data', (chunk: Buffer) => {
+    process.stdout.write(chunk);
+    if (/ready in/i.test(chunk.toString())) {
+      announce();
+    }
+  });
+
+  const code = await waitForExit(vite);
   stopAll();
   process.exit(code);
 }
