@@ -58,14 +58,27 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
   if (!user) {
     return (
-      <Button
-        onClick={signInWithGoogle}
-        className={join('gap-2', className)}
-        aria-label='Sign in with Google'
-      >
-        <Google className='size-4' />
-        <span className='hidden sm:inline'>Sign in</span>
-      </Button>
+      <div className='flex items-center gap-2'>
+        {isAwayFromHome && (
+          <Button
+            variant='base'
+            size='sm'
+            aria-label='Home'
+            title='Home'
+            onClick={() => navigate('/')}
+          >
+            <House className='h-4 w-4' />
+          </Button>
+        )}
+        <Button
+          onClick={signInWithGoogle}
+          className={join('gap-2', className)}
+          aria-label='Sign in with Google'
+        >
+          <Google className='size-4' />
+          <span className='hidden sm:inline'>Sign in</span>
+        </Button>
+      </div>
     );
   }
 

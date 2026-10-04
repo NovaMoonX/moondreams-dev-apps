@@ -24,6 +24,7 @@ import {
 
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
+import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
@@ -56,6 +57,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       previousUserIdRef.current = nextUserId;
+
+      if (firebaseUser) {
+        await grantEmulatorDevAccess(firebaseUser).catch((error) =>
+          console.error('Failed to grant emulator dev access:', error),
+        );
+      }
 
       const nextUserState = firebaseUser
         ? {

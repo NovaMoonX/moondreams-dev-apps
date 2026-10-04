@@ -144,6 +144,8 @@ When Vite uses the emulator configuration, the header provides local account but
 for these identities. This uses email/password so the selected account always owns the
 fixed UID and related fixture data. The ordinary Google popup remains unchanged; the
 Auth Emulator also supports its native local provider popup for manual testing.
+Anyone who signs in through that popup, new fake account or existing, gets the fixtures' see-every-app access
+automatically, but only against the emulators.
 
 ## Fixture scope
 
