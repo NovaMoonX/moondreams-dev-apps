@@ -113,6 +113,19 @@ const OUR_PROCESS = /vite|firebase|emulator|cloud-storage-rules|pubsub/i;
 // The emulators' own ports, plus the hub, logging and Firestore websocket ports they open beside them.
 const EXTRA_EMULATOR_PORTS = [4400, 4500, 9150];
 
+const PROCESS_LABELS = [
+  { pattern: /vite/i, label: 'Vite dev server', isEmulator: false },
+  { pattern: /emulators:start/, label: 'Firebase emulator suite', isEmulator: true },
+  { pattern: /firebase-auth-emulator/, label: 'Auth emulator', isEmulator: true },
+  { pattern: /cloud-firestore-emulator/, label: 'Firestore emulator', isEmulator: true },
+  { pattern: /firebase-database-emulator/, label: 'Realtime Database emulator', isEmulator: true },
+  { pattern: /pubsub-emulator/, label: 'Pub/Sub emulator', isEmulator: true },
+  { pattern: /cloud-storage-rules/, label: 'Storage emulator', isEmulator: true },
+];
+
+const describeProcess = (command: string) =>
+  PROCESS_LABELS.find(({ pattern }) => pattern.test(command))?.label ?? 'leftover Firebase or Vite process';
+
 interface Listener {
   pid: number;
   ports: number[];
@@ -183,21 +196,47 @@ async function freePorts() {
   const others = listeners.filter(({ command }) => !OUR_PROCESS.test(command));
 
   if (listeners.length === 0) {
-    console.log('Nothing is in the way: the ports are free.');
+    console.log('✅ Nothing is in the way: the ports are free.');
     return;
   }
 
   await Promise.all(ours.map(({ pid }) => stopProcess(pid)));
-  ours.forEach(({ pid, ports: pidPorts, command }) =>
-    console.log(`Stopped pid ${pid} (port ${pidPorts.join(', ')}): ${command.slice(0, 90)}`),
+  ours.forEach(({ ports: pidPorts, command }) =>
+    console.log(`🛑 Stopped the ${describeProcess(command)} (port ${pidPorts.join(', ')})`),
   );
 
   if (others.length > 0) {
-    others.forEach(({ pid, ports: pidPorts, command }) =>
-      console.error(`Left alone pid ${pid} (port ${pidPorts.join(', ')}), it isn't ours: ${command.slice(0, 90)}`),
+    others.forEach(({ ports: pidPorts, command }) =>
+      console.error(`⚠️  Left alone a program on port ${pidPorts.join(', ')} that isn't ours: ${command.slice(0, 90)}`),
     );
     throw new Error('Something else is using a port we need. Stop it, then run this again.');
   }
+}
+
+/** Stops every Firebase emulator process (not the dev server), saying which ones it stopped. */
+async function stopEmulators() {
+  const processes = execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' })
+    .split('\n')
+    .flatMap((line) => {
+      const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+      return match ? [{ pid: Number(match[1]), command: match[2] }] : [];
+    })
+    .filter(
+      ({ pid, command }) =>
+        pid !== process.pid &&
+        PROCESS_LABELS.some(({ pattern, isEmulator }) => isEmulator && pattern.test(command)),
+    );
+
+  if (processes.length === 0) {
+    console.log('✅ No emulators were running.');
+    return;
+  }
+
+  await Promise.all(processes.map(({ pid }) => stopProcess(pid)));
+  new Set(processes.map(({ command }) => describeProcess(command))).forEach((label) =>
+    console.log(`🛑 Stopped the ${label}`),
+  );
+  console.log('✅ All emulators are stopped.');
 }
 
 /** Your Mac's Tailscale address, which only people on (or shared into) your tailnet can reach. */
@@ -238,6 +277,27 @@ function waitForExit(child: ChildProcess) {
   return new Promise<number>((resolve) => child.on('exit', (code) => resolve(code ?? 1)));
 }
 
+const isTty = Boolean(process.stdout.isTTY);
+const style = (code: string, text: string) => (isTty ? `\x1b[${code}m${text}\x1b[0m` : text);
+
+/** The one thing to act on, so it is boxed in rules and printed after everything else has settled. */
+function banner(url: string, isCopied: boolean) {
+  const rule = style('36', '━'.repeat(Math.max(url.length + 10, 60)));
+  return [
+    '',
+    rule,
+    `  🌐  ${style('1', 'Share this link')}${isCopied ? '  (copied to your clipboard 📋)' : ''}`,
+    '',
+    `      👉  ${style('1;36', url)}`,
+    '',
+    '  📱  They need the Tailscale app, signed in to an account your Mac is shared with.',
+    '  🧪  Then pick a fixture account (Alex has the A-List and Waypoint data) from the dev switcher.',
+    '  🛑  Press Ctrl+C to stop sharing.',
+    rule,
+    '',
+  ].join('\n');
+}
+
 /** One command: emulators, seeded fixtures and the dev server, then the link to send. */
 async function share(isDry: boolean) {
   assertTrustedNetwork();
@@ -258,9 +318,21 @@ async function share(isDry: boolean) {
     stopAll();
     process.exit(0);
   });
+  let lastOutputAt = Date.now();
+  const forward = (child: ChildProcess) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
+      lastOutputAt = Date.now();
+      process.stdout.write(chunk);
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      lastOutputAt = Date.now();
+      process.stderr.write(chunk);
+    });
+  };
   const start = (command: string, args: string[]) => {
-    const child = spawn('npx', ['--no-install', command, ...args], { stdio: 'inherit' });
+    const child = spawn('npx', ['--no-install', command, ...args], { stdio: ['inherit', 'pipe', 'pipe'] });
     children.push(child);
+    forward(child);
     return child;
   };
 
@@ -273,31 +345,41 @@ async function share(isDry: boolean) {
     throw new Error('Seeding failed, so nothing is being shared.');
   }
 
-  try {
-    execFileSync('pbcopy', { input: url });
-  } catch {
-    // No clipboard: the link is printed anyway.
-  }
+  const copyToClipboard = () => {
+    try {
+      execFileSync('pbcopy', { input: url });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const isCopied = copyToClipboard();
 
-  const announce = () =>
-    console.log(
-      `\n  Send this link (copied to your clipboard):\n\n    ${url}\n\n  They need the Tailscale app, signed in to an account your Mac is shared with.\n  Press Ctrl+C to stop sharing.\n`,
-    );
-  announce();
-
-  // Vite's own output follows the first announcement, so it is repeated once Vite says it's ready.
+  let isViteReady = false;
   const vite = spawn(
     'npx',
     ['--no-install', 'vite', '--host', '--port', String(VITE_PORT), '--strictPort'],
-    { stdio: ['inherit', 'pipe', 'inherit'] },
+    { stdio: ['inherit', 'pipe', 'pipe'] },
   );
   children.push(vite);
+  forward(vite);
   vite.stdout?.on('data', (chunk: Buffer) => {
-    process.stdout.write(chunk);
     if (/ready in/i.test(chunk.toString())) {
-      announce();
+      isViteReady = true;
     }
   });
+
+  // Emulators and Vite keep logging for a moment after they're up, so the link waits for quiet to land last.
+  const announceWhenSettled = async () => {
+    for (let waited = 0; waited < 120_000 && !isViteReady; waited += 250) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    for (let waited = 0; waited < 15_000 && Date.now() - lastOutputAt < 2_000; waited += 250) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    console.log(banner(url, isCopied));
+  };
+  void announceWhenSettled();
 
   const code = await waitForExit(vite);
   stopAll();
@@ -362,6 +444,7 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
     run('firebase', ['emulators:start', '--only', only, '--config', LAN_CONFIG]);
   },
   cleanup: () => freePorts(),
+  'stop-emulators': () => stopEmulators(),
   share: (args) => share(args.includes('--dry')),
 };
 

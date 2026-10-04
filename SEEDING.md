@@ -65,20 +65,21 @@ can reach the link.
 
 1. Run `npm run share`. A `preshare` step runs first: it stops any leftover dev server or emulators of ours that are
    holding the ports `share` needs (5173, the emulators' ports, and the hub and logging ports beside them) and says what
-   it stopped, for example `Stopped pid 4821 (port 5173): node …/vite --host`. If something that isn't ours holds a
-   port, it leaves that alone, names it, and stops so you can deal with it.
+   it stopped by name, for example `🛑 Stopped the Vite dev server (port 5173)`. If something that isn't ours holds a
+   port, it leaves that alone, says so, and stops so you can deal with it.
 2. `share` then checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for them, runs
    `seed:reset` and starts the dev server on port 5173.
-3. It prints the link to send, like `http://100.x.y.z:5173`, and copies it to your clipboard. The link is printed again
-   at the bottom of the terminal once the dev server is ready, so it never scrolls away under the logs.
+3. It copies the link to send, like `http://100.x.y.z:5173`, to your clipboard and prints it in a boxed 🌐 banner once
+   the emulators and dev server have finished logging, so it's the last thing on screen and never scrolls away.
 4. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
    (Alex has the A-List and Waypoint data) from the dev switcher at the top.
 5. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing
    lingers.
 
 `npm run share:check` prints the link it would use without stopping or starting anything, which is a quick way to check
-that Tailscale and the network check are fine. To only free the ports, run `npx tsx scripts/lan.ts cleanup`. Set
-`SHARE_HOST=<address>` to use a different host in the link.
+that Tailscale and the network check are fine. To end a share completely from another terminal (it stops the dev
+server and emulators and says what it stopped), run `npm run share:stop`. `npm run emulators:kill` does the same for
+just the emulators, and leaves the dev server running. Set `SHARE_HOST=<address>` to use a different host in the link.
 
 ### One-time setup
 
