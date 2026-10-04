@@ -162,7 +162,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                     className='h-auto w-full justify-between gap-3 px-3 py-3 text-left'
                     onClick={() => setActiveRequestId(requestId)}
                   >
-                    <span className='flex min-w-0 items-center gap-3'>
+                    <span className='flex min-w-0 flex-1 items-center gap-3 text-left'>
                       <span className='shrink-0'>
                         <UserAvatar user={member ?? null} size='md' />
                       </span>
@@ -269,19 +269,21 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
               Asked {formatDateTime(activeRequest.requestedAt)}. Pick what they
               can do once they&apos;re in.
             </p>
-            <RadioGroup
-              value={selectedRoles[activeRequest.uid] ?? 'VIEWER'}
-              onChange={(value) =>
-                setSelectedRoles((current) => ({
-                  ...current,
-                  [activeRequest.uid]: value as UserRole,
-                }))
-              }
-              options={ROLE_OPTIONS.map((option) => ({
-                label: option.text,
-                value: option.value,
-              }))}
-            />
+            <div className='flex justify-center py-2'>
+              <RadioGroup
+                value={selectedRoles[activeRequest.uid] ?? 'VIEWER'}
+                onChange={(value) =>
+                  setSelectedRoles((current) => ({
+                    ...current,
+                    [activeRequest.uid]: value as UserRole,
+                  }))
+                }
+                options={ROLE_OPTIONS.map((option) => ({
+                  label: option.text,
+                  value: option.value,
+                }))}
+              />
+            </div>
           </div>
         )}
       </Drawer>
