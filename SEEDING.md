@@ -63,23 +63,12 @@ can reach the link.
 
 ### Every time: `npm run share`
 
-1. Run `npm run share`. A `preshare` step runs first: it stops any leftover dev server or emulators of ours that are
-   holding the ports `share` needs (5173, the emulators' ports, and the hub and logging ports beside them) and says what
-   it stopped by name, for example `🛑 Stopped the Vite dev server (port 5173)`. If something that isn't ours holds a
-   port, it leaves that alone, says so, and stops so you can deal with it.
-2. `share` then checks you're on a trusted network, builds the functions, starts the LAN emulators, waits for them, runs
-   `seed:reset` and starts the dev server on port 5173.
-3. It copies the link to send, like `http://100.x.y.z:5173`, to your clipboard and prints it in a boxed 🌐 banner once
-   the emulators and dev server have finished logging, so it's the last thing on screen and never scrolls away.
-4. Send your friend the link. They open it in Safari or Chrome **with the Tailscale app on**, and pick a fixture account
-   (Alex has the A-List and Waypoint data) from the dev switcher at the top.
-5. Press Ctrl+C when you're done. That stops the emulators and the dev server; the emulators keep no data, so nothing
-   lingers.
+1. Run `npm run share`. It starts everything and gives you a link, also copied to your clipboard.
+2. Send your friend the link. They open it **with the Tailscale app on** and pick a fixture account (Alex has the
+   A-List and Waypoint data) from the dev switcher at the top.
+3. Press Ctrl+C when you're done. If the terminal is gone, run `npm run share:stop` instead.
 
-`npm run share:check` prints the link it would use without stopping or starting anything, which is a quick way to check
-that Tailscale and the network check are fine. To end a share completely from another terminal (it stops the dev
-server and emulators and says what it stopped), run `npm run share:stop`. `npm run emulators:kill` does the same for
-just the emulators, and leaves the dev server running. Set `SHARE_HOST=<address>` to use a different host in the link.
+`npm run share:check` is a dry run. Set `SHARE_HOST=<address>` to use a different host in the link.
 
 ### One-time setup
 
