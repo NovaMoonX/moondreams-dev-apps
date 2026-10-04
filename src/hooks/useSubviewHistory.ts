@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { generateUuid } from '@/utils/idUtils';
 
 /**
  * Gives a subview its own history entry, so the browser's or phone's back gesture closes the
@@ -7,7 +8,7 @@ import { useEffect, useRef } from 'react';
  */
 export function useSubviewHistory(onClose: () => void) {
   const onCloseRef = useRef(onClose);
-  const keyRef = useRef(crypto.randomUUID());
+  const keyRef = useRef(generateUuid());
   const isMountedRef = useRef(false);
 
   useEffect(() => {

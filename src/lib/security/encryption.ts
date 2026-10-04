@@ -1,4 +1,5 @@
 import type { AppId } from '../types/appCatalog';
+import { generateUuid } from '@/utils/idUtils';
 
 export type EncryptionAlgorithm = 'AES-256-GCM';
 
@@ -87,7 +88,7 @@ export function createAppEncryptionKey<TAppId extends AppId>(
 
   return {
     appId,
-    keyId: `${prefix}-${crypto.randomUUID()}`,
+    keyId: `${prefix}-${generateUuid()}`,
     keyVersion: 1,
     key: toHex(keyBytes),
   };

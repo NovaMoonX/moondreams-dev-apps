@@ -8,6 +8,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
 import type { MovieSnapshot } from '@apps/a-list/types';
+import { generateUuid } from '@/utils/idUtils';
 
 export interface ManualMovieDraft {
   title: string;
@@ -68,7 +69,7 @@ function ManualMovieForm({
       runtimeMinutes: null,
       contentRating: null,
     };
-    onContinue(`manual-${crypto.randomUUID()}`, movie);
+    onContinue(`manual-${generateUuid()}`, movie);
   };
 
   return (

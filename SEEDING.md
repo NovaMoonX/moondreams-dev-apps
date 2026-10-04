@@ -87,7 +87,8 @@ When you're finished with a friend, remove the share in the same admin console p
   friend's side can reach your Mac.
 - **They get full access to the fake data.** Anyone who can open the link can reach every emulator, owner bypass
   included, and can see the dev App Check token in the page. That only touches seeded local data, so share with someone you trust.
-- **Not installable.** It runs in a normal browser tab; the PWA can't be installed because the emulators are plain HTTP.
+- **Plain HTTP.** It runs in a normal browser tab and can't be installed as a PWA. Browser features that need HTTPS are
+  missing too: ids fall back automatically, but Worth the Wait's encrypted entries can't be read or written on the link.
 - **Keep your Mac awake** and the terminal open while they're using it.
 - **Your edits reach them live.** App code hot-reloads on their screen, data is shared, and `firestore.rules` changes
   apply straight away. Not automatic: Functions code (rebuild with `npm --prefix functions run build`) and Vite config

@@ -7,6 +7,7 @@ export * from './enrichmentUtils';
 export * from './errorUtils';
 export * from './formatUtils';
 export * from './formFactoryHelpers';
+export * from './idUtils';
 export * from './inviteCodeUtils';
 export * from './mapUrlUtils';
 export * from './stringUtils';
