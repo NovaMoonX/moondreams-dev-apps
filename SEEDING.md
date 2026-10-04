@@ -89,6 +89,10 @@ When you're finished with a friend, remove the share in the same admin console p
   included, and can see the dev App Check token in the page. That only touches seeded local data, so share with someone you trust.
 - **Not installable.** It runs in a normal browser tab; the PWA can't be installed because the emulators are plain HTTP.
 - **Keep your Mac awake** and the terminal open while they're using it.
+- **Your edits reach them live.** App code hot-reloads on their screen, data is shared, and `firestore.rules` changes
+  apply straight away. Not automatic: Functions code (rebuild with `npm --prefix functions run build`) and Vite config
+  or `.env` changes (they refresh the page). `seed:reset` wipes the data for both of you, and a half-finished edit can
+  break their screen, so tell them before a messy change.
 - **No exit node.** Don't route your traffic through a Tailscale exit node while sharing; it can confuse the network check.
 
 ### If something's off
