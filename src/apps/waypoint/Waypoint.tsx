@@ -40,6 +40,7 @@ function Waypoint() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [isJoinCodeModalOpen, setIsJoinCodeModalOpen] = useState(false);
+  const [isEnteredCode, setIsEnteredCode] = useState(false);
   const [isInviteSubmitting, setIsInviteSubmitting] = useState(false);
   const trips = useAppSelector(selectTrips);
   const timelineEvents = useAppSelector(selectSortedTimelineEvents);
@@ -112,12 +113,14 @@ function Waypoint() {
   };
 
   const handleCloseJoinModal = () => {
+    setIsEnteredCode(false);
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('inviteCode');
     setSearchParams(nextSearchParams, { replace: true });
   };
 
   const handleViewInvitedTrip = (tripId: string) => {
+    setIsEnteredCode(false);
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('inviteCode');
     nextSearchParams.delete('tab');
@@ -147,6 +150,7 @@ function Waypoint() {
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.set('inviteCode', code);
     setSearchParams(nextSearchParams);
+    setIsEnteredCode(true);
     setIsJoinCodeModalOpen(false);
   };
 
@@ -314,6 +318,7 @@ function Waypoint() {
         <JoinTripModal
           key={inviteCode}
           inviteCode={inviteCode}
+          isEnteredCode={isEnteredCode}
           myTrips={trips}
           pendingRequests={pendingRequests}
           isSubmitting={isInviteSubmitting}
