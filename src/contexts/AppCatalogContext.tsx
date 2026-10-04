@@ -19,7 +19,7 @@ import {
   type AppCatalogContextValue,
 } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
-import { APP_REGISTRY, APP_REGISTRY_ID_MAP } from '@lib/app';
+import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
 import {
   normalizeAppStatus,
@@ -42,7 +42,7 @@ function normalizeAppMetadata(
     name: data.name?.trim() || registryEntry?.name || 'Untitled app',
     path: data.path ?? registryEntry?.path ?? `/${id}`,
     description: data.description?.trim() || registryEntry?.description || '',
-    status: normalizeAppStatus(data.status ?? registryEntry?.status ?? 'draft'),
+    status: normalizeAppStatus(data.status ?? 'draft'),
     isRestricted: Boolean(data.isRestricted),
     allowedUsers: Array.isArray(data.allowedUsers)
       ? data.allowedUsers.map(String)
@@ -51,24 +51,6 @@ function normalizeAppMetadata(
     updatedAt: data.updatedAt ?? new Date().toISOString(),
   };
 }
-
-const STATIC_APP_REGISTRY: AppMetadata[] = APP_REGISTRY.map((app) => ({
-  id: app.id,
-  name: app.name,
-  path: app.path,
-  description: app.description,
-  status: normalizeAppStatus(app.status ?? 'draft'),
-  isRestricted: false,
-  allowedUsers: [],
-  createdAt: app.createdAt
-    ? new Date(app.createdAt).toISOString()
-    : new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-}));
-
-const PUBLIC_STATIC_APP_REGISTRY: AppMetadata[] = STATIC_APP_REGISTRY.filter(
-  (app) => app.status === 'public' && !app.isRestricted,
-);
 
 // Mirrors firestore.rules: admins and local-emulator users can read every
 // app doc regardless of status.
@@ -170,7 +152,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
         (error) => {
           console.error('Failed to load app catalog:', error);
           if (isActive) {
-            setAllApps(PUBLIC_STATIC_APP_REGISTRY);
+            setAllApps([]);
             markQueryResolved(index);
           }
         },
