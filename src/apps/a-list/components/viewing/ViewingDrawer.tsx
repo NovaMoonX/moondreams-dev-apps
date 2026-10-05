@@ -153,13 +153,21 @@ export function ViewingPanel({
 
     // Opened straight from the tap, before any await, so phone browsers don't block it as a pop-up.
     window.open(viewing.purchase.purchaseUrl, '_blank', 'noopener,noreferrer');
-    void dispatch(
+    dispatch(
       setPurchaseStarted({
         uid: user.uid,
         id: viewing.id,
         startedAt: Date.now(),
       }),
-    );
+    )
+      .unwrap()
+      .catch(() =>
+        addToast({
+          title: "We couldn't note that you left for AMC",
+          description:
+            "So we won't ask about it when you're back. You can add the ticket from this showing.",
+        }),
+      );
     // Leaves every drawer, so the welcome-back question has the screen to itself when they return.
     closeOverlay();
   };
@@ -345,6 +353,7 @@ export function ViewingPanel({
           <p className='font-semibold'>Ticket</p>
           <TicketForm
             ticket={ticket}
+            purchase={viewing.purchase ?? null}
             isSaving={isSaving}
             onCancel={() => setView('details')}
             onSave={(nextTicket) => void handleSaveTicket(nextTicket)}

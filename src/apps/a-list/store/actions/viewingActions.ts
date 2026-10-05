@@ -134,12 +134,15 @@ async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
     }
 
     const stored = snapshot.data();
+    // Recording a ticket answers the "did you buy?" question for good.
+    const resolvesPurchase = fields.ticket != null && stored.purchase != null;
     const backfill = Object.fromEntries(
       Object.entries(LATER_KEYS).filter(([key]) => !(key in stored)),
     );
     transaction.update(viewingRef, {
       ...backfill,
       ...fields,
+      ...(resolvesPurchase ? { 'purchase.startedAt': null } : {}),
       lastEditedAt: Date.now(),
     });
   });

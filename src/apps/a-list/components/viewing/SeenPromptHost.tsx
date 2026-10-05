@@ -32,12 +32,11 @@ function SeenPromptHost() {
   const current =
     pending.find((viewing) => !laterIds.includes(viewing.id)) ?? null;
 
-  // Two overlay questions must never stack, so the second only gets a turn when the first has nothing to ask.
-  if (!user || !current || overlay !== null) {
-    return <PurchaseReturnHost />;
-  }
-
   const handleSeen = async (rating: number | null) => {
+    if (!user || !current) {
+      return;
+    }
+
     setIsSaving(true);
     try {
       await dispatch(
@@ -54,6 +53,10 @@ function SeenPromptHost() {
   };
 
   const handleDidNotGo = async () => {
+    if (!user || !current) {
+      return;
+    }
+
     const confirmed = await confirm({
       title: 'Remove showing',
       message: `Remove ${current.movie.title}? It stays on your watchlist.`,
@@ -74,15 +77,23 @@ function SeenPromptHost() {
     }
   };
 
+  const isSeenPromptShowing = Boolean(user && current && overlay === null);
+
+  // The purchase question stays mounted, so its snooze and return tracking survive a seen prompt coming and going.
   return (
-    <SeenPrompt
-      key={current.id}
-      viewing={current}
-      isSaving={isSaving}
-      onLater={() => setLaterIds((ids) => [...ids, current.id])}
-      onDidNotGo={() => void handleDidNotGo()}
-      onSeen={(rating) => void handleSeen(rating)}
-    />
+    <>
+      {isSeenPromptShowing && current && (
+        <SeenPrompt
+          key={current.id}
+          viewing={current}
+          isSaving={isSaving}
+          onLater={() => setLaterIds((ids) => [...ids, current.id])}
+          onDidNotGo={() => void handleDidNotGo()}
+          onSeen={(rating) => void handleSeen(rating)}
+        />
+      )}
+      <PurchaseReturnHost isSuppressed={isSeenPromptShowing} />
+    </>
   );
 }
 

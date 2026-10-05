@@ -74,7 +74,9 @@ export const selectPendingPurchaseReturns = createSelector(
     const result = viewings
       .filter(
         (viewing) =>
-          viewing.purchase?.startedAt != null && (viewing.ticket ?? null) === null,
+          viewing.status === 'PLANNED' &&
+          viewing.purchase?.startedAt != null &&
+          (viewing.ticket ?? null) === null,
       )
       .sort(
         (left, right) =>

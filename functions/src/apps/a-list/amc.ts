@@ -199,17 +199,24 @@ interface AmcShowtimesResponse {
   _embedded?: { showtimes?: AmcShowtime[] };
 }
 
-const SHOWTIMES_PAGE_SIZE = 100;
-const MAX_SHOWTIME_PAGES = 5;
+const SHOWTIMES_PAGE_SIZE = 200;
+const MAX_SHOWTIME_PAGES = 3;
+const AMC_HOST = /^https:\/\/([a-z0-9-]+\.)*amctheatres\.com(\/|$)/;
 
+// A caption or format tag in parentheses is not part of the title; anything else is, so a sequel never matches its predecessor.
 function normalizeTitle(value: string | undefined) {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return (value ?? '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 function isSameMovie(amcTitle: string | undefined, title: string) {
   const left = normalizeTitle(amcTitle);
-  const right = normalizeTitle(title);
-  return left !== '' && (left === right || (right.length >= 4 && (left.startsWith(right) || right.startsWith(left))));
+  return left !== '' && left === normalizeTitle(title);
+}
+
+/** AMC's showtime endpoint takes `M-D-YYYY`, not an ISO date. */
+function toAmcDate(isoDate: string) {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return `${month}-${day}-${year}`;
 }
 
 const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
@@ -228,13 +235,12 @@ function toFormat(showtime: AmcShowtime): AmcFormat {
 }
 
 function toAdultPriceCents(showtime: AmcShowtime) {
-  const prices = showtime.ticketPrices ?? [];
-  const adult = prices.find((entry) => entry.type?.toLowerCase() === 'adult') ?? prices[0];
+  const adult = (showtime.ticketPrices ?? []).find((entry) => entry.type?.toLowerCase() === 'adult');
   return typeof adult?.price === 'number' && adult.price >= 0 ? Math.round(adult.price * 100) : null;
 }
 
 function toHttpsUrl(value: string | undefined) {
-  return typeof value === 'string' && /^https:\/\/[^\s]+$/.test(value) && value.length <= 500 ? value : null;
+  return typeof value === 'string' && AMC_HOST.test(value) && !/\s/.test(value) && value.length <= 500 ? value : null;
 }
 
 /** One showing of any movie; `movieTitle` is what AMC calls it, matched later against the member's title. */
@@ -270,13 +276,13 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
   }
 
   const fetchPages = async (page: number, found: AmcShowtime[]): Promise<AmcShowtime[]> => {
-    const data = await callAmc<AmcShowtimesResponse>(apiKey, `/v2/theatres/${theatreId}/showtimes/${date}`, {
-      pageNumber: String(page),
-      pageSize: String(SHOWTIMES_PAGE_SIZE),
+    const data = await callAmc<AmcShowtimesResponse>(apiKey, `/v2/theatres/${theatreId}/showtimes/${toAmcDate(date)}`, {
+      'page-number': String(page),
+      'page-size': String(SHOWTIMES_PAGE_SIZE),
     });
     const embedded = data._embedded?.showtimes ?? [];
     const all = [...found, ...embedded];
-    const isDone = embedded.length === 0 || all.length >= (data.count ?? 0) || page >= MAX_SHOWTIME_PAGES;
+    const isDone = embedded.length < SHOWTIMES_PAGE_SIZE || all.length >= (data.count ?? 0) || page >= MAX_SHOWTIME_PAGES;
     return isDone ? all : fetchPages(page + 1, all);
   };
   const collected = await fetchPages(1, []);
@@ -308,8 +314,10 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
 /** One movie's showings from a day's list, each premium one carrying the cheapest Standard price that day to compare with. */
 export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeOption[] {
   const matches = day.filter((showtime) => showtime.movieTitle === '*' || isSameMovie(showtime.movieTitle, title));
+  const now = Date.now();
+  // The comparison is with a Standard showing the member could still buy, not a sold-out or already-started one.
   const standardPrices = matches
-    .filter((showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null)
+    .filter((showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null && !showtime.isSoldOut && showtime.startsAt > now)
     .map((showtime) => showtime.priceCents as number);
   const cheapestStandard = standardPrices.length > 0 ? Math.min(...standardPrices) : null;
   const result = matches.map((showtime) => ({

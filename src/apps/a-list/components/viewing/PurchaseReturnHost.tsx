@@ -14,8 +14,13 @@ import {
 import { selectPendingPurchaseReturns } from '@apps/a-list/store/selectors';
 import type { Ticket } from '@apps/a-list/types';
 
+interface PurchaseReturnHostProps {
+  /** True while a seen prompt is up, so the two questions never show together. */
+  isSuppressed: boolean;
+}
+
 /** Asks about one purchase at a time, once the member is back from AMC or opens the app later. */
-function PurchaseReturnHost() {
+function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -47,7 +52,7 @@ function PurchaseReturnHost() {
           Math.max(openedAt, returnedAt),
     ) ?? null;
 
-  if (!user || !current || overlay !== null) {
+  if (!user || !current || overlay !== null || isSuppressed) {
     return null;
   }
 

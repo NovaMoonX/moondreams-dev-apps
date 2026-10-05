@@ -95,10 +95,10 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 ### A-List Tracker: `findShowtimes`
 
 - **Secrets:** the same `AMC_API_KEY` and budget as `findTheatres`; nothing new to set up.
-- **Flow:** reads `/v2/theatres/{id}/showtimes/{date}` (paging up to 5 × 100), keeps the movie's showings by title, and reads each one's format from its attributes (IMAX, Dolby, PRIME, RealD 3D, Laser, otherwise Standard), its adult `ticketPrices` entry and its https `purchaseUrl`.
+- **Flow:** reads `/v2/theatres/{id}/showtimes/{M-D-YYYY}` (`page-size` 200, up to 3 pages), keeps the movie's showings by title, and reads each one's format from its attributes (IMAX, Dolby, PRIME, RealD 3D, Laser, otherwise Standard), its adult `ticketPrices` entry and its https `purchaseUrl`.
 - **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
 - **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
-- **Check after the key is set:** the attribute codes, the price `type` values and the title match were written from AMC's public docs and not run against the live API.
+- **Check after the key is set:** the response parsing was written from AMC's public docs and a third-party reference of live responses, and has not been run against the live API. Still unconfirmed: that `movieName` and `purchaseUrl` are present on every showtime, the Dolby and PRIME attribute codes, and the `/v2/locations` and `/v2/location-suggestions` shapes.
 
 ### `fetchLinkMetadata`
 

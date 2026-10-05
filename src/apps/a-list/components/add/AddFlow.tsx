@@ -157,11 +157,13 @@ export function AddFlow({
       : now,
   );
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
-  // Untouched, the favorite theater is picked for them; once they tap a pill (or clear it) their choice stands.
   const [pickedShowtime, setPickedShowtime] = useState<{
     theatreId: string;
     option: ShowtimeOption;
   } | null>(null);
+  // The date form only reads its values once, so each pick remounts it with a new key, even for the same showtime.
+  const [pickCount, setPickCount] = useState(0);
+  // Untouched, the favorite theater is picked for them; once they tap a pill (or clear it) their choice stands.
   const [theatreChoice, setTheatreChoice] = useState<
     TheatreSnapshot | null | undefined
   >(undefined);
@@ -314,6 +316,7 @@ export function AddFlow({
     }
 
     setPickedShowtime({ theatreId: theatre.theatreId, option });
+    setPickCount((count) => count + 1);
     setShowtimeValues({
       date: toLocalDateInputValue(option.startsAt),
       time: toLocalTimeInputValue(option.startsAt),
@@ -335,6 +338,7 @@ export function AddFlow({
     setTicketDraft(null);
     setTheatreChoice(undefined);
     setPickedShowtime(null);
+    setPickCount(0);
     setShowtimeValues({
       date: overlay.destination === 'calendar' ? overlay.date : '',
       time: DEFAULT_SHOWTIME,
@@ -362,15 +366,13 @@ export function AddFlow({
     // Poor signal in a theater shouldn't lose the title: save what search knows and the daily refresh fills in the rest.
     const snapshot = await queryClient
       .fetchQuery(movieDetailsQueryOptions(result.movieKey))
-      .catch(
-        (): MovieSnapshot => ({
-          title: result.title,
-          releaseDate: null,
-          posterUrl: result.posterUrl,
-          runtimeMinutes: null,
-          contentRating: null,
-        }),
-      );
+      .catch((): MovieSnapshot => ({
+        title: result.title,
+        releaseDate: null,
+        posterUrl: result.posterUrl,
+        runtimeMinutes: null,
+        contentRating: null,
+      }));
 
     try {
       const { created } = await dispatch(
@@ -563,7 +565,7 @@ export function AddFlow({
         </div>
         {isCalendar ? (
           <Form
-            key={pickedShowtime?.option.showtimeId ?? 'manual'}
+            key={`pick-${pickCount}`}
             id='a-list-add-viewing'
             form={SHOWTIME_FIELDS}
             initialData={showtimeValues}
@@ -631,7 +633,7 @@ export function AddFlow({
             </div>
             {ticketDraft && (
               <TicketFields
-                key={activePick?.showtimeId ?? 'manual'}
+                key={`pick-${pickCount}`}
                 draft={ticketDraft}
                 onChange={setTicketDraft}
               />
@@ -705,11 +707,17 @@ export function AddFlow({
   const getHeader = () => {
     if (selection !== null)
       return {
-        label: selection.kind === 'known' && selection.isManual ? 'Back' : 'Back to results',
+        label:
+          selection.kind === 'known' && selection.isManual
+            ? 'Back'
+            : 'Back to results',
         onClick: handleBack,
       };
     if (isAddingByTitle)
-      return { label: 'Back to search', onClick: () => setIsAddingByTitle(false) };
+      return {
+        label: 'Back to search',
+        onClick: () => setIsAddingByTitle(false),
+      };
     return { label: title ?? '', onClick: onClose };
   };
 
