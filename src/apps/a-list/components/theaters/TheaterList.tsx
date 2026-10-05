@@ -31,12 +31,13 @@ function TheaterList({
             name={theatre.name}
             detail={formatTheatreLocation(theatre)}
             trailing={
-              <div className='flex shrink-0 items-center'>
+              <div className='flex shrink-0 items-center gap-1'>
                 <Button
                   type='button'
                   variant='tertiary'
                   size='icon'
                   rounded='full'
+                  className='h-10 w-10'
                   disabled={isDisabled}
                   aria-pressed={isFavorite}
                   aria-label={
