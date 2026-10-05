@@ -1,9 +1,9 @@
+import { fetchLatestVersion } from './appVersionQueries';
 import { SITE_VERSION } from './app.constants';
 
 const TAPS_NEEDED = 8;
 const MAX_GAP_MS = 600;
 const MAX_DRIFT_PX = 40;
-const FETCH_TIMEOUT_MS = 6000;
 const PANEL_ID = 'version-peek';
 const INTERACTIVE = 'a,button,input,textarea,select,label,[role="button"],[contenteditable="true"]';
 
@@ -19,17 +19,6 @@ const getStatus = (remote: string | null): Status => {
   const diff = compareVersions(SITE_VERSION, remote);
   if (diff === 0) return 'latest';
   return diff < 0 ? 'outdated' : 'ahead';
-};
-
-const fetchLatestVersion = async () => {
-  const [{ get, ref }, { realtimeDb }] = await Promise.all([
-    import('firebase/database'),
-    import('@lib/firebase/config'),
-  ]);
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), FETCH_TIMEOUT_MS));
-  const snapshot = await Promise.race([get(ref(realtimeDb, 'appVersion')), timeout]);
-  const value = snapshot?.val();
-  return typeof value === 'string' ? value : null;
 };
 
 const getStatusCopy = (status: Status, remote: string | null) => {

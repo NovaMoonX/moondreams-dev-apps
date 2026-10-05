@@ -1,7 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Link, useLocation, useRouteError } from 'react-router-dom';
 
-import { SITE_VERSION } from '@lib/app';
+import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
 import { APP_REGISTRY_PATH_MAP } from '../lib/app/app.registry';
 
@@ -48,7 +48,7 @@ function ErrorBoundary() {
             <Button>Back home</Button>
           </Link>
         </div>
-        <p className='text-foreground/50 mt-6 text-xs'>Version {SITE_VERSION}</p>
+        <p className='text-foreground/50 mt-6 text-xs'><VersionLabel /></p>
       </div>
     </div>
   );

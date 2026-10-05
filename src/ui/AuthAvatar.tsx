@@ -13,7 +13,7 @@ import { useState } from 'react';
 import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
-import { SITE_VERSION } from '@lib/app';
+import { VersionLabel } from '@components/VersionLabel';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { useMediaQuery } from '@hooks/useMediaQuery';
@@ -139,7 +139,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     option({ label: 'Sign out', value: 'signout', icon: <LogOut className='size-4' /> }),
     custom(() => (
       <div className='border-border text-muted-foreground mt-1 border-t px-3 py-2 text-xs text-right'>
-        Version {SITE_VERSION}
+        <VersionLabel />
       </div>
     )),
   ];
