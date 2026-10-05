@@ -1892,10 +1892,13 @@ service cloud.firestore {
           && (data.endAt == null || isTimestampNumber(data.endAt))
           && data.get('startTime', null) == null
           && data.get('endTime', null) == null
-          && data.get('timezone', null) == null;
+          && data.get('timezone', null) == null
+          && data.get('endTimezone', null) == null;
       }
 
       // Relative trips: a trip day (or none) plus a floating "HH:mm", never a timestamp.
+      // An end in its own time zone (a flight landing elsewhere) can read earlier on the clock than
+      // its start, so the clock-time ordering only applies when both share a zone.
       function isRelativeEventTimeValid(data) {
         return (
             (data.dayIndex == null && data.endDayIndex == null)
@@ -1908,9 +1911,12 @@ service cloud.firestore {
             || (
               isClockTime(data.endTime)
               && data.dayIndex != null
-              && (data.endDayIndex > data.dayIndex || data.endTime > data.startTime)
+              && (data.endDayIndex > data.dayIndex
+                || data.endTime > data.startTime
+                || data.get('endTimezone', null) != null)
             ))
-          && (data.get('timezone', null) == null || isNonEmptyString(data.timezone));
+          && (data.get('timezone', null) == null || isNonEmptyString(data.timezone))
+          && (data.get('endTimezone', null) == null || isNonEmptyString(data.endTimezone));
       }
 
       function isEventTimeValid(data) {
@@ -1931,6 +1937,7 @@ service cloud.firestore {
             'startTime',
             'endTime',
             'timezone',
+            'endTimezone',
             'locationName',
             'address',
             'latitude',

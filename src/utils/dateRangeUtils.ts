@@ -19,9 +19,11 @@ export function getLocalDayIndex(rangeStart: number, now: number) {
   return result;
 }
 
-export function getIndexBucket(index: number | null, count: number): IndexBucket {
+/** `buffer` extends the range that many days on each side, so a day just before or after still
+ * gets a bucket of its own instead of falling into 'outside'. */
+export function getIndexBucket(index: number | null, count: number, buffer = 0): IndexBucket {
   if (index === null) return 'none';
-  if (index < 0 || index >= count) return 'outside';
+  if (index < -buffer || index >= count + buffer) return 'outside';
   return index;
 }
 
@@ -33,9 +35,10 @@ export function groupByIndexBucket<T>(
   items: T[],
   getIndex: (item: T) => number | null,
   count: number,
+  buffer = 0,
 ): { bucket: IndexBucket; items: T[] }[] {
   const byBucket = items.reduce<Map<IndexBucket, T[]>>((groups, item) => {
-    const bucket = getIndexBucket(getIndex(item), count);
+    const bucket = getIndexBucket(getIndex(item), count, buffer);
     groups.set(bucket, [...(groups.get(bucket) ?? []), item]);
     return groups;
   }, new Map());
@@ -50,13 +53,21 @@ export function groupByIndexBucket<T>(
 
 /** `rangeStart` is always a UTC-midnight-anchored value (from `fromDateInputValue`), so the
  * label is read from UTC fields — local fields would shift it a day off for viewers behind UTC. */
-export function getDayLabel(rangeStart: number, dayIndex: number) {
-  const date = new Date(rangeStart + dayIndex * 86_400_000);
-  return `Day ${dayIndex + 1} · ${date.toLocaleDateString(undefined, {
+export function getDayLabel(rangeStart: number, dayIndex: number, count?: number) {
+  const date = new Date(rangeStart + dayIndex * 86_400_000).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
-  })}`;
+  });
+  if (dayIndex < 0) {
+    const days = -dayIndex;
+    return `${days} ${days === 1 ? 'day' : 'days'} before · ${date}`;
+  }
+  if (count !== undefined && dayIndex >= count) {
+    const days = dayIndex - count + 1;
+    return `${days} ${days === 1 ? 'day' : 'days'} after · ${date}`;
+  }
+  return `Day ${dayIndex + 1} · ${date}`;
 }
 
 /** Just the calendar date ("Oct 3") of a day offset — for days outside a range, where "Day N" reads badly. */
@@ -93,21 +104,26 @@ export function shiftDateRangeStart(
   return result;
 }
 
-export function getBucketLabel(bucket: IndexBucket, rangeStart: number) {
+export function getBucketLabel(bucket: IndexBucket, rangeStart: number, count?: number) {
   if (bucket === 'none') return 'No specific day';
   if (bucket === 'outside') return 'Outside trip dates';
-  return getDayLabel(rangeStart, bucket);
+  return getDayLabel(rangeStart, bucket, count);
 }
 
-/** One option per day of the range, plus the `current` day when it sits outside the range so a
- * select showing a stored out-of-range value doesn't go blank. */
-export function getDayOptions(rangeStart: number, rangeEnd: number, current: number | null = null) {
+/** One option per day of the range (and `buffer` days either side of it), plus the `current` day
+ * when it sits beyond that so a select showing a stored out-of-range value doesn't go blank. */
+export function getDayOptions(
+  rangeStart: number,
+  rangeEnd: number,
+  current: number | null = null,
+  buffer = 0,
+) {
   const count = getDayCount(rangeStart, rangeEnd);
-  const days = Array.from({ length: count }, (_, index) => ({
+  const days = Array.from({ length: count + buffer * 2 }, (_, offset) => offset - buffer).map((index) => ({
     value: String(index),
-    label: getDayLabel(rangeStart, index),
+    label: getDayLabel(rangeStart, index, count),
   }));
-  const isOutside = current !== null && (current < 0 || current >= count);
+  const isOutside = current !== null && (current < -buffer || current >= count + buffer);
   const outside = isOutside
     ? [{ value: String(current), label: `${getDayDateLabel(rangeStart, current)} (outside trip dates)` }]
     : [];

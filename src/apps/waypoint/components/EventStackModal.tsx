@@ -15,6 +15,8 @@ interface EventStackModalProps {
   isSubmitting?: boolean;
   /** Taking one trip out only makes sense from that trip's own card, not the stack header. */
   canRemoveTrip?: boolean;
+  /** The event's group, when it has other legs: stacking moves all of them together. */
+  group?: { label: string; size: number } | null;
   onStack: (stackName: string) => void;
   onRename: (stackName: string) => void;
   onRemove: () => void;
@@ -28,6 +30,7 @@ function EventStackModal({
   events,
   isSubmitting = false,
   canRemoveTrip = true,
+  group = null,
   onStack,
   onRename,
   onRemove,
@@ -49,14 +52,23 @@ function EventStackModal({
     ? events.filter((other) => getStackKey(other) === getStackKey(event)).length
     : 0;
   const trimmedName = name.trim();
+  const groupNote = group && group.size > 1 && (
+    <p className='bg-muted/50 rounded-lg p-3 text-sm'>
+      🧳 This event is part of <span className='font-medium'>{group.label}</span>, so the whole group of{' '}
+      {group.size} events stacks together.
+    </p>
+  );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Stack'>
       {currentName ? (
         <div className='space-y-4'>
           <p className='text-muted-foreground text-sm'>
-            Stacked with {stackedCount - 1} other event{stackedCount - 1 === 1 ? '' : 's'}.
+            {stackedCount > 1
+              ? `Stacked with ${stackedCount - 1} other event${stackedCount - 1 === 1 ? '' : 's'}.`
+              : 'The only itinerary in this stack so far. Stack another trip with the same name to compare them.'}
           </p>
+          {groupNote}
           <div className='space-y-1.5'>
             <Label>Stack name</Label>
             <Input value={name} onChange={(changeEvent) => setName(changeEvent.target.value)} />
@@ -93,6 +105,7 @@ function EventStackModal({
           <p className='text-muted-foreground text-sm'>
             Stack the trips of everyone heading to the same place, so the whole itinerary sits together and each person can flip to their own.
           </p>
+          {groupNote}
           {sameTypeStacks.length > 0 && (
             <div className='space-y-1.5'>
               <Label>Add to</Label>

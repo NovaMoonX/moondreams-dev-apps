@@ -67,6 +67,7 @@ function IdeaToEventModal({ trip, idea, currentUserId, onClose }: IdeaToEventMod
     <EventFormModal
       isOpen
       trip={trip}
+      currentUserId={currentUserId}
       memberOptions={memberOptions}
       prefill={getPrefill(trip, idea)}
       events={events}

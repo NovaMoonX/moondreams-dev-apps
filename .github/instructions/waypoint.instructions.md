@@ -1,0 +1,18 @@
+---
+applyTo: "src/apps/waypoint/**"
+---
+
+# Waypoint rules
+
+Applies on top of `.github/copilot-instructions.md` to everything under `src/apps/waypoint/`. Keep `.claude/rules/waypoint.md` identical to this body.
+
+- **Theme: the map and the passport.** Warm, adventurous and playful, never corporate. The palette (compass-needle teal primary, sunset-coral accent, sky-tinted neutrals) lives in `waypoint.css` as tokens on `html.waypoint-theme`, switched on by `useWaypointTheme()` while the app is mounted so portaled modals and drawers match. Change the look there, not per component, and use semantic tokens (`bg-primary`, `bg-secondary`, `bg-accent`) rather than raw colors. The one deliberate exception is the live "Active Now" emerald card and its progress, which signal "happening right now".
+- **Round everything, from the tokens.** The theme raises `--radius-md` and up, so every Dreamer UI input, button, select, card and sheet is already soft; don't hand-roll radii. Pills (`@/components/Pill`) are for options a user picks among (event type, transit type, meal, who's coming), never a `Select` of three to six items, radio buttons or a tab strip. A `Select` stays for long lists (days, time zones, airlines).
+- **Emoji carry meaning.** Event types, transit types, meals and sections each have their own emoji (`EVENT_TYPE_EMOJIS`, `TRANSIT_TYPE_EMOJIS`); never reuse one across a list.
+- **Forms are modals that ask little up front.** A required essentials block (type, title or place, when), then a "+ Add X" chip row for everything else (`AddFieldChips`/`RemovableField`), exactly like the event form; a multi-step modal only when step two is truly secondary. Titles are plain nouns, footers are `ModalFooterActions` with a `DeleteIconButton` bottom-left.
+- **Time is trip-relative, and a day can sit just outside the trip.** A day number may run from 3 days before the first day to 3 days after the last (`MAX_DAYS_OUTSIDE_TRIP`), for the travel days around a trip; a checklist item may be due on any day, however far before, and stays relative to the trip's start when dates move. A start and an end may be in different time zones (`endTimezone`; a flight's landing zone); the zone picker searches by city or zone name (`@/utils/timezoneSearch`) and never assumes a fixed UTC offset, so daylight saving (and places without it, like Phoenix) come from the runtime's zone database.
+- **Overview is about me.** Today, Active Now and Up Next list only events the viewer is part of (`isEventForMember`); the Timeline shows everything. Before the trip, Overview asks each member for their own arrival and departure (`TravelPrompts`), skippable and quiet afterwards.
+- **People can be pre-approved by email.** An admin adds an email and role (`apps/waypoint/emailInvites`); that person never requests access: opening the trip's invite link or code shows "you're already on the list" with a single Join, and My Trips lists their open invitations. Joining adds them and deletes the invite in one batch.
+- **Documents can become events.** Travel, stays and rentals accept a photo, screenshot or PDF of a booking and propose entries for the member to review (`@apps/waypoint/lib/extractBookingFromFile`); nothing is saved without a review step.
+- **Stacks and groups.** A group has its own stack button; stacking a grouped event says it stacks the whole group. A stack of one event gets the same header, border and hierarchy as a stack of many.
+- **No "Back home" in the page.** The app shell gives Home through the avatar menu and the header's home icon. Only the landing/fallback page says "Back home".

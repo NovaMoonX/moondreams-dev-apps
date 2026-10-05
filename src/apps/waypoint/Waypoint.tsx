@@ -18,6 +18,7 @@ import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
+import { useWaypointTheme } from '@apps/waypoint/hooks/useWaypointTheme';
 import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
 import { createTrip } from '@apps/waypoint/store/actions/tripActions';
 import {
@@ -29,6 +30,7 @@ import {
 import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
+  useWaypointTheme();
   const { user, loading } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();

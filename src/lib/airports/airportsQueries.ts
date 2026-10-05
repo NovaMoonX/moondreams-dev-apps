@@ -7,6 +7,8 @@ export interface AirportOption {
   country: string;
   latitude: number;
   longitude: number;
+  /** IANA zone the airport sits in, when the data has one. */
+  timezone: string | null;
 }
 
 interface RawAirport {
@@ -16,6 +18,7 @@ interface RawAirport {
   iata?: string;
   latitude: string;
   longitude: string;
+  tz?: string;
 }
 
 export const airportsQueryKeys = {
@@ -43,6 +46,7 @@ async function loadAirports(): Promise<AirportOption[]> {
       country: airport.country,
       latitude: Number(airport.latitude),
       longitude: Number(airport.longitude),
+      timezone: airport.tz && airport.tz !== '\\N' ? airport.tz : null,
     }))
     .sort((first, second) => first.iataCode.localeCompare(second.iataCode));
   return airports;

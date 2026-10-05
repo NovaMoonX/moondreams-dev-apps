@@ -1,0 +1,43 @@
+/*
+ * Waypoint's theme: a map and a passport. Compass-needle teal, sunset coral and sky-tinted neutrals,
+ * rounded like a luggage tag. The class sits on <html> (see useWaypointTheme) so modals and drawers,
+ * which render outside the app's container, pick it up too.
+ */
+html.waypoint-theme {
+  --color-primary: var(--color-teal-600);
+  --color-primary-foreground: var(--color-white);
+  --color-secondary: var(--color-sky-100);
+  --color-secondary-foreground: var(--color-sky-950);
+  --color-muted: var(--color-sky-50);
+  --color-muted-foreground: var(--color-slate-500);
+  --color-accent: var(--color-orange-100);
+  --color-accent-foreground: var(--color-orange-900);
+  --color-border: var(--color-slate-200);
+
+  /* Everything that is rounded-md or larger softens up, so inputs, buttons, cards and sheets
+     all read like luggage tags without a rounded prop on each. */
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.75rem;
+}
+
+html.waypoint-theme.dark {
+  --color-primary: var(--color-teal-400);
+  --color-primary-foreground: var(--color-teal-950);
+  --color-secondary: var(--color-sky-950);
+  --color-secondary-foreground: var(--color-sky-100);
+  --color-muted: var(--color-slate-900);
+  --color-muted-foreground: var(--color-slate-400);
+  --color-accent: var(--color-orange-950);
+  --color-accent-foreground: var(--color-orange-100);
+  --color-border: var(--color-slate-800);
+}
+
+/* A click leaves a button focused, and the library's focus: outline and ring flash on it.
+   Keyboard focus (:focus-visible) keeps its cue. */
+html.waypoint-theme :focus:not(:focus-visible) {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}

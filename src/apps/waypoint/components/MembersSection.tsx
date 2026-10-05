@@ -42,8 +42,8 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
-  const memberIds = Object.keys(trip.members);
-  const userInfo = useUserInfo(memberIds);
+  const allMemberIds = Object.keys(trip.members);
+  const userInfo = useUserInfo(allMemberIds);
   const members = userInfo?.map ?? {};
   const isAdmin = trip.members[currentUserId]?.role === 'ADMIN';
   const activeMemberUid =
@@ -52,6 +52,14 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
     members[memberId]?.displayName?.trim() ||
     members[memberId]?.email ||
     'Trip member';
+  const memberIds = [...allMemberIds].sort((first, second) => {
+    if (first === trip.createdBy || second === trip.createdBy) {
+      return first === trip.createdBy ? -1 : 1;
+    }
+    return getDisplayName(first).localeCompare(getDisplayName(second), undefined, {
+      sensitivity: 'base',
+    });
+  });
   const roleOptions = Object.entries(MEMBER_ROLE_LABELS).map(
     ([value, text]) => ({ value, text }),
   );

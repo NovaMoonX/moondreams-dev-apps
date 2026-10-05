@@ -224,6 +224,13 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   SNACK: 'Snack',
 };
 
+export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
+  BREAKFAST: '🥐',
+  LUNCH: '🥪',
+  DINNER: '🍝',
+  SNACK: '🍿',
+};
+
 export const ACTIVITY_SETTING_LABELS: Record<ActivitySetting, string> = {
   INDOOR: 'Indoor',
   OUTDOOR: 'Outdoor',
@@ -296,6 +303,10 @@ export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
   'ACTIVITIES',
   'SHOPPING',
 ];
+
+/** How many days before the first day and after the last day an event, stay or rental may be dated,
+ * for the travel days around a trip. */
+export const MAX_DAYS_OUTSIDE_TRIP = 3;
 
 export const ADD_NEW_OPTION = '__add_new__';
 
