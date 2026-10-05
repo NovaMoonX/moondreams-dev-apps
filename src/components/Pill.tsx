@@ -21,10 +21,13 @@ function Pill({ children, isSelected, onClick, emoji, className }: PillProps) {
       variant={isSelected ? 'primary' : 'secondary'}
       aria-pressed={isSelected}
       onClick={onClick}
-      className={join('shrink-0 gap-1.5 whitespace-nowrap', className)}
+      className={join(
+        'max-w-full shrink-0 gap-1.5 whitespace-nowrap',
+        className,
+      )}
     >
       {emoji && <span aria-hidden='true'>{emoji}</span>}
-      {children}
+      <span className='truncate'>{children}</span>
     </Button>
   );
 }

@@ -77,8 +77,10 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
                 />
                 <div className='text-muted-foreground text-xs'>
                   We compare it with your premium ticket to see the upcharge you
-                  skipped.{' '}
-                  <PremiumSavingsHelp linkLabel='How premium savings work' />
+                  skipped.
+                  <div className='py-1'>
+                    <PremiumSavingsHelp linkLabel='How premium savings work' />
+                  </div>
                 </div>
               </div>
             ),

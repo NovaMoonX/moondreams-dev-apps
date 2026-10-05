@@ -177,7 +177,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             )}
             {renderEntryRow(
               () => openOverlay({ kind: 'theaters' }),
-              '🎭',
+              '📍',
               theatres.length === 0 ? 'Add your theaters' : 'Your theaters',
               theatres.length,
               false,

@@ -83,7 +83,7 @@ function HelpTip({
           className='w-72 p-3'
           trigger={renderTrigger()}
         >
-          <p className='mb-1 text-sm font-semibold'>{title}</p>
+          <p className='mb-1 text-left text-sm font-semibold'>{title}</p>
           {body}
         </Popover>
       )}
