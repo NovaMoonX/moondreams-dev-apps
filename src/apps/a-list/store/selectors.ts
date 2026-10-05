@@ -21,12 +21,30 @@ export const selectMembership = (state: RootState) =>
 export const selectAListLoadError = (state: RootState) =>
   state.aList.membership.loadError ??
   state.aList.watchlist.loadError ??
-  state.aList.viewings.loadError;
+  state.aList.viewings.loadError ??
+  state.aList.theatres.loadError;
 
 export const selectIsAListLoaded = (state: RootState) =>
   state.aList.membership.isLoaded &&
   state.aList.watchlist.isLoaded &&
-  state.aList.viewings.isLoaded;
+  state.aList.viewings.isLoaded &&
+  state.aList.theatres.isLoaded;
+
+const selectTheatreItems = (state: RootState) => state.aList.theatres.items;
+
+/** The favorite first, then by name. */
+export const selectTheatres = createSelector(
+  [selectTheatreItems, selectMembership],
+  (theatres, membership) => {
+    const favoriteId = membership?.favoriteTheatreId ?? null;
+    const result = [...theatres].sort((left, right) => {
+      if (left.theatreId === favoriteId) return -1;
+      if (right.theatreId === favoriteId) return 1;
+      return left.name.localeCompare(right.name);
+    });
+    return result;
+  },
+);
 
 const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 

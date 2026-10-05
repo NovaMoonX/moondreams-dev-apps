@@ -114,10 +114,16 @@ service cloud.firestore {
         return value == null || (value is number && value >= 0 && value <= 0.25);
       }
 
+      function isTheatreId(value) {
+        return value is string && value.matches('^[0-9]{1,8}$');
+      }
+
       function isMembershipValid(data) {
         let keys = ['uid', 'monthlyCostCents', 'monthlyTotalCents', 'taxRate', 'startDate',
                     'weeklyGoal', 'monthlyGoal', 'setupCompletedAt', 'createdAt', 'lastEditedAt'];
-        return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+        // `favoriteTheatreId` arrived later: legacy documents lack it, so it is allowed but not required.
+        return data.keys().hasOnly(keys.concat(['favoriteTheatreId'])) && data.keys().hasAll(keys)
+          && (data.get('favoriteTheatreId', null) == null || isTheatreId(data.favoriteTheatreId))
           && data.uid == uid
           && isCents(data.monthlyCostCents) && data.monthlyCostCents > 0
           && isCents(data.monthlyTotalCents)
@@ -137,6 +143,43 @@ service cloud.firestore {
         && request.resource.data.setupCompletedAt == resource.data.setupCompletedAt
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
+
+      function isOptionalText(value, maxSize) {
+        return value == null || (value is string && value.size() > 0 && value.size() <= maxSize);
+      }
+
+      function isTheatreSnapshotValid(theatre) {
+        let keys = ['theatreId', 'name', 'city', 'state'];
+        return theatre is map && theatre.keys().hasOnly(keys) && theatre.keys().hasAll(keys)
+          && isTheatreId(theatre.theatreId)
+          && theatre.name is string && theatre.name.size() > 0 && theatre.name.size() <= 120
+          && isOptionalText(theatre.city, 80)
+          && isOptionalText(theatre.state, 40);
+      }
+
+      match /theatres/{theatreId} {
+        function isTheatreValid(data) {
+          let keys = ['theatreId', 'name', 'addressLine', 'city', 'state', 'postalCode',
+                      'latitude', 'longitude', 'createdAt', 'lastEditedAt'];
+          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+            && data.theatreId == theatreId
+            && isTheatreId(theatreId)
+            && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+            && isOptionalText(data.addressLine, 200)
+            && isOptionalText(data.city, 80)
+            && isOptionalText(data.state, 40)
+            && isOptionalText(data.postalCode, 20)
+            && (data.latitude == null || (data.latitude is number && data.latitude >= -90 && data.latitude <= 90))
+            && (data.longitude == null || (data.longitude is number && data.longitude >= -180 && data.longitude <= 180))
+            && data.createdAt is int
+            && data.lastEditedAt is int;
+        }
+
+        allow read, delete: if isMembershipOwner();
+        allow create: if isMembershipOwner() && isTheatreValid(request.resource.data);
+        allow update: if isMembershipOwner() && isTheatreValid(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
 
       function isMovieValid(movie) {
         let keys = ['title', 'releaseDate', 'posterUrl', 'runtimeMinutes', 'contentRating'];
@@ -191,8 +234,8 @@ service cloud.firestore {
       match /viewings/{viewingId} {
         function isViewingValid(data) {
           let required = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
-          // `ticket` and `rating` arrived later: legacy documents lack them, so they're allowed but not required.
-          return data.keys().hasOnly(required.concat(['ticket', 'rating'])) && data.keys().hasAll(required)
+          // `ticket`, `rating` and `theatre` arrived later: legacy documents lack them, so they're allowed but not required.
+          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre'])) && data.keys().hasAll(required)
             && data.id == viewingId
             && data.movieKey is string
             && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
@@ -203,6 +246,7 @@ service cloud.firestore {
             // The server's clock, so a skewed device can't record a future showing as seen.
             && (data.status == 'PLANNED' || data.showtimeAt <= request.time.toMillis())
             && (data.get('ticket', null) == null || isTicketValid(data.ticket))
+            && (data.get('theatre', null) == null || isTheatreSnapshotValid(data.theatre))
             && isNullOrHalfStars(data.get('rating', null))
             && (data.status == 'SEEN' || data.get('rating', null) == null)
             && data.createdAt is int
@@ -234,6 +278,10 @@ service cloud.firestore {
     }
 
     match /apps/a-list/movieCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/a-list/theatreCache/{key} {
       allow read, write: if false;
     }
 

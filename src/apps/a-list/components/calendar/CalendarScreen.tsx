@@ -8,7 +8,10 @@ import { useAppSelector } from '@/store';
 import CounterRow from '@apps/a-list/components/calendar/CounterRow';
 import PosterCell from '@apps/a-list/components/calendar/PosterCell';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
-import { selectViewingsByDay } from '@apps/a-list/store/selectors';
+import {
+  selectTheatres,
+  selectViewingsByDay,
+} from '@apps/a-list/store/selectors';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
 
 function getTodayStart() {
@@ -30,6 +33,7 @@ const CALENDAR_STYLES = {
 function CalendarScreen() {
   const { openOverlay } = useAListOverlay();
   const viewingsByDay = useAppSelector(selectViewingsByDay);
+  const theatres = useAppSelector(selectTheatres);
   const now = useNow();
   const [selectedDay, setSelectedDay] = useState(getTodayStart);
   const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
@@ -76,6 +80,18 @@ function CalendarScreen() {
             </Button>
           </div>
         </div>
+      )}
+      {hasViewings && theatres.length === 0 && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          rounded='full'
+          className='text-muted-foreground! mx-auto flex gap-1.5'
+          onClick={() => openOverlay({ kind: 'theaters' })}
+        >
+          <span aria-hidden='true'>📍</span> Add the theaters you go to
+        </Button>
       )}
       <Calendar
         mode='single'

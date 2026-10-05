@@ -588,6 +588,7 @@ block-beta
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |
+| TheaterFinder, TheaterList, TheaterPills | Theaters subview and Setup's last step; the add and edit forms | a "Use my current location" button (the only thing that asks for a position) and a zip/city search over AMC's nearest theaters; the saved list with a favorite star and a remove button; and one `Pill` per saved theater on the forms, the favorite preselected |
 | StarRating | Seen prompt, edit viewing, rows (read-only) | half stars from 0.5 to 5: tap a star's left or right half, or slide a finger or the mouse across the row; tapping the current rating clears it; arrow keys step by a half; custom, since Dreamer UI has none |
 | HelpTip | Calendar's "Since Friday" tile, Dashboard's Premium formats tile, Membership settings' Goals, the standard-price field | a small help icon: a hover/click popover on a computer, a modal on a phone; or a text link that opens the same explanation in a modal |
 | OpeningTab | Watchlist | the first and default tab; carries an accent and a count when something opens in the next seven days; its empty state links to All |

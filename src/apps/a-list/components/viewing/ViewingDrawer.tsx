@@ -31,7 +31,7 @@ import {
   selectMembership,
   selectViewingById,
 } from '@apps/a-list/store/selectors';
-import type { Ticket } from '@apps/a-list/types';
+import type { Ticket, TheatreSnapshot } from '@apps/a-list/types';
 import { formatCents } from '@apps/a-list/utils/money';
 
 type DrawerView = 'details' | 'edit' | 'ticket' | 'seen';
@@ -86,7 +86,15 @@ export function ViewingPanel({
     }
   };
 
-  const handleSaveShowtime = (showtimeAt: number, rating?: number | null) =>
+  const handleSaveShowtime = ({
+    showtimeAt,
+    rating,
+    theatre,
+  }: {
+    showtimeAt: number;
+    rating?: number | null;
+    theatre: TheatreSnapshot | null;
+  }) =>
     runSave(
       () =>
         dispatch(
@@ -96,6 +104,7 @@ export function ViewingPanel({
             showtimeAt,
             runtimeMinutes: viewing.movie.runtimeMinutes,
             rating,
+            theatre,
           }),
         ).unwrap(),
       'Unable to save this showing.',
@@ -170,6 +179,14 @@ export function ViewingPanel({
         <p className='text-muted-foreground text-sm'>
           {formatDate(viewing.showtimeAt)} · {formatTime(viewing.showtimeAt)}
         </p>
+        {viewing.theatre && (
+          <p className='text-muted-foreground flex gap-1.5 text-sm'>
+            <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+              📍
+            </span>
+            <span className='min-w-0'>{viewing.theatre.name}</span>
+          </p>
+        )}
         <div className='flex flex-wrap items-center gap-1.5'>
           <ViewingStatusBadge viewing={viewing} now={now} />
           {ticket && <FormatBadge format={ticket.format} />}
@@ -214,9 +231,7 @@ export function ViewingPanel({
             now={now}
             isSaving={isSaving}
             onCancel={() => setView('details')}
-            onSave={(showtimeAt, rating) =>
-              void handleSaveShowtime(showtimeAt, rating)
-            }
+            onSave={(changes) => void handleSaveShowtime(changes)}
           />
         </div>
       );

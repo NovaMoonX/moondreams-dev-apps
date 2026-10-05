@@ -13,3 +13,17 @@ export interface MovieSearchResult {
   year: number | null;
   posterUrl: string | null;
 }
+
+export interface TheatreResult {
+  /** AMC's theatre number, as digits. */
+  theatreId: string;
+  name: string;
+  addressLine: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** From the searched point; null when AMC didn't say. */
+  distanceMiles: number | null;
+}

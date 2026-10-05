@@ -11,6 +11,8 @@ export interface MembershipProfile {
   startDate: number;
   weeklyGoal: number | null;
   monthlyGoal: number | null;
+  /** The theater new showings default to; null for none. Documents written before theaters existed lack the key. */
+  favoriteTheatreId: string | null;
   /** Immutable; its presence is what "Setup is done" means. */
   setupCompletedAt: number;
   createdAt: number;
@@ -60,6 +62,7 @@ export type AListOverlay =
   | { kind: 'viewing'; id: string }
   | { kind: 'watchlistItem'; movieKey: string }
   | { kind: 'tickets'; view: 'paid' | 'unpriced' }
+  | { kind: 'theaters' }
   | { kind: 'membership' };
 
 export interface WatchlistItem {
@@ -87,6 +90,8 @@ export interface Viewing {
   status: ViewingStatus;
   /** null until "Mark paid" or "Yes, I paid" in the add form. Documents written before tickets existed lack the key. */
   ticket: Ticket | null;
+  /** Copied when the theater is picked, so a showing outlives a removed theater. Documents written before theaters existed lack the key. */
+  theatre: TheatreSnapshot | null;
   /** 0.5–5 stars in half steps, only once seen. Older documents hold whole stars, and those written before ratings existed lack the key. */
   rating: number | null;
   createdAt: number;
@@ -109,4 +114,36 @@ export interface Ticket {
   taxCents: number;
   /** Exact as entered when all-in. */
   totalCents: number;
+}
+
+export interface TheatreSnapshot {
+  /** AMC's theatre number, as digits. */
+  theatreId: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+}
+
+/** A theater the member goes to; the document id is `theatreId`. */
+export interface AListTheatre {
+  /** AMC's theatre number, as digits; equals the document id; immutable. */
+  theatreId: string;
+  name: string;
+  addressLine: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** A theater found through AMC, before it is saved. */
+export interface TheatreSearchResult extends Omit<
+  AListTheatre,
+  'createdAt' | 'lastEditedAt'
+> {
+  /** From the searched point; null when AMC didn't say. */
+  distanceMiles: number | null;
 }

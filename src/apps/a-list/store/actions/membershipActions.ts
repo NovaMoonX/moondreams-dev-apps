@@ -1,8 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { MembershipProfile } from '@apps/a-list/types';
+import { toTheatre } from '@apps/a-list/store/actions/theatreActions';
+import type {
+  MembershipProfile,
+  TheatreSearchResult,
+} from '@apps/a-list/types';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 export interface SetupDraft {
@@ -13,6 +17,9 @@ export interface SetupDraft {
   startDate: number;
   weeklyGoal: number | null;
   monthlyGoal: number | null;
+  /** Theaters picked in the last step; the first is the favorite unless `favoriteTheatreId` says otherwise. */
+  theatres: TheatreSearchResult[];
+  favoriteTheatreId: string | null;
 }
 
 interface CompleteSetupInput {
@@ -36,13 +43,23 @@ export const completeSetup = createAsyncThunk<
       startDate: draft.startDate,
       weeklyGoal: draft.weeklyGoal ?? null,
       monthlyGoal: draft.monthlyGoal ?? null,
+      favoriteTheatreId: draft.favoriteTheatreId ?? null,
       setupCompletedAt: now,
       createdAt: now,
       lastEditedAt: now,
     };
 
     try {
-      await setDoc(doc(db, 'apps', 'a-list', 'memberships', uid), membership);
+      const membershipRef = doc(db, 'apps', 'a-list', 'memberships', uid);
+      const batch = writeBatch(db);
+      batch.set(membershipRef, membership);
+      draft.theatres.forEach((theatre) =>
+        batch.set(
+          doc(membershipRef, 'theatres', theatre.theatreId),
+          toTheatre(theatre, now),
+        ),
+      );
+      await batch.commit();
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to save your membership.'),
