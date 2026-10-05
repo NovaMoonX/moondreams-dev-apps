@@ -63,6 +63,16 @@ How Waypoint's phone-first redesign works; new features follow it. Design the ph
 - **Never offer an action the user can't complete.** Gate every button, reveal and submit with the same predicate as the rule behind it (`canAddIdea`, with `now` from `useNow()`), hide it rather than show-then-fail, and when state can flip while a form is open, disable its submit and say why.
 - **Trip-phase gating has two clocks.** Display uses the viewer's local day (`getTripStatus`); write gating uses UTC to match `firestore.rules` (`roleGuards.ts`: `hasTripStarted`). A UI gate and the rule that backs it use the same one — never mix them.
 
+## Product
+
+How a feature should serve the person using it; the review agents and your own iteration add lasting rules here (fold them in, don't append).
+
+- **Ask for a permission on a tap, with the reason beside it.** Location, notifications and the like are never requested on load; the button says what it is for ("Use my current location") and the feature works without it (a zip code, skipping the step).
+- **A hand-off to a third party is a hand-off, not a checkout.** The app shows what it can, opens the other site in a new tab straight from the tap, says before leaving what to look for there, and welcomes the person back with one question that has everything it already knows filled in. It never takes payment.
+- **Optional setup is skippable and quiet afterwards.** A last-step "Skip", then one muted line where it matters, never a repeating prompt or an auto-opened overlay.
+- **Say what the app can't know.** When a source only covers part of the story (prices for upcoming days only, a fee it never exposes), the screen says so plainly and falls back to a form, instead of showing a blank or a guess.
+- **Explain any number the person can't derive.** A stat that isn't self-evident (savings, a weekly count that resets on a day) carries a help icon that opens the explanation (`HelpTip`), and a field that asks for something unexpected says why beneath it.
+
 ## Designing a mini-app's look
 
 Each mini-app may have its own personality on top of the shared playful base; A-List (`src/apps/a-list`) is the reference.
@@ -122,6 +132,14 @@ Migrating between them means moving the collection path and updating every actio
 - **Anything that shows or compares a date runs in a timezone behind UTC** — create the Playwright page with `timezoneId: 'America/Los_Angeles'`. Cloud sandboxes and CI run in UTC, where a date-only value formatted in local time looks correct; the off-by-one only appears west of UTC. Check that the displayed date matches the date picker's value.
 - **Leave the dev server and emulators running** after browser validation; finish with `npm run seed:reset` so data is back to the seeded baseline.
 - **Update the mini-app seed** (`scripts/seeds/<app>.ts`) when a feature adds an entity or state worth seeding, including its `firestoreDocuments` count.
+
+## Every PR ends the same way
+
+Run automatically, never on request; the full procedure is `.claude/skills/pr-wrap-up/SKILL.md`, and the Stop hook reminds you on every new pushed HEAD.
+
+- **Screenshots in the PR body, phone first.** A single image for net-new screens; a before | after pair for anything that changes. Add a desktop shot only where the experience differs there. They are published to the `pr-screenshots` branch (never the PR's branch) with `scripts/publish-screenshots.sh`, and **re-taken whenever a push changes how something looks**.
+- **Review before it's done.** Ask Copilot first and wait up to 20 minutes (if it never registers, don't wait). Then run three read-only agents (technical, product, design), fix what is real, and list the rest as follow-ups.
+- **Write down what it taught, automatically.** A lasting design or product rule goes into the "Design & UX" or "Product" section (or the mini-app's rules file) in the same PR, without asking, and you tell the user afterwards. The same goes any time during a session that you decide something is worth noting there.
 
 ## Release hygiene
 

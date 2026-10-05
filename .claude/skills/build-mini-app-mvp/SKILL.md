@@ -13,6 +13,8 @@ Work autonomously. Don't ask questions you can answer from the docs, the code or
 
 Read `CLAUDE.md` (it imports `.github/copilot-instructions.md`) before writing code. Every rule there applies to every PR, as does every checklist in `.claude/skills/finish-feature-pr/SKILL.md`.
 
+Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: screenshots in the PR body, Copilot with a 20-minute window, then technical, product and design agents. Where that skill and this one differ on review, `pr-wrap-up` wins.
+
 ## Inputs
 
 - **Attached docs:** usually `README.md`, `UX.md`, `TECHNICAL.md`, `ISSUES.md`, and sometimes the issue-creation `init.sh`.
@@ -113,13 +115,13 @@ For each MVP issue, in order:
      - the attribution footer.
 7. **Review:**
    1. Request a Copilot review (MCP `request_copilot_review`).
-   2. Verify it registered (see Session facts). If it did, wait up to **15 minutes** with `.claude/skills/build-mini-app-mvp/scripts/waitreview.sh <pr> 15` in the background. Don't sit idle meanwhile: read the next issue and plan it, but don't push the next PR until review is handled.
+   2. Verify it registered (see Session facts). If it did, wait up to **20 minutes** with `.claude/skills/build-mini-app-mvp/scripts/waitreview.sh <pr> 20` in the background. Don't sit idle meanwhile: read the next issue and plan it, but don't push the next PR until review is handled.
    3. **If Copilot reviewed:**
       - Fix every real finding.
       - Reply on each thread with one line, then resolve it.
       - If a finding is wrong or out of scope, reply explaining why and leave it open.
-   4. **If Copilot didn't register or didn't review within 15 minutes:**
-      - Spawn one review subagent with `model: "sonnet"` (never an Opus- or Fable-class model), using `references/review-agent.md`.
+   4. **If Copilot didn't register or didn't review within 20 minutes:**
+      - Spawn the review agents per `.claude/skills/pr-wrap-up/SKILL.md` (technical, product and design), or, for a quick pass on a small PR, one review subagent using `references/review-agent.md`. Always `model: "sonnet"`, never an Opus- or Fable-class model.
       - Wait for its report.
       - Verify its fix commit yourself: read the diff, and check stack ancestry with `git merge-base --is-ancestor` for each adjacent pair.
 8. **Sync the stack after any fix** to a lower PR. Merge it up through every branch above it, in order: merge, never rebase or force-push. Push each branch, and confirm tsc and eslint stay green.
