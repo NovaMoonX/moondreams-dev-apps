@@ -1,6 +1,6 @@
 ---
 name: pr-wrap-up
-description: The standard way every PR in this repo ends, run automatically without being asked. Screenshots in the PR body (phone first, before and after for changes), a Copilot review with a 20-minute window, otherwise three review agents (technical, product, design), fixes, and any lasting design or product rule written into CLAUDE.md. Use whenever a PR is opened or its code changes, including from the Stop hook.
+description: The standard way every PR in this repo ends, run automatically without being asked. Screenshots in the PR body (phone first, before and after for changes), a regression check (rules and security first), a Copilot review with a 20-minute window, otherwise three review agents (technical, product, design), fixes, and any lasting design or product rule written into CLAUDE.md. Use whenever a PR is opened or its code changes, including from the Stop hook.
 ---
 
 # PR wrap-up
@@ -22,14 +22,27 @@ The reader should see what changed without checking out the branch.
 - **PR body:** a `## Screenshots` section: a before | after table for changes, and a single image for new screens, each with a one-line caption.
 - **Keep them current.** Whenever a push changes how something looks, re-take only the affected screens, re-publish, and update the links. The Stop hook reminds you on every new HEAD; treat out-of-date screenshots as an unfinished PR.
 
-## 2. Ask Copilot first (20-minute window)
+## 2. Regression check
 
-1. Request a review (MCP `request_copilot_review`), then verify it registered: `gh api repos/NovaMoonX/moondreams-dev-apps/pulls/<n>/requested_reviewers` and `…/reviews`. A request can "succeed" without registering. **If Copilot isn't listed, treat it as failed and go to step 3 immediately.** (It has not registered on draft PRs.)
+A `## Regression check` section in the PR body shows that what the PR adds does not break what already worked, **technical regressions first, security rules above all**. Build it from the diff against the base, not from memory.
+
+1. **Map the blast radius.** `git diff --stat origin/<base>...HEAD`, then for each changed file that something else depends on, grep its consumers: a shared component, hook or util (`src/components`, `src/hooks`, `src/utils`), a global stylesheet or token (`src/dreamer-ui.css` reaches every mini-app), a constant, a type, a selector, a rule, an index, a Function. A change that reaches other mini-apps is a regression risk for each of them.
+2. **Security rules, always first.** If the diff touches `firestore.rules`, `storage.rules`, an index, a field's type or who may write it, a path, or a Function, say for each change whether access is **widened, narrowed or unchanged**, and who gains or loses what. Then prove it against the emulator, signed in through the Auth emulator as the owner, another signed-in user and a signed-out client: one allowed and one denied write per role-sensitive rule (including the "non-member must be denied" side), reads of a **legacy-shaped document** (new keys removed), and the PR's existing rules on the same collection. Run the same script against the **base** rules too (hot-swap with `PUT http://127.0.0.1:8080/emulator/v1/projects/<project>:securityRules`, then restore the branch's rules): the only outcomes that differ must be the ones the PR intends. If the PR touches no rules, say so only after grepping the diff for each touched field and permission.
+3. **Data compatibility.** Existing documents lack any new field: readers default it, edits backfill it, rules accept the old shape, and a legacy-shaped document was driven through every read and edit path. Name any value that is computed rather than stored and now changes for existing users (a week boundary, a total), and call it an intended change.
+4. **Shared surfaces, visually.** For every changed shared component or token, take **before and after** of each screen that uses it (from the base branch in a second worktree, as in step 1), phone first, light and dark, and look at them. Include other mini-apps' screens when the change is global. Anything that moved without being meant to is a regression to fix, not to explain.
+5. **Behaviour that existing users already rely on.** Gestures, shortcuts, defaults, copy and keyboard paths the PR replaces or removes: list each as "was / now", and why.
+6. **Write it as a table:** `Area | What could regress | How it was checked | Result`, one row per risk, with the security-rules row first. Then one line each for anything found and fixed, and anything not checked and why.
+
+**Keep it current.** Whenever a push touches an area a row covers, re-run that row and update the result. A stale row, or a rules change with no matching row, is an unfinished PR. The Stop hook asks for this on every new HEAD, like the screenshots.
+
+## 3. Ask Copilot first (20-minute window)
+
+1. Request a review (MCP `request_copilot_review`), then verify it registered: `gh api repos/NovaMoonX/moondreams-dev-apps/pulls/<n>/requested_reviewers` and `…/reviews`. A request can "succeed" without registering. **If Copilot isn't listed, treat it as failed and go to step 4 immediately.** (It has not registered on draft PRs.)
 2. If it registered, wait up to **20 minutes**: `.claude/skills/build-mini-app-mvp/scripts/waitreview.sh <pr> 20 <request-time-iso>` in the background. Use the wait for the screenshots, not for idling.
 3. **Copilot reviewed:** fix every real finding, reply on each thread in one line, resolve it. A finding that is wrong or out of scope gets a reply saying why, and stays open.
-4. **No review in 20 minutes:** step 3.
+4. **No review in 20 minutes:** step 4.
 
-## 3. Our own review: three agents
+## 4. Our own review: three agents
 
 Spawn **technical, product and design** agents in parallel (`model: "sonnet"`, never an Opus- or Fable-class model, `run_in_background: true`), all **read-only**, using `references/review-agents.md`. They report; you make every fix.
 
@@ -39,14 +52,14 @@ Spawn **technical, product and design** agents in parallel (`model: "sonnet"`, n
 - **A stack of PRs:** one technical agent per PR (it only needs `git diff`), and one product and one design agent on the **top** branch, each tagging findings with the PR the flow belongs to. Before spawning them, have the emulators, the seed and the dev server running on the top branch.
 - **While read-only agents are running, don't change the checkout they read.** Make fixes in separate worktrees (`git worktree add /tmp/fix-<n> <branch>`, with `node_modules` symlinked), start from the lowest PR that needs one, merge it up through each branch above in order, and push only once every agent has reported.
 
-## 4. Triage, fix, re-validate
+## 5. Triage, fix, re-validate
 
 - Merge duplicates. Fix every real, in-scope finding. Put anything bigger in the PR body under "Follow-ups" rather than widening the PR.
 - Fix on the PR the finding belongs to, then merge that branch up through every branch above it (merge, never rebase or force-push), re-running `npx tsc -b --force` and `npx eslint .` on each.
-- Re-validate what you changed in the browser, and refresh the affected screenshots (step 1).
+- Re-validate what you changed in the browser, and refresh the affected screenshots (step 1) and the regression check (step 2).
 - **Check third-party contract claims before building on them.** A reviewer's "AMC's date format is different" is cheap to check and expensive to ship wrong; search for the real contract, and say in the PR body what is still unverified.
 
-## 5. Write down what the review taught, automatically
+## 6. Write down what the review taught, automatically
 
 Don't ask first. When a finding reflects a **lasting** design or product rule rather than a one-off bug, add it in the same PR and tell the user afterwards (the PR body's "Rules added" line and the final report).
 
@@ -54,6 +67,6 @@ Don't ask first. When a finding reflects a **lasting** design or product rule ra
 - **How:** fold, don't append. Tighten the nearest existing bullet instead of adding a near-duplicate, reword or remove a bullet the finding proves wrong, keep the section's voice (one or two lines, bold lead-in), and re-read the section afterwards.
 - **This applies outside the review too.** Any time during a session, while iterating on a PR or on the user's requests, you decide something is worth noting in the product or design guidance, add it in that PR and tell the user afterwards.
 
-## 6. Finish
+## 7. Finish
 
-The PR body ends with: Screenshots, Review (who reviewed, what was found and fixed, what is a follow-up), Rules added (or "none"), and what is unverified. Then the final report to the user: the same, short, with links.
+The PR body ends with: Screenshots, Regression check, Review (who reviewed, what was found and fixed, what is a follow-up), Rules added (or "none"), and what is unverified. Then the final report to the user: the same, short, with links.

@@ -148,7 +148,7 @@ dev server and emulators running and finish with `npm run seed:reset`.
 
 ## 6. Wrap up
 
-- **Then run `pr-wrap-up`** (`.claude/skills/pr-wrap-up/SKILL.md`): the PR's screenshots (phone first, before and after for changes) and the review. A push that changes how anything looks means the screenshots are re-taken in this same pass.
+- **Then run `pr-wrap-up`** (`.claude/skills/pr-wrap-up/SKILL.md`): the PR's screenshots (phone first, before and after for changes), the `## Regression check` section (security rules first) and the review. A push that changes how anything looks means the screenshots are re-taken in this same pass, and one that touches rules or a shared component re-runs its regression row.
 
 - **Re-sync with main immediately before this step, every time** —
   `git fetch origin main && git merge origin/main` again, exactly like
