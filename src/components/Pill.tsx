@@ -27,7 +27,11 @@ function Pill({ children, isSelected, onClick, emoji, className }: PillProps) {
       )}
     >
       {emoji && <span aria-hidden='true'>{emoji}</span>}
-      <span className='truncate'>{children}</span>
+      {typeof children === 'string' ? (
+        <span className='truncate'>{children}</span>
+      ) : (
+        children
+      )}
     </Button>
   );
 }
