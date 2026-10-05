@@ -16,6 +16,7 @@ The reader should see what changed without checking out the branch.
 - **Phone first.** 390×844, `timezoneId: 'America/Los_Angeles'`, signed in as a seeded fixture user. Add a desktop shot (1280×900) only when the experience differs there (a popover instead of a modal, a side panel, a different layout). Never show real data or secrets.
 - **Net new behaviour:** one screenshot per distinct screen or state is enough.
 - **Changed behaviour:** a **before** and an **after** of each changed screen. Take "before" from the PR's base branch: `git worktree add /tmp/before origin/<base>`, symlink `node_modules`, run a second dev server on another port (`npx vite --port 5174 --host 127.0.0.1`, same `VITE_*` env), and remove the worktree afterwards.
+- **Look before you publish.** `node .claude/skills/pr-wrap-up/scripts/contact-sheet.mjs <out.png> 560 <dir> <name> <name> …` lays several shots side by side so one look covers a before/after set.
 - **Capture** with a throwaway Playwright script (`.claude/skills/build-mini-app-mvp/scripts/pw.mjs` has `open` and `signIn`). Name files `<screen>-<mobile|desktop>-<before|after>.png` in one folder, and look at every image before publishing it.
 - **Publish** with `bash .claude/skills/pr-wrap-up/scripts/publish-screenshots.sh <pr> <folder>`. It commits the PNGs to the `pr-screenshots` branch under `pr-<n>/` (never to the PR's branch, so the diff stays clean) and prints Markdown image links pinned to that commit, so they never go stale or cache.
 - **PR body:** a `## Screenshots` section: a before | after table for changes, and a single image for new screens, each with a one-line caption.
@@ -36,18 +37,20 @@ Spawn **technical, product and design** agents in parallel (`model: "sonnet"`, n
 - **Product:** drives the real app and asks whether the experience serves the user's problem: paths, dead ends, buried journey steps, copy, edge cases, README accuracy.
 - **Design:** drives the real app and checks alignment, spacing, state clarity, hierarchy and the repo's design rules, phone first, then desktop, light and dark.
 - **A stack of PRs:** one technical agent per PR (it only needs `git diff`), and one product and one design agent on the **top** branch, each tagging findings with the PR the flow belongs to. Before spawning them, have the emulators, the seed and the dev server running on the top branch.
+- **While read-only agents are running, don't change the checkout they read.** Make fixes in separate worktrees (`git worktree add /tmp/fix-<n> <branch>`, with `node_modules` symlinked), start from the lowest PR that needs one, merge it up through each branch above in order, and push only once every agent has reported.
 
 ## 4. Triage, fix, re-validate
 
 - Merge duplicates. Fix every real, in-scope finding. Put anything bigger in the PR body under "Follow-ups" rather than widening the PR.
 - Fix on the PR the finding belongs to, then merge that branch up through every branch above it (merge, never rebase or force-push), re-running `npx tsc -b --force` and `npx eslint .` on each.
 - Re-validate what you changed in the browser, and refresh the affected screenshots (step 1).
+- **Check third-party contract claims before building on them.** A reviewer's "AMC's date format is different" is cheap to check and expensive to ship wrong; search for the real contract, and say in the PR body what is still unverified.
 
 ## 5. Write down what the review taught, automatically
 
 Don't ask first. When a finding reflects a **lasting** design or product rule rather than a one-off bug, add it in the same PR and tell the user afterwards (the PR body's "Rules added" line and the final report).
 
-- **Where:** design rules go in `CLAUDE.md` → "Design & UX" (or "Designing a mini-app's look"); product rules go in `CLAUDE.md` → "Product" (create it after "Design & UX" if it is missing); a rule that only applies to one mini-app goes in its rules file (`.github/instructions/<app>.instructions.md` and the identical `.claude/rules/<app>.md`) and its `UX.md`. Mirror anything shared with Copilot into `.github/copilot-instructions.md`, its source of truth.
+- **Where:** CLAUDE.md edits from a stack of PRs go into the one PR that owns the section (usually the procedure/rules PR) so the stack doesn't conflict, and the final report says which. Design rules go in `CLAUDE.md` → "Design & UX" (or "Designing a mini-app's look"); product rules go in `CLAUDE.md` → "Product" (create it after "Design & UX" if it is missing); a rule that only applies to one mini-app goes in its rules file (`.github/instructions/<app>.instructions.md` and the identical `.claude/rules/<app>.md`) and its `UX.md`. Mirror anything shared with Copilot into `.github/copilot-instructions.md`, its source of truth.
 - **How:** fold, don't append. Tighten the nearest existing bullet instead of adding a near-duplicate, reword or remove a bullet the finding proves wrong, keep the section's voice (one or two lines, bold lead-in), and re-read the section afterwards.
 - **This applies outside the review too.** Any time during a session, while iterating on a PR or on the user's requests, you decide something is worth noting in the product or design guidance, add it in that PR and tell the user afterwards.
 
