@@ -148,6 +148,8 @@ dev server and emulators running and finish with `npm run seed:reset`.
 
 ## 6. Wrap up
 
+- **Then run `pr-wrap-up`** (`.claude/skills/pr-wrap-up/SKILL.md`): the PR's screenshots (phone first, before and after for changes) and the review. A push that changes how anything looks means the screenshots are re-taken in this same pass.
+
 - **Re-sync with main immediately before this step, every time** —
   `git fetch origin main && git merge origin/main` again, exactly like
   step 1, resolving any new conflicts the same way. This skill's steps can
@@ -160,7 +162,7 @@ dev server and emulators running and finish with `npm run seed:reset`.
 - Commit with a message describing the actual end state, not the original
   PR title if it no longer matches.
 - Push to the PR's branch.
-- Update the PR body (`gh api repos/<owner>/<repo>/pulls/<n> -X PATCH -f
+- Update the PR body (keep its `## Screenshots` section current; `gh api repos/<owner>/<repo>/pulls/<n> -X PATCH -f
   body="..."` — `gh pr edit --body-file` can fail on unrelated GraphQL
   errors like a deprecated Projects-classic field; fall back to the REST API
   if it does) so it reflects what's actually in the branch now, not the
