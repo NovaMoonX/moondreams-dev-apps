@@ -13,7 +13,8 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 import { fromLocalDateAndTimeInputValues, toLocalTimeInputValue } from '@/utils/dateInputUtils';
-import { getDayCount, getDayIndex, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayIndex, getDayInputValue, getDayOptions } from '@/utils/dateRangeUtils';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -225,10 +226,9 @@ function EventSuggestionFormModal({
       select({
         name: 'dayIndex',
         label: 'Day',
-        options: Array.from({ length: dayCount }, (_, index) => ({
-          label: getDayLabel(trip.startDate, index),
-          value: String(index),
-        })),
+        options: getDayOptions(trip.startDate, trip.endDate, null, MAX_DAYS_OUTSIDE_TRIP).map(
+          ({ value, label }) => ({ value, label }),
+        ),
       }),
       createTimeInputField({ name: 'time', label: 'Start time', variant: 'outline' }),
       custom({

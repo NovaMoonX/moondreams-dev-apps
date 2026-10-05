@@ -28,6 +28,7 @@ import MemberRoleBadge from './MemberRoleBadge';
 import SectionHeader from '@/components/SectionHeader';
 import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
+import EmailInvitesPanel from './EmailInvitesPanel';
 import PendingMembersPanel from './PendingMembersPanel';
 
 interface MembersSectionProps {
@@ -261,6 +262,13 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
       </section>
 
       {isAdmin && <PendingMembersPanel tripId={trip.id} />}
+      {isAdmin && (
+        <EmailInvitesPanel
+          trip={trip}
+          currentUserId={currentUserId}
+          memberEmails={(userInfo?.users ?? []).flatMap((user) => (user.email ? [user.email] : []))}
+        />
+      )}
 
       <Drawer
         isOpen={activeMemberUid !== null}

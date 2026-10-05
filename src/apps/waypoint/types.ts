@@ -73,6 +73,17 @@ export interface TripJoinRequest {
   requestedAt: number;
 }
 
+/** An admin's standing "yes" for an email address: whoever signs in with it can join the trip as `role`
+ * without asking. Lives at `apps/waypoint/emailInvites/{tripId}_{email}`. */
+export interface TripEmailInvite {
+  tripId: string;
+  /** Lower-cased. */
+  email: string;
+  role: Exclude<UserRole, 'ADMIN'>;
+  invitedBy: string;
+  invitedAt: number;
+}
+
 export interface StayFieldChange {
   field:
     | 'checkInAt'

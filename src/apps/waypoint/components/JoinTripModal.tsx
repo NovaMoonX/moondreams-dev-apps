@@ -4,12 +4,16 @@ import { Modal } from '@moondreamsdev/dreamer-ui/components';
 import type { ModalProps } from '@moondreamsdev/dreamer-ui/components';
 
 import { getErrorMessage } from '@/utils/errorUtils';
-import type { TripJoinRequest, TripSpace } from '@apps/waypoint/types';
+import type { TripEmailInvite, TripJoinRequest, TripSpace } from '@apps/waypoint/types';
+import EmailInviteJoinModal from '@apps/waypoint/components/EmailInviteJoinModal';
 import { useTripInvite } from '@apps/waypoint/hooks/useTripInvite';
 
 interface JoinTripModalProps {
   inviteCode: string;
   isEnteredCode: boolean;
+  uid: string;
+  /** Invitations addressed to the signed-in email: one for this trip means no request is needed. */
+  emailInvites: TripEmailInvite[];
   myTrips: TripSpace[];
   pendingRequests: TripJoinRequest[];
   isSubmitting: boolean;
@@ -21,6 +25,8 @@ interface JoinTripModalProps {
 function JoinTripModal({
   inviteCode,
   isEnteredCode,
+  uid,
+  emailInvites,
   myTrips,
   pendingRequests,
   isSubmitting,
@@ -33,6 +39,9 @@ function JoinTripModal({
 
   const membership = invite.tripId
     ? myTrips.find((trip) => trip.id === invite.tripId)
+    : undefined;
+  const emailInvite = invite.tripId
+    ? emailInvites.find((candidate) => candidate.tripId === invite.tripId)
     : undefined;
   const pendingRequest = invite.tripId
     ? pendingRequests.find((request) => request.tripId === invite.tripId)
@@ -146,6 +155,10 @@ function JoinTripModal({
       ],
     };
   };
+
+  if (emailInvite && !membership) {
+    return <EmailInviteJoinModal invite={emailInvite} uid={uid} onViewTrip={onViewTrip} onClose={onClose} />;
+  }
 
   const { title, body, actions } = getView();
 

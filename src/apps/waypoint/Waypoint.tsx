@@ -14,6 +14,7 @@ import Loading from '@/ui/Loading';
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import JoinWithCodeModal from '@apps/waypoint/components/JoinWithCodeModal';
 import JoinTripModal from '@apps/waypoint/components/JoinTripModal';
+import MyEmailInvites from '@apps/waypoint/components/MyEmailInvites';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
@@ -50,6 +51,7 @@ function Waypoint() {
   const pendingRequestsLoaded = useAppSelector(
     (state) => state.waypoint.pendingRequests.myRequestsLoaded,
   );
+  const emailInvites = useAppSelector((state) => state.waypoint.emailInvites.mine);
   const now = useNow();
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
   const selectedTripId = searchParams.get('trip');
@@ -64,6 +66,7 @@ function Waypoint() {
   useWaypointSync(user?.uid ?? null, {
     tripId: selectedTrip?.id ?? null,
     isTripAdmin: isSelectedTripAdmin,
+    email: user?.email ?? null,
   });
 
   const handleCreateTrip = async (values: {
@@ -266,6 +269,8 @@ function Waypoint() {
           </div>
         )}
 
+        <MyEmailInvites uid={user.uid} invites={emailInvites} onViewTrip={handleViewInvitedTrip} />
+
         <MyPendingTrips
           requests={pendingRequests}
           loading={!pendingRequestsLoaded}
@@ -307,6 +312,8 @@ function Waypoint() {
           key={inviteCode}
           inviteCode={inviteCode}
           isEnteredCode={isEnteredCode}
+          uid={user.uid}
+          emailInvites={emailInvites}
           myTrips={trips}
           pendingRequests={pendingRequests}
           isSubmitting={isInviteSubmitting}

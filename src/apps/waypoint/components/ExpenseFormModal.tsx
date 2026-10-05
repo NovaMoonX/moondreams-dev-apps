@@ -7,7 +7,6 @@ import {
   Input,
   Modal,
   Select,
-  Tabs,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
@@ -18,7 +17,8 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
+import { PillGroup } from '@/components/PillGroup';
+import { ADD_NEW_OPTION, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,
   ExpenseStatus,
@@ -88,7 +88,7 @@ interface ExpenseFormModalProps {
   onClose: () => void;
 }
 
-const { checkbox, custom, input, radio, select } = FormFactories;
+const { checkbox, custom, input, select } = FormFactories;
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
@@ -164,7 +164,7 @@ function ExpenseFormModal({
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
-      ...getDayOptions(trip.startDate, trip.endDate, storedDayIndex),
+      ...getDayOptions(trip.startDate, trip.endDate, storedDayIndex, MAX_DAYS_OUTSIDE_TRIP),
     ],
     [trip.startDate, trip.endDate, storedDayIndex],
   );
@@ -212,18 +212,17 @@ function ExpenseFormModal({
         name: 'amountMode',
         label: 'Amount type',
         renderComponent: (props) => (
-          <Tabs
+          <PillGroup
+            label='Amount type'
+            options={[
+              { value: 'amount', label: 'Known amount', emoji: '🧾' },
+              { value: 'range', label: 'Estimated range', emoji: '🔮' },
+            ]}
             value={props.value as ExpenseFormData['amountMode']}
-            onValueChange={(value) => {
-              setMode(value as ExpenseFormData['amountMode']);
+            onChange={(value) => {
+              setMode(value);
               props.onValueChange(value);
             }}
-            tabsList={[
-              { value: 'amount', label: 'Known amount' },
-              { value: 'range', label: 'Estimated range' },
-            ]}
-            tabsWidth='full'
-            variant='pills'
           />
         ),
       }),
@@ -282,13 +281,20 @@ function ExpenseFormModal({
     }
 
     nextFields.push(
-      radio({
+      custom({
         name: 'status',
         label: 'Status',
-        options: [
-          { value: 'EXPECTED', label: 'Expected' },
-          { value: 'PAID', label: 'Paid' },
-        ],
+        renderComponent: (props) => (
+          <PillGroup
+            label='Status'
+            options={[
+              { value: 'EXPECTED', label: 'Expected', emoji: '⏳' },
+              { value: 'PAID', label: 'Paid', emoji: '💸' },
+            ]}
+            value={props.value as ExpenseFormData['status']}
+            onChange={(value) => props.onValueChange(value)}
+          />
+        ),
       }),
     );
 

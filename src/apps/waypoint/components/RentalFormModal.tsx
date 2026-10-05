@@ -10,6 +10,8 @@ import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SectionDivider from '@/components/SectionDivider';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { compareDayTime, shiftRangeEnd } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -133,7 +135,7 @@ function DayTimeField({ trip, label, day, time, onChange }: DayTimeFieldProps) {
       <Label>{label}</Label>
       <div className='grid gap-3 sm:grid-cols-2'>
         <Select
-          options={getDayOptions(trip.startDate, trip.endDate, day).map(({ value, label }) => ({ value, text: label }))}
+          options={getDayOptions(trip.startDate, trip.endDate, day, MAX_DAYS_OUTSIDE_TRIP).map(({ value, label }) => ({ value, text: label }))}
           value={String(day)}
           onChange={(value) => onChange(Number(value), time)}
         />
@@ -177,7 +179,7 @@ export function RentalFormModal({
       start: { day: draft.pickupDay, time: draft.pickupTime },
       end: { day: draft.returnDay, time: draft.returnTime },
       nextStart: { day, time },
-      max: day < dayCount ? { day: dayCount - 1, time: '23:59' } : undefined,
+      max: day <= dayCount + MAX_DAYS_OUTSIDE_TRIP - 1 ? { day: dayCount + MAX_DAYS_OUTSIDE_TRIP - 1, time: '23:59' } : undefined,
     });
     updateDraft({ pickupDay: day, pickupTime: time, returnDay: end.day, returnTime: end.time });
   };
@@ -229,7 +231,7 @@ export function RentalFormModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Car rental'>
-      <div className='space-y-4'>
+      <div className='space-y-5'>
         <div className='space-y-1.5'>
           <Label>Rental company</Label>
           <Input
@@ -253,6 +255,7 @@ export function RentalFormModal({
             })
           }
         />
+        <SectionDivider label='When' />
         <DayTimeField
           trip={trip}
           label='Pickup'
