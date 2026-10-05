@@ -53,6 +53,11 @@ export default defineConfig({
       injectRegister: null, // Handles registration manually
       manifest: false, // Disables auto single-manifest injection
       workbox: {
+        // Activate a new worker without waiting for every window to close, and without reloading the page (that needs registerType 'autoUpdate').
+        skipWaiting: true,
+        clientsClaim: true,
+        // Firebase Hosting serves its auth handler under /__/; the SPA fallback would swallow the sign-in popup.
+        navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         importScripts: [
           'firebase-messaging-sw-config.js',
