@@ -21,7 +21,7 @@ function TrailerPicksList({ picks, isBusy, onUndo }: TrailerPicksListProps) {
       </h3>
       <ul className='max-h-44 space-y-0.5 overflow-y-auto'>
         {picks.map((item) => (
-          <li key={item.movieKey} className='flex items-center gap-3 px-2 py-1'>
+          <li key={item.movieKey} className='flex items-center gap-3 py-1'>
             <span className='h-10 w-7 shrink-0 overflow-hidden rounded-md shadow-sm'>
               <PosterCover
                 title={item.movie.title}
