@@ -58,7 +58,13 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
 
   const handleAdd = (theatre: TheatreSearchResult) =>
     run(
-      () => dispatch(addTheatre({ uid: user.uid, theatre })).unwrap(),
+      () => dispatch(
+          addTheatre({
+            uid: user.uid,
+            theatre,
+            isFirst: theatres.length === 0,
+          }),
+        ).unwrap(),
       'Unable to save this theater.',
     );
 

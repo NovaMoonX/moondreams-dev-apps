@@ -18,7 +18,8 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
   const handleAdd = (theatre: TheatreSearchResult) =>
     onChange({
       theatres: [...theatres, theatre],
-      favoriteTheatreId: favoriteTheatreId ?? theatre.theatreId,
+      favoriteTheatreId:
+        theatres.length === 0 ? theatre.theatreId : favoriteTheatreId,
     });
 
   const handleRemove = (theatreId: string) => {
@@ -26,9 +27,7 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
     onChange({
       theatres: remaining,
       favoriteTheatreId:
-        favoriteTheatreId === theatreId
-          ? (remaining[0]?.theatreId ?? null)
-          : favoriteTheatreId,
+        favoriteTheatreId === theatreId ? null : favoriteTheatreId,
     });
   };
 

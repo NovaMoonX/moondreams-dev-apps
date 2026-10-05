@@ -10,12 +10,10 @@ interface TheaterListProps {
   theatres: TheatreSnapshot[];
   favoriteId: string | null;
   isDisabled?: boolean;
-  /** Tapping the favorite again clears it. */
   onToggleFavorite: (theatreId: string) => void;
   onRemove: (theatre: TheatreSnapshot) => void;
 }
 
-/** The theaters a member goes to, each with its favorite star and a remove button. */
 function TheaterList({
   theatres,
   favoriteId,

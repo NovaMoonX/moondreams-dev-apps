@@ -21,8 +21,7 @@ export const selectMembership = (state: RootState) =>
 export const selectAListLoadError = (state: RootState) =>
   state.aList.membership.loadError ??
   state.aList.watchlist.loadError ??
-  state.aList.viewings.loadError ??
-  state.aList.theatres.loadError;
+  state.aList.viewings.loadError;
 
 export const selectIsAListLoaded = (state: RootState) =>
   state.aList.membership.isLoaded &&

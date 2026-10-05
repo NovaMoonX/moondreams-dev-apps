@@ -94,15 +94,23 @@ export async function suggestPoint(apiKey: string, query: string): Promise<AmcPo
   const data = await callAmc<AmcSuggestionsResponse>(apiKey, '/v2/location-suggestions', { query });
   const points = (data._embedded?.suggestions ?? []).flatMap((suggestion) =>
     Object.values(suggestion._links ?? {}).flatMap((link) => {
-      const params = link?.href ? new URL(link.href, getBaseUrl()).searchParams : null;
-      const latitude = Number(params?.get('latitude'));
-      const longitude = Number(params?.get('longitude'));
-      return params?.has('latitude') && params.has('longitude') && Number.isFinite(latitude) && Number.isFinite(longitude)
+      const params = toSearchParams(link?.href);
+      const latitude = Number(params?.get('latitude') || Number.NaN);
+      const longitude = Number(params?.get('longitude') || Number.NaN);
+      return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
         ? [{ latitude, longitude, area: suggestion.title ?? null }]
         : [];
     }),
   );
   return points[0] ?? null;
+}
+
+function toSearchParams(href: string | undefined) {
+  try {
+    return href ? new URL(href, getBaseUrl()).searchParams : null;
+  } catch {
+    return null;
+  }
 }
 
 function toText(value: unknown) {
@@ -159,7 +167,7 @@ export async function findNearbyTheatres(apiKey: string, latitude: number, longi
   const data = await callAmc<AmcLocationsResponse>(apiKey, '/v2/locations', {
     latitude: String(latitude),
     longitude: String(longitude),
-    pageSize: String(MAX_THEATRES),
+    'page-size': String(MAX_THEATRES),
   });
   const locations = Object.values(data._embedded ?? {}).flatMap((entries) => entries ?? []);
   const result = locations

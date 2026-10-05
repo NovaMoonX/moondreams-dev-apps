@@ -86,6 +86,7 @@ export const WEEK_STARTS_ON = 5;
 
 export const MAX_THEATRES = 10;
 export const THEATRE_SEARCH_MIN_CHARS = 3;
+export const THEATRE_SEARCH_MAX_CHARS = 60;
 export const THEATRE_STALE_MS = 60 * 60 * 1000;
 
 export const MAX_FEE_CHIPS = 4;
