@@ -4,6 +4,7 @@ import { CalendarDays, Clapperboard, LayoutDashboard } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { A_LIST_TAB_LABELS } from '@apps/a-list/constants';
+import PreviewsNudge from '@apps/a-list/components/shell/PreviewsNudge';
 import type { AListTab } from '@apps/a-list/types';
 
 interface BottomNavProps {
@@ -49,23 +50,27 @@ function BottomNav({ value, onChange }: BottomNavProps) {
     >
       <ul className='mx-auto grid max-w-md grid-cols-3 items-end px-3 pb-2'>
         <li className='flex justify-center pt-2'>{renderSideItem('dashboard')}</li>
-        <li className='flex justify-center'>
-          <Button
-            type='button'
-            variant={isCalendarSelected ? 'primary' : 'secondary'}
-            aria-label={A_LIST_TAB_LABELS.calendar}
-            aria-current={isCalendarSelected ? 'page' : undefined}
-            onClick={() => onChange('calendar')}
-            className={join(
-              '-mt-6 h-auto flex-col gap-1 rounded-3xl! px-8 py-3 text-xs font-semibold shadow-lg',
-              isCalendarSelected
-                ? 'ring-primary/25 ring-4'
-                : 'text-muted-foreground!',
-            )}
-          >
-            <CalendarDays className='h-7 w-7' />
-            {A_LIST_TAB_LABELS.calendar}
-          </Button>
+        <li className='relative flex justify-center'>
+          <PreviewsNudge />
+          {/* The button's own tint is see-through, so a solid surface sits behind it. */}
+          <div className='bg-background -mt-6 rounded-3xl'>
+            <Button
+              type='button'
+              variant={isCalendarSelected ? 'primary' : 'secondary'}
+              aria-label={A_LIST_TAB_LABELS.calendar}
+              aria-current={isCalendarSelected ? 'page' : undefined}
+              onClick={() => onChange('calendar')}
+              className={join(
+                'h-auto flex-col gap-1 rounded-3xl! px-8 py-3 text-xs font-semibold shadow-lg',
+                isCalendarSelected
+                  ? 'ring-primary/25 ring-4'
+                  : 'text-muted-foreground!',
+              )}
+            >
+              <CalendarDays className='h-7 w-7' />
+              {A_LIST_TAB_LABELS.calendar}
+            </Button>
+          </div>
         </li>
         <li className='flex justify-center pt-2'>{renderSideItem('watchlist')}</li>
       </ul>

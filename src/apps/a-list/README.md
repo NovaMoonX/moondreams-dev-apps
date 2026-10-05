@@ -53,7 +53,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Mark as Paid: Format, ticket price, standard-format price for premium showings, the convenience fee you skipped (past fees as one-tap chips) and the tax amount, all in dollars as on the AMC receipt.
 - [x] Edit & Remove Viewings: Fix a price, format, date or fee, or delete a viewing; the calendar, watchlist and savings update to match.
 - [x] Mark as Seen: A prompt after a planned movie ends that updates the watchlist and takes an optional star rating.
-- [x] Trailer Picks: In the half hour before a planned showing and the first ten minutes after it starts, a quiet strip on Calendar and Watchlist offers "Add from trailers": search, tap a title, and it is saved as Want to See, ready for the next trailer. Nothing pops up on its own, and the strip can be hidden.
+- [x] Trailer Picks: In the half hour before a planned showing and the first ten minutes after it starts, a small bubble above the Calendar icon offers "Add from trailers": search, tap a title, and it is saved as Want to See, ready for the next trailer. Nothing pops up on its own; fold the bubble away and a small chip above the icon brings it back.
 - [x] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
 **Next Steps**
