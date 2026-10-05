@@ -10,7 +10,7 @@ Return findings as a list. Each has: `pr`, `area`, `severity` (blocker, major, m
 
 ## Driving the app (product and design agents)
 
-Use throwaway Playwright scripts in your scratchpad directory, built on `.claude/skills/build-mini-app-mvp/scripts/pw.mjs` (import it by absolute path). `open({ mobile: true })` is 390×844 and `open({ mobile: false })` is 1280×900, both in America/Los_Angeles. Sign in with `signIn(page, 'Alex')`; a second fixture user (`'Jamie'`) lands on setup. Take screenshots and **look at them** (Read tool on the PNG). Walk **every flow the PR touches** plus the flows in `UX.md` that share a changed file, at 390px first and then 1280px, including empty, loading, error and legacy-data states where reachable. Record "verified" or what broke for each flow. Delete your scripts when done, and keep the screenshots you cite.
+Use throwaway Playwright scripts in your scratchpad directory, built on `.claude/skills/build-mini-app-mvp/scripts/pw.mjs` (import it by absolute path). `open({ mobile: true })` is 390×844 and `open({ mobile: false })` is 1280×900, both in America/Los_Angeles. Sign in with `signIn(page, 'Alex')`; a second fixture user (`'Jamie'`) lands on setup. `open()` hides the seeded reminder toast and the emulator warning so they don't cover screenshots (`open({ showToasts: true })` to test a toast). Take screenshots and **look at them** (Read tool on the PNG). Walk **every flow the PR touches** plus the flows in `UX.md` that share a changed file, at 390px first and then 1280px, including empty, loading, error and legacy-data states where reachable. Record "verified" or what broke for each flow. Delete your scripts when done, and keep the screenshots you cite.
 
 ## Technical agent
 
