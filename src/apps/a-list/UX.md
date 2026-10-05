@@ -672,6 +672,17 @@ flowchart LR
     B --> H["Star = favorite (preselected on new showings) · Trash = remove, the star moves to another theater"]
 ```
 
+**Buy tickets (prototype)**
+```mermaid
+flowchart LR
+    A["Add form: pick a theater, then a showtime (upcoming days)"] --> B["Format, price and standard price prefilled"]
+    C["Showing drawer · Buy tickets"] --> D["Pick a showtime"] --> E["Heads-up: the convenience fee and the tax"] --> F["Continue to AMC (new tab)"]
+    F --> G["Back in the app: Did you get your tickets?"]
+    G -->|"Add fee and tax"| H["Ticket saved, savings count"]
+    G -->|Not yet| I["Asked again on the next app open; the drawer says Finish your ticket"]
+    G -->|"I didn't buy"| J["Plan kept, asking stops"]
+```
+
 **Edit or remove a viewing**
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%

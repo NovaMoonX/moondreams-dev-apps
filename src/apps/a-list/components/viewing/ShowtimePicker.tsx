@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 
+import ExternalLinkText from '@/components/ExternalLinkText';
 import Pill from '@/components/Pill';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatTime } from '@/utils/formatUtils';
@@ -17,6 +18,8 @@ interface ShowtimePickerProps {
   now: number;
   selectedShowtimeId: string | null;
   onPick: (option: ShowtimeOption) => void;
+  /** On the buy screen there is no form to fall back to, so a way to buy on AMC's own site is offered instead. */
+  offersAmcFallback?: boolean;
 }
 
 /** Upcoming showings of a movie at a theater, from AMC, each with its format and list price. Past days get an honest note instead. */
@@ -27,6 +30,7 @@ function ShowtimePicker({
   now,
   selectedShowtimeId,
   onPick,
+  offersAmcFallback = false,
 }: ShowtimePickerProps) {
   const isPastDay = dateKey < toLocalDateInputValue(now);
   const showtimes = useQuery({
@@ -48,9 +52,8 @@ function ShowtimePicker({
       (showtimes.error.code === 'functions/resource-exhausted' ||
         showtimes.error.code === 'functions/failed-precondition')
     )
-      return 'Showtime lookup is resting for today. You can still pick the time yourself.';
-    if (showtimes.error)
-      return 'Showtimes aren’t available right now. You can still pick the time yourself.';
+      return 'Showtime lookup is resting for today.';
+    if (showtimes.error) return 'Showtimes aren’t available right now.';
     return null;
   };
 
@@ -63,20 +66,32 @@ function ShowtimePicker({
 
   return (
     <div className='space-y-2'>
-      <p className='font-medium'>🕒 Showtimes at {theatre.name}</p>
+      <p className='flex gap-1.5 font-medium'>
+        <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+          ⏰
+        </span>
+        <span className='min-w-0'>Showtimes at {theatre.name}</span>
+      </p>
       {note && <p className='text-muted-foreground text-sm'>{note}</p>}
       {!note && open.length === 0 && (
         <p className='text-muted-foreground text-sm'>
           {soldOutCount > 0
             ? 'Everything left that day is sold out.'
-            : `AMC doesn’t list ${title} at this theater that day.`}
+            : `AMC isn’t showing ${title} at this theater that day yet. Schedules usually post a few weeks ahead.`}
         </p>
+      )}
+      {offersAmcFallback && !showtimes.isPending && open.length === 0 && (
+        <ExternalLinkText
+          href='https://www.amctheatres.com/'
+          label='Buy on amctheatres.com instead'
+        />
       )}
       {open.length > 0 && (
         <div className='flex flex-wrap gap-2'>
           {open.map((option) => (
             <Pill
               key={option.showtimeId}
+              className='min-h-9'
               isSelected={option.showtimeId === selectedShowtimeId}
               onClick={() => onPick(option)}
             >

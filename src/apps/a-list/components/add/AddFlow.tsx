@@ -224,9 +224,10 @@ export function AddFlow({
     isCalendar &&
     showtimeValues.date !== '' &&
     showtimeValues.date < startDateKey;
-  const favoriteTheatre = theatres.find(
-    (theatre) => theatre.theatreId === membership?.favoriteTheatreId,
-  );
+  const favoriteTheatre =
+    theatres.find(
+      (theatre) => theatre.theatreId === membership?.favoriteTheatreId,
+    ) ?? (theatres.length === 1 ? theatres[0] : undefined);
   const theatre =
     theatreChoice === undefined
       ? favoriteTheatre
@@ -585,6 +586,11 @@ export function AddFlow({
             value={theatre}
             onChange={setTheatreChoice}
           />
+        )}
+        {isCalendar && !isPast && !theatre && theatres.length > 0 && (
+          <p className='text-muted-foreground text-sm'>
+            Pick a theater to see showtimes and prices.
+          </p>
         )}
         {isCalendar && !isPast && theatre && movie && (
           <ShowtimePicker

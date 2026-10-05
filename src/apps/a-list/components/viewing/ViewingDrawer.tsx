@@ -172,6 +172,13 @@ export function ViewingPanel({
     closeOverlay();
   };
 
+  const getTicketRowLabel = () => {
+    if (ticket) return 'Edit ticket';
+    return viewing.purchase?.startedAt != null
+      ? 'Finish your ticket'
+      : 'Mark paid';
+  };
+
   const handleSaveTicket = (nextTicket: Ticket | null) =>
     runSave(
       () =>
@@ -257,8 +264,13 @@ export function ViewingPanel({
           ) : null}
         </div>
         {!ticket && viewing.purchase && (
-          <p className='text-muted-foreground text-xs'>
-            🎟️ {describePurchase(viewing.purchase)}, before tax and fees
+          <p className='text-muted-foreground flex gap-1.5 text-xs'>
+            <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+              🎟️
+            </span>
+            <span className='min-w-0'>
+              {describePurchase(viewing.purchase)}, before tax and fees
+            </span>
           </p>
         )}
         {ticket && (
@@ -404,8 +416,7 @@ export function ViewingPanel({
             className='w-full justify-start gap-2 rounded-none'
             onClick={() => setView('ticket')}
           >
-            <TicketIcon className='h-4 w-4' />{' '}
-            {ticket ? 'Edit ticket' : 'Mark paid'}
+            <TicketIcon className='h-4 w-4' /> {getTicketRowLabel()}
           </Button>
           <Button
             type='button'

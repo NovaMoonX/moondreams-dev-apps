@@ -311,21 +311,25 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
   return result;
 }
 
-/** One movie's showings from a day's list, each premium one carrying the cheapest Standard price that day to compare with. */
+/** One movie's showings from a day's list; each premium one carries the Standard price of the showing nearest in time that is still on sale, so a prime-time IMAX isn't compared with a matinee. */
 export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeOption[] {
   const matches = day.filter((showtime) => showtime.movieTitle === '*' || isSameMovie(showtime.movieTitle, title));
   const now = Date.now();
-  // The comparison is with a Standard showing the member could still buy, not a sold-out or already-started one.
-  const standardPrices = matches
-    .filter((showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null && !showtime.isSoldOut && showtime.startsAt > now)
-    .map((showtime) => showtime.priceCents as number);
-  const cheapestStandard = standardPrices.length > 0 ? Math.min(...standardPrices) : null;
+  const standards = matches.filter(
+    (showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null && !showtime.isSoldOut && showtime.startsAt > now,
+  );
+  const getBaseline = (startsAt: number) => {
+    const nearest = [...standards].sort(
+      (left, right) => Math.abs(left.startsAt - startsAt) - Math.abs(right.startsAt - startsAt) || left.startsAt - right.startsAt,
+    )[0];
+    return nearest ? nearest.priceCents : null;
+  };
   const result = matches.map((showtime) => ({
     showtimeId: showtime.showtimeId,
     startsAt: showtime.startsAt,
     format: showtime.format,
     priceCents: showtime.priceCents,
-    standardPriceCents: showtime.format === 'STANDARD' ? null : cheapestStandard,
+    standardPriceCents: showtime.format === 'STANDARD' ? null : getBaseline(showtime.startsAt),
     purchaseUrl: showtime.purchaseUrl,
     isSoldOut: showtime.isSoldOut,
   }));

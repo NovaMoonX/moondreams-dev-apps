@@ -54,16 +54,22 @@ function BuyTicketsPanel({
         now={now}
         selectedShowtimeId={purchase?.showtimeId ?? null}
         onPick={onPick}
+        offersAmcFallback
       />
       {purchase && (
         <div className='space-y-3'>
-          <p className='bg-secondary/60 rounded-2xl px-3 py-2 text-sm'>
-            🎟️ {formatTime(viewing.showtimeAt)} ·{' '}
-            {describePurchase(purchase)}
+          <p className='flex gap-1.5 text-sm font-medium'>
+            <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+              🎟️
+            </span>
+            <span className='min-w-0'>
+              You picked {formatTime(viewing.showtimeAt)} ·{' '}
+              {describePurchase(purchase)}
+            </span>
           </p>
           <div className='border-primary/30 bg-primary/5 space-y-2 rounded-2xl border p-3'>
             <p className='text-sm font-medium'>
-              Two numbers to spot at checkout
+              Two numbers to look for at checkout
             </p>
             <ul className='space-y-1.5 text-sm'>
               <li className='flex gap-2'>
@@ -71,8 +77,8 @@ function BuyTicketsPanel({
                   💸
                 </span>
                 <span>
-                  <strong>The convenience fee.</strong> Members skip it, but
-                  we'll count what you avoided.
+                  <strong>The convenience fee.</strong> Members don't pay it, so
+                  if you can't find it we'll use your usual one.
                 </span>
               </li>
               <li className='flex gap-2'>
@@ -80,7 +86,7 @@ function BuyTicketsPanel({
                   🧾
                 </span>
                 <span>
-                  <strong>The tax.</strong> It's added at the very end.
+                  <strong>The tax.</strong> It shows up just before you pay.
                 </span>
               </li>
             </ul>
