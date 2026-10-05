@@ -35,6 +35,12 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
           channelId: live
           projectId: moondreams-dev-apps
+      - name: Publish app version
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gcp-sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp-sa.json" npm run fb:version
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
       - name: Check for Cloudflare Worker changes
         id: worker_changes
         run: |
