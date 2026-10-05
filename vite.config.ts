@@ -51,6 +51,7 @@ export default defineConfig({
     firebaseMessagingSwConfig(),
     VitePWA({
       injectRegister: null, // Handles registration manually
+      registerType: 'autoUpdate', // Automatically updates the service worker when a new version is available
       manifest: false, // Disables auto single-manifest injection
       workbox: {
         navigateFallbackDenylist: [/^\/__\//],

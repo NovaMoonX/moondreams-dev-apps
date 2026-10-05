@@ -141,7 +141,7 @@ Problems we've hit before, so we don't hit them again.
 
 - **Symptom:** the sign-in popup opens as a page showing the app's "Page not found" (the URL is `apps.moondreams.dev/__/auth/handler?...`), then the console logs `auth/cancelled-popup-request`. Works in a fresh Incognito window or a profile that never loaded the site. Visiting `/__/auth/handler` directly in Incognito shows "missing initial state", which is normal.
 - **Cause:** `authDomain` is `apps.moondreams.dev`, the same origin as the service worker. Workbox's default navigation fallback answered the popup's `/__/auth/handler` request with `index.html`, so Firebase's handler never ran. It never showed up before the custom auth domain because the handler lived on `firebaseapp.com`, an origin the worker didn't control.
-- **Fix:** `navigateFallbackDenylist: [/^\/__\//]` in `vite.config.ts`. Keep every `/__/*` path (Firebase Hosting's reserved auth and init routes) out of the worker's fallback. Browsers with the old worker pick up the fix on their next load; if stuck, unregister it in DevTools → Application → Service Workers.
+- **Fix:** `navigateFallbackDenylist: [/^\/__\//]` in `vite.config.ts`. Keep every `/__/*` path (Firebase Hosting's reserved auth and init routes) out of the worker's fallback. The worker uses `registerType: 'autoUpdate'` (`skipWaiting` + `clientsClaim`) so a fix like this reaches open tabs on their next load instead of waiting for every window to close; if a browser is still stuck, unregister the worker in DevTools → Application → Service Workers.
 - **Check after any change to the worker or `authDomain`:** open `/__/auth/handler` in a profile that has loaded the site before; it should be blank, not the app.
 
 ## Tech Stack
