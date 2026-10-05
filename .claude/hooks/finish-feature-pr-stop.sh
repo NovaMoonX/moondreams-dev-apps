@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Stop hook: once a feature branch is pushed and clean, tells Claude to
-# ensure a (draft) PR exists for it and run the finish-feature-pr skill.
-# See .claude/skills/finish-feature-pr/SKILL.md step 0a/0b.
+# ensure a (draft) PR exists for it, run the finish-feature-pr skill, then the
+# pr-wrap-up skill (screenshots kept current, review).
+# See .claude/skills/finish-feature-pr/SKILL.md step 0a/0b and .claude/skills/pr-wrap-up/SKILL.md.
 
 input=$(cat)
 
@@ -59,6 +60,6 @@ fi
 echo "$head_sha" > "$marker_file"
 
 cat <<EOF >&2
-Branch '$current_branch' is pushed and clean at ${head_sha:0:7}. Before ending this turn: 1) check whether an open pull request already exists for this branch, and if not, create one as a DRAFT pull request; 2) then invoke the finish-feature-pr skill to take it the rest of the way to mergeable (resolve conflicts with main, audit CRUD/UX, sync Firestore/Storage rules, validate, and update the PR). Do this automatically, without asking for confirmation.
+Branch '$current_branch' is pushed and clean at ${head_sha:0:7}. Before ending this turn: 1) check whether an open pull request already exists for this branch, and if not, create one as a DRAFT pull request; 2) then invoke the finish-feature-pr skill to take it the rest of the way to mergeable (resolve conflicts with main, audit CRUD/UX, sync Firestore/Storage rules, validate, and update the PR); 3) then follow the pr-wrap-up skill (.claude/skills/pr-wrap-up/SKILL.md): keep the PR's screenshots current (re-take and re-publish any screen whose look changed since they were taken; phone first, before and after for changes), and run the review (Copilot, then the technical/product/design agents) if this HEAD changed behaviour since the last review. Do this automatically, without asking for confirmation.
 EOF
 exit 2
