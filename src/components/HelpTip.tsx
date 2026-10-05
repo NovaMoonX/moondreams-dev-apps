@@ -103,7 +103,7 @@ function HelpTip({
         <Tooltip
           placement='bottom'
           showArrow
-          className='w-64 text-left'
+          className='border-border w-64 border px-3 py-2 text-left'
           message={
             <div className='space-y-1'>
               <p className='text-sm font-semibold'>{title}</p>

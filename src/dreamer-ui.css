@@ -22,8 +22,8 @@
   --color-popover: var(--color-white); /* for popover backgrounds (popover, dropdowns, modals, etc) */
   --color-popover-foreground: var(--color-zinc-900); /* for popover text */
 
-  --color-tooltip: var(--color-zinc-100);
-  --color-tooltip-foreground: var(--color-zinc-900);
+  --color-tooltip: var(--color-popover);
+  --color-tooltip-foreground: var(--color-popover-foreground);
 }
 
 .dark {
@@ -48,6 +48,6 @@
   --color-popover: var(--color-zinc-900); /* for popover backgrounds (popover, dropdowns, modals, etc) */
   --color-popover-foreground: var(--color-zinc-50); /* for popover text */
 
-  --color-tooltip: var(--color-zinc-800);
-  --color-tooltip-foreground: var(--color-zinc-50);
+  --color-tooltip: var(--color-popover);
+  --color-tooltip-foreground: var(--color-popover-foreground);
 }
