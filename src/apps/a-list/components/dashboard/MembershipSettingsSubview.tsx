@@ -4,22 +4,24 @@ import {
   Button,
   Form,
   FormFactories,
-  Modal,
+  Input,
+  Label,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SectionDivider from '@/components/SectionDivider';
+import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
-import FormSection from '@/ui/FormSection';
 import {
   fromDateInputValue,
   toDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { createDateInputField } from '@/utils/formFactoryHelpers';
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
+import MoneyInput from '@/components/MoneyInput';
 import { MAX_MONTHLY_GOAL, MAX_WEEKLY_GOAL } from '@apps/a-list/constants';
 import {
   updateMembership,
@@ -60,15 +62,15 @@ function parseGoal(
   return { goal: isValid ? goal : null, isValid };
 }
 
-interface MembershipSettingsModalProps {
+interface MembershipSettingsSubviewProps {
   membership: MembershipProfile;
   onClose: () => void;
 }
 
-function MembershipSettingsModal({
+function MembershipSettingsSubview({
   membership,
   onClose,
-}: MembershipSettingsModalProps) {
+}: MembershipSettingsSubviewProps) {
   const dispatch = useAppDispatch();
   const now = useNow();
   // Only fields the member changed in this form are written, so a concurrent edit to another field survives.
@@ -185,14 +187,6 @@ function MembershipSettingsModal({
       : []),
   ];
 
-  const startDateFields = [
-    createDateInputField({
-      name: 'startDate',
-      label: 'When did your membership start?',
-      variant: 'outline',
-    }),
-  ];
-
   const goalFields = [
     input({
       name: 'weeklyGoal',
@@ -200,6 +194,7 @@ function MembershipSettingsModal({
       type: 'number',
       placeholder: membership.weeklyGoal?.toString() ?? '2',
       variant: 'outline',
+      rounded: 'full',
       isValid: (value) =>
         parseGoal(value, MAX_WEEKLY_GOAL).isValid
           ? { valid: true }
@@ -214,6 +209,7 @@ function MembershipSettingsModal({
       type: 'number',
       placeholder: membership.monthlyGoal?.toString() ?? '6',
       variant: 'outline',
+      rounded: 'full',
       isValid: (value) =>
         parseGoal(value, MAX_MONTHLY_GOAL).isValid
           ? { valid: true }
@@ -225,100 +221,118 @@ function MembershipSettingsModal({
   ];
 
   return (
-    <Modal isOpen onClose={onClose} title='Membership'>
-      <div className='space-y-3'>
-        <FormSection label='Cost & tax' defaultOpen>
-          <div className='space-y-2'>
-            <Form
-              key={costValues.showBillTotal ? 'with-bill' : 'no-bill'}
-              id='a-list-settings-cost'
-              form={costFields}
-              initialData={costValues}
-              columns={1}
-              spacing='normal'
-              onDataChange={(data) =>
-                setCostValues({
-                  ...costValues,
-                  ...(data as Partial<CostStepValues>),
-                })
-              }
-            />
-            {costValues.showBillTotal ? (
-              <div className='flex items-start justify-between gap-3'>
-                <p className='text-muted-foreground text-sm'>
-                  {cost.taxRate !== null && !billTotalError
-                    ? `That works out to about ${formatTaxRate(cost.taxRate)} tax.`
-                    : 'Add the total from your bill and we’ll work out your tax rate.'}
-                </p>
-                <Button
-                  type='button'
-                  variant='link'
-                  size='sm'
-                  className='shrink-0'
-                  onClick={() =>
-                    setCostValues({
-                      ...costValues,
-                      billTotal: '',
-                      showBillTotal: false,
-                    })
-                  }
-                >
-                  Remove total
-                </Button>
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='px-0'
-                onClick={() =>
-                  setCostValues({ ...costValues, showBillTotal: true })
-                }
-              >
-                + Add the total on your bill
-              </Button>
-            )}
+    <Subview title='Membership' onClose={onClose}>
+      <div className='space-y-4'>
+        <div className='bg-secondary/60 flex items-center gap-3 rounded-2xl px-4 py-3'>
+          <span className='text-3xl' aria-hidden='true'>
+            🎟️
+          </span>
+          <div className='min-w-0'>
+            <p className='font-semibold'>AMC A-List</p>
+            <p className='text-muted-foreground text-sm'>
+              Member since {formatDateUTC(membership.startDate)}
+            </p>
           </div>
-        </FormSection>
-        <FormSection label='Start date'>
+        </div>
+        <SectionDivider label='💳 Monthly cost' />
+        <div className='space-y-2'>
           <Form
-            id='a-list-settings-start'
-            form={startDateFields}
-            initialData={{ startDate: costValues.startDate }}
+            key={costValues.showBillTotal ? 'with-bill' : 'no-bill'}
+            id='a-list-settings-cost'
+            form={costFields}
+            initialData={costValues}
             columns={1}
             spacing='normal'
             onDataChange={(data) =>
               setCostValues({
                 ...costValues,
-                startDate: (data.startDate as string) ?? '',
+                ...(data as Partial<CostStepValues>),
               })
             }
           />
-          {cost.errors.startDate && (
-            <p className='text-destructive mt-2 text-sm'>
-              {cost.errors.startDate}
-            </p>
+          {costValues.showBillTotal ? (
+            <div className='flex items-start justify-between gap-3'>
+              <p className='text-muted-foreground text-sm'>
+                {cost.taxRate !== null && !billTotalError
+                  ? `That works out to about ${formatTaxRate(cost.taxRate)} tax.`
+                  : 'Add the total from your bill and we’ll work out your tax rate.'}
+              </p>
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='shrink-0'
+                onClick={() =>
+                  setCostValues({
+                    ...costValues,
+                    billTotal: '',
+                    showBillTotal: false,
+                  })
+                }
+              >
+                Remove total
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='px-0'
+              onClick={() =>
+                setCostValues({ ...costValues, showBillTotal: true })
+              }
+            >
+              + Add the total on your bill
+            </Button>
           )}
-        </FormSection>
-        <FormSection label='Goals'>
-          <Form
-            id='a-list-settings-goals'
-            form={goalFields}
-            initialData={goalValues}
-            columns={2}
-            spacing='normal'
-            onDataChange={(data) => setGoalValues(data as GoalValues)}
+        </div>
+        <SectionDivider label='📆 Start date' />
+        <div className='space-y-1.5'>
+          <Label>When did your membership start?</Label>
+          <Input
+            type='date'
+            variant='outline'
+            rounded='full'
+            aria-label='Membership start date'
+            max={toDateInputValue(todayDay)}
+            value={costValues.startDate}
+            errorMessage={cost.errors.startDate}
+            onChange={(event) =>
+              setCostValues({ ...costValues, startDate: event.target.value })
+            }
           />
-        </FormSection>
-        <div className='text-muted-foreground flex flex-wrap items-center gap-1 text-xs'>
-          <span>Movie details and posters come from</span>
-          <ExternalLinkText
-            href='https://www.omdbapi.com/'
-            label='OMDb'
-            className='text-xs'
-          />
-          <span>(CC BY-NC 4.0).</span>
+        </div>
+        <SectionDivider label='🎯 Goals' />
+        <Form
+          id='a-list-settings-goals'
+          form={goalFields}
+          initialData={goalValues}
+          columns={2}
+          spacing='normal'
+          onDataChange={(data) => setGoalValues(data as GoalValues)}
+        />
+        <div className='text-muted-foreground space-y-2 pt-2 text-xs'>
+          <div className='flex items-center gap-3'>
+            <img
+              src='/logos/tmdb.svg'
+              alt='TMDB'
+              className='h-3 w-auto shrink-0'
+            />
+            <span>
+              This product uses the TMDB API but is not endorsed or certified
+              by TMDB.
+            </span>
+          </div>
+          <div className='flex flex-wrap items-center gap-1'>
+            <span>Some movie details and posters come from</span>
+            <ExternalLinkText
+              href='https://www.omdbapi.com/'
+              label='OMDb'
+              className='text-xs'
+            />
+            <span>(CC BY-NC 4.0).</span>
+          </div>
         </div>
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions
@@ -327,6 +341,7 @@ function MembershipSettingsModal({
               <Button
                 type='button'
                 variant='secondary'
+                rounded='full'
                 disabled={isSaving}
                 onClick={onClose}
               >
@@ -334,6 +349,7 @@ function MembershipSettingsModal({
               </Button>
               <Button
                 type='button'
+                rounded='full'
                 loading={isSaving}
                 disabled={!isValid || !hasChanges || isSaving}
                 onClick={() => void handleSave()}
@@ -344,8 +360,8 @@ function MembershipSettingsModal({
           }
         />
       </div>
-    </Modal>
+    </Subview>
   );
 }
 
-export default MembershipSettingsModal;
+export default MembershipSettingsSubview;

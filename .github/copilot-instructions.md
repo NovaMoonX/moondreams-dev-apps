@@ -8,6 +8,12 @@
 - **No loose `let` variables assigned across `if`/`else` branches, and no `for` loops that build up a result. Wrap the branching in a small function that returns the value (early returns), and build collections with `.reduce`/`.map`/`.filter`/`Object.fromEntries`. Keep related logic colocated and compact — see "Functions over loose variables" under Coding Styles.**
 - **Class names: always use `join()` for conditionals; never use template literals in `className`.**
 - Check the repo's shared components (`src/components`, `src/ui`) first, then Dreamer UI, before building custom UI.
+- **Keep the look playful: rounded shapes, pills over radios/tab strips, meaningful emoji, warm copy. Mini-app-specific rules live in `.github/instructions/<app>.instructions.md` (mirrored in `.claude/rules/<app>.md`).**
+- **Floating/hover UI uses Dreamer UI's `Popover`/`DropdownMenu`/`Drawer`, not a hand-rolled hover panel; labeled hairline dividers use `@/components/SectionDivider`; status badges are soft tints, not solid fills; nested pages use `@/components/Subview`. See CLAUDE.md Design & UX.**
+- **A component whose props mention no app entity (a search field, divider, subview, money input) goes in `src/components` from its first use; only entity-aware pieces stay in the mini-app.**
+- **Alignment: items in a column share one left edge; an emoji/icon line uses a fixed-width icon column (`w-5 shrink-0 text-center`); counts and dates are `whitespace-nowrap` badges, never a wrapping trailing `· ×3`; omit empty rows instead of placeholder text. Check new screens at narrow phone width.**
+- **Search flows and long settings forms are full-page subviews (A-List's `Subview`), not tall drawers or modals; a mini-app's own look lives in its `<app>.css` tokens and `<app>.instructions.md`. See CLAUDE.md "Subviews" and "Designing a mini-app's look".**
+- **No "Back home" link inside a mini-app's page; Home is in the header (icon on sm+, avatar menu on phones). Only `AppEntryFallback` says "Back home".**
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
 - **Never call `setState` synchronously inside a `useEffect` body or during render to mirror props/derive values — see "React and state patterns" below.**
 - Always use the project import aliases instead of relative paths when available.

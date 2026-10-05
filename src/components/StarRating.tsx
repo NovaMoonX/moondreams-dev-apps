@@ -50,6 +50,8 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
           size='icon'
           aria-label={`${star} star${star === 1 ? '' : 's'}`}
           aria-pressed={value === star}
+          className='rounded-full! outline-none! focus-visible:bg-secondary'
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => onChange(value === star ? null : star)}
         >
           <Star

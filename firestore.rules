@@ -169,7 +169,7 @@ service cloud.firestore {
           let keys = ['movieKey', 'movie', 'priority', 'preferredFormat', 'createdAt', 'lastEditedAt'];
           return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
             && data.movieKey == movieKey
-            && movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
+            && movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
             && isMovieValid(data.movie)
             && data.priority in ['MUST_SEE', 'WANT_TO_SEE', 'IF_I_HAVE_TIME']
             && (data.preferredFormat == null || isFormat(data.preferredFormat))
@@ -190,7 +190,7 @@ service cloud.firestore {
           return data.keys().hasOnly(required.concat(['ticket', 'rating'])) && data.keys().hasAll(required)
             && data.id == viewingId
             && data.movieKey is string
-            && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$')
+            && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
             && isMovieValid(data.movie)
             && data.showtimeAt is int
             && data.endsAt is int && data.endsAt > data.showtimeAt

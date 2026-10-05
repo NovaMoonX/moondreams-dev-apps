@@ -55,6 +55,26 @@ export function formatDateUTC(timestamp: number) {
   });
 }
 
+/** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
+export function formatDateShort(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** The short month name ("Oct") of an instant in the viewer's timezone. */
+export function formatMonthShort(timestamp: number) {
+  const result = new Date(timestamp).toLocaleDateString(undefined, {
+    month: 'short',
+  });
+  return result;
+}
+
 /** Minutes-granularity duration string, e.g. "45m" or "2h 5m", for a span of milliseconds. */
 export function formatDuration(ms: number) {
   const totalMinutes = Math.max(0, Math.round(ms / 60_000));

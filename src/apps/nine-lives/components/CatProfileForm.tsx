@@ -16,6 +16,7 @@ import BreedField from './BreedField';
 import DeleteIconButton from './DeleteIconButton';
 import ModalFooterActions from './ModalFooterActions';
 import TagPickerField from './TagPickerField';
+import { generateUuid } from '@/utils/idUtils';
 
 interface CatProfileFormProps {
   householdId?: string;
@@ -88,12 +89,6 @@ const TAB_OPTIONS: { value: TabId; label: string }[] = [
 
 const defaultLifestyle: CatLifestyle = 'indoor';
 const { custom, input, select } = FormFactories;
-
-function createId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 
 const insuranceProviderOptions = INSURANCE_PROVIDER_OPTIONS.map((option) => ({
   text: option,
@@ -177,7 +172,7 @@ function getIdentificationInitialValue(cat?: Cat | null): IdentificationValue {
 
 function getKeyDatesAndNotesInitialValue(cat?: Cat | null): KeyDatesAndNotesValue {
   return {
-    customKeyDates: cat?.customKeyDates?.length ? cat.customKeyDates : [{ id: createId(), label: '', date: 0 }],
+    customKeyDates: cat?.customKeyDates?.length ? cat.customKeyDates : [{ id: generateUuid(), label: '', date: 0 }],
     notes: cat?.notes ?? '',
   };
 }
@@ -348,7 +343,7 @@ function IdentificationFields({
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => update({ otherLinks: [...otherLinks, { id: createId(), label: '', url: '' }] })}
+            onClick={() => update({ otherLinks: [...otherLinks, { id: generateUuid(), label: '', url: '' }] })}
             disabled={disabled}
           >
             Add link
@@ -479,7 +474,7 @@ function KeyDatesAndNotesFields({
   disabled?: boolean;
 }) {
   const update = (changes: Partial<KeyDatesAndNotesValue>) => onValueChange({ ...value, ...changes });
-  const keyDates = value.customKeyDates.length > 0 ? value.customKeyDates : [{ id: createId(), label: '', date: 0 }];
+  const keyDates = value.customKeyDates.length > 0 ? value.customKeyDates : [{ id: generateUuid(), label: '', date: 0 }];
 
   const updateKeyDate = (id: string, changes: Partial<CatKeyDate>) => {
     update({ customKeyDates: keyDates.map((entry) => (entry.id === id ? { ...entry, ...changes } : entry)) });
@@ -494,7 +489,7 @@ function KeyDatesAndNotesFields({
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => update({ customKeyDates: [...keyDates, { id: createId(), label: '', date: 0 }] })}
+            onClick={() => update({ customKeyDates: [...keyDates, { id: generateUuid(), label: '', date: 0 }] })}
             disabled={disabled}
           >
             Add date

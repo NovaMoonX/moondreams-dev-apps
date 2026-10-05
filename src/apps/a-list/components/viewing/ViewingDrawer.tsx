@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Badge, Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   ChevronLeft,
@@ -17,7 +17,8 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
-import StarRating from '@apps/a-list/components/shared/StarRating';
+import StarRating from '@/components/StarRating';
+import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import EditViewingForm from '@apps/a-list/components/viewing/EditViewingForm';
 import TicketForm from '@apps/a-list/components/viewing/TicketForm';
 import {
@@ -35,12 +36,22 @@ import { formatCents } from '@apps/a-list/utils/money';
 
 type DrawerView = 'details' | 'edit' | 'ticket' | 'seen';
 
-interface ViewingDrawerProps {
+interface ViewingPanelProps {
   viewingId: string;
+  /** Leaves the viewing: after a removal, or when there's nothing more to show. */
   onClose: () => void;
+  /** Set when the panel sits inside a list's drawer, so the details view can step back to it. */
+  onBack?: () => void;
+  backLabel?: string;
 }
 
-function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
+/** A viewing's details and actions, for a drawer to hold; it swaps its own content in place instead of stacking overlays. */
+export function ViewingPanel({
+  viewingId,
+  onClose,
+  onBack,
+  backLabel = 'Back',
+}: ViewingPanelProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -146,24 +157,21 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
 
   const header = (
     <div className='flex gap-3'>
-      <span className='h-24 w-16 shrink-0 overflow-hidden rounded-md'>
+      <span className='h-28 w-[4.5rem] shrink-0 overflow-hidden rounded-xl shadow-md'>
         <PosterCover
           title={viewing.movie.title}
           posterUrl={viewing.movie.posterUrl}
         />
       </span>
       <div className='min-w-0 space-y-1'>
-        <p className='font-semibold'>{viewing.movie.title}</p>
+        <p className='text-lg leading-tight font-semibold'>
+          {viewing.movie.title}
+        </p>
         <p className='text-muted-foreground text-sm'>
           {formatDate(viewing.showtimeAt)} · {formatTime(viewing.showtimeAt)}
         </p>
         <div className='flex flex-wrap items-center gap-1.5'>
-          <Badge
-            variant={viewing.status === 'SEEN' ? 'success' : 'muted'}
-            size='xs'
-          >
-            {viewing.status === 'SEEN' ? 'Seen' : 'Planned'}
-          </Badge>
+          <ViewingStatusBadge viewing={viewing} now={now} />
           {ticket && <FormatBadge format={ticket.format} />}
           {viewing.status === 'SEEN' && viewing.rating ? (
             <StarRating value={viewing.rating} />
@@ -257,8 +265,19 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
 
     return (
       <div className='space-y-4'>
+        {onBack && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='gap-1 px-0'
+            onClick={onBack}
+          >
+            <ChevronLeft className='h-4 w-4' /> {backLabel}
+          </Button>
+        )}
         {header}
-        <div className='bg-muted/50 divide-border divide-y rounded-lg'>
+        <div className='bg-muted/50 divide-border divide-y overflow-hidden rounded-2xl'>
           {viewing.status === 'PLANNED' && viewing.endsAt <= now && (
             <Button
               type='button'
@@ -300,9 +319,22 @@ function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
   };
 
   return (
-    <Drawer isOpen onClose={onClose} title='Movie'>
+    <>
       {getContent()}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
+    </>
+  );
+}
+
+interface ViewingDrawerProps {
+  viewingId: string;
+  onClose: () => void;
+}
+
+function ViewingDrawer({ viewingId, onClose }: ViewingDrawerProps) {
+  return (
+    <Drawer isOpen onClose={onClose} title='Movie'>
+      <ViewingPanel viewingId={viewingId} onClose={onClose} />
     </Drawer>
   );
 }

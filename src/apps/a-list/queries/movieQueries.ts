@@ -19,7 +19,7 @@ const getMovieCallable = httpsCallable<{ movieKey: string }, MovieSnapshot>(
 export const movieQueryKeys = {
   all: ['a-list', 'movies'] as const,
   search: (query: string) =>
-    [...movieQueryKeys.all, 'search', normalizeString(query)] as const,
+    [...movieQueryKeys.all, 'search', 'v2', normalizeString(query)] as const,
   details: (movieKey: string) =>
     [...movieQueryKeys.all, 'details', movieKey] as const,
 };

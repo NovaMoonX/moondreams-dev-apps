@@ -1,57 +1,29 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
-import type { FeeValue } from '@apps/a-list/utils/ticketDraft';
-import { formatCents } from '@apps/a-list/utils/money';
+import Pill from '@/components/Pill';
+import { formatCents, parseMoneyToCents } from '@apps/a-list/utils/money';
 
 interface FeeChipsProps {
-  value: FeeValue;
+  /** The fee as typed. */
+  value: string;
+  /** Fees entered on past tickets, $0 first. */
   chips: number[];
-  error?: string;
-  onChange: (value: FeeValue) => void;
+  onPick: (cents: number) => void;
 }
 
-function FeeChips({ value, chips, error, onChange }: FeeChipsProps) {
-  const options = Array.from(
-    new Set(
-      typeof value.selected === 'number' ? [...chips, value.selected] : chips,
-    ),
-  );
+/** One-tap fees from past tickets, so repeating one is a tap rather than typing. */
+function FeeChips({ value, chips, onPick }: FeeChipsProps) {
+  const current = parseMoneyToCents(value);
 
   return (
-    <div className='space-y-2'>
-      <div className='flex flex-wrap gap-2'>
-        {options.map((cents) => (
-          <Button
-            key={cents}
-            type='button'
-            size='sm'
-            variant={value.selected === cents ? 'primary' : 'secondary'}
-            aria-pressed={value.selected === cents}
-            onClick={() => onChange({ selected: cents, other: '' })}
-          >
-            {formatCents(cents)}
-          </Button>
-        ))}
-        <Button
-          type='button'
-          size='sm'
-          variant={value.selected === 'OTHER' ? 'primary' : 'secondary'}
-          aria-pressed={value.selected === 'OTHER'}
-          onClick={() => onChange({ selected: 'OTHER', other: value.other })}
+    <div className='flex flex-wrap gap-2'>
+      {chips.map((cents) => (
+        <Pill
+          key={cents}
+          isSelected={current === cents}
+          onClick={() => onPick(cents)}
         >
-          Other
-        </Button>
-      </div>
-      {value.selected === 'OTHER' && (
-        <MoneyInput
-          ariaLabel='Convenience fee'
-          placeholder='1.50'
-          value={value.other}
-          errorMessage={error}
-          onChange={(other) => onChange({ selected: 'OTHER', other })}
-        />
-      )}
+          {formatCents(cents)}
+        </Pill>
+      ))}
     </div>
   );
 }

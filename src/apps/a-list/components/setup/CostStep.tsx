@@ -1,16 +1,6 @@
-import {
-  Button,
-  Form,
-  FormFactories,
-} from '@moondreamsdev/dreamer-ui/components';
-
-import { createDateInputField } from '@/utils/formFactoryHelpers';
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
-import {
-  evaluateCostStep,
-  type CostStepValues,
-} from '@apps/a-list/utils/costStep';
-import { formatTaxRate } from '@apps/a-list/utils/tax';
+import MoneyInput from '@/components/MoneyInput';
+import type { CostStepValues } from '@apps/a-list/utils/costStep';
+import { evaluateCostStep } from '@apps/a-list/utils/costStep';
 
 interface CostStepProps {
   values: CostStepValues;
@@ -18,97 +8,34 @@ interface CostStepProps {
   onChange: (values: CostStepValues) => void;
 }
 
-const { custom } = FormFactories;
-
 function CostStep({ values, todayDay, onChange }: CostStepProps) {
-  const { errors, taxRate } = evaluateCostStep(values, todayDay);
-
-  const billTotalError = errors.billTotal;
-  const costError = errors.cost;
-  const fields = [
-    custom({
-      name: 'cost',
-      label: 'Monthly cost before tax',
-      renderComponent: (props) => (
-        <MoneyInput
-          ariaLabel='Monthly cost before tax'
-          placeholder='25.99'
-          value={(props.value as string | undefined) ?? ''}
-          errorMessage={costError}
-          onChange={(value) => props.onValueChange(value)}
-        />
-      ),
-    }),
-    ...(values.showBillTotal
-      ? [
-          custom({
-            name: 'billTotal',
-            label: 'Total on your bill, with tax',
-            renderComponent: (props) => (
-              <MoneyInput
-                ariaLabel='Total on your bill, with tax'
-                placeholder='27.94'
-                value={(props.value as string | undefined) ?? ''}
-                errorMessage={billTotalError}
-                onChange={(value) => props.onValueChange(value)}
-              />
-            ),
-          }),
-        ]
-      : []),
-    createDateInputField({
-      name: 'startDate',
-      label: 'When did your membership start?',
-      variant: 'outline',
-    }),
-  ];
+  const { errors } = evaluateCostStep(values, todayDay);
 
   return (
-    <div className='space-y-3'>
-      <Form
-        key={values.showBillTotal ? 'with-bill' : 'no-bill'}
-        id='a-list-setup-cost'
-        form={fields}
-        initialData={values}
-        columns={1}
-        spacing='normal'
-        onDataChange={(data) =>
-          onChange({ ...values, ...(data as Partial<CostStepValues>) })
-        }
-      />
-      {errors.startDate && (
-        <p className='text-destructive text-sm'>{errors.startDate}</p>
-      )}
-      {values.showBillTotal ? (
-        <div className='flex items-start justify-between gap-3'>
-          <p className='text-muted-foreground text-sm'>
-            {taxRate !== null && !errors.billTotal
-              ? `That works out to about ${formatTaxRate(taxRate)} tax. We'll suggest it on your tickets.`
-              : 'Add the total from your bill and we’ll work out your tax rate.'}
-          </p>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='shrink-0'
-            onClick={() =>
-              onChange({ ...values, billTotal: '', showBillTotal: false })
-            }
-          >
-            Remove total
-          </Button>
-        </div>
-      ) : (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='px-0'
-          onClick={() => onChange({ ...values, showBillTotal: true })}
-        >
-          + Add the total on your bill
-        </Button>
-      )}
+    <div className='space-y-5 text-center'>
+      <div className='space-y-2'>
+        <p className='text-5xl' aria-hidden='true'>
+          🎟️
+        </p>
+        <h3 className='text-xl font-semibold'>
+          What does your membership cost each month?
+        </h3>
+        <p className='text-muted-foreground text-sm'>
+          The price of your plan before any taxes. Check your AMC receipt or
+          account page if you're not sure.
+        </p>
+      </div>
+      <div className='mx-auto max-w-xs text-left'>
+        <MoneyInput
+          autoFocus
+          ariaLabel='Monthly cost before tax'
+          placeholder='25.99'
+          className='text-lg'
+          value={values.cost}
+          errorMessage={errors.cost}
+          onChange={(cost) => onChange({ ...values, cost })}
+        />
+      </div>
     </div>
   );
 }

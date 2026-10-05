@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ListPlus, MapPin, StickyNote, Timer, Truck } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
-import SectionDivider from '@/components/forms/SectionDivider';
+import SectionDivider from '@/components/SectionDivider';
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
 import {
@@ -248,13 +248,13 @@ function TransitDetailsFields({
     <div className='space-y-4'>
       {carrierSpecs.length > 0 && (
         <>
-          <SectionDivider label={TRANSIT_TYPE_LABELS[transitType]} />
+          <SectionDivider label={TRANSIT_TYPE_LABELS[transitType]} className='pt-2' />
           <div className='grid grid-cols-2 gap-3'>{carrierSpecs.map(renderSpec)}</div>
         </>
       )}
       {(routeSpecs.length > 0 || routeLocation) && (
         <>
-          <SectionDivider label='Route' />
+          <SectionDivider label='Route' className='pt-2' />
           {transitType !== 'FLIGHT' && routeLocation}
           {routeSpecs.length > 0 && (
             <div className='grid grid-cols-2 gap-3'>{routeSpecs.map(renderSpec)}</div>

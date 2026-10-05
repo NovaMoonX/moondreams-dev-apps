@@ -1,16 +1,13 @@
 import { useState } from 'react';
 
-import {
-  Button,
-  Drawer,
-  Form,
-  FormFactories,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
+import Pill from '@/components/Pill';
+import { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -31,42 +28,43 @@ import ManualMovieForm, {
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
+import TrailerPicksList from '@apps/a-list/components/add/TrailerPicksList';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
+import WatchlistDetailsFields, {
+  type WatchlistDetailsValues,
+} from '@apps/a-list/components/watchlist/WatchlistDetailsFields';
 import {
-  AMC_FORMAT_LABELS,
-  AMC_FORMATS,
   DEFAULT_SHOWTIME,
   DEFAULT_WATCH_PRIORITY,
-  WATCH_PRIORITIES,
-  WATCH_PRIORITY_LABELS,
+  PREVIEWS_WINDOW_BEFORE_MINUTES,
 } from '@apps/a-list/constants';
 import { movieDetailsQueryOptions } from '@apps/a-list/queries/movieQueries';
 import { addViewing } from '@apps/a-list/store/actions/viewingActions';
-import { addWatchlistItem } from '@apps/a-list/store/actions/watchlistActions';
+import {
+  addWatchlistItem,
+  removeWatchlistItem,
+} from '@apps/a-list/store/actions/watchlistActions';
 import {
   evaluateTicketDraft,
   getInitialTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
+import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
+  selectPreviewsWindowViewing,
   selectSeenCountByMovieKey,
-  selectTaxRateChips,
+  selectFeeChips,
+  selectWatchlistItems,
 } from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
-  AmcFormat,
   MovieSearchResult,
   MovieSnapshot,
-  WatchPriority,
+  WatchlistItem,
 } from '@apps/a-list/types';
-
-interface WatchlistDetailsValues {
-  priority: WatchPriority;
-  preferredFormat: AmcFormat | 'NONE';
-}
 
 interface ShowtimeValues {
   date: string;
@@ -91,33 +89,19 @@ const EMPTY_MANUAL_DRAFT: ManualMovieDraft = {
   releaseDate: '',
   showReleaseDate: false,
 };
-const { radio, select } = FormFactories;
-
-const WATCHLIST_FIELDS = [
-  radio({
-    name: 'priority',
-    label: 'Priority',
-    options: WATCH_PRIORITIES.map((priority) => ({
-      value: priority,
-      label: WATCH_PRIORITY_LABELS[priority],
-    })),
-  }),
-  select({
-    name: 'preferredFormat',
-    label: 'Preferred format',
-    options: [
-      { value: 'NONE', label: 'No preference' },
-      ...AMC_FORMATS.map((format) => ({
-        value: format,
-        label: AMC_FORMAT_LABELS[format],
-      })),
-    ],
-  }),
-];
-
 const SHOWTIME_FIELDS = [
-  createDateInputField({ name: 'date', label: 'Date', variant: 'outline' }),
-  createTimeInputField({ name: 'time', label: 'Showtime', variant: 'outline' }),
+  createDateInputField({
+    name: 'date',
+    label: 'Date',
+    variant: 'outline',
+    rounded: 'full',
+  }),
+  createTimeInputField({
+    name: 'time',
+    label: 'Showtime',
+    variant: 'outline',
+    rounded: 'full',
+  }),
 ];
 
 function getRewatchNote(seenCount: number) {
@@ -126,14 +110,13 @@ function getRewatchNote(seenCount: number) {
   return `↺ Seen ${seenCount} times before. This will be a rewatch.`;
 }
 
-interface AddDrawerProps {
+interface AddFlowProps {
   overlay: Extract<AListOverlay, { kind: 'add' }>;
   onClose: () => void;
-}
-
-interface AddFlowProps extends AddDrawerProps {
   initialSelection?: AddSelection;
   onBack?: () => void;
+  /** Set when the flow is a screen of its own: it then draws its own header, whose back control steps back before it exits. */
+  title?: string;
 }
 
 export function AddFlow({
@@ -141,14 +124,26 @@ export function AddFlow({
   onClose,
   initialSelection,
   onBack,
+  title,
 }: AddFlowProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const queryClient = useQueryClient();
   const now = useNow();
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
-  const { defaultRate } = useAppSelector(selectTaxRateChips);
+  const feeChips = useAppSelector(selectFeeChips);
+  const watchlist = useAppSelector(selectWatchlistItems);
+  const previewsViewing = useAppSelector((state) =>
+    selectPreviewsWindowViewing(state, now),
+  );
+  // What counts as "added from trailers": everything saved since the previews window opened, as of this screen opening.
+  const [trailersSince] = useState(() =>
+    previewsViewing
+      ? previewsViewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000
+      : now,
+  );
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
@@ -164,7 +159,7 @@ export function AddFlow({
     time: DEFAULT_SHOWTIME,
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [pastAdded, setPastAdded] = useState<{
+  const [addedSoFar, setAddedSoFar] = useState<{
     count: number;
     lastTitle: string;
   } | null>(null);
@@ -189,6 +184,13 @@ export function AddFlow({
   );
   const isCalendar = overlay.destination === 'calendar';
   const isPast = overlay.destination === 'calendar' && overlay.mode === 'past';
+  const isQuick =
+    overlay.destination === 'watchlist' && overlay.mode === 'quick';
+  const trailerPicks = isQuick
+    ? watchlist
+        .filter((item) => item.createdAt >= trailersSince)
+        .sort((left, right) => right.createdAt - left.createdAt)
+    : [];
   // Past mode only adds seen movies, so the showing must have ended, not just started.
   const isNotYetShown =
     isPast &&
@@ -209,18 +211,12 @@ export function AddFlow({
     movieKey !== null &&
     (!isCalendar || (showtimeAt !== undefined && showtimeValues.time !== ''));
 
-  const getReleaseLabel = (releaseDate: number | null) => {
-    if (releaseDate === null) return 'Release date not announced';
-    if (releaseDate > todayDay) return `Opens ${formatDateUTC(releaseDate)}`;
-    return `Released ${formatDateUTC(releaseDate)}`;
-  };
-
   const getDetailsLine = () => {
     if (selection?.kind === 'search' && details.isPending)
       return 'Getting the details…';
     if (!movie) return "We couldn't load this movie's details just now.";
     const parts = [
-      getReleaseLabel(movie.releaseDate),
+      getReleaseLabel(movie.releaseDate, todayDay),
       movie.runtimeMinutes === null
         ? null
         : formatDuration(movie.runtimeMinutes * 60_000),
@@ -275,7 +271,7 @@ export function AddFlow({
   };
 
   const resetForNextMovie = (addedTitle: string) => {
-    setPastAdded((previous) => ({
+    setAddedSoFar((previous) => ({
       count: (previous?.count ?? 0) + 1,
       lastTitle: addedTitle,
     }));
@@ -289,6 +285,85 @@ export function AddFlow({
       time: DEFAULT_SHOWTIME,
     });
     setIsSaving(false);
+  };
+
+  const handleQuickPick = async (
+    result: MovieSearchResult,
+    isListed: boolean,
+  ) => {
+    if (!user || isSaving) {
+      return;
+    }
+
+    if (isListed) {
+      addToast({
+        title: 'Already on your watchlist',
+        description: result.title,
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    // Poor signal in a theater shouldn't lose the title: save what search knows and the daily refresh fills in the rest.
+    const snapshot = await queryClient
+      .fetchQuery(movieDetailsQueryOptions(result.movieKey))
+      .catch(
+        (): MovieSnapshot => ({
+          title: result.title,
+          releaseDate: null,
+          posterUrl: result.posterUrl,
+          runtimeMinutes: null,
+          contentRating: null,
+        }),
+      );
+
+    try {
+      const { created } = await dispatch(
+        addWatchlistItem({
+          uid: user.uid,
+          movieKey: result.movieKey,
+          movie: snapshot,
+          priority: DEFAULT_WATCH_PRIORITY,
+          preferredFormat: null,
+        }),
+      ).unwrap();
+      if (!created) {
+        addToast({
+          title: 'Already on your watchlist',
+          description: result.title,
+        });
+      }
+      setQuery('');
+    } catch (saveError) {
+      addToast({
+        title: 'Unable to save this movie',
+        description: getErrorMessage(saveError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUndoPick = async (item: WatchlistItem) => {
+    if (!user || isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await dispatch(
+        removeWatchlistItem({ uid: user.uid, movieKey: item.movieKey }),
+      ).unwrap();
+    } catch (undoError) {
+      addToast({
+        title: 'Unable to undo',
+        description: getErrorMessage(undoError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAdd = async (keepGoing: boolean) => {
@@ -346,12 +421,17 @@ export function AddFlow({
     }
 
     if (selection === null) {
-      return (
+      const picker = (
         <MoviePicker
           query={query}
           onQueryChange={setQuery}
           showWatchlist={isCalendar}
-          onPick={(result) => setSelection({ kind: 'search', result })}
+          isDisabled={isSaving}
+          onPick={(result, isListed) =>
+            isQuick
+              ? void handleQuickPick(result, isListed)
+              : setSelection({ kind: 'search', result })
+          }
           onPickWatchlistItem={(item) =>
             setSelection({
               kind: 'known',
@@ -368,6 +448,24 @@ export function AddFlow({
           }}
         />
       );
+
+      return isQuick ? (
+        <div className='space-y-3'>
+          {trailerPicks.length > 0 && (
+            <TrailerPicksList
+              picks={trailerPicks}
+              isBusy={isSaving}
+              onUndo={(item) => void handleUndoPick(item)}
+            />
+          )}
+          <p className='text-muted-foreground text-sm'>
+            Tap a title to save it as Want to See.
+          </p>
+          {picker}
+        </div>
+      ) : (
+        picker
+      );
     }
 
     const rewatchNote =
@@ -381,17 +479,20 @@ export function AddFlow({
 
     return (
       <div className='space-y-4'>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='gap-1 px-0'
-          onClick={handleBack}
-        >
-          <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
-        </Button>
+        {title === undefined && (
+          <Button
+            type='button'
+            rounded='full'
+            variant='link'
+            size='sm'
+            className='gap-1 px-0'
+            onClick={handleBack}
+          >
+            <ChevronLeft className='h-4 w-4' /> {getBackLabel()}
+          </Button>
+        )}
         <div className='flex gap-3'>
-          <span className='h-30 w-20 shrink-0 overflow-hidden rounded-md'>
+          <span className='h-30 w-20 shrink-0 overflow-hidden rounded-xl shadow-sm'>
             <PosterCover
               title={movie?.title ?? fallbackTitle}
               posterUrl={movie?.posterUrl ?? fallbackPoster}
@@ -415,44 +516,45 @@ export function AddFlow({
             onDataChange={(data) => setShowtimeValues(data as ShowtimeValues)}
           />
         ) : (
-          <Form
-            id='a-list-add-watchlist'
-            form={WATCHLIST_FIELDS}
-            initialData={watchlistValues}
-            columns={1}
-            spacing='normal'
-            onDataChange={(data) =>
-              setWatchlistValues(data as WatchlistDetailsValues)
-            }
+          <WatchlistDetailsFields
+            values={watchlistValues}
+            onChange={setWatchlistValues}
           />
         )}
-        {isCalendar &&
-          (ticketDraft ? (
-            <div className='space-y-2'>
-              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='px-0'
+        {isCalendar && (
+          <div className='space-y-3'>
+            <div>
+              <p className='font-medium'>🎟️ Already bought your ticket?</p>
+              <p className='text-muted-foreground text-sm'>
+                Add what you paid and your savings count right away.
+              </p>
+            </div>
+            <div className='flex gap-2'>
+              <Pill
+                emoji='💳'
+                isSelected={ticketDraft !== null}
+                onClick={() =>
+                  setTicketDraft(
+                    (current) =>
+                      current ?? getInitialTicketDraft(null, feeChips[1] ?? 0),
+                  )
+                }
+              >
+                Yes, I paid
+              </Pill>
+              <Pill
+                emoji='🕒'
+                isSelected={ticketDraft === null}
                 onClick={() => setTicketDraft(null)}
               >
-                Remove ticket details
-              </Button>
+                Not yet
+              </Pill>
             </div>
-          ) : (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='px-0'
-              onClick={() =>
-                setTicketDraft(getInitialTicketDraft(null, defaultRate))
-              }
-            >
-              + Add ticket details
-            </Button>
-          ))}
+            {ticketDraft && (
+              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
+            )}
+          </div>
+        )}
         {isNotYetShown && (
           <p className='text-destructive text-sm'>
             These are movies you've already seen, so pick a showing that has
@@ -472,6 +574,7 @@ export function AddFlow({
               <>
                 <Button
                   type='button'
+                  rounded='full'
                   variant='secondary'
                   disabled={!canSave || isSaving}
                   onClick={() => void handleAdd(false)}
@@ -480,6 +583,7 @@ export function AddFlow({
                 </Button>
                 <Button
                   type='button'
+                  rounded='full'
                   loading={isSaving}
                   disabled={!canSave || isSaving}
                   onClick={() => void handleAdd(true)}
@@ -491,6 +595,7 @@ export function AddFlow({
               <>
                 <Button
                   type='button'
+                  rounded='full'
                   variant='secondary'
                   disabled={isSaving}
                   onClick={onClose}
@@ -499,6 +604,7 @@ export function AddFlow({
                 </Button>
                 <Button
                   type='button'
+                  rounded='full'
                   loading={isSaving}
                   disabled={!canSave || isSaving}
                   onClick={() => void handleAdd(false)}
@@ -513,25 +619,31 @@ export function AddFlow({
     );
   };
 
+  const getHeader = () => {
+    if (selection !== null)
+      return {
+        label: selection.kind === 'known' && selection.isManual ? 'Back' : 'Back to results',
+        onClick: handleBack,
+      };
+    if (isAddingByTitle)
+      return { label: 'Back to search', onClick: () => setIsAddingByTitle(false) };
+    return { label: title ?? '', onClick: onClose };
+  };
+
+  const header = getHeader();
+
   return (
     <>
-      {pastAdded && (
+      {title !== undefined && (
+        <SubviewHeader title={header.label} onBack={header.onClick} />
+      )}
+      {addedSoFar && (
         <PastMoviesStrip
-          count={pastAdded.count}
-          lastTitle={pastAdded.lastTitle}
+          count={addedSoFar.count}
+          lastTitle={addedSoFar.lastTitle}
         />
       )}
       {getContent()}
     </>
   );
 }
-
-function AddDrawer({ overlay, onClose }: AddDrawerProps) {
-  return (
-    <Drawer isOpen onClose={onClose} title='Movie'>
-      <AddFlow overlay={overlay} onClose={onClose} />
-    </Drawer>
-  );
-}
-
-export default AddDrawer;

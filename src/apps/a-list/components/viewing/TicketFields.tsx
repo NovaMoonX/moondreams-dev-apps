@@ -1,46 +1,42 @@
-import {
-  Button,
-  Form,
-  FormFactories,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
+import MoneyInput from '@/components/MoneyInput';
 import { useAppSelector } from '@/store';
-import MoneyInput from '@apps/a-list/components/shared/MoneyInput';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
-import TaxChips from '@apps/a-list/components/viewing/TaxChips';
 import { AMC_FORMAT_LABELS, AMC_FORMATS } from '@apps/a-list/constants';
 import {
   selectFeeChips,
   selectTaxRateChips,
 } from '@apps/a-list/store/selectors';
-import type { TicketEntryMode } from '@apps/a-list/types';
-import { formatCents } from '@apps/a-list/utils/money';
+import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@apps/a-list/utils/money';
+import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import {
   evaluateTicketDraft,
-  type FeeValue,
-  type RateValue,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
 
 const { custom, select } = FormFactories;
-
-const MODES: { value: TicketEntryMode; label: string }[] = [
-  { value: 'ITEMIZED', label: 'Itemized' },
-  { value: 'ALL_IN', label: 'All-in total' },
-];
 
 interface TicketFieldsProps {
   draft: TicketDraft;
   onChange: (draft: TicketDraft) => void;
 }
 
-/** The ticket's fields, shared by "Mark paid" and the add form's "+ Add ticket details". */
+/** The ticket's fields, shared by "Mark paid" and the add form's "+ Add ticket details": the same three amounts AMC itemizes. */
 function TicketFields({ draft, onChange }: TicketFieldsProps) {
   const feeChips = useAppSelector(selectFeeChips);
-  const { chips: rateChips } = useAppSelector(selectTaxRateChips);
+  const { defaultRate } = useAppSelector(selectTaxRateChips);
   const { ticket, errors } = evaluateTicketDraft(draft);
-  const isAllIn = draft.entryMode === 'ALL_IN';
   const isPremium = draft.format !== 'STANDARD';
+  const priceCents = parseMoneyToCents(draft.price);
+  const estimatedTax =
+    priceCents !== null && defaultRate !== null
+      ? centsToInputValue(getItemizedTaxCents(priceCents, defaultRate))
+      : '1.39';
 
   const fields = [
     select({
@@ -52,16 +48,14 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
       })),
     }),
     custom({
-      name: 'amount',
-      label: isAllIn ? 'Total with tax and fee' : 'Ticket price (before tax)',
+      name: 'price',
+      label: 'Ticket price',
       renderComponent: (props) => (
         <MoneyInput
-          ariaLabel={
-            isAllIn ? 'Total with tax and fee' : 'Ticket price before tax'
-          }
-          placeholder={isAllIn ? '21.39' : '18.50'}
+          ariaLabel='Ticket price'
+          placeholder='18.50'
           value={(props.value as string | undefined) ?? ''}
-          errorMessage={errors.amount}
+          errorMessage={errors.price}
           onChange={(value) => props.onValueChange(value)}
         />
       ),
@@ -70,7 +64,7 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
       ? [
           custom({
             name: 'standardPrice',
-            label: 'Standard price for this showing (before tax)',
+            label: 'Standard price for this showing',
             renderComponent: (props) => (
               <MoneyInput
                 ariaLabel='Standard price for this showing'
@@ -85,65 +79,44 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
       : []),
     custom({
       name: 'fee',
-      label: 'Convenience fee you skipped',
+      label: 'Convenience fee',
+      description: 'Members pay none, so enter what a non-member would have.',
       renderComponent: (props) => (
-        <FeeChips
-          value={props.value as FeeValue}
-          chips={feeChips}
-          error={errors.fee}
-          onChange={(value) => props.onValueChange(value)}
-        />
+        <div className='space-y-2'>
+          <MoneyInput
+            ariaLabel='Convenience fee'
+            placeholder='1.50'
+            value={(props.value as string | undefined) ?? ''}
+            errorMessage={errors.fee}
+            onChange={(value) => props.onValueChange(value)}
+          />
+          <FeeChips
+            value={(props.value as string | undefined) ?? ''}
+            chips={feeChips}
+            onPick={(cents) => props.onValueChange(centsToInputValue(cents))}
+          />
+        </div>
       ),
     }),
     custom({
-      name: 'rate',
-      label: 'Tax rate',
+      name: 'tax',
+      label: 'Tax',
       renderComponent: (props) => (
-        <TaxChips
-          value={props.value as RateValue}
-          chips={rateChips}
-          error={errors.rate}
+        <MoneyInput
+          ariaLabel='Tax'
+          placeholder={estimatedTax}
+          value={(props.value as string | undefined) ?? ''}
+          errorMessage={errors.tax}
           onChange={(value) => props.onValueChange(value)}
         />
       ),
     }),
   ];
 
-  const getSummary = () => {
-    if (!ticket) return null;
-    const parts = `${formatCents(ticket.priceCents)} + ${formatCents(ticket.feeAvoidedCents)} fee + ${formatCents(ticket.taxCents)} tax`;
-    return isAllIn
-      ? `Estimated split · ${parts}`
-      : `What a non-member would pay · ${formatCents(ticket.totalCents)} (${parts})`;
-  };
-
-  const summary = getSummary();
-
   return (
     <div className='space-y-3'>
-      <div
-        className='bg-muted/50 grid grid-cols-2 gap-1 rounded-lg p-1'
-        role='group'
-        aria-label='How to enter the ticket'
-      >
-        {MODES.map((mode) => (
-          <Button
-            key={mode.value}
-            type='button'
-            size='sm'
-            variant={draft.entryMode === mode.value ? 'primary' : 'tertiary'}
-            aria-pressed={draft.entryMode === mode.value}
-            onClick={() =>
-              mode.value !== draft.entryMode &&
-              onChange({ ...draft, entryMode: mode.value, amount: '' })
-            }
-          >
-            {mode.label}
-          </Button>
-        ))}
-      </div>
       <Form
-        key={`${draft.entryMode}-${isPremium ? 'premium' : 'standard'}`}
+        key={isPremium ? 'premium' : 'standard'}
         id='a-list-ticket'
         form={fields}
         initialData={draft}
@@ -153,11 +126,13 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
           onChange({ ...draft, ...(data as Partial<TicketDraft>) })
         }
       />
-      {summary && <p className='text-muted-foreground text-sm'>{summary}</p>}
-      {isAllIn && isPremium && (
-        <p className='text-muted-foreground text-xs'>
-          Premium savings use the price before tax, so they're most accurate
-          when a premium ticket is itemized.
+      {ticket && (
+        <p className='text-muted-foreground text-sm'>
+          A non-member would have paid{' '}
+          <strong className='text-foreground'>
+            {formatCents(ticket.totalCents)}
+          </strong>
+          .
         </p>
       )}
     </div>

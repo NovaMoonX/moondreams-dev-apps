@@ -360,6 +360,15 @@ export const TRIP_SECTION_TABS = [
 
 export type TripSectionTab = (typeof TRIP_SECTION_TABS)[number];
 
+/** Sections that are not in a phone's bottom nav: each opens from Overview as a subview. */
+export const TRIP_SUBVIEW_LABELS: Partial<Record<TripSectionTab, string>> = {
+  members: 'Members',
+  stays: 'Stays',
+  rentals: 'Rentals',
+  checklist: 'Before the Road',
+  ideas: 'Ideas',
+};
+
 export const WEATHER_BANNER_IMAGES: Record<WeatherConditionId, string | null> = {
   clear: '/by-app/waypoint/weather/clear.webp',
   'partly-sunny': '/by-app/waypoint/weather/partly-sunny.webp',

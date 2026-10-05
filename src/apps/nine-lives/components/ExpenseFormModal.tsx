@@ -20,6 +20,7 @@ import CatPillSelector from './CatPillSelector';
 import DeleteIconButton from './DeleteIconButton';
 import ExpenseLineItemsField from './ExpenseLineItemsField';
 import ModalFooterActions from './ModalFooterActions';
+import { generateUuid } from '@/utils/idUtils';
 
 type ExpenseMode = 'simple' | 'itemized';
 
@@ -378,7 +379,7 @@ function ExpenseFormModal({
       data.mode === 'simple'
         ? [
             {
-              id: initialExpense?.items?.[0]?.id ?? crypto.randomUUID(),
+              id: initialExpense?.items?.[0]?.id ?? generateUuid(),
               category: data.simpleCategory.trim() || DEFAULT_EXPENSE_CATEGORIES[0],
               label: data.simpleLabel.trim() || null,
               amount: Number(data.simpleAmount),

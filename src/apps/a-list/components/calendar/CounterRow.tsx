@@ -1,8 +1,9 @@
 import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
-import GoalChip from '@apps/a-list/components/shared/GoalChip';
-import StatTile from '@apps/a-list/components/shared/StatTile';
+import { formatDuration } from '@/utils/formatUtils';
+import StatTile from '@/components/StatTile';
+import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import { selectCounters } from '@apps/a-list/store/selectors';
 
 interface CounterRowProps {
@@ -14,37 +15,53 @@ function CounterRow({ now }: CounterRowProps) {
     (state) => selectCounters(state, now),
     shallowEqual,
   );
-  const hasGoals =
-    counters.weeklyGoal !== null || counters.monthlyGoal !== null;
+
+  const { openOverlay } = useAListOverlay();
+  const setGoalPrompt = {
+    label: '🎯 Set a goal',
+    onClick: () => openOverlay({ kind: 'membership' }),
+  };
+
+  const getGoalValue = (current: number, goal: number | null) =>
+    goal === null ? current : `${current}/${goal}`;
 
   return (
-    <div className='space-y-2'>
-      <div className='grid grid-cols-2 gap-3'>
-        <StatTile icon='🎞️' value={counters.watched} label='Watched' />
-        <StatTile
-          icon='📅'
-          value={
-            counters.weeklyGoal === null
-              ? counters.thisWeek
-              : `${counters.thisWeek}/${counters.weeklyGoal}`
-          }
-          label='This week'
-        />
-      </div>
-      {hasGoals && (
-        <div className='flex flex-wrap gap-2'>
-          <GoalChip
-            label='Weekly goal'
-            goal={counters.weeklyGoal}
-            isMet={counters.isWeeklyGoalMet}
-          />
-          <GoalChip
-            label='Monthly goal'
-            goal={counters.monthlyGoal}
-            isMet={counters.isMonthlyGoalMet}
-          />
-        </div>
-      )}
+    <div className='grid grid-cols-3 gap-2 sm:gap-3'>
+      <StatTile
+        isStacked
+        icon='🎞️'
+        value={counters.watched}
+        label='Watched'
+        detail={
+          counters.watchedMinutes > 0
+            ? formatDuration(counters.watchedMinutes * 60_000)
+            : undefined
+        }
+      />
+      <StatTile
+        isStacked
+        icon='📅'
+        value={getGoalValue(counters.thisWeek, counters.weeklyGoal)}
+        label='This week'
+        goal={
+          counters.weeklyGoal === null
+            ? undefined
+            : { current: counters.thisWeek, target: counters.weeklyGoal }
+        }
+        prompt={counters.weeklyGoal === null ? setGoalPrompt : undefined}
+      />
+      <StatTile
+        isStacked
+        icon='🗓️'
+        value={getGoalValue(counters.thisMonth, counters.monthlyGoal)}
+        label='This month'
+        goal={
+          counters.monthlyGoal === null
+            ? undefined
+            : { current: counters.thisMonth, target: counters.monthlyGoal }
+        }
+        prompt={counters.monthlyGoal === null ? setGoalPrompt : undefined}
+      />
     </div>
   );
 }

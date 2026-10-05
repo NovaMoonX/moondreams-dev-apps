@@ -16,6 +16,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
+import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { CHECKLIST_CATEGORY_LABELS } from '@apps/waypoint/constants';
 import type {
@@ -208,13 +209,7 @@ export default function ChecklistSection({
         <div className='space-y-4'>
           {dayGroups.map(({ bucket, items: dayItems }) => (
             <div key={bucket} className='space-y-2'>
-              <div className='flex items-center gap-3'>
-                <div className='border-border flex-1 border-t' />
-                <span className='text-muted-foreground text-sm font-medium'>
-                  {getBucketLabel(bucket, trip.startDate)}
-                </span>
-                <div className='border-border flex-1 border-t' />
-              </div>
+              <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
               <ul className='divide-border divide-y'>
                 {dayItems.map((item) => {
                   const assignedUsers = item.assignedToUids

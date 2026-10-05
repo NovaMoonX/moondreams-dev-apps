@@ -11,11 +11,11 @@ These shape everything below. Each is also listed under [Open questions](#open-q
 3. **A viewing is an instant keyed by the viewer's local day.** The calendar, the counters and the week/month goals all key off `toLocalDateInputValue(showtimeAt)`. Release dates are date-only (UTC midnight).
 4. **Savings count what a non-member would have paid: price + convenience fee + tax.** Members pay no convenience fee, so the fee on a ticket is one *avoided*; it counts as value and is also totalled on its own as "fees avoided". (See [Savings and break-even](#5-savings-and-break-even).)
 5. **Aggregates are never stored.** Savings, break-even, counters, format splits and chips are all computed from the three collections by memoized selectors. A member has on the order of 150 viewings a year, so there is nothing to optimize and nothing to drift.
-6. **Movie data is OMDb, behind two `onCall` functions** that hold the key. The free tier allows about 1,000 lookups a day **for the whole app, not per member**, so the functions share a server-side cache and a daily budget guard, the browser debounces and caches, and a manual "add by title" path keeps the app usable when the budget is spent. A small **snapshot** of each movie is copied into the watchlist item and each viewing, so the calendar renders with no network.
+6. **Movie data comes from TMDB (whenever its key is set) or OMDb, behind two `onCall` functions** that hold the keys. OMDb's free tier allows about 1,000 lookups a day **for the whole app, not per member** (TMDB isn't rationed), so the functions share a server-side cache and a daily budget guard, the browser debounces and caches, and a manual "add by title" path keeps the app usable when the budget is spent. A small **snapshot** of each movie is copied into the watchlist item and each viewing, so the calendar renders with no network.
 7. **There is no tax-rate source, so tax behaves like the convenience fee:** the membership's rate is gauged from the bill the member types in Setup (total ÷ cost − 1), and from then on ticket tax is a choice among chips built from the rates used on past tickets, the most-used one preselected. Each ticket stores its own rate and tax amount.
 8. **The membership start date is a required Setup field.** It anchors the billing cycle (cost so far and break-even) and is the earliest date a viewing can be given.
 9. **The app never tries to learn which formats a movie plays in.** Format is always the member's pick from a fixed list.
-10. **A ticket can be entered itemized or as one all-in total.** Either way the ticket stores price, fee, tax and total with `total = price + fee + tax`; an all-in ticket's price and tax are estimates, and it remembers it was entered that way.
+10. **A ticket is entered as the three amounts AMC itemizes: price, fee and tax in dollars.** It stores them with `total = price + fee + tax`, and `taxRate = tax ÷ price` for history. The old all-in entry mode was dropped; tickets saved that way keep `entryMode: 'ALL_IN'` and reopen as the same three amounts, and every save writes `'ITEMIZED'`.
 
 ---
 
@@ -118,7 +118,7 @@ interface MovieSnapshot {
 
 - **No `seen` field.** "Seen", "next planned date" and "latest watched date (×2)" are joined from viewings by `movieKey` in a selector. This also makes the watchlist drawer's "Remove" safe: removing an item doesn't touch its viewings, and the movie simply stops appearing in the list.
 - **No `priority` on the viewing**, and no free-text notes in the MVP.
-- The `movieKey` string is provider-namespaced on purpose. The `imdb-` id is the provider's own title id; `manual-` movies come from the "Add it by title" path and have no poster and no refresh. If OMDb's terms turn out not to allow what this design does (see [Movie Data Service](#movie-data-service)), the key format and the snapshot shape survive a provider swap; only the functions change.
+- The `movieKey` string is provider-namespaced on purpose. The `imdb-` and `tmdb-` ids are each provider's own title id (`getMovie` asks whichever issued the key); `manual-` movies come from the "Add it by title" path and have no poster and no refresh. If OMDb's terms turn out not to allow what this design does (see [Movie Data Service](#movie-data-service)), the key format and the snapshot shape survive a provider swap; only the functions change.
 
 #### 3. Viewing
 
@@ -133,7 +133,7 @@ interface Viewing {
   endsAt: number;                    // INSTANT: showtimeAt + previews buffer + runtime (fallback runtime if null); recomputed whenever showtimeAt changes
   status: ViewingStatus;             // PLANNED → SEEN; never back
   rating: number | null;             // 1–5 whole stars; only meaningful when SEEN
-  ticket: Ticket | null;             // null until "Mark paid" or the inline "+ Add ticket details"
+  ticket: Ticket | null;             // null until "Mark paid" or the add form's "Yes, I paid"
   createdAt: number;
   lastEditedAt: number;
 }
@@ -170,25 +170,58 @@ interface Ticket {
 | Opening tab contents and its count | watchlist release dates, local today | `selectOpeningRows` |
 | Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
 | Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
+| Previews window | the earliest `PLANNED` viewing with `showtimeAt − 30 min ≤ now ≤ showtimeAt + 10 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
 | Format split (count and %), activity over time, rating groups, per-format premium averages (Next Steps) | viewings | `selectDashboardBreakdowns` |
 
 ---
 
 ## Movie Data Service
 
+### How a lookup works, end to end
+
+This is the one place that ties the pieces together; the sections below hold the reasoning and the provider details.
+
+**Searching** (`MoviePicker` → `searchMovies`)
+1. **Browser.** After a pause in typing (450 ms) and at least 2 characters, TanStack Query asks for the search. Its key is the normalized text under `a-list/movies/search/v2`, it is fresh for a day and persisted, so a repeat costs nothing, even offline.
+2. **`searchMovies`** (signed-in callers only) trims and lowercases the text and requires 2 to 100 characters.
+3. **Which provider** (`pickProvider`): `MOVIE_PROVIDER` if it is set to `tmdb` or `omdb`; otherwise **TMDB whenever `TMDB_API_KEY` is set; otherwise OMDb** (which answers from sample movies in the emulator when no key can be read).
+4. **Server cache.** `apps/a-list/searchCache/<hash of provider + version + text>`. If it is under 7 days old the answer returns with no upstream call. The provider is in the key, so TMDB and OMDb never serve each other's results.
+5. **On a miss**, OMDb calls are counted against the daily budget (900 for the app, 100 per member, refused with "resting for today" beyond that). TMDB calls are not budgeted.
+6. **Fetch.** Page 1, then page 2 only if the provider says there is more (OMDb: over 10 matches; TMDB: more than one page). If page 2 fails, page 1 is still returned.
+7. **Shape.** Merge, drop duplicates, sort newest first (OMDb by year, TMDB by release date, so upcoming films lead), keep 20, cache, return `{ movieKey, title, year, posterUrl }`.
+8. **Browser.** A result is hidden when it is already on the watchlist, by key or, for the same film saved under the other provider's key, by title and year.
+
+**Opening a movie** (`AddFlow` → `getMovie`)
+1. **Which provider:** by the key's prefix, not the current default: `tmdb-` asks TMDB, `imdb-` asks OMDb (`manual-` never reaches the server). A key whose provider has no key configured gets "isn't set up", and the manual path is offered.
+2. **Server cache.** `apps/a-list/movieCache/<movieKey>`: 30 days once released, 1 day while unreleased or undated (those dates move).
+3. **On a miss** (OMDb budgeted, TMDB not), the provider's details become one snapshot: title, release date (date-only, UTC midnight), poster, runtime, content rating. For TMDB the date is the US theatrical release and the rating is the US certification.
+4. **Browser.** The snapshot is copied into the watchlist item or viewing, so the calendar renders with no network. `useRefreshUnreleasedMovies` re-asks for up to 10 unseen, unreleased `imdb-` or `tmdb-` items a day and writes back only what changed.
+
+**Where a failure lands:** no key, or TMDB rejecting its key → "isn't set up"; TMDB's 429, OMDb's 401 (its way of saying the daily limit is spent) or our own budget → "resting for today"; anything else → "unavailable". Each of those leaves the manual "Add it by title" path open.
+
+| Situation | Provider used |
+| --- | --- |
+| `TMDB_API_KEY` set, no override | TMDB |
+| No TMDB key | OMDb |
+| `MOVIE_PROVIDER=omdb` or `tmdb` | that one |
+| A movie already saved as `imdb-…` | OMDb, whatever the default is |
+| A movie already saved as `tmdb-…` | TMDB, whatever the default is |
+
+Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getMovie.ts`, `movieProvider.ts`, `tmdb.ts`, `omdb.ts`, `movieCache.ts`, `lookupBudget.ts`) and, in the app, `components/add/MoviePicker.tsx`, `queries/movieQueries.ts`, `hooks/useRefreshUnreleasedMovies.ts`.
+
 **The problem:** the app needs search, release dates, runtimes, content ratings and posters from a free source. No free source knows which AMC formats or showtimes exist, and the app never tries to find out (formats and prices stay member-entered).
 
-**Provider: OMDb.** What I confirmed on its site: free keys exist, its content is licensed CC BY-NC 4.0, and a separate high-resolution Poster API exists but is patron-only. What I could **not** confirm from its pages, and am taking from the owner (the 1,000-lookups-a-day free limit) or from memory (everything else), so it is unverified until one real call is made before the mapper is written:
+**Providers: TMDB (primary when `TMDB_API_KEY` is set) and OMDb (the alternative).** TMDB lists unreleased films, which OMDb mostly doesn't; the functions pick it automatically and `MOVIE_PROVIDER` forces one. Search is `GET /3/search/movie` (20 a page; a second page when there is one; merged, newest release first, capped at 20) and details are `GET /3/movie/{id}?append_to_response=release_dates` (US theatrical date, US certification, runtime, `image.tmdb.org` poster). TMDB's terms: free for non-commercial use only, credit line and logo required, cached data under 6 months. Everything below about OMDb still applies to it. **OMDb:** what I confirmed on its site: free keys exist, its content is licensed CC BY-NC 4.0, and a separate high-resolution Poster API exists but is patron-only. What I could **not** confirm from its pages, and am taking from the owner (the 1,000-lookups-a-day free limit) or from memory (everything else), so it is unverified until one real call is made before the mapper is written:
 
-- *Search* (`?s=<title>&type=movie`) returns up to 10 results per page with title, year, an id of the form `tt1234567`, and a poster URL. It carries **no release date and no runtime**, so every field the app needs beyond a title card costs a second call.
+- *Search* (`?s=<title>&type=movie&page=<n>`) returns up to 10 results per page with title, year, an id of the form `tt1234567`, and a poster URL, in no useful order and with no sort option. The function fetches a second page only when `totalResults` is over 10, merges, drops duplicates, sorts newest year first and keeps 20. It carries **no release date and no runtime**, so every field the app needs beyond a title card costs a second call.
 - *By id* (`?i=<id>`) returns a release date as text (like `31 Mar 1999`, or `N/A`), a runtime as text (like `136 min`, or `N/A`), a rating (`PG-13`, `Not Rated`, `N/A`) and the poster URL. The mapper treats every `N/A` as `null`.
 - **Terms.** CC BY-NC 4.0 is a non-commercial license that requires credit; this is a personal, non-commercial app, so it fits, and the plan is an About row in Membership settings that credits OMDb. Whether OMDb separately allows caching results, or hot-linking its poster images, I could not confirm; both are gated before the movie-data PR merges (see Open questions).
 - **What a real response confirms** (the owner's sample by-id response for `tt3896198`): `Released` is `"05 May 2017"`, `Runtime` is `"136 min"`, `Rated` is `"PG-13"`, `Poster` is an `https://m.media-amazon.com/…` URL, and `imdbID` is `tt` plus digits. The mapper (`functions/src/apps/a-list/omdb.ts`) parses exactly these shapes and maps `N/A` (and "Not Rated"/"Unrated" for the rating) to `null`.
 - **Search response shape** is corroborated by third-party OMDb client docs (not a live call): `{ Response: "True", Search: [{ Title, Year, imdbID, Type, Poster }], totalResults }`, or `{ Response: "False", Error }` where `Error` is `"Movie not found!"` or `"Too many results."` (a very short query); both errors map to an empty result.
 - **Still unverified, because the build sandbox can't reach `omdbapi.com` or the poster host (a pre-merge gate for the owner):** a live search and by-id call, whether OMDb's terms allow caching and hot-linking, and how a spent daily limit is reported (handled as HTTP 401 → `resource-exhausted`). Make one real search and one by-id call after setting the key. Until a key is set, the **local emulator** answers from an OMDb-shaped fixture catalog in the same module (a deployed function never does), so the whole flow runs offline.
-- **Release-date accuracy.** It isn't clear that OMDb's release date is the *US theatrical* date, or that it carries movies a week from release at all. The Opening tab depends on both, so this is a real risk to test early with a few upcoming titles. The mitigation is built in: the manual path takes a release date.
+- **Release-date accuracy (OMDb).** It isn't clear that OMDb's release date is the *US theatrical* date, or that it carries movies a week from release at all (a live check found it lacks unreleased films such as Vampire Carnival, which is why TMDB is primary). The Opening tab depends on both, so this is a real risk to test early with a few upcoming titles. The mitigation is built in: the manual path takes a release date.
 
-**The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
+**The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call, so a search with more than 10 matches costs two. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
 
 1. **The browser** debounces typing (`useDebouncedValue` with `DEBOUNCE_MS.autocomplete`), searches only from `MOVIE_SEARCH_MIN_CHARS`, never searches an empty box (it shows the watchlist), and remembers results with TanStack Query (persisted, so a repeat is free even offline). Search results never trigger per-result details calls; details are fetched only for the movie actually picked.
 2. **A shared server-side cache** (Firestore, written and read only by the functions through the admin SDK; clients have no access): `apps/a-list/searchCache/{key}` and `apps/a-list/movieCache/{movieKey}`, each `{ value, cachedAt }`. Search results live 7 days; details live 30 days for a movie already released and 1 day when the release date is null or in the future (those are the ones that change). A cache hit costs no lookup, and the second member to search for the same movie costs nothing.
@@ -200,7 +233,7 @@ interface Ticket {
 **Two callables** (`functions/src/apps/a-list/`, exported from `functions/src/index.ts`):
 
 ```typescript
-// searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 10)
+// searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 20, newest year first)
 interface MovieSearchResult {
   movieKey: string;                  // "imdb-tt0133093"
   title: string;
@@ -212,7 +245,7 @@ interface MovieSearchResult {
 //   release date and runtime parsed from text; every "N/A" becomes null
 ```
 
-Both follow the existing callable conventions: reject without `request.auth?.uid`; validate and length-cap input (`query` ≤ 100 characters, `movieKey` matches `^imdb-tt[0-9]{7,10}$`); a hard timeout on the upstream call; `maxInstances` capped low. The provider key is a Functions secret (`OMDB_API_KEY`) and never appears in a response or a log, **including the upstream URL, since the key is in it**; the query text is not logged. Per `CLAUDE.md`, a newly added `onCall` may need its public-invoker grant (the symptom is a CORS error on the preflight); that step is in the wiring checklist at the end.
+Both follow the existing callable conventions: reject without `request.auth?.uid`; validate and length-cap input (`query` ≤ 100 characters, `movieKey` matches `^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9})$`); a hard timeout on the upstream call; `maxInstances` capped low. The provider keys are Functions secrets (`TMDB_API_KEY`, `OMDB_API_KEY`) and never appear in a response or a log, **including the upstream URL, since the key is in it**; the query text is not logged. Per `CLAUDE.md`, a newly added `onCall` may need its public-invoker grant (the symptom is a CORS error on the preflight); that step is in the wiring checklist at the end.
 
 **Client queries** (`src/apps/a-list/queries/movieQueries.ts`, `queryOptions` factories; keys include every parameter that changes the result and nothing else):
 
@@ -228,9 +261,9 @@ export const movieQueryKeys = {
 
 `persist: true` is right for both: they reach a third party and hold nothing sensitive, so search and a re-opened movie work at the theater with poor signal. There is no tax query: nothing is looked up for tax.
 
-**Posters** load straight from the URL OMDb returns (`posterUrl`) with `referrerPolicy='no-referrer'`. They are small (OMDb's free posters are around 300 px wide), which is fine for a phone cell and soft on a large screen. `EnrichedImage` hides itself when an image fails, which is wrong for a calendar cell that has to stay filled, so `PosterCover` is its own small component: `<img loading="lazy">` with an `onError` fallback to a flat tile showing the title. That fallback also makes a hot-linking refusal degrade gracefully instead of breaking the calendar.
+**Posters** load straight from the URL the provider returns (`posterUrl`; `image.tmdb.org` for TMDB) with `referrerPolicy='no-referrer'`. They are small (OMDb's free posters are around 300 px wide), which is fine for a phone cell and soft on a large screen. `EnrichedImage` hides itself when an image fails, which is wrong for a calendar cell that has to stay filled, so `PosterCover` is its own small component: `<img loading="lazy">` with an `onError` fallback to a flat tile showing the title. That fallback also makes a hot-linking refusal degrade gracefully instead of breaking the calendar.
 
-**Keeping release dates honest.** The Opening tab is only as right as the stored release date, and studios move dates. A `useRefreshUnreleasedMovies` hook (mounted once in the orchestrator, no listener) takes the *unseen*, non-manual watchlist items whose `releaseDate` is null or not yet past (capped at 10 a session, picked by a daily rotation: the eligible items sorted by `movieKey`, starting at offset `(days since epoch × 10) mod count` and wrapping, so every eligible movie is checked within a few days without any stored bookkeeping), and for each calls `queryClient.fetchQuery(movieDetailsQueryOptions(key))`. The query's 24-hour `staleTime` and the server's 1-day cache for unreleased movies mean a device asks at most once a day and the whole app asks OMDb at most once a day per movie. If the fresh snapshot differs from the stored one, it writes `{ movie, lastEditedAt }` to that watchlist item with a field-scoped `updateDoc`. Viewings' snapshots are never refreshed.
+**Keeping release dates honest.** The Opening tab is only as right as the stored release date, and studios move dates. A `useRefreshUnreleasedMovies` hook (mounted once in the orchestrator, no listener) takes the *unseen* watchlist items with an `imdb-` or `tmdb-` key (never `manual-`) whose `releaseDate` is null or not yet past (capped at 10 a session, picked by a daily rotation: the eligible items sorted by `movieKey`, starting at offset `(days since epoch × 10) mod count` and wrapping, so every eligible movie is checked within a few days without any stored bookkeeping), and for each calls `queryClient.fetchQuery(movieDetailsQueryOptions(key))`. The query's 24-hour `staleTime` and the server's 1-day cache for unreleased movies mean a device asks at most once a day and the whole app asks its provider at most once a day per movie. If the fresh snapshot differs from the stored one, it writes `{ movie, lastEditedAt }` to that watchlist item with a field-scoped `updateDoc`. Viewings' snapshots are never refreshed.
 
 ---
 
@@ -345,7 +378,7 @@ Step 1 Membership (confirm perks, read-only copy)
            < cost           → inline error, Next disabled
            implied rate > 0.25 → inline error (almost certainly a typo)
   → Step 3 Goals (weekly, monthly; both optional) → one setDoc → "Add movies you've already seen?"
-        ├─ Add past movies → AddDrawer in past-movies mode (dates can't precede the start date)
+        ├─ Add past movies → the add subview in past-movies mode (dates can't precede the start date)
         └─ Skip            → empty Calendar (with its "Add your first movie" / "Add past movies" nudge)
 ```
 
@@ -397,6 +430,10 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 
 `selectPendingSeenPrompts(state, now)` is every `PLANNED` viewing with `endsAt ≤ now`, oldest first. The host component shows the first one only when no other overlay is open, and keeps a session-local set of "Later" ids in its own state (not stored: "Later" means *until the next open*). Answering "Seen it" or "Didn't go" removes the viewing from the queue by changing or deleting the document, and the next one appears.
 
+
+#### 11. The previews strip
+
+`selectPreviewsWindowViewing(state, now)` returns the earliest `PLANNED` viewing whose previews are near: `showtimeAt − 30 min ≤ now ≤ showtimeAt + 10 min` (display only, the viewer's local clock; `useNow`'s 15-second tick moves the edges). `PreviewsNudge` shows a small bubble for it above the Calendar icon, folds it into a chip when the user dismisses it (in component state, so until the next open; tapping the chip unfolds it again), and never opens an overlay: its button opens the ordinary add subview in `quick` mode. Because it is not a drawer it cannot stack on the Seen prompt, which may appear over it for an earlier showing. Quick mode saves a tapped result as `WANT_TO_SEE` with no preferred format and no details step, skips a title already on the watchlist (by key, or by title and year across providers) with an "Already on your watchlist" toast, and, when the details lookup fails (poor signal in a theater), saves what the search returned and leaves the rest to `useRefreshUnreleasedMovies`, which covers null-dated items.
 ---
 
 ## Security Rules Design Criteria
@@ -462,7 +499,7 @@ match /apps/a-list/memberships/{uid} {
   allow delete: if false;
 
   match /watchlist/{movieKey} {
-    // valid: exact keys; movieKey field == document id and matches ^(imdb-tt[0-9]{7,10}|manual-[A-Za-z0-9-]{8,40})$; isMovieValid(movie);
+    // valid: exact keys; movieKey field == document id and matches ^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$; isMovieValid(movie);
     //        priority in the three values; preferredFormat null or one of the six; createdAt/lastEditedAt numbers
     allow read, delete: if isOwner();
     allow create: if isOwner() /* && isWatchlistItemValid(request.resource.data) */;
@@ -542,8 +579,9 @@ No cached document is ever written back whole. A transaction is used only where 
 - **`CalendarScreen`** — owns the selected day (local state, set from `onDateSelect`), the counters row, the Calendar, and the inline day panel. Reads `selectViewingsByDay` and `selectCounters`; knows nothing about tickets.
 - **`PosterCell`** — pure: `(dayViewings) → PosterSplit`. No store access; `renderCell` is a thin closure over the map.
 - **`ViewingDrawer`** — owns its internal view (`details | ticket | edit`) and the swap-in-place back link; calls actions and the destructive confirm. Everything else about a viewing (row, badges, stars) is a pure presentational component.
-- **`AddDrawer`** — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
+- **`AddFlow`** (shown full-page by `AddSubview`, or inside the watchlist drawer for "Add to calendar") — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. In the watchlist's `quick` mode (the trailers loop) a tap on a result saves it straight away with the default priority and no toast (only a duplicate or a failure toasts), falling back to what the search knew if the details lookup fails. `TrailerPicksList` shows the picks, derived from the watchlist (items created since the previews window opened, as of the screen opening), and its Undo calls `removeWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
 - **`SeenPromptHost`** and **`useRefreshUnreleasedMovies`** — the two background concerns, each mounted once in `AList.tsx`. Neither renders anything except the prompt drawer.
+- **`PreviewsNudge`** (`components/shell/`) — a third, quieter one: rendered by `BottomNav` above the Calendar button (so on every tab, never as an overlay) while a showing's previews are near. It keeps its own session-local list of folded showings, like "Later".
 - **Pure utilities** (`utils/`): `money.ts` (parse/format cents), `dayKeys.ts`, `billing.ts`, `savings.ts`, `viewingState.ts`, `tax.ts` (itemized tax, all-in split, bill-derived rate), `watchlistRows.ts`, `opening.ts`, `chips.ts` (fee and tax-rate chips). All are plain functions over plain data with no React or Firebase, so the arithmetic that decides "have I broken even?" is exercised without a UI.
 - **Reuse, not copy:** `useDebouncedValue`/`DEBOUNCE_MS`, `useNow`, `queryClient`/`DAY_MS`, `normalizeString`, `formatDateUTC`/`formatDate`/`formatTime`/`formatDateTime`, `fromDateInputValue`/`toLocalDateInputValue`/`fromLocalDateAndTimeInputValues`, `useActionModal`, and `AppToggle` if an immediate-effect toggle ever appears. **`SectionHeader`, `ModalFooterActions` and `DeleteIconButton` currently live in Waypoint's `components/`.** A-List is the second app that needs them, so they move to central `src/components/` in the first A-List PR that uses one, with Waypoint's imports updated in the same PR. A-List never imports from `@apps/waypoint`.
 
@@ -554,7 +592,7 @@ No cached document is ever written back whole. A transaction is used only where 
 - **Overlays.** Setup and Membership settings are `Modal`s. Every movie flow (Add, viewing details, watchlist item, Seen prompt) is a `Drawer` at every width: the deliberate exception recorded in the UX doc. Mark paid, Edit and Add to calendar swap the open drawer's content in place with a "‹ Back" link. Only the destructive confirm (`useActionModal().confirm({ destructive: true })`) is ever stacked.
 - **Titles are plain nouns:** "Membership", "Movie", "Ticket", "Viewing", "Watchlist item". The verb belongs on the button ("Add", "Save", "Add + another", "Add & finish").
 - **Forms use `Form` + `FormFactories`.** Setup's three steps are three small `Form`s inside a stepper; the Ticket and Edit forms are `Form`s; the movie picker, fee chips, tax chips and star rating are `FormFactories.custom` fields. The Ticket form's itemized / all-in switch is local form state that decides which amount field renders. Money is entered through a text input with `inputMode="decimal"` and parsed by `parseMoneyToCents`; a number input's spinner and float parsing are wrong for money.
-- **Submit disables until valid** (`onDataChange` + `isValid`). Optional ticket details sit behind "+ Add ticket details"; a "Custom/Other" fee or tax-rate input renders only once "Other" is selected.
+- **Submit disables until valid** (`onDataChange` + `isValid`). Ticket details sit behind the "Already bought your ticket?" question (pills: "Yes, I paid" / "Not yet"); a "Custom/Other" fee or tax-rate input renders only once "Other" is selected.
 - **Layout.** One border per card, flat rows inside; `StatTile` is the only card allowed on a screen. Counts appear only when greater than zero. Posters carry no border of their own; the cell is the frame.
 - **No raw `<button>/<input>/<select>/<textarea>/<a>`** anywhere, including the star rating (Dreamer UI `Button`s with an icon) and the cell tap target (the Calendar's own). `join()` for every conditional class.
 - **Date-only and instants never share a formatter** (see Logic §2). Every screen that shows a date is validated in a timezone behind UTC.
@@ -596,14 +634,14 @@ src/apps/a-list/
 │   ├── money.ts  dayKeys.ts  billing.ts  savings.ts  viewingState.ts
 │   ├── tax.ts  watchlistRows.ts  opening.ts  chips.ts
 └── components/
-    ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx
+    ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx  PreviewsNudge.tsx
     ├── setup/       SetupModal.tsx  SetupStepper.tsx  CostStep.tsx  MembershipSettingsModal.tsx
-    ├── calendar/    CalendarScreen.tsx  CounterRow.tsx  PosterCell.tsx  PosterSplit.tsx  DayPanel.tsx  ViewingRow.tsx
+    ├── calendar/    CalendarScreen.tsx  CounterRow.tsx  PosterCell.tsx  PosterSplit.tsx  DayDrawer.tsx  DayHoverCard.tsx  ViewingRow.tsx
     ├── viewing/     ViewingDrawer.tsx  TicketForm.tsx  EditViewingForm.tsx  FeeChips.tsx  TaxChips.tsx  SeenPromptHost.tsx  SeenPrompt.tsx
-    ├── add/         AddDrawer.tsx  MoviePicker.tsx  PastMoviesStrip.tsx
-    ├── watchlist/   WatchlistScreen.tsx  WatchlistTabs.tsx  WatchlistRow.tsx  WatchlistItemDrawer.tsx
+    ├── add/         AddFlow.tsx  AddSubview.tsx  MoviePicker.tsx  PastMoviesStrip.tsx
+    ├── watchlist/   WatchlistScreen.tsx  WatchlistFilters.tsx  WatchlistDetailsFields.tsx  WatchlistRow.tsx  WatchlistItemDrawer.tsx
     ├── dashboard/   DashboardScreen.tsx  StatTile.tsx  (Next Steps: FormatSplit.tsx  ActivityChart.tsx  RatingsSpend.tsx  PremiumInsights.tsx)
-    └── shared/      PosterCover.tsx  StarRating.tsx  FormatBadge.tsx  PriorityBadge.tsx  GoalChip.tsx
+    └── shared/      PosterCover.tsx  FormatBadge.tsx  PriorityBadge.tsx  ViewingStatusBadge.tsx
 
 functions/src/apps/a-list/       searchMovies.ts  getMovie.ts  lookupBudget.ts  movieCache.ts
 scripts/seeds/aList.ts
@@ -618,8 +656,8 @@ Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineCh
 - `public/manifest-a-list.json`, a logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` (the registry's own comment lists exactly these). The root README's "Current apps" list is stale (it names only Worth the Wait), so this first PR rewrites it to list every app, each with an emoji; `CLAUDE.md` (Release hygiene) and `.github/copilot-instructions.md` (Documentation quality) each gain a rule that adding or renaming an app updates that list in the same PR.
 - `src/store/index.ts`: `aList` reducer and `RootState`.
 - `firestore.rules`: the block above (including the three server-only deny blocks), in alphabetical order, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
-- `functions/src/index.ts`: export `searchMovies` and `getMovie`; set the `OMDB_API_KEY` secret; after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
-- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, and one day with four movies. Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
+- `functions/src/index.ts`: export `searchMovies` and `getMovie`; set the `TMDB_API_KEY` and `OMDB_API_KEY` secrets (create `TMDB_API_KEY` in production before the PR merges); after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
+- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, one day with four movies, and one that starts 20 minutes after the seed runs so the trailers strip shows (it leaves the window about 40 minutes later). Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
 - `SITE_VERSION` bumped (minor) in `src/lib/app/app.constants.ts` in each PR; `README.md`, `UX.md`, `TECHNICAL.md` current.
 
 ---

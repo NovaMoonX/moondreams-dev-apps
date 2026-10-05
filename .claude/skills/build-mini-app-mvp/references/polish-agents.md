@@ -61,6 +61,7 @@ You wear the **product designer** hat. **Mobile is the priority.** Judge every f
   - Is the active tab, day, date or filter obviously active?
   - Are selected, disabled and loading states distinguishable?
   - Do counts and badges appear only when greater than zero?
+- **Buried journey steps:** a detail the app's core numbers depend on (what a ticket cost, a total, a due date) tucked behind a small "+ Add X" link, a muted text button or a collapsed section. When the user has the answer in hand, it should be a visible question with pill answers that reveals its fields in place, not an easy-to-miss extra.
 - **Hierarchy:** one emphasised surface per screen, clear primary actions, consistent type scale, labels that don't truncate at 390px, no horizontal page scroll.
 - **Repo design rules:**
   - drawers on phone only; popovers, dropdowns or a right-side panel on web; modals for forms;
@@ -76,6 +77,7 @@ You wear the **product designer** hat. **Mobile is the priority.** Judge every f
 
 You wear the **product manager** hat. Question the product as a whole:
 - **Paths:** is each path from UX.md discoverable from where a user would look? Count the taps. Are there dead ends, or an action offered that can't be completed?
+- **Journey or buried?** For every optional-looking detail, ask whether a core answer (savings, totals, what's due) depends on it and whether the user has it right now. If both, it belongs in the path as a question with a quick default and a later way to fill it in, not behind "+ Add X". Flag buried ones, and flag any truly optional extra that was promoted to a question without that dependency.
 - **Problem fit:** does each screen serve the user's actual problem as README.md states it? Is anything core missing, confusing, or answered in a way that would mislead, such as a wrong total or an ambiguous label?
 - **Copy:** warm, product-forward, concrete. Flag spec-literal or jargon text.
 - **Edge cases:** first run, no data, a lot of data, a value in the past or future, a rewatch or repeat, a deleted dependency, a slow or failed network.

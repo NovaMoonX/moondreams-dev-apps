@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -9,7 +8,6 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
-import NavButton from '@/ui/NavButton';
 
 import AttentionSection from './components/AttentionSection';
 import CatsSection from './components/CatsSection';
@@ -163,12 +161,6 @@ function NineLives() {
   return (
     <div className='page'>
       <div className='mx-auto max-w-6xl space-y-6 py-8 relative'>
-        <div className='pb-2'>
-          <NavButton href='/' variant='link'>
-            <ChevronLeft /> Back home
-          </NavButton>
-        </div>
-
         <HouseholdSwitcher
           households={households}
           selectedHousehold={selectedHousehold}

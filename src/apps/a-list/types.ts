@@ -23,7 +23,7 @@ export type AmcFormat =
   'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
-export type WatchlistTab = 'opening' | 'all' | WatchPriority | 'seen';
+export type WatchlistFilter = 'opening' | WatchPriority | 'seen';
 export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
 
 export interface MovieSnapshot {
@@ -38,7 +38,7 @@ export interface MovieSnapshot {
 }
 
 export interface MovieSearchResult {
-  /** Provider-namespaced id, e.g. "imdb-tt0133093". */
+  /** Provider-namespaced id, e.g. "tmdb-438631", "imdb-tt0133093". */
   movieKey: string;
   title: string;
   year: number | null;
@@ -46,7 +46,8 @@ export interface MovieSearchResult {
 }
 
 export type AListOverlay =
-  | { kind: 'add'; destination: 'watchlist' }
+  /** `quick` is the trailers loop: one tap saves a result with the default priority and the search stays open. */
+  | { kind: 'add'; destination: 'watchlist'; mode?: 'quick' }
   /** `date` is a local "YYYY-MM-DD" the date field starts on. */
   /** `past` is the backfill loop: "Add + another" keeps the drawer open for the next movie. */
   | {
@@ -55,8 +56,10 @@ export type AListOverlay =
       date: string;
       mode: 'single' | 'past';
     }
+  | { kind: 'day'; dayKey: string }
   | { kind: 'viewing'; id: string }
   | { kind: 'watchlistItem'; movieKey: string }
+  | { kind: 'tickets'; view: 'paid' | 'unpriced' }
   | { kind: 'membership' };
 
 export interface WatchlistItem {
@@ -82,7 +85,7 @@ export interface Viewing {
   endsAt: number;
   /** PLANNED → SEEN; never back. */
   status: ViewingStatus;
-  /** null until "Mark paid" or "+ Add ticket details". Documents written before tickets existed lack the key. */
+  /** null until "Mark paid" or "Yes, I paid" in the add form. Documents written before tickets existed lack the key. */
   ticket: Ticket | null;
   /** 1–5 whole stars, only once seen. Documents written before ratings existed lack the key. */
   rating: number | null;

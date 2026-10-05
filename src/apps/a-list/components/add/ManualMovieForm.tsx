@@ -8,6 +8,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { createDateInputField } from '@/utils/formFactoryHelpers';
 import type { MovieSnapshot } from '@apps/a-list/types';
+import { generateUuid } from '@/utils/idUtils';
 
 export interface ManualMovieDraft {
   title: string;
@@ -40,6 +41,7 @@ function ManualMovieForm({
       label: 'Title',
       placeholder: 'Dune: Part Three',
       variant: 'outline',
+      rounded: 'full',
     }),
     ...(showReleaseDate
       ? [
@@ -47,6 +49,7 @@ function ManualMovieForm({
             name: 'releaseDate',
             label: 'Release date',
             variant: 'outline',
+            rounded: 'full',
           }),
         ]
       : []),
@@ -66,7 +69,7 @@ function ManualMovieForm({
       runtimeMinutes: null,
       contentRating: null,
     };
-    onContinue(`manual-${crypto.randomUUID()}`, movie);
+    onContinue(`manual-${generateUuid()}`, movie);
   };
 
   return (
@@ -115,10 +118,20 @@ function ManualMovieForm({
       <ModalFooterActions
         rightActions={
           <>
-            <Button type='button' variant='secondary' onClick={onCancel}>
+            <Button
+              type='button'
+              variant='secondary'
+              rounded='full'
+              onClick={onCancel}
+            >
               Back
             </Button>
-            <Button type='button' disabled={!title} onClick={handleContinue}>
+            <Button
+              type='button'
+              rounded='full'
+              disabled={!title}
+              onClick={handleContinue}
+            >
               Next
             </Button>
           </>

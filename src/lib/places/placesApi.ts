@@ -1,4 +1,5 @@
 import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from './types';
+import { generateUuid } from '@/utils/idUtils';
 
 /**
  * App-agnostic client for Google Places API (New), called directly from the
@@ -37,7 +38,7 @@ export function getPlaceBiasFromItems(
 }
 
 export function createSessionToken() {
-  return crypto.randomUUID();
+  return generateUuid();
 }
 
 export function buildMapsUrl(placeId: string) {

@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -11,7 +10,6 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import AppToggle from '@/components/AppToggle';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
-import NavButton from '@/ui/NavButton';
 
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import JoinWithCodeModal from '@apps/waypoint/components/JoinWithCodeModal';
@@ -219,10 +217,6 @@ function Waypoint() {
   return (
     <div className='page'>
       <div className='mx-auto max-w-4xl space-y-6 py-8'>
-        <NavButton href='/' variant='link'>
-          <ChevronLeft /> Back home
-        </NavButton>
-
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h1 className='text-3xl font-semibold'>My Trips</h1>

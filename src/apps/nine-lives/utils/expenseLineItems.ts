@@ -1,3 +1,5 @@
+import { generateUuid } from '@/utils/idUtils';
+
 export interface LineItemValue {
   id: string;
   category: string;
@@ -6,5 +8,5 @@ export interface LineItemValue {
 }
 
 export function createEmptyLineItem(): LineItemValue {
-  return { id: crypto.randomUUID(), category: 'other', label: '', amount: '' };
+  return { id: generateUuid(), category: 'other', label: '', amount: '' };
 }

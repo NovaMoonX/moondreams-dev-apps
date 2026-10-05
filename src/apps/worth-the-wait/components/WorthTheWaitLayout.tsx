@@ -1,4 +1,3 @@
-import NavButton from '@/ui/NavButton';
 import { useAuth } from '@hooks/useAuth';
 import {
   Button,
@@ -10,7 +9,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
 import { formatList } from '@/utils';
-import { ChevronLeft } from '@moondreamsdev/dreamer-ui/symbols';
 import { useEffect, useMemo, useState } from 'react';
 import { BoxProvider } from '../context/BoxProvider';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
@@ -111,17 +109,11 @@ function WorthTheWaitLayout() {
   return (
     <div className='page pt-28'>
       <div className={join('mx-auto max-w-6xl space-y-6')}>
-        <header className='flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4'>
-          <NavButton href='/' variant='link'>
-            <ChevronLeft /> Back home
-          </NavButton>
-
-          {space ? (
-            <div className='flex items-center justify-center gap-3'>
-              <PresenceBadge className='w-fit shrink-0 self-center' />
-            </div>
-          ) : null}
-        </header>
+        {space && (
+          <header className='flex items-center justify-center gap-3 sm:justify-end'>
+            <PresenceBadge className='w-fit shrink-0 self-center' />
+          </header>
+        )}
 
         <main className='bg-card/80 border-border rounded-2xl border p-5 shadow-sm md:p-8'>
           <div className='max-w-3xl space-y-5'>

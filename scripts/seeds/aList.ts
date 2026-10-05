@@ -34,7 +34,8 @@ function movie(
 }
 
 // Keys and snapshots match the emulator's OMDb fixture catalog, so a seeded movie and a
-// searched one are the same movie. Posters are null so seeds work offline.
+// searched one are the same movie; one `tmdb-` key (already released, so never refreshed)
+// covers the TMDB key shape. Posters are null so seeds work offline.
 function getWatchlistFixtures(now: number) {
   return [
     {
@@ -77,6 +78,12 @@ function getWatchlistFixtures(now: number) {
       movie: movie('The Matrix', Date.UTC(1999, 2, 31), 136, 'R'),
       priority: 'IF_I_HAVE_TIME',
       preferredFormat: 'LASER',
+    },
+    {
+      movieKey: 'tmdb-438631',
+      movie: movie('Dune', Date.UTC(2021, 9, 22), 155, 'PG-13'),
+      priority: 'WANT_TO_SEE',
+      preferredFormat: null,
     },
   ];
 }
@@ -208,6 +215,13 @@ function getViewingFixtures(now: number) {
       hour: 14,
       awaiting: true,
     },
+    // Starts 20 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 40 minutes).
+    {
+      id: 'seed-viewing-previews',
+      movieKey: 'imdb-tt99000004',
+      daysFromNow: 0,
+      minutesFromNow: 20,
+    },
     {
       id: 'seed-viewing-starlight',
       movieKey: 'imdb-tt99000001',
@@ -216,7 +230,7 @@ function getViewingFixtures(now: number) {
     { id: 'seed-viewing-galaxy', movieKey: 'imdb-tt99000003', daysFromNow: 25 },
   ];
 
-  // One day each with two, three, four and five movies, to show every poster split.
+  // One day each with two, three, four and five movies, to show every poster split, past and ahead.
   const DUNE = 'imdb-tt15239678';
   const MATRIX = 'imdb-tt0133093';
   const MIDNIGHT = 'imdb-tt99000004';
@@ -226,13 +240,18 @@ function getViewingFixtures(now: number) {
     [-9, [MIDNIGHT, MATRIX, DUNE]],
     [-15, [HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
     [-17, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
+    // Yesterday: six seen movies, past the four a cell can split, so the "+N" shows in the current month.
+    [-1, [MATRIX, DUNE, MIDNIGHT, HOMETOWN, MATRIX, DUNE]],
+    // Planned days ahead, so the current month shows a split of three and of five too.
+    [8, [MATRIX, DUNE, MIDNIGHT]],
+    [11, [DUNE, HOMETOWN, MIDNIGHT, MATRIX, DUNE]],
   ];
   const multiPlan = multiDays.flatMap(([daysFromNow, movieKeys]) =>
     movieKeys.map((movieKey, index) => ({
-      id: `seed-viewing-day${-daysFromNow}-${index + 1}`,
+      id: `seed-viewing-day${daysFromNow < 0 ? -daysFromNow : `ahead${daysFromNow}`}-${index + 1}`,
       movieKey,
       daysFromNow,
-      hour: 11 + index * 3,
+      hour: daysFromNow === -1 ? 7 + index : 11 + index * 3,
     })),
   );
 
@@ -243,6 +262,7 @@ function getViewingFixtures(now: number) {
       daysFromNow,
       hour = 19,
       minute = 0,
+      minutesFromNow,
       awaiting = false,
     }: {
       id: string;
@@ -250,10 +270,14 @@ function getViewingFixtures(now: number) {
       daysFromNow: number;
       hour?: number;
       minute?: number;
+      minutesFromNow?: number;
       awaiting?: boolean;
     }) => {
       const { movie: snapshot } = find(movieKey);
-      const showtimeAt = getShowtime(now, daysFromNow, hour, minute);
+      const showtimeAt =
+        minutesFromNow === undefined
+          ? getShowtime(now, daysFromNow, hour, minute)
+          : now + minutesFromNow * 60_000;
       const endsAt =
         showtimeAt +
         (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *

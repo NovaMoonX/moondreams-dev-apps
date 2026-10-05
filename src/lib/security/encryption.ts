@@ -1,4 +1,5 @@
 import type { AppId } from '../types/appCatalog';
+import { generateUuid } from '@/utils/idUtils';
 
 export type EncryptionAlgorithm = 'AES-256-GCM';
 
@@ -70,11 +71,39 @@ function fromHex(value: string): Uint8Array {
 }
 
 function getCrypto(): Crypto {
-  if (!globalThis.crypto || !globalThis.crypto.subtle) {
-    throw new Error('WebCrypto is not available in this runtime.');
+  if (!globalThis.crypto || !globalThis.crypto.getRandomValues) {
+    throw new Error('Web Crypto is not available in this runtime.');
   }
 
   return globalThis.crypto;
+}
+
+// Plain-HTTP origins (a LAN or Tailscale link) have no crypto.subtle; the same AES-GCM runs in JS there.
+async function aesGcm(
+  mode: 'encrypt' | 'decrypt',
+  keyBytes: Uint8Array,
+  nonce: Uint8Array,
+  data: Uint8Array,
+): Promise<Uint8Array> {
+  if (!globalThis.crypto.subtle) {
+    const { gcm } = await import('@noble/ciphers/aes.js');
+    const cipher = gcm(keyBytes, nonce);
+    return mode === 'encrypt' ? cipher.encrypt(data) : cipher.decrypt(data);
+  }
+
+  const importedKey = await globalThis.crypto.subtle.importKey(
+    'raw',
+    toBuffer(keyBytes),
+    { name: 'AES-GCM', length: 256 },
+    false,
+    [mode],
+  );
+  const algorithm = { name: 'AES-GCM', iv: toBuffer(nonce) };
+  const result =
+    mode === 'encrypt'
+      ? await globalThis.crypto.subtle.encrypt(algorithm, importedKey, toBuffer(data))
+      : await globalThis.crypto.subtle.decrypt(algorithm, importedKey, toBuffer(data));
+  return new Uint8Array(result);
 }
 
 export function createAppEncryptionKey<TAppId extends AppId>(
@@ -87,7 +116,7 @@ export function createAppEncryptionKey<TAppId extends AppId>(
 
   return {
     appId,
-    keyId: `${prefix}-${crypto.randomUUID()}`,
+    keyId: `${prefix}-${generateUuid()}`,
     keyVersion: 1,
     key: toHex(keyBytes),
   };
@@ -164,24 +193,8 @@ export async function encryptValue(
   keyId: string,
   keyVersion: number,
 ): Promise<EncryptedFieldPayload> {
-  const crypto = getCrypto();
-  const keyBytes = fromHex(rawKey);
-  const nonce = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const keyBuffer = toBuffer(keyBytes);
-  const importedKey = await crypto.subtle.importKey(
-    'raw',
-    keyBuffer,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt'],
-  );
-  const encoded = new TextEncoder().encode(value);
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce },
-    importedKey,
-    encoded,
-  );
-  const ciphertext = new Uint8Array(encrypted);
+  const nonce = getCrypto().getRandomValues(new Uint8Array(IV_BYTES));
+  const ciphertext = await aesGcm('encrypt', fromHex(rawKey), nonce, new TextEncoder().encode(value));
 
   return {
     value: toBase64(ciphertext),
@@ -205,26 +218,8 @@ export async function decryptValue(
     return '';
   }
 
-  const crypto = getCrypto();
   const ciphertext = payload.value || payload.ciphertext || '';
-  const keyBytes = fromHex(rawKey);
-  const nonceBytes = fromBase64(payload.nonce);
-  const encryptedValue = fromBase64(ciphertext);
-  const keyBuffer = toBuffer(keyBytes);
-  const nonceBuffer = toBuffer(nonceBytes);
-  const encryptedBuffer = toBuffer(encryptedValue);
-  const importedKey = await crypto.subtle.importKey(
-    'raw',
-    keyBuffer,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt'],
-  );
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: nonceBuffer },
-    importedKey,
-    encryptedBuffer,
-  );
+  const decrypted = await aesGcm('decrypt', fromHex(rawKey), fromBase64(payload.nonce), fromBase64(ciphertext));
 
   return new TextDecoder().decode(decrypted);
 }

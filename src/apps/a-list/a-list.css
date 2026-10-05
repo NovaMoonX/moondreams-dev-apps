@@ -1,0 +1,35 @@
+/*
+ * A-List Tracker's theme: AMC red and theater gold, rounded and playful. The class sits on <html>
+ * (see useAListTheme) so modals and drawers, which render outside the app's container, pick it up too.
+ */
+html.a-list-theme {
+  --color-primary: var(--color-red-600);
+  --color-primary-foreground: var(--color-white);
+  --color-secondary: var(--color-rose-100);
+  --color-secondary-foreground: var(--color-rose-900);
+  --color-muted: var(--color-rose-50);
+  --color-muted-foreground: var(--color-stone-500);
+  --color-accent: var(--color-amber-100);
+  --color-accent-foreground: var(--color-amber-900);
+  --color-border: var(--color-stone-200);
+}
+
+html.a-list-theme.dark {
+  --color-primary: var(--color-red-500);
+  --color-primary-foreground: var(--color-white);
+  --color-secondary: var(--color-rose-950);
+  --color-secondary-foreground: var(--color-rose-100);
+  --color-muted: var(--color-zinc-900);
+  --color-muted-foreground: var(--color-stone-400);
+  --color-accent: var(--color-amber-950);
+  --color-accent-foreground: var(--color-amber-100);
+  --color-border: var(--color-zinc-800);
+}
+
+/* A click leaves a button focused, and the library's focus: outline and ring flash on it.
+   Keyboard focus (:focus-visible) keeps its cue. */
+html.a-list-theme :focus:not(:focus-visible) {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}

@@ -12,7 +12,7 @@
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Modal`, `Drawer`, `Tabs`, `Badge` — custom only where the catalog has nothing: the poster split and the star rating |
 | Log in a tap or two | defaults, chips and pickers over typing; anything optional waits behind a "+ Add X" link |
 | Never overlay on overlay | tapping a day opens nothing (its movies show in a panel under the grid); tapping a movie opens a `Drawer`; whatever continues inside an open drawer — Mark paid, Edit, Add to calendar from the watchlist — swaps that drawer's content in place with a "‹ Back" link. Only a destructive confirm may sit on top |
-| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup and Membership settings are `Modal`s. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
+| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup is a `Modal`. Adding a movie and Membership settings are full-page subviews with their own back button. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
 | Never offer what can't be done | "Mark seen" appears only once the showtime has ended; "Standard price" appears only for a premium format |
 | Honest, kind math | negative net savings reads "Not yet" in a plain tone, never an alarm |
 
@@ -300,7 +300,7 @@ block-beta
   Picked["🖼️ Movie Title · 2h 10m · PG-13<br/>↺ Seen once before — this will be a rewatch"]:2
   Date["Fri, Oct 2"]:1
   Time["7:10 PM"]:1
-  Reveal["+ Add ticket details"]:2
+  Reveal["Already bought your ticket?"]:2
   Cancel["Cancel"]:1
   Add["Add"]:1
   style Back fill:transparent,stroke:#888888,stroke-width:1px;
@@ -311,7 +311,7 @@ block-beta
   style Cancel fill:transparent,stroke:#888888,stroke-width:1px;
   style Add fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A date in the past saves as Seen with no prompt; a future date saves as Planned. A movie not on your watchlist joins it automatically. "+ Add ticket details" reveals the Ticket fields in place, which suits backfilling and pre-bought tickets. Add past movies is this same drawer in a past-movies mode, shown next. From the watchlist drawer, "Add to calendar" skips the pick step because the movie is already chosen. The edit form is this same step, prefilled.*
+*A date in the past saves as Seen with no prompt; a future date saves as Planned. A movie not on your watchlist joins it automatically. "Already bought your ticket?" is a question in the form, answered with two pills; "Yes, I paid" reveals the Ticket fields in place, which suits backfilling and pre-bought tickets. Add past movies is this same drawer in a past-movies mode, shown next. From the watchlist drawer, "Add to calendar" skips the pick step because the movie is already chosen. The edit form is this same step, prefilled.*
 
 **Add past movies — details** (the same drawer in past-movies mode, from Setup or the empty Calendar)
 ```mermaid
@@ -323,7 +323,7 @@ block-beta
   Picked["🖼️ Another Title · 2h 10m · PG-13"]:2
   Date["Sat, Sep 6"]:1
   Time["4:30 PM"]:1
-  Reveal["+ Add ticket details"]:2
+  Reveal["Already bought your ticket?"]:2
   Finish["Add & finish"]:1
   More["Add + another"]:1
   style Count fill:transparent,stroke:#888888,stroke-width:1px;
@@ -336,6 +336,8 @@ block-beta
   style More fill:transparent,stroke:#888888,stroke-width:3px;
 ```
 *Here the primary button is "Add + another": it saves, shows the "✓ added · N so far" strip (it appears after the first one), and drops back to the search with the form cleared, ready for the next movie. "Add & finish" saves and closes. Closing the drawer ends the loop and loses nothing, since each movie saves the moment it's added. The normal "+ Add" from the Calendar keeps a single Add button. A viewing can't be dated before your membership start date, so the date picker starts there.*
+
+*Revision: the Ticket form below no longer has the Itemized / All-in toggle or the tax-rate chips. It is one form: format, ticket price, the convenience fee (with past fees as one-tap chips) and the tax amount in dollars, matching what AMC shows on every ticket.*
 
 **Ticket** (swaps in place inside the viewing drawer; premium format shown, itemized)
 ```mermaid
@@ -475,7 +477,7 @@ block-beta
   style O1 fill:transparent,stroke:#888888,stroke-width:1px;
   style O2 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Six tabs sit right under the header, in this order: Opening, All, Must See, Want to See, If I Have Time, Seen. Opening is the default and the watchlist's one emphasized surface: its label carries an accent and a count whenever something opens in the next seven days. It lists only unseen movies releasing between today and a week out, soonest first, with "in N days" on each row. With nothing opening it shows one muted line and a link to All. On a phone the strip scrolls sideways with the full names.*
+*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows everything, unseen first; each pill narrows the list (priorities combine with "or", Opening and Seen with "and"). Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
 
 **Watchlist — All**
 ```mermaid
@@ -507,7 +509,7 @@ block-beta
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
   style R4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The three priority tabs list only unseen movies of that priority; Seen lists the ones you have; All shows everything — unseen first, by priority and then release date, seen ones last. A movie opening this week also appears in All and in its priority tab. Each row shows release date, preferred format, a priority badge, a Seen check once watched, and the next planned date — or the latest watched date, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
+*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and the latest watched date for seen movies, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
 
 **Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above)
 ```mermaid
@@ -576,12 +578,13 @@ block-beta
 | PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
-| GoalChip | Calendar | weekly or monthly goal: met / not yet |
+| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached; with no goal set, a tile turns dashed and muted with a "Set a goal" button that opens Membership settings |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
-| AddDrawer | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details `Drawer` for either destination; past-movies mode makes "Add + another" the primary action and keeps a running count |
-| ViewingRow | day panel | poster thumb, title, time, format badge, stars, price, state |
-| ViewingDrawer | day panel | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
+| AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
+| ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |
+| ViewingDrawer | day drawer (swaps in place from the day's list) | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
 | SeenPrompt | auto, after a showtime | `Drawer` with stars plus Seen it / Didn't go / Later; queues one at a time |
+| PreviewsNudge | above the Calendar icon in the bottom nav (so on every tab), from 30 min before a planned showing to 10 min after it starts | a small bubble: the showing, its countdown, an "Add from trailers" pill and a fold-away ✕. Folded, it becomes a small 📽️ chip in the same spot that brings the bubble back. It never opens anything by itself; the button opens the add screen in "Trailer picks" mode, where a tap on a result saves it as Want to See and the search stays open, with the titles added so far listed above the search, each with an Undo |
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |
@@ -692,7 +695,7 @@ flowchart LR
 - **Calendar cells** — prove that `customStyles` can clear padding and border and make cells taller than square before committing to the layout.
 - **Tabs** — the Watchlist now has six (Opening, All, Must See, Want to See, If I Have Time, Seen), up from the five first asked for; confirm Dreamer UI's `Tabs` can scroll sideways on a phone.
 - **Opening window** — today through seven days out, judged against the viewer's local today; a release date is date-only (UTC midnight), so it follows the repo's date-only rules, not a plain timestamp comparison.
-- **Movie database** — OMDb, with a limited number of lookups a day shared by every member, so search is debounced and cached and a manual "add by title" path exists; search results carry no release date.
+- **Movie database** — TMDB when its key is set, otherwise OMDb. OMDb has a limited number of lookups a day shared by every member, so search is debounced and cached, and a manual "add by title" path exists; results are the newest 20, and the credits (TMDB's notice and logo, plus OMDb) sit in Membership settings.
 - **Formats** — settled: the app never looks up which formats a movie plays in; the member picks from the fixed list.
 - **Perks copy** — the exact A-List perk wording for the confirm step needs to come from AMC's own page.
 - **Membership cost over time** — not modelled yet: one monthly cost applies to the whole history. Supporting price changes is a planned future goal.

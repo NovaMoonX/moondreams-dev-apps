@@ -1,7 +1,12 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { WATCH_PRIORITIES, WEEK_STARTS_ON } from '@apps/a-list/constants';
+import {
+  PREVIEWS_WINDOW_AFTER_MINUTES,
+  PREVIEWS_WINDOW_BEFORE_MINUTES,
+  WATCH_PRIORITIES,
+  WEEK_STARTS_ON,
+} from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
 import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
@@ -104,6 +109,12 @@ export const selectCounters = createSelector(
 
     const result = {
       watched: seenDayKeys.length,
+      watchedMinutes: viewings
+        .filter((viewing) => viewing.status === 'SEEN')
+        .reduce(
+          (total, viewing) => total + (viewing.movie.runtimeMinutes ?? 0),
+          0,
+        ),
       thisWeek,
       thisMonth,
       weeklyGoal,
@@ -143,6 +154,21 @@ export const selectSavingsSummary = createSelector(
   },
 );
 
+/** Seen viewings split by whether a ticket is on record, newest first: what the dashboard's ticket lists read. */
+export const selectSeenTicketGroups = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const seen = viewings
+      .filter((viewing) => viewing.status === 'SEEN')
+      .sort((left, right) => right.showtimeAt - left.showtimeAt);
+    const result = {
+      paid: seen.filter((viewing) => viewing.ticket),
+      unpriced: seen.filter((viewing) => !viewing.ticket),
+    };
+    return result;
+  },
+);
+
 /** Planned showings that have ended and still need an answer, oldest first. */
 export const selectPendingSeenPrompts = createSelector(
   [selectViewingItems, (_state: RootState, now: number) => now],
@@ -152,6 +178,25 @@ export const selectPendingSeenPrompts = createSelector(
         (viewing) => viewing.status === 'PLANNED' && viewing.endsAt <= now,
       )
       .sort((left, right) => left.endsAt - right.endsAt);
+    return result;
+  },
+);
+
+/** The planned showing whose previews are about to run or just started, earliest first if two overlap. */
+export const selectPreviewsWindowViewing = createSelector(
+  [selectViewingItems, (_state: RootState, now: number) => now],
+  (viewings, now): Viewing | null => {
+    const result =
+      viewings
+        .filter(
+          (viewing) =>
+            viewing.status === 'PLANNED' &&
+            viewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000 <=
+              now &&
+            now <=
+              viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
+        )
+        .sort((left, right) => left.showtimeAt - right.showtimeAt)[0] ?? null;
     return result;
   },
 );

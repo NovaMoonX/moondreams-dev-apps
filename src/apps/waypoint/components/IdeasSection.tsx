@@ -4,6 +4,7 @@ import { Button, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/c
 
 import { useAppSelector } from '@/store';
 import IdeaCard from '@apps/waypoint/components/IdeaCard';
+import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
 import { filterIdeasByType, selectSortedIdeas } from '@apps/waypoint/store/selectors';
@@ -69,11 +70,7 @@ function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps)
       {undecided.length > 0 && renderCards(undecided)}
       {onItinerary.length > 0 && (
         <>
-          <div className='flex items-center gap-3'>
-            <div className='border-border flex-1 border-t' />
-            <span className='text-muted-foreground text-sm font-medium'>Already on the itinerary</span>
-            <div className='border-border flex-1 border-t' />
-          </div>
+          <SectionDivider label='Already on the itinerary' />
           {renderCards(onItinerary)}
         </>
       )}

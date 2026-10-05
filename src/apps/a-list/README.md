@@ -10,11 +10,11 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 
 ## How it Works
 
-1. **Set up your membership** — Confirm the perks, then enter your monthly cost before tax, the total on your bill with tax, and the day your membership started. The app gauges your tax rate from those two numbers and tracks the total as your monthly cost. Then set your weekly and monthly watch goals.
+1. **Set up your membership** — A short welcome, the perks your membership covers, then one question per step: your monthly cost before tax, the total on your bill with tax (skippable), and the day your membership started (it tells you how long you've been a member). The app gauges your tax rate from the first two and tracks the total as your monthly cost. Then set your weekly and monthly watch goals. Closing the setup lands on the app's entry page, where you can re-enter or go home.
 2. **Add what you've already seen** — A short first-time flow to backfill movies since you joined, so your savings start accurate instead of from zero. Each movie you add nudges you to add another, until you say you're done.
-3. **Build a watchlist** — Search for a movie, pick it, and set a priority and preferred format. Nothing to browse, nothing recommended: just your list. Anything opening in the next week gets its own tab — the first thing you see.
-4. **Put movies on the calendar** — Add a movie you saw or plan to see, from your watchlist or a fresh search (new ones join your watchlist automatically). Each day shows the posters of what you watched; tap a day to see the details. Seeing a movie twice is just two entries.
-5. **Record what it would have cost** — Mark a movie paid with its format and price, or just the all-in total if that's all you have. For a premium format, add what a standard ticket would have cost so the upcharge you skipped is counted. Members pay no convenience fee, so the fee you enter is one you skipped; it varies by format and showing, so it's entered each time, and the fees you've entered before show up as chips so repeating one is a single tap. Tax works the same way: your past rates appear as chips, and the one you use most is already selected.
+3. **Build a watchlist** — Search for a movie on a full-page screen, pick it, and set a priority and preferred format. Nothing to browse, nothing recommended: just your list. Rounded filter pills (Opening, Must See, Want to See, If I Have Time, Seen) narrow the list; anything opening in the next week is one tap away.
+4. **Put movies on the calendar** — Add a movie you saw or plan to see, from your watchlist or a fresh search (new ones join your watchlist automatically). Each day shows the posters of what you watched; tap a day to see its movies in a drawer (on a computer, hover a day for a peek). Seeing a movie twice is just two entries.
+5. **Record what it would have cost** — Mark a movie paid with its format and the three amounts AMC itemizes on every ticket: the ticket price, the convenience fee and the tax, all in dollars. For a premium format, add what a standard ticket would have cost so the upcharge you skipped is counted. Members pay no convenience fee, so the fee you enter is one you skipped; it varies by showing, and the fees you've entered before show up as chips so repeating one is a single tap. The tax field hints at an estimate from your usual rate.
 6. **Mark it seen** — When a planned movie's showtime ends, a prompt asks if you saw it. One tap updates your watchlist, and you can leave a star rating.
 7. **Watch the numbers** — The top of the calendar tracks movies watched, movies this week, and whether your goals are met. The dashboard shows your savings, the convenience fees you've skipped, and whether you've broken even, with breakdowns by format, activity over time, and ratings to follow.
 
@@ -28,7 +28,8 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 
 ## How it Feels
 
-- **App-like, thumb-first** — A phone-shaped app: a bottom bar with Dashboard, Calendar and Watchlist — Calendar in the middle, where the app opens — and details in drawers, no page-hopping.
+- **App-like, thumb-first** — A phone-shaped app: a bottom bar with Dashboard, Calendar and Watchlist — Calendar in the middle, where the app opens — and details in drawers, no page-hopping. Home is in the avatar menu, not on the page.
+- **Playful, a little theatrical** — AMC red and marquee gold, round inputs and pills, and an emoji wherever it says something.
 - **Posters first** — The calendar is the star, and each poster fills its whole day like a photo calendar. Two movies on a day split corner to corner, three are cut like a pizza in thirds, four make quadrants — a month of movies reads like a collage.
 - **Low effort to log** — Quick prompts, sensible defaults, and as little typing as possible. Anything optional waits behind a "+ Add" link.
 - **Honest math, friendly tone** — A negative net-savings number is shown plainly but kindly ("not yet" beats a red alarm).
@@ -49,9 +50,10 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Rewatches: Every viewing is its own entry, so the same movie can appear many times.
 - [x] Watchlist: Search and add movies with release date, preferred format, priority (Must See / Want to See / If I Have Time), seen status, and date watched or planned.
 - [x] Opening Tab: The watchlist opens on a tab of movies releasing in the next seven days, with a count so they can't be missed.
-- [x] Mark as Paid: Format and price (or an all-in total), standard-format price for premium showings, the convenience fee you skipped entered per ticket with your past fees as one-tap chips, and a tax rate chosen from chips built from your own history.
+- [x] Mark as Paid: Format, ticket price, standard-format price for premium showings, the convenience fee you skipped (past fees as one-tap chips) and the tax amount, all in dollars as on the AMC receipt.
 - [x] Edit & Remove Viewings: Fix a price, format, date or fee, or delete a viewing; the calendar, watchlist and savings update to match.
 - [x] Mark as Seen: A prompt after a planned movie ends that updates the watchlist and takes an optional star rating.
+- [x] Trailer Picks: In the half hour before a planned showing and the first ten minutes after it starts, a small bubble above the Calendar icon offers "Add from trailers": search, tap a title, and it is saved quietly as Want to See, ready for the next trailer. What you've added so far is listed right there, each with an Undo. Nothing pops up on its own; fold the bubble away and a small chip above the icon brings it back.
 - [x] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
 **Next Steps**
@@ -70,7 +72,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 ## Under the Hood
 
 - **Frontend:** React + TypeScript + Tailwind CSS, built on Dreamer UI — the calendar is Dreamer UI's `Calendar` with a custom `renderCell` for the poster split.
-- **Movie Data:** OMDb for search, posters, release dates and content ratings. Its free tier allows about 1,000 lookups a day for everyone combined, so lookups go through a thin server-side proxy that remembers results, search waits for a pause in typing, and a manual "add by title" path covers an empty quota. AMC-specific details (formats, prices, tax) are never looked up; you pick or enter them.
+- **Movie Data:** TMDB (including upcoming films) for search, posters, US release dates and content ratings, with OMDb as the alternative when no TMDB key is set. OMDb's free tier allows about 1,000 lookups a day for everyone combined, so lookups go through a thin server-side proxy that remembers results, search waits for a pause in typing, and a manual "add by title" path covers an empty quota or a film neither source has. AMC-specific details (formats, prices, tax) are never looked up; you pick or enter them.
 - **Backend & Realtime:** Firebase (Firestore, Auth, Cloud Functions), private to each member — no sharing or invites.
 - **State Management:** Redux Toolkit, consistent with the platform's other mini apps.
 - **Deployment:** Ships as a mini-app within the existing platform, under `src/apps/a-list`.
