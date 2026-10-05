@@ -7,7 +7,7 @@ interface PremiumSavingsHelpProps {
 
 function PremiumSavingsHelp({ linkLabel }: PremiumSavingsHelpProps) {
   return (
-    <HelpTip title='How premium savings work' linkLabel={linkLabel}>
+    <HelpTip title='Premium format savings' linkLabel={linkLabel}>
       <p>
         A-List covers IMAX, Dolby Cinema, PRIME and the other premium formats at
         no extra charge. Premium savings is the upcharge you skipped.

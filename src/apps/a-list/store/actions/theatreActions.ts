@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, runTransaction, updateDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -33,48 +33,53 @@ const getTheatreRef = (uid: string, theatreId: string) =>
 interface AddTheatreInput {
   uid: string;
   theatre: TheatreSearchResult;
+  /** True when no theater is saved yet: only then does the new one become the favorite. */
+  isFirst: boolean;
 }
 
-/** Saves the theater and, in the same transaction, makes it the favorite if there isn't one yet. */
+/** Saves the theater and, when it is the member's first, makes it the favorite in the same transaction. */
 export const addTheatre = createAsyncThunk<
   void,
   AddTheatreInput,
   { rejectValue: string }
->('aList/theatres/add', async ({ uid, theatre }, { rejectWithValue }) => {
-  const membershipRef = getMembershipRef(uid);
-  const theatreRef = getTheatreRef(uid, theatre.theatreId);
+>(
+  'aList/theatres/add',
+  async ({ uid, theatre, isFirst }, { rejectWithValue }) => {
+    const membershipRef = getMembershipRef(uid);
+    const theatreRef = getTheatreRef(uid, theatre.theatreId);
 
-  try {
-    await runTransaction(db, async (transaction) => {
-      const [membershipSnapshot, theatreSnapshot] = await Promise.all([
-        transaction.get(membershipRef),
-        transaction.get(theatreRef),
-      ]);
-      if (theatreSnapshot.exists()) {
-        return;
-      }
+    try {
+      await runTransaction(db, async (transaction) => {
+        const [membershipSnapshot, theatreSnapshot] = await Promise.all([
+          transaction.get(membershipRef),
+          transaction.get(theatreRef),
+        ]);
+        if (theatreSnapshot.exists()) {
+          return;
+        }
 
-      transaction.set(theatreRef, toTheatre(theatre, Date.now()));
-      if (membershipSnapshot.get('favoriteTheatreId') == null) {
-        transaction.update(membershipRef, {
-          favoriteTheatreId: theatre.theatreId,
-          lastEditedAt: Date.now(),
-        });
-      }
-    });
-  } catch (error) {
-    return rejectWithValue(
-      getErrorMessage(error, 'Unable to save this theater.'),
-    );
-  }
-});
+        transaction.set(theatreRef, toTheatre(theatre, Date.now()));
+        if (isFirst && membershipSnapshot.get('favoriteTheatreId') == null) {
+          transaction.update(membershipRef, {
+            favoriteTheatreId: theatre.theatreId,
+            lastEditedAt: Date.now(),
+          });
+        }
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this theater.'),
+      );
+    }
+  },
+);
 
 interface RemoveTheatreInput {
   uid: string;
   theatreId: string;
 }
 
-/** Removes the theater and, if it was the favorite, clears that too. Showings keep the name they were saved with. */
+/** Removes the theater and, if it was the favorite, clears that too. */
 export const removeTheatre = createAsyncThunk<
   void,
   RemoveTheatreInput,
@@ -106,6 +111,7 @@ interface SetFavoriteTheatreInput {
   theatreId: string | null;
 }
 
+/** Points the favorite at a theater that still exists, so a stale device can't leave it dangling. */
 export const setFavoriteTheatre = createAsyncThunk<
   void,
   SetFavoriteTheatreInput,
@@ -114,9 +120,20 @@ export const setFavoriteTheatre = createAsyncThunk<
   'aList/theatres/setFavorite',
   async ({ uid, theatreId }, { rejectWithValue }) => {
     try {
-      await updateDoc(getMembershipRef(uid), {
-        favoriteTheatreId: theatreId,
-        lastEditedAt: Date.now(),
+      await runTransaction(db, async (transaction) => {
+        if (theatreId !== null) {
+          const theatreSnapshot = await transaction.get(
+            getTheatreRef(uid, theatreId),
+          );
+          if (!theatreSnapshot.exists()) {
+            throw new Error('That theater was removed.');
+          }
+        }
+
+        transaction.update(getMembershipRef(uid), {
+          favoriteTheatreId: theatreId,
+          lastEditedAt: Date.now(),
+        });
       });
     } catch (error) {
       return rejectWithValue(

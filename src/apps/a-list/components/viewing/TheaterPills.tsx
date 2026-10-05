@@ -10,7 +10,6 @@ interface TheaterPillsProps {
   onChange: (theatre: TheatreSnapshot | null) => void;
 }
 
-/** One pill per saved theater, plus the one a showing already carries if it has since been removed. Tapping the chosen pill clears it. */
 function TheaterPills({ label, value, onChange }: TheaterPillsProps) {
   const theatres = useAppSelector(selectTheatres);
   const options = theatres.map((theatre) => toTheatreSnapshot(theatre));

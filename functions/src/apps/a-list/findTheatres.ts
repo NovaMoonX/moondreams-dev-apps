@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-import { AMC_API_KEY, findNearbyTheatres, suggestPoint, type AmcPoint } from './amc.js';
+import { AMC_API_KEY, findNearbyTheatres, isFixtureMode, suggestPoint, type AmcPoint } from './amc.js';
 import { reserveLookup, THEATRE_BUDGET } from './lookupBudget.js';
 import { isFresh, readCache, toCacheId, writeCache } from './movieCache.js';
 import type { TheatreResult } from './types.js';
@@ -64,7 +64,10 @@ export const findTheatres = onCall(
 
       await reserveLookup(uid, THEATRE_BUDGET);
       const point = await suggestPoint(apiKey, query);
-      await writeCache('theatreCache', cacheId, point);
+      // An empty answer is never kept: it may be a parsing gap or one bad response, and would stick for weeks.
+      if (point && !isFixtureMode(apiKey)) {
+        await writeCache('theatreCache', cacheId, point);
+      }
       return point;
     };
 
@@ -73,16 +76,20 @@ export const findTheatres = onCall(
       return { theatres: [], area: null };
     }
 
-    // About a kilometre of precision is plenty to rank the nearest theaters, and shares one cache entry per neighborhood.
-    const cacheId = toCacheId(`v${CACHE_VERSION}:near:${point.latitude.toFixed(2)},${point.longitude.toFixed(2)}`);
+    // About a kilometre of precision is plenty to rank the nearest theaters, and every member in a cell then shares the same answer.
+    const cellLatitude = Math.round(point.latitude * 100) / 100;
+    const cellLongitude = Math.round(point.longitude * 100) / 100;
+    const cacheId = toCacheId(`v${CACHE_VERSION}:near:${cellLatitude},${cellLongitude}`);
     const cached = await readCache<TheatreResult[]>('theatreCache', cacheId);
     if (cached && isFresh(cached, NEARBY_CACHE_MS)) {
       return { theatres: cached.value, area: point.area };
     }
 
     await reserveLookup(uid, THEATRE_BUDGET);
-    const theatres = await findNearbyTheatres(apiKey, point.latitude, point.longitude);
-    await writeCache('theatreCache', cacheId, theatres);
+    const theatres = await findNearbyTheatres(apiKey, cellLatitude, cellLongitude);
+    if (theatres.length > 0 && !isFixtureMode(apiKey)) {
+      await writeCache('theatreCache', cacheId, theatres);
+    }
     return { theatres, area: point.area };
   },
 );

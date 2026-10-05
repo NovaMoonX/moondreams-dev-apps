@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
@@ -13,7 +13,11 @@ import {
   type Coordinates,
 } from '@/utils/geolocationUtils';
 import TheaterRow from '@apps/a-list/components/theaters/TheaterRow';
-import { MAX_THEATRES, THEATRE_SEARCH_MIN_CHARS } from '@apps/a-list/constants';
+import {
+  MAX_THEATRES,
+  THEATRE_SEARCH_MAX_CHARS,
+  THEATRE_SEARCH_MIN_CHARS,
+} from '@apps/a-list/constants';
 import {
   findTheatresQueryOptions,
   type TheatreSearch,
@@ -24,7 +28,6 @@ import { formatTheatreLocation } from '@apps/a-list/utils/theatres';
 interface TheaterFinderProps {
   savedIds: string[];
   onAdd: (theatre: TheatreSearchResult) => void;
-  /** Blocks every Add while a save is in flight, so a double tap can't save twice. */
   isDisabled?: boolean;
 }
 
@@ -39,15 +42,20 @@ function TheaterFinder({
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  // Typing while the location prompt is open must win over the answer that arrives later.
+  const locationRequest = useRef(0);
   const debouncedQuery = useDebouncedValue(
     query.trim(),
     DEBOUNCE_MS.autocomplete,
   );
   const trimmedQuery = query.trim();
-  const hasQuery = trimmedQuery.length >= THEATRE_SEARCH_MIN_CHARS;
+  const isSearchable = (text: string) =>
+    text.length >= THEATRE_SEARCH_MIN_CHARS &&
+    text.length <= THEATRE_SEARCH_MAX_CHARS;
+  const hasQuery = isSearchable(trimmedQuery);
   const getSearch = (): TheatreSearch | null => {
     if (coordinates) return { kind: 'coordinates', ...coordinates };
-    if (debouncedQuery.length >= THEATRE_SEARCH_MIN_CHARS) {
+    if (isSearchable(debouncedQuery)) {
       return { kind: 'text', query: debouncedQuery };
     }
     return null;
@@ -60,36 +68,46 @@ function TheaterFinder({
   const isFull = savedIds.length >= MAX_THEATRES;
 
   const handleUseLocation = async () => {
+    const request = locationRequest.current + 1;
+    locationRequest.current = request;
     setIsLocating(true);
     setLocationError(null);
     try {
-      setCoordinates(await getCurrentCoordinates());
-      setQuery('');
+      const position = await getCurrentCoordinates();
+      if (locationRequest.current === request) {
+        setCoordinates(position);
+        setQuery('');
+      }
     } catch (error) {
-      setLocationError(
-        getErrorMessage(error, 'We couldn’t find your location just now.'),
-      );
+      if (locationRequest.current === request) {
+        setLocationError(
+          getErrorMessage(error, 'We couldn’t find your location just now.'),
+        );
+      }
     } finally {
-      setIsLocating(false);
+      if (locationRequest.current === request) {
+        setIsLocating(false);
+      }
     }
   };
 
-  const isResting =
-    results.error instanceof FirebaseError &&
-    (results.error.code === 'functions/resource-exhausted' ||
-      results.error.code === 'functions/failed-precondition');
+  const errorCode =
+    results.error instanceof FirebaseError ? results.error.code : null;
 
   const getEmptyState = () => {
-    if (locationError) return `${locationError} You can search by zip code instead.`;
+    if (locationError)
+      return `${locationError} You can search by zip code instead.`;
+    if (!coordinates && trimmedQuery.length > THEATRE_SEARCH_MAX_CHARS)
+      return 'That’s a bit long. Try a zip code or a city name.';
     if (!coordinates && !hasQuery)
       return 'Search by zip code or city, or use where you are right now.';
     // The debounce or the request hasn't caught up with what is typed.
-    if (
-      results.isPending ||
-      (!coordinates && debouncedQuery !== trimmedQuery)
-    )
+    if (results.isPending || (!coordinates && debouncedQuery !== trimmedQuery))
       return 'Searching…';
-    if (isResting) return 'Theater search is resting for today. Try again tomorrow.';
+    if (errorCode === 'functions/resource-exhausted')
+      return 'Theater search is resting for today. Try again tomorrow.';
+    if (errorCode === 'functions/failed-precondition')
+      return 'Theater search isn’t set up yet. We’re on it.';
     if (results.error) return 'Theater search isn’t available right now.';
     return 'No AMC theaters turned up near there. Try another zip code or city.';
   };
@@ -116,6 +134,8 @@ function TheaterFinder({
       <SearchInput
         value={query}
         onChange={(value) => {
+          locationRequest.current += 1;
+          setIsLocating(false);
           setQuery(value);
           setCoordinates(null);
           setLocationError(null);

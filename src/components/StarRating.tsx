@@ -77,6 +77,8 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !event.isPrimary) return;
+
     event.currentTarget.setPointerCapture(event.pointerId);
     gesture.current = { isActive: true, hasMoved: false, startValue: value };
     setPreview(getValueAt(event.clientX));
@@ -100,10 +102,13 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
     const { hasMoved, startValue } = gesture.current;
     const final = getValueAt(event.clientX);
     gesture.current.isActive = false;
-    setPreview(event.pointerType === 'mouse' ? final : null);
-    if (final === null) return;
+    if (final === null) {
+      setPreview(null);
+      return;
+    }
 
     const isTapOnCurrent = !hasMoved && final === startValue;
+    setPreview(event.pointerType === 'mouse' && !isTapOnCurrent ? final : null);
     onChange(isTapOnCurrent ? null : final);
   };
 
@@ -133,7 +138,7 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
   };
 
   return (
-    <div className='flex items-center gap-2'>
+    <div className='relative inline-flex items-center'>
       <div
         ref={rowRef}
         role='slider'
@@ -155,7 +160,7 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
       </div>
       {size === 'lg' && (
         <span
-          className='text-muted-foreground w-7 text-sm tabular-nums'
+          className='text-muted-foreground absolute left-full ml-2 text-sm tabular-nums'
           aria-hidden='true'
         >
           {shown > 0 ? formatStars(shown) : ''}

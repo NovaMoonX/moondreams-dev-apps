@@ -137,7 +137,6 @@ interface Viewing {
   ticket: Ticket | null;             // null until "Mark paid" or the add form's "Yes, I paid"
   purchase: PurchasePlan | null;     // the AMC showing the member picked to buy, until a ticket is recorded; documents written before it existed lack the key
   theatre: TheatreSnapshot | null;   // copied when picked, so a showing outlives a removed theater; documents written before theaters existed lack the key
-  purchase: PurchasePlan | null;     // the AMC showing the member picked to buy, until a ticket is recorded; documents written before it existed lack the key
   createdAt: number;
   lastEditedAt: number;
 }
@@ -194,7 +193,7 @@ interface TheatreSnapshot { theatreId: string; name: string; city: string | null
 ```
 
 - **A copy, not a reference.** Search results are snapshotted into the member's own collection, so the list works offline and nothing depends on AMC at read time. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing.
-- **At most 10 saved theaters** (`MAX_THEATRES`, enforced in the UI).
+- **At most 10 saved theaters** (`MAX_THEATRES`), enforced in the UI only, so two devices can briefly exceed it.
 - **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite clears the pointer in the same transaction. Setting a favorite is a single field write on the membership.
 - **Indexes:** none (a whole-collection listener).
 
@@ -312,7 +311,8 @@ export const movieQueryKeys = {
 Theaters come from the AMC Theatres API through one callable, `findTheatres`, so the vendor key never reaches the browser.
 
 - **Two ways in.** `{ query }` (a zip code or city) goes to AMC's location suggestions to find coordinates, and `{ latitude, longitude }` (the member tapped "Use my current location", which is the only thing that asks the browser for a position) skips that step. Both then ask AMC's locations lookup for the nearest theaters (up to 10, nearest first).
-- **Server cache** in `apps/a-list/theatreCache`: text to coordinates for 30 days, a neighborhood's theaters for 7 days, keyed on coordinates rounded to two decimals (about a kilometre) so nearby members share an entry and an exact position is never stored.
+- **Server cache** in `apps/a-list/theatreCache`: text to coordinates for 30 days, a neighborhood's theaters for 7 days, keyed on coordinates rounded to two decimals (about a kilometre). The point is rounded on the server before AMC is asked, so every member in a cell shares one answer and an exact position is never sent upstream or stored. An empty result is never cached, and neither is anything in the emulator's fixture mode.
+- **The app never waits on theaters.** The theaters listener feeds the loading gate but not the fatal load-error screen, so a failure there leaves the Calendar, Dashboard and Watchlist working.
 - **Budget** (`lookupBudget.ts`, its own counters): 500 upstream calls a day for the app and 40 per member, only on cache misses; past that the callable answers `resource-exhausted` and the finder says search is resting.
 - **Client:** `findTheatresQueryOptions` in `queries/theatreQueries.ts` (TanStack Query, one hour stale time, not persisted because the key can hold the member's position). The finder waits for a pause in typing, and shows results or exactly one empty state.
 - **Without a key**, the emulator answers from three built-in Kansas City theaters, like the movie lookups, so the whole flow can be driven offline. In production a missing key answers `failed-precondition`.
@@ -430,12 +430,13 @@ Step 1 Membership (confirm perks, read-only copy)
            ≥ cost           → monthlyTotalCents = total, taxRate = round(total / cost − 1, 4 dp)   // shown as "about 7.5%"
            < cost           → inline error, Next disabled
            implied rate > 0.25 → inline error (almost certainly a typo)
-  → Step 3 Goals (weekly, monthly; both optional) → one setDoc → "Add movies you've already seen?"
+  → Step 3 Goals (weekly, monthly; both optional)
+  → Step 4 Theaters (optional: find AMC theaters by zip, city or current location, star a favorite) → one writeBatch (membership + theaters) → "Add movies you've already seen?"
         ├─ Add past movies → the add subview in past-movies mode (dates can't precede the start date)
         └─ Skip            → empty Calendar (with its "Add your first movie" / "Add past movies" nudge)
 ```
 
-There is no location step and no lookup; the rate comes from the member's own bill. The "Add movies you've already seen?" offer is ephemeral UI state in the orchestrator. If the member reloads while it's showing, they land on the empty Calendar with the nudge, which is the same destination as "Skip" and loses nothing.
+The tax rate comes from the member's own bill, never a lookup. The only location use is the Theaters step's "Use my current location" button, which asks the browser only when tapped. The "Add movies you've already seen?" offer is ephemeral UI state in the orchestrator. If the member reloads while it's showing, they land on the empty Calendar with the nudge, which is the same destination as "Skip" and loses nothing.
 
 #### 7. Opening window
 
@@ -494,12 +495,12 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 1. **Everything is owner-only.** Every path under `apps/a-list/memberships/{uid}` allows read and write only when `request.auth.uid == uid`. There is no member-of, admin, or role branch.
 2. **`isAdmin()` and `isDevUser()` get no access to member data.** They already gate the app *catalog* document (`apps/a-list`), as for every other app. Neither is added to these rules: a seeded dev fixture signs in as its own `uid` like anyone else.
 3. **The app document** `apps/a-list` follows the existing four-read-predicate shape (admin/dev, unrestricted-public, uid-allowed, email-allowed) and admin-only writes, and the block goes in alphabetical position, **above** `nine-lives`.
-4. **Shape validation covers every field on every type**, with the `T | null` convention (the key must exist; `null` is a legal value only where the type says so). Cents are integers `0 … 1,000,000`; `rating` is null or an integer `1 … 5`; goals are null or in a sane range; `taxRate` (membership and ticket) is null or `0 … 0.25`; enums are checked with `in [...]` against the same strings as `constants.ts`; strings have length caps.
+4. **Shape validation covers every field on every type**, with the `T | null` convention (the key must exist; `null` is a legal value only where the type says so). Cents are integers `0 … 1,000,000`; `rating` is null or `0.5 … 5` in half steps; goals are null or in a sane range; `taxRate` (membership and ticket) is null or `0 … 0.25`; enums are checked with `in [...]` against the same strings as `constants.ts`; strings have length caps.
 5. **Immutable fields only:** `uid`/`movieKey`/`id`, `createdAt`, and a viewing's `movie` snapshot, and the membership's `setupCompletedAt`. Everything the UI edits stays editable.
 6. **Cross-field integrity the client could get wrong:** `endsAt > showtimeAt`; `status == 'SEEN'` implies `showtimeAt ≤ request.time.toMillis()` (the server's clock, so a skewed device can't create a seen movie in the future); arriving at `SEEN` (a create, or a `PLANNED → SEEN` update) also requires `endsAt ≤ request.time.toMillis()`, so a movie can't be marked seen while it is still running; an update whose stored `status` is `SEEN` must keep `SEEN` (no `SEEN → PLANNED`); `status == 'PLANNED'` implies `rating == null`; `ticket.format == 'STANDARD'` implies `standardPriceCents == null`; `ticket.totalCents == priceCents + feeAvoidedCents + taxCents`; `monthlyTotalCents ≥ monthlyCostCents`.
 7. **Deletes:** the owner may delete viewings and watchlist items (both have UI). The membership document cannot be deleted (no UI; there is no "reset" in the MVP).
 8. **No cross-document rules.** A viewing doesn't require its watchlist item to exist: the app's "add viewing" writes both in one transaction for user-experience atomicity, but the data is the member's own, and nothing reads a viewing in a way that needs the watchlist document. This keeps the rules `get()`-free.
-9. **Rules tolerate older documents** the way every collection in this repo must: a field added later is validated on the *incoming* document with `request.resource.data.get('field', default)` (so a write that omits it still passes, and a write that sets it is checked), and `resource.data.get('field', default)` is used only to compare against the stored value (immutability, transitions). Every edit action backfills the new key with its empty value in the same write. (Nothing is legacy yet; this app is new.)
+9. **Rules tolerate older documents** the way every collection in this repo must: a field added later is validated on the *incoming* document with `request.resource.data.get('field', default)` (so a write that omits it still passes, and a write that sets it is checked), and `resource.data.get('field', default)` is used only to compare against the stored value (immutability, transitions). Every edit action backfills the new key with its empty value in the same write. (Older viewings lack `ticket`, `rating`, `theatre`; older memberships lack `favoriteTheatreId`.)
 10. **No `storage.rules` change.** The app stores no files.
 11. **The movie and theater caches and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache`, `apps/a-list/theatreCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
 12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be digits and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range), and `createdAt` is immutable. `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
@@ -612,15 +613,15 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 | Action | Write |
 |---|---|
 | `completeSetup(draft)` | one `writeBatch`: the membership document (all keys, explicit `null`s; `taxRate` null when no bill total was given) and the theaters picked in the last step |
-| `addTheatre(theatre)` / `removeTheatre(theatreId)` | one `runTransaction` each: the theater document and, when needed, the membership's `favoriteTheatreId` (the first theater becomes the favorite; removing the favorite clears it) |
-| `setFavoriteTheatre(theatreId \| null)` | field-scoped `updateDoc` of `favoriteTheatreId` |
+| `addTheatre(theatre)` / `removeTheatre(theatreId)` | one `runTransaction` each: the theater document and, when needed, the membership's `favoriteTheatreId` (only the member's first theater becomes the favorite; removing the favorite clears it, and it stays cleared) |
+| `setFavoriteTheatre(theatreId \| null)` | one `runTransaction`: confirms the theater still exists, then writes `favoriteTheatreId`, so a stale device can't leave it dangling |
 | `setPurchaseStarted(id, startedAt \| null)` | dotted-path `updateDoc` of `purchase.startedAt` only |
 | `updateMembership(fields)` | field-scoped `updateDoc` (+ `lastEditedAt`) |
 | `addWatchlistItem(movie, priority, preferredFormat)` (a manual movie is just a snapshot built by `ManualMovieForm` with a `manual-<uuid>` key) | `setDoc` at `watchlist/{movieKey}`; **create-if-absent** inside a `runTransaction` so a double-tap or two devices can't overwrite an existing priority |
 | `updateWatchlistItem(movieKey, fields)` | field-scoped `updateDoc` |
 | `removeWatchlistItem(movieKey)` | `deleteDoc`, after `useActionModal().confirm({ destructive: true })`; viewings untouched |
-| `addViewing({ movie, showtimeAt, ticket })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action |
-| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`) |
+| `addViewing({ movie, showtimeAt, ticket, theatre })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action |
+| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`, `theatre`) |
 | `recordTicket(id, ticket)` | `updateDoc({ ticket, lastEditedAt })` — the form owns the whole object |
 | `markViewingSeen(id, rating)` | `updateDoc({ status: 'SEEN', rating, lastEditedAt })` |
 | `removeViewing(id)` | `deleteDoc` after a destructive confirm (also what "Didn't go" does) |
@@ -654,7 +655,7 @@ No cached document is ever written back whole. A transaction is used only where 
 - **Forms use `Form` + `FormFactories`.** Setup's three steps are three small `Form`s inside a stepper; the Ticket and Edit forms are `Form`s; the movie picker, fee chips, tax chips and star rating are `FormFactories.custom` fields. The Ticket form's itemized / all-in switch is local form state that decides which amount field renders. Money is entered through a text input with `inputMode="decimal"` and parsed by `parseMoneyToCents`; a number input's spinner and float parsing are wrong for money.
 - **Submit disables until valid** (`onDataChange` + `isValid`). Ticket details sit behind the "Already bought your ticket?" question (pills: "Yes, I paid" / "Not yet"); a "Custom/Other" fee or tax-rate input renders only once "Other" is selected.
 - **Layout.** One border per card, flat rows inside; `StatTile` is the only card allowed on a screen. Counts appear only when greater than zero. Posters carry no border of their own; the cell is the frame.
-- **No raw `<button>/<input>/<select>/<textarea>/<a>`** anywhere, including the star rating (Dreamer UI `Button`s with an icon) and the cell tap target (the Calendar's own). `join()` for every conditional class.
+- **No raw `<button>/<input>/<select>/<textarea>/<a>`** anywhere, including the star rating (a pointer-event `role="slider"` row) and the cell tap target (the Calendar's own). `join()` for every conditional class.
 - **Date-only and instants never share a formatter** (see Logic §2). Every screen that shows a date is validated in a timezone behind UTC.
 - **Copy** is warm and short ("Not yet", never a red alarm; "Did you catch it?"). Footer labels stay short.
 
@@ -731,7 +732,7 @@ Each has a default the design already assumes; the owner can change any of them 
 3. **The daily budget numbers** (stop at 900 app-wide, 100 per member, UTC day) are my choices; the provider's own day boundary is undocumented.
 4. **"Add it by title" is an addition beyond the UX doc** (now added to it), made because the shared lookup quota can run out. A manually added title can be duplicated if added twice.
 5. **Money in integer cents, US dollars.** Waypoint's expenses use a plain `amount` number; A-List uses cents because it sums many small amounts. A non-US member isn't supported.
-6. **Week starts on Sunday; the "month" is the calendar month; billing is anchored on the start date's day.** All three are constants.
+6. **The week starts on Friday (AMC's week); the "month" is the calendar month; billing is anchored on the start date's day.** All three are constants. The calendar grid itself still starts on Sunday.
 7. **Showtime end** = showtime + 20 minutes of previews + runtime (120 if unknown). The 20 minutes is my assumption.
 8. **"Spend per rating"** (a Next Steps chart) sums what the tickets would have cost (their totals), since members pay no fee and nothing else is spent. Say so if you want it to mean something else.
 9. **"Mark paid" is the name the spec uses,** but it now records what a non-member would have paid. The copy in the form says so; the action label can become "Add ticket details" if you'd rather it not suggest the member paid.

@@ -75,11 +75,11 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
                   errorMessage={errors.standardPrice}
                   onChange={(value) => props.onValueChange(value)}
                 />
-                <p className='text-muted-foreground text-xs'>
+                <div className='text-muted-foreground text-xs'>
                   We compare it with your premium ticket to see the upcharge you
                   skipped.{' '}
                   <PremiumSavingsHelp linkLabel='How premium savings work' />
-                </p>
+                </div>
               </div>
             ),
           }),
