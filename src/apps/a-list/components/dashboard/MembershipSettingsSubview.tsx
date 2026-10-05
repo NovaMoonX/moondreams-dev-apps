@@ -304,7 +304,7 @@ function MembershipSettingsSubview({
             }
           />
         </div>
-        <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
+        <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp noModal />} />
         <Form
           id='a-list-settings-goals'
           form={goalFields}

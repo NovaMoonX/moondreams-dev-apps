@@ -10,34 +10,26 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 interface HelpTipProps {
   title: string;
   children: ReactNode;
-  /** Renders this text as an inline link that opens the explanation in a modal at every size, instead of the help icon. */
+  /** Shows this text as an inline link that reveals the explanation in place, for use inside a drawer, modal or form. */
   linkLabel?: string;
+  /** Keeps a phone from opening a modal, for a help icon that sits inside a drawer, modal or subview. */
+  noModal?: boolean;
   className?: string;
 }
 
-/** A "what does this mean?" explainer: a help icon that peeks in a popover on a computer and opens a modal on a phone, or a text link that always opens the modal. */
-function HelpTip({ title, children, linkLabel, className }: HelpTipProps) {
+/** A "what does this mean?" explainer: a help icon that peeks in a popover on a computer and opens a modal on a phone, or an inline link that reveals it in place. */
+function HelpTip({
+  title,
+  children,
+  linkLabel,
+  noModal = false,
+  className,
+}: HelpTipProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
+  const usesModal = isPhone && !noModal;
 
   const body = <div className='space-y-2 text-left text-sm'>{children}</div>;
-
-  const modal = (
-    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
-      <div className='space-y-4'>
-        {body}
-        <div className='flex justify-end'>
-          <Button
-            type='button'
-            rounded='full'
-            onClick={() => setIsOpen(false)}
-          >
-            Got it
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
 
   if (linkLabel) {
     return (
@@ -46,59 +38,72 @@ function HelpTip({ title, children, linkLabel, className }: HelpTipProps) {
           type='button'
           variant='link'
           size='sm'
+          aria-expanded={isOpen}
           className={join('h-auto p-0 text-xs underline', className)}
-          onClick={() => setIsOpen(true)}
+          onClick={() => setIsOpen((current) => !current)}
         >
           {linkLabel}
         </Button>
-        {modal}
+        {isOpen && (
+          <div className='bg-secondary/60 text-foreground mt-2 rounded-2xl p-3'>
+            <p className='mb-1 text-sm font-semibold'>{title}</p>
+            {body}
+          </div>
+        )}
       </>
     );
   }
 
-  const icon = <CircleHelp className='text-muted-foreground h-3.5 w-3.5' />;
-
-  if (isPhone) {
-    return (
-      <>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          rounded='full'
-          aria-label={`About ${title}`}
-          className={join('h-5 w-5', className)}
-          onClick={() => setIsOpen(true)}
-        >
-          {icon}
-        </Button>
-        {modal}
-      </>
-    );
-  }
+  const renderTrigger = (onClick?: () => void) => (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='icon'
+      rounded='full'
+      aria-label={`Help: ${title}`}
+      className={join(
+        "relative -my-1 h-5 w-5 after:absolute after:-inset-2.5 after:content-['']",
+        className,
+      )}
+      onClick={onClick}
+    >
+      <CircleHelp className='text-muted-foreground h-3.5 w-3.5' />
+    </Button>
+  );
 
   return (
-    <Popover
-      hoverable
-      placement='bottom'
-      alignment='center'
-      className='w-72 p-3'
-      trigger={
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          rounded='full'
-          aria-label={`About ${title}`}
-          className={join('h-5 w-5', className)}
+    <>
+      {usesModal ? (
+        renderTrigger(() => setIsOpen(true))
+      ) : (
+        <Popover
+          hoverable={!isPhone}
+          placement='bottom'
+          alignment='center'
+          className='w-72 p-3'
+          trigger={renderTrigger()}
         >
-          {icon}
-        </Button>
-      }
-    >
-      <p className='mb-1 text-sm font-semibold'>{title}</p>
-      {body}
-    </Popover>
+          <p className='mb-1 text-sm font-semibold'>{title}</p>
+          {body}
+        </Popover>
+      )}
+      {usesModal && (
+        <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
+          <div className='space-y-4'>
+            {body}
+            <div className='flex justify-end'>
+              <Button
+                type='button'
+                rounded='full'
+                onClick={() => setIsOpen(false)}
+              >
+                Got it
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
