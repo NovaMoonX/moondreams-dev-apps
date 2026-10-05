@@ -170,6 +170,7 @@ interface Ticket {
 | Opening tab contents and its count | watchlist release dates, local today | `selectOpeningRows` |
 | Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
 | Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
+| Previews window | the earliest `PLANNED` viewing with `showtimeAt − 30 min ≤ now ≤ showtimeAt + 10 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
 | Format split (count and %), activity over time, rating groups, per-format premium averages (Next Steps) | viewings | `selectDashboardBreakdowns` |
 
 ---
@@ -429,6 +430,10 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 
 `selectPendingSeenPrompts(state, now)` is every `PLANNED` viewing with `endsAt ≤ now`, oldest first. The host component shows the first one only when no other overlay is open, and keeps a session-local set of "Later" ids in its own state (not stored: "Later" means *until the next open*). Answering "Seen it" or "Didn't go" removes the viewing from the queue by changing or deleting the document, and the next one appears.
 
+
+#### 11. The previews strip
+
+`selectPreviewsWindowViewing(state, now)` returns the earliest `PLANNED` viewing whose previews are near: `showtimeAt − 30 min ≤ now ≤ showtimeAt + 10 min` (display only, the viewer's local clock; `useNow`'s 15-second tick moves the edges). `PreviewsStrip` shows one quiet row for it above the Calendar and Watchlist screens, hides it for a showing the user dismissed (in component state, so until the next open), and never opens an overlay: its button opens the ordinary add subview in `quick` mode. Because it is a row and not a drawer it cannot stack on the Seen prompt, which may appear over it for an earlier showing. Quick mode saves a tapped result as `WANT_TO_SEE` with no preferred format and no details step, skips a title already on the watchlist (by key, or by title and year across providers) with an "Already on your watchlist" toast, and, when the details lookup fails (poor signal in a theater), saves what the search returned and leaves the rest to `useRefreshUnreleasedMovies`, which covers null-dated items.
 ---
 
 ## Security Rules Design Criteria
@@ -574,8 +579,9 @@ No cached document is ever written back whole. A transaction is used only where 
 - **`CalendarScreen`** — owns the selected day (local state, set from `onDateSelect`), the counters row, the Calendar, and the inline day panel. Reads `selectViewingsByDay` and `selectCounters`; knows nothing about tickets.
 - **`PosterCell`** — pure: `(dayViewings) → PosterSplit`. No store access; `renderCell` is a thin closure over the map.
 - **`ViewingDrawer`** — owns its internal view (`details | ticket | edit`) and the swap-in-place back link; calls actions and the destructive confirm. Everything else about a viewing (row, badges, stars) is a pure presentational component.
-- **`AddFlow`** (shown full-page by `AddSubview`, or inside the watchlist drawer for "Add to calendar") — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
+- **`AddFlow`** (shown full-page by `AddSubview`, or inside the watchlist drawer for "Add to calendar") — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. In the watchlist's `quick` mode (the trailers loop) a tap on a result saves it straight away with the default priority, falling back to what the search knew if the details lookup fails, and keeps the same counter. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
 - **`SeenPromptHost`** and **`useRefreshUnreleasedMovies`** — the two background concerns, each mounted once in `AList.tsx`. Neither renders anything except the prompt drawer.
+- **`PreviewsStrip`** (`components/shell/`) — a third, quieter one: mounted once above the screens, it renders a single in-flow row (never an overlay) while a showing's previews are near, on Calendar and Watchlist only. It keeps its own session-local list of hidden showings, like "Later".
 - **Pure utilities** (`utils/`): `money.ts` (parse/format cents), `dayKeys.ts`, `billing.ts`, `savings.ts`, `viewingState.ts`, `tax.ts` (itemized tax, all-in split, bill-derived rate), `watchlistRows.ts`, `opening.ts`, `chips.ts` (fee and tax-rate chips). All are plain functions over plain data with no React or Firebase, so the arithmetic that decides "have I broken even?" is exercised without a UI.
 - **Reuse, not copy:** `useDebouncedValue`/`DEBOUNCE_MS`, `useNow`, `queryClient`/`DAY_MS`, `normalizeString`, `formatDateUTC`/`formatDate`/`formatTime`/`formatDateTime`, `fromDateInputValue`/`toLocalDateInputValue`/`fromLocalDateAndTimeInputValues`, `useActionModal`, and `AppToggle` if an immediate-effect toggle ever appears. **`SectionHeader`, `ModalFooterActions` and `DeleteIconButton` currently live in Waypoint's `components/`.** A-List is the second app that needs them, so they move to central `src/components/` in the first A-List PR that uses one, with Waypoint's imports updated in the same PR. A-List never imports from `@apps/waypoint`.
 
@@ -651,7 +657,7 @@ Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineCh
 - `src/store/index.ts`: `aList` reducer and `RootState`.
 - `firestore.rules`: the block above (including the three server-only deny blocks), in alphabetical order, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
 - `functions/src/index.ts`: export `searchMovies` and `getMovie`; set the `TMDB_API_KEY` and `OMDB_API_KEY` secrets (create `TMDB_API_KEY` in production before the PR merges); after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
-- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, and one day with four movies. Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
+- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, one day with four movies, and one that starts 20 minutes after the seed runs so the trailers strip shows (it leaves the window about 40 minutes later). Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
 - `SITE_VERSION` bumped (minor) in `src/lib/app/app.constants.ts` in each PR; `README.md`, `UX.md`, `TECHNICAL.md` current.
 
 ---

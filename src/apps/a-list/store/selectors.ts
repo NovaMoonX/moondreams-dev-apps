@@ -1,7 +1,12 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { WATCH_PRIORITIES, WEEK_STARTS_ON } from '@apps/a-list/constants';
+import {
+  PREVIEWS_WINDOW_AFTER_MINUTES,
+  PREVIEWS_WINDOW_BEFORE_MINUTES,
+  WATCH_PRIORITIES,
+  WEEK_STARTS_ON,
+} from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
 import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
@@ -173,6 +178,25 @@ export const selectPendingSeenPrompts = createSelector(
         (viewing) => viewing.status === 'PLANNED' && viewing.endsAt <= now,
       )
       .sort((left, right) => left.endsAt - right.endsAt);
+    return result;
+  },
+);
+
+/** The planned showing whose previews are about to run or just started, earliest first if two overlap. */
+export const selectPreviewsWindowViewing = createSelector(
+  [selectViewingItems, (_state: RootState, now: number) => now],
+  (viewings, now): Viewing | null => {
+    const result =
+      viewings
+        .filter(
+          (viewing) =>
+            viewing.status === 'PLANNED' &&
+            viewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000 <=
+              now &&
+            now <=
+              viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
+        )
+        .sort((left, right) => left.showtimeAt - right.showtimeAt)[0] ?? null;
     return result;
   },
 );

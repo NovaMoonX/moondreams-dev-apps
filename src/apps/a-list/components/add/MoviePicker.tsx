@@ -22,11 +22,14 @@ import type { MovieSearchResult, WatchlistItem } from '@apps/a-list/types';
 interface MoviePickerProps {
   query: string;
   onQueryChange: (query: string) => void;
-  onPick: (movie: MovieSearchResult) => void;
+  /** `isListed` is true when the film is already on the watchlist, by key or by title and year. */
+  onPick: (movie: MovieSearchResult, isListed: boolean) => void;
   onPickWatchlistItem: (item: WatchlistItem) => void;
   onAddByTitle: () => void;
   /** Calendar adds pick from the watchlist first; watchlist adds search the movie database only. */
   showWatchlist: boolean;
+  /** Blocks every row while a pick is being saved, so a double tap can't save twice. */
+  isDisabled?: boolean;
 }
 
 function MoviePicker({
@@ -36,6 +39,7 @@ function MoviePicker({
   onPickWatchlistItem,
   onAddByTitle,
   showWatchlist,
+  isDisabled = false,
 }: MoviePickerProps) {
   const watchlist = useAppSelector(selectWatchlistItems);
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
@@ -155,6 +159,7 @@ function MoviePicker({
         variant='tertiary'
         size='stripped'
         onClick={onClick}
+        disabled={isDisabled}
         className='text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left'
       >
         <span className='h-14 w-10 shrink-0 overflow-hidden rounded-lg shadow-sm'>
@@ -245,7 +250,7 @@ function MoviePicker({
                 ]
                   .filter(Boolean)
                   .join(' · ') || null,
-                () => onPick(movie),
+                () => onPick(movie, isListed(movie)),
               ),
             )}
           </ul>

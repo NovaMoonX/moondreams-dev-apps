@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -121,6 +121,7 @@ export function AddFlow({
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
+  const queryClient = useQueryClient();
   const now = useNow();
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
@@ -140,7 +141,7 @@ export function AddFlow({
     time: DEFAULT_SHOWTIME,
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [pastAdded, setPastAdded] = useState<{
+  const [addedSoFar, setAddedSoFar] = useState<{
     count: number;
     lastTitle: string;
   } | null>(null);
@@ -165,6 +166,8 @@ export function AddFlow({
   );
   const isCalendar = overlay.destination === 'calendar';
   const isPast = overlay.destination === 'calendar' && overlay.mode === 'past';
+  const isQuick =
+    overlay.destination === 'watchlist' && overlay.mode === 'quick';
   // Past mode only adds seen movies, so the showing must have ended, not just started.
   const isNotYetShown =
     isPast &&
@@ -245,7 +248,7 @@ export function AddFlow({
   };
 
   const resetForNextMovie = (addedTitle: string) => {
-    setPastAdded((previous) => ({
+    setAddedSoFar((previous) => ({
       count: (previous?.count ?? 0) + 1,
       lastTitle: addedTitle,
     }));
@@ -259,6 +262,49 @@ export function AddFlow({
       time: DEFAULT_SHOWTIME,
     });
     setIsSaving(false);
+  };
+
+  const handleQuickPick = async (
+    result: MovieSearchResult,
+    isListed: boolean,
+  ) => {
+    if (!user || isSaving) {
+      return;
+    }
+
+    if (isListed) {
+      addToast({
+        title: 'Already on your watchlist',
+        description: result.title,
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    // Poor signal in a theater shouldn't lose the title: save what search knows and the daily refresh fills in the rest.
+    const snapshot = await queryClient
+      .fetchQuery(movieDetailsQueryOptions(result.movieKey))
+      .catch(
+        (): MovieSnapshot => ({
+          title: result.title,
+          releaseDate: null,
+          posterUrl: result.posterUrl,
+          runtimeMinutes: null,
+          contentRating: null,
+        }),
+      );
+
+    try {
+      await saveToWatchlist(user.uid, result.movieKey, snapshot);
+      resetForNextMovie(result.title);
+    } catch (saveError) {
+      addToast({
+        title: 'Unable to save this movie',
+        description: getErrorMessage(saveError, 'Please try again.'),
+        type: 'error',
+      });
+      setIsSaving(false);
+    }
   };
 
   const handleAdd = async (keepGoing: boolean) => {
@@ -316,12 +362,17 @@ export function AddFlow({
     }
 
     if (selection === null) {
-      return (
+      const picker = (
         <MoviePicker
           query={query}
           onQueryChange={setQuery}
           showWatchlist={isCalendar}
-          onPick={(result) => setSelection({ kind: 'search', result })}
+          isDisabled={isSaving}
+          onPick={(result, isListed) =>
+            isQuick
+              ? void handleQuickPick(result, isListed)
+              : setSelection({ kind: 'search', result })
+          }
           onPickWatchlistItem={(item) =>
             setSelection({
               kind: 'known',
@@ -337,6 +388,17 @@ export function AddFlow({
             setIsAddingByTitle(true);
           }}
         />
+      );
+
+      return isQuick ? (
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-sm'>
+            Tap a title to save it as Want to See.
+          </p>
+          {picker}
+        </div>
+      ) : (
+        picker
       );
     }
 
@@ -509,10 +571,11 @@ export function AddFlow({
       {title !== undefined && (
         <SubviewHeader title={header.label} onBack={header.onClick} />
       )}
-      {pastAdded && (
+      {addedSoFar && (
         <PastMoviesStrip
-          count={pastAdded.count}
-          lastTitle={pastAdded.lastTitle}
+          count={addedSoFar.count}
+          lastTitle={addedSoFar.lastTitle}
+          emoji={isQuick ? '📽️' : undefined}
         />
       )}
       {getContent()}

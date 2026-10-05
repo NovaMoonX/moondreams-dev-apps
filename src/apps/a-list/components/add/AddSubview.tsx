@@ -9,7 +9,13 @@ interface AddSubviewProps {
 
 function AddSubview({ overlay, onClose }: AddSubviewProps) {
   const isPast = overlay.destination === 'calendar' && overlay.mode === 'past';
-  const title = isPast ? 'Movies you have seen' : 'Find a movie';
+  const isQuick = overlay.destination === 'watchlist' && overlay.mode === 'quick';
+  const getTitle = () => {
+    if (isPast) return 'Movies you have seen';
+    if (isQuick) return 'Trailer picks';
+    return 'Find a movie';
+  };
+  const title = getTitle();
 
   return (
     <Subview onClose={onClose}>

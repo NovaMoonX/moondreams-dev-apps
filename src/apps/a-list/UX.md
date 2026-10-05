@@ -584,6 +584,7 @@ block-beta
 | ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |
 | ViewingDrawer | day drawer (swaps in place from the day's list) | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
 | SeenPrompt | auto, after a showtime | `Drawer` with stars plus Seen it / Didn't go / Later; queues one at a time |
+| PreviewsStrip | top of Calendar and Watchlist (not Dashboard), from 30 min before a planned showing to 10 min after it starts | a quiet in-flow row: the showing and its countdown, an "Add from trailers" pill and a hide ✕. It never opens anything by itself; the button opens the add screen in "Trailer picks" mode, where a tap on a result saves it as Want to See and the search stays open, with an "added · N so far" counter |
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |

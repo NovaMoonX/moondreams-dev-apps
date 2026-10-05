@@ -19,6 +19,7 @@ import PastMoviesOfferModal from '@apps/a-list/components/setup/PastMoviesOfferM
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
 import BottomNav from '@apps/a-list/components/shell/BottomNav';
 import LoadingSkeleton from '@apps/a-list/components/shell/LoadingSkeleton';
+import PreviewsStrip from '@apps/a-list/components/shell/PreviewsStrip';
 import SeenPromptHost from '@apps/a-list/components/viewing/SeenPromptHost';
 import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
 import WatchlistItemDrawer from '@apps/a-list/components/watchlist/WatchlistItemDrawer';
@@ -165,7 +166,10 @@ function AList() {
       {/* A subview takes over the app; the screens stay mounted underneath so filters and the selected day survive. */}
       <div className={join(isSubviewOpen && 'hidden')}>
         <div className='page pb-28'>
-          <div className='mx-auto max-w-4xl space-y-4 py-6'>{getScreen()}</div>
+          <div className='mx-auto max-w-4xl space-y-4 py-6'>
+            <PreviewsStrip activeTab={activeTab} />
+            {getScreen()}
+          </div>
           <BottomNav value={activeTab} onChange={setActiveTab} />
         </div>
       </div>

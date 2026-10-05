@@ -46,7 +46,8 @@ export interface MovieSearchResult {
 }
 
 export type AListOverlay =
-  | { kind: 'add'; destination: 'watchlist' }
+  /** `quick` is the trailers loop: one tap saves a result with the default priority and the search stays open. */
+  | { kind: 'add'; destination: 'watchlist'; mode?: 'quick' }
   /** `date` is a local "YYYY-MM-DD" the date field starts on. */
   /** `past` is the backfill loop: "Add + another" keeps the drawer open for the next movie. */
   | {

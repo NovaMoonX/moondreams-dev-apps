@@ -215,6 +215,13 @@ function getViewingFixtures(now: number) {
       hour: 14,
       awaiting: true,
     },
+    // Starts 20 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 40 minutes).
+    {
+      id: 'seed-viewing-previews',
+      movieKey: 'imdb-tt99000004',
+      daysFromNow: 0,
+      minutesFromNow: 20,
+    },
     {
       id: 'seed-viewing-starlight',
       movieKey: 'imdb-tt99000001',
@@ -255,6 +262,7 @@ function getViewingFixtures(now: number) {
       daysFromNow,
       hour = 19,
       minute = 0,
+      minutesFromNow,
       awaiting = false,
     }: {
       id: string;
@@ -262,10 +270,14 @@ function getViewingFixtures(now: number) {
       daysFromNow: number;
       hour?: number;
       minute?: number;
+      minutesFromNow?: number;
       awaiting?: boolean;
     }) => {
       const { movie: snapshot } = find(movieKey);
-      const showtimeAt = getShowtime(now, daysFromNow, hour, minute);
+      const showtimeAt =
+        minutesFromNow === undefined
+          ? getShowtime(now, daysFromNow, hour, minute)
+          : now + minutesFromNow * 60_000;
       const endsAt =
         showtimeAt +
         (PREVIEWS_MINUTES + (snapshot.runtimeMinutes ?? DEFAULT_RUNTIME)) *
