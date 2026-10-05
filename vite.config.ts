@@ -53,6 +53,7 @@ export default defineConfig({
       injectRegister: null, // Handles registration manually
       manifest: false, // Disables auto single-manifest injection
       workbox: {
+        navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         importScripts: [
           'firebase-messaging-sw-config.js',

@@ -133,6 +133,17 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 - **PWA/service-worker behavior is production-only by default.** `vite-plugin-pwa` doesn't register a worker in `npm run dev` unless `devOptions.enabled` is turned on, so push notifications can't be exercised locally without a production-style build (`npm run build && npm run preview`, or a deploy preview).
 - **Push notifications need one more secret Firestore doesn't require:** `VITE_FIREBASE_VAPID_KEY` (see [Environment variables](#environment-variables)) isn't part of the standard `firebaseConfig` object, so it also has to be added to the `VITE_FIREBASE_*` repo secrets used by the deploy workflows before `requestPushPermission()` can mint a real device token.
 
+## Troubleshooting
+
+Problems we've hit before, so we don't hit them again.
+
+### Google sign-in fails in a browser that has visited the site before
+
+- **Symptom:** the sign-in popup opens as a page showing the app's "Page not found" (the URL is `apps.moondreams.dev/__/auth/handler?...`), then the console logs `auth/cancelled-popup-request`. Works in a fresh Incognito window or a profile that never loaded the site. Visiting `/__/auth/handler` directly in Incognito shows "missing initial state", which is normal.
+- **Cause:** `authDomain` is `apps.moondreams.dev`, the same origin as the service worker. Workbox's default navigation fallback answered the popup's `/__/auth/handler` request with `index.html`, so Firebase's handler never ran. It never showed up before the custom auth domain because the handler lived on `firebaseapp.com`, an origin the worker didn't control.
+- **Fix:** `navigateFallbackDenylist: [/^\/__\//]` in `vite.config.ts`. Keep every `/__/*` path (Firebase Hosting's reserved auth and init routes) out of the worker's fallback. Browsers with the old worker pick up the fix on their next load; if stuck, unregister it in DevTools → Application → Service Workers.
+- **Check after any change to the worker or `authDomain`:** open `/__/auth/handler` in a profile that has loaded the site before; it should be blank, not the app.
+
 ## Tech Stack
 
 - [React](https://react.dev/)
