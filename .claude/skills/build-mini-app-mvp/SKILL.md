@@ -13,7 +13,7 @@ Work autonomously. Don't ask questions you can answer from the docs, the code or
 
 Read `CLAUDE.md` (it imports `.github/copilot-instructions.md`) before writing code. Every rule there applies to every PR, as does every checklist in `.claude/skills/finish-feature-pr/SKILL.md`.
 
-Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: screenshots in the PR body, Copilot with a 20-minute window, then technical, product and design agents. Where that skill and this one differ on review, `pr-wrap-up` wins.
+Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: screenshots in the PR body, a regression check (rules first), Copilot with a 20-minute window, then technical, product and design agents. Where that skill and this one differ on review, `pr-wrap-up` wins.
 
 ## Inputs
 

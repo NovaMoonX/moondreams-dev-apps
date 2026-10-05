@@ -15,16 +15,16 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 3. **Build a watchlist** — Search for a movie on a full-page screen, pick it, and set a priority and preferred format. Nothing to browse, nothing recommended: just your list. Rounded filter pills (Opening, Must See, Want to See, If I Have Time, Seen) narrow the list; anything opening in the next week is one tap away.
 4. **Put movies on the calendar** — Add a movie you saw or plan to see, from your watchlist or a fresh search (new ones join your watchlist automatically). Each day shows the posters of what you watched; tap a day to see its movies in a drawer (on a computer, hover a day for a peek). Seeing a movie twice is just two entries.
 5. **Record what it would have cost** — Mark a movie paid with its format and the three amounts AMC itemizes on every ticket: the ticket price, the convenience fee and the tax, all in dollars. For a premium format, add what a standard ticket would have cost so the upcharge you skipped is counted. Members pay no convenience fee, so the fee you enter is one you skipped; it varies by showing, and the fees you've entered before show up as chips so repeating one is a single tap. The tax field hints at an estimate from your usual rate.
-6. **Mark it seen** — When a planned movie's showtime ends, a prompt asks if you saw it. One tap updates your watchlist, and you can leave a star rating.
-7. **Watch the numbers** — The top of the calendar tracks movies watched, movies this week, and whether your goals are met. The dashboard shows your savings, the convenience fees you've skipped, and whether you've broken even, with breakdowns by format, activity over time, and ratings to follow.
+6. **Mark it seen** — When a planned movie's showtime ends, a prompt asks if you saw it. One tap updates your watchlist, and you can leave a star rating, in half stars: tap either half of a star or slide across the row.
+7. **Watch the numbers** — The top of the calendar tracks movies watched, movies since Friday (AMC's week turns over on Friday, so that's when the weekly count starts over), and whether your goals are met. The dashboard shows your savings, the convenience fees you've skipped, and whether you've broken even, with breakdowns by format, activity over time, and ratings to follow.
 
 ### Savings & Break-Even, In Detail
 
 - **Total ticket savings** is the sum of what each watched ticket would have cost you without the membership: the ticket price, the convenience fee you skipped, and tax.
 - **Convenience fees avoided** is the fee part of that total on its own, so you can see what the membership spares you in fees alone.
 - **Net savings** is total ticket savings minus the membership cost you've incurred (tax included), counted in monthly bills from the day you started. Negative means you haven't broken even yet; **break-even** flips once net savings reaches zero.
-- **Premium format savings** is the extra you would have paid for IMAX, Dolby Cinema and the like versus a standard ticket for the same showing, which is why the standard price is requested whenever the format isn't standard.
-- Goals are *your* targets, not rules the app enforces: the weekly counter reads "watched / goal" (e.g. 1/4), and the monthly goal shows met or not yet.
+- **Premium format savings** is the extra you would have paid for IMAX, Dolby Cinema and the like versus a standard ticket for the same showing (premium price minus standard price, before tax and fees), which is why the standard price is requested whenever the format isn't standard. A help icon on the dashboard tile and a link under the standard price field explain it.
+- Goals are *your* targets, not rules the app enforces: the "Since Friday" counter reads "watched / goal" (e.g. 1/4) and starts over each Friday, like AMC's week, and the monthly goal shows met or not yet.
 
 ## How it Feels
 
@@ -45,7 +45,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Backfill Past Movies: A first-time flow to add movies already watched since joining, one after another with "Add + another" as the main button.
 - [x] Poster Calendar: Month calendar where each day is filled by the poster(s) of what was watched or is planned — one, a corner-to-corner split, pizza-style thirds, or quadrants.
 - [x] Day Details: Tap a day to see its movies with format, rating, and price.
-- [x] Top-of-Calendar Counters: Total movies watched, movies this week (watched/goal), and weekly and monthly goal status.
+- [x] Top-of-Calendar Counters: Total movies watched, movies since Friday (watched/goal), and weekly and monthly goal status.
 - [x] Add to Calendar: Add a watched or planned movie from your watchlist or a search; new movies join the watchlist automatically.
 - [x] Rewatches: Every viewing is its own entry, so the same movie can appear many times.
 - [x] Watchlist: Search and add movies with release date, preferred format, priority (Must See / Want to See / If I Have Time), seen status, and date watched or planned.

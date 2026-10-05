@@ -81,8 +81,8 @@ export const DEFAULT_SHOWTIME = '19:00';
 /** The "add from trailers" strip shows from this long before a planned showing until this long after it starts. */
 export const PREVIEWS_WINDOW_BEFORE_MINUTES = 30;
 export const PREVIEWS_WINDOW_AFTER_MINUTES = 10;
-/** Weeks start on Sunday (0), matching the calendar grid. */
-export const WEEK_STARTS_ON = 0;
+/** AMC's week turns over on Friday (5), when new releases open; the calendar grid itself still starts on Sunday. */
+export const WEEK_STARTS_ON = 5;
 
 export const MAX_FEE_CHIPS = 4;
 export const MAX_TAX_CHIPS = 4;

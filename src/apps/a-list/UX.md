@@ -132,7 +132,7 @@ block-beta
 block-beta
   columns 14
   Watched["🎞️ 1<br/>Watched"]:7
-  Week["📅 1/4<br/>This week"]:7
+  Week["📅 1/4<br/>Since Friday"]:7
   Goals["🎯 Weekly goal: not yet · Monthly goal: not yet"]:14
   Nav["‹   October 2026   ›"]:14
   Wd1["S"]:2
@@ -438,7 +438,7 @@ block-beta
   columns 3
   Q["🎬 Did you catch it?"]:3
   M["🖼️ Movie Title · Fri, 7:10 PM"]:3
-  Stars["☆ ☆ ☆ ☆ ☆ · optional"]:3
+  Stars["☆ ☆ ☆ ☆ ☆ · half stars, optional"]:3
   Later["Later"]:1
   NoGo["Didn't go"]:1
   Seen["Seen it"]:1
@@ -569,7 +569,7 @@ block-beta
   style N3 fill:transparent,stroke:#888888,stroke-width:1px;
   style N4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies this week stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
+*Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
 
 ## Reusable Components
 
@@ -588,7 +588,8 @@ block-beta
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |
-| StarRating | Seen prompt, edit viewing, rows (read-only) | one to five stars; custom, since Dreamer UI has none |
+| StarRating | Seen prompt, edit viewing, rows (read-only) | half stars from 0.5 to 5: tap a star's left or right half, or slide a finger or the mouse across the row; hovering with a mouse previews the value in a lighter tint until it is clicked; arrow keys step by a half (and work while hovering); a visible Clear button removes the rating (tapping the current rating does nothing); custom, since Dreamer UI has none |
+| HelpTip | Calendar's "Since Friday" tile, Dashboard's Premium formats tile, Membership settings' Goals, the standard-price field | a small help icon: a hover tooltip (with its arrow) on a computer, a modal on a phone (a tooltip inside a drawer, modal or subview); or a text link that opens the same explanation in a modal at every size |
 | OpeningTab | Watchlist | the first and default tab; carries an accent and a count when something opens in the next seven days; its empty state links to All |
 | BottomNav | shell | Dashboard · Calendar · Watchlist with Calendar centred and prominent; new, because Waypoint's `TripBottomNav` is trip-specific |
 | SetupStepper | Setup | a local step index, not a library component; `StepThroughModal` pages through dismissable items and doesn't fit |
@@ -678,7 +679,7 @@ flowchart LR
 | Watchlist item | movie (picked), priority (defaults to Want to See), preferred format (optional, defaults to no preference)¹ | — | later edits through the watchlist drawer (catch-all edit) | none | none: priority is closed; format is a closed list¹ |
 | Viewing | movie (picked), date (defaults to the selected day), showtime | ticket details, star rating | ticket: contextual Mark paid inside the viewing drawer, and an inline reveal on the add form; rating: contextual Seen prompt | none | none |
 | Ticket | entry mode (itemized or all-in total), format¹, ticket price before tax or the all-in total, standard price (only when format isn't Standard), convenience fee skipped², tax rate³ | — | edits through the viewing drawer's Edit ticket | none | none |
-| Star rating | stars one to five (optional) | — | Seen prompt, or edit viewing | none | none |
+| Star rating | half stars, 0.5 to 5 (optional) | — | Seen prompt, or edit viewing | none | none |
 
 ¹ Formats: Standard, Dolby Cinema, IMAX, PRIME at AMC, RealD 3D, and Laser. A watchlist item's preferred format can be empty, meaning no preference. This is a closed list that only the developer extends; nothing for users to add.
 ² The fee chips are the distinct fees from your past tickets, most recent first, plus $0; "Other" opens a field.

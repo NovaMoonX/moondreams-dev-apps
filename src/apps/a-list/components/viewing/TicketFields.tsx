@@ -2,6 +2,7 @@ import { Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
 import MoneyInput from '@/components/MoneyInput';
 import { useAppSelector } from '@/store';
+import PremiumSavingsHelp from '@apps/a-list/components/shared/PremiumSavingsHelp';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import { AMC_FORMAT_LABELS, AMC_FORMATS } from '@apps/a-list/constants';
 import {
@@ -66,13 +67,20 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
             name: 'standardPrice',
             label: 'Standard price for this showing',
             renderComponent: (props) => (
-              <MoneyInput
-                ariaLabel='Standard price for this showing'
-                placeholder='14.00'
-                value={(props.value as string | undefined) ?? ''}
-                errorMessage={errors.standardPrice}
-                onChange={(value) => props.onValueChange(value)}
-              />
+              <div className='space-y-1.5'>
+                <MoneyInput
+                  ariaLabel='Standard price for this showing'
+                  placeholder='14.00'
+                  value={(props.value as string | undefined) ?? ''}
+                  errorMessage={errors.standardPrice}
+                  onChange={(value) => props.onValueChange(value)}
+                />
+                <p className='text-muted-foreground text-xs'>
+                  We compare it with your premium ticket to see the upcharge you
+                  skipped.{' '}
+                  <PremiumSavingsHelp linkLabel='How premium savings work' />
+                </p>
+              </div>
             ),
           }),
         ]

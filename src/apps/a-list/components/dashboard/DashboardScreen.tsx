@@ -7,6 +7,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import StatTile from '@/components/StatTile';
+import PremiumSavingsHelp from '@apps/a-list/components/shared/PremiumSavingsHelp';
 import type { TicketsView } from '@apps/a-list/components/dashboard/TicketsList';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
@@ -144,6 +145,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             <StatTile
               icon='📽️'
               label='Premium formats'
+              help={<PremiumSavingsHelp />}
               value={formatCents(summary.premiumFormatSavingsCents)}
             />
             <StatTile

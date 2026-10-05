@@ -10,6 +10,8 @@ interface StatTileProps {
   detail?: ReactNode;
   /** Icon above the number instead of beside it, for tiles that sit three across. */
   isStacked?: boolean;
+  /** A help icon beside the label, for a number that needs explaining. */
+  help?: ReactNode;
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
@@ -23,6 +25,7 @@ function StatTile({
   value,
   icon,
   detail,
+  help,
   isStacked = false,
   goal,
   prompt,
@@ -61,7 +64,15 @@ function StatTile({
         >
           {value}
         </p>
-        <p className='text-muted-foreground text-xs'>{label}</p>
+        <div
+          className={join(
+            'text-muted-foreground flex items-center gap-0.5 text-xs',
+            isStacked && 'justify-center',
+          )}
+        >
+          <span className='whitespace-nowrap'>{label}</span>
+          {help}
+        </div>
         {prompt && (
           <Button
             type='button'
