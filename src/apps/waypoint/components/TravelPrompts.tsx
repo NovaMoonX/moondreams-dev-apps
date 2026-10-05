@@ -86,6 +86,7 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
     }
   }, [isVisible, queryClient]);
 
+
   if (!isVisible) {
     return null;
   }

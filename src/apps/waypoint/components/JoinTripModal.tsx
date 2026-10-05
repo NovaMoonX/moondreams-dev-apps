@@ -35,6 +35,8 @@ function JoinTripModal({
   onClose,
 }: JoinTripModalProps) {
   const [error, setError] = useState<string | null>(null);
+  // Joining uses up the invitation and makes them a member, so remember it to keep showing the welcome.
+  const [joinedInvite, setJoinedInvite] = useState<TripEmailInvite | null>(null);
   const invite = useTripInvite(inviteCode);
 
   const membership = invite.tripId
@@ -156,8 +158,17 @@ function JoinTripModal({
     };
   };
 
-  if (emailInvite && !membership) {
-    return <EmailInviteJoinModal invite={emailInvite} uid={uid} onViewTrip={onViewTrip} onClose={onClose} />;
+  const shownInvite = joinedInvite ?? (membership ? undefined : emailInvite);
+  if (shownInvite) {
+    return (
+      <EmailInviteJoinModal
+        invite={shownInvite}
+        uid={uid}
+        onJoined={() => setJoinedInvite(shownInvite)}
+        onViewTrip={onViewTrip}
+        onClose={onClose}
+      />
+    );
   }
 
   const { title, body, actions } = getView();

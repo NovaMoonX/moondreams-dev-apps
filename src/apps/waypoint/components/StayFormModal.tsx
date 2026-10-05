@@ -367,7 +367,7 @@ export function StayFormModal({
 
   const chips = [
     { key: 'link', label: 'Listing link', icon: <Link2 className='h-4 w-4' /> },
-    { key: 'confirmation', label: 'Confirmation code', icon: <Hash className='h-4 w-4' /> },
+    { key: 'confirmation', label: 'Confirmation', icon: <Hash className='h-4 w-4' /> },
     ...(isRelative ? [{ key: 'timezone', label: 'Time zone', icon: <Globe className='h-4 w-4' /> }] : []),
     { key: 'planned', label: 'Planned arrival', icon: <Clock className='h-4 w-4' /> },
   ].filter((chip) => !revealed.includes(chip.key));

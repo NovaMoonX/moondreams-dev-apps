@@ -49,46 +49,51 @@ function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
     }
   };
 
+  // The welcome modal outlives the list: joining uses up the invitation, which empties it.
+  const modal = joining && (
+    <EmailInviteJoinModal
+      key={joining.tripId}
+      invite={joining}
+      uid={uid}
+      onViewTrip={(tripId) => {
+        setJoining(null);
+        onViewTrip(tripId);
+      }}
+      onClose={() => setJoining(null)}
+    />
+  );
+
   if (invites.length === 0) {
-    return null;
+    return modal || null;
   }
 
   return (
-    <section className='bg-accent/60 rounded-2xl'>
-      <h2 className='text-accent-foreground px-4 pt-4 pb-2 text-xs font-semibold tracking-wide uppercase'>
-        💌 You&apos;re invited
-      </h2>
-      <ul className='divide-border/60 divide-y'>
-        {invites.map((invite) => (
-          <li key={invite.tripId} className='flex items-center gap-3 px-4 py-3'>
-            <div className='min-w-0 flex-1'>
-              <p className='truncate font-medium'>{titles[invite.tripId] ?? 'A trip'}</p>
-              <p className='text-muted-foreground text-xs'>
-                Join as {MEMBER_ROLE_LABELS[invite.role]} · no request needed
-              </p>
-            </div>
-            <Button type='button' variant='tertiary' size='sm' onClick={() => void handleDecline(invite)}>
-              Not for me
-            </Button>
-            <Button type='button' size='sm' rounded='full' onClick={() => setJoining(invite)}>
-              Join
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {joining && (
-        <EmailInviteJoinModal
-          key={joining.tripId}
-          invite={joining}
-          uid={uid}
-          onViewTrip={(tripId) => {
-            setJoining(null);
-            onViewTrip(tripId);
-          }}
-          onClose={() => setJoining(null)}
-        />
-      )}
-    </section>
+    <>
+      <section className='bg-accent/60 rounded-2xl'>
+        <h2 className='text-accent-foreground px-4 pt-4 pb-2 text-xs font-semibold tracking-wide uppercase'>
+          💌 You&apos;re invited
+        </h2>
+        <ul className='divide-border/60 divide-y'>
+          {invites.map((invite) => (
+            <li key={invite.tripId} className='flex items-center gap-3 px-4 py-3'>
+              <div className='min-w-0 flex-1'>
+                <p className='truncate font-medium'>{titles[invite.tripId] ?? 'A trip'}</p>
+                <p className='text-muted-foreground text-xs'>
+                  Join as {MEMBER_ROLE_LABELS[invite.role]} · no request needed
+                </p>
+              </div>
+              <Button type='button' variant='tertiary' size='sm' onClick={() => void handleDecline(invite)}>
+                Not for me
+              </Button>
+              <Button type='button' size='sm' rounded='full' onClick={() => setJoining(invite)}>
+                Join
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {modal}
+    </>
   );
 }
 

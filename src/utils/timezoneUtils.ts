@@ -1,11 +1,15 @@
-let cachedTimezoneOptions: { value: string; text: string }[] | null = null;
-
-/** IANA zone name ("America/Los_Angeles") -> readable label ("America / Los Angeles"), no underscores. */
+/** IANA zone name ("America/Los_Angeles") -> readable label ("Los Angeles · Pacific Time"): the city, then
+ * the zone's own name, which says whether it observes daylight saving ("Mountain Standard Time" for Phoenix). */
 export function formatTimezoneLabel(zone: string): string {
-  return zone
-    .split('/')
-    .map((part) => part.replace(/_/g, ' '))
-    .join(' / ');
+  const city = (zone.split('/').pop() ?? zone).replace(/_/g, ' ');
+  try {
+    const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longGeneric' })
+      .formatToParts(new Date())
+      .find((entry) => entry.type === 'timeZoneName')?.value;
+    return name ? `${city} · ${name}` : city;
+  } catch {
+    return city;
+  }
 }
 
 /** "PDT", "EST"… as the runtime knows it at `at`; zones without a short name read like "GMT+1". */
@@ -62,21 +66,4 @@ export function zonedDateTimeToEpoch(date: string, time: string, timeZone: strin
     .sort((first, second) => first - second);
   const result = validInstants[0] ?? wallClockAsUtc - offsetBefore;
   return result;
-}
-
-/** Every IANA timezone the runtime supports, as `{ value, text }` select options sorted by label. */
-export function getTimezoneOptions(): { value: string; text: string }[] {
-  if (cachedTimezoneOptions) {
-    return cachedTimezoneOptions;
-  }
-
-  const zones =
-    typeof Intl.supportedValuesOf === 'function'
-      ? Intl.supportedValuesOf('timeZone')
-      : [];
-  cachedTimezoneOptions = zones
-    .map((zone) => ({ value: zone, text: formatTimezoneLabel(zone) }))
-    .sort((a, b) => a.text.localeCompare(b.text));
-
-  return cachedTimezoneOptions;
 }

@@ -106,7 +106,7 @@ function EventGroupCard({ trip, group, showAttendees, canEdit, onManage, onStack
         </div>
       </div>
       {isExpanded && (
-        <div className='ml-4 space-y-3 border-l-2 pl-4'>
+        <div className='ml-4 space-y-3 border-l-2 border-primary/30 pl-4'>
           {isTravel ? (
             <>
               <ol className='space-y-1'>

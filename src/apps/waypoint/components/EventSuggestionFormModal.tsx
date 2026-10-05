@@ -13,7 +13,7 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 import { fromLocalDateAndTimeInputValues, toLocalTimeInputValue } from '@/utils/dateInputUtils';
-import { getDayCount, getDayIndex, getDayInputValue, getDayOptions } from '@/utils/dateRangeUtils';
+import { getDayIndex, getDayInputValue, getDayOptions } from '@/utils/dateRangeUtils';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
@@ -215,7 +215,6 @@ function EventSuggestionFormModal({
   );
   const [formData, setFormData] = useState<SuggestionFormData>(initialData);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const times = parseTimes(trip, formData);
   const isFormComplete = formData.title.trim() !== '' && formData.time !== '' && times.error === null;
@@ -329,7 +328,7 @@ function EventSuggestionFormModal({
         },
       }),
     ],
-    [dayCount, trip.startDate, formData.title, placeBias],
+    [trip.startDate, trip.endDate, formData.title, placeBias],
   );
 
   const handleSubmit = async (data: SuggestionFormData) => {

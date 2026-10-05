@@ -14,12 +14,14 @@ import type { TripEmailInvite } from '@apps/waypoint/types';
 interface EmailInviteJoinModalProps {
   invite: TripEmailInvite;
   uid: string;
+  /** Called once they've joined, for a parent whose own state would otherwise change under the welcome. */
+  onJoined?: () => void;
   onViewTrip: (tripId: string) => void;
   onClose: () => void;
 }
 
 /** What someone sees when an Admin already added their email: nothing to request, just a way in. */
-function EmailInviteJoinModal({ invite, uid, onViewTrip, onClose }: EmailInviteJoinModalProps) {
+function EmailInviteJoinModal({ invite, uid, onJoined, onViewTrip, onClose }: EmailInviteJoinModalProps) {
   const dispatch = useAppDispatch();
   const { data: title } = useQuery(tripTitleQueryOptions(invite.tripId));
   const [isJoining, setIsJoining] = useState(false);
@@ -33,6 +35,7 @@ function EmailInviteJoinModal({ invite, uid, onViewTrip, onClose }: EmailInviteJ
     try {
       await dispatch(acceptEmailInvite({ uid, invite })).unwrap();
       setHasJoined(true);
+      onJoined?.();
     } catch (joinError) {
       setError(getErrorMessage(joinError, 'Unable to join this trip.'));
     } finally {
