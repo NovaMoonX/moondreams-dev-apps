@@ -24,9 +24,13 @@ const formatStars = (value: number) =>
 
 function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef({ isActive: false, hasMoved: false, startValue: value });
+  const gesture = useRef({
+    isActive: false,
+    hasMoved: false,
+    startValue: value,
+  });
   const [preview, setPreview] = useState<number | null>(null);
-  const iconClassName = size === 'lg' ? 'h-7 w-7' : 'h-3.5 w-3.5';
+  const iconClassName = size === 'lg' ? 'h-8 w-8' : 'h-3.5 w-3.5';
   const shown = preview ?? value ?? 0;
 
   const renderStars = (stars: number) => (
@@ -147,8 +151,15 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
         aria-valuemin={0}
         aria-valuemax={MAX_STARS}
         aria-valuenow={value ?? 0}
-        aria-valuetext={value === null ? 'No rating' : `${formatStars(value)} stars`}
-        className='focus-visible:ring-primary flex cursor-pointer touch-pan-y items-center gap-1 rounded-full px-1 py-1 select-none outline-none focus-visible:ring-2'
+        aria-valuetext={
+          value === null
+            ? 'No rating'
+            : `${formatStars(value)} ${value === 1 ? 'star' : 'stars'}`
+        }
+        className={join(
+          'focus-visible:ring-primary flex cursor-pointer touch-pan-y items-center gap-1 rounded-full px-1 outline-none select-none focus-visible:ring-2',
+          size === 'lg' ? 'py-2' : 'py-1',
+        )}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
