@@ -28,6 +28,7 @@ import ManualMovieForm, {
 } from '@apps/a-list/components/add/ManualMovieForm';
 import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
+import TrailerPicksList from '@apps/a-list/components/add/TrailerPicksList';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import WatchlistDetailsFields, {
@@ -36,10 +37,14 @@ import WatchlistDetailsFields, {
 import {
   DEFAULT_SHOWTIME,
   DEFAULT_WATCH_PRIORITY,
+  PREVIEWS_WINDOW_BEFORE_MINUTES,
 } from '@apps/a-list/constants';
 import { movieDetailsQueryOptions } from '@apps/a-list/queries/movieQueries';
 import { addViewing } from '@apps/a-list/store/actions/viewingActions';
-import { addWatchlistItem } from '@apps/a-list/store/actions/watchlistActions';
+import {
+  addWatchlistItem,
+  removeWatchlistItem,
+} from '@apps/a-list/store/actions/watchlistActions';
 import {
   evaluateTicketDraft,
   getInitialTicketDraft,
@@ -49,13 +54,16 @@ import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
+  selectPreviewsWindowViewing,
   selectSeenCountByMovieKey,
   selectFeeChips,
+  selectWatchlistItems,
 } from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
   MovieSearchResult,
   MovieSnapshot,
+  WatchlistItem,
 } from '@apps/a-list/types';
 
 interface ShowtimeValues {
@@ -126,6 +134,16 @@ export function AddFlow({
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const feeChips = useAppSelector(selectFeeChips);
+  const watchlist = useAppSelector(selectWatchlistItems);
+  const previewsViewing = useAppSelector((state) =>
+    selectPreviewsWindowViewing(state, now),
+  );
+  // What counts as "added from trailers": everything saved since the previews window opened, as of this screen opening.
+  const [trailersSince] = useState(() =>
+    previewsViewing
+      ? previewsViewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000
+      : now,
+  );
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
@@ -168,6 +186,11 @@ export function AddFlow({
   const isPast = overlay.destination === 'calendar' && overlay.mode === 'past';
   const isQuick =
     overlay.destination === 'watchlist' && overlay.mode === 'quick';
+  const trailerPicks = isQuick
+    ? watchlist
+        .filter((item) => item.createdAt >= trailersSince)
+        .sort((left, right) => right.createdAt - left.createdAt)
+    : [];
   // Past mode only adds seen movies, so the showing must have ended, not just started.
   const isNotYetShown =
     isPast &&
@@ -295,14 +318,50 @@ export function AddFlow({
       );
 
     try {
-      await saveToWatchlist(user.uid, result.movieKey, snapshot);
-      resetForNextMovie(result.title);
+      const { created } = await dispatch(
+        addWatchlistItem({
+          uid: user.uid,
+          movieKey: result.movieKey,
+          movie: snapshot,
+          priority: DEFAULT_WATCH_PRIORITY,
+          preferredFormat: null,
+        }),
+      ).unwrap();
+      if (!created) {
+        addToast({
+          title: 'Already on your watchlist',
+          description: result.title,
+        });
+      }
+      setQuery('');
     } catch (saveError) {
       addToast({
         title: 'Unable to save this movie',
         description: getErrorMessage(saveError, 'Please try again.'),
         type: 'error',
       });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUndoPick = async (item: WatchlistItem) => {
+    if (!user || isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await dispatch(
+        removeWatchlistItem({ uid: user.uid, movieKey: item.movieKey }),
+      ).unwrap();
+    } catch (undoError) {
+      addToast({
+        title: 'Unable to undo',
+        description: getErrorMessage(undoError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
       setIsSaving(false);
     }
   };
@@ -392,6 +451,13 @@ export function AddFlow({
 
       return isQuick ? (
         <div className='space-y-3'>
+          {trailerPicks.length > 0 && (
+            <TrailerPicksList
+              picks={trailerPicks}
+              isBusy={isSaving}
+              onUndo={(item) => void handleUndoPick(item)}
+            />
+          )}
           <p className='text-muted-foreground text-sm'>
             Tap a title to save it as Want to See.
           </p>
@@ -575,7 +641,6 @@ export function AddFlow({
         <PastMoviesStrip
           count={addedSoFar.count}
           lastTitle={addedSoFar.lastTitle}
-          emoji={isQuick ? '📽️' : undefined}
         />
       )}
       {getContent()}
