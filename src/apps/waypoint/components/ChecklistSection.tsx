@@ -74,7 +74,7 @@ export default function ChecklistSection({
   );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const dayGroups = useMemo(
-    () => groupByIndexBucket(visibleItems, (item) => item.completeByDayIndex, dayCount),
+    () => groupByIndexBucket(visibleItems, (item) => item.completeByDayIndex, dayCount, Number.POSITIVE_INFINITY),
     [visibleItems, dayCount],
   );
 
@@ -209,7 +209,7 @@ export default function ChecklistSection({
         <div className='space-y-4'>
           {dayGroups.map(({ bucket, items: dayItems }) => (
             <div key={bucket} className='space-y-2'>
-              <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
+              <SectionDivider label={getBucketLabel(bucket, trip.startDate, dayCount)} />
               <ul className='divide-border divide-y'>
                 {dayItems.map((item) => {
                   const assignedUsers = item.assignedToUids

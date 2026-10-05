@@ -1,3 +1,4 @@
+/** Shrinks a photo before it is sent to the AI extraction models; anything that is not an image passes through. */
 const MAX_IMAGE_DIMENSION = 2_000;
 const WEBP_QUALITY = 0.82;
 

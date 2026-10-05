@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -16,6 +16,7 @@ import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Users, Utensils } from 'l
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import Pill from '@/components/Pill';
+import { PillRow } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -437,15 +438,6 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
   };
 }
 
-
-/** A row of wrapping pills for picking among a few options. */
-function PillRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div role='group' aria-label={label} className='flex flex-wrap gap-2'>
-      {children}
-    </div>
-  );
-}
 
 interface ZoneFieldProps {
   label: string;
@@ -1064,7 +1056,7 @@ function EventFormModal({
             type='button'
             variant='link'
             size='sm'
-            className='h-auto p-0'
+            className='h-auto px-0! py-0!'
             onClick={() => updateDraft({ hasEndTime: true })}
           >
             {isTravel ? '+ Add arrival time' : '+ Add end time'}

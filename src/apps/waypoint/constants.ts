@@ -286,6 +286,14 @@ export const CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
   'OTHER',
 ];
 
+export const CHECKLIST_CATEGORY_EMOJIS: Record<ChecklistCategory, string> = {
+  DOCUMENTS: '🛂',
+  PACKING: '🧳',
+  BOOKINGS: '🎟️',
+  LOGISTICS: '🗺️',
+  OTHER: '✨',
+};
+
 export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
   DOCUMENTS: 'Documents',
   PACKING: 'Packing',

@@ -15,6 +15,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { PillGroup } from '@/components/PillGroup';
 import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
 import type { AnnouncementSeverity } from '@apps/waypoint/types';
 
@@ -43,11 +44,14 @@ interface AnnouncementFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input, select, textarea } = FormFactories;
+const { custom, input, textarea } = FormFactories;
 
-const severityOptions = Object.entries(ANNOUNCEMENT_SEVERITY_LABELS).map(([value, label]) => ({
+const SEVERITY_EMOJIS: Record<AnnouncementSeverity, string> = { INFO: '💬', HEADS_UP: '👀', URGENT: '🚨' };
+
+const severityOptions = (Object.keys(ANNOUNCEMENT_SEVERITY_LABELS) as AnnouncementSeverity[]).map((value) => ({
   value,
-  label,
+  label: ANNOUNCEMENT_SEVERITY_LABELS[value],
+  emoji: SEVERITY_EMOJIS[value],
 }));
 
 const INITIAL_DATA: AnnouncementFormData = {
@@ -77,7 +81,18 @@ function AnnouncementFormModal({
 
   const fields = useMemo(
     () => [
-      select({ name: 'severity', label: 'Type', options: severityOptions }),
+      custom({
+        name: 'severity',
+        label: 'How loud?',
+        renderComponent: (props) => (
+          <PillGroup
+            label='Announcement type'
+            options={severityOptions}
+            value={props.value as AnnouncementSeverity}
+            onChange={(value) => props.onValueChange(value)}
+          />
+        ),
+      }),
       input({ name: 'title', label: 'Title', variant: 'outline' }),
       textarea({ name: 'body', label: 'Message', rows: 3, variant: 'outline' }),
       custom({

@@ -52,6 +52,7 @@ import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import Subview from '@/components/Subview';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import TravelPrompts from '@apps/waypoint/components/TravelPrompts';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
 import StaysEntry from '@apps/waypoint/components/StaysEntry';
 import RentalsSection from '@apps/waypoint/components/RentalsSection';
@@ -561,6 +562,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         {showOverviewHud && (
           <div className='mt-5 sm:mt-4'>
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
+          </div>
+        )}
+        {(hasAppNav ? sectionTab === '' : true) && (
+          <div className='mt-5'>
+            <TravelPrompts trip={trip} currentUserId={currentUserId} />
           </div>
         )}
         {canAddIdeas && ideasOverview}

@@ -20,6 +20,7 @@ import DayWeather from '@apps/waypoint/components/DayWeather';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
+import ImportBookingButton from '@apps/waypoint/components/ImportBookingButton';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
 import EventFormModal, {
@@ -386,7 +387,7 @@ export function TimelineSection({
       dayCount,
       MAX_DAYS_OUTSIDE_TRIP,
     );
-    const weatherOnlyDays = Array.from({ length: dayCount }, (_, day) => day)
+    const weatherOnlyDays = dayIndexes
       .filter((day) => weather.getDay(day) && !eventDays.some(({ bucket }) => bucket === day))
       .map((day) => ({ bucket: day as IndexBucket, items: [] as TimelineEvent[] }));
     const getBucketOrder = (bucket: IndexBucket) =>
@@ -469,7 +470,7 @@ export function TimelineSection({
     }
   };
 
-  const weatherDays = Array.from({ length: dayCount }, (_, dayIndex) => ({
+  const weatherDays = dayIndexes.map((dayIndex) => ({
     dayIndex,
     forecast: weather.getDay(dayIndex),
   })).flatMap(({ dayIndex, forecast }) => (forecast ? [{ dayIndex, forecast }] : []));
@@ -524,15 +525,18 @@ export function TimelineSection({
           title='Timeline'
           action={
             canAddEvents && (
-              <Button
-                type='button'
-                onClick={() => {
-                  setEditingEvent(undefined);
-                  setIsFormOpen(true);
-                }}
-              >
-                Add event
-              </Button>
+              <div className='flex items-center gap-2'>
+                <ImportBookingButton trip={trip} currentUserId={currentUserId} kind='travel' />
+                <Button
+                  type='button'
+                  onClick={() => {
+                    setEditingEvent(undefined);
+                    setIsFormOpen(true);
+                  }}
+                >
+                  Add event
+                </Button>
+              </div>
             )
           }
         />

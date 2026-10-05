@@ -16,6 +16,7 @@ import { getEventBadge, getGroupBadge } from '@apps/waypoint/utils/eventBadge';
 
 interface TodayAgendaProps {
   trip: TripSpace;
+  currentUserId: string;
   title: string;
   dayIndex: number;
   now: number;
@@ -24,8 +25,8 @@ interface TodayAgendaProps {
   onOpenEvent: (event: TimelineEvent) => void;
 }
 
-function TodayAgenda({ trip, title, dayIndex, now, limit, onViewAll, onOpenEvent }: TodayAgendaProps) {
-  const dayEvents = useAppSelector(selectEventsByDay(dayIndex), shallowEqual);
+function TodayAgenda({ trip, currentUserId, title, dayIndex, now, limit, onViewAll, onOpenEvent }: TodayAgendaProps) {
+  const dayEvents = useAppSelector(selectEventsByDay(dayIndex, trip, currentUserId), shallowEqual);
   const items = buildTimelineItems(
     dayEvents
       .filter((event) => !event.isArchived)

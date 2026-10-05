@@ -115,8 +115,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const now = useNow();
   const dispatch = useAppDispatch();
   const isLive = getTripStatus(trip, now) === 'ACTIVE';
-  const activeEvent = useAppSelector(selectActiveEvent(trip, now));
-  const upNextEvent = useAppSelector(selectUpNextEvent(trip, now));
+  const activeEvent = useAppSelector(selectActiveEvent(trip, now, currentUserId));
+  const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
   const stays = useAppSelector(selectStays);
   const events = useAppSelector(selectSortedTimelineEvents);
   const weather = useTripWeather(trip, events, stays, now);
@@ -241,6 +241,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           <hr className='border-border' />
           <TodayAgenda
             trip={trip}
+            currentUserId={currentUserId}
             title='Today'
             dayIndex={todayIndex}
             now={now}
@@ -249,6 +250,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           {hasTomorrow && (
             <TodayAgenda
               trip={trip}
+              currentUserId={currentUserId}
               title='Tomorrow'
               dayIndex={todayIndex + 1}
               now={now}
