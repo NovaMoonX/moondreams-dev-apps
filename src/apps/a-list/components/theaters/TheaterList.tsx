@@ -49,7 +49,7 @@ function TheaterList({
                   <Star
                     className={join(
                       'h-4 w-4',
-                      isFavorite && 'fill-current text-primary',
+                      isFavorite && 'text-primary fill-current',
                     )}
                   />
                 </Button>

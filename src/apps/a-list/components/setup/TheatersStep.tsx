@@ -27,7 +27,9 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
     onChange({
       theatres: remaining,
       favoriteTheatreId:
-        favoriteTheatreId === theatreId ? null : favoriteTheatreId,
+        favoriteTheatreId === theatreId
+          ? (remaining[0]?.theatreId ?? null)
+          : favoriteTheatreId,
     });
   };
 
@@ -43,6 +45,11 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
           You can skip this and add them any time.
         </p>
       </div>
+      {theatres.length > 1 && (
+        <p className='text-muted-foreground text-center text-sm'>
+          Tap the star on the one you go to most.
+        </p>
+      )}
       {theatres.length > 0 && (
         <TheaterList
           theatres={theatres}

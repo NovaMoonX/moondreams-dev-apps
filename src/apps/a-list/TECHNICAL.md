@@ -194,7 +194,7 @@ interface TheatreSnapshot { theatreId: string; name: string; city: string | null
 
 - **A copy, not a reference.** Search results are snapshotted into the member's own collection, so the list works offline and nothing depends on AMC at read time. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing.
 - **At most 10 saved theaters** (`MAX_THEATRES`), enforced in the UI only, so two devices can briefly exceed it.
-- **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite clears the pointer in the same transaction. Setting a favorite is a single field write on the membership.
+- **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite hands the star to another saved theater in the same transaction (Setup does the same), and unstarring it is the only way to have none. Setting a favorite is a single field write on the membership.
 - **Indexes:** none (a whole-collection listener).
 
 #### Derived values (never stored)
@@ -613,7 +613,7 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 | Action | Write |
 |---|---|
 | `completeSetup(draft)` | one `writeBatch`: the membership document (all keys, explicit `null`s; `taxRate` null when no bill total was given) and the theaters picked in the last step |
-| `addTheatre(theatre)` / `removeTheatre(theatreId)` | one `runTransaction` each: the theater document and, when needed, the membership's `favoriteTheatreId` (only the member's first theater becomes the favorite; removing the favorite clears it, and it stays cleared) |
+| `addTheatre(theatre)` / `removeTheatre(theatreId)` | one `runTransaction` each: the theater document and, when needed, the membership's `favoriteTheatreId` (only the member's first theater becomes the favorite; removing the favorite hands the star to another saved theater in the same transaction, and tapping the star again clears it for good) |
 | `setFavoriteTheatre(theatreId \| null)` | one `runTransaction`: confirms the theater still exists, then writes `favoriteTheatreId`, so a stale device can't leave it dangling |
 | `setPurchaseStarted(id, startedAt \| null)` | dotted-path `updateDoc` of `purchase.startedAt` only |
 | `updateMembership(fields)` | field-scoped `updateDoc` (+ `lastEditedAt`) |

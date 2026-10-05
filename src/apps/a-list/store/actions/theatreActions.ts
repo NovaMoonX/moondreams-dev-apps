@@ -77,33 +77,41 @@ export const addTheatre = createAsyncThunk<
 interface RemoveTheatreInput {
   uid: string;
   theatreId: string;
+  /** Another saved theater to take over if this one is the favorite; null when it was the last. */
+  nextFavoriteId: string | null;
 }
 
-/** Removes the theater and, if it was the favorite, clears that too. */
+/** Removes the theater and, if it was the favorite, hands the star to `nextFavoriteId` (or clears it when none is left). */
 export const removeTheatre = createAsyncThunk<
   void,
   RemoveTheatreInput,
   { rejectValue: string }
->('aList/theatres/remove', async ({ uid, theatreId }, { rejectWithValue }) => {
-  const membershipRef = getMembershipRef(uid);
+>(
+  'aList/theatres/remove',
+  async ({ uid, theatreId, nextFavoriteId }, { rejectWithValue }) => {
+    const membershipRef = getMembershipRef(uid);
 
-  try {
-    await runTransaction(db, async (transaction) => {
-      const membershipSnapshot = await transaction.get(membershipRef);
-      transaction.delete(getTheatreRef(uid, theatreId));
-      if (membershipSnapshot.get('favoriteTheatreId') === theatreId) {
-        transaction.update(membershipRef, {
-          favoriteTheatreId: null,
-          lastEditedAt: Date.now(),
-        });
-      }
-    });
-  } catch (error) {
-    return rejectWithValue(
-      getErrorMessage(error, 'Unable to remove this theater.'),
-    );
-  }
-});
+    try {
+      await runTransaction(db, async (transaction) => {
+        const membershipSnapshot = await transaction.get(membershipRef);
+        const nextSnapshot = nextFavoriteId
+          ? await transaction.get(getTheatreRef(uid, nextFavoriteId))
+          : null;
+        transaction.delete(getTheatreRef(uid, theatreId));
+        if (membershipSnapshot.get('favoriteTheatreId') === theatreId) {
+          transaction.update(membershipRef, {
+            favoriteTheatreId: nextSnapshot?.exists() ? nextFavoriteId : null,
+            lastEditedAt: Date.now(),
+          });
+        }
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to remove this theater.'),
+      );
+    }
+  },
+);
 
 interface SetFavoriteTheatreInput {
   uid: string;
