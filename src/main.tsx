@@ -10,6 +10,18 @@ import './index.css';
 // to match the user's active sub-route (/app-a, /app-b) when triggering 
 // the "Add to Home Screen" prompt
 registerSW({ immediate: true });
+
+// A tab opened before a deploy can't fetch the new build's lazy chunks; reload once to pick them up.
+window.addEventListener('vite:preloadError', () => {
+  try {
+    const lastReload = Number(sessionStorage.getItem('chunk-reload-at'));
+    if (Date.now() - lastReload < 30_000) return;
+    sessionStorage.setItem('chunk-reload-at', String(Date.now()));
+  } catch {
+    return;
+  }
+  window.location.reload();
+});
 installVersionPeek();
 
 createRoot(document.getElementById('root')!).render(

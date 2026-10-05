@@ -51,9 +51,12 @@ export default defineConfig({
     firebaseMessagingSwConfig(),
     VitePWA({
       injectRegister: null, // Handles registration manually
-      registerType: 'autoUpdate', // Automatically updates the service worker when a new version is available
       manifest: false, // Disables auto single-manifest injection
       workbox: {
+        // Activate a new worker without waiting for every window to close, and without reloading the page (that needs registerType 'autoUpdate').
+        skipWaiting: true,
+        clientsClaim: true,
+        // Firebase Hosting serves its auth handler under /__/; the SPA fallback would swallow the sign-in popup.
         navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         importScripts: [
