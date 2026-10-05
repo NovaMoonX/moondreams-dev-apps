@@ -330,10 +330,10 @@ A day with two movies splits corner to corner, three are cut like a pizza in thi
 **Context:** Read Logic §3 (counters and goals) and §2; `UX.md`'s Calendar screen (the 14-column counter row) and its caption (counters count Seen movies only).
 
 ### Description
-Above the month grid: total movies watched, movies this week as "watched / goal", and a goal chip each for the week and the month, "met" or "not yet". Counts are Seen viewings only, bucketed by the viewer's local day, and a rewatch counts again.
+Above the month grid: total movies watched, movies since Friday as "watched / goal", and a goal chip each for the week and the month, "met" or "not yet". Counts are Seen viewings only, bucketed by the viewer's local day, and a rewatch counts again.
 
 ### Possible Approach
-1. `selectCounters(state, now)` over `SEEN` viewings by day key: total, this week (local week from `WEEK_STARTS_ON`, compared as day-key strings), this month (the `YYYY-MM` prefix).
+1. `selectCounters(state, now)` over `SEEN` viewings by day key: total, since Friday (local week from `WEEK_STARTS_ON`, Friday, compared as day-key strings), this month (the `YYYY-MM` prefix).
 2. `StatTile` is the only card allowed inside a screen; `GoalChip` hides when a goal is null; the tile shows plain "n" with no goal.
 3. `now` comes from `useNow()` at the screen; the selector is a `createSelector` keyed on viewings and `now`.
 
@@ -493,7 +493,7 @@ The Dashboard shows monthly cost with tax (and how many months have been billed 
 - `src/apps/a-list/store/actions/viewingActions.ts` (`markViewingSeen`), `selectors.ts` (`selectPendingSeenPrompts`)
 - `src/apps/a-list/components/viewing/SeenPromptHost.tsx`, `SeenPrompt.tsx`, `ViewingDrawer.tsx`, `EditViewingForm.tsx`
 - `src/apps/a-list/components/calendar/ViewingRow.tsx`
-- `src/apps/a-list/components/shared/StarRating.tsx`
+- `src/components/StarRating.tsx`
 - `firestore.rules`, `scripts/seeds/aList.ts`
 
 **Context:** Read Logic §1 (lifecycle, "Didn't go", `markViewingSeen`) and §10 (the prompt queue); `UX.md`'s Seen prompt diagram and caption, the viewing-state table and the "Mark seen" journey.
@@ -502,10 +502,10 @@ The Dashboard shows monthly cost with tax (and how many months have been billed 
 The next time the app is open after a planned showing ends, a drawer asks "Did you catch it?" with optional stars and Seen it / Didn't go / Later. Several prompts queue one at a time and wait for any open drawer to close. A "Did you catch it?" chip marks such rows, "Mark seen" appears in the drawer, and stars can be edited later.
 
 ### Possible Approach
-1. Add `rating` (null or 1–5) to `Viewing`; existing documents lack it, so readers default `viewing.rating ?? null`, every viewing edit action (`updateViewing`, `recordTicket`, `markViewingSeen`) writes `rating` (backfilling `null` when absent), and the rules validate the incoming value with `request.resource.data.get('rating', null)`.
+1. Add `rating` (null; later widened to 0.5–5 in half steps) to `Viewing`; existing documents lack it, so readers default `viewing.rating ?? null`, every viewing edit action (`updateViewing`, `recordTicket`, `markViewingSeen`) writes `rating` (backfilling `null` when absent), and the rules validate the incoming value with `request.resource.data.get('rating', null)`.
 2. `selectPendingSeenPrompts(state, now)`: `PLANNED` viewings with `endsAt <= now`, oldest first. `SeenPromptHost` (mounted once in the orchestrator) shows the first only when no overlay is open and keeps a session-local set for "Later".
 3. `markViewingSeen` is a field-scoped `updateDoc({ status: 'SEEN', rating, lastEditedAt })`. "Didn't go" reuses `removeViewing` with its destructive confirm.
-4. `StarRating` is custom (Dreamer UI has none), built on Dreamer UI `Button`s; read-only on rows, editable in the prompt and the edit form.
+4. `StarRating` is custom (Dreamer UI has none): a pointer-event `role="slider"` row that takes half stars; read-only on rows, editable in the prompt and the edit form.
 5. Rules: `status`/`rating` integrity (`PLANNED` implies no rating; rating in range) verified on the emulator. Seed an ended-awaiting-answer viewing.
 
 ### CRUD & Entry-Point Requirements
@@ -679,7 +679,7 @@ A chart of movies watched per month (with a toggle for per week), bucketed by lo
 **Context:** Read `UX.md`'s "Ratings and spend" and `TECHNICAL.md`'s open question on what spend means (it sums what the tickets would have cost, their totals).
 
 ### Description
-Movies grouped by star rating (one to five, plus unrated), with the combined ticket value for each group.
+Movies grouped by star rating (0.5 to 5 in half steps, plus unrated), with the combined ticket value for each group.
 
 ### Possible Approach
 1. Group `SEEN` viewings by `rating ?? 'Unrated'`, with count and the sum of `totalCents`; label the amount as what those tickets would have cost, since members pay no fee.

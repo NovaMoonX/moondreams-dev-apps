@@ -569,7 +569,7 @@ block-beta
   style N3 fill:transparent,stroke:#888888,stroke-width:1px;
   style N4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies this week stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
+*Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
 
 ## Reusable Components
 
