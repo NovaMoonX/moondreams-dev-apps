@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Star } from 'lucide-react';
 
@@ -11,7 +12,7 @@ const STEP = 0.5;
 interface StarRatingProps {
   /** 0.5 to 5 in half steps; null is no rating. */
   value: number | null;
-  /** Omit for a read-only display. Tap or slide across the stars; tapping the current rating clears it. */
+  /** Omit for a read-only display. Tap or slide across the stars; a Clear button removes the rating. */
   onChange?: (value: number | null) => void;
   size?: 'sm' | 'lg';
 }
@@ -24,16 +25,12 @@ const formatStars = (value: number) =>
 
 function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef({
-    isActive: false,
-    hasMoved: false,
-    startValue: value,
-  });
+  const isDragging = useRef(false);
   const [preview, setPreview] = useState<number | null>(null);
   const iconClassName = size === 'lg' ? 'h-8 w-8' : 'h-3.5 w-3.5';
   const shown = preview ?? value ?? 0;
 
-  const renderStars = (stars: number) => (
+  const renderStars = (stars: number, isPreviewing = false) => (
     <>
       {STARS.map((star) => (
         <span key={star} className='relative inline-block'>
@@ -51,6 +48,7 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
               className={join(
                 iconClassName,
                 'max-w-none shrink-0 fill-current text-amber-500',
+                isPreviewing && 'opacity-50',
               )}
             />
           </span>
@@ -84,40 +82,34 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
     if (event.button !== 0 || !event.isPrimary) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
-    gesture.current = { isActive: true, hasMoved: false, startValue: value };
+    isDragging.current = true;
     setPreview(getValueAt(event.clientX));
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const isHoveringWithMouse =
-      event.pointerType === 'mouse' && !gesture.current.isActive;
-    if (!gesture.current.isActive && !isHoveringWithMouse) return;
+      event.pointerType === 'mouse' && !isDragging.current;
+    if (!isDragging.current && !isHoveringWithMouse) return;
 
     const next = getValueAt(event.clientX);
     if (next !== preview) {
-      gesture.current.hasMoved = gesture.current.hasMoved || next !== null;
       setPreview(next);
     }
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    if (!gesture.current.isActive) return;
+    if (!isDragging.current) return;
 
-    const { hasMoved, startValue } = gesture.current;
+    isDragging.current = false;
     const final = getValueAt(event.clientX);
-    gesture.current.isActive = false;
-    if (final === null) {
-      setPreview(null);
-      return;
+    setPreview(event.pointerType === 'mouse' ? final : null);
+    if (final !== null && final !== value) {
+      onChange(final);
     }
-
-    const isTapOnCurrent = !hasMoved && final === startValue;
-    setPreview(event.pointerType === 'mouse' && !isTapOnCurrent ? final : null);
-    onChange(isTapOnCurrent ? null : final);
   };
 
   const handlePointerCancel = () => {
-    gesture.current.isActive = false;
+    isDragging.current = false;
     setPreview(null);
   };
 
@@ -138,11 +130,14 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
     if (next === null) return;
 
     event.preventDefault();
+    setPreview(null);
     onChange(next < STEP ? null : next);
   };
 
+  const isPreviewing = preview !== null && preview !== (value ?? 0);
+
   return (
-    <div className='relative inline-flex items-center'>
+    <div className='inline-flex flex-col items-center'>
       <div
         ref={rowRef}
         role='slider'
@@ -164,18 +159,37 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        onPointerLeave={() => !gesture.current.isActive && setPreview(null)}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') {
+            rowRef.current?.focus({ preventScroll: true });
+          }
+        }}
+        onPointerLeave={() => !isDragging.current && setPreview(null)}
         onKeyDown={handleKeyDown}
       >
-        {renderStars(shown)}
+        {renderStars(shown, isPreviewing)}
       </div>
       {size === 'lg' && (
-        <span
-          className='text-muted-foreground absolute left-full ml-2 text-sm tabular-nums'
-          aria-hidden='true'
-        >
-          {shown > 0 ? formatStars(shown) : ''}
-        </span>
+        <div className='text-muted-foreground flex h-6 items-center gap-2 text-sm'>
+          {shown > 0 && (
+            <span
+              className={join('tabular-nums', isPreviewing && 'opacity-60')}
+            >
+              {formatStars(shown)}
+            </span>
+          )}
+          {value !== null && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto p-0 text-sm'
+              onClick={() => onChange(null)}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

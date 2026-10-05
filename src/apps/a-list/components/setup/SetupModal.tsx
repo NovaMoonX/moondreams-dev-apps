@@ -101,7 +101,7 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
       input({
         name: 'weeklyGoal',
         label: 'Movies a week',
-        description: 'We count from Friday to Friday, like AMC does.',
+        description: 'Counted Friday to Friday, like AMC.',
         type: 'number',
         placeholder: '2',
         variant: 'outline',
@@ -117,6 +117,7 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
       input({
         name: 'monthlyGoal',
         label: 'Movies a month',
+        description: 'Counted by calendar month.',
         type: 'number',
         placeholder: '6',
         variant: 'outline',
@@ -203,8 +204,8 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
                 Here's what you're covered for
               </h3>
               <p className='text-muted-foreground text-sm'>
-                We'll keep track of all of it, so you can watch your savings
-                add up.
+                We'll keep track of all of it, so you can watch your savings add
+                up.
               </p>
             </div>
             <ul className='space-y-2'>

@@ -16,10 +16,21 @@ function PremiumSavingsHelp({ linkLabel }: PremiumSavingsHelpProps) {
         For each premium ticket, we take its price and subtract what a standard
         ticket for the same showing would have cost, then add those up.
       </p>
-      <p className='bg-secondary/60 rounded-2xl px-3 py-2'>
-        📽️ IMAX at $22.00 − Standard at $16.00 = <strong>$6.00 saved</strong>
-      </p>
-      <p className='text-muted-foreground'>
+      <dl className='space-y-1 rounded-2xl border border-current/20 px-3 py-2'>
+        <div className='flex justify-between gap-3'>
+          <dt>📽️ IMAX ticket</dt>
+          <dd className='tabular-nums'>$22.00</dd>
+        </div>
+        <div className='flex justify-between gap-3'>
+          <dt>− Standard ticket</dt>
+          <dd className='tabular-nums'>$16.00</dd>
+        </div>
+        <div className='flex justify-between gap-3 border-t border-current/20 pt-1 font-semibold'>
+          <dt>= Premium savings</dt>
+          <dd className='tabular-nums'>$6.00</dd>
+        </div>
+      </dl>
+      <p className='opacity-80'>
         Tax and fees aren't part of it, and a premium ticket without a standard
         price adds nothing yet.
       </p>
