@@ -50,7 +50,9 @@ function TheaterList({
                   <Star
                     className={join(
                       'h-4 w-4',
-                      isFavorite && 'text-primary fill-current',
+                      isFavorite
+                        ? 'text-primary fill-current'
+                        : 'text-muted-foreground',
                     )}
                   />
                 </Button>
@@ -61,7 +63,7 @@ function TheaterList({
                   rounded='full'
                   disabled={isDisabled}
                   aria-label={`Remove ${theatre.name}`}
-                  className='text-destructive!'
+                  className='text-muted-foreground hover:text-destructive! h-10 w-10'
                   onClick={() => onRemove(theatre)}
                 >
                   <Trash2 className='h-4 w-4' />
