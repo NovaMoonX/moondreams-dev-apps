@@ -176,6 +176,38 @@ interface Ticket {
 
 ## Movie Data Service
 
+### How a lookup works, end to end
+
+This is the one place that ties the pieces together; the sections below hold the reasoning and the provider details.
+
+**Searching** (`MoviePicker` → `searchMovies`)
+1. **Browser.** After a pause in typing (450 ms) and at least 2 characters, TanStack Query asks for the search. Its key is the normalized text under `a-list/movies/search/v2`, it is fresh for a day and persisted, so a repeat costs nothing, even offline.
+2. **`searchMovies`** (signed-in callers only) trims and lowercases the text and requires 2 to 100 characters.
+3. **Which provider** (`pickProvider`): `MOVIE_PROVIDER` if it is set to `tmdb` or `omdb`; otherwise **TMDB whenever `TMDB_API_KEY` is set; otherwise OMDb** (which answers from sample movies in the emulator when no key can be read).
+4. **Server cache.** `apps/a-list/searchCache/<hash of provider + version + text>`. If it is under 7 days old the answer returns with no upstream call. The provider is in the key, so TMDB and OMDb never serve each other's results.
+5. **On a miss**, OMDb calls are counted against the daily budget (900 for the app, 100 per member, refused with "resting for today" beyond that). TMDB calls are not budgeted.
+6. **Fetch.** Page 1, then page 2 only if the provider says there is more (OMDb: over 10 matches; TMDB: more than one page). If page 2 fails, page 1 is still returned.
+7. **Shape.** Merge, drop duplicates, sort newest first (OMDb by year, TMDB by release date, so upcoming films lead), keep 20, cache, return `{ movieKey, title, year, posterUrl }`.
+8. **Browser.** A result is hidden when it is already on the watchlist, by key or, for the same film saved under the other provider's key, by title and year.
+
+**Opening a movie** (`AddFlow` → `getMovie`)
+1. **Which provider:** by the key's prefix, not the current default: `tmdb-` asks TMDB, `imdb-` asks OMDb (`manual-` never reaches the server). A key whose provider has no key configured gets "isn't set up", and the manual path is offered.
+2. **Server cache.** `apps/a-list/movieCache/<movieKey>`: 30 days once released, 1 day while unreleased or undated (those dates move).
+3. **On a miss** (OMDb budgeted, TMDB not), the provider's details become one snapshot: title, release date (date-only, UTC midnight), poster, runtime, content rating. For TMDB the date is the US theatrical release and the rating is the US certification.
+4. **Browser.** The snapshot is copied into the watchlist item or viewing, so the calendar renders with no network. `useRefreshUnreleasedMovies` re-asks for up to 10 unseen, unreleased `imdb-` or `tmdb-` items a day and writes back only what changed.
+
+**Where a failure lands:** no key, or TMDB rejecting its key → "isn't set up"; TMDB's 429, OMDb's 401 (its way of saying the daily limit is spent) or our own budget → "resting for today"; anything else → "unavailable". Each of those leaves the manual "Add it by title" path open.
+
+| Situation | Provider used |
+| --- | --- |
+| `TMDB_API_KEY` set, no override | TMDB |
+| No TMDB key | OMDb |
+| `MOVIE_PROVIDER=omdb` or `tmdb` | that one |
+| A movie already saved as `imdb-…` | OMDb, whatever the default is |
+| A movie already saved as `tmdb-…` | TMDB, whatever the default is |
+
+Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getMovie.ts`, `movieProvider.ts`, `tmdb.ts`, `omdb.ts`, `movieCache.ts`, `lookupBudget.ts`) and, in the app, `components/add/MoviePicker.tsx`, `queries/movieQueries.ts`, `hooks/useRefreshUnreleasedMovies.ts`.
+
 **The problem:** the app needs search, release dates, runtimes, content ratings and posters from a free source. No free source knows which AMC formats or showtimes exist, and the app never tries to find out (formats and prices stay member-entered).
 
 **Providers: TMDB (primary when `TMDB_API_KEY` is set) and OMDb (the alternative).** TMDB lists unreleased films, which OMDb mostly doesn't; the functions pick it automatically and `MOVIE_PROVIDER` forces one. Search is `GET /3/search/movie` (20 a page; a second page when there is one; merged, newest release first, capped at 20) and details are `GET /3/movie/{id}?append_to_response=release_dates` (US theatrical date, US certification, runtime, `image.tmdb.org` poster). TMDB's terms: free for non-commercial use only, credit line and logo required, cached data under 6 months. Everything below about OMDb still applies to it. **OMDb:** what I confirmed on its site: free keys exist, its content is licensed CC BY-NC 4.0, and a separate high-resolution Poster API exists but is patron-only. What I could **not** confirm from its pages, and am taking from the owner (the 1,000-lookups-a-day free limit) or from memory (everything else), so it is unverified until one real call is made before the mapper is written:

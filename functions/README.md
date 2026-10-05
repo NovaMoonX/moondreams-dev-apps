@@ -63,6 +63,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 
 ### A-List Tracker: `searchMovies` and `getMovie`
 
+- **Full flow:** the end-to-end outline (search, caching, provider choice, budget, details, refresh) is in `src/apps/a-list/TECHNICAL.md` under "Movie Data Service" → "How a lookup works, end to end".
 - **Providers:** [TMDB](https://www.themoviedb.org/) is used whenever `TMDB_API_KEY` is set, otherwise [OMDb](https://www.omdbapi.com/) (free tier, about 1,000 lookups a day for the whole app). `MOVIE_PROVIDER` forces one. TMDB lists unreleased films; OMDb mostly does not.
   - **Keys:** new movies are saved as `tmdb-<id>`; older ones stay `imdb-tt…` and keep refreshing through OMDb, so keep `OMDB_API_KEY` set. `getMovie` asks the provider that issued the key.
   - **TMDB credential:** either the v4 "API Read Access Token" (sent as a Bearer header) or the v3 API key (sent as `api_key`); it is detected from the value.
