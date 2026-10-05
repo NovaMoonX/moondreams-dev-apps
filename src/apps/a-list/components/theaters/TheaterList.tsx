@@ -63,7 +63,7 @@ function TheaterList({
                   rounded='full'
                   disabled={isDisabled}
                   aria-label={`Remove ${theatre.name}`}
-                  className='text-muted-foreground hover:text-destructive! h-10 w-10'
+                  className='text-muted-foreground! hover:text-destructive! h-10 w-10'
                   onClick={() => onRemove(theatre)}
                 >
                   <Trash2 className='h-4 w-4' />
