@@ -5,7 +5,6 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import RentalCard from '@apps/waypoint/components/RentalCard';
 import RentalFormModal from '@apps/waypoint/components/RentalFormModal';
-import ImportBookingButton from '@apps/waypoint/components/ImportBookingButton';
 import SectionHeader from '@/components/SectionHeader';
 import {
   createRental,
@@ -98,8 +97,7 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
         action={
           canAddRentals && (
             <div className='flex items-center gap-2'>
-              <ImportBookingButton trip={trip} currentUserId={currentUserId} kind='rentals' />
-              <Button onClick={() => setIsModalOpen(true)}>Add rental</Button>
+              <Button onClick={() => setIsModalOpen(true)}>Add</Button>
             </div>
           )
         }

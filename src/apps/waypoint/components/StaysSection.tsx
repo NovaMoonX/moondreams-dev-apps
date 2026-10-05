@@ -3,7 +3,6 @@ import { useRef, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ImportBookingButton from '@apps/waypoint/components/ImportBookingButton';
 import StayCard from '@apps/waypoint/components/StayCard';
 import SectionHeader from '@/components/SectionHeader';
 import StayFormModal from '@apps/waypoint/components/StayFormModal';
@@ -97,8 +96,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
         action={
           canAddStays && (
             <div className='flex items-center gap-2'>
-              <ImportBookingButton trip={trip} currentUserId={currentUserId} kind='stays' />
-              <Button onClick={() => setIsModalOpen(true)}>Add stay</Button>
+              <Button onClick={() => setIsModalOpen(true)}>Add</Button>
             </div>
           )
         }

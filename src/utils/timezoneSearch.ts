@@ -109,9 +109,9 @@ const LEGACY_ZONE_NAMES: Record<string, string> = {
 
 const cityFromZone = (zone: string) => (zone.split('/').pop() ?? zone).replace(/_/g, ' ');
 
-const getZoneName = (timeZone: string, at: number, style: 'long' | 'longGeneric' | 'short') => {
+const getZoneName = (timeZone: string, at: number, style: 'long' | 'longGeneric' | 'short' | 'shortGeneric') => {
   try {
-    const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: style })
+    const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: style as Intl.DateTimeFormatOptions['timeZoneName'] })
       .formatToParts(new Date(at))
       .find((entry) => entry.type === 'timeZoneName');
     return part?.value ?? '';
@@ -159,12 +159,20 @@ export function observesDaylightSaving(timeZone: string, at: number = Date.now()
 
 const choiceCache = new Map<string, TimezoneChoice[]>();
 
+/** "PT", "ET": short enough for a phone's picker; zones with no short generic name fall back to their offset. */
+const getCompactName = (timeZone: string, at: number) => {
+  const short = getZoneName(timeZone, at, 'shortGeneric');
+  return short && short.length <= 4 ? short : formatUtcOffset(getOffsetMinutes(timeZone, at));
+};
+
 /** Every zone the runtime knows, as search-friendly choices. The offset and abbreviation come from
- * `at`, since they change with daylight saving. Searching matches the city, other well-known cities,
- * the zone's own name ("Eastern Time Zone") and its id ("America/New_York"). */
-export function getTimezoneChoices(at: number = Date.now()): TimezoneChoice[] {
+ * `at`, since they change with daylight saving. Searching matches the city, the zone's own name
+ * ("Eastern Time Zone") and its abbreviation. `compact` shortens the names for a phone. A well-known
+ * city that isn't the zone's own ("Milwaukee" for Central Time) is offered by `getTimezoneCityMatches`
+ * while the person is typing it. */
+export function getTimezoneChoices(at: number = Date.now(), compact = false): TimezoneChoice[] {
   const day = Math.floor(at / 86_400_000);
-  const cacheKey = String(day);
+  const cacheKey = `${day}-${compact}`;
   const cached = choiceCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -178,15 +186,9 @@ export function getTimezoneChoices(at: number = Date.now()): TimezoneChoice[] {
       const shortName = getZoneName(zone, at, 'short');
       const abbreviation = shortName.startsWith('GMT') ? '' : `${shortName} · `;
       const noDst = observesDaylightSaving(zone, at) ? '' : ' · no daylight saving';
-      const aliases = CITY_ALIASES[zone] ?? CITY_ALIASES[LEGACY_ZONE_NAMES[zone]] ?? [];
-      const detail = [
-        `${generic ? `${generic} Zone` : zone} · ${abbreviation}${offset}${noDst}`,
-        aliases.length > 0 ? `also ${aliases.join(', ')}` : '',
-        zone,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      return { value: zone, text: generic ? `${cityFromZone(zone)} · ${generic}` : cityFromZone(zone), description: detail };
+      const detail = `${generic ? `${generic} Zone` : cityFromZone(zone)} · ${abbreviation}${offset}${noDst}`;
+      const label = compact ? getCompactName(zone, at) : generic;
+      return { value: zone, text: label ? `${cityFromZone(zone)} · ${label}` : cityFromZone(zone), description: detail };
     })
     .sort((first, second) => first.text.localeCompare(second.text));
 
@@ -195,11 +197,47 @@ export function getTimezoneChoices(at: number = Date.now()): TimezoneChoice[] {
   return choices;
 }
 
+const MAX_CITY_MATCHES = 4;
+export const CITY_MATCH_SEPARATOR = '#';
+
+/** Well-known cities that a search names but that aren't a zone's own city, each as its own option in that
+ * zone ("Milwaukee · Central Time"), so the city typed is always there to pick. Its value is
+ * `zone#City`; `getZoneFromChoiceValue` turns that back into the zone. */
+export function getTimezoneCityMatches(query: string, at: number = Date.now(), compact = false): TimezoneChoice[] {
+  const needle = query.trim().toLowerCase();
+  if (needle.length < 2) {
+    return [];
+  }
+
+  const byZone = new Map(getTimezoneChoices(at, compact).map((choice) => [choice.value, choice]));
+  const matches = Object.entries(CITY_ALIASES)
+    .flatMap(([zone, cities]) =>
+      cities
+        .filter((city) => city.toLowerCase().includes(needle))
+        .map((city) => ({ zone, city, startsWith: city.toLowerCase().startsWith(needle) })),
+    )
+    .sort((first, second) => Number(second.startsWith) - Number(first.startsWith) || first.city.localeCompare(second.city))
+    .slice(0, MAX_CITY_MATCHES);
+
+  const result = matches.flatMap(({ zone, city }) => {
+    const legacyName = Object.keys(LEGACY_ZONE_NAMES).find((name) => LEGACY_ZONE_NAMES[name] === zone);
+    const base = byZone.get(zone) ?? (legacyName ? byZone.get(legacyName) : undefined);
+    if (!base) {
+      return [];
+    }
+    const zoneName = base.text.split(' · ').slice(1).join(' · ');
+    return [{ value: `${base.value}${CITY_MATCH_SEPARATOR}${city}`, text: zoneName ? `${city} · ${zoneName}` : city, description: base.description }];
+  });
+  return result;
+}
+
+export const getZoneFromChoiceValue = (value: string) => value.split(CITY_MATCH_SEPARATOR)[0];
+
 /** The choices, plus the chosen zone itself when this runtime doesn't list it (a saved legacy name). */
-export function getTimezoneChoicesWith(timeZone: string, at?: number): TimezoneChoice[] {
-  const choices = getTimezoneChoices(at);
+export function getTimezoneChoicesWith(timeZone: string, at?: number, compact = false): TimezoneChoice[] {
+  const choices = getTimezoneChoices(at, compact);
   if (choices.some((choice) => choice.value === timeZone)) {
     return choices;
   }
-  return [...choices, { value: timeZone, text: cityFromZone(timeZone), description: timeZone }];
+  return [...choices, { value: timeZone, text: cityFromZone(timeZone), description: timeZone.replace(/_/g, ' ') }];
 }

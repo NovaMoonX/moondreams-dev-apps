@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
+import { stayToFields, type StayFields } from '@apps/waypoint/utils/bookingImport';
 
 import {
   Button,
@@ -14,7 +16,7 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FormScreen from '@/components/FormScreen';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
@@ -186,6 +188,11 @@ export function StayFormModal({
       ...(stay?.checkInTimezone ? ['timezone'] : []),
     ],
   );
+  const applyUpload = (fields: StayFields) => {
+    const uploaded = { ...fields, id: '', tripId: trip.id, createdBy: '', createdAt: 0, lastEditedAt: 0 } as Stay;
+    setDraft(getInitialDraft(trip, uploaded));
+    setRevealed((current) => (uploaded.confirmationCode && !current.includes('booking') ? [...current, 'booking'] : current));
+  };
   const updateDraft = (changes: Partial<StayDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
   const reveal = (key: string) => setRevealed((current) => [...current, key]);
@@ -370,8 +377,17 @@ export function StayFormModal({
   ].filter((chip) => !revealed.includes(chip.key));
 
   return (
-    <FormScreen isOpen={isOpen} onClose={onClose} title='Stay'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-5'>
+        {!stay && (
+          <UploadAutofill
+            kind='stay'
+            trip={trip}
+            noun='booking confirmation'
+            convert={(extracted) => stayToFields(trip, extracted)}
+            onFilled={({ value }) => applyUpload(value)}
+          />
+        )}
         <PillGroup
           label='Stay type'
           options={STAY_TYPES.map((stayType) => ({
@@ -608,12 +624,13 @@ export function StayFormModal({
               <DeleteIconButton onClick={() => void onDelete()} disabled={isSubmitting} />
             )
           }
-          rightActions={
-            <>
+          cancelAction={
               <Button type='button' variant='secondary' onClick={onClose}>
                 Cancel
               </Button>
-              <Button
+          }
+          rightActions={
+            <Button
                 type='button'
                 loading={isSubmitting}
                 disabled={isSubmitting || !isFormComplete}
@@ -621,11 +638,10 @@ export function StayFormModal({
               >
                 {isSubmitting ? 'Saving…' : stay ? 'Save' : 'Add'}
               </Button>
-            </>
           }
         />
       </div>
-    </FormScreen>
+    </FormSheet>
   );
 }
 

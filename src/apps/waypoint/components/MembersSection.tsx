@@ -9,10 +9,12 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
+import { Mail, UserPlus, X } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { shallowEqual } from 'react-redux';
 import UserAvatar from '@/ui/UserAvatar';
 import { getErrorMessage } from '@/utils';
 import {
@@ -20,6 +22,7 @@ import {
   MEMBER_ROLE_LABELS,
 } from '@apps/waypoint/constants';
 import type { TripSpace, UserRole } from '@apps/waypoint/types';
+import { removeEmailInvite } from '@apps/waypoint/store/actions/emailInviteActions';
 import {
   changeRole,
   removeMember,
@@ -28,7 +31,7 @@ import MemberRoleBadge from './MemberRoleBadge';
 import SectionHeader from '@/components/SectionHeader';
 import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
-import EmailInvitesPanel from './EmailInvitesPanel';
+import AddMemberByEmailModal from './AddMemberByEmailModal';
 import PendingMembersPanel from './PendingMembersPanel';
 
 interface MembersSectionProps {
@@ -42,6 +45,14 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const { confirm } = useActionModal();
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
+  const [isAddingByEmail, setIsAddingByEmail] = useState(false);
+  const waitingEmails = useAppSelector(
+    (state) =>
+      state.waypoint.emailInvites.forTrip
+        .filter((invite) => invite.tripId === trip.id)
+        .sort((first, second) => first.email.localeCompare(second.email)),
+    shallowEqual,
+  );
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const allMemberIds = Object.keys(trip.members);
   const userInfo = useUserInfo(allMemberIds);
@@ -146,12 +157,49 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
     }
   };
 
+  const handleRemoveWaiting = async (email: string) => {
+    const confirmed = await confirm({
+      title: 'Remove from trip',
+      message: `Take ${email} off the trip? They'll need to ask to join instead.`,
+      confirmText: 'Remove',
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await dispatch(removeEmailInvite({ tripId: trip.id, email })).unwrap();
+    } catch (error) {
+      addToast({
+        title: 'Unable to remove them',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
+
+  const subtitle = [
+    `${memberIds.length} ${memberIds.length === 1 ? 'member' : 'members'}`,
+    waitingEmails.length > 0 ? `${waitingEmails.length} yet to join` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div className='space-y-6 pt-4'>
       <section className='space-y-3'>
         <SectionHeader
           title='Members'
-          subtitle={`${memberIds.length} ${memberIds.length === 1 ? 'member' : 'members'}`}
+          subtitle={subtitle}
+          action={
+            isAdmin ? (
+              <Button type='button' size='sm' onClick={() => setIsAddingByEmail(true)}>
+                <UserPlus className='h-4 w-4' />
+                Add
+              </Button>
+            ) : undefined
+          }
         />
         <ul className={join('divide-border', !isSmallScreen && 'divide-y')}>
           {memberIds.map((memberId) => {
@@ -258,15 +306,50 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
               </li>
             );
           })}
+          {waitingEmails.map((invite) => (
+            <li key={invite.email} className='flex items-center justify-between gap-3 py-3'>
+              <span className='flex min-w-0 items-center gap-3'>
+                <span
+                  aria-hidden
+                  className='bg-secondary text-secondary-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-full'
+                >
+                  <Mail className='h-4 w-4' />
+                </span>
+                <span className='min-w-0'>
+                  <span className='block truncate font-medium'>{invite.email}</span>
+                  <span className='text-muted-foreground block text-xs'>
+                    {MEMBER_ROLE_LABELS[invite.role]} · yet to join
+                  </span>
+                </span>
+              </span>
+              {isAdmin && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='icon'
+                  aria-label={`Remove ${invite.email}`}
+                  onClick={() => void handleRemoveWaiting(invite.email)}
+                >
+                  <X className='h-4 w-4' />
+                </Button>
+              )}
+            </li>
+          ))}
         </ul>
       </section>
 
       {isAdmin && <PendingMembersPanel tripId={trip.id} />}
       {isAdmin && (
-        <EmailInvitesPanel
+        <AddMemberByEmailModal
+          key={isAddingByEmail ? 'open' : 'closed'}
+          isOpen={isAddingByEmail}
           trip={trip}
           currentUserId={currentUserId}
-          memberEmails={(userInfo?.users ?? []).flatMap((user) => (user.email ? [user.email] : []))}
+          memberEmails={[
+            ...(userInfo?.users ?? []).flatMap((user) => (user.email ? [user.email] : [])),
+            ...waitingEmails.map((invite) => invite.email),
+          ]}
+          onClose={() => setIsAddingByEmail(false)}
         />
       )}
 

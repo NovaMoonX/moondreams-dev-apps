@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, FieldPath, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, FieldPath, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -18,13 +18,13 @@ function inviteRef(tripId: string, email: string) {
   return doc(db, 'apps', 'waypoint', 'emailInvites', `${tripId}_${normalizeEmail(email)}`);
 }
 
-export const inviteMemberByEmail = createAsyncThunk<
+export const addMemberByEmail = createAsyncThunk<
   TripEmailInvite,
   { trip: TripSpace; uid: string; email: string; role: TripEmailInvite['role'] },
   { rejectValue: string }
->('waypoint/emailInvites/invite', async ({ trip, uid, email, role }, { rejectWithValue }) => {
+>('waypoint/emailInvites/add', async ({ trip, uid, email, role }, { rejectWithValue }) => {
   if (!isTripAdmin(trip, uid)) {
-    return rejectWithValue('Only an Admin can invite people by email.');
+    return rejectWithValue('Only an Admin can add people by email.');
   }
   if (!isValidEmail(email)) {
     return rejectWithValue('Enter a valid email address.');
@@ -42,21 +42,14 @@ export const inviteMemberByEmail = createAsyncThunk<
   };
 
   try {
-    // Inviting the same address again only changes the role they'll join with.
-    const ref = inviteRef(trip.id, email);
-    const existing = await getDoc(ref);
-    if (existing.exists()) {
-      await updateDoc(ref, { role });
-      return { ...(existing.data() as TripEmailInvite), role };
-    }
-    await setDoc(ref, invite);
+    await setDoc(inviteRef(trip.id, email), invite);
     return invite;
   } catch (error) {
-    return rejectWithValue(getErrorMessage(error, 'Unable to save this invitation.'));
+    return rejectWithValue(getErrorMessage(error, 'Unable to add this person.'));
   }
 });
 
-/** Takes back an invitation (an Admin) or turns one down (the person it was for). */
+/** Takes someone back off the list (an Admin) or declines being on it (the person it was for). */
 export const removeEmailInvite = createAsyncThunk<
   void,
   { tripId: string; email: string },
@@ -65,7 +58,7 @@ export const removeEmailInvite = createAsyncThunk<
   try {
     await deleteDoc(inviteRef(tripId, email));
   } catch (error) {
-    return rejectWithValue(getErrorMessage(error, 'Unable to remove this invitation.'));
+    return rejectWithValue(getErrorMessage(error, 'Unable to remove this person.'));
   }
 });
 

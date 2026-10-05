@@ -253,19 +253,19 @@ function EditTripDatesModal({
           <div className='space-y-3'>
             {error && <p className='text-destructive text-sm'>{error}</p>}
             <ModalFooterActions
-              rightActions={
-                <>
+              cancelAction={
                   <Button type='button' variant='secondary' onClick={onClose}>
                     Cancel
                   </Button>
-                  <Button
+              }
+              rightActions={
+                <Button
                     type='submit'
                     loading={isSubmitting}
                     disabled={isSubmitting || !isFormComplete}
                   >
                     {isSubmitting ? 'Saving…' : 'Save'}
                   </Button>
-                </>
               }
             />
           </div>

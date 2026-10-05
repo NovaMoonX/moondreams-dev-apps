@@ -329,9 +329,9 @@ export function EventCard({
           imageUrl={getDisplayImage(event)}
           location={event}
           linkUrl={event.linkUrl}
-          onEdit={canModify ? () => onEdit(event, closeDrawer) : null}
+          onEdit={canModify ? () => { closeDrawer(); onEdit(event); } : null}
           stackLabel={stackActionLabel}
-          onStack={canModify ? () => onStack(event, closeDrawer) : null}
+          onStack={canModify ? () => { closeDrawer(); onStack(event); } : null}
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >

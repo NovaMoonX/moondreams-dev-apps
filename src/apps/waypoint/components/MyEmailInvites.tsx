@@ -2,12 +2,12 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { useQueries } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { Mail } from 'lucide-react';
 
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailInviteJoinModal from '@apps/waypoint/components/EmailInviteJoinModal';
-import { MEMBER_ROLE_LABELS } from '@apps/waypoint/constants';
 import { tripTitleQueryOptions } from '@apps/waypoint/queries/tripTitleQueries';
 import { removeEmailInvite } from '@apps/waypoint/store/actions/emailInviteActions';
 import type { TripEmailInvite } from '@apps/waypoint/types';
@@ -18,19 +18,44 @@ interface MyEmailInvitesProps {
   onViewTrip: (tripId: string) => void;
 }
 
-/** Trips whose Admin already added the signed-in email: one tap to join, no request. */
+const DISMISSED_KEY = 'waypoint.invitesDismissed';
+
+const readDismissed = () => {
+  try {
+    return sessionStorage.getItem(DISMISSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const writeDismissed = (value: boolean) => {
+  try {
+    sessionStorage.setItem(DISMISSED_KEY, String(value));
+  } catch {
+    // The choice still holds for this visit without storage.
+  }
+};
+
+/** Trips whose Admin already set up the signed-in email. They open once as a prompt to join, then stay one tap away behind an icon button. */
 function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
-  const [joining, setJoining] = useState<TripEmailInvite | null>(null);
-  const titleQueries = useQueries({ queries: invites.map((invite) => tripTitleQueryOptions(invite.tripId)) });
-  const titles = Object.fromEntries(invites.map((invite, index) => [invite.tripId, titleQueries[index]?.data ?? null]));
+  const [isDismissed, setIsDismissed] = useState(readDismissed);
+  const [pinned, setPinned] = useState<TripEmailInvite | null>(null);
+  const shown = pinned ?? (isDismissed ? null : (invites[0] ?? null));
+  const { data: title } = useQuery({ ...tripTitleQueryOptions(shown?.tripId ?? ''), enabled: shown !== null });
+
+  const close = () => {
+    setPinned(null);
+    setIsDismissed(true);
+    writeDismissed(true);
+  };
 
   const handleDecline = async (invite: TripEmailInvite) => {
     const confirmed = await confirm({
       title: 'Turn down invitation',
-      message: `Turn down the invitation to ${titles[invite.tripId] ?? 'this trip'}? An Admin can invite you again.`,
+      message: `Turn down ${title ?? 'this trip'}? An Admin can add you again later.`,
       confirmText: 'Turn down',
       destructive: true,
     });
@@ -49,50 +74,40 @@ function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
     }
   };
 
-  // The welcome modal outlives the list: joining uses up the invitation, which empties it.
-  const modal = joining && (
-    <EmailInviteJoinModal
-      key={joining.tripId}
-      invite={joining}
-      uid={uid}
-      onViewTrip={(tripId) => {
-        setJoining(null);
-        onViewTrip(tripId);
-      }}
-      onClose={() => setJoining(null)}
-    />
-  );
-
-  if (invites.length === 0) {
-    return modal || null;
-  }
-
   return (
     <>
-      <section className='bg-accent/60 rounded-2xl'>
-        <h2 className='text-accent-foreground px-4 pt-4 pb-2 text-xs font-semibold tracking-wide uppercase'>
-          💌 You&apos;re invited
-        </h2>
-        <ul className='divide-border/60 divide-y'>
-          {invites.map((invite) => (
-            <li key={invite.tripId} className='flex items-center gap-3 px-4 py-3'>
-              <div className='min-w-0 flex-1'>
-                <p className='truncate font-medium'>{titles[invite.tripId] ?? 'A trip'}</p>
-                <p className='text-muted-foreground text-xs'>
-                  Join as {MEMBER_ROLE_LABELS[invite.role]} · no request needed
-                </p>
-              </div>
-              <Button type='button' variant='tertiary' size='sm' onClick={() => void handleDecline(invite)}>
-                Not for me
-              </Button>
-              <Button type='button' size='sm' rounded='full' onClick={() => setJoining(invite)}>
-                Join
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </section>
-      {modal}
+      {invites.length > 0 && (
+        <Button
+          type='button'
+          variant='secondary'
+          size='icon'
+          aria-label={`Trip invitations (${invites.length})`}
+          className='relative shrink-0'
+          onClick={() => {
+            setIsDismissed(false);
+            writeDismissed(false);
+          }}
+        >
+          <Mail className='h-4 w-4' />
+          <span className='bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold'>
+            {invites.length}
+          </span>
+        </Button>
+      )}
+      {shown && (
+        <EmailInviteJoinModal
+          key={shown.tripId}
+          invite={shown}
+          uid={uid}
+          onJoined={() => setPinned(shown)}
+          onDecline={() => void handleDecline(shown)}
+          onViewTrip={(tripId) => {
+            setPinned(null);
+            onViewTrip(tripId);
+          }}
+          onClose={close}
+        />
+      )}
     </>
   );
 }

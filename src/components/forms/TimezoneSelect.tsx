@@ -1,10 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Select } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Globe } from 'lucide-react';
 
-import { getTimezoneChoicesWith } from '@/utils/timezoneSearch';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import {
+  getTimezoneChoicesWith,
+  getTimezoneCityMatches,
+  getZoneFromChoiceValue,
+} from '@/utils/timezoneSearch';
 
 interface TimezoneSelectProps {
   value: string;
@@ -18,21 +23,27 @@ interface TimezoneSelectProps {
 
 function TimezoneSelect({ value, onChange, disabled = false, pill = false, at }: TimezoneSelectProps) {
   const day = at === undefined ? undefined : Math.floor(at / 86_400_000);
-  const options = useMemo(() => getTimezoneChoicesWith(value, day === undefined ? undefined : day * 86_400_000), [day, value]);
+  const isPhone = useMediaQuery().isBelow('sm');
+  const [query, setQuery] = useState('');
+  const options = useMemo(() => {
+    const dayStart = day === undefined ? undefined : day * 86_400_000;
+    return [...getTimezoneCityMatches(query, dayStart, isPhone), ...getTimezoneChoicesWith(value, dayStart, isPhone)];
+  }, [day, value, query, isPhone]);
 
   const select = (
     <Select
       searchable
-      searchPlaceholder='Search a city or zone, like Phoenix or Eastern Time'
+      searchPlaceholder='Search city or zone'
       options={options}
       value={value}
       disabled={disabled}
-      onChange={onChange}
+      onSearch={setQuery}
+      onChange={(next) => onChange(getZoneFromChoiceValue(next))}
       className={join(pill && 'w-fit')}
       triggerClassName={join(
         pill && 'bg-secondary border-transparent gap-2 rounded-full! py-1.5 pr-3 pl-8 text-sm',
       )}
-      dropdownClassName={join(pill && 'max-w-[calc(100vw-3rem)] min-w-80')}
+      dropdownClassName={join(pill && 'max-w-[calc(100vw-3rem)] min-w-72 sm:min-w-80')}
     />
   );
 

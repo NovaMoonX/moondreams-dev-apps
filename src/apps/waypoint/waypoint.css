@@ -1,10 +1,11 @@
 /*
- * Waypoint's theme: a map and a passport. Compass-needle teal, sunset coral and sky-tinted neutrals,
- * rounded like a luggage tag. The class sits on <html> (see useWaypointTheme) so modals and drawers,
- * which render outside the app's container, pick it up too.
+ * Waypoint's theme: business casual. Utility first, with a little style. A steel-blue primary that stays
+ * quiet across a whole screen, soft sky neutrals and a warm orange accent, with corners between formal and
+ * playful. The class sits on <html> (see useWaypointTheme) so modals and drawers, which render outside the
+ * app's container, pick it up too.
  */
 html.waypoint-theme {
-  --color-primary: var(--color-teal-600);
+  --color-primary: oklch(0.47 0.07 252);
   --color-primary-foreground: var(--color-white);
   --color-secondary: var(--color-sky-100);
   --color-secondary-foreground: var(--color-sky-950);
@@ -14,17 +15,15 @@ html.waypoint-theme {
   --color-accent-foreground: var(--color-orange-900);
   --color-border: var(--color-slate-200);
 
-  /* Everything that is rounded-md or larger softens up, so inputs, buttons, cards and sheets
-     all read like luggage tags without a rounded prop on each. */
-  --radius-md: 0.875rem;
-  --radius-lg: 1.125rem;
-  --radius-xl: 1.375rem;
-  --radius-2xl: 1.75rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
 }
 
 html.waypoint-theme.dark {
-  --color-primary: var(--color-teal-400);
-  --color-primary-foreground: var(--color-teal-950);
+  --color-primary: oklch(0.8 0.075 245);
+  --color-primary-foreground: oklch(0.22 0.04 250);
   --color-secondary: var(--color-sky-950);
   --color-secondary-foreground: var(--color-sky-100);
   --color-muted: var(--color-slate-900);
@@ -32,6 +31,29 @@ html.waypoint-theme.dark {
   --color-accent: var(--color-orange-950);
   --color-accent-foreground: var(--color-orange-100);
   --color-border: var(--color-slate-800);
+}
+
+/* A rounded field needs its text inset from the curve, or the first letter looks pressed against the edge. */
+html.waypoint-theme
+  :is(input, textarea):not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [class*='pl-'],
+    [class*='ps-']
+  ),
+html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='border']:not([class*='pl-']) {
+  padding-inline: 1rem;
+}
+
+/* A chosen pill keeps its own colors and says "selected" with a primary outline, so an emoji or a dark
+   label is as readable as on an unchosen one (a solid fill swallows both). */
+html.waypoint-theme [data-pill][aria-pressed='true'] {
+  background-color: color-mix(in oklab, var(--color-primary) 12%, var(--color-background));
+  color: var(--color-foreground);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 
 /* A click leaves a button focused, and the library's focus: outline and ring flash on it.

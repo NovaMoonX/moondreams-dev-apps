@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
+import { rentalToFields } from '@apps/waypoint/utils/bookingImport';
 
 import { Button, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
 import { Car, Globe } from 'lucide-react';
@@ -9,7 +11,7 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FormScreen from '@/components/FormScreen';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
@@ -165,6 +167,11 @@ export function RentalFormModal({
     OPTIONAL_FIELD_CHIPS.map(({ key }) => key).filter((key) => hasInitialValue(key, rental)),
   );
   const isBooked = revealed.includes('confirmationCode') || revealed.includes('link');
+  const applyUpload = (fields: RentalFormFields) => {
+    const uploaded = { ...fields, id: '', tripId: trip.id, createdBy: '', createdAt: 0, lastEditedAt: 0 } as Rental;
+    setDraft(getInitialDraft(trip, uploaded));
+    setRevealed(OPTIONAL_FIELD_CHIPS.map(({ key }) => key).filter((key) => hasInitialValue(key, uploaded)));
+  };
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const updateDraft = (changes: Partial<RentalDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -230,8 +237,17 @@ export function RentalFormModal({
   };
 
   return (
-    <FormScreen isOpen={isOpen} onClose={onClose} title='Car rental'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Car rental'>
       <div className='space-y-5'>
+        {!rental && (
+          <UploadAutofill
+            kind='rental'
+            trip={trip}
+            noun='rental confirmation'
+            convert={(extracted) => rentalToFields(trip, extracted)}
+            onFilled={({ value }) => applyUpload(value)}
+          />
+        )}
         <div className='space-y-1.5'>
           <Label>Rental company</Label>
           <Input
@@ -372,12 +388,13 @@ export function RentalFormModal({
             rental &&
             onDelete && <DeleteIconButton onClick={() => void onDelete()} disabled={isSubmitting} />
           }
-          rightActions={
-            <>
+          cancelAction={
               <Button type='button' variant='secondary' onClick={onClose}>
                 Cancel
               </Button>
-              <Button
+          }
+          rightActions={
+            <Button
                 type='button'
                 loading={isSubmitting}
                 disabled={isSubmitting || !isFormComplete}
@@ -385,12 +402,11 @@ export function RentalFormModal({
               >
                 {isSubmitting ? 'Saving…' : rental ? 'Save' : 'Add'}
               </Button>
-            </>
           }
         />
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
-    </FormScreen>
+    </FormSheet>
   );
 }
 

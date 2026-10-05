@@ -465,18 +465,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
-            {expense.status === 'PAID' ? 'Paid' : 'Expected'} · {payerLine}
+            {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {expense.status === 'PAID' ? 'Paid' : 'Expected'} ·{' '}
+            {payerLine}
           </p>
-          <div className='mt-1 flex flex-wrap gap-1'>
-            <Badge variant='muted' outline>
-              {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))}
-            </Badge>
-            {expense.status === 'PAID' && (
-              <Badge variant='muted' outline>
-                {splitDescription}
-              </Badge>
-            )}
-          </div>
+          {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
         <div className='col-span-2'>
@@ -649,7 +641,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 setIsModalOpen(true);
               }}
             >
-              Add expense
+              Add
             </Button>
           )
         }

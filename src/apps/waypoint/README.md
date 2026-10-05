@@ -13,11 +13,11 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 1. **Create & Invite** — A trip organizer (automatically the trip's Admin) creates a new Waypoint space (e.g., "Tokyo Summer 2026"), sets the dates, and shares an invite link or code. Anyone who follows the link or enters the code (My Trips → Join with code) joins as pending until an Admin approves them and assigns their role — editor, commenter, or viewer — unless an Admin already added their email: those people join straight away, as the role they were given. Once in, any trip's URL (`/waypoint?trip={tripId}`) opens straight to it for members, so a trip can be shared or bookmarked directly.
 2. **Pre-Trip Checklist & Expense Allocation** — The group populates the "Before the Road" checklist (flight confirmations, driving routes, passport checks) and enters expected expenses. Expenses can be assigned to everyone, specific members, or individual users (or priced per person, so a $15 meal for four totals $60), with status tracking to mark items as paid and a running "who owes who" summary so debts are easy to settle.
 3. **Build the Adaptive Itinerary** — Add activities, transit steps (flights, drives, ferries) — including flight numbers and confirmation details so anyone can check on a delayed flight — and locations, whether the trip stays in one place or moves across multiple cities day to day — with each place you're sleeping tracked as its own stay, check-in to check-out. Commenters can propose edits or drop notes that Editors can review and approve with one click, and any change to a time or location is flagged clearly rather than buried in an edit history.
-4. **Live Trip Mode** — When the trip starts, Waypoint shifts into active mode — elevating today's schedule, highlighting what is currently active, what is coming up next, and what has been completed. On a check-in day, that night's stay sits up top with directions, the confirmation code, and any notes. Members can post a quick status (checking bags, landed, driving through Denver) so the group knows where everyone is, and near the end of each day and the end of the trip, Waypoint reminds everyone to add today's photos to the trip's shared album link.
+4. **Live Trip Mode** — When the trip starts, Waypoint shifts into active mode — elevating today's schedule, a small pill that floats over every screen with what is happening right now and, one tap away, what comes next, and what has been completed. On a check-in day, that night's stay sits up top with directions, the confirmation code, and any notes. Members can post a quick status (checking bags, landed, driving through Denver) so the group knows where everyone is, and near the end of each day and the end of the trip, Waypoint reminds everyone to add today's photos to the trip's shared album link.
 
 ## How it Feels
 
-- **A look of its own** — the map and the passport: compass teal, sunset coral, soft rounded shapes and pills (themed in `waypoint.css`).
+- **A look of its own** — business casual: utility with a little style. A quiet steel blue, soft sky neutrals and a warm orange, with corners between formal and playful (themed in `waypoint.css`).
 - **Itinerary-First** — No endless scrolling; every item is time-bound, location-aware, and actionable.
 - **Adaptive Context** — Seamless transition from high-level pre-trip planning to high-stakes active execution on the go.
 - **Zero-Friction Navigation** — One tap launches native Apple Maps or Google Maps directions for any destination on the itinerary.
@@ -39,7 +39,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 
 **Next Steps**
 - [ ] Comment & Proposal Approval Workflow: Commenters submit event changes/proposals; Editors accept or decline.
-- [ ] Active Trip HUD: Automatic detection of current trip day featuring an "Active Now / Up Next" hero banner.
+- [ ] Active Trip HUD: Automatic detection of the current trip day, with a floating "Now / Up next" pill over every screen.
 - [x] Transit Detail Cards: Specialized fields for flights (airline, flight number, confirmation code), driving routes, and train schedules — plus an estimated travel time for the leg — visible to the group so anyone can check a flight's status. Group the legs of one trip into a collapsible card, and stack several travelers' trips into one named itinerary.
 - [ ] Live Travel Status: Members can post a quick status update — checking bags, landed, passing through a city — visible to the group during active trip mode.
 - [ ] Shared Trip Album Link: A default, semi-prominent spot for one person to drop a link to wherever the group's photos already live (a Google Photos or Drive folder), with reminders near the end of each day and the end of the trip to add today's photos there.
@@ -47,9 +47,9 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 - [ ] Offline Support: Trip data is cached locally so it's viewable without signal while traveling.
 - [ ] My Trips Search, Filter & Sort: Find a trip quickly as the list grows — search by name, filter by date range, status (live/upcoming/past), or destination, and sort.
 - [ ] Trip Tags: Freeform tags like "Guys Trip" or "Couples Vacation" — separate from destination — shown on My Trips and within the trip itself.
-- [x] Email Invitations: An Admin adds someone's email and role before they ever ask; opening the trip link or code (or My Trips) shows "you're already on the list" with a one-tap Join, no approval needed.
+- [x] Add by Email: An Admin adds someone's email and role from Members before they ever ask (nothing is sent); when they sign in, My Trips opens an invitation with a one-tap Join, no approval needed, and the person shows in Members as "yet to join" until then.
 - [x] Travel That's Yours: Each member is asked for their own arrival and trip home (skippable), Overview shows only the events you're part of, and a start and an end can sit in different time zones (a flight that lands elsewhere), with zones searchable by city or name and daylight saving handled for you.
-- [x] Booking Import: Upload a ticket, confirmation or screenshot for travel, a stay or a car rental and review the entries it reads before they're added.
+- [x] Fill From a Confirmation: When adding a flight, a stay or a car rental, upload a photo, screenshot or PDF and the form fills in; you check and edit the fields like any other entry before saving.
 - [x] Days Around the Trip: Events, stays, rentals and expenses can sit up to three days before or after the trip's dates; checklist items can be due any distance ahead and stay that far from the trip if its dates move.
 - [ ] Auto-Suggested Transit Between Events: Adding an event proposes a default driving leg to and from it, editable, convertible to downtime, or removable, so commutes between plans aren't forgotten by default.
 

@@ -241,13 +241,16 @@ function Waypoint() {
               </label>
             )}
             <div className='grid grid-cols-2 gap-3 sm:flex'>
-              <Button
-                variant='secondary'
-                className='whitespace-nowrap'
-                onClick={() => setIsJoinCodeModalOpen(true)}
-              >
-                Join with code
-              </Button>
+              <div className='flex gap-2'>
+                <Button
+                  variant='secondary'
+                  className='flex-1 whitespace-nowrap'
+                  onClick={() => setIsJoinCodeModalOpen(true)}
+                >
+                  Join with code
+                </Button>
+                <MyEmailInvites uid={user.uid} invites={emailInvites} onViewTrip={handleViewInvitedTrip} />
+              </div>
               <Button
                 className='whitespace-nowrap'
                 onClick={() => setIsCreateModalOpen(true)}
@@ -268,8 +271,6 @@ function Waypoint() {
             </Button>
           </div>
         )}
-
-        <MyEmailInvites uid={user.uid} invites={emailInvites} onViewTrip={handleViewInvitedTrip} />
 
         <MyPendingTrips
           requests={pendingRequests}

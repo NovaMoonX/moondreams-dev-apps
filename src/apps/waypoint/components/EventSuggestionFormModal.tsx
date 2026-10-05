@@ -16,7 +16,7 @@ import { getDayIndex, getDayInputValue, getDayOptions } from '@/utils/dateRangeU
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
-import FormScreen from '@/components/FormScreen';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
@@ -362,7 +362,7 @@ function EventSuggestionFormModal({
   const displayedError = submitError ?? (formData.endTime.enabled ? times.error : null);
 
   return (
-    <FormScreen isOpen={isOpen} onClose={onClose} title='Suggested change'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Suggested change'>
       <Form
         id='waypoint-event-suggestion'
         form={fields}
@@ -374,25 +374,25 @@ function EventSuggestionFormModal({
         }}
         submitButton={
           <ModalFooterActions
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete}
                 >
                   {suggestion ? 'Save' : 'Suggest'}
                 </Button>
-              </>
             }
           />
         }
       />
       {displayedError && <p className='text-destructive mt-3 text-sm'>{displayedError}</p>}
-    </FormScreen>
+    </FormSheet>
   );
 }
 

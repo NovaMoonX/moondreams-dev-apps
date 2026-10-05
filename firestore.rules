@@ -2826,9 +2826,10 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // An Admin's standing invitation for an email address. The person it is for reads and uses it
+    // An Admin's standing approval for an email address. The person it is for reads and uses it
     // (with a verified email, so a made-up account can't claim it); the trip's members read it;
-    // only the trip's Admins create, re-role or withdraw it.
+    // only the trip's Admins create, re-role or withdraw it. Adding the same address again overwrites
+    // it with a plain set, so nothing needs to read the document first.
     match /apps/waypoint/emailInvites/{inviteId} {
       function tripOf(tripId) {
         return get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
@@ -2872,8 +2873,10 @@ service cloud.firestore {
         && request.resource.data.invitedBy == request.auth.uid
         && isAdminOfTrip(request.resource.data.tripId);
       allow update: if isAdminOfTrip(resource.data.tripId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
-        && request.resource.data.role in ['EDITOR', 'COMMENTER', 'VIEWER'];
+        && isInviteShapeValid(request.resource.data)
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.invitedBy == request.auth.uid;
       allow delete: if isInvitee(resource.data.email) || isAdminOfTrip(resource.data.tripId);
     }
 

@@ -172,7 +172,7 @@ export default function ChecklistSection({
                 setIsModalOpen(true);
               }}
             >
-              Add item
+              Add
             </Button>
           )
         }
@@ -219,9 +219,9 @@ export default function ChecklistSection({
                   return (
                     <li
                       key={item.id}
-                      className='flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0'
+                      className='flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0'
                     >
-                      <div className='flex min-w-0 items-center gap-3'>
+                      <div className='flex min-w-0 items-start gap-3'>
                         <Tooltip
                           message='Only assigned members or trip editors can update this item.'
                           placement='right'
@@ -229,7 +229,7 @@ export default function ChecklistSection({
                         >
                           {/* Checkbox doesn't forward children, so Tooltip's
                           child-cloning needs a plain wrapper to attach to. */}
-                          <span className='inline-flex'>
+                          <span className='mt-0.5 inline-flex'>
                             <Checkbox
                               checked={item.isCompleted}
                               disabled={!mayToggle(item)}

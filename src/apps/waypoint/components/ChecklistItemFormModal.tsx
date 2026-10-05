@@ -19,7 +19,7 @@ import {
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FormScreen from '@/components/FormScreen';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { ChecklistCategory, ChecklistItem, TripSpace } from '@apps/waypoint/types';
 
@@ -277,7 +277,7 @@ export default function ChecklistItemFormModal({
   };
 
   return (
-    <FormScreen isOpen={isOpen} onClose={onClose} title='Checklist item'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Checklist item'>
       <Form
         id='waypoint-checklist-item'
         form={fields}
@@ -293,24 +293,24 @@ export default function ChecklistItemFormModal({
               item &&
               onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             }
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete}
                 >
                   {isSubmitting ? 'Saving…' : item ? 'Save' : 'Add'}
                 </Button>
-              </>
             }
           />
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </FormScreen>
+    </FormSheet>
   );
 }

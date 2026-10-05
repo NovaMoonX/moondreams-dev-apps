@@ -20,6 +20,7 @@ function Pill({ children, isSelected, onClick, emoji, className }: PillProps) {
       rounded='full'
       variant={isSelected ? 'primary' : 'secondary'}
       aria-pressed={isSelected}
+      data-pill=''
       onClick={onClick}
       className={join(
         'max-w-full shrink-0 gap-1.5 whitespace-nowrap',

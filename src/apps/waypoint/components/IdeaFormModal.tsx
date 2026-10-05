@@ -17,7 +17,7 @@ import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FormScreen from '@/components/FormScreen';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
@@ -369,7 +369,7 @@ function IdeaFormModal({
   };
 
   return (
-    <FormScreen isOpen={isOpen} onClose={onClose} title='Idea'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Idea'>
       <Form
         id='waypoint-idea'
         form={fields}
@@ -385,19 +385,19 @@ function IdeaFormModal({
               idea &&
               onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             }
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete || !canPost}
                 >
                   {idea ? 'Save' : 'Post'}
                 </Button>
-              </>
             }
           />
         }
@@ -408,7 +408,7 @@ function IdeaFormModal({
         </p>
       )}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </FormScreen>
+    </FormSheet>
   );
 }
 

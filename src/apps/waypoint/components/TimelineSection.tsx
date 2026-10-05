@@ -20,7 +20,6 @@ import DayWeather from '@apps/waypoint/components/DayWeather';
 import EventCard from '@apps/waypoint/components/EventCard';
 import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
-import ImportBookingButton from '@apps/waypoint/components/ImportBookingButton';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
 import EventFormModal, {
@@ -526,7 +525,6 @@ export function TimelineSection({
           action={
             canAddEvents && (
               <div className='flex items-center gap-2'>
-                <ImportBookingButton trip={trip} currentUserId={currentUserId} kind='travel' />
                 <Button
                   type='button'
                   onClick={() => {
@@ -534,7 +532,7 @@ export function TimelineSection({
                     setIsFormOpen(true);
                   }}
                 >
-                  Add event
+                  Add
                 </Button>
               </div>
             )

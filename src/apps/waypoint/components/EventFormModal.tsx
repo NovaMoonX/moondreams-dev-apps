@@ -39,6 +39,8 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
+import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
+import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
 import {
   ACTIVITY_SETTING_LABELS,
   ADD_NEW_OPTION,
@@ -443,7 +445,7 @@ interface ZoneFieldProps {
 
 function ZoneField({ label, zone, at, isTripDefault, onChange }: ZoneFieldProps) {
   return (
-    <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+    <div className='flex flex-wrap items-center gap-x-2 gap-y-1 pl-4'>
       <span className='text-muted-foreground text-xs'>{label}</span>
       <TimezoneSelect pill value={zone} at={at} onChange={onChange} />
       {isTripDefault && <span className='text-muted-foreground text-xs'>Trip default</span>}
@@ -1013,6 +1015,25 @@ function EventFormModal({
             </PillRow>
           )}
         </div>
+        {isTravel && draft.quickField === 'FLIGHT' && !event && !legFrom && (
+          <UploadAutofill
+            kind='flight'
+            trip={trip}
+            noun='flight confirmation'
+            convert={(extracted, { airports, airlines }) => {
+              const result = flightToPrefill(trip, currentUserId, extracted, airports, airlines);
+              if (!result) {
+                return null;
+              }
+              const note =
+                result.extraFlights > 0
+                  ? `Found ${result.extraFlights} more ${result.extraFlights === 1 ? 'flight' : 'flights'} on it. This fills the first; add the rest after you save.`
+                  : undefined;
+              return { ...result, note };
+            }}
+            onFilled={({ value }) => setDraft(getPrefilledDraft(trip, value))}
+          />
+        )}
 
         <SectionDivider label='When' />
         <div className='space-y-2'>
@@ -1376,11 +1397,13 @@ function EventFormModal({
               <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             )
           }
-          rightActions={
-            <>
+          cancelAction={
               <Button type='button' variant='secondary' onClick={onClose}>
                 Cancel
               </Button>
+          }
+          rightActions={
+            <>
               {isTravel && transitType === 'FLIGHT' && (
                 <Button
                   type='button'

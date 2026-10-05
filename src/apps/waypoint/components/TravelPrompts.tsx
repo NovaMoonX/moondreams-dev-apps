@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileUp, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
@@ -13,7 +13,6 @@ import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
-import BookingImportModal from '@apps/waypoint/components/BookingImportModal';
 import EventFormModal, {
   type EventFormValues,
   type EventPrefill,
@@ -73,7 +72,6 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
   const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
   const [formKey, setFormKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
 
   const canAdd = canCreateItem(trip, currentUserId);
   const isVisible =
@@ -150,14 +148,6 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
           }}
         />
       )}
-      <BookingImportModal
-        key={isImporting ? 'open' : 'closed'}
-        isOpen={isImporting}
-        trip={trip}
-        currentUserId={currentUserId}
-        kind='travel'
-        onClose={() => setIsImporting(false)}
-      />
     </>
   );
 
@@ -218,17 +208,6 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
             🏠 My trip home
           </Button>
         )}
-        <Button
-          type='button'
-          size='sm'
-          rounded='full'
-          variant='secondary'
-          className='gap-1.5'
-          onClick={() => setIsImporting(true)}
-        >
-          <FileUp className='h-4 w-4' />
-          Upload a booking
-        </Button>
       </div>
       {modals}
     </section>

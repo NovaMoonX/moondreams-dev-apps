@@ -192,19 +192,19 @@ function AnnouncementFormModal({
         }}
         submitButton={
           <ModalFooterActions
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete}
                 >
                   Post
                 </Button>
-              </>
             }
           />
         }

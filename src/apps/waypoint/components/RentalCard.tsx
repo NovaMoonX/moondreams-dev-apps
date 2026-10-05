@@ -199,7 +199,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
           imageUrl={imageUrl}
           location={getPickupLocation(rental)}
           linkUrl={rental.linkUrl}
-          onEdit={canEdit ? () => onEdit(rental, closeDrawer) : null}
+          onEdit={canEdit ? () => { closeDrawer(); onEdit(rental); } : null}
         >
           <RentalDetailLines
             trip={trip}

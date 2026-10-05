@@ -39,9 +39,9 @@ function TripEntryPoints({ trip, currentUserId, onOpen }: TripEntryPointsProps) 
           variant='tertiary'
           size='sm'
           onClick={() => onOpen(pill.tab)}
-          className='border-border bg-background! hover:bg-muted! h-9 gap-1.5 rounded-full border px-3.5 text-sm font-medium shadow-sm'
+          className='border-primary/30 bg-background! hover:bg-secondary! text-primary h-9 gap-1.5 rounded-full border px-3.5 text-sm font-medium'
         >
-          <span className='text-muted-foreground'>{pill.icon}</span>
+          {pill.icon}
           {pill.label}
           {pill.count > 0 && (
             <span className='bg-primary text-primary-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold'>

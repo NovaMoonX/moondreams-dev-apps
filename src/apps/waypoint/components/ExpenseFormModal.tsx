@@ -15,7 +15,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FormScreen from '@/components/FormScreen';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { ADD_NEW_OPTION, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
@@ -420,7 +420,7 @@ function ExpenseFormModal({
   };
 
   return (
-    <FormScreen isOpen={isOpen} onClose={onClose} title='Expense'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Expense'>
       <Form
         id='waypoint-add-expense'
         form={fields}
@@ -464,12 +464,13 @@ function ExpenseFormModal({
                   <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
                 )
               }
-              rightActions={
-                <>
+              cancelAction={
                   <Button type='button' variant='secondary' onClick={onClose}>
                     Cancel
                   </Button>
-                  <Button
+              }
+              rightActions={
+                <Button
                     type='submit'
                     loading={isSubmitting}
                     disabled={isSubmitting || !isFormComplete}
@@ -482,14 +483,13 @@ function ExpenseFormModal({
                         ? 'Save'
                         : 'Add'}
                   </Button>
-                </>
               }
             />
           </div>
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </FormScreen>
+    </FormSheet>
   );
 }
 
