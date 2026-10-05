@@ -66,11 +66,11 @@ function StatTile({
         </p>
         <div
           className={join(
-            'text-muted-foreground flex flex-wrap items-center gap-x-0.5 text-xs',
+            'text-muted-foreground flex items-center gap-0.5 text-xs',
             isStacked && 'justify-center',
           )}
         >
-          <span>{label}</span>
+          <span className='whitespace-nowrap'>{label}</span>
           {help}
         </div>
         {prompt && (
