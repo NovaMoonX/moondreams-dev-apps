@@ -235,7 +235,6 @@ export interface DayShowtime extends ShowtimeOption {
 }
 
 function fixtureDay(date: string): DayShowtime[] {
-  // Evening in the Central time zone, as an instant.
   const at = (time: string) => Date.parse(`${date}T${time}:00-05:00`);
   return [
     ['13:10', 'STANDARD', 1489],
@@ -262,18 +261,17 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
     return fixtureDay(date);
   }
 
-  const collected: AmcShowtime[] = [];
-  for (let page = 1; page <= MAX_SHOWTIME_PAGES; page += 1) {
+  const fetchPages = async (page: number, found: AmcShowtime[]): Promise<AmcShowtime[]> => {
     const data = await callAmc<AmcShowtimesResponse>(apiKey, `/v2/theatres/${theatreId}/showtimes/${date}`, {
       pageNumber: String(page),
       pageSize: String(SHOWTIMES_PAGE_SIZE),
     });
     const embedded = data._embedded?.showtimes ?? [];
-    collected.push(...embedded);
-    if (embedded.length === 0 || collected.length >= (data.count ?? 0)) {
-      break;
-    }
-  }
+    const all = [...found, ...embedded];
+    const isDone = embedded.length === 0 || all.length >= (data.count ?? 0) || page >= MAX_SHOWTIME_PAGES;
+    return isDone ? all : fetchPages(page + 1, all);
+  };
+  const collected = await fetchPages(1, []);
 
   const result = collected
     .filter((showtime) => !showtime.isCanceled)

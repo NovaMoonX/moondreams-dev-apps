@@ -15,7 +15,7 @@ import {
 } from '@apps/a-list/store/actions/viewingActions';
 import { selectPendingSeenPrompts } from '@apps/a-list/store/selectors';
 
-/** Asks about one ended showing at a time, and only while nothing else is open. When none is waiting, it hands over to the purchase-return question. */
+/** Asks about one ended showing at a time, and only while nothing else is open. */
 function SeenPromptHost() {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -32,7 +32,7 @@ function SeenPromptHost() {
   const current =
     pending.find((viewing) => !laterIds.includes(viewing.id)) ?? null;
 
-  // One question at a time: when no seen prompt is waiting, the welcome-back-from-AMC question gets its turn.
+  // Two overlay questions must never stack, so the second only gets a turn when the first has nothing to ask.
   if (!user || !current || overlay !== null) {
     return <PurchaseReturnHost />;
   }

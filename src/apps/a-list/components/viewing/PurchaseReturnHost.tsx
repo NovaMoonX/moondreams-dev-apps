@@ -14,7 +14,7 @@ import {
 import { selectPendingPurchaseReturns } from '@apps/a-list/store/selectors';
 import type { Ticket } from '@apps/a-list/types';
 
-/** Asks about one purchase at a time, once the member is back from AMC (or opens the app later). Mounted by the seen-prompt host so the two never show together. */
+/** Asks about one purchase at a time, once the member is back from AMC or opens the app later. */
 function PurchaseReturnHost() {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
