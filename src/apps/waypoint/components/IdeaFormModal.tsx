@@ -5,7 +5,6 @@ import {
   Form,
   FormFactories,
   Input,
-  Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -18,6 +17,7 @@ import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
@@ -369,7 +369,7 @@ function IdeaFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Idea'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Idea'>
       <Form
         id='waypoint-idea'
         form={fields}
@@ -408,7 +408,7 @@ function IdeaFormModal({
         </p>
       )}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </Modal>
+    </FormScreen>
   );
 }
 

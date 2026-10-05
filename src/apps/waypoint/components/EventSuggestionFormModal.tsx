@@ -5,7 +5,6 @@ import {
   Form,
   FormFactories,
   Input,
-  Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
@@ -17,6 +16,7 @@ import { getDayIndex, getDayInputValue, getDayOptions } from '@/utils/dateRangeU
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
@@ -362,7 +362,7 @@ function EventSuggestionFormModal({
   const displayedError = submitError ?? (formData.endTime.enabled ? times.error : null);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Suggested change'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Suggested change'>
       <Form
         id='waypoint-event-suggestion'
         form={fields}
@@ -392,7 +392,7 @@ function EventSuggestionFormModal({
         }
       />
       {displayedError && <p className='text-destructive mt-3 text-sm'>{displayedError}</p>}
-    </Modal>
+    </FormScreen>
   );
 }
 

@@ -4,7 +4,6 @@ import {
   Button,
   Form,
   FormFactories,
-  Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { Input } from '@moondreamsdev/dreamer-ui/components';
@@ -20,6 +19,7 @@ import {
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { ChecklistCategory, ChecklistItem, TripSpace } from '@apps/waypoint/types';
 
@@ -277,7 +277,7 @@ export default function ChecklistItemFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Checklist item'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Checklist item'>
       <Form
         id='waypoint-checklist-item'
         form={fields}
@@ -311,6 +311,6 @@ export default function ChecklistItemFormModal({
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </Modal>
+    </FormScreen>
   );
 }

@@ -5,7 +5,6 @@ import {
   Form,
   FormFactories,
   Input,
-  Modal,
   Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
@@ -16,6 +15,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { ADD_NEW_OPTION, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
@@ -420,7 +420,7 @@ function ExpenseFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Expense'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Expense'>
       <Form
         id='waypoint-add-expense'
         form={fields}
@@ -489,7 +489,7 @@ function ExpenseFormModal({
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </Modal>
+    </FormScreen>
   );
 }
 

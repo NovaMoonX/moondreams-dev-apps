@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -171,7 +172,7 @@ function ExpenseSplitModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Split'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Split'>
       <div className='space-y-4'>
         {expense.isPerPerson && (
           <p className='text-muted-foreground text-sm'>
@@ -281,7 +282,7 @@ function ExpenseSplitModal({
         />
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
-    </Modal>
+    </FormScreen>
   );
 }
 

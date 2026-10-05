@@ -46,13 +46,13 @@ You wear the **product designer** hat. **Mobile is the priority.** Judge every f
 - one column;
 - thumb-reachable primary actions;
 - bottom drawers for menus and details;
-- modals for forms and confirmations.
+- modals only for short forms and confirmations; a form that can scroll on a phone is a subview.
 
 **Web (1280px):** it may differ from phone on purpose.
 - Use the width: content can sit side by side, such as a list with its details beside it.
 - Lighter overlays feel natural here: popovers and dropdown menus for small choices, and a right-side panel for opening an item's details.
 - A bottom drawer feels wrong on desktop. Flag any drawer that opens at web width; it should be a popover, a dropdown or a side panel.
-- Forms and destructive confirms stay modals at every size.
+- A form that is a subview on phones is a modal at web width; destructive confirms stay modals at every size.
 
 **Problems to look for (at both widths):**
 - **Alignment:** elements not lined up, baseline mismatches, uneven gutters, and anything not centred that should be (icons in chips, empty-state text, modal titles).
@@ -64,7 +64,7 @@ You wear the **product designer** hat. **Mobile is the priority.** Judge every f
 - **Buried journey steps:** a detail the app's core numbers depend on (what a ticket cost, a total, a due date) tucked behind a small "+ Add X" link, a muted text button or a collapsed section. When the user has the answer in hand, it should be a visible question with pill answers that reveals its fields in place, not an easy-to-miss extra.
 - **Hierarchy:** one emphasised surface per screen, clear primary actions, consistent type scale, labels that don't truncate at 390px, no horizontal page scroll.
 - **Repo design rules:**
-  - drawers on phone only; popovers, dropdowns or a right-side panel on web; modals for forms;
+  - drawers on phone only; popovers, dropdowns or a right-side panel on web; the form container fitted to the content (a short form is a modal; one that can scroll on a phone is a subview, never a long modal);
   - never an overlay on an overlay;
   - `SectionHeader` with at most one CTA;
   - one border per card, never nested cards;

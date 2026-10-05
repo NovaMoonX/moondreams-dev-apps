@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-import { Button, Checkbox, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
@@ -219,7 +220,7 @@ function BookingImportModal({ isOpen, trip, currentUserId, kind, onClose }: Book
 
   if (step === 'reading') {
     return (
-      <Modal isOpen={isOpen} onClose={() => undefined} title={copy.title} hideCloseButton>
+      <FormScreen isOpen={isOpen} onClose={onClose} title={copy.title}>
         <div className='flex flex-col items-center gap-4 py-10 text-center'>
           <span className='text-4xl' aria-hidden>
             {copy.emoji}
@@ -227,14 +228,14 @@ function BookingImportModal({ isOpen, trip, currentUserId, kind, onClose }: Book
           <div className='border-primary/20 border-t-primary h-10 w-10 animate-spin rounded-full border-4' />
           <p className='text-muted-foreground'>Reading your booking…</p>
         </div>
-      </Modal>
+      </FormScreen>
     );
   }
 
   if (step === 'review' && proposal) {
     const rows = getRows(proposal);
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title={copy.title}>
+      <FormScreen isOpen={isOpen} onClose={onClose} title={copy.title}>
         <div className='space-y-4'>
           {rows.length === 0 ? (
             <p className='text-muted-foreground text-sm'>
@@ -308,12 +309,12 @@ function BookingImportModal({ isOpen, trip, currentUserId, kind, onClose }: Book
             }
           />
         </div>
-      </Modal>
+      </FormScreen>
     );
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={copy.title}>
+    <FormScreen isOpen={isOpen} onClose={onClose} title={copy.title}>
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>{copy.intro}</p>
         <Input
@@ -343,7 +344,7 @@ function BookingImportModal({ isOpen, trip, currentUserId, kind, onClose }: Book
           }
         />
       </div>
-    </Modal>
+    </FormScreen>
   );
 }
 

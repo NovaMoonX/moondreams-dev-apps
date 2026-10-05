@@ -4,10 +4,9 @@ import {
   Button,
   Input,
   Label,
-  Modal,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
-import { Clock, Globe, Hash, Link2 } from 'lucide-react';
+import { Clock, Globe } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import LinkAttachField from '@/components/forms/LinkAttachField';
@@ -15,6 +14,7 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
@@ -182,8 +182,7 @@ export function StayFormModal({
   const [revealed, setRevealed] = useState<string[]>(() =>
     [
       ...(initiallyHasPlanned ? ['planned'] : []),
-      ...(stay?.linkUrl ? ['link'] : []),
-      ...(stay?.confirmationCode ? ['confirmation'] : []),
+      ...(stay?.linkUrl || stay?.confirmationCode ? ['booking'] : []),
       ...(stay?.checkInTimezone ? ['timezone'] : []),
     ],
   );
@@ -351,11 +350,11 @@ export function StayFormModal({
         longitude: draft.longitude,
         ...timeFields,
         checkInTimezone: revealed.includes('timezone') ? draft.checkInTimezone : '',
-        confirmationCode: revealed.includes('confirmation') ? draft.confirmationCode : '',
+        confirmationCode: revealed.includes('booking') ? draft.confirmationCode : '',
         notes: stay?.notes ?? null,
         place: draft.place,
-        linkUrl: revealed.includes('link') ? draft.linkUrl : '',
-        linkPreview: revealed.includes('link') ? draft.linkPreview : null,
+        linkUrl: revealed.includes('booking') ? draft.linkUrl : '',
+        linkPreview: revealed.includes('booking') ? draft.linkPreview : null,
         changeHistory: stay?.changeHistory ?? [],
         seenBy: stay?.seenBy ?? {},
       });
@@ -366,14 +365,12 @@ export function StayFormModal({
   };
 
   const chips = [
-    { key: 'link', label: 'Listing link', icon: <Link2 className='h-4 w-4' /> },
-    { key: 'confirmation', label: 'Confirmation', icon: <Hash className='h-4 w-4' /> },
     ...(isRelative ? [{ key: 'timezone', label: 'Time zone', icon: <Globe className='h-4 w-4' /> }] : []),
     { key: 'planned', label: 'Planned arrival', icon: <Clock className='h-4 w-4' /> },
   ].filter((chip) => !revealed.includes(chip.key));
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Stay'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-5'>
         <PillGroup
           label='Stay type'
@@ -468,6 +465,43 @@ export function StayFormModal({
             </div>
           </div>
         )}
+        <SectionDivider label='Booking' />
+        <div className='space-y-3'>
+          <div className='space-y-2'>
+            <Label>🔖 Already booked?</Label>
+            <PillGroup
+              label='Already booked'
+              options={[
+                { value: 'yes', label: 'Yes, I have the details' },
+                { value: 'no', label: 'Not yet' },
+              ]}
+              value={revealed.includes('booking') ? 'yes' : 'no'}
+              onChange={(value) => (value === 'yes' ? reveal('booking') : hide('booking'))}
+            />
+          </div>
+          {revealed.includes('booking') && (
+            <>
+              <div className='space-y-1.5'>
+                <Label>Confirmation code</Label>
+                <Input
+                  value={draft.confirmationCode}
+                  placeholder='XK7P2Q'
+                  onChange={(event) => updateDraft({ confirmationCode: event.target.value })}
+                />
+              </div>
+              <LinkAttachField
+                url={draft.linkUrl}
+                preview={draft.linkPreview}
+                label='Listing or website link'
+                addLabel='+ Add listing or website link'
+                placeholder='https://www.airbnb.com/rooms/… or the property website'
+                onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+                currentTitle={draft.name}
+                onUseTitle={(title) => updateDraft({ name: title })}
+              />
+            </>
+          )}
+        </div>
         {revealed.includes('planned') &&
           (isRelative ? (
             <RemovableField
@@ -565,36 +599,6 @@ export function StayFormModal({
             />
           </RemovableField>
         )}
-        {revealed.includes('link') && (
-          <RemovableField
-            label='Listing link'
-            removeLabel='Remove link'
-            onRemove={() => hide('link', { linkUrl: '', linkPreview: null })}
-          >
-            <LinkAttachField
-              url={draft.linkUrl}
-              preview={draft.linkPreview}
-              label=''
-              startRevealed
-              placeholder='https://www.airbnb.com/rooms/… or the property website'
-              onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
-              currentTitle={draft.name}
-              onUseTitle={(title) => updateDraft({ name: title })}
-            />
-          </RemovableField>
-        )}
-        {revealed.includes('confirmation') && (
-          <RemovableField
-            label='Confirmation code'
-            removeLabel='Remove confirmation code'
-            onRemove={() => hide('confirmation', { confirmationCode: '' })}
-          >
-            <Input
-              value={draft.confirmationCode}
-              onChange={(event) => updateDraft({ confirmationCode: event.target.value })}
-            />
-          </RemovableField>
-        )}
         <AddFieldChips heading='Add to this stay' chips={chips} onAdd={reveal} />
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions
@@ -621,7 +625,7 @@ export function StayFormModal({
           }
         />
       </div>
-    </Modal>
+    </FormScreen>
   );
 }
 

@@ -7,16 +7,15 @@ import {
   Checkbox,
   Input,
   Label,
-  Modal,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Users, Utensils } from 'lucide-react';
+import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import Pill from '@/components/Pill';
-import { PillRow } from '@/components/PillGroup';
+import { PillGroup, PillRow } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -37,6 +36,7 @@ import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtil
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import {
@@ -198,7 +198,6 @@ interface EventDraft {
   hasCuisines: boolean;
   transit: TransitDraft;
   cuisines: string;
-  hasAttendeeOverride: boolean;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
   hasVenueHours: boolean;
@@ -281,7 +280,6 @@ function getNextLegDraft(trip: TripSpace, { previous, arrivalPlace }: NextLegSee
     place: arrivalPlace?.place ?? null,
     isGrouped: true,
     groupLabel: previous.groupLabel ?? '',
-    hasAttendeeOverride: previous.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
     attendeeTargetType: previous.attendeeTargetType,
     assignedMemberIds: previous.assignedMemberIds,
     transit: {
@@ -321,7 +319,6 @@ function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
     hasLocation: Boolean(prefill.locationName),
     isGrouped: Boolean(prefill.groupLabel),
     groupLabel: prefill.groupLabel ?? '',
-    hasAttendeeOverride: isSpecific,
     attendeeTargetType: isSpecific ? 'SPECIFIC_MEMBERS' : base.attendeeTargetType,
     assignedMemberIds: prefill.attendeeUids ?? [],
     transit: prefill.transitValues
@@ -419,9 +416,6 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
       event?.eventType === 'DINING' && event.eventDetails && 'mealType' in event.eventDetails
         ? (event.eventDetails.cuisines ?? []).join(', ')
         : '',
-    hasAttendeeOverride: Boolean(
-      event && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
-    ),
     attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
     hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
@@ -544,7 +538,8 @@ function EventFormModal({
 
   const selectEventType = (eventType: EventType) => {
     const isNewEvent = !event && !prefill && !legFrom;
-    const becomesTravel = eventType === 'TRAVEL' && isNewEvent && !draft.hasAttendeeOverride;
+    const becomesTravel =
+      eventType === 'TRAVEL' && isNewEvent && draft.attendeeTargetType === 'EVERYONE_INCLUDING_FUTURE';
     const leavesTravel = eventType !== 'TRAVEL' && draft.isAttendeeAuto;
     updateDraft({
       eventType,
@@ -554,7 +549,6 @@ function EventFormModal({
       groupLabel: '',
       ...(becomesTravel
         ? {
-            hasAttendeeOverride: true,
             isAttendeeAuto: true,
             attendeeTargetType: 'SPECIFIC_MEMBERS' as const,
             assignedMemberIds: [currentUserId],
@@ -562,7 +556,6 @@ function EventFormModal({
         : {}),
       ...(leavesTravel
         ? {
-            hasAttendeeOverride: false,
             isAttendeeAuto: false,
             attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE' as const,
             assignedMemberIds: [],
@@ -608,12 +601,16 @@ function EventFormModal({
   };
   const handleArrivalAirport = (airport: AirportOption) => {
     if (isRelative && airport.timezone) {
-      setDraft((current) => ({
-        ...current,
-        hasEndTime: current.hasEndTime || current.eventType === 'TRAVEL',
-        endDayIndex: current.endDayIndex ?? current.dayIndex,
-        endTimezone: airport.timezone === (current.timezone ?? trip.timezone) ? null : airport.timezone,
-      }));
+      setDraft((current) => {
+        const suggested = fromDayMinutes(toDayMinutes(current.dayIndex ?? 0, current.time) + 60);
+        return {
+          ...current,
+          hasEndTime: true,
+          endDayIndex: current.hasEndTime ? current.endDayIndex : suggested.day,
+          endTime: current.hasEndTime && current.endTime ? current.endTime : suggested.time,
+          endTimezone: airport.timezone === (current.timezone ?? trip.timezone) ? null : airport.timezone,
+        };
+      });
     }
   };
 
@@ -850,12 +847,6 @@ function EventFormModal({
       icon: <Bell className='h-4 w-4' />,
       isShown: draft.dayIndex === null || draft.hasReminderOverride,
     },
-    {
-      key: 'attendees',
-      label: attendeesLabel,
-      icon: <Users className='h-4 w-4' />,
-      isShown: draft.hasAttendeeOverride,
-    },
   ].filter((chip) => !chip.isShown);
 
   const revealDetail = (key: string) =>
@@ -870,7 +861,6 @@ function EventFormModal({
         group: { isGrouped: true },
         reminder: { hasReminderOverride: true },
         venueHours: { hasVenueHours: true },
-        attendees: { hasAttendeeOverride: true },
       }[key] ?? {},
     );
 
@@ -930,8 +920,51 @@ function EventFormModal({
             : [],
     });
 
+  // Turning an end on starts it an hour after the start (a quick default, never left blank).
+  const startEndTime = () => {
+    const suggested = fromDayMinutes(toDayMinutes(draft.dayIndex ?? 0, draft.time) + 60);
+    updateDraft({
+      hasEndTime: true,
+      endDayIndex: suggested.day,
+      endTime: draft.endTime || suggested.time,
+    });
+  };
+
+  const endFields = (
+    <div className='space-y-2'>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <Select
+          options={getDayChoices(trip, draft.endDayIndex, false)}
+          value={String(draft.endDayIndex ?? draft.dayIndex)}
+          onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
+        />
+        <Input
+          type='time'
+          aria-label='End time'
+          value={draft.endTime}
+          onChange={(changeEvent) => updateDraft({ endTime: changeEvent.target.value })}
+        />
+      </div>
+      {isRelative && endZone && (
+        <ZoneField
+          label={isTravel ? 'Lands in' : 'Ends in'}
+          zone={endZone}
+          at={endDayAt}
+          isTripDefault={false}
+          onChange={setEndZone}
+        />
+      )}
+      {isRelative && draft.endTimezone !== null && (
+        <p className='text-muted-foreground text-xs'>
+          {formatTimezoneAbbreviation(startZone ?? endZone ?? '', startDayAt)} to{' '}
+          {formatTimezoneAbbreviation(endZone ?? '', endDayAt)}: the clock times are each in their own zone.
+        </p>
+      )}
+    </div>
+  );
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Timeline event'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Timeline event'>
       <div className='space-y-5'>
         {legFrom && (
           <p className='text-muted-foreground text-xs'>
@@ -1007,9 +1040,27 @@ function EventFormModal({
             />
           )}
         </div>
-        {draft.dayIndex === null ? null : draft.hasEndTime ? (
+        {draft.dayIndex === null ? null : isTravel ? (
+          <div className='space-y-3'>
+            <div className='space-y-2'>
+              <Label>🛬 Know when you arrive?</Label>
+              <PillGroup
+                label='Arrival time'
+                options={[
+                  { value: 'yes', label: 'Yes, I know' },
+                  { value: 'no', label: 'Not yet' },
+                ]}
+                value={draft.hasEndTime ? 'yes' : 'no'}
+                onChange={(value) =>
+                  value === 'yes' ? startEndTime() : updateDraft({ hasEndTime: false, endDayIndex: draft.dayIndex, endTime: '', endTimezone: null })
+                }
+              />
+            </div>
+            {draft.hasEndTime && endFields}
+          </div>
+        ) : draft.hasEndTime ? (
           <RemovableField
-            label={isTravel ? 'Arrives' : 'Ends'}
+            label='Ends'
             removeLabel='Remove end time'
             onRemove={() =>
               updateDraft({
@@ -1020,36 +1071,7 @@ function EventFormModal({
               })
             }
           >
-            <div className='space-y-2'>
-              <div className='grid gap-3 sm:grid-cols-2'>
-                <Select
-                  options={getDayChoices(trip, draft.endDayIndex, false)}
-                  value={String(draft.endDayIndex ?? draft.dayIndex)}
-                  onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
-                />
-                <Input
-                  type='time'
-                  aria-label='End time'
-                  value={draft.endTime}
-                  onChange={(changeEvent) => updateDraft({ endTime: changeEvent.target.value })}
-                />
-              </div>
-              {isRelative && endZone && (
-                <ZoneField
-                  label={isTravel ? 'Lands in' : 'Ends in'}
-                  zone={endZone}
-                  at={endDayAt}
-                  isTripDefault={false}
-                  onChange={setEndZone}
-                />
-              )}
-              {isRelative && draft.endTimezone !== null && (
-                <p className='text-muted-foreground text-xs'>
-                  {formatTimezoneAbbreviation(startZone ?? endZone ?? '', startDayAt)} to{' '}
-                  {formatTimezoneAbbreviation(endZone ?? '', endDayAt)}: the clock times are each in their own zone.
-                </p>
-              )}
-            </div>
+            {endFields}
           </RemovableField>
         ) : (
           <Button
@@ -1057,9 +1079,9 @@ function EventFormModal({
             variant='link'
             size='sm'
             className='h-auto px-0! py-0!'
-            onClick={() => updateDraft({ hasEndTime: true })}
+            onClick={startEndTime}
           >
-            {isTravel ? '+ Add arrival time' : '+ Add end time'}
+            + Add end time
           </Button>
         )}
 
@@ -1107,6 +1129,43 @@ function EventFormModal({
           </>
         )}
 
+        <div className='space-y-2'>
+          <SectionDivider label={attendeesLabel} />
+          <PillRow label={attendeesLabel}>
+            {ATTENDEE_CHOICES.map((choice) => (
+              <Pill
+                key={choice.type}
+                emoji={choice.emoji}
+                isSelected={attendeeChoice === choice.type}
+                onClick={() => chooseAttendees(choice.type)}
+              >
+                {choice.label}
+              </Pill>
+            ))}
+          </PillRow>
+          {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && attendeeChoice !== 'ME' && (
+            <PillRow label='People'>
+              {memberOptions.map((member) => (
+                <Pill
+                  key={member.value}
+                  isSelected={draft.assignedMemberIds.includes(member.value)}
+                  onClick={() =>
+                    updateDraft({
+                      assignedMemberIds: draft.assignedMemberIds.includes(member.value)
+                        ? draft.assignedMemberIds.filter((uid) => uid !== member.value)
+                        : [...draft.assignedMemberIds, member.value],
+                    })
+                  }
+                >
+                  {member.label}
+                </Pill>
+              ))}
+            </PillRow>
+          )}
+          <p className='text-muted-foreground text-xs'>
+            Your Overview shows only the events you&apos;re part of.
+          </p>
+        </div>
         <SectionDivider label='More details' />
         {draft.hasTitle && (
           <RemovableField
@@ -1305,54 +1364,6 @@ function EventFormModal({
             </div>
           </RemovableField>
         )}
-        {draft.hasAttendeeOverride && (
-          <RemovableField
-            label={attendeesLabel}
-            removeLabel='Reset attendees'
-            onRemove={() =>
-              updateDraft({
-                hasAttendeeOverride: false,
-                isAttendeeAuto: false,
-                attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
-                assignedMemberIds: [],
-              })
-            }
-          >
-            <div className='space-y-3'>
-              <PillRow label={attendeesLabel}>
-                {ATTENDEE_CHOICES.map((choice) => (
-                  <Pill
-                    key={choice.type}
-                    emoji={choice.emoji}
-                    isSelected={attendeeChoice === choice.type}
-                    onClick={() => chooseAttendees(choice.type)}
-                  >
-                    {choice.label}
-                  </Pill>
-                ))}
-              </PillRow>
-              {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && attendeeChoice !== 'ME' && (
-                <PillRow label='People'>
-                  {memberOptions.map((member) => (
-                    <Pill
-                      key={member.value}
-                      isSelected={draft.assignedMemberIds.includes(member.value)}
-                      onClick={() =>
-                        updateDraft({
-                          assignedMemberIds: draft.assignedMemberIds.includes(member.value)
-                            ? draft.assignedMemberIds.filter((uid) => uid !== member.value)
-                            : [...draft.assignedMemberIds, member.value],
-                        })
-                      }
-                    >
-                      {member.label}
-                    </Pill>
-                  ))}
-                </PillRow>
-              )}
-            </div>
-          </RemovableField>
-        )}
         <AddFieldChips heading='Add to this event' chips={detailChips} onAdd={revealDetail} />
 
         {(error ?? timeError) && (
@@ -1392,7 +1403,7 @@ function EventFormModal({
           }
         />
       </div>
-    </Modal>
+    </FormScreen>
   );
 }
 

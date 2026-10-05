@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -40,18 +41,67 @@ interface SubviewProps {
   /** Omit when the content draws its own `SubviewHeader` because its back step changes. */
   title?: string;
   className?: string;
+  /**
+   * Render as a full-screen layer on top of the page instead of in its place, for a subview opened
+   * from deep inside a screen (a form from a card's Edit button) where the parent can't swap its own
+   * content out. The screens underneath stay mounted, and a form's `FormFooterActions` pin to the bottom.
+   */
+  overlay?: boolean;
 }
 
 /**
  * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
  * closes on the browser's back gesture rather than leaving the page beneath it.
  */
-function Subview({ children, onClose, title, className }: SubviewProps) {
+function Subview({ children, onClose, title, className, overlay = false }: SubviewProps) {
   useSubviewHistory(onClose);
 
   useEffect(() => {
+    if (overlay) {
+      return;
+    }
     window.scrollTo({ top: 0 });
-  }, []);
+  }, [overlay]);
+
+  useEffect(() => {
+    if (!overlay) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [overlay, onClose]);
+
+  if (overlay) {
+    return createPortal(
+      <div
+        role='dialog'
+        aria-label={title}
+        className='bg-background fixed inset-0 z-40 overflow-y-auto overscroll-contain'
+      >
+        <div
+          className={join(
+            'mx-auto max-w-2xl px-4 pt-6 pb-4',
+            '[&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-4 [&_.form-footer]:border-t [&_.form-footer]:px-4 [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur',
+            className,
+          )}
+        >
+          {title !== undefined && <SubviewHeader title={title} onBack={onClose} />}
+          <SubviewTitleContext.Provider value={title ?? null}>{children}</SubviewTitleContext.Provider>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
 
   return (
     <div className='page'>

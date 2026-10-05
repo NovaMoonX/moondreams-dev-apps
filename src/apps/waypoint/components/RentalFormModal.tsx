@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
-import { Button, Input, Label, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
-import { Car, Globe, Hash, Link2, MapPin } from 'lucide-react';
+import { Button, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Car, Globe } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import LinkAttachField from '@/components/forms/LinkAttachField';
@@ -9,7 +9,9 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { PillGroup } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
@@ -115,10 +117,7 @@ type OptionalField = 'vehicle' | 'returnLocation' | 'timezone' | 'confirmationCo
 
 const OPTIONAL_FIELD_CHIPS: { key: OptionalField; label: string; icon: ReactNode }[] = [
   { key: 'vehicle', label: 'Vehicle', icon: <Car className='h-4 w-4' /> },
-  { key: 'returnLocation', label: 'Return spot', icon: <MapPin className='h-4 w-4' /> },
   { key: 'timezone', label: 'Time zone', icon: <Globe className='h-4 w-4' /> },
-  { key: 'confirmationCode', label: 'Confirmation', icon: <Hash className='h-4 w-4' /> },
-  { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
 ];
 
 interface DayTimeFieldProps {
@@ -165,6 +164,7 @@ export function RentalFormModal({
   const [revealed, setRevealed] = useState<OptionalField[]>(() =>
     OPTIONAL_FIELD_CHIPS.map(({ key }) => key).filter((key) => hasInitialValue(key, rental)),
   );
+  const isBooked = revealed.includes('confirmationCode') || revealed.includes('link');
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const updateDraft = (changes: Partial<RentalDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -230,7 +230,7 @@ export function RentalFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Car rental'>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Car rental'>
       <div className='space-y-5'>
         <div className='space-y-1.5'>
           <Label>Rental company</Label>
@@ -279,23 +279,6 @@ export function RentalFormModal({
             />
           </RemovableField>
         )}
-        {revealed.includes('returnLocation') && (
-          <RemovableField
-            label='Return spot'
-            removeLabel='Remove different return spot'
-            onRemove={() => remove('returnLocation')}
-          >
-            <PlaceAutocompleteInput
-              placeholder='Same as pickup if left empty'
-              value={draft.returnLocation.address}
-              onChange={(address) =>
-                updateDraft({ returnLocation: { ...draft.returnLocation, address, ...UNLINKED_PLACE } })
-              }
-              bias={placeBias}
-              onSelect={(result) => updateDraft({ returnLocation: toLocationDraft(result) })}
-            />
-          </RemovableField>
-        )}
         {revealed.includes('timezone') && (
           <RemovableField label='Time zone' removeLabel='Remove time zone' onRemove={() => remove('timezone')}>
             <div className='flex flex-wrap items-center gap-2'>
@@ -310,30 +293,75 @@ export function RentalFormModal({
             </div>
           </RemovableField>
         )}
-        {revealed.includes('confirmationCode') && (
-          <RemovableField
-            label='Confirmation code'
-            removeLabel='Remove confirmation code'
-            onRemove={() => remove('confirmationCode')}
-          >
-            <Input
-              value={draft.confirmationCode}
-              onChange={(event) => updateDraft({ confirmationCode: event.target.value })}
+        <SectionDivider label='Pickup and return' />
+        <div className='space-y-3'>
+          <div className='space-y-2'>
+            <Label>🚗 Returning it somewhere else?</Label>
+            <PillGroup
+              label='Return spot'
+              options={[
+                { value: 'same', label: 'Same place' },
+                { value: 'other', label: 'Somewhere else' },
+              ]}
+              value={revealed.includes('returnLocation') ? 'other' : 'same'}
+              onChange={(value) => (value === 'other' ? reveal('returnLocation') : remove('returnLocation'))}
             />
-          </RemovableField>
-        )}
-        {revealed.includes('link') && (
-          <RemovableField label='Link' removeLabel='Remove link' onRemove={() => remove('link')}>
-            <LinkAttachField
-              url={draft.linkUrl}
-              preview={draft.linkPreview}
-              label=''
-              startRevealed
-              placeholder='https://www.hertz.com/…'
-              onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+          </div>
+          {revealed.includes('returnLocation') && (
+            <PlaceAutocompleteInput
+              label='Return spot'
+              placeholder='Where it goes back'
+              value={draft.returnLocation.address}
+              onChange={(address) =>
+                updateDraft({ returnLocation: { ...draft.returnLocation, address, ...UNLINKED_PLACE } })
+              }
+              bias={placeBias}
+              onSelect={(result) => updateDraft({ returnLocation: toLocationDraft(result) })}
             />
-          </RemovableField>
-        )}
+          )}
+        </div>
+        <SectionDivider label='Booking' />
+        <div className='space-y-3'>
+          <div className='space-y-2'>
+            <Label>🔖 Already booked?</Label>
+            <PillGroup
+              label='Already booked'
+              options={[
+                { value: 'yes', label: 'Yes, I have the details' },
+                { value: 'no', label: 'Not yet' },
+              ]}
+              value={isBooked ? 'yes' : 'no'}
+              onChange={(value) => {
+                if (value === 'yes') {
+                  setRevealed((current) => [...current, 'confirmationCode', 'link']);
+                  return;
+                }
+                remove('confirmationCode');
+                remove('link');
+              }}
+            />
+          </div>
+          {isBooked && (
+            <>
+              <div className='space-y-1.5'>
+                <Label>Confirmation code</Label>
+                <Input
+                  value={draft.confirmationCode}
+                  placeholder='XK7P2Q'
+                  onChange={(event) => updateDraft({ confirmationCode: event.target.value })}
+                />
+              </div>
+              <LinkAttachField
+                url={draft.linkUrl}
+                preview={draft.linkPreview}
+                label='Link'
+                addLabel='+ Add a link'
+                placeholder='https://www.hertz.com/…'
+                onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+              />
+            </>
+          )}
+        </div>
         <AddFieldChips
           heading='Add rental details'
           chips={OPTIONAL_FIELD_CHIPS.filter((chip) => !revealed.includes(chip.key))}
@@ -362,7 +390,7 @@ export function RentalFormModal({
         />
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
-    </Modal>
+    </FormScreen>
   );
 }
 
