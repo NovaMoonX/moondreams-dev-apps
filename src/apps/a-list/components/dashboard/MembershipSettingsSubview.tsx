@@ -192,6 +192,7 @@ function MembershipSettingsSubview({
     input({
       name: 'weeklyGoal',
       label: 'Movies a week',
+      description: 'Counted Friday to Friday, like AMC.',
       type: 'number',
       placeholder: membership.weeklyGoal?.toString() ?? '2',
       variant: 'outline',
@@ -207,6 +208,7 @@ function MembershipSettingsSubview({
     input({
       name: 'monthlyGoal',
       label: 'Movies a month',
+      description: 'Counted by calendar month.',
       type: 'number',
       placeholder: membership.monthlyGoal?.toString() ?? '6',
       variant: 'outline',
@@ -321,8 +323,8 @@ function MembershipSettingsSubview({
               className='h-3 w-auto shrink-0'
             />
             <span>
-              This product uses the TMDB API but is not endorsed or certified
-              by TMDB.
+              This product uses the TMDB API but is not endorsed or certified by
+              TMDB.
             </span>
           </div>
           <div className='flex flex-wrap items-center gap-1'>
