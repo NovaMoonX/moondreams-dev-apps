@@ -90,7 +90,7 @@ function CalendarScreen() {
           className='text-muted-foreground! mx-auto flex gap-1.5'
           onClick={() => openOverlay({ kind: 'theaters' })}
         >
-          <span aria-hidden='true'>📍</span> Add the theaters you go to
+          <span aria-hidden='true'>📍</span> Tag your movies with a theater
         </Button>
       )}
       <Calendar

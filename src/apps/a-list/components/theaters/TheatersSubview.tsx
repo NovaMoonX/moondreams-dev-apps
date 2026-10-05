@@ -16,10 +16,7 @@ import {
   removeTheatre,
   setFavoriteTheatre,
 } from '@apps/a-list/store/actions/theatreActions';
-import {
-  selectMembership,
-  selectTheatres,
-} from '@apps/a-list/store/selectors';
+import { selectMembership, selectTheatres } from '@apps/a-list/store/selectors';
 import type { TheatreSearchResult, TheatreSnapshot } from '@apps/a-list/types';
 
 interface TheatersSubviewProps {
@@ -58,7 +55,8 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
 
   const handleAdd = (theatre: TheatreSearchResult) =>
     run(
-      () => dispatch(
+      () =>
+        dispatch(
           addTheatre({
             uid: user.uid,
             theatre,
@@ -94,7 +92,13 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
     await run(
       () =>
         dispatch(
-          removeTheatre({ uid: user.uid, theatreId: theatre.theatreId }),
+          removeTheatre({
+            uid: user.uid,
+            theatreId: theatre.theatreId,
+            nextFavoriteId:
+              theatres.find((item) => item.theatreId !== theatre.theatreId)
+                ?.theatreId ?? null,
+          }),
         ).unwrap(),
       'Unable to remove this theater.',
     );
@@ -122,7 +126,11 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
         <SectionHeader
           title='Theaters'
           subtitle={
-            theatres.length === 1 ? '1 theater' : `${theatres.length} theaters`
+            theatres.length === 0
+              ? undefined
+              : theatres.length === 1
+                ? '1 theater'
+                : `${theatres.length} theaters`
           }
           action={
             theatres.length < MAX_THEATRES ? (

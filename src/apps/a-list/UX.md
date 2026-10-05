@@ -605,8 +605,8 @@ block-beta
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Open app] --> B[Confirm perks] --> C["Cost, bill total and start date"] --> D[Goals]
-    D --> G{Add movies you've already seen?}
+    A[Open app] --> B[Confirm perks] --> C["Cost, bill total and start date"] --> D[Goals] --> T["Theaters · skippable"]
+    T --> G{Add movies you've already seen?}
     G -->|Yes| H[Pick a movie and fill details] --> I{Which button?}
     I -->|"Add + another" · primary| H
     I -->|Add & finish| J[Calendar, filled in]
@@ -658,6 +658,17 @@ flowchart LR
     C -->|Seen it| D[Optional stars] --> E[Watchlist shows Seen, counters update]
     C -->|Didn't go| F[Confirm remove] --> G[Viewing removed, movie stays on watchlist]
     C -->|Later| H[Dismissed until next open]
+```
+
+**Find and save theaters**
+```mermaid
+flowchart LR
+    A["Dashboard · Your theaters, or the Calendar nudge, or Setup's last step"] --> B[Theaters subview]
+    B --> C["+ Add"] --> D{How?}
+    D -->|"Use my current location (asks the browser on tap)"| E[Nearest AMC theaters]
+    D -->|Zip code or city| E
+    E --> F["Add"] --> G["Saved; the first one becomes the favorite"]
+    B --> H["Star = favorite (preselected on new showings) · Trash = remove, the star moves to another theater"]
 ```
 
 **Edit or remove a viewing**

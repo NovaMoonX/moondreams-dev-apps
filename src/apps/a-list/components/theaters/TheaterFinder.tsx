@@ -131,6 +131,9 @@ function TheaterFinder({
       >
         <LocateFixed className='h-4 w-4' /> Use my current location
       </Button>
+      <p className='text-muted-foreground -mt-1 text-center text-xs'>
+        Only used to find theaters near you. We don't keep it.
+      </p>
       <SearchInput
         value={query}
         onChange={(value) => {
