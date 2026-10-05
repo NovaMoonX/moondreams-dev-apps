@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { SITE_VERSION } from '@lib/app';
 import { useAuth } from '@hooks/useAuth';
 
 interface AuthRequiredStateProps {
@@ -29,6 +30,7 @@ function AuthRequiredState({
           <Google className='size-4' />
           Sign in with Google
         </Button>
+        <p className='text-foreground/50 mt-6 text-xs'>Version {SITE_VERSION}</p>
       </div>
     </div>
   );
