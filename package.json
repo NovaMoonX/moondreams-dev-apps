@@ -43,6 +43,7 @@
     "fb:indexes": "firebase deploy --only firestore:indexes",
     "fb:functions": "cd functions && npm run build && firebase deploy --only functions",
     "fb:deploy:smart": "tsx scripts/fbDeploySmart.ts",
+    "fb:version": "tsx scripts/publishAppVersion.ts",
     "fb:all": "npm run fb:deploy:smart",
     "issues:create": "bash scripts/createGithubIssues.sh",
     "issues:create:dry-run": "bash scripts/createGithubIssues.sh"
