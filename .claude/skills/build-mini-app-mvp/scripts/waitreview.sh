@@ -1,9 +1,9 @@
 #!/bin/bash
-# usage: waitreview.sh <pr-number> [max-minutes=15] [since-iso]
+# usage: waitreview.sh <pr-number> [max-minutes=20] [since-iso]
 # Exits with REVIEW_READY when a Copilot review newer than <since> appears,
 # NOT_REQUESTED if Copilot never shows up as a requested reviewer or reviewer,
 # or TIMEOUT after max-minutes. Run it with run_in_background.
-PR=$1; MAX=${2:-15}; SINCE=${3:-1970-01-01T00:00:00Z}
+PR=$1; MAX=${2:-20}; SINCE=${3:-1970-01-01T00:00:00Z}
 REPO=NovaMoonX/moondreams-dev-apps
 reviews() { gh api repos/$REPO/pulls/$PR/reviews --jq "[.[]|select((.user.login|test(\"opilot\")) and .submitted_at > \"$SINCE\")]|length" 2>/dev/null; }
 requested() { gh api repos/$REPO/pulls/$PR/requested_reviewers --jq '[.users[].login|select(test("opilot"))]|length' 2>/dev/null; }
