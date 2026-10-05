@@ -22,6 +22,7 @@ import {
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import MoneyInput from '@/components/MoneyInput';
+import WeekResetHelp from '@apps/a-list/components/shared/WeekResetHelp';
 import { MAX_MONTHLY_GOAL, MAX_WEEKLY_GOAL } from '@apps/a-list/constants';
 import {
   updateMembership,
@@ -303,7 +304,7 @@ function MembershipSettingsSubview({
             }
           />
         </div>
-        <SectionDivider label='🎯 Goals' />
+        <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
         <Form
           id='a-list-settings-goals'
           form={goalFields}

@@ -58,7 +58,7 @@ export const DEFAULT_WATCH_PRIORITY: WatchPriority = 'WANT_TO_SEE';
 export const OPENING_WINDOW_DAYS = 7;
 export const DEFAULT_RUNTIME_MINUTES = 120;   // when the provider has none
 export const PREVIEWS_BUFFER_MINUTES = 20;    // trailers before the feature; end = showtime + previews + runtime
-export const WEEK_STARTS_ON = 0;              // Sunday
+export const WEEK_STARTS_ON = 5;              // Friday: AMC's week turns over when new releases open
 export const MAX_FEE_CHIPS = 4;
 export const MAX_TAX_CHIPS = 4;
 export const MOVIE_SEARCH_MIN_CHARS = 2;
@@ -132,7 +132,7 @@ interface Viewing {
   showtimeAt: number;                // INSTANT: when the showing starts
   endsAt: number;                    // INSTANT: showtimeAt + previews buffer + runtime (fallback runtime if null); recomputed whenever showtimeAt changes
   status: ViewingStatus;             // PLANNED → SEEN; never back
-  rating: number | null;             // 1–5 whole stars; only meaningful when SEEN
+  rating: number | null;             // 0.5–5 stars in half steps (older ones are whole stars); only meaningful when SEEN
   ticket: Ticket | null;             // null until "Mark paid" or the add form's "Yes, I paid"
   createdAt: number;
   lastEditedAt: number;
@@ -164,7 +164,7 @@ interface Ticket {
 |---|---|---|
 | Watchlist "Seen", next planned date, latest watched date, rewatch count | viewings joined on `movieKey` | `selectWatchlistRows` |
 | Day → viewings map for the calendar | viewings keyed by local day | `selectViewingsByDay` |
-| Movies watched, movies this week, goal status | `SEEN` viewings by local day | `selectCounters` |
+| Movies watched, movies since Friday, goal status | `SEEN` viewings by local day | `selectCounters` |
 | Billing cycles elapsed, membership cost incurred | `startDate`, `monthlyTotalCents`, today | `selectSavingsSummary` |
 | Total ticket savings, fees avoided, net savings, break-even, premium savings | `SEEN` viewings with tickets | `selectSavingsSummary` |
 | Opening tab contents and its count | watchlist release dates, local today | `selectOpeningRows` |
@@ -315,7 +315,7 @@ getDayKey(timestamp: number): string // = toLocalDateInputValue(timestamp), "YYY
 All counts are over `SEEN` viewings only (planned ones are future by definition, and an ended-but-unconfirmed one is not yet a watched movie), bucketed by `getDayKey(showtimeAt)`:
 
 - **Movies watched** — count of `SEEN` viewings. A rewatch counts again.
-- **Movies this week** — `SEEN` viewings with a day key in `[weekStartKey, weekEndKey]`, the viewer's local week starting on `WEEK_STARTS_ON` (Sunday). Shown as `count / weeklyGoal` (e.g. `1/4`), or just `count` when no goal is set.
+- **Movies since Friday** — `SEEN` viewings with a day key in `[weekStartKey, weekEndKey]`, the viewer's local week starting on `WEEK_STARTS_ON` (Friday, because AMC's week turns over then; the calendar grid still starts on Sunday). The tile reads "Since Friday" and carries a help icon. Shown as `count / weeklyGoal` (e.g. `1/4`), or just `count` when no goal is set.
 - **Weekly goal met** — `count ≥ weeklyGoal`. **Monthly goal met** — `SEEN` viewings whose key shares today's `YYYY-MM` prefix, `≥ monthlyGoal`. The month is the calendar month.
 - A goal is the member's own target, so `null` means "no goal" and the chip is hidden.
 

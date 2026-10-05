@@ -93,6 +93,7 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
       input({
         name: 'weeklyGoal',
         label: 'Movies a week',
+        description: 'We count from Friday to Friday, like AMC does.',
         type: 'number',
         placeholder: '2',
         variant: 'outline',

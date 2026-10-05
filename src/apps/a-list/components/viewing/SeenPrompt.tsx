@@ -44,7 +44,7 @@ function SeenPrompt({
         </div>
         <div className='space-y-1'>
           <p className='text-muted-foreground text-sm'>
-            How was it? Stars are optional.
+            How was it? Tap or slide for half stars, or skip them.
           </p>
           <div className='flex justify-center'>
             <StarRating value={rating} onChange={setRating} size='lg' />

@@ -4,6 +4,7 @@ import { useAppSelector } from '@/store';
 import { formatDuration } from '@/utils/formatUtils';
 import StatTile from '@/components/StatTile';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
+import WeekResetHelp from '@apps/a-list/components/shared/WeekResetHelp';
 import { selectCounters } from '@apps/a-list/store/selectors';
 
 interface CounterRowProps {
@@ -42,7 +43,8 @@ function CounterRow({ now }: CounterRowProps) {
         isStacked
         icon='📅'
         value={getGoalValue(counters.thisWeek, counters.weeklyGoal)}
-        label='This week'
+        label='Since Friday'
+        help={<WeekResetHelp />}
         goal={
           counters.weeklyGoal === null
             ? undefined

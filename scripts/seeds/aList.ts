@@ -142,7 +142,7 @@ function getShowtime(now: number, daysFromNow: number, hour = 19, minute = 0) {
 
 // The spec's Standard example, a premium ticket with its standard price, and an all-in total.
 const SEED_RATINGS: Record<string, number> = {
-  'seed-viewing-matrix': 4,
+  'seed-viewing-matrix': 3.5,
   'seed-viewing-dune-1': 5,
   'seed-viewing-dune-2': 5,
 };
