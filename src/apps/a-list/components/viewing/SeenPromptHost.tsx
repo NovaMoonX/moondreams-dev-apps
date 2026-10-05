@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import PurchaseReturnHost from '@apps/a-list/components/viewing/PurchaseReturnHost';
 import SeenPrompt from '@apps/a-list/components/viewing/SeenPrompt';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
@@ -14,7 +15,7 @@ import {
 } from '@apps/a-list/store/actions/viewingActions';
 import { selectPendingSeenPrompts } from '@apps/a-list/store/selectors';
 
-/** Asks about one ended showing at a time, and only while nothing else is open. */
+/** Asks about one ended showing at a time, and only while nothing else is open. When none is waiting, it hands over to the purchase-return question. */
 function SeenPromptHost() {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -31,8 +32,9 @@ function SeenPromptHost() {
   const current =
     pending.find((viewing) => !laterIds.includes(viewing.id)) ?? null;
 
+  // One question at a time: when no seen prompt is waiting, the welcome-back-from-AMC question gets its turn.
   if (!user || !current || overlay !== null) {
-    return null;
+    return <PurchaseReturnHost />;
   }
 
   const handleSeen = async (rating: number | null) => {

@@ -1,7 +1,7 @@
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
-import type { TheatreResult } from './types.js';
+import type { AmcFormat, ShowtimeOption, TheatreResult } from './types.js';
 
 export const AMC_API_KEY = defineSecret('AMC_API_KEY');
 
@@ -171,5 +171,149 @@ export async function findNearbyTheatres(apiKey: string, latitude: number, longi
     )
     .filter((theatre): theatre is TheatreResult => theatre !== null)
     .slice(0, MAX_THEATRES);
+  return result;
+}
+
+interface AmcShowtime {
+  id?: number | string;
+  movieName?: string;
+  showDateTimeUtc?: string;
+  isSoldOut?: boolean;
+  isCanceled?: boolean;
+  purchaseUrl?: string;
+  mobilePurchaseUrl?: string;
+  attributes?: Array<{ code?: string; name?: string }>;
+  ticketPrices?: Array<{ type?: string; price?: number }>;
+}
+
+interface AmcShowtimesResponse {
+  count?: number;
+  _embedded?: { showtimes?: AmcShowtime[] };
+}
+
+const SHOWTIMES_PAGE_SIZE = 100;
+const MAX_SHOWTIME_PAGES = 5;
+
+function normalizeTitle(value: string | undefined) {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function isSameMovie(amcTitle: string | undefined, title: string) {
+  const left = normalizeTitle(amcTitle);
+  const right = normalizeTitle(title);
+  return left !== '' && (left === right || (right.length >= 4 && (left.startsWith(right) || right.startsWith(left))));
+}
+
+const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
+  ['imax', 'IMAX'],
+  ['dolby', 'DOLBY_CINEMA'],
+  ['prime', 'PRIME'],
+  ['reald', 'REALD_3D'],
+  ['3d', 'REALD_3D'],
+  ['laser', 'LASER'],
+];
+
+function toFormat(showtime: AmcShowtime): AmcFormat {
+  const text = (showtime.attributes ?? []).map((attribute) => `${attribute.code ?? ''} ${attribute.name ?? ''}`.toLowerCase()).join(' ');
+  const match = FORMAT_KEYWORDS.find(([keyword]) => text.includes(keyword));
+  return match ? match[1] : 'STANDARD';
+}
+
+function toAdultPriceCents(showtime: AmcShowtime) {
+  const prices = showtime.ticketPrices ?? [];
+  const adult = prices.find((entry) => entry.type?.toLowerCase() === 'adult') ?? prices[0];
+  return typeof adult?.price === 'number' && adult.price >= 0 ? Math.round(adult.price * 100) : null;
+}
+
+function toHttpsUrl(value: string | undefined) {
+  return typeof value === 'string' && /^https:\/\/[^\s]+$/.test(value) && value.length <= 500 ? value : null;
+}
+
+/** One showing of any movie; `movieTitle` is what AMC calls it, matched later against the member's title. */
+export interface DayShowtime extends ShowtimeOption {
+  movieTitle: string;
+}
+
+function fixtureDay(date: string): DayShowtime[] {
+  // Evening in the Central time zone, as an instant.
+  const at = (time: string) => Date.parse(`${date}T${time}:00-05:00`);
+  return [
+    ['13:10', 'STANDARD', 1489],
+    ['16:00', 'IMAX', 2149],
+    ['19:00', 'STANDARD', 1689],
+    ['19:40', 'DOLBY_CINEMA', 2049],
+    ['22:15', 'STANDARD', 1689],
+  ].map(([time, format, priceCents], index) => ({
+    showtimeId: `${date.replaceAll('-', '')}${index}`,
+    startsAt: at(time as string),
+    format: format as AmcFormat,
+    priceCents: priceCents as number,
+    standardPriceCents: null,
+    purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
+    isSoldOut: index === 4,
+    // Matches every title, so any movie the emulator is asked about has showings.
+    movieTitle: '*',
+  }));
+}
+
+/** Every showing at one theater on one day (`YYYY-MM-DD`), all movies, earliest first. */
+export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: string): Promise<DayShowtime[]> {
+  if (isFixtureMode(apiKey)) {
+    return fixtureDay(date);
+  }
+
+  const collected: AmcShowtime[] = [];
+  for (let page = 1; page <= MAX_SHOWTIME_PAGES; page += 1) {
+    const data = await callAmc<AmcShowtimesResponse>(apiKey, `/v2/theatres/${theatreId}/showtimes/${date}`, {
+      pageNumber: String(page),
+      pageSize: String(SHOWTIMES_PAGE_SIZE),
+    });
+    const embedded = data._embedded?.showtimes ?? [];
+    collected.push(...embedded);
+    if (embedded.length === 0 || collected.length >= (data.count ?? 0)) {
+      break;
+    }
+  }
+
+  const result = collected
+    .filter((showtime) => !showtime.isCanceled)
+    .flatMap((showtime) => {
+      const startsAt = Date.parse(showtime.showDateTimeUtc ?? '');
+      const purchaseUrl = toHttpsUrl(showtime.purchaseUrl) ?? toHttpsUrl(showtime.mobilePurchaseUrl);
+      return Number.isFinite(startsAt) && purchaseUrl && showtime.id !== undefined && showtime.movieName
+        ? [
+            {
+              showtimeId: String(showtime.id),
+              startsAt,
+              format: toFormat(showtime),
+              priceCents: toAdultPriceCents(showtime),
+              standardPriceCents: null,
+              purchaseUrl,
+              isSoldOut: Boolean(showtime.isSoldOut),
+              movieTitle: showtime.movieName,
+            } satisfies DayShowtime,
+          ]
+        : [];
+    })
+    .sort((left, right) => left.startsAt - right.startsAt);
+  return result;
+}
+
+/** One movie's showings from a day's list, each premium one carrying the cheapest Standard price that day to compare with. */
+export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeOption[] {
+  const matches = day.filter((showtime) => showtime.movieTitle === '*' || isSameMovie(showtime.movieTitle, title));
+  const standardPrices = matches
+    .filter((showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null)
+    .map((showtime) => showtime.priceCents as number);
+  const cheapestStandard = standardPrices.length > 0 ? Math.min(...standardPrices) : null;
+  const result = matches.map((showtime) => ({
+    showtimeId: showtime.showtimeId,
+    startsAt: showtime.startsAt,
+    format: showtime.format,
+    priceCents: showtime.priceCents,
+    standardPriceCents: showtime.format === 'STANDARD' ? null : cheapestStandard,
+    purchaseUrl: showtime.purchaseUrl,
+    isSoldOut: showtime.isSoldOut,
+  }));
   return result;
 }

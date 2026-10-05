@@ -1,11 +1,18 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  runTransaction,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DEFAULT_WATCH_PRIORITY } from '@apps/a-list/constants';
 import type {
   MovieSnapshot,
+  PurchasePlan,
   Ticket,
   TheatreSnapshot,
   Viewing,
@@ -23,6 +30,7 @@ interface AddViewingInput {
   showtimeAt: number;
   ticket: Ticket | null;
   theatre: TheatreSnapshot | null;
+  purchase: PurchasePlan | null;
 }
 
 function toSnapshot(movie: MovieSnapshot): MovieSnapshot {
@@ -43,7 +51,7 @@ export const addViewing = createAsyncThunk<
 >(
   'aList/viewings/add',
   async (
-    { uid, movieKey, movie, showtimeAt, ticket, theatre },
+    { uid, movieKey, movie, showtimeAt, ticket, theatre, purchase },
     { rejectWithValue },
   ) => {
     const membershipPath = ['apps', 'a-list', 'memberships', uid] as const;
@@ -78,6 +86,7 @@ export const addViewing = createAsyncThunk<
           status: getInitialStatus(endsAt, now),
           ticket: ticket ?? null,
           theatre: theatre ?? null,
+          purchase: purchase ?? null,
           rating: null,
           createdAt: now,
           lastEditedAt: now,
@@ -96,7 +105,12 @@ export const addViewing = createAsyncThunk<
 );
 
 /** Keys added after the first viewings were written, with the empty value a legacy document gets. */
-const LATER_KEYS = { ticket: null, rating: null, theatre: null } as const;
+const LATER_KEYS = {
+  ticket: null,
+  rating: null,
+  theatre: null,
+  purchase: null,
+} as const;
 
 /**
  * A field-scoped edit in a transaction: any later-added key the freshly read document still lacks
@@ -140,6 +154,8 @@ interface UpdateViewingInput {
   rating?: number | null;
   /** Omit to leave the theater alone; null clears it. */
   theatre?: TheatreSnapshot | null;
+  /** Omit to leave the purchase plan alone; null clears it. */
+  purchase?: PurchasePlan | null;
 }
 
 /** Moves a showing (the showtime and its derived end are written together) and edits its theater and, once seen, its stars. */
@@ -150,7 +166,7 @@ export const updateViewing = createAsyncThunk<
 >(
   'aList/viewings/update',
   async (
-    { uid, id, showtimeAt, runtimeMinutes, rating, theatre },
+    { uid, id, showtimeAt, runtimeMinutes, rating, theatre, purchase },
     { rejectWithValue },
   ) => {
     try {
@@ -159,6 +175,7 @@ export const updateViewing = createAsyncThunk<
         endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
         ...(rating === undefined ? {} : { rating }),
         ...(theatre === undefined ? {} : { theatre }),
+        ...(purchase === undefined ? {} : { purchase }),
       });
     } catch (error) {
       return rejectWithValue(
@@ -233,6 +250,34 @@ export const markViewingSeen = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to mark this movie seen.'),
+      );
+    }
+  },
+);
+
+interface SetPurchaseStartedInput {
+  uid: string;
+  id: string;
+  /** The instant the member left for AMC; null stops asking about it. */
+  startedAt: number | null;
+}
+
+/** Writes only the `startedAt` key of the plan, so a plan changed on another device isn't overwritten. */
+export const setPurchaseStarted = createAsyncThunk<
+  void,
+  SetPurchaseStartedInput,
+  { rejectValue: string }
+>(
+  'aList/viewings/setPurchaseStarted',
+  async ({ uid, id, startedAt }, { rejectWithValue }) => {
+    try {
+      await updateDoc(
+        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
+        { 'purchase.startedAt': startedAt, lastEditedAt: Date.now() },
+      );
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save your purchase.'),
       );
     }
   },

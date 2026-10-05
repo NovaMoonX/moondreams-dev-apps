@@ -6,12 +6,14 @@ import {
   ChevronLeft,
   CircleCheck,
   Pencil,
+  ShoppingBag,
   Ticket as TicketIcon,
   Trash2,
 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate, formatTime } from '@/utils/formatUtils';
@@ -20,21 +22,28 @@ import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import StarRating from '@/components/StarRating';
 import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import EditViewingForm from '@apps/a-list/components/viewing/EditViewingForm';
+import BuyTicketsPanel from '@apps/a-list/components/viewing/BuyTicketsPanel';
 import TicketForm from '@apps/a-list/components/viewing/TicketForm';
 import {
   markViewingSeen,
   recordTicket,
   removeViewing,
+  setPurchaseStarted,
   updateViewing,
 } from '@apps/a-list/store/actions/viewingActions';
 import {
   selectMembership,
   selectViewingById,
 } from '@apps/a-list/store/selectors';
-import type { Ticket, TheatreSnapshot } from '@apps/a-list/types';
+import type {
+  ShowtimeOption,
+  TheatreSnapshot,
+  Ticket,
+} from '@apps/a-list/types';
+import { describePurchase, toPurchasePlan } from '@apps/a-list/utils/purchase';
 import { formatCents } from '@apps/a-list/utils/money';
 
-type DrawerView = 'details' | 'edit' | 'ticket' | 'seen';
+type DrawerView = 'details' | 'edit' | 'ticket' | 'seen' | 'buy';
 
 interface ViewingPanelProps {
   viewingId: string;
@@ -56,6 +65,7 @@ export function ViewingPanel({
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
+  const { closeOverlay } = useAListOverlay();
   const now = useNow();
   const viewing = useAppSelector((state) =>
     selectViewingById(state, viewingId),
@@ -105,10 +115,54 @@ export function ViewingPanel({
             runtimeMinutes: viewing.movie.runtimeMinutes,
             rating,
             theatre,
+            // A plan points at one showing at one theater, so moving either one drops it.
+            ...(viewing.purchase &&
+            (showtimeAt !== viewing.showtimeAt ||
+              theatre?.theatreId !== viewing.theatre?.theatreId)
+              ? { purchase: null }
+              : {}),
           }),
         ).unwrap(),
       'Unable to save this showing.',
     );
+
+  const handlePickShowtime = async (option: ShowtimeOption) => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      await dispatch(
+        updateViewing({
+          uid: user.uid,
+          id: viewing.id,
+          showtimeAt: option.startsAt,
+          runtimeMinutes: viewing.movie.runtimeMinutes,
+          purchase: toPurchasePlan(option),
+        }),
+      ).unwrap();
+    } catch (pickError) {
+      setError(getErrorMessage(pickError, 'Unable to save this showtime.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGoBuy = () => {
+    if (!viewing.purchase) {
+      return;
+    }
+
+    // Opened straight from the tap, before any await, so phone browsers don't block it as a pop-up.
+    window.open(viewing.purchase.purchaseUrl, '_blank', 'noopener,noreferrer');
+    void dispatch(
+      setPurchaseStarted({
+        uid: user.uid,
+        id: viewing.id,
+        startedAt: Date.now(),
+      }),
+    );
+    // Leaves every drawer, so the welcome-back question has the screen to itself when they return.
+    closeOverlay();
+  };
 
   const handleSaveTicket = (nextTicket: Ticket | null) =>
     runSave(
@@ -194,6 +248,11 @@ export function ViewingPanel({
             <StarRating value={viewing.rating} />
           ) : null}
         </div>
+        {!ticket && viewing.purchase && (
+          <p className='text-muted-foreground text-xs'>
+            🎟️ {describePurchase(viewing.purchase)}, before tax and fees
+          </p>
+        )}
         {ticket && (
           <p className='text-muted-foreground text-xs'>
             {formatCents(ticket.priceCents)} +{' '}
@@ -262,6 +321,23 @@ export function ViewingPanel({
       );
     }
 
+    if (view === 'buy') {
+      return (
+        <div className='space-y-4'>
+          {backLink}
+          <p className='font-semibold'>Buy tickets</p>
+          <BuyTicketsPanel
+            viewing={viewing}
+            now={now}
+            isSaving={isSaving}
+            onPick={(option) => void handlePickShowtime(option)}
+            onGoBuy={handleGoBuy}
+            onChooseTheater={() => setView('edit')}
+          />
+        </div>
+      );
+    }
+
     if (view === 'ticket') {
       return (
         <div className='space-y-4'>
@@ -301,6 +377,16 @@ export function ViewingPanel({
               onClick={() => setView('seen')}
             >
               <CircleCheck className='h-4 w-4' /> Mark seen
+            </Button>
+          )}
+          {viewing.status === 'PLANNED' && !ticket && viewing.endsAt > now && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='w-full justify-start gap-2 rounded-none'
+              onClick={() => setView('buy')}
+            >
+              <ShoppingBag className='h-4 w-4' /> Buy tickets
             </Button>
           )}
           <Button

@@ -92,6 +92,8 @@ export interface Viewing {
   ticket: Ticket | null;
   /** Copied when the theater is picked, so a showing outlives a removed theater. Documents written before theaters existed lack the key. */
   theatre: TheatreSnapshot | null;
+  /** The AMC showing the member picked to buy, until a ticket is recorded. Documents written before it existed lack the key. */
+  purchase: PurchasePlan | null;
   /** 0.5–5 stars in half steps, only once seen. Older documents hold whole stars, and those written before ratings existed lack the key. */
   rating: number | null;
   createdAt: number;
@@ -146,4 +148,31 @@ export interface TheatreSearchResult extends Omit<
 > {
   /** From the searched point; null when AMC didn't say. */
   distanceMiles: number | null;
+}
+
+/** One showing of a movie at a saved theater, as AMC lists it. */
+export interface ShowtimeOption {
+  /** AMC's showtime id. */
+  showtimeId: string;
+  /** Instant: when the showing starts. */
+  startsAt: number;
+  format: AmcFormat;
+  /** The adult price before tax and fees; null when AMC lists none. */
+  priceCents: number | null;
+  /** The cheapest Standard showing of the same movie that day, for a premium showing; null otherwise. */
+  standardPriceCents: number | null;
+  /** https link to buy this showing on amctheatres.com. */
+  purchaseUrl: string;
+  isSoldOut: boolean;
+}
+
+/** What the member picked on AMC's showtime list; the ticket itself is only recorded once they come back with the fee and tax. */
+export interface PurchasePlan {
+  showtimeId: string;
+  format: AmcFormat;
+  priceCents: number | null;
+  standardPriceCents: number | null;
+  purchaseUrl: string;
+  /** Instant: when the member last left for AMC to buy; null until they do. */
+  startedAt: number | null;
 }

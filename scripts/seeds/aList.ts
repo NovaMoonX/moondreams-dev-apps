@@ -184,6 +184,20 @@ const SEED_VIEWING_THEATRES: Record<string, number> = {
   'seed-viewing-matrix': 0,
   'seed-viewing-dune-1': 0,
   'seed-viewing-dune-2': 1,
+  'seed-viewing-starlight': 0,
+  'seed-viewing-galaxy': 1,
+};
+
+// A showing picked from AMC's list and not yet bought, so the Buy tickets path has something to open.
+const SEED_PURCHASES: Record<string, object> = {
+  'seed-viewing-starlight': {
+    showtimeId: 'seed-showtime-starlight',
+    format: 'IMAX',
+    priceCents: 2149,
+    standardPriceCents: 1489,
+    purchaseUrl: 'https://www.amctheatres.com/order/seed/starlight',
+    startedAt: null,
+  },
 };
 
 const SEED_TICKETS: Record<string, object> = {
@@ -332,6 +346,7 @@ function getViewingFixtures(now: number) {
         status,
         ticket: SEED_TICKETS[id] ?? null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
+        ...(SEED_PURCHASES[id] ? { purchase: SEED_PURCHASES[id] } : {}),
         ...(SEED_VIEWING_THEATRES[id] === undefined
           ? {}
           : {

@@ -13,6 +13,7 @@ Server-side code for the mini-apps. Every function:
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `findTheatres` | callable | A-List Tracker | `{ query }` (zip code or city) or `{ latitude, longitude }` → `{ theatres, area }`: the closest AMC theaters (up to 10, nearest first) from the AMC Theatres API |
+| `findShowtimes` | callable | A-List Tracker | `{ theatreId, date, title }` → `{ showtimes }`: a movie's showings at an AMC theater that day, with format, list price, a Standard price to compare and a purchase link |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every item on its calendar day ("keep original dates") |
@@ -90,6 +91,14 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Access:** clients can't read or write `theatreCache`.
 - **Offline fixtures:** in the emulator with no key readable, it answers from three built-in theaters.
 - **Check after the key is set:** the response parsing follows AMC's public docs but hasn't been run against the live API, so call it once with a real zip code and compare the shape.
+
+### A-List Tracker: `findShowtimes`
+
+- **Secrets:** the same `AMC_API_KEY` and budget as `findTheatres`; nothing new to set up.
+- **Flow:** reads `/v2/theatres/{id}/showtimes/{date}` (paging up to 5 × 100), keeps the movie's showings by title, and reads each one's format from its attributes (IMAX, Dolby, PRIME, RealD 3D, Laser, otherwise Standard), its adult `ticketPrices` entry and its https `purchaseUrl`.
+- **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
+- **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
+- **Check after the key is set:** the attribute codes, the price `type` values and the title match were written from AMC's public docs and not run against the live API.
 
 ### `fetchLinkMetadata`
 

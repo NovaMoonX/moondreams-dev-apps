@@ -16,6 +16,7 @@ import {
   fromLocalDateAndTimeInputValues,
   toDateInputValue,
   toLocalDateInputValue,
+  toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -30,6 +31,7 @@ import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
 import TrailerPicksList from '@apps/a-list/components/add/TrailerPicksList';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import ShowtimePicker from '@apps/a-list/components/viewing/ShowtimePicker';
 import TheaterPills from '@apps/a-list/components/viewing/TheaterPills';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import WatchlistDetailsFields, {
@@ -65,9 +67,14 @@ import type {
   AListOverlay,
   MovieSearchResult,
   MovieSnapshot,
+  ShowtimeOption,
   TheatreSnapshot,
   WatchlistItem,
 } from '@apps/a-list/types';
+import {
+  applyPurchaseToDraft,
+  toPurchasePlan,
+} from '@apps/a-list/utils/purchase';
 import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
 
 interface ShowtimeValues {
@@ -151,6 +158,10 @@ export function AddFlow({
   );
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
   // Untouched, the favorite theater is picked for them; once they tap a pill (or clear it) their choice stands.
+  const [pickedShowtime, setPickedShowtime] = useState<{
+    theatreId: string;
+    option: ShowtimeOption;
+  } | null>(null);
   const [theatreChoice, setTheatreChoice] = useState<
     TheatreSnapshot | null | undefined
   >(undefined);
@@ -220,6 +231,13 @@ export function AddFlow({
         ? toTheatreSnapshot(favoriteTheatre)
         : null
       : theatreChoice;
+  // A pick only counts while the theater and the time still match it, so editing either one drops it.
+  const activePick =
+    pickedShowtime &&
+    pickedShowtime.theatreId === theatre?.theatreId &&
+    pickedShowtime.option.startsAt === showtimeAt
+      ? pickedShowtime.option
+      : null;
   const ticketResult = ticketDraft ? evaluateTicketDraft(ticketDraft) : null;
   const canSave =
     !isBeforeStart &&
@@ -280,6 +298,7 @@ export function AddFlow({
         showtimeAt: at,
         ticket: ticketResult?.ticket ?? null,
         theatre,
+        purchase: activePick ? toPurchasePlan(activePick) : null,
       }),
     ).unwrap();
     addToast({
@@ -287,6 +306,21 @@ export function AddFlow({
         viewing.status === 'SEEN' ? 'Added as seen' : 'Added to your calendar',
       description: snapshot.title,
     });
+  };
+
+  const handlePickShowtime = (option: ShowtimeOption) => {
+    if (!theatre) {
+      return;
+    }
+
+    setPickedShowtime({ theatreId: theatre.theatreId, option });
+    setShowtimeValues({
+      date: toLocalDateInputValue(option.startsAt),
+      time: toLocalTimeInputValue(option.startsAt),
+    });
+    setTicketDraft((current) =>
+      current ? applyPurchaseToDraft(current, option) : current,
+    );
   };
 
   const resetForNextMovie = (addedTitle: string) => {
@@ -300,6 +334,7 @@ export function AddFlow({
     setManualDraft(EMPTY_MANUAL_DRAFT);
     setTicketDraft(null);
     setTheatreChoice(undefined);
+    setPickedShowtime(null);
     setShowtimeValues({
       date: overlay.destination === 'calendar' ? overlay.date : '',
       time: DEFAULT_SHOWTIME,
@@ -528,6 +563,7 @@ export function AddFlow({
         </div>
         {isCalendar ? (
           <Form
+            key={pickedShowtime?.option.showtimeId ?? 'manual'}
             id='a-list-add-viewing'
             form={SHOWTIME_FIELDS}
             initialData={showtimeValues}
@@ -548,6 +584,16 @@ export function AddFlow({
             onChange={setTheatreChoice}
           />
         )}
+        {isCalendar && !isPast && theatre && movie && (
+          <ShowtimePicker
+            theatre={theatre}
+            dateKey={showtimeValues.date}
+            title={movie.title}
+            now={now}
+            selectedShowtimeId={activePick?.showtimeId ?? null}
+            onPick={handlePickShowtime}
+          />
+        )}
         {isCalendar && (
           <div className='space-y-3'>
             <div>
@@ -561,10 +607,16 @@ export function AddFlow({
                 emoji='💳'
                 isSelected={ticketDraft !== null}
                 onClick={() =>
-                  setTicketDraft(
-                    (current) =>
-                      current ?? getInitialTicketDraft(null, feeChips[1] ?? 0),
-                  )
+                  setTicketDraft((current) => {
+                    if (current) return current;
+                    const initial = getInitialTicketDraft(
+                      null,
+                      feeChips[1] ?? 0,
+                    );
+                    return activePick
+                      ? applyPurchaseToDraft(initial, activePick)
+                      : initial;
+                  })
                 }
               >
                 Yes, I paid
@@ -578,7 +630,11 @@ export function AddFlow({
               </Pill>
             </div>
             {ticketDraft && (
-              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
+              <TicketFields
+                key={activePick?.showtimeId ?? 'manual'}
+                draft={ticketDraft}
+                onChange={setTicketDraft}
+              />
             )}
           </div>
         )}
