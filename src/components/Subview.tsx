@@ -53,7 +53,13 @@ interface SubviewProps {
  * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
  * closes on the browser's back gesture rather than leaving the page beneath it.
  */
-function Subview({ children, onClose, title, className, overlay = false }: SubviewProps) {
+function Subview({
+  children,
+  onClose,
+  title,
+  className,
+  overlay = false,
+}: SubviewProps) {
   useSubviewHistory(onClose);
 
   useEffect(() => {
@@ -70,12 +76,16 @@ function Subview({ children, onClose, title, className, overlay = false }: Subvi
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
-      const hasDialogOnTop = Array.from(document.querySelectorAll(
+      const hasDialogOnTop = Array.from(
+        document.querySelectorAll(
           '[role="dialog"]:not([inert]):not([aria-hidden="true"]), [role="alertdialog"]:not([inert]):not([aria-hidden="true"])',
-        )).some(
-        (dialog) => !dialog.hasAttribute('data-subview-overlay'),
-      );
-      if (event.key === 'Escape' && !event.defaultPrevented && !hasDialogOnTop) {
+        ),
+      ).some((dialog) => !dialog.hasAttribute('data-subview-overlay'));
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        !hasDialogOnTop
+      ) {
         onClose();
       }
     };
@@ -96,13 +106,17 @@ function Subview({ children, onClose, title, className, overlay = false }: Subvi
       >
         <div
           className={join(
-            'mx-auto max-w-2xl px-4 pt-6 pb-4',
-            '[&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-4 [&_.form-footer]:border-t [&_.form-footer]:px-4 [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur',
+            'mx-auto flex min-h-full max-w-2xl flex-col px-4 pt-6 pb-4 *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0',
+            '[&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-4 [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-4 [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur',
             className,
           )}
         >
-          {title !== undefined && <SubviewHeader title={title} onBack={onClose} />}
-          <SubviewTitleContext.Provider value={title ?? null}>{children}</SubviewTitleContext.Provider>
+          {title !== undefined && (
+            <SubviewHeader title={title} onBack={onClose} />
+          )}
+          <SubviewTitleContext.Provider value={title ?? null}>
+            {children}
+          </SubviewTitleContext.Provider>
         </div>
       </div>,
       document.body,
