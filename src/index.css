@@ -63,15 +63,22 @@ html:has(
   }
 }
 
-/* A tapped control keeps its focus outline/ring and the browser's tap flash after the
-   touch ends. Keyboard focus (:focus-visible) keeps its cue; text fields keep only their
-   border change. Component focus styles are utilities, so only !important beats them. */
+/* A control that took focus from a mouse or touch keeps its focus outline/ring after the click,
+   then fades it out when focus moves on, which reads as a border flashing on the one just left
+   (a pill, or a card the drawer handed focus back to). Keyboard focus (:focus-visible) keeps its
+   cue. Component focus styles are utilities, so only !important beats them. */
+:focus:not(:focus-visible) {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/* On phones text fields keep only their border change, and a pressed control shows no ring. */
 @media (max-width: 639px) {
   * {
     -webkit-tap-highlight-color: transparent;
   }
 
-  :focus:not(:focus-visible),
   input:focus,
   textarea:focus,
   select:focus,
