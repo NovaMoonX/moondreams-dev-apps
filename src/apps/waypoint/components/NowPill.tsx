@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { Play, SkipForward } from 'lucide-react';
+import { ChevronsRight, CircleDot } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -115,13 +115,22 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
           type='button'
           variant='tertiary'
           aria-label={isExpanded ? `${label}. Show details` : `Show ${itemView === 'now' ? 'what is happening now' : 'what is up next'}`}
-          className='h-12 min-w-12 justify-start gap-2 rounded-full p-0 pr-4'
+          className={join('h-12 min-w-12 justify-start gap-0 rounded-full p-0 transition-[padding] duration-300', isExpanded && 'pr-4 pl-4')}
           onClick={() => (isExpanded ? open(target) : showView(itemView))}
         >
-          <span className='flex size-12 shrink-0 items-center justify-center'>
-            {itemView === 'now' ? <Play className='h-5 w-5 text-emerald-500' /> : <SkipForward className='h-5 w-5' />}
+          <span
+            className={join(
+              'flex shrink-0 items-center justify-center overflow-hidden transition-[width,opacity] duration-300',
+              isExpanded ? 'w-0 opacity-0' : 'size-12 opacity-100',
+            )}
+          >
+            {itemView === 'now' ? (
+              <CircleDot className='h-5 w-5 text-emerald-500' />
+            ) : (
+              <ChevronsRight className='h-5 w-5' />
+            )}
           </span>
-          <span className={join('transition-opacity duration-300', isExpanded ? 'opacity-100' : 'opacity-0')}>
+          <span className={join('transition-opacity duration-300', isExpanded ? 'opacity-100' : 'w-0 overflow-hidden opacity-0')}>
             {renderStatus(target, itemView)}
           </span>
         </Button>
