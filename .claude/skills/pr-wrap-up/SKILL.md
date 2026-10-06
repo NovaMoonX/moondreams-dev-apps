@@ -5,7 +5,7 @@ description: The standard way every PR in this repo ends, run automatically with
 
 # PR wrap-up
 
-Every PR in this repo ends the same way, and nobody has to ask for it. It runs after `finish-feature-pr` (which makes the branch mergeable) and again whenever a push changes behaviour.
+Every piece of work in this repo ends with a **draft PR**, opened automatically as soon as the work is pushed (if the branch has none; never ready for review, and without asking), and every PR ends the same way below, and nobody has to ask for it. It runs after `finish-feature-pr` (which makes the branch mergeable) and again whenever a push changes behaviour.
 
 **Skip it** only for a PR that changes no app behaviour or UI (docs, CI config, skills): say so in the PR body in one line.
 
