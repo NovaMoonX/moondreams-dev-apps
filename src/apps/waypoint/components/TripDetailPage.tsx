@@ -422,7 +422,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         className={join(
           'mx-auto max-w-4xl',
           isActive ? 'space-y-2.5 pt-6 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
-          hasAppNav ? (isActive ? 'pb-44' : 'pb-24') : isActive && 'pb-40',
+          hasAppNav ? (isActive ? 'pb-44' : 'pb-24') : isActive && 'pb-40 sm:pb-44',
         )}
       >
         <div className={join('flex items-center justify-between', isSmallScreen && 'mb-5')}>
