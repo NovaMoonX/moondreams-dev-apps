@@ -63,7 +63,6 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     setOpenEventId(target.id);
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: target.id }));
   };
-  const swap = () => setPeekedFor(view === 'now' ? (activeEvent?.id ?? null) : undefined);
   const details = openEvent && (
     <EventDetailLines
       trip={trip}
