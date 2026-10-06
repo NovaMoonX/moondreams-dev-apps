@@ -133,18 +133,18 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
+  Pills["Members · Checklist · Stays · Rentals"]:2
   CheckIn["CHECKING IN TODAY<br/>🛏️ Hotel · 3 PM"]:2
   Agenda["TODAY<br/>✓ Breakfast · 8 AM<br/>🍜 Dinner · 6 PM"]:2
-  IdeasCollapsed["💡 Ideas (3 new) ▸"]:1
-  StaysRentals["Stays · Rentals ›"]:1
-  Pill(["● NOW · 12m left — Dinner      [Up next]"]):2
+  IdeasCollapsed["💡 Ideas (3 new) ▸"]:2
+  Pill(["● NOW · 12m left — Dinner  ›  [Up next]"]):2
+  style Pills fill:transparent,stroke:#888888,stroke-width:1px;
   style CheckIn fill:transparent,stroke:#888888,stroke-width:1px;
   style Agenda fill:transparent,stroke:#888888,stroke-width:1px;
   style IdeasCollapsed fill:transparent,stroke:#888888,stroke-width:1px;
-  style StaysRentals fill:transparent,stroke:#888888,stroke-width:1px;
   style Pill fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*What is happening now and what comes next float as one pill over every main screen: it shows what is on, one button swaps to what is next, and a tap opens the details. The page keeps the static hub (today's check-ins and pickups, weather, agenda) and the entries to ideas, stays and rentals.*
+*What is happening now and what comes next float as one pill over the main screens (Overview, Timeline, Expenses): it shows what is on, one button swaps to what is next, and a tap opens the details. The page keeps the static hub (today's check-ins and pickups, weather, agenda) and the entries to members, checklist, stays and rentals sit in one row at the top, with ideas below.*
 
 **Timeline**
 ```mermaid

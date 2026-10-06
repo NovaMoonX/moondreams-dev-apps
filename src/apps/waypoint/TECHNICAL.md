@@ -828,7 +828,7 @@ The flight (Travel + Flight), stay and rental forms show `UploadAutofill` when c
 
 ## Travel prompts and "my" Overview
 
-`TravelPrompts` asks each member (who may add events) for their own arrival and departure until they have a travel event (non-archived, for them or everyone) in the first two or last two days; it can be dismissed per person per trip (local preference) and then shrinks to one line. Active Now, Up Next and the Today/Tomorrow agenda list only events the viewer is part of (`isEventForMember`); the Timeline still shows everyone's, with its own "only events I'm attending" filter.
+`TravelPrompts` asks each member (who may add events) for their own arrival and departure until they have a travel event (non-archived, for them or everyone) in the first two or last two days; it can be dismissed per person per trip (local preference) and then shrinks to one line. The Now / Up next pill and the Today/Tomorrow agenda list only events the viewer is part of (`isEventForMember`); the Timeline still shows everyone's, with its own "only events I'm attending" filter.
 
 ## Form containers
 

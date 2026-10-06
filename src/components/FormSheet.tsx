@@ -33,7 +33,7 @@ function FormSheet({ isOpen, onClose, title, children }: FormSheetProps) {
         title={title}
         showCloseButton
         disableCloseOnOverlayClick
-        className='max-h-[92dvh]'
+        className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
       >
         <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-9')}>{children}</div>
       </Drawer>
