@@ -106,7 +106,8 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         key={itemView}
         role='status'
         className={join(
-          'bg-popover min-w-0 overflow-hidden rounded-full border shadow-lg',
+          'bg-popover min-w-0 basis-12 overflow-hidden rounded-full border shadow-lg transition-[flex-grow] duration-700 ease-in-out',
+          isExpanded ? 'grow' : 'grow-0',
           itemView === 'now' ? 'border-emerald-500/60' : 'border-border',
         )}
       >
@@ -146,13 +147,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     if (isPhone) {
       return (
         <div className='pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-30 flex justify-center px-4'>
-          <div
-            className={join(
-              'pointer-events-auto grid w-[min(100%,22rem)] gap-2 transition-[grid-template-columns] duration-700 ease-in-out',
-              !canSwap && 'grid-cols-[1fr]',
-              canSwap && (view === 'now' ? 'grid-cols-[1fr_3rem]' : 'grid-cols-[3rem_1fr]'),
-            )}
-          >
+          <div className='pointer-events-auto flex w-[min(100%,22rem)] gap-2'>
             {activeEvent && renderPhoneItem(activeEvent, 'now')}
             {upNextEvent && renderPhoneItem(upNextEvent, 'next')}
           </div>
