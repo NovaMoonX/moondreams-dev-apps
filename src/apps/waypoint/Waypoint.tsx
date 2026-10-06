@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -18,6 +18,7 @@ import MyEmailInvites from '@apps/waypoint/components/MyEmailInvites';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
+import { getMyTripsParams } from '@apps/waypoint/utils/tripsUrl';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
 import { useWaypointTheme } from '@apps/waypoint/hooks/useWaypointTheme';
 import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
@@ -62,6 +63,14 @@ function Waypoint() {
   const isSelectedTripMissing = Boolean(selectedTripId) && !selectedTrip;
   const isSelectedTripAdmin =
     selectedTrip?.members[user?.uid ?? '']?.role === 'ADMIN';
+
+  const isOnMyTrips = tripsLoaded && !selectedTrip;
+  useEffect(() => {
+    const cleaned = getMyTripsParams(searchParams);
+    if (isOnMyTrips && cleaned) {
+      setSearchParams(cleaned, { replace: true });
+    }
+  }, [isOnMyTrips, searchParams, setSearchParams]);
 
   useWaypointSync(user?.uid ?? null, {
     tripId: selectedTrip?.id ?? null,
