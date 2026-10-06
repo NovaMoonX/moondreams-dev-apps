@@ -13,6 +13,8 @@ Work autonomously. Don't ask questions you can answer from the docs, the code or
 
 Read `CLAUDE.md` (it imports `.github/copilot-instructions.md`) before writing code. Every rule there applies to every PR, as does every checklist in `.claude/skills/finish-feature-pr/SKILL.md`.
 
+The app's look is one `<app>.css` on a theme class, built per `CLAUDE.md` → "Designing a mini-app's look" (including "Where a visual rule lives" and "Text color is part of the theme"): tokens, radius and field padding, selected-pill tint, and quiet tappable text. Anything every app should get goes in `src/index.css` once, never copied per app.
+
 Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: screenshots in the PR body, a regression check (rules first), Copilot with a 20-minute window, then technical, product and design agents. Where that skill and this one differ on review, `pr-wrap-up` wins.
 
 ## Inputs
