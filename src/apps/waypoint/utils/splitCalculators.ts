@@ -239,10 +239,8 @@ const emptyOwed = (): DirectionalOwed => ({
 
 const directionKey = (debtorUid: string, creditorUid: string) => `${debtorUid}>${creditorUid}`;
 
-// Every expense a creditor paid where a debtor owes a share, split into what's already been marked
-// repaid and what's still outstanding. This is the raw, un-netted relationship between exactly two
-// people, so a circular pair (A owes B on one expense, B owes A on another) shows both sides. Each
-// expense is split once for all of its debtors, not once per pair, so a big group stays quick.
+// The raw, un-netted relationship between two people, so a circular pair shows both sides.
+// Each expense is split once for all its debtors, not once per pair, so a big group stays quick.
 function groupOwedByDirection(expenses: TripExpense[], currentMemberIds: string[]): Map<string, DirectionalOwed> {
   const byDirection = new Map<string, DirectionalOwed>();
   expenses.forEach((expense) => {
