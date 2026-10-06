@@ -15,7 +15,12 @@ interface StatTileProps {
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
-  prompt?: { label: string; ariaLabel: string; onClick: () => void };
+  prompt?: {
+    label: string;
+    shortLabel: string;
+    ariaLabel: string;
+    onClick: () => void;
+  };
   className?: string;
 }
 
@@ -86,11 +91,12 @@ function StatTile({
             size='sm'
             rounded='full'
             variant='secondary'
-            className='mt-2 min-h-10 w-full text-xs'
+            className="relative mt-2 h-7 min-h-0 w-full py-0 text-xs after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             aria-label={prompt.ariaLabel}
             onClick={prompt.onClick}
           >
-            {prompt.label}
+            <span className='sm:hidden'>{prompt.shortLabel}</span>
+            <span className='max-sm:hidden'>{prompt.label}</span>
           </Button>
         )}
         {goal && (
@@ -122,7 +128,8 @@ function StatTile({
             {isGoalMet ? (
               <>
                 <span aria-hidden='true'>🏆</span>{' '}
-                <span className='sr-only'>Goal </span>Met
+                <span className='max-sm:sr-only'>Goal </span>
+                <span className='sm:lowercase'>Met</span>
               </>
             ) : (
               detail

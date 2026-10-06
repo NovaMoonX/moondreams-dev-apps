@@ -19,7 +19,8 @@ function CounterRow({ now }: CounterRowProps) {
 
   const { openOverlay } = useAListOverlay();
   const getGoalPrompt = (ariaLabel: string) => ({
-    label: '🎯 Set',
+    label: '🎯 Set a goal',
+    shortLabel: '🎯 Set',
     ariaLabel,
     onClick: () => openOverlay({ kind: 'membership' }),
   });
