@@ -26,6 +26,13 @@ export function getTimeModel(trip: TripSpace): TripTimeModel {
   return trip.timeModel ?? 'ABSOLUTE';
 }
 
+/** Today's day number while the trip is on, otherwise its first day: where a new item most likely belongs. */
+export function getDefaultDayIndex(trip: TripSpace, now: number = Date.now()) {
+  const today = Math.floor((now - trip.startDate) / DAY_MS);
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  return today >= 0 && today < dayCount ? today : 0;
+}
+
 export function isRelativeTrip(trip: TripSpace) {
   return getTimeModel(trip) === 'RELATIVE';
 }

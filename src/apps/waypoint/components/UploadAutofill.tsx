@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 
 import { airlinesQueryOptions, type AirlineOption } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
-import { getErrorMessage } from '@/utils/errorUtils';
 import {
   extractBookingFromFile,
   type BookingKind,
@@ -60,7 +59,8 @@ function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofi
       onFilled(result);
       setState({ status: 'done', fileName: file.name, unread: result.unread, note: result.note ?? null });
     } catch (error) {
-      setState({ status: 'failed', message: getErrorMessage(error, `We couldn't read that file. Try a clearer photo or a PDF.`) });
+      console.error('Reading the confirmation failed', error);
+      setState({ status: 'failed', message: `We couldn't read that right now. Try a clearer photo or a PDF, or fill it in below.` });
       setPickerKey((current) => current + 1);
     }
   };
@@ -72,6 +72,7 @@ function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofi
         <p className='text-muted-foreground text-xs'>
           Upload a photo, screenshot or PDF and we&apos;ll fill this in. You can change anything before you save.
         </p>
+        <p className='text-muted-foreground text-xs'>An AI model reads the file to fill the form. It isn&apos;t saved.</p>
       </div>
       {state.status !== 'reading' && (
         <Input
@@ -102,7 +103,7 @@ function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofi
           )}
         </div>
       )}
-      {state.status === 'failed' && <p className='text-destructive text-sm'>{state.message}</p>}
+      {state.status === 'failed' && <p className='text-destructive text-sm break-words'>{state.message}</p>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ListChecks, Users } from 'lucide-react';
+import { BedDouble, Car, ListChecks, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { useAppSelector } from '@/store';
@@ -7,15 +7,17 @@ import { useAppSelector } from '@/store';
 import type { TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
-export type TripEntryTab = 'members' | 'checklist';
+export type TripEntryTab = 'members' | 'checklist' | 'stays' | 'rentals';
 
 interface TripEntryPointsProps {
   trip: TripSpace;
   currentUserId: string;
   onOpen: (tab: TripEntryTab) => void;
+  /** On a live trip where the group sleeps and drives is a glance away, so Stays and Rentals join the row. */
+  includeLogistics?: boolean;
 }
 
-function TripEntryPoints({ trip, currentUserId, onOpen }: TripEntryPointsProps) {
+function TripEntryPoints({ trip, currentUserId, onOpen, includeLogistics = false }: TripEntryPointsProps) {
   const incompleteCount = useAppSelector(
     (state) => state.waypoint.checklist.items.filter((item) => !item.isCompleted).length,
   );
@@ -28,6 +30,12 @@ function TripEntryPoints({ trip, currentUserId, onOpen }: TripEntryPointsProps) 
   const pills: { tab: TripEntryTab; label: string; icon: ReactNode; count: number }[] = [
     { tab: 'members', label: 'Members', icon: <Users className='h-4 w-4' />, count: pendingCount },
     { tab: 'checklist', label: 'Checklist', icon: <ListChecks className='h-4 w-4' />, count: incompleteCount },
+    ...(includeLogistics
+      ? [
+          { tab: 'stays' as const, label: 'Stays', icon: <BedDouble className='h-4 w-4' />, count: 0 },
+          { tab: 'rentals' as const, label: 'Rentals', icon: <Car className='h-4 w-4' />, count: 0 },
+        ]
+      : []),
   ];
 
   return (
@@ -39,7 +47,7 @@ function TripEntryPoints({ trip, currentUserId, onOpen }: TripEntryPointsProps) 
           variant='tertiary'
           size='sm'
           onClick={() => onOpen(pill.tab)}
-          className='border-primary/30 bg-background! hover:bg-secondary! text-primary h-9 gap-1.5 rounded-full border px-3.5 text-sm font-medium'
+          className='border-primary/30 bg-background! hover:bg-secondary! text-primary h-10 gap-1.5 rounded-full border px-3.5 text-sm font-medium'
         >
           {pill.icon}
           {pill.label}

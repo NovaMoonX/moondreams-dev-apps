@@ -46,7 +46,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [isAddingByEmail, setIsAddingByEmail] = useState(false);
-  const waitingEmails = useAppSelector(
+  const addedInvites = useAppSelector(
     (state) =>
       state.waypoint.emailInvites.forTrip
         .filter((invite) => invite.tripId === trip.id)
@@ -57,6 +57,8 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const allMemberIds = Object.keys(trip.members);
   const userInfo = useUserInfo(allMemberIds);
   const members = userInfo?.map ?? {};
+  const memberEmailSet = new Set((userInfo?.users ?? []).flatMap((user) => (user.email ? [user.email.toLowerCase()] : [])));
+  const waitingEmails = addedInvites.filter((invite) => !memberEmailSet.has(invite.email));
   const isAdmin = trip.members[currentUserId]?.role === 'ADMIN';
   const activeMemberUid =
     activeMemberId && trip.members[activeMemberId] ? activeMemberId : null;
@@ -345,10 +347,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
           isOpen={isAddingByEmail}
           trip={trip}
           currentUserId={currentUserId}
-          memberEmails={[
-            ...(userInfo?.users ?? []).flatMap((user) => (user.email ? [user.email] : [])),
-            ...waitingEmails.map((invite) => invite.email),
-          ]}
+          memberEmails={(userInfo?.users ?? []).flatMap((user) => (user.email ? [user.email] : []))}
           onClose={() => setIsAddingByEmail(false)}
         />
       )}

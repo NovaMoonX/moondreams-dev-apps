@@ -79,6 +79,7 @@ import {
   type TransitDraft,
 } from '@apps/waypoint/utils/transitDetails';
 import {
+  getDefaultDayIndex,
   buildEventTimeFields,
   getEventTime,
   isRelativeTrip,
@@ -360,8 +361,8 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
     eventType: event?.eventType ?? 'ACTIVITY',
     title: '',
     hasTitle: false,
-    dayIndex: event ? (time?.dayIndex ?? null) : 0,
-    endDayIndex: event ? (time?.endDayIndex ?? null) : 0,
+    dayIndex: event ? (time?.dayIndex ?? null) : getDefaultDayIndex(trip),
+    endDayIndex: event ? (time?.endDayIndex ?? null) : getDefaultDayIndex(trip),
     hasEndTime: Boolean(time?.endTime),
     time: time?.startTime || '09:00',
     endTime: time?.endTime ?? '',

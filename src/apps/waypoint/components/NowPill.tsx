@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -39,11 +40,11 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const activeEvent = useAppSelector(selectActiveEvent(trip, now, currentUserId));
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
-  const [preferred, setPreferred] = useState<View>('now');
+  const [peekedFor, setPeekedFor] = useState<string | null | undefined>(undefined);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
 
   const getView = (): View | null => {
-    if (preferred === 'next' && upNextEvent) return 'next';
+    if (peekedFor === (activeEvent?.id ?? null) && upNextEvent) return 'next';
     if (activeEvent) return 'now';
     return upNextEvent ? 'next' : null;
   };
@@ -104,6 +105,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
                 {event.title}
               </span>
             </span>
+            <ChevronRight aria-hidden className='text-muted-foreground h-4 w-4 shrink-0' />
           </Button>
           {canSwap && (
             <Button
@@ -111,8 +113,8 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
               size='sm'
               rounded='full'
               variant='secondary'
-              className='shrink-0'
-              onClick={() => setPreferred(view === 'now' ? 'next' : 'now')}
+              className='h-10 shrink-0'
+              onClick={() => setPeekedFor(view === 'now' ? (activeEvent?.id ?? null) : undefined)}
             >
               {view === 'now' ? 'Up next' : 'Now'}
             </Button>

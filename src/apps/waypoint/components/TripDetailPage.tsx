@@ -562,6 +562,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               trip={trip}
               currentUserId={currentUserId}
               onOpen={setSectionTab}
+              includeLogistics={isActive}
             />
           </div>
         )}
@@ -576,7 +577,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </div>
         )}
         {canAddIdeas && ideasOverview}
-        {hasAppNav && sectionTab === '' && (
+        {hasAppNav && sectionTab === '' && !isActive && (
           <div className='mt-5 space-y-3'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
             <RentalsEntry onOpen={() => setSectionTab('rentals')} />

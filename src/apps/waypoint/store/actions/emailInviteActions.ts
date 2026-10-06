@@ -83,7 +83,8 @@ export const acceptEmailInvite = createAsyncThunk<
   try {
     await batch.commit();
   } catch (error) {
-    return rejectWithValue(getErrorMessage(error, 'Unable to join this trip.'));
+    console.error('Joining from an email invitation failed', error);
+    return rejectWithValue("We couldn't add you to this trip. You may already be on it, or an Admin may have changed your invitation.");
   }
 
   // A request sent earlier is moot now; failing to clear it leaves a harmless stale row for an Admin to decline.

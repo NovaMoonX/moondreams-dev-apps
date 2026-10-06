@@ -16,13 +16,17 @@ interface MyEmailInvitesProps {
   uid: string;
   invites: TripEmailInvite[];
   onViewTrip: (tripId: string) => void;
+  /** Another prompt owns the screen (a join link), so this one waits behind its icon button. */
+  isQuiet?: boolean;
+  /** The trip the page is trying to open: an invitation to it is shown even if it was put away before. */
+  focusTripId?: string | null;
 }
 
 const dismissedKey = (uid: string) => `waypoint.invitesDismissed.${uid}`;
 
 const readDismissed = (uid: string): string[] => {
   try {
-    return JSON.parse(sessionStorage.getItem(dismissedKey(uid)) ?? '[]') as string[];
+    return JSON.parse(localStorage.getItem(dismissedKey(uid)) ?? '[]') as string[];
   } catch {
     return [];
   }
@@ -30,20 +34,22 @@ const readDismissed = (uid: string): string[] => {
 
 const writeDismissed = (uid: string, tripIds: string[]) => {
   try {
-    sessionStorage.setItem(dismissedKey(uid), JSON.stringify(tripIds));
+    localStorage.setItem(dismissedKey(uid), JSON.stringify(tripIds));
   } catch {
     // The choice still holds for this visit without storage.
   }
 };
 
-/** Trips whose Admin already set up the signed-in email. They open once as a prompt to join, then stay one tap away behind an icon button. */
-function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
+/** Trips whose Admin already set up the signed-in email. Each opens once as a prompt to join (remembered per person), then stays one tap away behind an icon button. */
+function MyEmailInvites({ uid, invites, onViewTrip, isQuiet = false, focusTripId = null }: MyEmailInvitesProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const [dismissed, setDismissed] = useState(() => readDismissed(uid));
   const [pinned, setPinned] = useState<TripEmailInvite | null>(null);
-  const shown = pinned ?? invites.find((invite) => !dismissed.includes(invite.tripId)) ?? null;
+  const focused = invites.find((invite) => invite.tripId === focusTripId);
+  const unseen = isQuiet ? undefined : invites.find((invite) => !dismissed.includes(invite.tripId));
+  const shown = pinned ?? focused ?? unseen ?? null;
   const { data: title } = useQuery({ ...tripTitleQueryOptions(shown?.tripId ?? ''), enabled: shown !== null });
 
   const close = () => {
@@ -83,7 +89,8 @@ function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
           variant='secondary'
           size='icon'
           aria-label={`Trip invitations (${invites.length})`}
-          className='relative shrink-0'
+          title='Trip invitations'
+          className='relative size-10 min-w-10 shrink-0 p-0'
           onClick={() => {
             setDismissed([]);
             writeDismissed(uid, []);

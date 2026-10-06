@@ -191,7 +191,7 @@ export function StayFormModal({
   const applyUpload = (fields: StayFields) => {
     const uploaded = { ...fields, id: '', tripId: trip.id, createdBy: '', createdAt: 0, lastEditedAt: 0 } as Stay;
     const next = getInitialDraft(trip, uploaded);
-    const readAddress = Boolean(fields.address) && fields.address !== fields.name;
+    const readAddress = Boolean(fields.address);
     setDraft((current) => ({
       ...next,
       name: next.name || current.name,

@@ -50,6 +50,10 @@ html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='bo
 
 /* A chosen pill keeps its own colors and says "selected" with a primary outline, so an emoji or a dark
    label is as readable as on an unchosen one (a solid fill swallows both). */
+html.waypoint-theme [data-pill] {
+  min-height: 2.5rem;
+}
+
 html.waypoint-theme [data-pill][aria-pressed='true'] {
   background-color: color-mix(in oklab, var(--color-primary) 12%, var(--color-background));
   color: var(--color-foreground);

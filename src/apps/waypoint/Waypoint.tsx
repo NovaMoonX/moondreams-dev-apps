@@ -253,6 +253,8 @@ function Waypoint() {
                   uid={user.uid}
                   invites={emailInvites.filter((invite) => !trips.some((trip) => trip.id === invite.tripId))}
                   onViewTrip={handleViewInvitedTrip}
+                  isQuiet={Boolean(inviteCode)}
+                  focusTripId={selectedTripId}
                 />
               </div>
               <Button

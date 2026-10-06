@@ -168,7 +168,7 @@ export function stayToFields(trip: TripSpace, extracted: ExtractedBooking): Auto
   const value: StayFields = {
     name: name ?? '',
     stayType: item.stayType ?? 'HOTEL',
-    address: clean(item.address) ?? name ?? '',
+    address: clean(item.address) ?? '',
     latitude: null,
     longitude: null,
     checkInAt: null,

@@ -11,6 +11,7 @@ import DateRangeField, {
   type DateRangeValue,
 } from '@/components/forms/DateRangeField';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
@@ -121,18 +122,18 @@ function CreateTripModal({
           void handleSubmit(data as CreateTripFormData);
         }}
         submitButton={
-          <div className='flex justify-end gap-2'>
-            <Button type='button' variant='secondary' onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type='submit'
-              loading={isSubmitting}
-              disabled={isSubmitting || !isFormComplete}
-            >
-              {isSubmitting ? 'Creating…' : 'Create trip'}
-            </Button>
-          </div>
+          <ModalFooterActions
+            cancelAction={
+              <Button type='button' variant='secondary' onClick={onClose}>
+                Cancel
+              </Button>
+            }
+            rightActions={
+              <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
+                {isSubmitting ? 'Creating…' : 'Create trip'}
+              </Button>
+            }
+          />
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}

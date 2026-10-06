@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 
+import { useUserInfo } from '@/hooks/useUserInfo';
+
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -26,6 +28,8 @@ interface EmailInviteJoinModalProps {
 function EmailInviteJoinModal({ invite, uid, onJoined, onDecline, onViewTrip, onClose }: EmailInviteJoinModalProps) {
   const dispatch = useAppDispatch();
   const { data: title } = useQuery(tripTitleQueryOptions(invite.tripId));
+  const inviter = useUserInfo([invite.invitedBy])?.map[invite.invitedBy];
+  const inviterName = inviter?.displayName?.trim() || 'An Admin';
   const [isJoining, setIsJoining] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +77,7 @@ function EmailInviteJoinModal({ invite, uid, onJoined, onDecline, onViewTrip, on
     <Modal isOpen onClose={onClose} title='Trip invitation'>
       <div className='space-y-4 pt-1'>
         <p className='text-sm'>
-          An Admin set you up on {tripName}, so you can join without asking.
+          {inviterName} added you to {tripName}, so you can join without asking.
         </p>
         <div className='bg-muted/60 rounded-xl p-3 text-sm'>
           <p className='font-medium'>Joining as {MEMBER_ROLE_LABELS[invite.role]}</p>
