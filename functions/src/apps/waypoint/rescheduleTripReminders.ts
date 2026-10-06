@@ -9,6 +9,8 @@ if (getApps().length === 0) {
 }
 
 const DAY_MS = 86_400_000;
+// An event may be dated this many days before the first day or after the last (the app's MAX_DAYS_OUTSIDE_TRIP).
+const DAYS_OUTSIDE_TRIP = 3;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const WATCHED_TRIP_FIELDS = ['startDate', 'endDate', 'timezone'] as const;
@@ -30,8 +32,8 @@ function getReminderInstant(trip: DocumentData, event: DocumentData): number | n
   const zone = event.timezone ?? trip.timezone;
   const isScheduled =
     typeof dayIndex === 'number' &&
-    dayIndex >= 0 &&
-    dayIndex < dayCount &&
+    dayIndex >= -DAYS_OUTSIDE_TRIP &&
+    dayIndex < dayCount + DAYS_OUTSIDE_TRIP &&
     typeof startTime === 'string' &&
     TIME_PATTERN.test(startTime) &&
     typeof zone === 'string';
@@ -50,7 +52,7 @@ function getReminderInstant(trip: DocumentData, event: DocumentData): number | n
 /**
  * Re-times every event reminder when a relative trip's dates or time zone change. Reminders are
  * absolute instants (that's all the delivery function understands), so they have to follow the
- * trip: moved when the event is still on the calendar, cancelled when it has fallen outside the
+ * trip: moved when the event is still on the calendar, cancelled when it has fallen more than a few days outside the
  * trip's dates or has no day, and re-created if an event comes back into range after its reminder
  * was cancelled or already sent. Everything is re-derived from the stored events, so a concurrent
  * event edit simply converges on the same answer.

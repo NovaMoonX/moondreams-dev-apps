@@ -48,12 +48,15 @@ function relativeEventTime({
   start,
   end = null,
   timezone = null,
+  endTimezone = null,
 }: {
   day: number;
   endDay?: number;
   start: string;
   end?: string | null;
   timezone?: string | null;
+  /** The end's zone when it differs from the start's. */
+  endTimezone?: string | null;
 }) {
   return {
     dayIndex: day,
@@ -63,6 +66,7 @@ function relativeEventTime({
     startTime: start,
     endTime: end,
     timezone,
+    endTimezone,
   };
 }
 
@@ -76,6 +80,7 @@ function absoluteEventTime(startAt: number, endAt: number, tripStart: number) {
     startTime: null,
     endTime: null,
     timezone: null,
+    endTimezone: null,
   };
 }
 
@@ -507,7 +512,13 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-flight',
     tripId: TRIP_ID,
     eventType: 'TRAVEL',
-    ...relativeEventTime({ day: 0, start: '09:00', end: '11:05', timezone: 'America/New_York' }),
+    ...relativeEventTime({
+      day: 0,
+      start: '09:00',
+      end: '11:05',
+      timezone: 'America/New_York',
+      endTimezone: 'America/Chicago',
+    }),
     title: 'Flight DL 482',
     locationName: 'John F. Kennedy International Airport',
     address: null,
@@ -555,7 +566,13 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     id: 'seed-waypoint-flight-2',
     tripId: TRIP_ID,
     eventType: 'TRAVEL',
-    ...relativeEventTime({ day: 0, start: '12:30', end: '14:30', timezone: 'America/New_York' }),
+    ...relativeEventTime({
+      day: 0,
+      start: '12:30',
+      end: '14:30',
+      timezone: 'America/Chicago',
+      endTimezone: 'America/Los_Angeles',
+    }),
     title: 'Flight DL 1190',
     locationName: 'Seattle-Tacoma International Airport',
     address: null,
@@ -875,6 +892,37 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     createdAt: joinedAt,
     lastEditedAt: context.now - 1_800_000,
   });
+
+  await checklistCollection.doc('book-rental-early').set({
+    id: 'book-rental-early',
+    tripId: TRIP_ID,
+    title: 'Book the rental car before prices climb',
+    category: 'BOOKINGS',
+    customCategoryLabel: null,
+    note: 'Due two months ahead; it stays two months before the trip if the dates move.',
+    completeByDayIndex: -60,
+    assignedToUids: [alex.uid],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
+  // A pre-approved invitation: Jamie joins the empty trip as an Editor without asking.
+  await context.firestore
+    .collection('apps')
+    .doc('waypoint')
+    .collection('emailInvites')
+    .doc(`${EMPTY_TRIP_ID}_${jamie.email}`)
+    .set({
+      tripId: EMPTY_TRIP_ID,
+      email: jamie.email,
+      role: 'EDITOR',
+      invitedBy: alex.uid,
+      invitedAt: context.now,
+    });
 
   const activeEventsCollection = activeTripRef.collection('events');
   const activeStaysCollection = activeTripRef.collection('stays');
@@ -1736,6 +1784,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 76,
+    firestoreDocuments: 78,
   };
 }

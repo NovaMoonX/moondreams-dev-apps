@@ -3,13 +3,14 @@ import {
   getEndOfLocalDay,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
-import { getDayCount, getDayDateLabel, getDayInputValue } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayDateLabel, getDayInputValue, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { formatClockTime, formatDateTime } from '@/utils/formatUtils';
 import {
   formatTimezoneAbbreviation,
   formatTimezoneLabel,
   zonedDateTimeToEpoch,
 } from '@/utils/timezoneUtils';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
   EventSuggestion,
   Rental,
@@ -23,6 +24,13 @@ const DAY_MS = 86_400_000;
 
 export function getTimeModel(trip: TripSpace): TripTimeModel {
   return trip.timeModel ?? 'ABSOLUTE';
+}
+
+/** Today's day number while the trip is on, otherwise its first day: where a new item most likely belongs. */
+export function getDefaultDayIndex(trip: TripSpace, now: number = Date.now()) {
+  const today = getLocalDayIndex(trip.startDate, now);
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  return today >= 0 && today < dayCount ? today : 0;
 }
 
 export function isRelativeTrip(trip: TripSpace) {
@@ -53,9 +61,12 @@ export function toTripMoment(
   }
 }
 
+/** A day within the trip or its few days of buffer on either side, which is as far out as a time can be placed. */
 function isInTripRange(trip: TripSpace, dayIndex: number | null): dayIndex is number {
   const result =
-    dayIndex !== null && dayIndex >= 0 && dayIndex < getDayCount(trip.startDate, trip.endDate);
+    dayIndex !== null &&
+    dayIndex >= -MAX_DAYS_OUTSIDE_TRIP &&
+    dayIndex < getDayCount(trip.startDate, trip.endDate) + MAX_DAYS_OUTSIDE_TRIP;
   return result;
 }
 
@@ -64,7 +75,10 @@ export interface ResolvedEventTime {
   endDayIndex: number | null;
   startTime: string | null;
   endTime: string | null;
+  /** The zone the start is in. */
   timezone: string | null;
+  /** The zone the end is in: the start's own unless the event overrides it. */
+  endTimezone: string | null;
   /** Real instants; `null` when the event has no day or sits outside the trip's dates. */
   startMs: number | null;
   endMs: number | null;
@@ -75,7 +89,8 @@ export interface ResolvedEventTime {
 export type EventTimeSource = Pick<
   TimelineEvent,
   'dayIndex' | 'endDayIndex' | 'startAt' | 'endAt' | 'startTime' | 'endTime' | 'timezone'
->;
+> &
+  Partial<Pick<TimelineEvent, 'endTimezone'>>;
 
 export function getEventTime(trip: TripSpace, event: EventTimeSource): ResolvedEventTime {
   if (!isRelativeTrip(trip)) {
@@ -87,6 +102,7 @@ export function getEventTime(trip: TripSpace, event: EventTimeSource): ResolvedE
       startTime: toLocalTimeInputValue(startAt) || null,
       endTime: toLocalTimeInputValue(endAt) || null,
       timezone: null,
+      endTimezone: null,
       startMs: startAt,
       endMs: endAt,
       impliedEndMs: endAt ?? (startAt === null ? null : getEndOfLocalDay(startAt)),
@@ -98,15 +114,16 @@ export function getEventTime(trip: TripSpace, event: EventTimeSource): ResolvedE
   const startTime = event.startTime ?? null;
   const endTime = event.endTime ?? null;
   const timezone = getEffectiveTimezone(trip, event.timezone);
+  const endTimezone = getEffectiveTimezone(trip, event.endTimezone ?? event.timezone);
   const isTimed = isInTripRange(trip, dayIndex) && startTime !== null;
   const startMs = isTimed ? toTripMoment(trip, dayIndex, startTime, timezone) : null;
   const endMs =
     isTimed && endTime !== null && endDayIndex !== null
-      ? toTripMoment(trip, endDayIndex, endTime, timezone)
+      ? toTripMoment(trip, endDayIndex, endTime, endTimezone)
       : null;
   const impliedEndMs = isTimed ? (endMs ?? toTripMoment(trip, dayIndex + 1, '00:00', timezone)) : null;
 
-  return { dayIndex, endDayIndex, startTime, endTime, timezone, startMs, endMs, impliedEndMs };
+  return { dayIndex, endDayIndex, startTime, endTime, timezone, endTimezone, startMs, endMs, impliedEndMs };
 }
 
 export interface DayTimeValue {
@@ -217,7 +234,7 @@ export function getRentalTime(trip: TripSpace, rental: RentalTimeSource): Resolv
 
 export type EventTimeFields = Pick<
   TimelineEvent,
-  'dayIndex' | 'endDayIndex' | 'startAt' | 'endAt' | 'startTime' | 'endTime' | 'timezone'
+  'dayIndex' | 'endDayIndex' | 'startAt' | 'endAt' | 'startTime' | 'endTime' | 'timezone' | 'endTimezone'
 >;
 
 export interface EventTimeDraft {
@@ -226,6 +243,8 @@ export interface EventTimeDraft {
   startTime: string;
   endTime: string | null;
   timezone: string | null;
+  /** `null` keeps the end in the start's zone. */
+  endTimezone: string | null;
 }
 
 /** `null` when a legacy draft has no day to build a timestamp from. */
@@ -240,6 +259,7 @@ export function buildEventTimeFields(trip: TripSpace, draft: EventTimeDraft): Ev
       startTime: draft.startTime,
       endTime: hasEnd ? draft.endTime : null,
       timezone: draft.timezone,
+      endTimezone: hasEnd && draft.endTimezone !== draft.timezone ? draft.endTimezone : null,
     };
   }
 
@@ -267,6 +287,7 @@ export function buildEventTimeFields(trip: TripSpace, draft: EventTimeDraft): Ev
     startTime: null,
     endTime: null,
     timezone: null,
+    endTimezone: null,
   };
 }
 
@@ -322,18 +343,30 @@ export function formatEventTimeRange(
   event: EventTimeSource,
   zoneStyle: ZoneStyle = 'short',
 ) {
-  const { dayIndex, endDayIndex, startTime, endTime, timezone, startMs } = getEventTime(trip, event);
+  const { dayIndex, endDayIndex, startTime, endTime, timezone, endTimezone, startMs, endMs } = getEventTime(
+    trip,
+    event,
+  );
   if (!startTime) {
     return '';
   }
 
+  const isRelative = isRelativeTrip(trip);
+  const hasOwnEndZone = isRelative && endTime !== null && endTimezone !== timezone;
   const endsOnAnotherDay = dayIndex !== null && endDayIndex !== null && endDayIndex !== dayIndex;
-  const end = endTime ? ` - ${endsOnAnotherDay ? `Day ${endDayIndex + 1} ` : ''}${formatClockTime(endTime)}` : '';
-  const zone =
-    isRelativeTrip(trip) && timezone && timezone !== trip.timezone
-      ? ` · ${formatZone(timezone, zoneStyle, startMs)}`
+  const endDay =
+    endsOnAnotherDay && endDayIndex !== null
+      ? `${endDayIndex >= 0 ? `Day ${endDayIndex + 1}` : getDayDateLabel(trip.startDate, endDayIndex)} `
       : '';
-  const result = `${formatClockTime(startTime)}${end}${zone}`;
+  const startZone =
+    isRelative && timezone && (hasOwnEndZone || timezone !== trip.timezone)
+      ? ` ${formatZone(timezone, zoneStyle, startMs)}`
+      : '';
+  const endZone = hasOwnEndZone && endTimezone ? ` ${formatZone(endTimezone, zoneStyle, endMs)}` : '';
+  const end = endTime ? ` - ${endDay}${formatClockTime(endTime)}${endZone}` : '';
+  const result = hasOwnEndZone
+    ? `${formatClockTime(startTime)}${startZone}${end}`
+    : `${formatClockTime(startTime)}${end}${startZone ? ` ·${startZone}` : ''}`;
   return result;
 }
 

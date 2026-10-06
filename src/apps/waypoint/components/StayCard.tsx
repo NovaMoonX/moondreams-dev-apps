@@ -193,7 +193,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
           imageUrl={imageUrl}
           location={getStayLocation(stay)}
           linkUrl={stay.linkUrl}
-          onEdit={canEdit ? () => onEdit(stay, closeDrawer) : null}
+          onEdit={canEdit ? () => { closeDrawer(); onEdit(stay); } : null}
         >
           <StayDetailLines
             trip={trip}

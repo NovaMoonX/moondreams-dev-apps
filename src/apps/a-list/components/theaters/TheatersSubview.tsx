@@ -8,8 +8,8 @@ import Subview, { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import TheaterFinder from '@apps/a-list/components/theaters/TheaterFinder';
 import TheaterList from '@apps/a-list/components/theaters/TheaterList';
+import TheaterPicker from '@apps/a-list/components/theaters/TheaterPicker';
 import { MAX_THEATRES } from '@apps/a-list/constants';
 import {
   addTheatre,
@@ -17,7 +17,7 @@ import {
   setFavoriteTheatre,
 } from '@apps/a-list/store/actions/theatreActions';
 import { selectMembership, selectTheatres } from '@apps/a-list/store/selectors';
-import type { TheatreSearchResult, TheatreSnapshot } from '@apps/a-list/types';
+import type { TheatreDraft, TheatreSnapshot } from '@apps/a-list/types';
 
 interface TheatersSubviewProps {
   onClose: () => void;
@@ -53,7 +53,7 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
     }
   };
 
-  const handleAdd = (theatre: TheatreSearchResult) =>
+  const handleAdd = (theatre: TheatreDraft) =>
     run(
       () =>
         dispatch(
@@ -111,8 +111,9 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
           title='Back to theaters'
           onBack={() => setIsAdding(false)}
         />
-        <TheaterFinder
+        <TheaterPicker
           savedIds={theatres.map((theatre) => theatre.theatreId)}
+          savedNames={theatres.map((theatre) => theatre.name)}
           isDisabled={isSaving}
           onAdd={(theatre) => void handleAdd(theatre)}
         />

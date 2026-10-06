@@ -112,8 +112,10 @@ This checklist names the sections to walk; the rules themselves live there:
   audit (do it on every file touched this session, including your own edits,
   and re-check right before wrap-up), no IIFEs, no setState-in-effect, Dreamer
   UI components, `AppToggle`, toggle-vs-checkbox.
-- **Forms, modals, and CRUD conventions** — noun titles, submit disabling,
-  reveal links, `key` on modals, confirm dialogs, delete icon placement,
+- **Forms and CRUD conventions** — noun titles, submit disabling,
+  reveal links vs asked journey details, `key` on form containers, confirm
+  dialogs, delete icon placement, modal vs drawer vs subview (measure every
+  form on a phone; none may be a long modal),
   requester-side cancel on pending-request features, single-declaration
   option lists.
 - **State, data, and performance** — listeners in `store/listeners/`,

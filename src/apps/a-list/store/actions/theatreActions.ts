@@ -3,22 +3,18 @@ import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
-import type { AListTheatre, TheatreSearchResult } from '@apps/a-list/types';
+import type { AListTheatre, TheatreDraft } from '@apps/a-list/types';
 
-/** The fields a saved theater keeps; `distanceMiles` belongs to one search only. */
-export function toTheatre(
-  result: TheatreSearchResult,
-  now: number,
-): AListTheatre {
+export function toTheatre(draft: TheatreDraft, now: number): AListTheatre {
   return {
-    theatreId: result.theatreId,
-    name: result.name,
-    addressLine: result.addressLine ?? null,
-    city: result.city ?? null,
-    state: result.state ?? null,
-    postalCode: result.postalCode ?? null,
-    latitude: result.latitude ?? null,
-    longitude: result.longitude ?? null,
+    theatreId: draft.theatreId,
+    name: draft.name,
+    addressLine: draft.addressLine ?? null,
+    city: draft.city ?? null,
+    state: draft.state ?? null,
+    postalCode: draft.postalCode ?? null,
+    latitude: draft.latitude ?? null,
+    longitude: draft.longitude ?? null,
     createdAt: now,
     lastEditedAt: now,
   };
@@ -32,7 +28,7 @@ const getTheatreRef = (uid: string, theatreId: string) =>
 
 interface AddTheatreInput {
   uid: string;
-  theatre: TheatreSearchResult;
+  theatre: TheatreDraft;
   /** True when no theater is saved yet: only then does the new one become the favorite. */
   isFirst: boolean;
 }

@@ -33,3 +33,6 @@ tsconfig.app.tsbuildinfo
 .scaffold-progress
 .scaffold-config
 firebase.lan.json
+
+__pycache__/
+*.pyc

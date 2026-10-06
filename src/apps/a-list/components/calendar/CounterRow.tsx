@@ -18,10 +18,11 @@ function CounterRow({ now }: CounterRowProps) {
   );
 
   const { openOverlay } = useAListOverlay();
-  const setGoalPrompt = {
-    label: '🎯 Set a goal',
+  const getGoalPrompt = (ariaLabel: string) => ({
+    label: '🎯 Set',
+    ariaLabel,
     onClick: () => openOverlay({ kind: 'membership' }),
-  };
+  });
 
   const getGoalValue = (current: number, goal: number | null) =>
     goal === null ? current : `${current}/${goal}`;
@@ -50,7 +51,11 @@ function CounterRow({ now }: CounterRowProps) {
             ? undefined
             : { current: counters.thisWeek, target: counters.weeklyGoal }
         }
-        prompt={counters.weeklyGoal === null ? setGoalPrompt : undefined}
+        prompt={
+          counters.weeklyGoal === null
+            ? getGoalPrompt('Set a weekly goal')
+            : undefined
+        }
       />
       <StatTile
         isStacked
@@ -62,7 +67,11 @@ function CounterRow({ now }: CounterRowProps) {
             ? undefined
             : { current: counters.thisMonth, target: counters.monthlyGoal }
         }
-        prompt={counters.monthlyGoal === null ? setGoalPrompt : undefined}
+        prompt={
+          counters.monthlyGoal === null
+            ? getGoalPrompt('Set a monthly goal')
+            : undefined
+        }
       />
     </div>
   );

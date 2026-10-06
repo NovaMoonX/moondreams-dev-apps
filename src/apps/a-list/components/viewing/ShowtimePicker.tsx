@@ -9,6 +9,7 @@ import { AMC_FORMAT_LABELS } from '@apps/a-list/constants';
 import { findShowtimesQueryOptions } from '@apps/a-list/queries/showtimeQueries';
 import type { ShowtimeOption, TheatreSnapshot } from '@apps/a-list/types';
 import { formatCents } from '@apps/a-list/utils/money';
+import { isTypedTheatre } from '@apps/a-list/utils/theatres';
 
 interface ShowtimePickerProps {
   theatre: TheatreSnapshot;
@@ -33,20 +34,25 @@ function ShowtimePicker({
   offersAmcFallback = false,
 }: ShowtimePickerProps) {
   const isPastDay = dateKey < toLocalDateInputValue(now);
+  const isTyped = isTypedTheatre(theatre);
   const showtimes = useQuery({
     ...findShowtimesQueryOptions({
       theatreId: theatre.theatreId,
       date: dateKey,
       title,
     }),
-    enabled: !isPastDay && dateKey !== '',
+    enabled: !isPastDay && !isTyped && dateKey !== '',
   });
+
+  const isLooking = showtimes.isPending && showtimes.fetchStatus !== 'idle';
 
   const getNote = () => {
     if (dateKey === '') return null;
     if (isPastDay)
       return 'AMC only shares showtimes and prices for upcoming days, so this one is yours to enter.';
-    if (showtimes.isPending) return 'Looking up showtimes…';
+    if (isTyped)
+      return `${theatre.name} was typed in by hand, so AMC can't list its showtimes. This one is yours to enter.`;
+    if (isLooking) return 'Looking up showtimes…';
     if (
       showtimes.error instanceof FirebaseError &&
       (showtimes.error.code === 'functions/resource-exhausted' ||
@@ -80,7 +86,7 @@ function ShowtimePicker({
             : `AMC isn’t showing ${title} at this theater that day yet. Schedules usually post a few weeks ahead.`}
         </p>
       )}
-      {offersAmcFallback && !showtimes.isPending && open.length === 0 && (
+      {offersAmcFallback && !isLooking && open.length === 0 && (
         <ExternalLinkText
           href='https://www.amctheatres.com/'
           label='Buy on amctheatres.com instead'

@@ -3,10 +3,7 @@ import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { toTheatre } from '@apps/a-list/store/actions/theatreActions';
-import type {
-  MembershipProfile,
-  TheatreSearchResult,
-} from '@apps/a-list/types';
+import type { MembershipProfile, TheatreDraft } from '@apps/a-list/types';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 export interface SetupDraft {
@@ -18,7 +15,7 @@ export interface SetupDraft {
   weeklyGoal: number | null;
   monthlyGoal: number | null;
   /** Theaters picked in the last step; the first is the favorite unless `favoriteTheatreId` says otherwise. */
-  theatres: TheatreSearchResult[];
+  theatres: TheatreDraft[];
   favoriteTheatreId: string | null;
 }
 

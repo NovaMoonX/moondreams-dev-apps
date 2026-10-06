@@ -54,6 +54,7 @@ function formatStackSpan(trip: TripSpace, events: TimelineEvent[]) {
     endDayIndex: last.event.endDayIndex ?? last.event.dayIndex,
     endTime: last.event.endTime ?? last.event.startTime,
     endAt: last.event.endAt ?? last.event.startAt,
+    endTimezone: last.event.endTime ? (last.event.endTimezone ?? last.event.timezone) : last.event.timezone,
   };
   const day = first.event.dayIndex === null ? '' : `${getDayDateLabel(trip.startDate, first.event.dayIndex)} · `;
   const result = `${day}${formatEventTimeRange(trip, span)}`;
@@ -133,7 +134,7 @@ function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, on
               {badge.emoji} {badge.label}
             </Badge>
             <span className='text-muted-foreground text-sm'>
-              {stack.members.length} trips · {formatStackSpan(trip, stack.events)}
+              {stack.members.length} {stack.members.length === 1 ? 'trip' : 'trips'} · {formatStackSpan(trip, stack.events)}
             </span>
           </div>
           {showAttendees && <EventAttendeeAvatars trip={trip} events={stack.events} includeEveryone />}
@@ -165,7 +166,8 @@ function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, on
         </div>
       </div>
       {isExpanded && (
-        <div className='ml-4 space-y-3 border-l-2 pl-4'>
+        <div className='ml-4 space-y-3 border-l-2 border-primary/30 pl-4'>
+          {stack.members.length > 1 && (
           <div className='flex items-center justify-between'>
             <span className='text-muted-foreground text-xs tabular-nums'>
               Trip {currentIndex + 1} of {stack.members.length}
@@ -193,12 +195,14 @@ function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, on
               </Button>
             </div>
           </div>
+          )}
           <Itinerary
             trip={trip}
             member={currentMember}
             renderEvent={renderEvent}
             onManageGroup={canEdit ? onManageGroup : null}
           />
+          {stack.members.length > 1 && (
           <div className='flex items-center justify-center'>
             {stack.members.map((member, index) => (
               <Button
@@ -219,6 +223,7 @@ function EventStackCard({ trip, stack, currentUserId, showAttendees, canEdit, on
               </Button>
             ))}
           </div>
+          )}
           <p className='text-muted-foreground text-center text-xs'>End of {stack.label}</p>
         </div>
       )}

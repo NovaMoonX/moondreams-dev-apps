@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import DetailSheet from '@/components/DetailSheet';
 
 interface NotesViewButtonProps {
   title: string;
@@ -25,9 +27,9 @@ export function NotesViewButton({ title, notes }: NotesViewButtonProps) {
       >
         View notes
       </Button>
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
+      <DetailSheet isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
         <p className='text-sm whitespace-pre-line'>{notes}</p>
-      </Modal>
+      </DetailSheet>
     </>
   );
 }

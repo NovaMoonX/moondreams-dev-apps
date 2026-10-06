@@ -93,7 +93,8 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
     <section className='space-y-4 pt-4'>
       <SectionHeader
         title='Stays'
-        action={canAddStays && <Button onClick={() => setIsModalOpen(true)}>Add stay</Button>}
+        subtitle={`${stays.length} ${stays.length === 1 ? 'stay' : 'stays'}`}
+        action={canAddStays && <Button onClick={() => setIsModalOpen(true)}>Add</Button>}
       />
       {stays.length === 0 ? (
         <p className='text-muted-foreground text-sm'>No stays planned yet.</p>

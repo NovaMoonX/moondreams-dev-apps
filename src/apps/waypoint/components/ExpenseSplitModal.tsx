@@ -1,15 +1,11 @@
 import { useMemo, useState } from 'react';
 
-import {
-  Button,
-  Checkbox,
-  Input,
-  Label,
-  Modal,
-  Select,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -36,10 +32,10 @@ interface ExpenseSplitModalProps {
   onClose: () => void;
 }
 
-const targetTypeOptions: { value: ExpenseTargetType; text: string }[] = [
-  { value: 'EVERYONE_CURRENT', text: 'Everyone on the trip' },
-  { value: 'JUST_ME', text: 'Just me' },
-  { value: 'SPECIFIC_MEMBERS', text: 'Specific members' },
+const targetTypeOptions: { value: ExpenseTargetType; label: string; emoji: string }[] = [
+  { value: 'EVERYONE_CURRENT', label: 'Everyone', emoji: '👥' },
+  { value: 'JUST_ME', label: 'Just me', emoji: '🙋' },
+  { value: 'SPECIFIC_MEMBERS', label: 'Pick people', emoji: '🎯' },
 ];
 
 function ExpenseSplitModal({
@@ -127,15 +123,13 @@ function ExpenseSplitModal({
     updateAmount(uid, ((percent / 100) * amount).toFixed(2));
   };
 
-  const toggleSpecificMember = (uid: string, checked: boolean) => {
-    setSpecificMemberIds((current) =>
-      checked ? [...current, uid] : current.filter((id) => id !== uid),
-    );
+  const handleSpecificMembersChange = (uids: string[]) => {
+    setSpecificMemberIds(uids);
     setCustomSplitAmounts(null);
   };
 
-  const handleTargetTypeChange = (value: string) => {
-    setTargetType(value as ExpenseTargetType);
+  const handleTargetTypeChange = (value: ExpenseTargetType) => {
+    setTargetType(value);
     setCustomSplitAmounts(null);
   };
 
@@ -178,7 +172,7 @@ function ExpenseSplitModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Split'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Split'>
       <div className='space-y-4'>
         {expense.isPerPerson && (
           <p className='text-muted-foreground text-sm'>
@@ -189,27 +183,20 @@ function ExpenseSplitModal({
         )}
         <div className='space-y-1.5'>
           <Label>Split with</Label>
-          <Select
+          <PillGroup
+            label='Split with'
             options={targetTypeOptions}
             value={targetType}
             onChange={handleTargetTypeChange}
           />
         </div>
         {targetType === 'SPECIFIC_MEMBERS' && (
-          <div className='space-y-1.5'>
-            <Label>Members</Label>
-            <div className='space-y-2'>
-              {memberIds.map((uid) => (
-                <label key={uid} className='flex items-center gap-2 text-sm'>
-                  <Checkbox
-                    checked={specificMemberIds.includes(uid)}
-                    onCheckedChange={(checked) => toggleSpecificMember(uid, checked)}
-                  />
-                  {memberLabel(uid)}
-                </label>
-              ))}
-            </div>
-          </div>
+          <MultiPillGroup
+            label='Members'
+            options={memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) }))}
+            values={specificMemberIds}
+            onChange={handleSpecificMembersChange}
+          />
         )}
         {splitMemberIds.length > 0 && (
           <div className='space-y-1.5'>
@@ -276,22 +263,26 @@ function ExpenseSplitModal({
             )}
           </div>
         )}
-        <div className='flex justify-end gap-2'>
-          <Button type='button' variant='secondary' onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type='button'
-            loading={isSubmitting}
-            disabled={isSubmitting || !isMemberSelectionValid || !isAmountsValid}
-            onClick={() => void handleSubmit()}
-          >
-            {isSubmitting ? 'Saving…' : 'Save split'}
-          </Button>
-        </div>
+        <ModalFooterActions
+          cancelAction={
+              <Button type='button' variant='secondary' onClick={onClose}>
+                Cancel
+              </Button>
+          }
+          rightActions={
+            <Button
+                type='button'
+                loading={isSubmitting}
+                disabled={isSubmitting || !isMemberSelectionValid || !isAmountsValid}
+                onClick={() => void handleSubmit()}
+              >
+                {isSubmitting ? 'Saving…' : 'Save'}
+              </Button>
+          }
+        />
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
-    </Modal>
+    </FormSheet>
   );
 }
 

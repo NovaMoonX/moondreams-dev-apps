@@ -26,7 +26,7 @@ import {
   type EventReminderSource,
   scheduleEventReminder,
 } from '@apps/waypoint/utils/reminders';
-import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
+import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import { canArchiveEvent, canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateEventInput {
@@ -67,6 +67,12 @@ const RELATIVE_TRACKED_FIELDS = ['startTime', 'endTime', 'locationName', 'dayInd
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// Clock times in two zones can't be compared as text (a flight can land at an earlier clock time than it left).
+function isEndAfterStartAcrossZones(trip: TripSpace, event: EventFields) {
+  const { startMs, endMs } = getEventTime(trip, event);
+  return startMs === null || endMs === null || endMs > startMs;
+}
+
 export function validateEventTime(trip: TripSpace, event: EventFields) {
   const message = 'Choose a valid event date and time.';
   if (!isRelativeTrip(trip)) {
@@ -80,11 +86,13 @@ export function validateEventTime(trip: TripSpace, event: EventFields) {
     event.dayIndex === null ||
     event.endDayIndex === null ||
     event.endDayIndex >= event.dayIndex;
-  const endsAfterStart =
-    event.endTime === null ||
-    event.startTime === null ||
-    (event.endDayIndex ?? event.dayIndex) !== event.dayIndex ||
-    event.endTime > event.startTime;
+  const hasOwnEndZone = event.endTime !== null && (event.endTimezone ?? event.timezone) !== event.timezone;
+  const endsAfterStart = hasOwnEndZone
+    ? isEndAfterStartAcrossZones(trip, event)
+    : event.endTime === null ||
+      event.startTime === null ||
+      (event.endDayIndex ?? event.dayIndex) !== event.dayIndex ||
+      event.endTime > event.startTime;
   if (!endsAfterStart) {
     return 'The end time needs to be after the start time.';
   }
@@ -294,6 +302,7 @@ function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
     startTime: null,
     endTime: null,
     timezone: null,
+    endTimezone: null,
     eventDetails: null,
     attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: [],

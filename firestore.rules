@@ -115,7 +115,7 @@ service cloud.firestore {
       }
 
       function isTheatreId(value) {
-        return value is string && value.matches('^[0-9]{1,8}$');
+        return value is string && value.matches('^([0-9]{1,8}|manual-[A-Za-z0-9-]{8,40})$');
       }
 
       function isMembershipValid(data) {
@@ -1796,15 +1796,43 @@ service cloud.firestore {
           );
       }
 
+      // Someone an Admin invited by email joins themselves, without a request: only as the role the
+      // invitation names, only as themselves, and only by using up that invitation in the same commit.
+      // They can't read the trip yet, so every check here is against the write and the invitation. Only
+      // `members` and `lastEditedAt` may change, so the rest of the document keeps the shape it already had.
+      function isTripEmailInviteJoinValid() {
+        let uid = request.auth.uid;
+        let email = request.auth.token.get('email', '').lower();
+        let invitePath = /databases/$(database)/documents/apps/waypoint/emailInvites/$(tripId + '_' + email);
+        let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
+        return request.auth.token.get('email_verified', false) == true
+          && email != ''
+          && !(uid in resource.data.members)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'lastEditedAt'])
+          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && request.resource.data.members.keys().hasAll(resource.data.members.keys())
+          && addedUids.size() == 1
+          && addedUids[0] == uid
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([uid])
+          && isTripMemberEntryValid(request.resource.data.members[uid], uid)
+          && exists(invitePath)
+          && get(invitePath).data.tripId == tripId
+          && get(invitePath).data.invitedBy in resource.data.members
+          && resource.data.members[get(invitePath).data.invitedBy].role == 'ADMIN'
+          && get(invitePath).data.role == request.resource.data.members[uid].role
+          && !existsAfter(invitePath);
+      }
+
       allow read: if isTripMember();
       allow create: if isTripCreateValid();
-      allow update: if isTripMember() && (
+      allow update: if (isTripMember() && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
          || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
         || isTripMembershipApprovalValid()
         || isTripMembershipManagementValid()
-      );
+      ))
+        || (request.auth != null && !(request.auth.uid in resource.data.members) && isTripEmailInviteJoinValid());
       allow delete: if isTripAdmin();
 
       match /checklist/{checklistId} {
@@ -1953,10 +1981,13 @@ service cloud.firestore {
           && (data.endAt == null || isTimestampNumber(data.endAt))
           && data.get('startTime', null) == null
           && data.get('endTime', null) == null
-          && data.get('timezone', null) == null;
+          && data.get('timezone', null) == null
+          && data.get('endTimezone', null) == null;
       }
 
       // Relative trips: a trip day (or none) plus a floating "HH:mm", never a timestamp.
+      // An end in its own time zone (a flight landing elsewhere) can read earlier on the clock than
+      // its start, so the clock-time ordering only applies when both share a zone.
       function isRelativeEventTimeValid(data) {
         return (
             (data.dayIndex == null && data.endDayIndex == null)
@@ -1969,9 +2000,12 @@ service cloud.firestore {
             || (
               isClockTime(data.endTime)
               && data.dayIndex != null
-              && (data.endDayIndex > data.dayIndex || data.endTime > data.startTime)
+              && (data.endDayIndex > data.dayIndex
+                || data.endTime > data.startTime
+                || data.get('endTimezone', null) != null)
             ))
-          && (data.get('timezone', null) == null || isNonEmptyString(data.timezone));
+          && (data.get('timezone', null) == null || isNonEmptyString(data.timezone))
+          && (data.get('endTimezone', null) == null || isNonEmptyString(data.endTimezone));
       }
 
       function isEventTimeValid(data) {
@@ -1992,6 +2026,7 @@ service cloud.firestore {
             'startTime',
             'endTime',
             'timezone',
+            'endTimezone',
             'locationName',
             'address',
             'latitude',
@@ -2852,6 +2887,60 @@ service cloud.firestore {
           || (resource != null && isMemberOfTrip(resource.data.tripId))
         );
       allow update: if false;
+    }
+
+    // An Admin's standing approval for an email address. The person it is for reads and uses it
+    // (with a verified email, so a made-up account can't claim it); the trip's members read it;
+    // only the trip's Admins create, re-role or withdraw it. Adding the same address again overwrites
+    // it with a plain set, so nothing needs to read the document first.
+    match /apps/waypoint/emailInvites/{inviteId} {
+      function tripOf(tripId) {
+        return get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+      }
+
+      function isAdminOfTrip(tripId) {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId))
+          && request.auth.uid in tripOf(tripId).members
+          && tripOf(tripId).members[request.auth.uid].role == 'ADMIN';
+      }
+
+      function isMemberOfTrip(tripId) {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId))
+          && request.auth.uid in tripOf(tripId).members;
+      }
+
+      function isInvitee(email) {
+        return request.auth != null
+          && request.auth.token.get('email_verified', false) == true
+          && request.auth.token.get('email', '').lower() == email;
+      }
+
+      function isInviteShapeValid(data) {
+        return data.keys().hasOnly(['tripId', 'email', 'role', 'invitedBy', 'invitedAt'])
+          && data.tripId is string
+          && data.email is string
+          && data.email == data.email.lower()
+          && data.email.matches('^[^@ /]+@[^@ /]+[.][^@ /]+$')
+          && data.role in ['EDITOR', 'COMMENTER', 'VIEWER']
+          && data.invitedBy is string
+          && isTimestampNumber(data.invitedAt);
+      }
+
+      allow read: if resource != null && isInvitee(resource.data.email);
+      allow read: if resource != null && isMemberOfTrip(resource.data.tripId);
+      allow create: if request.auth != null
+        && isInviteShapeValid(request.resource.data)
+        && inviteId == request.resource.data.tripId + '_' + request.resource.data.email
+        && request.resource.data.invitedBy == request.auth.uid
+        && isAdminOfTrip(request.resource.data.tripId);
+      allow update: if isAdminOfTrip(resource.data.tripId)
+        && isInviteShapeValid(request.resource.data)
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.invitedBy == request.auth.uid;
+      allow delete: if isInvitee(resource.data.email) || isAdminOfTrip(resource.data.tripId);
     }
 
     // Fallback for any app doc that doesn't have an explicit /apps/{appId}

@@ -1,9 +1,9 @@
-import TheaterFinder from '@apps/a-list/components/theaters/TheaterFinder';
 import TheaterList from '@apps/a-list/components/theaters/TheaterList';
-import type { TheatreSearchResult } from '@apps/a-list/types';
+import TheaterPicker from '@apps/a-list/components/theaters/TheaterPicker';
+import type { TheatreDraft } from '@apps/a-list/types';
 
 export interface TheatersStepValues {
-  theatres: TheatreSearchResult[];
+  theatres: TheatreDraft[];
   favoriteTheatreId: string | null;
 }
 
@@ -15,7 +15,7 @@ interface TheatersStepProps {
 function TheatersStep({ values, onChange }: TheatersStepProps) {
   const { theatres, favoriteTheatreId } = values;
 
-  const handleAdd = (theatre: TheatreSearchResult) =>
+  const handleAdd = (theatre: TheatreDraft) =>
     onChange({
       theatres: [...theatres, theatre],
       favoriteTheatreId:
@@ -64,8 +64,9 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
           onRemove={(theatre) => handleRemove(theatre.theatreId)}
         />
       )}
-      <TheaterFinder
+      <TheaterPicker
         savedIds={theatres.map((theatre) => theatre.theatreId)}
+        savedNames={theatres.map((theatre) => theatre.name)}
         onAdd={handleAdd}
       />
     </div>

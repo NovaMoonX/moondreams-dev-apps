@@ -417,6 +417,7 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + SEED_THEATRES.length + watchlist.length + viewings.length,
+    firestoreDocuments:
+      1 + SEED_THEATRES.length + watchlist.length + viewings.length,
   };
 }

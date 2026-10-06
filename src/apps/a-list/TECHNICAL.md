@@ -173,11 +173,11 @@ interface Ticket {
 
 #### 4. Theater
 
-Path: `apps/a-list/memberships/{uid}/theatres/{theatreId}` (the document id is AMC's theatre number, as digits, so saving the same theater twice is one document)
+Path: `apps/a-list/memberships/{uid}/theatres/{theatreId}` (the document id is AMC's theatre number, as digits, so saving the same theater twice is one document; a theater the member typed by name gets `manual-` plus a random id instead)
 
 ```typescript
 interface AListTheatre {
-  theatreId: string;                 // AMC's theatre number; equals the document id; immutable
+  theatreId: string;                 // AMC's theatre number as digits, or manual-…; equals the document id; immutable
   name: string;
   addressLine: string | null;
   city: string | null;
@@ -192,7 +192,7 @@ interface AListTheatre {
 interface TheatreSnapshot { theatreId: string; name: string; city: string | null; state: string | null }
 ```
 
-- **A copy, not a reference.** Search results are snapshotted into the member's own collection, so the list works offline and nothing depends on AMC at read time. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing.
+- **A copy, not a reference.** Search results are snapshotted into the member's own collection, so the list works offline and nothing depends on AMC at read time. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing. A theater AMC doesn't list can be typed by name: its address, city, state, postal code and coordinates stay `null`, and the UI refuses a name already on the list.
 - **At most 10 saved theaters** (`MAX_THEATRES`), enforced in the UI only, so two devices can briefly exceed it.
 - **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite hands the star to another saved theater in the same transaction (Setup does the same), and unstarring it is the only way to have none. Setting a favorite is a single field write on the membership.
 - **Indexes:** none (a whole-collection listener).
@@ -319,6 +319,7 @@ Theaters come from the AMC Theatres API through one callable, `findTheatres`, so
 - **Showtimes** (`findShowtimes`): `{ theatreId, date, title }` returns that movie's upcoming showings at a theater with each one's format (read from AMC's showtime attributes), adult list price and purchase link, and, for a premium showing, the Standard price of the nearest-in-time Standard showing that day for the same movie (the premium-savings baseline). A whole day at a theater is cached for 15 minutes and shared by every movie asked about, since prices and sold-out flags move. Canceled showings and links that aren't on amctheatres.com are dropped, a movie matches by exact normalized title (a parenthetical caption aside), and the Standard comparison price is the Standard showing nearest in time that is still on sale (so a prime-time IMAX isn't compared with a matinee). AMC's endpoint takes `M-D-YYYY` dates and `page-size`/`page-number` (so the server converts our ISO date). The client only asks for today or later, because AMC lists prices for upcoming days only; a past day says so and falls back to the manual form.
 - **The buy path:** a showtime picked in the add form or the showing drawer's "Buy tickets" is stored as the plan. "Continue to AMC" opens `purchaseUrl` straight from the tap (so phone browsers don't block it), stamps `startedAt`, and closes the drawers. When the member returns to the tab, or opens the app later, `PurchaseReturnHost` (mounted by the seen-prompt host, which suppresses it while a seen prompt is up) asks for the fee and tax with everything else filled in. "Not yet" lasts until the next app open and "I didn't buy" clears `startedAt`.
 - **Response shapes** follow AMC's public API (`/v2/location-suggestions`, `/v2/locations`) and are parsed defensively: an entry with no usable id or name is dropped.
+- **Typed theaters skip the service.** "Can't find it? Add it by name" saves the name locally with a `manual-` id and nothing is sent to AMC.
 
 ## State Machines & Logic
 
@@ -431,7 +432,7 @@ Step 1 Membership (confirm perks, read-only copy)
            < cost           → inline error, Next disabled
            implied rate > 0.25 → inline error (almost certainly a typo)
   → Step 3 Goals (weekly, monthly; both optional)
-  → Step 4 Theaters (optional: find AMC theaters by zip, city or current location, star a favorite) → one writeBatch (membership + theaters) → "Add movies you've already seen?"
+  → Step 4 Theaters (optional: find AMC theaters by zip, city or current location or type a name, star a favorite) → one writeBatch (membership + theaters) → "Add movies you've already seen?"
         ├─ Add past movies → the add subview in past-movies mode (dates can't precede the start date)
         └─ Skip            → empty Calendar (with its "Add your first movie" / "Add past movies" nudge)
 ```
@@ -503,7 +504,7 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 9. **Rules tolerate older documents** the way every collection in this repo must: a field added later is validated on the *incoming* document with `request.resource.data.get('field', default)` (so a write that omits it still passes, and a write that sets it is checked), and `resource.data.get('field', default)` is used only to compare against the stored value (immutability, transitions). Every edit action backfills the new key with its empty value in the same write. (Older viewings lack `ticket`, `rating`, `theatre`; older memberships lack `favoriteTheatreId`.)
 10. **No `storage.rules` change.** The app stores no files.
 11. **The movie and theater caches and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache`, `apps/a-list/theatreCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
-12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be digits and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range), and `createdAt` is immutable. `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
+12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be AMC's digits or `manual-…` and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range), and `createdAt` is immutable. `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
 13. **A viewing's `purchase`** is allowed but not required. When present it is a map of exactly `showtimeId`, `format`, `priceCents`, `standardPriceCents`, `purchaseUrl` and `startedAt`, with an https link and cents in range.
 
 The shape of the block (helpers are declared in the `memberships/{uid}` match so the nested matches reuse them):
