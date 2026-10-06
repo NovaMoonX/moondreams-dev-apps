@@ -9,6 +9,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatClockTime, formatCountdown, formatDuration } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
+import EnrichedImage from '@/components/EnrichedImage';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -39,7 +40,6 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
   const dispatch = useAppDispatch();
   const breakpoints = useMediaQuery();
   const isPhone = breakpoints.isBelow('sm');
-  const isWide = breakpoints.isAtLeast('xl');
   const activeEvent = useAppSelector(selectActiveEvent(trip, now, currentUserId));
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
   const [peekedFor, setPeekedFor] = useState<string | null | undefined>(undefined);
@@ -76,14 +76,11 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     />
   );
 
-  const renderRow = (target: TimelineEvent, rowView: View, className?: string) => (
-    <Button
-      type='button'
-      variant='tertiary'
-      aria-label={`${getStatusLine(trip, target, rowView, now)}: ${target.title}. Show details`}
-      className={join('h-auto min-w-0 justify-start gap-2.5 rounded-full px-3 py-1.5 text-left', className)}
-      onClick={() => open(target)}
-    >
+  const showView = (target: View) =>
+    setPeekedFor(target === 'next' ? (activeEvent?.id ?? null) : undefined);
+
+  const renderStatus = (target: TimelineEvent, rowView: View) => (
+    <span className='flex min-w-0 items-center gap-2.5'>
       <span
         aria-hidden
         className={join(
@@ -91,73 +88,94 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
           rowView === 'now' ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
         )}
       />
-      <span className='min-w-0'>
-        <span className='text-muted-foreground block text-[11px] leading-tight font-medium tracking-wide uppercase'>
+      <span className='min-w-0 text-left'>
+        <span className='text-muted-foreground block text-[11px] leading-tight font-medium tracking-wide whitespace-nowrap uppercase'>
           {getStatusLine(trip, target, rowView, now)}
         </span>
-        <span className='text-foreground block max-w-48 truncate text-sm leading-tight font-semibold sm:max-w-80'>
+        <span className='text-foreground block max-w-48 truncate text-sm leading-tight font-semibold sm:max-w-96'>
           {target.title}
         </span>
       </span>
-    </Button>
+    </span>
   );
 
-  const swapButton = canSwap && (
-    <Button
-      type='button'
-      variant='secondary'
-      rounded='full'
-      aria-label={view === 'now' ? 'Show what is up next' : 'Show what is happening now'}
-      title={view === 'now' ? 'Up next' : 'Now'}
-      className='bg-popover! size-12 min-w-12 shrink-0 border p-0 shadow-lg'
-      onClick={swap}
-    >
-      {view === 'now' ? <SkipForward className='h-5 w-5' /> : <Play className='h-5 w-5' />}
-    </Button>
-  );
+  const renderPhoneItem = (target: TimelineEvent, itemView: View) => {
+    const isExpanded = view === itemView;
+    const label = `${getStatusLine(trip, target, itemView, now)}: ${target.title}`;
+    return (
+      <div
+        key={itemView}
+        role='status'
+        className={join(
+          'bg-popover overflow-hidden rounded-full border shadow-lg transition-[max-width] duration-300 ease-in-out',
+          itemView === 'now' ? 'border-emerald-500/60' : 'border-border',
+          isExpanded ? 'max-w-[19rem]' : 'max-w-12',
+        )}
+      >
+        <Button
+          type='button'
+          variant='tertiary'
+          aria-label={isExpanded ? `${label}. Show details` : `Show ${itemView === 'now' ? 'what is happening now' : 'what is up next'}`}
+          className='h-12 min-w-12 justify-start gap-2 rounded-full p-0 pr-4'
+          onClick={() => (isExpanded ? open(target) : showView(itemView))}
+        >
+          <span className='flex size-12 shrink-0 items-center justify-center'>
+            {itemView === 'now' ? <Play className='h-5 w-5 text-emerald-500' /> : <SkipForward className='h-5 w-5' />}
+          </span>
+          <span className={join('transition-opacity duration-300', isExpanded ? 'opacity-100' : 'opacity-0')}>
+            {renderStatus(target, itemView)}
+          </span>
+        </Button>
+      </div>
+    );
+  };
 
   const renderSurface = () => {
-    if (isWide) {
-      return (
-        <aside
-          aria-label='Happening now'
-          className='bg-popover fixed top-28 right-6 z-30 w-64 space-y-1 rounded-2xl border p-2 shadow-lg'
-        >
-          {activeEvent && renderRow(activeEvent, 'now', 'w-full rounded-xl')}
-          {upNextEvent && renderRow(upNextEvent, 'next', 'w-full rounded-xl')}
-        </aside>
-      );
-    }
     if (isPhone) {
       return (
         <div className='pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-30 flex justify-center px-4'>
           <div className='pointer-events-auto flex max-w-full items-center gap-2'>
-            <div
-              role='status'
-              className={join(
-                'bg-popover flex min-w-0 items-center rounded-full border p-1 shadow-lg',
-                view === 'now' ? 'border-emerald-500/60' : 'border-border',
-              )}
-            >
-              {renderRow(event, view)}
-            </div>
-            {swapButton}
+            {activeEvent && renderPhoneItem(activeEvent, 'now')}
+            {upNextEvent && renderPhoneItem(upNextEvent, 'next')}
           </div>
         </div>
       );
     }
+    const rows = [activeEvent && { target: activeEvent, rowView: 'now' as const }, upNextEvent && { target: upNextEvent, rowView: 'next' as const }].filter(
+      (row): row is { target: TimelineEvent; rowView: View } => Boolean(row),
+    );
+    const shownIndex = rows.findIndex((row) => row.rowView === view);
     return (
-      <div
-        role='status'
-        className='bg-background/95 border-border fixed inset-x-0 bottom-9 z-20 border-t backdrop-blur'
-      >
+      <div className='bg-background/95 border-border fixed inset-x-0 bottom-9 z-20 border-t backdrop-blur'>
         <div className='mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-1'>
-          {renderRow(event, view, 'rounded-lg')}
-          {canSwap && (
-            <Button type='button' size='sm' variant='secondary' className='h-10 shrink-0' onClick={swap}>
-              {view === 'now' ? 'Up next' : 'Now'}
+          <div role='status' className='h-12 min-w-0 flex-1 overflow-hidden'>
+            <div
+              className='transition-transform duration-300 ease-in-out'
+              style={{ transform: `translateY(-${shownIndex * 3}rem)` }}
+            >
+              {rows.map(({ target, rowView }) => (
+                <div key={rowView} className='flex h-12 items-center' aria-hidden={rowView !== view}>
+                  {renderStatus(target, rowView)}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className='flex shrink-0 items-center gap-2'>
+            <Button type='button' size='sm' variant='tertiary' className='h-10' onClick={() => open(event)}>
+              Details
             </Button>
-          )}
+            {canSwap && (
+              <Button
+                type='button'
+                size='sm'
+                variant='secondary'
+                className='h-10'
+                onClick={() => showView(view === 'now' ? 'next' : 'now')}
+              >
+                {view === 'now' ? 'Up next' : 'Now'}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -183,6 +201,9 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         ) : (
           <Modal isOpen onClose={() => setOpenEventId(null)} title={openEvent.title}>
             <div className='space-y-4'>
+              {getDisplayImage(openEvent) && (
+                <EnrichedImage src={getDisplayImage(openEvent) as string} alt='' className='aspect-video w-full rounded-lg object-cover' />
+              )}
               {details}
               <div className='flex items-center gap-2'>
                 <MapNavigationButton {...openEvent} variant='primary' />
