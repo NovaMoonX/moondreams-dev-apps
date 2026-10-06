@@ -147,6 +147,45 @@ const SEED_RATINGS: Record<string, number> = {
   'seed-viewing-dune-2': 5,
 };
 
+const SEED_THEATRES = [
+  {
+    theatreId: 'manual-seed-theatre-mission-valley',
+    name: 'AMC Mission Valley 20',
+    addressLine: null,
+    city: null,
+    state: null,
+    postalCode: null,
+    latitude: null,
+    longitude: null,
+  },
+  {
+    theatreId: 'manual-seed-theatre-town-center',
+    name: 'AMC Town Center 20',
+    addressLine: null,
+    city: null,
+    state: null,
+    postalCode: null,
+    latitude: null,
+    longitude: null,
+  },
+];
+
+function toTheatreSnapshot({
+  theatreId,
+  name,
+  city,
+  state,
+}: (typeof SEED_THEATRES)[number]) {
+  return { theatreId, name, city, state };
+}
+
+// Viewings not listed here have no theater, like the ones written before theaters existed.
+const SEED_VIEWING_THEATRES: Record<string, number> = {
+  'seed-viewing-matrix': 0,
+  'seed-viewing-dune-1': 0,
+  'seed-viewing-dune-2': 1,
+};
+
 const SEED_TICKETS: Record<string, object> = {
   'seed-viewing-matrix': {
     entryMode: 'ITEMIZED',
@@ -293,6 +332,13 @@ function getViewingFixtures(now: number) {
         status,
         ticket: SEED_TICKETS[id] ?? null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
+        ...(SEED_VIEWING_THEATRES[id] === undefined
+          ? {}
+          : {
+              theatre: toTheatreSnapshot(
+                SEED_THEATRES[SEED_VIEWING_THEATRES[id]],
+              ),
+            }),
         createdAt: Math.min(now, showtimeAt),
         lastEditedAt: Math.min(now, showtimeAt),
       };
@@ -318,10 +364,20 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     startDate: getDayUtc(context.now, 60),
     weeklyGoal: 2,
     monthlyGoal: 6,
+    favoriteTheatreId: SEED_THEATRES[0].theatreId,
     setupCompletedAt: setupAt,
     createdAt: setupAt,
     lastEditedAt: setupAt,
   });
+
+  await Promise.all(
+    SEED_THEATRES.map((theatre) =>
+      membershipRef
+        .collection('theatres')
+        .doc(theatre.theatreId)
+        .set({ ...theatre, createdAt: setupAt, lastEditedAt: setupAt }),
+    ),
+  );
 
   const watchlist = getWatchlistFixtures(context.now);
   await Promise.all(
@@ -346,6 +402,7 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + watchlist.length + viewings.length,
+    firestoreDocuments:
+      1 + SEED_THEATRES.length + watchlist.length + viewings.length,
   };
 }

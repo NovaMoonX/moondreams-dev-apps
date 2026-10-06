@@ -30,6 +30,7 @@ import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
 import TrailerPicksList from '@apps/a-list/components/add/TrailerPicksList';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import TheaterPills from '@apps/a-list/components/viewing/TheaterPills';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import WatchlistDetailsFields, {
   type WatchlistDetailsValues,
@@ -54,6 +55,7 @@ import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
+  selectTheatres,
   selectPreviewsWindowViewing,
   selectSeenCountByMovieKey,
   selectFeeChips,
@@ -63,8 +65,10 @@ import type {
   AListOverlay,
   MovieSearchResult,
   MovieSnapshot,
+  TheatreSnapshot,
   WatchlistItem,
 } from '@apps/a-list/types';
+import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
 
 interface ShowtimeValues {
   date: string;
@@ -134,6 +138,7 @@ export function AddFlow({
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const feeChips = useAppSelector(selectFeeChips);
+  const theatres = useAppSelector(selectTheatres);
   const watchlist = useAppSelector(selectWatchlistItems);
   const previewsViewing = useAppSelector((state) =>
     selectPreviewsWindowViewing(state, now),
@@ -145,6 +150,10 @@ export function AddFlow({
       : now,
   );
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
+  // Untouched, the favorite theater is picked for them; once they tap a pill (or clear it) their choice stands.
+  const [theatreChoice, setTheatreChoice] = useState<
+    TheatreSnapshot | null | undefined
+  >(undefined);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
   const [manualDraft, setManualDraft] =
@@ -202,6 +211,15 @@ export function AddFlow({
     isCalendar &&
     showtimeValues.date !== '' &&
     showtimeValues.date < startDateKey;
+  const favoriteTheatre = theatres.find(
+    (theatre) => theatre.theatreId === membership?.favoriteTheatreId,
+  );
+  const theatre =
+    theatreChoice === undefined
+      ? favoriteTheatre
+        ? toTheatreSnapshot(favoriteTheatre)
+        : null
+      : theatreChoice;
   const ticketResult = ticketDraft ? evaluateTicketDraft(ticketDraft) : null;
   const canSave =
     !isBeforeStart &&
@@ -261,6 +279,7 @@ export function AddFlow({
         movie: snapshot,
         showtimeAt: at,
         ticket: ticketResult?.ticket ?? null,
+        theatre,
       }),
     ).unwrap();
     addToast({
@@ -280,6 +299,7 @@ export function AddFlow({
     setIsAddingByTitle(false);
     setManualDraft(EMPTY_MANUAL_DRAFT);
     setTicketDraft(null);
+    setTheatreChoice(undefined);
     setShowtimeValues({
       date: overlay.destination === 'calendar' ? overlay.date : '',
       time: DEFAULT_SHOWTIME,
@@ -519,6 +539,13 @@ export function AddFlow({
           <WatchlistDetailsFields
             values={watchlistValues}
             onChange={setWatchlistValues}
+          />
+        )}
+        {isCalendar && (
+          <TheaterPills
+            label='📍 Which theater?'
+            value={theatre}
+            onChange={setTheatreChoice}
           />
         )}
         {isCalendar && (

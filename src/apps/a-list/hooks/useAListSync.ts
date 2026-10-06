@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { startMembershipListener } from '@apps/a-list/store/listeners/membershipListeners';
+import { startTheatresListener } from '@apps/a-list/store/listeners/theatreListeners';
 import { startViewingsListener } from '@apps/a-list/store/listeners/viewingListeners';
 import { startWatchlistListener } from '@apps/a-list/store/listeners/watchlistListeners';
 import {
@@ -10,6 +11,11 @@ import {
   setMembership,
   setMembershipLoadError,
 } from '@apps/a-list/store/slices/membershipSlice';
+import {
+  clearTheatres,
+  setTheatres,
+  setTheatresLoadError,
+} from '@apps/a-list/store/slices/theatresSlice';
 import {
   clearViewings,
   setViewings,
@@ -29,6 +35,7 @@ export function useAListSync(uid: string | null) {
       dispatch(clearMembership());
       dispatch(clearWatchlist());
       dispatch(clearViewings());
+      dispatch(clearTheatres());
       return;
     }
 
@@ -64,7 +71,19 @@ export function useAListSync(uid: string | null) {
         ),
     );
 
+    const unsubscribeTheatres = startTheatresListener(
+      uid,
+      (theatres) => dispatch(setTheatres(theatres)),
+      (error) =>
+        dispatch(
+          setTheatresLoadError(
+            getErrorMessage(error, 'Unable to load your theaters.'),
+          ),
+        ),
+    );
+
     return () => {
+      unsubscribeTheatres();
       unsubscribeMembership();
       unsubscribeWatchlist();
       unsubscribeViewings();
