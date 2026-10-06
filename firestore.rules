@@ -2784,20 +2784,35 @@ service cloud.firestore {
           && entry.toUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
           && entry.amount is number
           && entry.amount > 0
+          && entry.amount * 100 == math.floor(entry.amount * 100)
           && isTimestampNumber(entry.paidAt)
           && entry.isReturned is bool
-          && (entry.returnedAt == null || isTimestampNumber(entry.returnedAt));
+          && (entry.returnedAt == null || isTimestampNumber(entry.returnedAt))
+          && entry.isReturned == (entry.returnedAt != null);
       }
 
+      // Everyone-expenses cover whoever is on the trip now; the other targets list their people.
       function isEarlyPaymentPartOfSplit() {
-        return resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
-          || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE'
-          || request.auth.uid in resource.data.targetMemberIds;
+        let targetType = resource.data.targetType;
+        return targetType in ['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE']
+          || (targetType == 'SPECIFIC_MEMBERS' && request.auth.uid in resource.data.targetMemberIds)
+          || (targetType == 'JUST_ME' && request.auth.uid == resource.data.payerUid);
+      }
+
+      // Nobody sends more than the whole expense (at its highest estimate, times the headcount when per person).
+      function isEarlyPaymentAmountBounded(entry) {
+        let data = resource.data;
+        let top = data.amount != null ? data.amount : data.amountMax;
+        let headcount = data.get('isPerPerson', false)
+          ? get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members.size()
+          : 1;
+        return entry.amount <= top * headcount;
       }
 
       function isEarlyPaymentWriteValid(before, entry) {
         return isEarlyPaymentEntryValid(entry)
           && isEarlyPaymentPartOfSplit()
+          && (resource.data.status != 'EXPECTED' || isEarlyPaymentAmountBounded(entry))
           && (resource.data.status == 'EXPECTED'
             || (request.auth.uid in before
               && entry.diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt'])));
@@ -2816,6 +2831,7 @@ service cloud.firestore {
       allow create: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
         && request.resource.data.targetType == 'EVERYONE_CURRENT'
+        && earlyPaymentsOf(request.resource.data).size() == 0
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
@@ -2836,6 +2852,12 @@ service cloud.firestore {
       allow update: if isTripExpenseMember()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
         && isOwnEarlyPaymentChangeValid();
+      // An editor can take an early payment off an expense (a wrong claim, or its author has left),
+      // never add or change one.
+      allow update: if isTripExpenseEditor()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
+        && earlyPaymentsOf(request.resource.data).diff(earlyPaymentsOf(resource.data)).affectedKeys()
+          .intersection(earlyPaymentsOf(request.resource.data).keys().toSet()).size() == 0;
       allow delete: if isTripExpenseEditor()
         && earlyPaymentsOf(resource.data).size() == 0;
     }

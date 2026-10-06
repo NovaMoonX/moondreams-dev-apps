@@ -21,14 +21,10 @@ interface PickOrCreateProps {
   newPlaceholder: string;
 }
 
-/**
- * Pick one of the existing names or make a new one. Nothing starts selected, so the person has to
- * act, and the dashed "New" pill comes first so it is obvious a new name is allowed. With no existing
- * names it is just the text field.
- */
+/** Pick an existing name or make a new one: nothing starts selected, and the dashed "New" pill comes first. With no names yet it is just the text field. */
 function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel, newPlaceholder }: PickOrCreateProps) {
-  const [isCreating, setIsCreating] = useState(choice === NEW_CHOICE || newText !== '');
-  const showCreate = isCreating || options.length === 0;
+  const [isCreating, setIsCreating] = useState(choice === NEW_CHOICE);
+  const showCreate = isCreating || choice === NEW_CHOICE || options.length === 0;
 
   const newInput = (
     <Input
@@ -67,7 +63,7 @@ function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel,
         isSelected={(value) => !isCreating && choice === value}
         onToggle={(value) => {
           setIsCreating(false);
-          onChange(value, '');
+          onChange(!isCreating && choice === value ? '' : value, '');
         }}
       />
       {showCreate && newInput}

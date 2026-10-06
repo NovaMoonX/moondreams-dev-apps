@@ -87,7 +87,8 @@ function Layout() {
 
   useEffect(() => {
     document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
-  }, [isHeaderHidden]);
+    document.documentElement.dataset.siteBanner = String(isBannerVisible);
+  }, [isHeaderHidden, isBannerVisible]);
   useReminderToasts();
 
   useEffect(() => {

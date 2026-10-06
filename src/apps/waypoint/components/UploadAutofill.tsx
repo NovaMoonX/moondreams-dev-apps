@@ -35,7 +35,7 @@ type State =
   | { status: 'done'; fileName: string; unread: string[]; note: string | null }
   | { status: 'failed'; message: string };
 
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const toIsoDay = (epoch: number) => new Date(epoch).toISOString().slice(0, 10);
 
@@ -62,7 +62,7 @@ function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofi
 
   const handleFile = async (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
-      setState({ status: 'failed', message: 'That file is too big to read. Try a photo or a PDF under 15 MB.' });
+      setState({ status: 'failed', message: 'That file is too big to read. Try a photo or a PDF under 10 MB.' });
       setPickerKey((current) => current + 1);
       return;
     }
@@ -80,6 +80,7 @@ function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofi
         return;
       }
       onFilled(result);
+      setPickerKey((current) => current + 1);
       setState({ status: 'done', fileName: file.name, unread: result.unread, note: result.note ?? null });
     } catch (error) {
       console.error('Reading the confirmation failed', error, error instanceof AIError ? error.customErrorData : null);

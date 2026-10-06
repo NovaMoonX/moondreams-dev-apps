@@ -108,8 +108,8 @@ function EarlyPaymentModal({
         ) : (
           <>
             <p className='text-muted-foreground text-sm'>
-              {getShareLine()} Already sent your part to someone ahead of time? Record it here. It cancels out when this
-              is paid, or shows as owed back to you if plans change.
+              {getShareLine()} Already sent your part to someone ahead of time? Record it here. It comes off what you owe them
+              right away, covers your share once they pay, and is owed back to you if plans change.
             </p>
             <div className='space-y-2'>
               <Label>Who did you pay?</Label>

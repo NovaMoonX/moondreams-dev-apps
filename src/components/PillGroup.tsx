@@ -7,9 +7,8 @@ import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
-/** Past this many options a pill list gets a search field. */
 const SEARCH_THRESHOLD = 12;
-/** Two rows of pills; keep in step with the `max-h-22` (5.5rem) clamp below. */
+/** Two rows of pills: keep in step with `max-h-22` below. */
 const COLLAPSED_ROWS_REM = 5.5;
 
 export interface PillOption<T extends string> {
@@ -37,11 +36,7 @@ interface PillOptionsProps<T extends string> {
   selectedCount?: number;
 }
 
-/**
- * The pills of one pick-one or pick-several row, built for lists that grow: a search field once
- * there are many, and on a phone only the first two rows until "Show all" is tapped, so a trip
- * of thirty people never makes a form taller than the screen.
- */
+/** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
 export function PillOptions<T extends string>({
   label,
   options,
@@ -55,7 +50,8 @@ export function PillOptions<T extends string>({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const trimmedQuery = query.trim().toLowerCase();
+  const hasSearch = options.length > SEARCH_THRESHOLD;
+  const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const visible =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
   const isClamped = isPhone && trimmedQuery === '' && !isExpanded;
@@ -75,10 +71,12 @@ export function PillOptions<T extends string>({
 
   return (
     <div className='space-y-2'>
-      {options.length > SEARCH_THRESHOLD && (
-        <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
+      {hasSearch && (
+        <div onKeyDown={(event) => event.key === 'Enter' && event.preventDefault()}>
+          <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
+        </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={() => isClamped && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}

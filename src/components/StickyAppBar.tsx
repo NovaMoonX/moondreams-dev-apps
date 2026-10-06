@@ -12,12 +12,7 @@ interface StickyAppBarProps {
   className?: string;
 }
 
-/**
- * A mini-app's header row on a phone: back navigation is never scrolled away. It sticks below the site
- * header (and takes the top of the screen when that slides away), and once stuck it shows `title` next
- * to the back control so it is always clear where you are. Every mini-app header with back navigation
- * should use this, so the behaviour is tweaked here and in `sticky-app-bar` (index.css) only.
- */
+/** A mini-app header row on a phone that keeps back navigation on screen, and shows `title` beside it once stuck. */
 function StickyAppBar({ leading, trailing, title, className }: StickyAppBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);

@@ -2,6 +2,7 @@ import { SchemaType } from 'firebase/ai';
 
 import { generativeModel } from '@/lib/firebase/ai';
 import { compressIngestionImage } from '@/utils/imageCompression';
+import { getUploadMimeType } from '@/utils/uploadMimeType';
 
 /** A flight, a lodging reservation or a car rental: the logistics a confirmation spells out in a fixed shape. */
 export type BookingKind = 'flight' | 'stay' | 'rental';
@@ -160,9 +161,6 @@ function asBase64(buffer: ArrayBuffer): string {
   return btoa(bytes.reduce((binary, byte) => binary + String.fromCharCode(byte), ''));
 }
 
-const getMimeType = (file: File) =>
-  file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-
 /** Reads a booking confirmation (photo, screenshot or PDF) into entries of one kind. The result only
  * fills a form for the person to review; nothing is saved from it directly. */
 export async function extractBookingFromFile(
@@ -178,7 +176,7 @@ export async function extractBookingFromFile(
         role: 'user',
         parts: [
           { text: buildPrompt(kind, trip, file.name) },
-          { inlineData: { data, mimeType: getMimeType(inputFile) } },
+          { inlineData: { data, mimeType: getUploadMimeType(inputFile) } },
         ],
       },
     ],

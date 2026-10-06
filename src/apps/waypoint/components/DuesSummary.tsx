@@ -25,6 +25,9 @@ interface DuesSummaryProps {
   formatAmount: (amount: number) => string;
   onToggleRepaid: (expenseId: string) => void;
   onSetEarlyReturned: (expenseId: string, isReturned: boolean) => void;
+  /** Takes an early payment off its expense: its author always can, and so can an editor. */
+  canRemoveEarly: (fromUid: string) => boolean;
+  onRemoveEarly: (expenseId: string, fromUid: string) => void;
 }
 
 const getPairKey = (settlement: PairSettlement) => `${settlement.personA}-${settlement.personB}`;
@@ -36,6 +39,8 @@ function DuesSummary({
   formatAmount,
   onToggleRepaid,
   onSetEarlyReturned,
+  canRemoveEarly,
+  onRemoveEarly,
 }: DuesSummaryProps) {
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
   const [showAllNotices, setShowAllNotices] = useState(false);
@@ -138,9 +143,13 @@ function DuesSummary({
   const getEarlyStateLabel = (item: EarlyItem, toUid: string) => {
     switch (item.state) {
       case 'PENDING':
-        return 'Waiting for it to be paid';
-      case 'APPLIED':
-        return 'Counted toward this expense';
+        return `${memberLabel(toUid)} is holding it until this is paid`;
+      case 'APPLIED': {
+        const extra = item.payment.amount - item.applied;
+        return extra > EPSILON
+          ? `${formatAmount(item.applied)} counted toward their share, ${formatAmount(extra)} owed back`
+          : 'Counted toward their share';
+      }
       case 'HELD':
         return `${memberLabel(toUid)} still has it`;
       case 'RETURNED':
@@ -179,6 +188,16 @@ function DuesSummary({
                     {item.state === 'RETURNED' ? 'Undo' : 'Got it back'}
                   </Button>
                 )}
+                {canRemoveEarly(fromUid) && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    className='h-10 text-xs'
+                    onClick={() => onRemoveEarly(item.expense.id, fromUid)}
+                  >
+                    Remove
+                  </Button>
+                )}
               </span>
             </li>
           ))}
@@ -201,10 +220,10 @@ function DuesSummary({
       const text =
         fromUid === currentUserId
           ? item.state === 'PENDING'
-            ? `You sent ${memberLabel(toUid)} ${amount} early for ${title}. It cancels out once it's paid.`
+            ? `You sent ${memberLabel(toUid)} ${amount} early for ${title}. It's already taken off what you owe them, and it covers your share once they pay.`
             : `${memberLabel(toUid)} is still holding the ${amount} you sent early for ${title}.`
           : item.state === 'PENDING'
-            ? `${memberLabel(fromUid)} sent you ${amount} early for ${title}. It's counted when you mark it paid.`
+            ? `${memberLabel(fromUid)} sent you ${amount} early for ${title}. It's already taken off what they owe you. If someone else pays, you'll owe it back.`
             : `You're holding ${amount} from ${memberLabel(fromUid)} for ${title}. Send it back and they can mark it returned.`;
       return { key: `${item.expense.id}-${fromUid}`, text };
     });
@@ -215,6 +234,45 @@ function DuesSummary({
       Number([first.personA, first.personB].includes(currentUserId)),
   );
   const visibleSettlements = showAllPairs ? yoursFirst : yoursFirst.slice(0, MAX_VISIBLE_PAIRS);
+
+  const renderNetWorking = ({ personA, personB, netAmount, aOwesB, bOwesA, aPaidEarly, bPaidEarly }: PairSettlement) => {
+    const held = (items: EarlyItem[]) =>
+      items.filter((item) => item.state !== 'RETURNED').reduce((total, item) => total + item.payment.amount - item.applied, 0);
+    const rows = [
+      { label: `${memberLabel(personA)} owes ${memberLabel(personB)}`, amount: aOwesB.remaining },
+      { label: `${memberLabel(personB)} owes ${memberLabel(personA)}`, amount: -bOwesA.remaining },
+      { label: `${memberLabel(personB)} holds for ${memberLabel(personA)}`, amount: -held(aPaidEarly) },
+      { label: `${memberLabel(personA)} holds for ${memberLabel(personB)}`, amount: held(bPaidEarly) },
+    ].filter((row) => Math.abs(row.amount) > EPSILON);
+    if (held(aPaidEarly) + held(bPaidEarly) <= EPSILON) {
+      return null;
+    }
+
+    return (
+      <div className='border-border space-y-1 rounded-xl border p-3'>
+        <p className='text-sm font-medium'>How the net adds up</p>
+        {rows.map((row) => (
+          <p key={row.label} className='flex items-baseline justify-between gap-3 text-sm'>
+            <span className='text-muted-foreground min-w-0'>{row.label}</span>
+            <span className='shrink-0 whitespace-nowrap tabular-nums'>
+              {row.amount < 0 ? '−' : '+'}
+              {formatAmount(Math.abs(row.amount))}
+            </span>
+          </p>
+        ))}
+        <p className='border-border flex items-baseline justify-between gap-3 border-t pt-1 text-sm font-semibold'>
+          <span>Net</span>
+          <span className='shrink-0 whitespace-nowrap tabular-nums'>
+            {netAmount < 0 ? '−' : '+'}
+            {formatAmount(Math.abs(netAmount))}
+          </span>
+        </p>
+        <p className='text-muted-foreground text-xs'>
+          Plus means {memberLabel(personA)} owes {memberLabel(personB)}; minus means the other way around.
+        </p>
+      </div>
+    );
+  };
 
   const renderBreakdown = (settlement: PairSettlement) => {
     const { personA, personB, netAmount, aOwesB, bOwesA } = settlement;
@@ -239,6 +297,7 @@ function DuesSummary({
         {renderDirection(personB, personA, bOwesA, showTotals)}
         {renderEarly(settlement.aPaidEarly, personA, personB)}
         {renderEarly(settlement.bPaidEarly, personB, personA)}
+        {renderNetWorking(settlement)}
       </div>
     );
   };

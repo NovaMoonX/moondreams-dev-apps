@@ -410,7 +410,7 @@ function ExpenseFormModal({
       return;
     }
     if (initialExpense && Object.keys(getEarlyPayments(initialExpense)).length > 0) {
-      setError('Someone recorded paying toward this early. They can remove that (Paid early, then the trash) before it can be deleted.');
+      setError('Someone recorded paying toward this early. Remove it from the Dues summary (Remove, next to the early payment) before deleting.');
       return;
     }
 

@@ -295,8 +295,6 @@ interface SetEarlyPaymentInput extends EarlyPaymentTarget {
   amount: number;
 }
 
-// Each member writes only their own key, with a dotted path, so a teammate's concurrent early
-// payment (or an editor's save) is never overwritten.
 export const setEarlyPayment = createAsyncThunk<void, SetEarlyPaymentInput, { rejectValue: string }>(
   'waypoint/expenses/setEarlyPayment',
   async ({ uid, tripId, expenseId, toUid, amount }, { rejectWithValue }) => {

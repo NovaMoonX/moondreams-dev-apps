@@ -12,7 +12,7 @@ interface ModalFooterActionsProps {
  * groups, side by side on one row at every width. Relies on button labels staying short
  * ("Save"/"Add", not "Save changes"/"Add event") — a footer that needs longer labels to be
  * clear belongs in a wider layout, not a wrapped stack here. On a phone the right group takes
- * the row's remaining width, so the primary action is the widest control in the footer.
+ * the row's remaining width and its last button (the primary) grows.
  */
 function ModalFooterActions({ leftActions, cancelAction, rightActions }: ModalFooterActionsProps) {
   return (
@@ -21,7 +21,7 @@ function ModalFooterActions({ leftActions, cancelAction, rightActions }: ModalFo
         {leftActions}
         {cancelAction}
       </div>
-      <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:*:flex-1'>{rightActions}</div>
+      <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>{rightActions}</div>
     </div>
   );
 }

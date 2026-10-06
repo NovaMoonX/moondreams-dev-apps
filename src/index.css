@@ -16,8 +16,14 @@
   @media (max-width: 767.98px) {
     top: 5rem;
     transition: top 300ms;
+    html[data-site-banner='true'] & {
+      top: 7.25rem;
+    }
     html[data-site-header='hidden'] & {
       top: 0;
+    }
+    html[data-site-header='hidden'][data-site-banner='true'] & {
+      top: 2.25rem;
     }
   }
 }

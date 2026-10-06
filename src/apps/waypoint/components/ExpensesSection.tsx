@@ -7,6 +7,7 @@ import {
   Input,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ListFilter } from 'lucide-react';
 
@@ -213,6 +214,7 @@ function clusterByGroup(items: TripExpense[]): ExpenseCluster[] {
 
 function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
@@ -429,6 +431,29 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       setError(getErrorMessage(splitError, 'Unable to update this split.'));
     } finally {
       setIsSplitSubmitting(false);
+    }
+  };
+
+  const runAction = async (action: Promise<unknown>, fallback: string) => {
+    setError(null);
+    try {
+      await action;
+    } catch (actionError) {
+      setError(getErrorMessage(actionError, fallback));
+    }
+  };
+
+  const handleRemoveEarlyFromDues = async (expenseId: string, fromUid: string) => {
+    const confirmed = await confirm({
+      title: 'Remove early payment',
+      message: `Remove the early payment ${memberLabel(fromUid)} recorded? It stops counting in the Dues summary.`,
+      destructive: true,
+    });
+    if (confirmed) {
+      await runAction(
+        dispatch(removeEarlyPayment({ uid: fromUid, tripId: trip.id, expenseId })).unwrap(),
+        'Unable to remove this early payment.',
+      );
     }
   };
 
@@ -701,6 +726,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           ))}
         </div>
       </div>
+      {totalsView === 'me' && myTotals.sentEarly > 0 && (
+        <p className='text-muted-foreground -mt-2 text-sm'>
+          You&apos;ve sent {formatTotal(myTotals.sentEarly, myTotals.sentEarly, currency)} early toward expected expenses.
+        </p>
+      )}
       <div className='border-border rounded-lg border p-3'>
         <p className='text-sm font-medium'>Dues summary</p>
         {pairSettlements.length === 0 ? (
@@ -717,8 +747,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
             }
             onSetEarlyReturned={(expenseId, isReturned) =>
-              void dispatch(setEarlyPaymentReturned({ uid: currentUserId, tripId: trip.id, expenseId, isReturned }))
+              void runAction(
+                dispatch(setEarlyPaymentReturned({ uid: currentUserId, tripId: trip.id, expenseId, isReturned })).unwrap(),
+                'Unable to update this early payment.',
+              )
             }
+            canRemoveEarly={(fromUid) => fromUid === currentUserId || canAddExpenses}
+            onRemoveEarly={(expenseId, fromUid) => void handleRemoveEarlyFromDues(expenseId, fromUid)}
           />
         )}
       </div>

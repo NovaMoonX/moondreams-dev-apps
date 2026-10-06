@@ -1281,7 +1281,7 @@ function EventFormModal({
                 sameTypeGroupLabels.find((groupLabel) => normalizeLabel(groupLabel) === normalizeLabel(draft.groupLabel)) ??
                 (draft.groupLabel === '' ? '' : NEW_CHOICE)
               }
-              newText={sameTypeGroupLabels.some((groupLabel) => normalizeLabel(groupLabel) === normalizeLabel(draft.groupLabel)) ? '' : draft.groupLabel}
+              newText={draft.groupLabel}
               newPillLabel='New group'
               newPlaceholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
               onChange={(choice, newText) => updateDraft({ groupLabel: choice === NEW_CHOICE ? newText : choice })}

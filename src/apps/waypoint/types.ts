@@ -211,8 +211,7 @@ export interface TripExpense {
   targetMemberIds: string[];
   splitAmounts: Record<string, number> | null;
   paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
-  /** Keyed by the member who paid early (one per member per expense). Documents from before this
-   * existed lack the key: read it with `getEarlyPayments`. */
+  /** Keyed by the member who paid early; older documents lack it. */
   earlyPayments: Record<string, EarlyPayment>;
   note: string | null;
   groupLabel: string | null;
