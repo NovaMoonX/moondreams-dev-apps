@@ -70,7 +70,9 @@ function Subview({ children, onClose, title, className, overlay = false }: Subvi
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
-      const hasDialogOnTop = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(
+      const hasDialogOnTop = Array.from(document.querySelectorAll(
+          '[role="dialog"]:not([inert]):not([aria-hidden="true"]), [role="alertdialog"]:not([inert]):not([aria-hidden="true"])',
+        )).some(
         (dialog) => !dialog.hasAttribute('data-subview-overlay'),
       );
       if (event.key === 'Escape' && !event.defaultPrevented && !hasDialogOnTop) {

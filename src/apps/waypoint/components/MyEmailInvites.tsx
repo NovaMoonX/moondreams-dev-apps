@@ -16,7 +16,7 @@ interface MyEmailInvitesProps {
   uid: string;
   invites: TripEmailInvite[];
   onViewTrip: (tripId: string) => void;
-  /** Another prompt owns the screen (a join link), so this one waits behind its icon button. */
+  /** Another prompt owns the screen (a join link), so this one doesn't open by itself while it is up. */
   isQuiet?: boolean;
   /** The trip the page is trying to open: an invitation to it is shown even if it was put away before. */
   focusTripId?: string | null;
@@ -26,7 +26,8 @@ const dismissedKey = (uid: string) => `waypoint.invitesDismissed.${uid}`;
 
 const readDismissed = (uid: string): string[] => {
   try {
-    return JSON.parse(localStorage.getItem(dismissedKey(uid)) ?? '[]') as string[];
+    const stored: unknown = JSON.parse(localStorage.getItem(dismissedKey(uid)) ?? '[]');
+    return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : [];
   } catch {
     return [];
   }
@@ -47,14 +48,16 @@ function MyEmailInvites({ uid, invites, onViewTrip, isQuiet = false, focusTripId
   const { confirm } = useActionModal();
   const [dismissed, setDismissed] = useState(() => readDismissed(uid));
   const [pinned, setPinned] = useState<TripEmailInvite | null>(null);
-  const focused = invites.find((invite) => invite.tripId === focusTripId);
+  const [skippedFocus, setSkippedFocus] = useState<string | null>(null);
+  const focused = invites.find((invite) => invite.tripId === focusTripId && invite.tripId !== skippedFocus);
   const unseen = isQuiet ? undefined : invites.find((invite) => !dismissed.includes(invite.tripId));
   const shown = pinned ?? focused ?? unseen ?? null;
   const { data: title } = useQuery({ ...tripTitleQueryOptions(shown?.tripId ?? ''), enabled: shown !== null });
 
   const close = () => {
-    const next = invites.map((invite) => invite.tripId);
+    const next = shown ? Array.from(new Set([...dismissed, shown.tripId])) : dismissed;
     setPinned(null);
+    setSkippedFocus(shown?.tripId ?? null);
     setDismissed(next);
     writeDismissed(uid, next);
   };

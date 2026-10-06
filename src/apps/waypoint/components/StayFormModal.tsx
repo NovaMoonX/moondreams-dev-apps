@@ -195,6 +195,7 @@ export function StayFormModal({
     setDraft((current) => ({
       ...next,
       name: next.name || current.name,
+      confirmationCode: next.confirmationCode || current.confirmationCode,
       address: readAddress ? next.address : current.address || next.address,
       ...(readAddress
         ? {}

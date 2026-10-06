@@ -250,6 +250,7 @@ function Waypoint() {
                   Join with code
                 </Button>
                 <MyEmailInvites
+                  key={user.uid}
                   uid={user.uid}
                   invites={emailInvites.filter((invite) => !trips.some((trip) => trip.id === invite.tripId))}
                   onViewTrip={handleViewInvitedTrip}

@@ -177,12 +177,15 @@ export function RentalFormModal({
       ...next,
       name: next.name || current.name,
       vehicle: next.vehicle || current.vehicle,
+      confirmationCode: next.confirmationCode || current.confirmationCode,
       pickup: fields.pickupAddress ? next.pickup : current.pickup,
       returnLocation: fields.returnAddress ? next.returnLocation : current.returnLocation,
       linkUrl: current.linkUrl,
       linkPreview: current.linkPreview,
     }));
-    setRevealed(ALL_OPTIONAL_FIELDS.filter((key) => hasInitialValue(key, uploaded)));
+    setRevealed((current) =>
+      Array.from(new Set([...current, ...ALL_OPTIONAL_FIELDS.filter((key) => hasInitialValue(key, uploaded))])),
+    );
   };
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const updateDraft = (changes: Partial<RentalDraft>) =>

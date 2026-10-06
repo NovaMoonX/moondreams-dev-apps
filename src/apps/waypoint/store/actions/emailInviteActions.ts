@@ -84,7 +84,12 @@ export const acceptEmailInvite = createAsyncThunk<
     await batch.commit();
   } catch (error) {
     console.error('Joining from an email invitation failed', error);
-    return rejectWithValue("We couldn't add you to this trip. You may already be on it, or an Admin may have changed your invitation.");
+    const isDenied = typeof error === 'object' && error !== null && 'code' in error && error.code === 'permission-denied';
+    return rejectWithValue(
+      isDenied
+        ? "We couldn't add you to this trip. You may already be on it, or an Admin may have changed your invitation."
+        : getErrorMessage(error, 'Unable to join this trip. Check your connection and try again.'),
+    );
   }
 
   // A request sent earlier is moot now; failing to clear it leaves a harmless stale row for an Admin to decline.

@@ -3,7 +3,7 @@ import {
   getEndOfLocalDay,
   toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
-import { getDayCount, getDayDateLabel, getDayInputValue } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayDateLabel, getDayInputValue, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { formatClockTime, formatDateTime } from '@/utils/formatUtils';
 import {
   formatTimezoneAbbreviation,
@@ -28,7 +28,7 @@ export function getTimeModel(trip: TripSpace): TripTimeModel {
 
 /** Today's day number while the trip is on, otherwise its first day: where a new item most likely belongs. */
 export function getDefaultDayIndex(trip: TripSpace, now: number = Date.now()) {
-  const today = Math.floor((now - trip.startDate) / DAY_MS);
+  const today = getLocalDayIndex(trip.startDate, now);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   return today >= 0 && today < dayCount ? today : 0;
 }
