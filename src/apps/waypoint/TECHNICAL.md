@@ -373,7 +373,7 @@ previews. Once stored, rendering never calls Google or the function again; a bro
 just hides itself. These are app-agnostic, so other mini-apps can reuse them: the
 Places client lives at `src/lib/places/placesApi.ts`, the link-metadata client and the
 image component at `src/lib/linkMetadata/fetchLinkMetadata.ts` and
-`src/components/EnrichedImage.tsx`, and the Cloud Function at
+`src/components/FallbackImage.tsx`, and the Cloud Function at
 `functions/src/linkMetadata/fetchLinkMetadata.ts`.
 
 **On keeping these as timestamps, not strings:** the skill's Data Schema rule is explicit and repeated three times — "no excuse for a TDD to introduce a `string` date field." I kept `checkInAt`/`checkOutAt` as `number` rather than following the string suggestion, but added `checkInTimezone` to solve the actual underlying concern: a hotel's "3pm check-in" means 3pm *local to the property*, and a raw millisecond timestamp alone doesn't carry that — the timezone field is what lets it render correctly as local time without abandoning the convention. This is the "date + timezone" option floated as an alternative, applied without the string-typing part. Flagging this as a real judgment call rather than silently picking a side — happy to revisit if the intent was specifically to break from the timestamp convention here.

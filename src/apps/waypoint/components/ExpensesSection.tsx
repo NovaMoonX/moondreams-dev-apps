@@ -149,13 +149,13 @@ const ESTIMATED_ROW_HEIGHT = 72;
 
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
-// The zero-width space after the dash lets a long range wrap there instead of overflowing its box.
+// An en dash, not a hyphen: it lets a long range wrap there instead of overflowing its box.
 function formatTotal(min: number, max: number, currency: string) {
   const formatter =
     currencyFormatters.get(currency) ?? new Intl.NumberFormat(undefined, { style: 'currency', currency });
   currencyFormatters.set(currency, formatter);
   const minimum = formatter.format(min);
-  return min === max ? minimum : `${minimum}-\u200b${formatter.format(max)}`;
+  return min === max ? minimum : `${minimum}\u2013${formatter.format(max)}`;
 }
 
 interface SplitShare {
@@ -706,12 +706,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       );
     }
 
+    const actions = getActions(expense);
     return (
       <li key={expense.id} className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'>
         {renderExpenseDetail(expense)}
-        {getActions(expense).length > 0 && (
+        {actions.length > 0 && (
           <div className='col-start-2 row-start-1 flex items-start gap-2 self-start'>
-            {getActions(expense).map((action) => (
+            {actions.map((action) => (
               <Button
                 key={action.key}
                 type='button'

@@ -4,7 +4,7 @@ interface LazyMountProps {
   children: ReactNode;
   /** Height reserved until the content mounts, so the scrollbar and the rows below stay put. */
   estimatedHeight: number;
-  /** Mount at once, for the first screenful. */
+  /** Mount at once, for the first screenful. Read once: content that has mounted stays, even if the list reorders. */
   eager?: boolean;
   /** How far outside the viewport the content mounts, so it is ready before it scrolls in. */
   rootMargin?: string;
@@ -13,7 +13,7 @@ interface LazyMountProps {
 /** Mounts a long section's children only when it nears the viewport, then keeps them: a list of 100+ cards never builds them all at once. */
 function LazyMount({ children, estimatedHeight, eager = false, rootMargin = '800px 0px' }: LazyMountProps) {
   const placeholderRef = useRef<HTMLDivElement>(null);
-  const [hasMounted, setHasMounted] = useState(false);
+  const [hasMounted, setHasMounted] = useState(eager);
   const isMounted = eager || hasMounted;
 
   useEffect(() => {

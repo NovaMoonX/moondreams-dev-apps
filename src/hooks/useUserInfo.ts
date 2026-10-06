@@ -67,11 +67,34 @@ const notifyWatchers = (watchers: Set<() => void>) => {
   }, 50);
 };
 
-/** Forgets every cached profile, so the next person to sign in never sees the last one's. */
+const startListening = (uid: string, entry: UserEntry) => {
+  entry.stop = onSnapshot(
+    doc(db, 'users', uid),
+    (docSnapshot) => {
+      entry.info = normalizeUserInfo(uid, docSnapshot.data());
+      entry.rev += 1;
+      notifyWatchers(entry.watchers);
+    },
+    () => {
+      entry.stop = null;
+    },
+  );
+};
+
+/** Forgets every cached profile and restarts the listeners still being watched, so the next person to sign in never sees the last one's. */
 export function clearUserInfoStore() {
-  entries.forEach((entry) => {
-    entry.info = normalizeUserInfo(entry.info.uid, null);
+  entries.forEach((entry, uid) => {
+    if (entry.stopTimer) {
+      clearTimeout(entry.stopTimer);
+      entry.stopTimer = null;
+    }
+    entry.stop?.();
+    entry.stop = null;
+    entry.info = normalizeUserInfo(uid, null);
     entry.rev += 1;
+    if (entry.watchers.size > 0) {
+      startListening(uid, entry);
+    }
     notifyWatchers(entry.watchers);
   });
 }
@@ -94,15 +117,7 @@ function watchUser(uid: string, onChange: () => void) {
     entry.stopTimer = null;
   }
   if (!entry.stop) {
-    entry.stop = onSnapshot(
-      doc(db, 'users', uid),
-      (docSnapshot) => {
-        entry.info = normalizeUserInfo(uid, docSnapshot.data());
-        entry.rev += 1;
-        notifyWatchers(entry.watchers);
-      },
-      () => {},
-    );
+    startListening(uid, entry);
   }
 
   return () => {
