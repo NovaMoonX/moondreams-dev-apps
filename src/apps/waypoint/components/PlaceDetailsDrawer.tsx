@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { Archive, Layers } from 'lucide-react';
 
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
 
@@ -74,7 +74,7 @@ export function PlaceDetailsDrawer({
     <Drawer isOpen={isOpen} onClose={onClose} title={title} showCloseButton={true} footer={getFooter()}>
       <div className='space-y-4'>
         {imageUrl && (
-          <EnrichedImage src={imageUrl} alt='' className='aspect-video max-h-36 w-full rounded-lg object-cover' />
+          <FallbackImage src={imageUrl} alt='' className='aspect-video max-h-36 w-full rounded-lg object-cover' />
         )}
         <div className='space-y-2'>{children}</div>
         {hasMoreActions && (

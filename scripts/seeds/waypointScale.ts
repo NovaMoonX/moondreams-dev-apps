@@ -254,24 +254,33 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     const id = `scale-expense-${index}`;
     const isPaid = index % 3 !== 0;
     const isRange = !isPaid && index % 2 === 0;
+    const isCustomSplit = isPaid && index % 5 === 1 && index % 7 !== 0;
+    const amount = 40 + (index % 17) * 12;
+    const splitUids = Array.from(new Set([alexUid, taylorUid, pickMember(index + 3), pickMember(index + 8)]));
+    const firstCents = Math.round(amount * 40);
+    const restCount = splitUids.length - 1;
+    const baseRestCents = Math.floor((amount * 100 - firstCents) / restCount);
+    const shareCents = splitUids.map((_, position) =>
+      position === 0 ? firstCents : position === restCount ? amount * 100 - firstCents - baseRestCents * (restCount - 1) : baseRestCents,
+    );
     add(`${tripPath}/expenses/${id}`, {
       id,
       tripId: TRIP_ID,
       dayIndex: index % TRIP_DAYS,
       title: `${['Dinner', 'Shuttle', 'Tickets', 'Groceries', 'Parking', 'Boat tour'][index % 6]} #${index + 1}`,
-      amount: isRange ? null : 40 + (index % 17) * 12,
+      amount: isRange ? null : amount,
       amountMin: isRange ? 100 : null,
       amountMax: isRange ? 180 : null,
       paidAmount: null,
       currency: 'USD',
       isPerPerson: index % 7 === 0,
-      payerUid: isPaid ? pickMember(index) : null,
+      payerUid: isPaid ? (isCustomSplit ? alexUid : pickMember(index)) : null,
       status: isPaid ? 'PAID' : 'EXPECTED',
       category: EXPENSE_CATEGORIES[index % EXPENSE_CATEGORIES.length],
       customCategoryLabel: null,
-      targetType: 'EVERYONE_CURRENT',
-      targetMemberIds: memberUids,
-      splitAmounts: null,
+      targetType: isCustomSplit ? 'SPECIFIC_MEMBERS' : 'EVERYONE_CURRENT',
+      targetMemberIds: isCustomSplit ? splitUids : memberUids,
+      splitAmounts: isCustomSplit ? Object.fromEntries(splitUids.map((uid, position) => [uid, shareCents[position] / 100])) : null,
       paidMemberStatus: paidStatus,
       earlyPayments: !isPaid && index % 6 === 0 ? { [taylorUid]: { toUid: alexUid, amount: 2, paidAt: context.now - 3_600_000, isReturned: false, returnedAt: null } } : {},
       note: null,

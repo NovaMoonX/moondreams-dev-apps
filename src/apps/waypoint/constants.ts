@@ -425,3 +425,6 @@ export const WEATHER_BANNER_IMAGES: Record<WeatherConditionId, string | null> = 
   thunderstorms: '/by-app/waypoint/weather/thunderstorms.webp',
   unknown: null,
 };
+
+/** Lists with at least this many rows (members, checklist items) get a search field. */
+export const LIST_SEARCH_THRESHOLD = 8;

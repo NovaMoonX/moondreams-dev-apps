@@ -18,6 +18,7 @@ Review only each PR's own changes: `git diff origin/<base>...origin/<head>` (thr
 - the repo rules in `CLAUDE.md`: functions over loose `let` and accumulator `for` loops, no IIFEs, `join()` for class names, no raw form elements, default-zero comments, Firestore `T | null`, `generateUuid`, date-only vs instant, `useAppSelector` that builds a value, listeners in `store/listeners/`, TanStack Query, `persist: true`, atomic writes, never an overlay on an overlay, option lists in `constants.ts`;
 - `firestore.rules`, `storage.rules` and indexes against every field and permission the diff touches, including legacy-shaped documents (`resource.data.get(field, default)`), and whether the PR body's verification claims are plausible;
 - Functions: secrets, caching and budget for third-party calls, `functions/README.md` rows, errors that could leak a key or URL;
+- performance at scale (`CLAUDE.md` "Performance is a design check"): an `Intl` formatter built per call, work done per row or per pair that one pass would do, a `useMemo`/selector keyed on something that changes every render, a store or hook that re-renders every subscriber on any change, an uncapped list, a module-level cache of user data that survives sign-out;
 - gaps: seeds, docs, `SITE_VERSION`, unmet issue checkboxes, a component that exists but isn't reachable from a screen.
 Also name any feature-specific risk: <list the risky logic for this PR: money math, time zones, transitions, rules, transactions, memoization keyed on `now`, overlay stacking, concurrency>.
 

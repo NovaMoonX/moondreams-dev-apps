@@ -34,6 +34,8 @@ A `## Regression check` section in the PR body shows that what the PR adds does 
 5. **Behaviour that existing users already rely on.** Gestures, shortcuts, defaults, copy and keyboard paths the PR replaces or removes: list each as "was / now", and why.
 6. **Write it as a table:** `Area | What could regress | How it was checked | Result`, one row per risk, with the security-rules row first. Then one line each for anything found and fixed, and anything not checked and why.
 
+**Performance section.** When the PR changes rendering, selectors, listeners, shared hooks or per-row computation, the body also has a `## Performance` section: the app's scale fixture, the throttle used (dev build, 4× CPU), before/after timings for each screen switched, what changed (formatter caches, one-pass math, shared stores, memoization, caps) and anything still slow. A PR that adds a list to an app says how it behaves on that app's fixture.
+
 **Keep it current.** Whenever a push touches an area a row covers, re-run that row and update the result. A stale row, or a rules change with no matching row, is an unfinished PR. The Stop hook asks for this on every new HEAD, like the screenshots.
 
 ## 3. Ask Copilot first (20-minute window)
@@ -70,4 +72,4 @@ Don't ask first. When a finding reflects a **lasting** design or product rule ra
 
 ## 7. Finish
 
-The PR body ends with: Screenshots, Regression check, Review (who reviewed, what was found and fixed, what is a follow-up), Rules added (or "none"), and what is unverified. Then the final report to the user: the same, short, with links.
+The PR body ends with: Screenshots, Regression check, Performance (when it applies), Review (who reviewed, what was found and fixed, what is a follow-up), Rules added (or "none"), and what is unverified. Then the final report to the user: the same, short, with links.

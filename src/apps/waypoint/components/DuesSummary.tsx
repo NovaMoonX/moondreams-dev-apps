@@ -214,19 +214,15 @@ function DuesSummary({
     .filter(({ item, fromUid, toUid }) =>
       (fromUid === currentUserId || toUid === currentUserId) && (item.state === 'PENDING' || item.state === 'HELD'),
     )
-    .map(({ item, fromUid, toUid }) => {
-      const amount = formatAmount(item.payment.amount);
-      const title = item.expense.title;
-      const text =
-        fromUid === currentUserId
-          ? item.state === 'PENDING'
-            ? `You sent ${memberLabel(toUid)} ${amount} early for ${title}. It's already taken off what you owe them, and it covers your share once they pay.`
-            : `${memberLabel(toUid)} is still holding the ${amount} you sent early for ${title}.`
-          : item.state === 'PENDING'
-            ? `${memberLabel(fromUid)} sent you ${amount} early for ${title}. It's already taken off what they owe you. If someone else pays, you'll owe it back.`
-            : `You're holding ${amount} from ${memberLabel(fromUid)} for ${title}. Send it back and they can mark it returned.`;
-      return { key: `${item.expense.id}-${fromUid}`, text };
-    });
+    .sort((first, second) => second.item.payment.paidAt - first.item.payment.paidAt)
+    .map(({ item, fromUid, toUid }) => ({
+      key: `${item.expense.id}-${fromUid}`,
+      fromUid,
+      toUid,
+      amount: formatAmount(item.payment.amount),
+      title: item.expense.title,
+      isHeld: item.state === 'HELD',
+    }));
   const visibleNotices = showAllNotices ? notices : notices.slice(0, MAX_VISIBLE_NOTICES);
   const involvesMe = (settlement: PairSettlement) => [settlement.personA, settlement.personB].includes(currentUserId);
   const myPairs = settlements.filter(involvesMe);
@@ -344,13 +340,26 @@ function DuesSummary({
   return (
     <>
       {notices.length > 0 && (
-        <div className='bg-muted/50 mt-2 space-y-1.5 rounded-xl p-3'>
-          {visibleNotices.map((notice) => (
-            <p key={notice.key} className='flex items-start gap-2 text-sm'>
-              <HandCoins className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
-              <span className='min-w-0'>{notice.text}</span>
-            </p>
-          ))}
+        <div className='bg-muted/50 mt-2 space-y-2 rounded-xl p-3'>
+          <p className='text-muted-foreground flex items-start gap-2 text-xs'>
+            <HandCoins className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+            <span>
+              <span className='text-foreground block text-sm font-medium'>Paid early</span>
+              Money sent ahead of an expense comes off what&apos;s owed until the expense is paid. Newest first.
+            </span>
+          </p>
+          <ul className='divide-border divide-y'>
+            {visibleNotices.map((notice) => (
+              <li key={notice.key} className='py-2 text-sm first:pt-0 last:pb-0'>
+                {memberLabel(notice.fromUid)} sent {memberLabel(notice.toUid)}{' '}
+                <span className='font-medium whitespace-nowrap'>{notice.amount}</span>
+                <span className='text-muted-foreground block text-xs'>
+                  {notice.title}
+                  {notice.isHeld ? ' · being held until it is sent back' : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
           {notices.length > MAX_VISIBLE_NOTICES && (
             <Button
               type='button'

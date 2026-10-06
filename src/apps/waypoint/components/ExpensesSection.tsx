@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import {
   Button,
+  Disclosure,
   Drawer,
   Input,
   Select,
@@ -142,13 +143,15 @@ function describeSplit(
     : `Split · ${targetLabel} (even)`;
 }
 
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
+// The zero-width space after the dash lets a long range wrap there instead of overflowing its box.
 function formatTotal(min: number, max: number, currency: string) {
-  const formatter = new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-  });
+  const formatter =
+    currencyFormatters.get(currency) ?? new Intl.NumberFormat(undefined, { style: 'currency', currency });
+  currencyFormatters.set(currency, formatter);
   const minimum = formatter.format(min);
-  return min === max ? minimum : `${minimum}-${formatter.format(max)}`;
+  return min === max ? minimum : `${minimum}-\u200b${formatter.format(max)}`;
 }
 
 interface SplitShare {
@@ -162,6 +165,8 @@ interface SplitBreakdown {
   perPersonLabel: string | null;
   /** Every debtor (payer excluded — they don't owe themselves). */
   shares: SplitShare[];
+  /** The payer's own part of a custom split, shown last so the list adds up to the total. */
+  payerShare: SplitShare | null;
 }
 
 function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBreakdown | null {
@@ -191,7 +196,13 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
       ? `${formatTotal(amounts[splitMemberIds[0]] ?? 0, amounts[splitMemberIds[0]] ?? 0, expense.currency)} per person`
       : null;
 
-  return { perPersonLabel, shares };
+  const payerAmount = expense.payerUid === null ? undefined : amounts[expense.payerUid];
+  const payerShare =
+    customAmounts !== null && expense.payerUid !== null && payerAmount !== undefined
+      ? { uid: expense.payerUid, amountLabel: formatTotal(payerAmount, payerAmount, expense.currency), isPaid: true }
+      : null;
+
+  return { perPersonLabel, shares, payerShare };
 }
 
 interface ExpenseCluster {
@@ -236,6 +247,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
+  const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
@@ -495,6 +507,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
+    ...(expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly
+      ? [
+          {
+            key: 'early-payment',
+            label: getEarlyPayments(expense)[currentUserId] ? 'Edit my early payment' : 'Record an early payment',
+            description: 'Money you already sent a teammate for this.',
+            run: () => setEarlyExpense(expense),
+          },
+        ]
+      : []),
     ...(canAddExpenses && getResolvedExpenseAmount(expense) !== null
       ? [
           {
@@ -522,17 +544,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   const renderEarlyPayments = (expense: TripExpense) => {
     const entries = Object.entries(getEarlyPayments(expense));
-    const canRecord =
-      expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly;
-    if (entries.length === 0 && !canRecord) {
+    if (entries.length === 0) {
       return null;
     }
 
     return (
       <div className='mt-1 space-y-0.5'>
-        {entries.length > 0 && (
-          <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>Paid early</p>
-        )}
+        <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>Paid early</p>
         {entries.map(([fromUid, payment]) => (
           <p key={fromUid} className='text-muted-foreground text-xs'>
             {memberLabel(fromUid)} → {memberLabel(payment.toUid)} ·{' '}
@@ -540,19 +558,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             {payment.isReturned ? ' · sent back' : expense.status === 'EXPECTED' ? ' · waiting for this to be paid' : ''}
           </p>
         ))}
-        {canRecord && (
-          <Button
-            type='button'
-            variant='link'
-            className='h-10 px-0! text-xs'
-            onClick={() => {
-              setDetailExpenseId(null);
-              setEarlyExpense(expense);
-            }}
-          >
-            {getEarlyPayments(expense)[currentUserId] ? 'Edit my early payment' : 'Record an early payment'}
-          </Button>
-        )}
       </div>
     );
   };
@@ -577,7 +582,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       if (!share.isPaid) {
         return (
-          <Button type='button' variant='link' className='h-10 shrink-0 text-xs' onClick={toggle}>
+          <Button type='button' variant='secondary' size='sm' className='shrink-0' onClick={toggle}>
             Mark as repaid
           </Button>
         );
@@ -586,7 +591,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
           <span className='text-muted-foreground text-xs'>You repaid this</span>
-          <Button type='button' variant='link' className='text-xs' onClick={toggle}>
+          <Button type='button' variant='tertiary' size='sm' onClick={toggle}>
             Undo
           </Button>
         </span>
@@ -644,6 +649,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   </div>
                 ))
               )}
+              {splitBreakdown.payerShare && (
+                <p className='text-muted-foreground text-xs'>
+                  {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (their own share)
+                </p>
+              )}
               {expense.payerUid === currentUserId && repaidNames.length > 0 && (
                 <p className='text-muted-foreground text-right text-xs'>
                   Repaid so far: {repaidNames.join(', ')}
@@ -678,7 +688,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 {hasEarly ? ' · Paid early' : ''}
               </span>
             </span>
-            <span className='shrink-0 text-right whitespace-nowrap'>
+            <span className='max-w-32 shrink-0 text-right'>
               <span className='block font-medium'>{formatTotal(displayRange.min, displayRange.max, expense.currency)}</span>
               {myShare && (
                 <span className='text-muted-foreground block text-xs'>
@@ -730,12 +740,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <li key={`group-${cluster.groupLabel}-${index}`} className='py-3'>
           <div className='grid grid-cols-[1fr_auto] gap-x-3'>
             <div className='min-w-0'>
-              <p className='font-medium'>{cluster.groupLabel}</p>
-              <p className='text-muted-foreground text-sm'>
+              <p className='text-sm font-medium'>{cluster.groupLabel}</p>
+              <p className='text-muted-foreground text-xs'>
                 {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
               </p>
             </div>
-            <p className='pr-2 font-medium whitespace-nowrap'>
+            <p className='text-muted-foreground max-w-32 pr-2 text-right text-sm'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
             </p>
           </div>
@@ -793,12 +803,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <div
               key={label}
               className={join(
-                'border-border rounded-lg border p-3 text-center sm:text-left',
+                'border-border min-w-0 rounded-lg border p-3 text-center sm:text-left',
                 (label === 'Total' || label === 'My total') && 'col-span-2 sm:col-span-1',
               )}
             >
               <p className='text-muted-foreground text-sm'>{label}</p>
-              <p className='mt-1 text-lg font-semibold'>
+              <p className='mt-1 text-base font-semibold text-balance sm:text-lg'>
                 {formatTotal(total.min, total.max, currency)}
               </p>
             </div>
@@ -810,31 +820,40 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           You&apos;ve sent {formatTotal(myTotals.sentEarly, myTotals.sentEarly, currency)} early toward expected expenses.
         </p>
       )}
-      <div className='border-border rounded-lg border p-3'>
-        <p className='text-sm font-medium'>Dues summary</p>
-        {pairSettlements.length === 0 ? (
-          <p className='text-muted-foreground mt-1 text-sm'>
-            Everyone&apos;s settled up.
-          </p>
-        ) : (
-          <DuesSummary
-            settlements={pairSettlements}
-            currentUserId={currentUserId}
-            memberLabel={memberLabel}
-            formatAmount={(amount) => formatTotal(amount, amount, currency)}
-            onToggleRepaid={(expenseId) =>
-              void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
-            }
-            onSetEarlyReturned={(expenseId, isReturned) =>
-              void runAction(
-                dispatch(setEarlyPaymentReturned({ uid: currentUserId, tripId: trip.id, expenseId, isReturned })).unwrap(),
-                'Unable to update this early payment.',
-              )
-            }
-            canRemoveEarly={(fromUid) => fromUid === currentUserId || canAddExpenses}
-            onRemoveEarly={(expenseId, fromUid) => void handleRemoveEarlyFromDues(expenseId, fromUid)}
-          />
-        )}
+      <div className='border-border rounded-lg border'>
+        <Disclosure
+          label={<span className='text-sm font-medium'>Dues summary</span>}
+          isOpen={isDuesOpen}
+          onToggle={setIsDuesOpen}
+          buttonClassName='px-3 py-2.5 hover:bg-muted/40'
+          className='overflow-visible'
+        >
+          <div className='border-border border-t px-3 pb-3'>
+          {pairSettlements.length === 0 ? (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              Everyone&apos;s settled up.
+            </p>
+          ) : (
+            <DuesSummary
+              settlements={pairSettlements}
+              currentUserId={currentUserId}
+              memberLabel={memberLabel}
+              formatAmount={(amount) => formatTotal(amount, amount, currency)}
+              onToggleRepaid={(expenseId) =>
+                void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+              }
+              onSetEarlyReturned={(expenseId, isReturned) =>
+                void runAction(
+                  dispatch(setEarlyPaymentReturned({ uid: currentUserId, tripId: trip.id, expenseId, isReturned })).unwrap(),
+                  'Unable to update this early payment.',
+                )
+              }
+              canRemoveEarly={(fromUid) => fromUid === currentUserId || canAddExpenses}
+              onRemoveEarly={(expenseId, fromUid) => void handleRemoveEarlyFromDues(expenseId, fromUid)}
+            />
+          )}
+          </div>
+        </Disclosure>
       </div>
       <div className='flex flex-wrap items-center gap-2'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>

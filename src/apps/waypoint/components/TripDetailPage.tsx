@@ -1,3 +1,4 @@
+import FallbackImage from '@/components/FallbackImage';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -465,7 +466,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
         <div>
           {trip.coverImageUrl && showHeaderExtras && (
-            <img
+            <FallbackImage
               src={trip.coverImageUrl}
               alt={`${trip.title} cover`}
               className={join(

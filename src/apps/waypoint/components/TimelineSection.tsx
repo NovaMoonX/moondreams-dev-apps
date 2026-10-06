@@ -14,7 +14,7 @@ import { shallowEqual } from 'react-redux';
 
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import DayWeather from '@apps/waypoint/components/DayWeather';
 import EventCard from '@apps/waypoint/components/EventCard';
@@ -662,7 +662,7 @@ function StayBanner({ stay, showCover }: { stay: Stay; showCover: boolean }) {
   return (
     <div className='border-border bg-card flex overflow-hidden rounded-lg border'>
       {imageUrl && (
-        <EnrichedImage
+        <FallbackImage
           src={imageUrl}
           alt=''
           className='w-28 shrink-0 object-cover sm:w-44'
