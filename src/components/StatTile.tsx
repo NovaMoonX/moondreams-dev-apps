@@ -86,7 +86,7 @@ function StatTile({
             size='sm'
             rounded='full'
             variant='secondary'
-            className='mt-2 w-full text-xs'
+            className='mt-2 min-h-10 w-full text-xs'
             aria-label={prompt.ariaLabel}
             onClick={prompt.onClick}
           >

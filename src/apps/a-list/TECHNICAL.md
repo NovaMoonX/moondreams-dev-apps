@@ -10,7 +10,7 @@ These shape everything below. Each is also listed under [Open questions](#open-q
 2. **Watchlist "Seen" is derived**, never stored: a movie is seen when any of its viewings has `status: 'SEEN'`. Editing or removing a viewing can't leave the watchlist wrong.
 3. **A viewing is an instant keyed by the viewer's local day.** The calendar, the counters and the week/month goals all key off `toLocalDateInputValue(showtimeAt)`. Release dates are date-only (UTC midnight).
 4. **Savings count what a non-member would have paid: price + convenience fee + tax.** Members pay no convenience fee, so the fee on a ticket is one *avoided*; it counts as value and is also totalled on its own as "fees avoided". (See [Savings and break-even](#5-savings-and-break-even).)
-5. **Aggregates are never stored.** Savings, break-even, counters, format splits and chips are all computed from the three collections by memoized selectors. A member has on the order of 150 viewings a year, so there is nothing to optimize and nothing to drift.
+5. **Aggregates are never stored.** Savings, break-even, counters, format splits and chips are all computed from the collections by memoized selectors. A member has on the order of 150 viewings a year, so there is nothing to optimize and nothing to drift.
 6. **Movie data comes from TMDB (whenever its key is set) or OMDb, behind two `onCall` functions** that hold the keys. OMDb's free tier allows about 1,000 lookups a day **for the whole app, not per member** (TMDB isn't rationed), so the functions share a server-side cache and a daily budget guard, the browser debounces and caches, and a manual "add by title" path keeps the app usable when the budget is spent. A small **snapshot** of each movie is copied into the watchlist item and each viewing, so the calendar renders with no network.
 7. **There is no tax-rate source, so tax behaves like the convenience fee:** the membership's rate is gauged from the bill the member types in Setup (total ÷ cost − 1), and from then on ticket tax is a choice among chips built from the rates used on past tickets, the most-used one preselected. Each ticket stores its own rate and tax amount.
 8. **The membership start date is a required Setup field.** It anchors the billing cycle (cost so far and break-even) and is the earliest date a viewing can be given.
@@ -158,7 +158,7 @@ interface Ticket {
 - **Ticket fields are all required once a ticket exists**, which is why "Mark paid" writes the whole `ticket` object in one `updateDoc` (the form owns the whole object). `ticket: null` is the legitimate state of a back-filled movie with no prices entered yet.
 - **Premium savings need `standardPriceCents`.** If a premium ticket has `standardPriceCents: null` the ticket still counts in total savings but contributes nothing to premium savings (and the Dashboard says how many tickets that is).
 - **`totalCents` is stored even though it's a sum.** Itemized, it is just `price + fee + tax`; all-in, it is the one exact number the member typed and the other three are derived from it. Storing it lets the rules assert `totalCents == priceCents + feeAvoidedCents + taxCents` for every ticket, so the two entry modes can never disagree.
-- **Indexes:** none. All three listeners are whole-collection reads; no query filters or orders on the server. `firestore.indexes.json` is unchanged.
+- **Indexes:** none. Every listener is a whole-collection read; no query filters or orders on the server. `firestore.indexes.json` is unchanged.
 
 #### 4. Theater
 
@@ -182,8 +182,8 @@ interface TheatreSnapshot { theatreId: string; name: string; city: string | null
 ```
 
 - **A copy, not a reference.** Search results are snapshotted into the member's own collection, so the list works offline and nothing depends on AMC at read time. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing. A theater AMC doesn't list can be typed by name: its address, city, state, postal code and coordinates stay `null`, and the UI refuses a name already on the list.
-- **At most 10 saved theaters** (`MAX_THEATRES`), enforced in the UI only, so two devices can briefly exceed it.
-- **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite hands the star to another saved theater in the same transaction (Setup does the same), and unstarring it is the only way to have none. Setting a favorite is a single field write on the membership.
+- **At most 10 saved theaters** (`MAX_THEATRES`) and **no duplicate names** (compared case-insensitively with spaces collapsed) are enforced in the UI only, so two devices, or a device whose theaters listener failed, can briefly exceed the cap or save the same name twice. Accepted: a duplicate is harmless (two pills) and removable, and a real cap would need a counter on the membership.
+- **Two devices can race the favorite** (one removes the last theater while another adds, or the next-in-line theater vanishes mid-removal): the worst outcome is a saved theater with no star, which still works (pills, tagging) and is fixed by tapping a star. Accepted. **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite hands the star to another saved theater in the same transaction (Setup does the same), and unstarring it is the only way to have none. Setting a favorite is a single field write on the membership.
 - **Indexes:** none (a whole-collection listener).
 
 #### Derived values (never stored)
@@ -511,8 +511,9 @@ match /apps/a-list/memberships/{uid} {
   function isNullOrIntBetween(value, low, high) { return value == null || (value is int && value >= low && value <= high); }
 
   function isMembershipValid(data) {
+    // `favoriteTheatreId` is allowed but not required (documents written before theaters lack it) and, when present, must match isTheatreId.
     return data.keys().hasOnly(['uid','monthlyCostCents','monthlyTotalCents','taxRate',
-                                'startDate','weeklyGoal','monthlyGoal','setupCompletedAt','createdAt','lastEditedAt'])
+                                'startDate','weeklyGoal','monthlyGoal','setupCompletedAt','createdAt','lastEditedAt','favoriteTheatreId'])
       && data.keys().hasAll(['uid','monthlyCostCents','monthlyTotalCents','taxRate',
                              'startDate','weeklyGoal','monthlyGoal','setupCompletedAt','createdAt','lastEditedAt'])
       && data.uid == uid
@@ -549,7 +550,16 @@ match /apps/a-list/memberships/{uid} {
     allow update: if isOwner() /* && valid && movieKey and createdAt unchanged */;
   }
 
+  match /theatres/{theatreId} {
+    // valid: exact keys (the ten on AListTheatre); theatreId == document id and matches ^manual-[A-Za-z0-9-]{8,40}$;
+    //        name 1–120 characters; address fields null or short text; coordinates null or in range; createdAt/lastEditedAt ints
+    allow read, delete: if isOwner();
+    allow create: if isOwner() /* && isTheatreValid(request.resource.data) */;
+    allow update: if isOwner() /* && valid && createdAt unchanged */;
+  }
+
   match /viewings/{viewingId} {
+    // `theatre` is allowed but not required: null or a map of exactly theatreId, name, city, state.
     // valid: exact keys; id == document id; isMovieValid(movie); endsAt > showtimeAt; the status/rating/showtime
     //        rules in criterion 6; ticket null or isTicketValid (exact keys, format in the six, cents helpers,
     //        STANDARD ⇒ standardPriceCents == null; entryMode in the two values; taxRate null or 0–0.25;
@@ -652,10 +662,10 @@ No cached document is ever written back whole. A transaction is used only where 
 - **Private by construction.** One member's membership, watchlist and viewings are readable and writable only by them. There is no sharing and no admin read; the rules in Security Rules Design Criteria #1–2 are the whole access model.
 - **What leaves the app, and where it goes.** Movie search text and a chosen `movieKey` go to the app's own Cloud Functions, which forward them to the movie provider; the provider sees the function's address and the text, never the member's identity, and the functions don't log the text. The functions do keep a shared cache of results and per-member lookup counts (server-only, no text, no identity beyond a `uid` in a counter's document id). Nothing else leaves the app: there is no location, and tax is never looked up. Posters load straight from the host OMDb names in its response, which sees the viewer's address when they load, as with any image; the app sets `referrerPolicy='no-referrer'` as `EnrichedImage` does.
 - **The provider credential never reaches the browser, a response, or a log** (Functions secret). Inputs to the callables are validated and length-capped; every callable requires an authenticated caller.
-- **Stored data minimization.** No location of any kind is collected or stored. No ticket confirmation numbers, card data or showtime-venue details are ever collected.
+- **Stored data minimization.** No location of any kind is collected or stored. No ticket confirmation numbers or card data are ever collected. The only venue detail is the theater's name (and AMC's id once theaters come from AMC), stored on the member's own theater list and copied onto a showing; address and coordinates stay `null`.
 - **Persistence on the device.** Only the movie search/details queries are persisted to IndexedDB (public third-party data). Nothing from the member's own documents is persisted by the app beyond Firestore's own cache. The query cache is cleared on user switch in `AuthContext`, as everywhere.
 - **Attribution and terms** for the movie provider are an About row in Membership settings and a verification gate before the movie-data PR merges (see Movie Data Service).
-- **Rules are verified against the emulator, not by the UI hiding a control:** owner allowed and a second signed-in user denied on all three paths, signed-out denied; and one denied write per integrity rule (rating 6, negative cents, `SEEN` with a future showtime, `PLANNED` with a rating, changed `movieKey`).
+- **Rules are verified against the emulator, not by the UI hiding a control:** owner allowed and a second signed-in user denied on every path (membership, watchlist, viewings, theaters), signed-out denied; and one denied write per integrity rule (rating 6, negative cents, `SEEN` with a future showtime, `PLANNED` with a rating, changed `movieKey`).
 
 ---
 

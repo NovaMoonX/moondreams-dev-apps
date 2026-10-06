@@ -9,7 +9,7 @@ import type { TheatreDraft } from '@apps/a-list/types';
 interface TheaterPickerProps {
   savedIds: string[];
   savedNames: string[];
-  onAdd: (theatre: TheatreDraft) => void;
+  onAdd: (theatre: TheatreDraft) => boolean | Promise<boolean>;
   isDisabled?: boolean;
 }
 
