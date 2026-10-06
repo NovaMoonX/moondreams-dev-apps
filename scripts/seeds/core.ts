@@ -62,7 +62,6 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         displayName: fixture.displayName,
         photoURL: '',
         isAdmin: fixture.uid === FIXTURE_USERS.admin.uid,
-        lastVisitedAt: context.now - (fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid ? 120 : 1) * 24 * 60 * 60 * 1000,
       },
       { merge: true },
     );
@@ -115,6 +114,15 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       }),
     );
 
+  const visitedFixtures = fixtures.filter((fixture) => fixture.uid !== FIXTURE_USERS.admin.uid);
+  visitedFixtures.forEach((fixture) => {
+    batch.set(context.firestore.doc(`siteVisits/${fixture.uid}`), {
+      uid: fixture.uid,
+      lastVisitedAt:
+        context.now - (fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid ? 120 : 1) * DAY_MS,
+    });
+  });
+
   usageEntries.forEach(({ appId, usage }) => {
     batch.set(
       context.firestore.doc(`apps/${appId}/usage/${usage.uid}`),
@@ -140,7 +148,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
-    firestoreDocuments: fixtures.length + APP_REGISTRY.length + usageEntries.length,
+    firestoreDocuments: fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length,
     realtimePaths: fixtures.length,
   };
 

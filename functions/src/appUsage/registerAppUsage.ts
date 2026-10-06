@@ -20,7 +20,7 @@ const FIRST_ACTIVITY_FINDERS: Record<string, (firestore: Firestore, uid: string)
   'worth-the-wait': findWorthTheWaitStart,
 };
 
-// Mirrors the app-visibility rules in firestore.rules.
+// Matches the app catalog's client-side filter, which trims and lowercases the allowed list.
 function canUseApp(
   app: FirebaseFirestore.DocumentData | undefined,
   uid: string,
@@ -53,7 +53,9 @@ export const registerAppUsage = onCall(
     }
 
     const appId = typeof request.data?.appId === 'string' ? request.data.appId.trim() : '';
-    const findFirstActivityAt = FIRST_ACTIVITY_FINDERS[appId];
+    const findFirstActivityAt = Object.hasOwn(FIRST_ACTIVITY_FINDERS, appId)
+      ? FIRST_ACTIVITY_FINDERS[appId]
+      : undefined;
     if (!findFirstActivityAt) {
       throw new HttpsError('invalid-argument', 'That app is not tracked.');
     }

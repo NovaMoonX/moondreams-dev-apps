@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { DAY_MS } from '@/lib/query/queryClient';
@@ -13,6 +13,13 @@ export interface AppUsage {
   lastActiveAt: number;
 }
 
+/** The last time a member loaded the site, at `siteVisits/{uid}`; private to them and the admin. */
+export interface SiteVisit {
+  uid: string;
+  /** Instant: rewritten on every page load while signed in. */
+  lastVisitedAt: number;
+}
+
 export const ACTIVE_WINDOW_MONTHS = 3;
 
 const ACTIVITY_REFRESH_MS = DAY_MS;
@@ -20,12 +27,17 @@ const ACTIVITY_REFRESH_MS = DAY_MS;
 const registerAppUsageCallable = httpsCallable<{ appId: string }, AppUsage>(
   functions,
   'registerAppUsage',
+  { timeout: 120_000 },
 );
 
 /** The moment `ACTIVE_WINDOW_MONTHS` calendar months before `now`; members active since then count as active. */
 export function getActiveSince(now: number) {
   const date = new Date(now);
+  const dayOfMonth = date.getDate();
+  date.setDate(1);
   date.setMonth(date.getMonth() - ACTIVE_WINDOW_MONTHS);
+  const daysInTargetMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(dayOfMonth, daysInTargetMonth));
   const result = date.getTime();
   return result;
 }
@@ -44,4 +56,10 @@ export async function recordAppOpened(appId: string, uid: string) {
   if (Date.now() - lastActiveAt >= ACTIVITY_REFRESH_MS) {
     await updateDoc(usageRef, { lastActiveAt: Date.now() });
   }
+}
+
+/** Stamps the member's last visit to the site. */
+export async function recordSiteVisit(uid: string) {
+  const visit: SiteVisit = { uid, lastVisitedAt: Date.now() };
+  await setDoc(doc(db, 'siteVisits', uid), visit);
 }

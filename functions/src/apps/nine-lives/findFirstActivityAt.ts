@@ -1,6 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore';
 
-// Every household collection whose documents carry `createdBy`.
+// Every household collection whose documents carry `createdBy` and `createdAt`.
 const AUTHORED_COLLECTIONS = [
   'cats',
   'conditions',
@@ -13,6 +13,12 @@ const AUTHORED_COLLECTIONS = [
   'litterBoxes',
   'litters',
   'litterEntries',
+  'ingestionDrafts',
+  'customHealthRecordTypes',
+  'customPreventiveProducts',
+  'customPreventiveTypes',
+  'customSymptomQuickTags',
+  'customLitterTypes',
 ];
 
 /** The oldest timestamp Nine Lives holds for a member, or null when they have none (joining a household leaves no timestamp). */

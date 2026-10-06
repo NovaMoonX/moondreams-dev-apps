@@ -2903,7 +2903,21 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActiveAt'])
         && request.resource.data.lastActiveAt is number
-        && request.resource.data.lastActiveAt >= resource.data.lastActiveAt;
+        && request.resource.data.lastActiveAt >= resource.data.lastActiveAt
+        && request.resource.data.lastActiveAt <= request.time.toMillis() + 3600000;
+    }
+
+    // The last time a member loaded the site, kept out of `users` because that collection is
+    // readable by every signed-in member. Admins read them all; a member only writes their own.
+    match /siteVisits/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'lastVisitedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.lastVisitedAt is number
+        && request.resource.data.lastVisitedAt <= request.time.toMillis() + 3600000;
+      allow delete: if false;
     }
 
     match /users/{userId} {

@@ -23,7 +23,7 @@ import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { ADMIN_EMAIL, getUnconfiguredRegistryApps } from '@lib/app';
 import { ACTIVE_WINDOW_MONTHS, getActiveSince } from '@lib/appUsage/appUsage';
-import { appUsageQueryOptions } from '@lib/appUsage/appUsageQueries';
+import { appUsageQueryOptions, siteVisitsQueryOptions } from '@lib/appUsage/appUsageQueries';
 import { db } from '@lib/firebase/config';
 import {
   APP_STATUS_OPTIONS,
@@ -33,6 +33,7 @@ import {
   type UserProfile,
 } from '@lib/types/appCatalog';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 type AppConfigEditorProps = {
   app: AppMetadata;
@@ -468,9 +469,10 @@ function AppUsageSection({ app, users }: { app: AppMetadata; users: UserProfile[
   const getEmptyMessage = () => {
     if (isPending) return 'Loading…';
     if (isError) return "We couldn't load usage just now.";
-    if (filter === 'active') return `Nobody has opened ${app.name} in the past ${ACTIVE_WINDOW_MONTHS} months.`;
-    return `Nobody has opened ${app.name} yet. People appear here the next time they open it.`;
+    if (filter === 'active') return `No one we've seen has opened ${app.name} in the past ${ACTIVE_WINDOW_MONTHS} months.`;
+    return `No one has been seen in ${app.name} yet. Members appear here the next time they open it.`;
   };
+  const getCount = (count: number) => (isPending || isError ? '–' : count);
 
   return (
     <section className='space-y-4'>
@@ -478,29 +480,32 @@ function AppUsageSection({ app, users }: { app: AppMetadata; users: UserProfile[
         <p className='text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase'>
           Usage
         </p>
-        <h2 className='text-foreground mt-1 text-2xl font-semibold'>{app.name}</h2>
+        <h2 className='text-foreground mt-1 text-lg font-semibold'>Who's using {app.name}</h2>
       </div>
 
       <div className='grid grid-cols-2 gap-3'>
-        <StatTile label='Started using' value={startedRows.length} />
+        <StatTile label='Started using' value={getCount(startedRows.length)} />
         <StatTile
           label='Active'
-          value={activeRows.length}
+          value={getCount(activeRows.length)}
           help={
             <HelpTip title='Active users'>
-              Members who opened {app.name} in the past {ACTIVE_WINDOW_MONTHS} months. Everyone who has ever opened it counts as having started using it.
+              Members who opened {app.name} in the past {ACTIVE_WINDOW_MONTHS} months. Counts only include members we've seen open it since tracking began.
             </HelpTip>
           }
         />
       </div>
+      <p className='text-muted-foreground text-xs'>
+        Members show up the first time they open {app.name} after tracking began, dated from their oldest data there. Anyone who hasn't been back yet isn't counted.
+      </p>
 
       <PillGroup<UsageFilter>
         label='Show members'
         value={filter}
         onChange={setFilter}
         options={[
-          { value: 'started', label: `Started using · ${startedRows.length}` },
-          { value: 'active', label: `Active · ${activeRows.length}` },
+          { value: 'started', label: `Started using · ${getCount(startedRows.length)}` },
+          { value: 'active', label: `Active · ${getCount(activeRows.length)}` },
         ]}
       />
 
@@ -512,19 +517,16 @@ function AppUsageSection({ app, users }: { app: AppMetadata; users: UserProfile[
             <li key={row.uid} className='flex items-center gap-3 py-2.5'>
               <UserAvatar user={row.profile} size='sm' />
               <div className='min-w-0 flex-1'>
-                <div className='text-foreground flex items-center gap-2 text-sm'>
-                  <span className='truncate'>{row.profile.displayName ?? row.profile.email}</span>
-                  {row.isActive ? (
-                    <Badge variant='secondary' size='sm'>
-                      Active
-                    </Badge>
-                  ) : null}
+                <div className='text-foreground truncate text-sm'>
+                  {row.profile.displayName ?? row.profile.email}
                 </div>
                 <div className='text-muted-foreground truncate text-xs'>{row.profile.email}</div>
               </div>
               <div className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
                 <div>Started {formatDate(row.startedAt)}</div>
-                <div>Last active {formatDate(row.lastActiveAt)}</div>
+                <div>
+                  {row.isActive ? 'Last active' : 'Quiet since'} {formatDate(row.lastActiveAt)}
+                </div>
               </div>
             </li>
           ))}
@@ -538,6 +540,11 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
   const [searchTerm, setSearchTerm] = useState('');
   const now = useNow(60_000);
   const usageQueries = useQueries({ queries: apps.map((app) => appUsageQueryOptions(app.id)) });
+  const visitsQuery = useQuery(siteVisitsQueryOptions());
+  const sources = [...usageQueries, visitsQuery];
+  const isLoading = sources.some((source) => source.isPending);
+  const hasError = sources.some((source) => source.isError);
+  const lastVisitByUid = new Map((visitsQuery.data ?? []).map((visit) => [visit.uid, visit.lastVisitedAt]));
 
   const activeSince = getActiveSince(now);
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -550,7 +557,7 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
     )
     .map((profile) => ({
       profile,
-      lastVisitedAt: profile.lastVisitedAt ?? null,
+      lastVisitedAt: lastVisitByUid.get(profile.uid) ?? null,
       appUsage: apps.flatMap((app, index) => {
         const entry = usageQueries[index]?.data?.find((usage) => usage.uid === profile.uid);
         return entry ? [{ app, isActive: entry.lastActiveAt >= activeSince }] : [];
@@ -559,7 +566,7 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
     .sort((a, b) => (b.lastVisitedAt ?? 0) - (a.lastVisitedAt ?? 0));
 
   return (
-    <section className='space-y-4'>
+    <section className='max-w-3xl space-y-4'>
       <div>
         <p className='text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase'>
           Everyone
@@ -568,11 +575,17 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
           {users.length} {users.length === 1 ? 'member' : 'members'}
         </h2>
         <p className='text-muted-foreground mt-1 text-sm'>
-          Most recent visitors first. Apps in color were opened in the past {ACTIVE_WINDOW_MONTHS} months.
+          Most recent visitors first. Filled apps were opened in the past {ACTIVE_WINDOW_MONTHS} months; outlined ones have gone quiet. Visits and app opens are counted from when tracking began.
         </p>
       </div>
 
       <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder='Search members by name or email' />
+
+      {isLoading || hasError ? (
+        <p className='text-muted-foreground text-sm'>
+          {isLoading ? 'Loading visits and apps…' : "We couldn't load everything just now, so some visits and apps may be missing."}
+        </p>
+      ) : null}
 
       {rows.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
@@ -598,11 +611,11 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
                         <div>{formatDate(row.lastVisitedAt)}</div>
                       </>
                     ) : (
-                      <div>No visit yet</div>
+                      <div>Not seen yet</div>
                     )}
                   </div>
                 </div>
-                {row.appUsage.length > 0 ? (
+                {row.appUsage.length > 0 && !isLoading ? (
                   <div className='mt-2 flex flex-wrap gap-1.5'>
                     {row.appUsage.map(({ app, isActive }) => (
                       <Badge
@@ -610,6 +623,7 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
                         variant={isActive ? 'secondary' : 'muted'}
                         outline={!isActive}
                         size='sm'
+                        className={join(isActive && 'border border-transparent')}
                       >
                         {app.name}
                       </Badge>
