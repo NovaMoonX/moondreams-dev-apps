@@ -23,8 +23,9 @@ export function useTrackAppUsage(appId: string, uid: string | null) {
     if (previous !== undefined && Date.now() - previous < DAY_MS) return;
     lastCheckedAt.set(key, Date.now());
 
-    recordAppOpened(appId, uid).catch((error: { code?: string }) => {
-      if (!FINAL_ERROR_CODES.includes(error.code ?? '')) {
+    recordAppOpened(appId, uid).catch((error: unknown) => {
+      const code = (error as { code?: string } | null)?.code ?? '';
+      if (!FINAL_ERROR_CODES.includes(code)) {
         lastCheckedAt.delete(key);
       }
       console.error('Failed to record app usage:', error);

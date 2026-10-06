@@ -90,7 +90,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
   - Worth the Wait: their space, boxes and items, plus when they first saw the welcome.
 - **Lazy by design:** nothing runs for existing members until they next open an app, so counts start from when tracking began, and a member who only joined a Nine Lives household starts at their first visit after launch.
 - **Access:** it refuses a caller who couldn't open the app (not public, or restricted and not on its list). Admins and emulator dev accounts always pass.
-- **Rules:** clients can't create or delete a record, and may only move their own `lastActiveAt` forward (never past the present), so `startedAt` can't be forged. Only admins can list a collection. The site-wide last visit lives separately in `siteVisits/{uid}`, written by the member and readable only by them and the admin.
+- **Rules:** clients can't create or delete a record, and may only move their own `lastActiveAt` forward (and not more than an hour past the server clock), so `startedAt` can't be forged. Only admins can list a collection. The site-wide last visit lives separately in `siteVisits/{uid}`, written by the member and readable only by them and the admin.
 
 ### `fetchLinkMetadata`
 

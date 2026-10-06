@@ -1,6 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore';
 
-// Every household collection whose documents carry `createdBy` and `createdAt`.
+// Every household collection whose documents carry `createdBy` and `createdAt` (health records name their author `uploadedBy`).
 const AUTHORED_COLLECTIONS = [
   'cats',
   'conditions',
@@ -30,11 +30,12 @@ export async function findFirstActivityAt(firestore: Firestore, uid: string) {
 
   const perHousehold = await Promise.all(
     households.docs.map(async (household) => {
-      const authored = await Promise.all(
-        AUTHORED_COLLECTIONS.map((name) =>
+      const authored = await Promise.all([
+        ...AUTHORED_COLLECTIONS.map((name) =>
           household.ref.collection(name).where('createdBy', '==', uid).select('createdAt').get(),
         ),
-      );
+        household.ref.collection('healthRecords').where('uploadedBy', '==', uid).select('createdAt').get(),
+      ]);
 
       const candidates = [
         household.data().createdBy === uid ? household.data().createdAt : null,

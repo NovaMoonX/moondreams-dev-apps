@@ -582,7 +582,7 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
       <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder='Search members by name or email' />
 
       {isLoading || hasError ? (
-        <p className='text-muted-foreground text-sm'>
+        <p role='status' className='text-muted-foreground text-sm'>
           {isLoading ? 'Loading visits and apps…' : "We couldn't load everything just now, so some visits and apps may be missing."}
         </p>
       ) : null}
@@ -611,7 +611,7 @@ function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile
                         <div>{formatDate(row.lastVisitedAt)}</div>
                       </>
                     ) : (
-                      <div>Not seen yet</div>
+                      <div>{isLoading || visitsQuery.isError ? '…' : 'Not seen yet'}</div>
                     )}
                   </div>
                 </div>
