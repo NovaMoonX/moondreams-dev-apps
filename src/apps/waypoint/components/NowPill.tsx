@@ -106,9 +106,9 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         key={itemView}
         role='status'
         className={join(
-          'bg-popover overflow-hidden rounded-full border shadow-lg transition-[max-width] duration-300 ease-in-out',
+          'bg-popover overflow-hidden rounded-full border shadow-lg transition-[max-width] duration-700 ease-in-out',
           itemView === 'now' ? 'border-emerald-500/60' : 'border-border',
-          isExpanded ? 'max-w-[19rem]' : 'size-12 max-w-12',
+          isExpanded ? 'max-w-[17rem]' : 'size-12 max-w-12',
         )}
       >
         <Button
