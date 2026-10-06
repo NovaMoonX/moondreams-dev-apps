@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 
 import {
   Button,
   Checkbox,
+  Drawer,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
@@ -54,6 +57,8 @@ export default function ChecklistSection({
   const { addToast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
+  const [detailItemId, setDetailItemId] = useState<string | null>(null);
+  const isPhone = useMediaQuery().isBelow('sm');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const items = useAppSelector((state) => state.waypoint.checklist.items);
@@ -159,6 +164,8 @@ export default function ChecklistSection({
     }
   };
 
+  const detailItem = items.find((item) => item.id === detailItemId) ?? null;
+
   return (
     <section className='space-y-4 pt-4'>
       <SectionHeader
@@ -239,7 +246,23 @@ export default function ChecklistSection({
                             />
                           </span>
                         </Tooltip>
-                        <div className='min-w-0'>
+                        <div
+                          className={join('min-w-0', isPhone && canEditExisting && 'cursor-pointer')}
+                          {...(isPhone && canEditExisting
+                            ? {
+                                role: 'button',
+                                tabIndex: 0,
+                                'aria-label': `Details for ${item.title}`,
+                                onClick: () => setDetailItemId(item.id),
+                                onKeyDown: (event: KeyboardEvent) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    setDetailItemId(item.id);
+                                  }
+                                },
+                              }
+                            : {})}
+                        >
                           <div className='flex flex-wrap items-center gap-2'>
                             <span
                               className={
@@ -269,7 +292,7 @@ export default function ChecklistSection({
                             Everyone
                           </span>
                         )}
-                        {canEditExisting && (
+                        {canEditExisting && !isPhone && (
                           <Button
                             type='button'
                             size='sm'
@@ -291,6 +314,37 @@ export default function ChecklistSection({
           ))}
         </div>
       )}
+
+      <Drawer
+        isOpen={detailItem !== null}
+        onClose={() => setDetailItemId(null)}
+        title={detailItem?.title ?? 'Checklist item'}
+        showCloseButton
+        footer={
+          <Button
+            type='button'
+            size='lg'
+            variant='secondary'
+            className='w-full'
+            onClick={() => {
+              setEditingItem(detailItem);
+              setDetailItemId(null);
+              setIsModalOpen(true);
+            }}
+          >
+            Modify
+          </Button>
+        }
+      >
+        {detailItem && (
+          <div className='space-y-2 pb-2'>
+            <Badge variant='muted' outline>
+              {getChecklistCategoryLabel(detailItem)}
+            </Badge>
+            {detailItem.note && <p className='text-muted-foreground text-sm italic'>{detailItem.note}</p>}
+          </div>
+        )}
+      </Drawer>
 
       <ChecklistItemFormModal
         key={`${editingItem?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { Play, SkipForward } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -75,48 +75,50 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
 
   return (
     <>
-      <div className='pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-30 flex justify-center px-4 sm:bottom-16'>
-        <div
-          role='status'
-          className={join(
-            'bg-popover pointer-events-auto flex max-w-full items-center gap-1 rounded-full border p-1 shadow-lg',
-            view === 'now' ? 'border-emerald-500/60' : 'border-border',
-          )}
-        >
-          <Button
-            type='button'
-            variant='tertiary'
-            aria-label={`${getStatusLine(trip, event, view, now)}: ${event.title}`}
-            className='h-auto min-w-0 justify-start gap-2.5 rounded-full px-3 py-1.5 text-left'
-            onClick={open}
+      <div className='pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-30 flex justify-center px-4 sm:bottom-24'>
+        <div className='pointer-events-auto flex max-w-full items-center gap-2'>
+          <div
+            role='status'
+            className={join(
+              'bg-popover flex min-w-0 items-center rounded-full border p-1 shadow-lg',
+              view === 'now' ? 'border-emerald-500/60' : 'border-border',
+            )}
           >
-            <span
-              aria-hidden
-              className={join(
-                'h-2.5 w-2.5 shrink-0 rounded-full',
-                view === 'now' ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
-              )}
-            />
-            <span className='min-w-0'>
-              <span className='text-muted-foreground block text-[11px] leading-tight font-medium tracking-wide uppercase'>
-                {getStatusLine(trip, event, view, now)}
+            <Button
+              type='button'
+              variant='tertiary'
+              aria-label={`${getStatusLine(trip, event, view, now)}: ${event.title}. Show details`}
+              className='h-auto min-w-0 justify-start gap-2.5 rounded-full px-3 py-1.5 text-left'
+              onClick={open}
+            >
+              <span
+                aria-hidden
+                className={join(
+                  'h-2.5 w-2.5 shrink-0 rounded-full',
+                  view === 'now' ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
+                )}
+              />
+              <span className='min-w-0'>
+                <span className='text-muted-foreground block text-[11px] leading-tight font-medium tracking-wide uppercase'>
+                  {getStatusLine(trip, event, view, now)}
+                </span>
+                <span className='text-foreground block max-w-48 truncate text-sm leading-tight font-semibold sm:max-w-80'>
+                  {event.title}
+                </span>
               </span>
-              <span className='text-foreground block max-w-56 truncate text-sm leading-tight font-semibold sm:max-w-80'>
-                {event.title}
-              </span>
-            </span>
-            <ChevronRight aria-hidden className='text-muted-foreground h-4 w-4 shrink-0' />
-          </Button>
+            </Button>
+          </div>
           {canSwap && (
             <Button
               type='button'
-              size='sm'
-              rounded='full'
               variant='secondary'
-              className='h-10 shrink-0'
+              rounded='full'
+              aria-label={view === 'now' ? 'Show what is up next' : 'Show what is happening now'}
+              title={view === 'now' ? 'Up next' : 'Now'}
+              className='bg-popover! size-12 min-w-12 shrink-0 border p-0 shadow-lg'
               onClick={() => setPeekedFor(view === 'now' ? (activeEvent?.id ?? null) : undefined)}
             >
-              {view === 'now' ? 'Up next' : 'Now'}
+              {view === 'now' ? <SkipForward className='h-5 w-5' /> : <Play className='h-5 w-5' />}
             </Button>
           )}
         </div>

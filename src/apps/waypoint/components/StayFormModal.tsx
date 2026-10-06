@@ -389,7 +389,7 @@ export function StayFormModal({
   ].filter((chip) => !revealed.includes(chip.key));
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title='Stay'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Stay' wide='panel'>
       <div className='space-y-5'>
         {!stay && isRelative && (
           <UploadAutofill

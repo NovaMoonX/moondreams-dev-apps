@@ -252,7 +252,7 @@ export function RentalFormModal({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title='Car rental'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Car rental' wide='panel'>
       <div className='space-y-5'>
         {!rental && isRelativeTrip(trip) && (
           <UploadAutofill

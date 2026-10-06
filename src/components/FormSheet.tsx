@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Drawer, Modal, Panel } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -11,6 +11,8 @@ interface FormSheetProps {
   /** A plain noun, the same for creating and editing. */
   title: string;
   children: ReactNode;
+  /** What a wide screen gets: a centered modal, or a panel sliding in from the right. */
+  wide?: 'modal' | 'panel';
 }
 
 const STICKY_FOOTER =
@@ -22,7 +24,7 @@ const STICKY_FOOTER =
  * `ModalFooterActions` stay pinned to the bottom edge while the fields scroll under them. A search or a
  * sequence is a `Subview` instead, and a handful of simple fields is a plain `Modal`.
  */
-function FormSheet({ isOpen, onClose, title, children }: FormSheetProps) {
+function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormSheetProps) {
   const isPhone = useMediaQuery().isBelow('sm');
 
   if (isPhone) {
@@ -37,6 +39,14 @@ function FormSheet({ isOpen, onClose, title, children }: FormSheetProps) {
       >
         <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-9')}>{children}</div>
       </Drawer>
+    );
+  }
+
+  if (wide === 'panel') {
+    return (
+      <Panel isOpen={isOpen} onClose={onClose} title={title}>
+        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
+      </Panel>
     );
   }
 

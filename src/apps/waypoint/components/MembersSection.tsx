@@ -9,7 +9,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
-import { Mail, UserPlus, X } from 'lucide-react';
+import { Mail, X } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -196,8 +196,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
           subtitle={subtitle}
           action={
             isAdmin ? (
-              <Button type='button' size='sm' onClick={() => setIsAddingByEmail(true)}>
-                <UserPlus className='h-4 w-4' />
+              <Button type='button' onClick={() => setIsAddingByEmail(true)}>
                 Add
               </Button>
             ) : undefined
