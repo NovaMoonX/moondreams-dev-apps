@@ -30,6 +30,7 @@ import type {
   PlaceSelectionBias,
   PlaceSelectionResult,
 } from '@/lib/places/types';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
@@ -481,6 +482,7 @@ function EventFormModal({
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
   const queryClient = useQueryClient();
+  const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
   const isRelative = isRelativeTrip(trip);
@@ -971,6 +973,18 @@ function EventFormModal({
     </div>
   );
 
+  const addAnotherFlightButton = isTravel && transitType === 'FLIGHT' && (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='max-sm:w-full'
+      disabled={isSubmitting || timeError !== null}
+      onClick={() => void handleSubmit(true)}
+    >
+      Add another flight
+    </Button>
+  );
+
   return (
     <FormScreen isOpen={isOpen} onClose={onClose} title='Timeline event'>
       <div className='space-y-5'>
@@ -1408,6 +1422,7 @@ function EventFormModal({
         {(error ?? timeError) && (
           <p className='text-destructive text-sm'>{error ?? timeError}</p>
         )}
+        {isPhone && addAnotherFlightButton}
         <ModalFooterActions
           leftActions={
             event &&
@@ -1422,16 +1437,7 @@ function EventFormModal({
           }
           rightActions={
             <>
-              {isTravel && transitType === 'FLIGHT' && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isSubmitting || timeError !== null}
-                  onClick={() => void handleSubmit(true)}
-                >
-                  Add another flight
-                </Button>
-              )}
+              {!isPhone && addAnotherFlightButton}
               <Button
                 type='button'
                 loading={isSubmitting}

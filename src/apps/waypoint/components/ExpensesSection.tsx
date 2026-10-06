@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 
 import {
-  Badge,
   Button,
   Drawer,
   DropdownMenuFactories,
@@ -12,10 +11,11 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import { MultiPillGroup } from '@/components/PillGroup';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
+import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
@@ -278,8 +278,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     categoryFilter.length +
     Number(rangedOnly) +
     Number(splitOnly);
-  const toggleFilterValue = <T,>(current: T[], value: T): T[] =>
-    current.includes(value) ? current.filter((filterValue) => filterValue !== value) : [...current, value];
   const clearFilters = () => {
     setDayFilter([]);
     setPayerFilter([]);
@@ -601,30 +599,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     label: string,
     options: { value: string; label: string }[],
     selected: string[],
-    onToggle: (value: string) => void,
+    onChange: (values: string[]) => void,
   ) => (
     <div className='space-y-2'>
       <p className='text-muted-foreground text-sm font-medium'>{label}</p>
-      <div role='group' aria-label={`Filter by ${label.toLowerCase()}`} className='flex flex-wrap gap-2'>
-        {options.map((option) => {
-          const isSelected = selected.includes(option.value);
-
-          return (
-            <Button
-              key={option.value}
-              type='button'
-              variant='base'
-              size='sm'
-              aria-pressed={isSelected}
-              onClick={() => onToggle(option.value)}
-            >
-              <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
-                {option.label}
-              </Badge>
-            </Button>
-          );
-        })}
-      </div>
+      <MultiPillGroup
+        label={`Filter by ${label.toLowerCase()}`}
+        options={options}
+        values={selected}
+        onChange={onChange}
+      />
     </div>
   );
 
@@ -756,14 +740,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }
       >
         <div className='space-y-5'>
-          <div className='flex flex-col gap-3'>
-            <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
-              <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
+          <div className='divide-border divide-y'>
+            <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
               Custom split only
+              <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
             </label>
-            <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
-              <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
+            <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
               Estimated range only
+              <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
             </label>
           </div>
           {renderChipGroup(
@@ -773,31 +757,31 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               label: status === 'PAID' ? 'Paid' : 'Expecting',
             })),
             statusFilter,
-            (value) => setStatusFilter((current) => toggleFilterValue(current, value as ExpenseStatus)),
+            (values) => setStatusFilter(values as ExpenseStatus[]),
           )}
           {renderChipGroup(
             'Category',
             categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
             categoryFilter,
-            (value) => setCategoryFilter((current) => toggleFilterValue(current, value)),
+            setCategoryFilter,
           )}
           {renderChipGroup(
             'Day',
             [
               ...Array.from({ length: dayCount }, (_, index) => ({
                 value: String(index),
-                label: `Day ${index + 1}`,
+                label: getDayLabel(trip.startDate, index, dayCount),
               })),
               { value: 'other', label: 'No specific day' },
             ],
             dayFilter,
-            (value) => setDayFilter((current) => toggleFilterValue(current, value)),
+            setDayFilter,
           )}
           {renderChipGroup(
             'Paid by',
             memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) })),
             payerFilter,
-            (value) => setPayerFilter((current) => toggleFilterValue(current, value)),
+            setPayerFilter,
           )}
         </div>
       </Drawer>

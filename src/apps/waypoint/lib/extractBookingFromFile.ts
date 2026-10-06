@@ -160,6 +160,9 @@ function asBase64(buffer: ArrayBuffer): string {
   return btoa(bytes.reduce((binary, byte) => binary + String.fromCharCode(byte), ''));
 }
 
+const getMimeType = (file: File) =>
+  file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+
 /** Reads a booking confirmation (photo, screenshot or PDF) into entries of one kind. The result only
  * fills a form for the person to review; nothing is saved from it directly. */
 export async function extractBookingFromFile(
@@ -175,7 +178,7 @@ export async function extractBookingFromFile(
         role: 'user',
         parts: [
           { text: buildPrompt(kind, trip, file.name) },
-          { inlineData: { data, mimeType: inputFile.type || file.type } },
+          { inlineData: { data, mimeType: getMimeType(inputFile) } },
         ],
       },
     ],

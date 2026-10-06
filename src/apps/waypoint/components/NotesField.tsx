@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Pencil } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -18,6 +19,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isEditing = draft !== null;
+  const isLarge = variant === 'link';
 
   const handleSave = async () => {
     if (draft === null) {
@@ -44,18 +46,18 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
       {isEditing ? (
         <>
           <Textarea
-            rows={2}
+            rows={isLarge ? 3 : 2}
             autoFocus
             value={draft}
-            variant='left-line'
-            className='text-xs!'
+            variant={isLarge ? 'outline' : 'left-line'}
+            className={isLarge ? undefined : 'text-xs!'}
             placeholder={placeholder}
             onChange={(changeEvent) => setDraft(changeEvent.target.value)}
           />
-          <div className='flex justify-end gap-2'>
+          <div className={join('gap-2', isLarge ? 'grid grid-cols-2' : 'flex justify-end')}>
             <Button
               type='button'
-              size='sm'
+              size={isLarge ? 'md' : 'sm'}
               variant='secondary'
               disabled={isSaving}
               onClick={() => {
@@ -67,7 +69,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
             </Button>
             <Button
               type='button'
-              size='sm'
+              size={isLarge ? 'md' : 'sm'}
               loading={isSaving}
               disabled={isSaving || draft.trim() === (notes ?? '')}
               onClick={() => void handleSave()}
@@ -87,12 +89,12 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
           {canEdit && variant === 'link' && (
             <Button
               type='button'
-              variant='link'
-              size='sm'
-              className='h-auto min-h-0 p-0!'
+              variant='secondary'
+              className='h-11 w-full justify-start gap-3 px-4'
               onClick={() => setDraft(notes ?? '')}
             >
-              {notes ? 'Edit note' : '+ Add note'}
+              <Pencil className='text-muted-foreground h-4 w-4' aria-hidden='true' />
+              {notes ? 'Edit note' : 'Add a note'}
             </Button>
           )}
           {canEdit && variant === 'subtle' && (

@@ -370,7 +370,11 @@ export function TimelineSection({
             .sort((first, second) => first - second)
             .map((day) => (
               <div key={day} className='space-y-3'>
-                {renderDivider(getDayDateLabel(trip.startDate, day))}
+                {renderDivider(
+                  getDayDateLabel(trip.startDate, day),
+                  minimizeWeather ? renderDayWeather(day) : undefined,
+                )}
+                {!minimizeWeather && renderDayWeather(day)}
                 {renderEventItems(visibleEvents.filter((event) => event.dayIndex === day))}
               </div>
             ))}
