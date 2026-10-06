@@ -1,15 +1,15 @@
-import { useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Car, KeyRound, LogIn, PlayCircle } from 'lucide-react';
+import { Car, KeyRound, LogIn } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import EnrichedImage from '@/components/EnrichedImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import { formatClockTime, formatCountdown, formatDuration } from '@/utils/formatUtils';
+import { formatClockTime, formatCountdown } from '@/utils/formatUtils';
 import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { isSameLocalCalendarDay } from '@/utils/dateInputUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
@@ -38,7 +38,6 @@ import {
 } from '@apps/waypoint/store/selectors';
 import type { Rental, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
-  formatEventTimeRange,
   getEventTime,
   getRentalTime,
   getRentalTimezoneLabel,
@@ -46,7 +45,6 @@ import {
   getStayTimezoneLabel,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
-import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 
 type OverviewDetail =
   | { type: 'event'; event: TimelineEvent }
@@ -64,10 +62,6 @@ interface OverviewSectionProps {
   trip: TripSpace;
   currentUserId: string;
   onViewDay: (dayIndex: number) => void;
-}
-
-function stopPropagation(clickEvent: MouseEvent) {
-  clickEvent.stopPropagation();
 }
 
 function getRentalLocation(rental: Rental, leg: RentalLeg) {
@@ -115,8 +109,8 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const now = useNow();
   const dispatch = useAppDispatch();
   const isLive = getTripStatus(trip, now) === 'ACTIVE';
-  const activeEvent = useAppSelector(selectActiveEvent(trip, now));
-  const upNextEvent = useAppSelector(selectUpNextEvent(trip, now));
+  const activeEvent = useAppSelector(selectActiveEvent(trip, now, currentUserId));
+  const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
   const stays = useAppSelector(selectStays);
   const events = useAppSelector(selectSortedTimelineEvents);
   const weather = useTripWeather(trip, events, stays, now);
@@ -154,7 +148,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     !activeEvent &&
     (!upNextEvent || getEventTime(trip, upNextEvent).dayIndex !== todayIndex);
 
-  // Below `sm`, Active Now/Up Next/Checking-in cards are too tight for the full
+  // Below `sm`, the Checking-in and pickup cards are too tight for the full
   // details, so tapping opens the drawer — same split Timeline/EventCard use.
   // At `sm`+, the cards show everything inline instead and are never clickable.
   const openEventDrawer = (event: TimelineEvent) => {
@@ -194,24 +188,6 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             onOpenDetails={() => openRentalDrawer(rental, leg)}
           />
         ))}
-        {activeEvent && (
-          <ActiveNowCard
-            trip={trip}
-            event={activeEvent}
-            now={now}
-            isSmallScreen={isSmallScreen}
-            onOpenDetails={() => openEventDrawer(activeEvent)}
-          />
-        )}
-        {upNextEvent && (
-          <UpNextCard
-            trip={trip}
-            event={upNextEvent}
-            now={now}
-            isSmallScreen={isSmallScreen}
-            onOpenDetails={() => openEventDrawer(upNextEvent)}
-          />
-        )}
         {todayWeather && (
           <section className='border-border mt-5 space-y-2 border-t pt-5'>
             <div className='flex items-baseline justify-between gap-3'>
@@ -241,6 +217,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           <hr className='border-border' />
           <TodayAgenda
             trip={trip}
+            currentUserId={currentUserId}
             title='Today'
             dayIndex={todayIndex}
             now={now}
@@ -249,6 +226,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           {hasTomorrow && (
             <TodayAgenda
               trip={trip}
+              currentUserId={currentUserId}
               title='Tomorrow'
               dayIndex={todayIndex + 1}
               now={now}
@@ -352,15 +330,6 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   );
 }
 
-
-function EventTypeBadge({ event }: { event: TimelineEvent }) {
-  const badge = getEventBadge(event);
-  return (
-    <Badge variant='base' className={badge.className}>
-      {badge.emoji} {badge.label}
-    </Badge>
-  );
-}
 
 function CheckInStayCard({
   trip,
@@ -521,154 +490,6 @@ function RentalTodayCard({
         </div>
       )}
     </article>
-  );
-}
-
-function ActiveNowCard({
-  trip,
-  event,
-  now,
-  isSmallScreen,
-  onOpenDetails,
-}: {
-  trip: TripSpace;
-  event: TimelineEvent;
-  now: number;
-  isSmallScreen: boolean;
-  onOpenDetails: () => void;
-}) {
-  const { startMs, endMs } = getEventTime(trip, event);
-  const duration = startMs !== null && endMs !== null ? endMs - startMs : null;
-  const progress =
-    duration !== null && duration > 0 && startMs !== null
-      ? Math.min(1, Math.max(0, (now - startMs) / duration))
-      : null;
-  const imageUrl = getDisplayImage(event);
-  const clickProps = isSmallScreen ? getOpenDetailsProps(event.title, onOpenDetails) : {};
-
-  return (
-    <article
-      {...clickProps}
-      className={join(
-        'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden rounded-xl border-2 shadow-sm',
-        isSmallScreen && 'cursor-pointer',
-      )}
-    >
-      {imageUrl && (
-        <EnrichedImage src={imageUrl} alt='' className='aspect-video w-full object-cover' />
-      )}
-      <div className='p-3.5'>
-        <div className='flex items-start justify-between gap-3'>
-          <div className='min-w-0'>
-            <div className='flex flex-wrap items-center gap-2'>
-              <p className='text-emerald-700 dark:text-emerald-300 flex items-center gap-1 text-xs font-bold tracking-wide uppercase'>
-                <PlayCircle className='h-3 w-3' /> Active now
-              </p>
-              <EventTypeBadge event={event} />
-            </div>
-            <h3 className='mt-1 truncate text-lg font-bold'>{event.title}</h3>
-            <p className='text-muted-foreground text-xs'>
-              {formatEventTimeRange(trip, event)}
-            </p>
-            {(event.locationName || event.address) && (
-              <LocationLink
-                {...event}
-                label={[event.locationName, event.address].filter(Boolean).join(' · ')}
-                className='mt-1'
-              />
-            )}
-            {!isSmallScreen && event.linkUrl && (
-              <div className='mt-1'>
-                <ExternalLinkText href={event.linkUrl} />
-              </div>
-            )}
-          </div>
-          <div onClick={stopPropagation}>
-            <MapNavigationButton {...event} variant='primary' />
-          </div>
-        </div>
-        {progress !== null && (
-          <div className='mt-2'>
-            <div className='bg-emerald-500/20 h-1 overflow-hidden rounded-full'>
-              <div
-                className='bg-emerald-500 h-full transition-[width]'
-                style={{ width: `${progress * 100}%` }}
-              />
-            </div>
-            <p className='text-muted-foreground mt-0.5 text-xs'>
-              {formatDuration((endMs as number) - now)} left
-            </p>
-          </div>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function UpNextCard({
-  trip,
-  event,
-  now,
-  isSmallScreen,
-  onOpenDetails,
-}: {
-  trip: TripSpace;
-  event: TimelineEvent;
-  now: number;
-  isSmallScreen: boolean;
-  onOpenDetails: () => void;
-}) {
-  const imageUrl = getDisplayImage(event);
-  const clickProps = isSmallScreen ? getOpenDetailsProps(event.title, onOpenDetails) : {};
-  const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
-  const { startTime, startMs } = getEventTime(trip, event);
-
-  return (
-    <div
-      {...clickProps}
-      className={join(
-        'border-border flex items-start justify-between gap-3 border-l-2 py-1 pl-4 pr-5',
-        isSmallScreen && 'cursor-pointer',
-      )}
-    >
-      <div className='flex items-start gap-3'>
-        {imageUrl && (
-          <EnrichedImage
-            src={imageUrl}
-            alt=''
-            className='h-12 w-12 shrink-0 rounded object-cover'
-          />
-        )}
-        <div>
-          <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
-            Up Next
-          </p>
-          <div className='mt-1 flex flex-wrap items-center gap-2'>
-            <EventTypeBadge event={event} />
-            <span className='text-muted-foreground text-sm'>
-              {startTime ? formatClockTime(startTime) : ''}
-              {startMs !== null ? ` · ${formatCountdown(startMs, now)}` : ''}
-            </span>
-          </div>
-          <h4 className='mt-1 text-sm font-medium'>{event.title}</h4>
-          {isSmallScreen ? (
-            event.locationName && (
-              <p className='text-muted-foreground text-xs'>{event.locationName}</p>
-            )
-          ) : (
-            locationLabel && <LocationLink {...event} label={locationLabel} className='text-xs' />
-          )}
-          {!isSmallScreen && event.linkUrl && (
-            <div className='mt-1'>
-              <ExternalLinkText href={event.linkUrl} />
-            </div>
-          )}
-        </div>
-      </div>
-      <div onClick={stopPropagation}>
-        <MapNavigationButton {...event} />
-      </div>
-    </div>
   );
 }
 

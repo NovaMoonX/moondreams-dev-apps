@@ -420,9 +420,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const payerLine =
       expense.status === 'PAID'
         ? expense.payerUid
-          ? memberLabel(expense.payerUid)
+          ? `Paid by ${memberLabel(expense.payerUid)}`
           : 'Paid by each person'
-        : 'Not yet paid';
+        : 'Expected, not yet paid';
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
     const splitBreakdown = getSplitBreakdown(expense, memberIds);
@@ -441,7 +441,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       if (!share.isPaid) {
         return (
-          <Button type='button' variant='link' className='shrink-0 text-xs' onClick={toggle}>
+          <Button type='button' variant='link' className='h-10 shrink-0 text-xs' onClick={toggle}>
             Mark as repaid
           </Button>
         );
@@ -465,18 +465,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
-            {expense.status === 'PAID' ? 'Paid' : 'Expected'} · {payerLine}
+            {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {payerLine}
           </p>
-          <div className='mt-1 flex flex-wrap gap-1'>
-            <Badge variant='muted' outline>
-              {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))}
-            </Badge>
-            {expense.status === 'PAID' && (
-              <Badge variant='muted' outline>
-                {splitDescription}
-              </Badge>
-            )}
-          </div>
+          {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
         <div className='col-span-2'>
@@ -649,7 +640,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 setIsModalOpen(true);
               }}
             >
-              Add expense
+              Add
             </Button>
           )
         }

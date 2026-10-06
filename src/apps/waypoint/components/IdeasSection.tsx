@@ -47,7 +47,7 @@ function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps)
         action={
           canAdd && (
             <Button type='button' className='shrink-0' onClick={() => onAdd(ideaType ?? 'RESTAURANT')}>
-              Add idea
+              Add
             </Button>
           )
         }

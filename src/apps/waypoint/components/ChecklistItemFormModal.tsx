@@ -4,18 +4,22 @@ import {
   Button,
   Form,
   FormFactories,
-  Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import { Input } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { getDayOptions } from '@/utils/dateRangeUtils';
+import { PillGroup } from '@/components/PillGroup';
+import { fromDateInputValue } from '@/utils/dateInputUtils';
+import { getDayCount, getDayInputValue } from '@/utils/dateRangeUtils';
 import {
   CHECKLIST_CATEGORIES,
+  CHECKLIST_CATEGORY_EMOJIS,
   CHECKLIST_CATEGORY_LABELS,
 } from '@apps/waypoint/constants';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { ChecklistCategory, ChecklistItem, TripSpace } from '@apps/waypoint/types';
 
@@ -23,7 +27,8 @@ interface ChecklistFormData {
   title: string;
   category: ChecklistCategory;
   customCategoryLabel: string;
-  completeByDayIndex: string;
+  /** A calendar day, turned into a day number from the trip's start on save, so it stays relative. */
+  dueDate: { enabled: boolean; date: string };
   note: string;
   assignedToUids: string[];
 }
@@ -46,17 +51,37 @@ interface ChecklistItemFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input, select, checkboxGroup } = FormFactories;
+const { custom, input, checkboxGroup } = FormFactories;
 
-function getInitialFormData(item?: ChecklistItem | null): ChecklistFormData {
+const DAY_MS = 86_400_000;
+
+function getDayIndexFromDate(trip: TripSpace, date: string) {
+  const parsed = fromDateInputValue(date);
+  return parsed === undefined ? null : Math.round((parsed - trip.startDate) / DAY_MS);
+}
+
+/** How far a due day sits from the trip, in words — it is stored as that distance, so it moves with the trip. */
+function describeDueDay(trip: TripSpace, dayIndex: number) {
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  const plural = (days: number) => `${days} ${days === 1 ? 'day' : 'days'}`;
+  if (dayIndex < 0) {
+    return `${plural(-dayIndex)} before the trip starts`;
+  }
+  if (dayIndex >= dayCount) {
+    return `${plural(dayIndex - dayCount + 1)} after the trip ends`;
+  }
+  return `Day ${dayIndex + 1} of the trip`;
+}
+
+function getInitialFormData(trip: TripSpace, item?: ChecklistItem | null): ChecklistFormData {
   return {
     title: item?.title ?? '',
     category: item?.category ?? 'DOCUMENTS',
     customCategoryLabel: item?.customCategoryLabel ?? '',
-    completeByDayIndex:
+    dueDate:
       item?.completeByDayIndex === null || item?.completeByDayIndex === undefined
-        ? ''
-        : String(item.completeByDayIndex),
+        ? { enabled: false, date: getDayInputValue(trip.startDate, 0) }
+        : { enabled: true, date: getDayInputValue(trip.startDate, item.completeByDayIndex) },
     note: item?.note ?? '',
     assignedToUids: item?.assignedToUids ?? [],
   };
@@ -73,23 +98,15 @@ export default function ChecklistItemFormModal({
   onClose,
 }: ChecklistItemFormModalProps) {
   const { confirm } = useActionModal();
-  const initialData = useMemo(() => getInitialFormData(item), [item]);
+  const initialData = useMemo(() => getInitialFormData(trip, item), [trip, item]);
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));
 
   const isFormComplete =
     formData.title.trim() !== '' &&
-    (formData.category !== 'OTHER' || formData.customCategoryLabel.trim() !== '');
-
-  const storedDayIndex = item?.completeByDayIndex ?? null;
-  const dayOptions = useMemo(
-    () => [
-      { value: '', label: 'No specific day' },
-      ...getDayOptions(trip.startDate, trip.endDate, storedDayIndex),
-    ],
-    [trip.startDate, trip.endDate, storedDayIndex],
-  );
+    (formData.category !== 'OTHER' || formData.customCategoryLabel.trim() !== '') &&
+    (!formData.dueDate.enabled || getDayIndexFromDate(trip, formData.dueDate.date) !== null);
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
@@ -99,13 +116,21 @@ export default function ChecklistItemFormModal({
         placeholder: 'Confirm passport expiration dates',
         variant: 'outline',
       }),
-      select({
+      custom({
         name: 'category',
         label: 'Category',
-        options: CHECKLIST_CATEGORIES.map((category) => ({
-          label: CHECKLIST_CATEGORY_LABELS[category],
-          value: category,
-        })),
+        renderComponent: (props) => (
+          <PillGroup
+            label='Category'
+            options={CHECKLIST_CATEGORIES.map((category) => ({
+              value: category,
+              label: CHECKLIST_CATEGORY_LABELS[category],
+              emoji: CHECKLIST_CATEGORY_EMOJIS[category],
+            }))}
+            value={props.value as ChecklistCategory}
+            onChange={(value) => props.onValueChange(value)}
+          />
+        ),
       }),
     ];
 
@@ -121,10 +146,42 @@ export default function ChecklistItemFormModal({
     }
 
     nextFields.push(
-      select({
-        name: 'completeByDayIndex',
+      custom({
+        name: 'dueDate',
         label: 'Complete by',
-        options: dayOptions,
+        renderComponent: (props) => {
+          const due = props.value as ChecklistFormData['dueDate'];
+          const dayIndex = due.enabled ? getDayIndexFromDate(trip, due.date) : null;
+          return (
+            <div className='space-y-2'>
+              <PillGroup
+                label='Complete by'
+                options={[
+                  { value: 'none', label: 'No date', emoji: '🗓️' },
+                  { value: 'date', label: 'Pick a date', emoji: '⏰' },
+                ]}
+                value={due.enabled ? 'date' : 'none'}
+                onChange={(value) => props.onValueChange({ ...due, enabled: value === 'date' })}
+              />
+              {due.enabled && (
+                <>
+                  <Input
+                    type='date'
+                    variant='outline'
+                    aria-label='Due date'
+                    value={due.date}
+                    onChange={(event) => props.onValueChange({ ...due, date: event.target.value })}
+                  />
+                  {dayIndex !== null && (
+                    <p className='text-muted-foreground text-xs'>
+                      {describeDueDay(trip, dayIndex)}. It stays that far from the trip if the trip&apos;s dates move.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        },
       }),
     );
 
@@ -165,7 +222,7 @@ export default function ChecklistItemFormModal({
     );
 
     return nextFields;
-  }, [dayOptions, formData.category, memberOptions, showNoteField]);
+  }, [trip, formData.category, memberOptions, showNoteField]);
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();
@@ -177,13 +234,19 @@ export default function ChecklistItemFormModal({
       return;
     }
 
+    const completeByDayIndex = data.dueDate.enabled ? getDayIndexFromDate(trip, data.dueDate.date) : null;
+    if (data.dueDate.enabled && completeByDayIndex === null) {
+      setError('Pick a valid due date, or choose No date.');
+      return;
+    }
+
     setError(null);
     try {
       await onSubmit({
         title,
         category: data.category,
         customCategoryLabel,
-        completeByDayIndex: data.completeByDayIndex === '' ? null : Number(data.completeByDayIndex),
+        completeByDayIndex,
         note: data.note.trim() || null,
         assignedToUids: data.assignedToUids,
       });
@@ -214,7 +277,7 @@ export default function ChecklistItemFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Checklist item'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Checklist item'>
       <Form
         id='waypoint-checklist-item'
         form={fields}
@@ -230,24 +293,24 @@ export default function ChecklistItemFormModal({
               item &&
               onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             }
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete}
                 >
                   {isSubmitting ? 'Saving…' : item ? 'Save' : 'Add'}
                 </Button>
-              </>
             }
           />
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </Modal>
+    </FormSheet>
   );
 }

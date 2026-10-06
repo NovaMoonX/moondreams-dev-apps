@@ -8,6 +8,7 @@ import {
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
+import { isEventForMember } from '@apps/waypoint/utils/attendeeCalculators';
 import { getEventTime, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import type {
   Announcement,
@@ -278,8 +279,10 @@ export const selectLiveAnnouncements =
       .sort((a, b) => b.createdAt - a.createdAt);
 
 export const selectEventsByDay =
-  (dayIndex: number) => (state: RootState) =>
-    state.waypoint.events.items.filter((event) => event.dayIndex === dayIndex);
+  (dayIndex: number, trip: TripSpace, uid: string) => (state: RootState) =>
+    state.waypoint.events.items.filter(
+      (event) => event.dayIndex === dayIndex && isEventForMember(event, Object.keys(trip.members), uid),
+    );
 
 /** Timestamp of an event's most recent post-trip-start activity (creation or a tracked
  * field edit), or 0 if it has none — `changeHistory` entries are only ever appended while
@@ -342,10 +345,12 @@ export function getEventStatus(trip: TripSpace, event: TimelineEvent, now: numbe
 }
 
 // Among simultaneously active events, the one that started most recently is treated as "the" active event.
+// Only events `uid` is part of count: Overview is about what's happening to them.
 export const selectActiveEvent =
-  (trip: TripSpace, now: number) => (state: RootState): TimelineEvent | null => {
+  (trip: TripSpace, now: number, uid: string) => (state: RootState): TimelineEvent | null => {
+    const memberIds = Object.keys(trip.members);
     const activeEvents = state.waypoint.events.items.filter(
-      (event) => getEventStatus(trip, event, now) === 'ACTIVE',
+      (event) => isEventForMember(event, memberIds, uid) && getEventStatus(trip, event, now) === 'ACTIVE',
     );
     if (activeEvents.length === 0) {
       return null;
@@ -356,9 +361,10 @@ export const selectActiveEvent =
   };
 
 export const selectUpNextEvent =
-  (trip: TripSpace, now: number) => (state: RootState): TimelineEvent | null => {
+  (trip: TripSpace, now: number, uid: string) => (state: RootState): TimelineEvent | null => {
+    const memberIds = Object.keys(trip.members);
     const upcomingEvents = state.waypoint.events.items.filter(
-      (event) => getEventStatus(trip, event, now) === 'UPCOMING',
+      (event) => isEventForMember(event, memberIds, uid) && getEventStatus(trip, event, now) === 'UPCOMING',
     );
     if (upcomingEvents.length === 0) {
       return null;

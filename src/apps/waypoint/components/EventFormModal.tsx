@@ -7,14 +7,15 @@ import {
   Checkbox,
   Input,
   Label,
-  Modal,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Users, Utensils, X } from 'lucide-react';
+import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import Pill from '@/components/Pill';
+import { PillGroup, PillRow } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -30,21 +31,26 @@ import type {
   PlaceSelectionResult,
 } from '@/lib/places/types';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
+import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
+import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
+import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
 import {
   ACTIVITY_SETTING_LABELS,
   ADD_NEW_OPTION,
   DEFAULT_REMINDER_MINUTES_BEFORE,
-  EVENT_ATTENDEE_TARGET_LABELS,
+  MAX_DAYS_OUTSIDE_TRIP,
   EVENT_LINK_KIND_LABELS,
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
+  MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
   MAX_REMINDER_MINUTES_BEFORE,
   REMINDER_STEP_MINUTES,
@@ -73,6 +79,7 @@ import {
   type TransitDraft,
 } from '@apps/waypoint/utils/transitDetails';
 import {
+  getDefaultDayIndex,
   buildEventTimeFields,
   getEventTime,
   isRelativeTrip,
@@ -94,9 +101,10 @@ export interface SubmitOptions {
   arrivalPlace?: PlaceSelectionResult | null;
 }
 
-/** Known fields to open a new event already filled in (e.g. from an idea); the form still asks for day and time. */
+/** Known fields to open a new event already filled in (from an idea, a travel prompt or an imported
+ * booking); the form still lets the person change any of it. */
 export interface EventPrefill {
-  eventType: Extract<EventType, 'DINING' | 'ACTIVITY'>;
+  eventType: EventType;
   title: string;
   notes: string | null;
   linkUrl: string | null;
@@ -104,11 +112,23 @@ export interface EventPrefill {
   settings: ActivitySetting[];
   dayIndex: number;
   time: string;
+  /** Who the event is for; leave out to keep it for everyone. */
+  attendeeUids?: string[];
+  transitType?: TransitType;
+  /** Transit field values by key (`airline`, `flightNumber`, `departureAirportCode`…). */
+  transitValues?: Record<string, string>;
+  endDayIndex?: number;
+  endTime?: string;
+  timezone?: string | null;
+  endTimezone?: string | null;
+  locationName?: string;
+  groupLabel?: string;
 }
 
 interface EventFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
+  currentUserId: string;
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
   prefill?: EventPrefill;
@@ -125,25 +145,9 @@ interface EventFormModalProps {
   onClose: () => void;
 }
 
-function toSelectOptions<T extends string>(labels: Record<T, string>) {
-  return Object.entries(labels).map(([value, text]) => ({
-    value,
-    text: text as string,
-  }));
-}
-
-const eventTypeOptions = Object.entries(EVENT_TYPE_LABELS).map(
-  ([value, text]) => ({
-    value,
-    text: `${EVENT_TYPE_EMOJIS[value as EventType]} ${text}`,
-  }),
-);
-const transitTypeOptions = Object.entries(TRANSIT_TYPE_LABELS).map(([value, text]) => ({
-  value,
-  text: `${TRANSIT_TYPE_EMOJIS[value as TransitType]} ${text}`,
-}));
-const mealTypeOptions = toSelectOptions(MEAL_TYPE_LABELS);
-const attendeeTargetOptions = toSelectOptions(EVENT_ATTENDEE_TARGET_LABELS);
+const EVENT_TYPES = Object.keys(EVENT_TYPE_LABELS) as EventType[];
+const TRANSIT_TYPES = Object.keys(TRANSIT_TYPE_LABELS) as TransitType[];
+const MEAL_TYPES = Object.keys(MEAL_TYPE_LABELS) as MealType[];
 const reminderHourOptions = Array.from(
   { length: Math.floor(MAX_REMINDER_MINUTES_BEFORE / 60) + 1 },
   (_, hours) => ({ value: String(hours), text: `${hours} hr` }),
@@ -172,6 +176,8 @@ interface EventDraft {
   endTime: string;
   /** Override of the trip's time zone; `null` follows the trip. */
   timezone: string | null;
+  /** Zone the end is in when it differs from the start's; `null` means the same zone. */
+  endTimezone: string | null;
   /** Transit type for travel, meal type for dining; unused otherwise. */
   quickField: string;
   isMealTouched: boolean;
@@ -190,10 +196,13 @@ interface EventDraft {
   groupLabel: string;
   isGrouped: boolean;
   hasLink: boolean;
+  /** Attendees were filled in by the form (travel is for just you by default), not chosen by the person. */
+  isAttendeeAuto: boolean;
+  /** Pick people was chosen, even if the only one picked so far is the signed-in user. */
+  isPickingPeople: boolean;
   hasCuisines: boolean;
   transit: TransitDraft;
   cuisines: string;
-  hasAttendeeOverride: boolean;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
   hasVenueHours: boolean;
@@ -227,7 +236,7 @@ function getDefaultSubtype(eventType: EventType, time: string): string {
 }
 
 function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: boolean) {
-  const days = getDayOptions(trip.startDate, trip.endDate, current).map(({ value, label }) => ({
+  const days = getDayOptions(trip.startDate, trip.endDate, current, MAX_DAYS_OUTSIDE_TRIP).map(({ value, label }) => ({
     value,
     text: label,
   }));
@@ -266,7 +275,8 @@ function getNextLegDraft(trip: TripSpace, { previous, arrivalPlace }: NextLegSee
     dayIndex: time.endDayIndex ?? time.dayIndex,
     endDayIndex: time.endDayIndex ?? time.dayIndex,
     time: time.endTime ?? time.startTime ?? base.time,
-    timezone: previous.timezone,
+    timezone: previous.endTimezone ?? previous.timezone,
+    endTimezone: null,
     locationName: arrivalPlace?.name ?? '',
     address: arrivalPlace?.address ?? '',
     hasAddress: Boolean(arrivalPlace?.address),
@@ -275,7 +285,6 @@ function getNextLegDraft(trip: TripSpace, { previous, arrivalPlace }: NextLegSee
     place: arrivalPlace?.place ?? null,
     isGrouped: true,
     groupLabel: previous.groupLabel ?? '',
-    hasAttendeeOverride: previous.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
     attendeeTargetType: previous.attendeeTargetType,
     assignedMemberIds: previous.assignedMemberIds,
     transit: {
@@ -290,21 +299,36 @@ function getNextLegDraft(trip: TripSpace, { previous, arrivalPlace }: NextLegSee
 
 function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
   const base = getBaseDraft(trip, undefined);
+  const hasEnd = prefill.endTime !== undefined;
+  const isSpecific = prefill.attendeeUids !== undefined;
   return {
     ...base,
     eventType: prefill.eventType,
-    hasTitle: true,
+    hasTitle: Boolean(prefill.title),
     title: prefill.title,
     dayIndex: prefill.dayIndex,
-    endDayIndex: prefill.dayIndex,
+    endDayIndex: prefill.endDayIndex ?? prefill.dayIndex,
+    hasEndTime: hasEnd,
+    endTime: prefill.endTime ?? '',
     time: prefill.time,
-    quickField: getDefaultSubtype(prefill.eventType, prefill.time),
+    timezone: prefill.timezone ?? null,
+    endTimezone: prefill.endTimezone ?? null,
+    quickField: prefill.transitType ?? getDefaultSubtype(prefill.eventType, prefill.time),
     settings: prefill.settings,
     hasSettings: prefill.settings.length > 0,
     cuisines: prefill.cuisines.join(', '),
     hasCuisines: prefill.cuisines.length > 0,
     linkUrl: prefill.linkUrl ?? '',
     hasLink: Boolean(prefill.linkUrl),
+    locationName: prefill.locationName ?? '',
+    hasLocation: Boolean(prefill.locationName),
+    isGrouped: Boolean(prefill.groupLabel),
+    groupLabel: prefill.groupLabel ?? '',
+    attendeeTargetType: isSpecific ? 'SPECIFIC_MEMBERS' : base.attendeeTargetType,
+    assignedMemberIds: prefill.attendeeUids ?? [],
+    transit: prefill.transitValues
+      ? { ...EMPTY_TRANSIT_DRAFT, values: prefill.transitValues }
+      : EMPTY_TRANSIT_DRAFT,
   };
 }
 
@@ -339,12 +363,13 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
     eventType: event?.eventType ?? 'ACTIVITY',
     title: '',
     hasTitle: false,
-    dayIndex: event ? (time?.dayIndex ?? null) : 0,
-    endDayIndex: event ? (time?.endDayIndex ?? null) : 0,
+    dayIndex: event ? (time?.dayIndex ?? null) : getDefaultDayIndex(trip),
+    endDayIndex: event ? (time?.endDayIndex ?? null) : getDefaultDayIndex(trip),
     hasEndTime: Boolean(time?.endTime),
     time: time?.startTime || '09:00',
     endTime: time?.endTime ?? '',
     timezone: event?.timezone ?? null,
+    endTimezone: event?.endTimezone ?? null,
     quickField:
       event?.eventType === 'TRAVEL' &&
       event.eventDetails &&
@@ -380,6 +405,8 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
     linkKind: event?.linkKind ?? null,
     groupLabel: event?.groupLabel ?? '',
     isGrouped: Boolean(event?.groupLabel),
+    isAttendeeAuto: false,
+    isPickingPeople: false,
     hasLink: Boolean(event?.linkUrl),
     hasCuisines: Boolean(
       event?.eventType === 'DINING' &&
@@ -395,9 +422,6 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
       event?.eventType === 'DINING' && event.eventDetails && 'mealType' in event.eventDetails
         ? (event.eventDetails.cuisines ?? []).join(', ')
         : '',
-    hasAttendeeOverride: Boolean(
-      event && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE',
-    ),
     attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
     hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
@@ -414,9 +438,36 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
   };
 }
 
+
+interface ZoneFieldProps {
+  label: string;
+  zone: string;
+  at: number;
+  isTripDefault: boolean;
+  onChange: (zone: string) => void;
+}
+
+function ZoneField({ label, zone, at, isTripDefault, onChange }: ZoneFieldProps) {
+  return (
+    <div className='flex flex-wrap items-center gap-x-2 gap-y-1 pl-4'>
+      <span className='text-muted-foreground text-xs'>{label}</span>
+      <TimezoneSelect pill value={zone} at={at} onChange={onChange} />
+      {isTripDefault && <span className='text-muted-foreground text-xs'>Trip default</span>}
+    </div>
+  );
+}
+
+const ATTENDEE_CHOICES: { type: EventAttendeeTargetType | 'ME'; label: string; emoji: string }[] = [
+  { type: 'EVERYONE_INCLUDING_FUTURE', label: 'Everyone', emoji: '👥' },
+  { type: 'ME', label: 'Just me', emoji: '🙋' },
+  { type: 'SPECIFIC_MEMBERS', label: 'Pick people', emoji: '🎯' },
+  { type: 'EVERYONE_CURRENT', label: 'Everyone here now', emoji: '📸' },
+];
+
 function EventFormModal({
   isOpen,
   trip,
+  currentUserId,
   memberOptions,
   event,
   prefill,
@@ -430,7 +481,6 @@ function EventFormModal({
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
   const isRelative = isRelativeTrip(trip);
@@ -447,6 +497,11 @@ function EventFormModal({
   );
   const isTravel = draft.eventType === 'TRAVEL';
   const dayCount = getDayCount(trip.startDate, trip.endDate);
+  const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
+  const startZone = draft.timezone ?? trip.timezone;
+  const endZone = draft.endTimezone ?? startZone;
+  const startDayAt = trip.startDate + (draft.dayIndex ?? 0) * 86_400_000;
+  const endDayAt = trip.startDate + (draft.endDayIndex ?? draft.dayIndex ?? 0) * 86_400_000;
 
   const updateDraft = (changes: Partial<EventDraft>) =>
     setDraft((current) => ({ ...current, ...changes }));
@@ -477,7 +532,7 @@ function EventFormModal({
       start: { day: draft.dayIndex, time: draft.time },
       end: { day: draft.endDayIndex ?? draft.dayIndex, time: draft.endTime },
       nextStart: { day: nextDayIndex, time: nextTime },
-      max: nextDayIndex < dayCount ? { day: dayCount - 1, time: '23:59' } : undefined,
+      max: nextDayIndex <= lastDayWithBuffer ? { day: lastDayWithBuffer, time: '23:59' } : undefined,
     });
     applyChanges({
       dayIndex: nextDayIndex,
@@ -486,6 +541,39 @@ function EventFormModal({
       endTime: nextEnd.time,
     });
   };
+
+  const selectEventType = (eventType: EventType) => {
+    const isNewEvent = !event && !prefill && !legFrom;
+    const becomesTravel =
+      eventType === 'TRAVEL' && isNewEvent && draft.attendeeTargetType === 'EVERYONE_INCLUDING_FUTURE';
+    const leavesTravel = eventType !== 'TRAVEL' && draft.isAttendeeAuto;
+    updateDraft({
+      eventType,
+      quickField: getDefaultSubtype(eventType, draft.time),
+      isMealTouched: false,
+      isGrouped: false,
+      groupLabel: '',
+      ...(becomesTravel
+        ? {
+            isAttendeeAuto: true,
+            attendeeTargetType: 'SPECIFIC_MEMBERS' as const,
+            assignedMemberIds: [currentUserId],
+          }
+        : {}),
+      ...(leavesTravel
+        ? {
+            isAttendeeAuto: false,
+            attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE' as const,
+            assignedMemberIds: [],
+          }
+        : {}),
+    });
+  };
+
+  const setStartZone = (zone: string) =>
+    updateDraft({ timezone: zone === trip.timezone ? null : zone });
+  const setEndZone = (zone: string) =>
+    updateDraft({ endTimezone: zone === (draft.timezone ?? trip.timezone) ? null : zone });
 
   const fillLocationFromAirport = useCallback(
     async (airport: AirportOption) => {
@@ -510,22 +598,26 @@ function EventFormModal({
     [queryClient],
   );
 
-  const handleNext = () => {
-    if (!draft.time || (draft.dayIndex === null && !isRelative)) {
-      setError('Enter a day and start time.');
-      return;
+  // An airport knows its own zone, so a flight lands in the right one without anyone looking it up.
+  const handleDepartureAirport = (airport: AirportOption) => {
+    void fillLocationFromAirport(airport);
+    if (isRelative && airport.timezone) {
+      setStartZone(airport.timezone);
     }
-    if (draft.hasEndTime && !draft.endTime) {
-      setError('Enter an end time, or remove the end time.');
-      return;
+  };
+  const handleArrivalAirport = (airport: AirportOption) => {
+    if (isRelative && airport.timezone) {
+      setDraft((current) => {
+        const suggested = fromDayMinutes(toDayMinutes(current.dayIndex ?? 0, current.time) + 60);
+        return {
+          ...current,
+          hasEndTime: true,
+          endDayIndex: current.hasEndTime ? current.endDayIndex : suggested.day,
+          endTime: current.hasEndTime && current.endTime ? current.endTime : suggested.time,
+          endTimezone: airport.timezone === (current.timezone ?? trip.timezone) ? null : airport.timezone,
+        };
+      });
     }
-    const isSameDay = (draft.endDayIndex ?? draft.dayIndex) === draft.dayIndex;
-    if (draft.hasEndTime && isSameDay && draft.endTime <= draft.time) {
-      setError('The end time needs to be after the start time.');
-      return;
-    }
-    setError(null);
-    setStep(2);
   };
 
   const timeFields = buildEventTimeFields(trip, {
@@ -534,11 +626,31 @@ function EventFormModal({
     startTime: draft.time,
     endTime: draft.hasEndTime ? draft.endTime : null,
     timezone: draft.timezone,
+    endTimezone: draft.endTimezone,
   });
 
+  const getTimeError = () => {
+    if (!draft.time || (draft.dayIndex === null && !isRelative)) {
+      return 'Pick a day and a start time.';
+    }
+    if (!draft.hasEndTime) {
+      return null;
+    }
+    if (!draft.endTime) {
+      return 'Pick an end time, or remove it.';
+    }
+    const resolved = timeFields ? getEventTime(trip, timeFields) : null;
+    if (resolved?.startMs != null && resolved.endMs != null) {
+      return resolved.endMs > resolved.startMs ? null : 'The end needs to come after the start.';
+    }
+    const isSameDay = (draft.endDayIndex ?? draft.dayIndex) === draft.dayIndex;
+    return isSameDay && draft.endTime <= draft.time ? 'The end needs to come after the start.' : null;
+  };
+  const timeError = getTimeError();
+
   const handleSubmit = async (addLeg = false) => {
-    if (!timeFields) {
-      setError('Choose a valid day and start time.');
+    if (!timeFields || timeError) {
+      setError(timeError ?? 'Choose a valid day and start time.');
       return;
     }
 
@@ -652,7 +764,6 @@ function EventFormModal({
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
       }, { addLeg, arrivalPlace });
-      setStep(1);
       setError(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));
@@ -691,11 +802,10 @@ function EventFormModal({
     return startMs === null ? null : formatTime(startMs - draft.reminderMinutesBefore * 60_000);
   };
   const reminderText = getReminderText();
-  const effectiveTimezone = draft.timezone ?? trip.timezone;
 
   const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
   const isPlaceEvent = draft.eventType === 'DINING' || draft.eventType === 'ACTIVITY';
-  const attendeesLabel = isTravel ? "Who's traveling" : 'Attendees';
+  const attendeesLabel = isTravel ? "Who's traveling" : "Who's coming";
   const transitType = draft.quickField as TransitType;
   const isLocationVisible = isTravel
     ? transitType === 'FLIGHT'
@@ -743,12 +853,6 @@ function EventFormModal({
       icon: <Bell className='h-4 w-4' />,
       isShown: draft.dayIndex === null || draft.hasReminderOverride,
     },
-    {
-      key: 'attendees',
-      label: attendeesLabel,
-      icon: <Users className='h-4 w-4' />,
-      isShown: draft.hasAttendeeOverride,
-    },
   ].filter((chip) => !chip.isShown);
 
   const revealDetail = (key: string) =>
@@ -763,7 +867,6 @@ function EventFormModal({
         group: { isGrouped: true },
         reminder: { hasReminderOverride: true },
         venueHours: { hasVenueHours: true },
-        attendees: { hasAttendeeOverride: true },
       }[key] ?? {},
     );
 
@@ -804,488 +907,544 @@ function EventFormModal({
     </div>
   );
   const travelLocationLabel = TRANSIT_LOCATION_LABELS[transitType];
+  const attendeeChoice: EventAttendeeTargetType | 'ME' =
+    draft.attendeeTargetType === 'SPECIFIC_MEMBERS' &&
+    !draft.isPickingPeople &&
+    draft.assignedMemberIds.length === 1 &&
+    draft.assignedMemberIds[0] === currentUserId
+      ? 'ME'
+      : draft.attendeeTargetType;
+
+  const chooseAttendees = (choice: EventAttendeeTargetType | 'ME') =>
+    updateDraft({
+      isAttendeeAuto: false,
+      isPickingPeople: choice === 'SPECIFIC_MEMBERS',
+      attendeeTargetType: choice === 'ME' ? 'SPECIFIC_MEMBERS' : choice,
+      assignedMemberIds:
+        choice === 'ME'
+          ? [currentUserId]
+          : choice === 'SPECIFIC_MEMBERS'
+            ? draft.assignedMemberIds
+            : [],
+    });
+
+  // Turning an end on starts it an hour after the start (a quick default, never left blank).
+  const startEndTime = () => {
+    const suggested = fromDayMinutes(toDayMinutes(draft.dayIndex ?? 0, draft.time) + 60);
+    updateDraft({
+      hasEndTime: true,
+      endDayIndex: suggested.day,
+      endTime: draft.endTime || suggested.time,
+    });
+  };
+
+  const endFields = (
+    <div className='space-y-2'>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <Select
+          options={getDayChoices(trip, draft.endDayIndex, false)}
+          value={String(draft.endDayIndex ?? draft.dayIndex)}
+          onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
+        />
+        <Input
+          type='time'
+          aria-label='End time'
+          value={draft.endTime}
+          onChange={(changeEvent) => updateDraft({ endTime: changeEvent.target.value })}
+        />
+      </div>
+      {isRelative && endZone && (
+        <ZoneField
+          label={isTravel ? 'Lands in' : 'Ends in'}
+          zone={endZone}
+          at={endDayAt}
+          isTripDefault={false}
+          onChange={setEndZone}
+        />
+      )}
+      {isRelative && draft.endTimezone !== null && (
+        <p className='text-muted-foreground text-xs'>
+          {formatTimezoneAbbreviation(startZone ?? endZone ?? '', startDayAt)} to{' '}
+          {formatTimezoneAbbreviation(endZone ?? '', endDayAt)}: the clock times are each in their own zone.
+        </p>
+      )}
+    </div>
+  );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Timeline event'>
-      <div className='space-y-4'>
-        <p className='text-muted-foreground text-sm'>
-          Step {step} of 2 · {step === 1 ? 'What & when' : 'Details'}
-        </p>
+    <FormScreen isOpen={isOpen} onClose={onClose} title='Timeline event'>
+      <div className='space-y-5'>
         {legFrom && (
           <p className='text-muted-foreground text-xs'>
             Next leg of {legFrom.previous.groupLabel ?? 'this flight'}: the airline, booking and travelers carry over.
           </p>
         )}
-        {step === 1 ? (
-          <>
-            <div className='space-y-1.5'>
-              <Label>Event type</Label>
-              <Select
-                options={eventTypeOptions}
-                value={draft.eventType}
-                onChange={(value) =>
-                  updateDraft({
-                    eventType: value as EventType,
-                    quickField: getDefaultSubtype(value as EventType, draft.time),
-                    isMealTouched: false,
-                    isGrouped: false,
-                    groupLabel: '',
-                  })
-                }
-              />
-            </div>
-            {isTravel && (
-              <div className='space-y-1.5'>
-                <Label>Transit type</Label>
-                <Select
-                  options={transitTypeOptions}
-                  value={draft.quickField}
-                  onChange={(value) => updateDraft({ quickField: value })}
-                />
-              </div>
-            )}
-            {draft.eventType === 'DINING' && (
-              <div className='space-y-1.5'>
-                <Label>Meal</Label>
-                <Select
-                  options={mealTypeOptions}
-                  value={draft.quickField}
-                  onChange={(value) => updateDraft({ quickField: value, isMealTouched: true })}
-                />
-              </div>
-            )}
-            <div className='space-y-1.5'>
-              <Label>{isTravel ? 'Departs' : 'Starts at'}</Label>
-              <div className='grid gap-3 sm:grid-cols-2'>
-                <Select
-                  options={getDayChoices(trip, draft.dayIndex, isRelative)}
-                  value={draft.dayIndex === null ? NO_DAY_VALUE : String(draft.dayIndex)}
-                  onChange={(value) =>
-                    updateStart(value === NO_DAY_VALUE ? null : Number(value), draft.time)
-                  }
-                />
-                <Input
-                  type='time'
-                  aria-label='Start time'
-                  value={draft.time}
-                  onChange={(event) => updateStart(draft.dayIndex, event.target.value)}
-                />
-              </div>
-            </div>
-            {draft.dayIndex === null ? null : draft.hasEndTime ? (
-              <div className='space-y-1.5'>
-                <div className='flex items-center justify-between'>
-                  <Label>{isTravel ? 'Arrives' : 'Ends at'}</Label>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='icon'
-                    aria-label='Remove end time'
-                    onClick={() =>
-                      updateDraft({
-                        hasEndTime: false,
-                        endDayIndex: draft.dayIndex,
-                        endTime: '',
-                      })
-                    }
-                  >
-                    <X className='h-4 w-4' />
-                  </Button>
-                </div>
-                <div className='grid gap-3 sm:grid-cols-2'>
-                  <Select
-                    options={getDayChoices(trip, draft.endDayIndex, false)}
-                    value={String(draft.endDayIndex ?? draft.dayIndex)}
-                    onChange={(value) =>
-                      updateDraft({ endDayIndex: Number(value) })
-                    }
-                  />
-                  <Input
-                    type='time'
-                    value={draft.endTime}
-                    onChange={(event) =>
-                      updateDraft({ endTime: event.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            ) : (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0'
-                onClick={() => updateDraft({ hasEndTime: true })}
+        <div className='space-y-3'>
+          <PillRow label='Event type'>
+            {EVENT_TYPES.map((type) => (
+              <Pill
+                key={type}
+                emoji={EVENT_TYPE_EMOJIS[type]}
+                isSelected={draft.eventType === type}
+                onClick={() => selectEventType(type)}
               >
-                {isTravel ? '+ Add arrival time' : '+ Add end time'}
-              </Button>
-            )}
-            {isRelative && effectiveTimezone && (
-              <div className='space-y-1.5'>
-                <Label>Time zone</Label>
-                <div className='flex flex-wrap items-center gap-2'>
-                  <TimezoneSelect
-                    pill
-                    value={effectiveTimezone}
-                    onChange={(value) =>
-                      updateDraft({ timezone: value === trip.timezone ? null : value })
-                    }
-                  />
-                  {draft.timezone === null && (
-                    <span className='text-muted-foreground text-xs'>Trip default</span>
-                  )}
-                </div>
-              </div>
-            )}
-            <ModalFooterActions
-              leftActions={
-                event &&
-                onDelete && (
-                  <DeleteIconButton
-                    onClick={() => void handleDelete()}
-                    disabled={isSubmitting}
-                  />
-                )
+                {EVENT_TYPE_LABELS[type]}
+              </Pill>
+            ))}
+          </PillRow>
+          {isTravel && (
+            <PillRow label='Transit type'>
+              {TRANSIT_TYPES.map((type) => (
+                <Pill
+                  key={type}
+                  emoji={TRANSIT_TYPE_EMOJIS[type]}
+                  isSelected={draft.quickField === type}
+                  onClick={() => updateDraft({ quickField: type })}
+                >
+                  {TRANSIT_TYPE_LABELS[type]}
+                </Pill>
+              ))}
+            </PillRow>
+          )}
+          {draft.eventType === 'DINING' && (
+            <PillRow label='Meal'>
+              {MEAL_TYPES.map((meal) => (
+                <Pill
+                  key={meal}
+                  emoji={MEAL_TYPE_EMOJIS[meal]}
+                  isSelected={draft.quickField === meal}
+                  onClick={() => updateDraft({ quickField: meal, isMealTouched: true })}
+                >
+                  {MEAL_TYPE_LABELS[meal]}
+                </Pill>
+              ))}
+            </PillRow>
+          )}
+        </div>
+        {isTravel && draft.quickField === 'FLIGHT' && !event && !legFrom && isRelative && (
+          <UploadAutofill
+            kind='flight'
+            trip={trip}
+            noun='flight confirmation'
+            convert={(extracted, { airports, airlines }) => {
+              const result = flightToPrefill(trip, currentUserId, extracted, airports, airlines);
+              if (!result) {
+                return null;
               }
-              rightActions={
-                <>
-                  <Button type='button' variant='secondary' onClick={onClose}>
-                    Cancel
-                  </Button>
-                  <Button type='button' onClick={handleNext}>
-                    Next
-                  </Button>
-                </>
-              }
+              const note =
+                result.extraFlights > 0
+                  ? `Found ${result.extraFlights} more ${result.extraFlights === 1 ? 'flight' : 'flights'} on it. This fills the first; add the rest after you save.`
+                  : undefined;
+              return { ...result, note };
+            }}
+            onFilled={({ value }) =>
+              setDraft((current) => ({
+                ...getPrefilledDraft(trip, value),
+                title: current.title,
+                hasTitle: current.hasTitle,
+                linkUrl: current.linkUrl,
+                linkPreview: current.linkPreview,
+                linkKind: current.linkKind,
+                hasLink: current.hasLink,
+                groupLabel: current.groupLabel,
+                isGrouped: current.isGrouped,
+              }))
+            }
+          />
+        )}
+
+        <SectionDivider label='When' />
+        <div className='space-y-2'>
+          <Label>{isTravel ? 'Departs' : 'Starts'}</Label>
+          <div className='grid gap-3 sm:grid-cols-2'>
+            <Select
+              options={getDayChoices(trip, draft.dayIndex, isRelative)}
+              value={draft.dayIndex === null ? NO_DAY_VALUE : String(draft.dayIndex)}
+              onChange={(value) => updateStart(value === NO_DAY_VALUE ? null : Number(value), draft.time)}
             />
-          </>
-        ) : (
-          <>
-            {isTravel && (
-              <TransitDetailsFields
-                transitType={transitType}
-                value={draft.transit}
-                onChange={(transit) => updateDraft({ transit })}
-                onDepartureAirportPicked={(airport) => void fillLocationFromAirport(airport)}
-                hasEndTime={draft.hasEndTime}
-                routeLocation={
-                  transitType === 'FLIGHT'
-                    ? isLocationVisible
-                      ? locationField('Departure location')
-                      : undefined
-                    : locationField(travelLocationLabel ?? 'Where to navigate')
+            <Input
+              type='time'
+              aria-label='Start time'
+              value={draft.time}
+              onChange={(changeEvent) => updateStart(draft.dayIndex, changeEvent.target.value)}
+            />
+          </div>
+          {isRelative && startZone && (
+            <ZoneField
+              label={draft.hasEndTime ? 'Leaves in' : 'In'}
+              zone={startZone}
+              at={startDayAt}
+              isTripDefault={draft.timezone === null}
+              onChange={setStartZone}
+            />
+          )}
+        </div>
+        {draft.dayIndex === null ? null : isTravel ? (
+          <div className='space-y-3'>
+            <div className='space-y-2'>
+              <Label>🛬 Know when you arrive?</Label>
+              <PillGroup
+                label='Arrival time'
+                options={[
+                  { value: 'yes', label: 'Yes, I know' },
+                  { value: 'no', label: 'Not yet' },
+                ]}
+                value={draft.hasEndTime ? 'yes' : 'no'}
+                onChange={(value) =>
+                  value === 'yes' ? startEndTime() : updateDraft({ hasEndTime: false, endDayIndex: draft.dayIndex, endTime: '', endTimezone: null })
                 }
               />
-            )}
-            {isPlaceEvent && (
-              <>
-                <SectionDivider label='Where to navigate' className='pt-2' />
-                {locationField('Location')}
-              </>
-            )}
-            {draft.eventType === 'FREE_TIME' && draft.hasLocation && (
-              <>
-                <SectionDivider label='Where to navigate' className='pt-2' />
-                <RemovableField
-                  label='Location'
-                  removeLabel='Remove location'
-                  onRemove={() =>
+            </div>
+            {draft.hasEndTime && endFields}
+          </div>
+        ) : draft.hasEndTime ? (
+          <RemovableField
+            label='Ends'
+            removeLabel='Remove end time'
+            onRemove={() =>
+              updateDraft({
+                hasEndTime: false,
+                endDayIndex: draft.dayIndex,
+                endTime: '',
+                endTimezone: null,
+              })
+            }
+          >
+            {endFields}
+          </RemovableField>
+        ) : (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='h-auto px-0! py-0!'
+            onClick={startEndTime}
+          >
+            + Add end time
+          </Button>
+        )}
+
+        {isTravel && (
+          <TransitDetailsFields
+            transitType={transitType}
+            value={draft.transit}
+            onChange={(transit) => updateDraft({ transit })}
+            onDepartureAirportPicked={handleDepartureAirport}
+            onArrivalAirportPicked={handleArrivalAirport}
+            hasEndTime={draft.hasEndTime}
+            routeLocation={
+              transitType === 'FLIGHT'
+                ? isLocationVisible
+                  ? locationField('Departure location')
+                  : undefined
+                : locationField(travelLocationLabel ?? 'Where to navigate')
+            }
+          />
+        )}
+        {isPlaceEvent && (
+          <>
+            <SectionDivider label='Where' />
+            {locationField('Location')}
+          </>
+        )}
+        {draft.eventType === 'FREE_TIME' && draft.hasLocation && (
+          <>
+            <SectionDivider label='Where' />
+            <RemovableField
+              label='Location'
+              removeLabel='Remove location'
+              onRemove={() =>
+                updateDraft({
+                  hasLocation: false,
+                  hasAddress: false,
+                  locationName: '',
+                  address: '',
+                  ...UNLINKED_PLACE,
+                })
+              }
+            >
+              {locationField('')}
+            </RemovableField>
+          </>
+        )}
+
+        <div className='space-y-2'>
+          <SectionDivider label={attendeesLabel} />
+          <PillRow label={attendeesLabel}>
+            {ATTENDEE_CHOICES.map((choice) => (
+              <Pill
+                key={choice.type}
+                emoji={choice.emoji}
+                isSelected={attendeeChoice === choice.type}
+                onClick={() => chooseAttendees(choice.type)}
+              >
+                {choice.label}
+              </Pill>
+            ))}
+          </PillRow>
+          {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && attendeeChoice !== 'ME' && (
+            <PillRow label='People'>
+              {memberOptions.map((member) => (
+                <Pill
+                  key={member.value}
+                  isSelected={draft.assignedMemberIds.includes(member.value)}
+                  onClick={() =>
                     updateDraft({
-                      hasLocation: false,
-                      hasAddress: false,
-                      locationName: '',
-                      address: '',
-                      ...UNLINKED_PLACE,
+                      assignedMemberIds: draft.assignedMemberIds.includes(member.value)
+                        ? draft.assignedMemberIds.filter((uid) => uid !== member.value)
+                        : [...draft.assignedMemberIds, member.value],
                     })
                   }
                 >
-                  {locationField('')}
-                </RemovableField>
-              </>
-            )}
-            <SectionDivider label='More details' className='pt-2' />
-            {draft.hasTitle && (
-              <RemovableField
-                label='Title'
-                removeLabel='Remove title'
-                onRemove={() => updateDraft({ hasTitle: false, title: '' })}
-              >
-                <Input
-                  value={draft.title}
-                  placeholder={getDerivedTitle(draft)}
-                  onChange={(event) => updateDraft({ title: event.target.value })}
-                />
-              </RemovableField>
-            )}
-            {isLinkable && draft.hasLink && (
-              <RemovableField
-                label='Link'
-                removeLabel='Remove link'
-                onRemove={() =>
-                  updateDraft({ hasLink: false, linkUrl: '', linkPreview: null, linkKind: null })
-                }
-              >
-                <LinkAttachField
-                  url={draft.linkUrl}
-                  preview={draft.linkPreview}
-                  label=''
-                  startRevealed
-                  placeholder='https://…'
-                  onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
-                  currentTitle={draft.hasTitle ? draft.title : ''}
-                  onUseTitle={(title) => updateDraft({ title, hasTitle: true })}
-                />
-                {draft.linkUrl.trim() && (
-                  <Select
-                    options={EVENT_LINK_KINDS_BY_TYPE[draft.eventType].map((kind) => ({
-                      value: kind,
-                      text: EVENT_LINK_KIND_LABELS[kind],
-                    }))}
-                    value={draft.linkKind ?? EVENT_LINK_KINDS_BY_TYPE[draft.eventType][0]}
-                    onChange={(value) => updateDraft({ linkKind: value as EventLinkKind })}
-                  />
-                )}
-              </RemovableField>
-            )}
-            {draft.eventType === 'DINING' && draft.hasCuisines && (
-              <RemovableField
-                label='Cuisine'
-                removeLabel='Remove cuisine'
-                onRemove={() => updateDraft({ hasCuisines: false, cuisines: '' })}
-              >
-                <Input
-                  placeholder='Ramen, Japanese'
-                  value={draft.cuisines}
-                  onChange={(event) => updateDraft({ cuisines: event.target.value })}
-                />
-              </RemovableField>
-            )}
-            {draft.isGrouped && (
-              <RemovableField
-                label='Group'
-                removeLabel='Remove from group'
-                onRemove={() => updateDraft({ isGrouped: false, groupLabel: '' })}
-              >
-                <div className='space-y-2'>
-                  {sameTypeGroupLabels.length > 0 && (
-                    <Select
-                      options={[
-                        ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
-                        { value: ADD_NEW_OPTION, text: 'New group…' },
-                      ]}
-                      value={
-                        sameTypeGroupLabels.find(
-                          (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-                        ) ?? ADD_NEW_OPTION
-                      }
-                      onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
-                    />
-                  )}
-                  {!sameTypeGroupLabels.some(
-                    (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-                  ) && (
-                    <Input
-                      placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
-                      value={draft.groupLabel}
-                      onChange={(event) => updateDraft({ groupLabel: event.target.value })}
-                    />
-                  )}
-                </div>
-              </RemovableField>
-            )}
-            {draft.dayIndex !== null && draft.hasReminderOverride && (
-              <RemovableField
-                label='Reminder'
-                removeLabel='Reset reminder'
-                onRemove={() =>
-                  updateDraft({
-                    hasReminderOverride: false,
-                    reminderEnabled: true,
-                    reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
-                  })
-                }
-              >
-                <div className='flex items-center gap-2'>
-                  <Select
-                    className='flex-1'
-                    disabled={!draft.reminderEnabled}
-                    options={reminderHourOptions}
-                    value={String(Math.floor(draft.reminderMinutesBefore / 60))}
-                    onChange={(value) =>
-                      updateDraft({
-                        reminderMinutesBefore: clampReminderMinutes(
-                          Number(value),
-                          draft.reminderMinutesBefore % 60,
-                        ),
-                      })
-                    }
-                  />
-                  <Select
-                    className='flex-1'
-                    disabled={!draft.reminderEnabled}
-                    options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
-                    value={String(draft.reminderMinutesBefore % 60)}
-                    onChange={(value) =>
-                      updateDraft({
-                        reminderMinutesBefore: clampReminderMinutes(
-                          Math.floor(draft.reminderMinutesBefore / 60),
-                          Number(value),
-                        ),
-                      })
-                    }
-                  />
-                  <span className='text-muted-foreground shrink-0 text-sm'>before</span>
-                </div>
-                <label className='flex items-center gap-2 text-sm'>
-                  <Checkbox
-                    checked={!draft.reminderEnabled}
-                    onCheckedChange={(checked) => updateDraft({ reminderEnabled: checked !== true })}
-                  />
-                  Don&apos;t remind me
-                </label>
-                {reminderText !== null && (
-                  <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
-                )}
-              </RemovableField>
-            )}
-            {draft.eventType === 'ACTIVITY' && draft.hasSettings && (
-              <RemovableField
-                label='Indoor / outdoor'
-                removeLabel='Remove indoor / outdoor'
-                onRemove={() => updateDraft({ hasSettings: false, settings: [] })}
-              >
-                <div className='flex flex-wrap gap-4'>
-                  {(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => (
-                    <label key={setting} className='flex items-center gap-2 text-sm'>
-                      <Checkbox
-                        checked={draft.settings.includes(setting)}
-                        onCheckedChange={(checked) =>
-                          updateDraft({
-                            settings:
-                              checked === true
-                                ? [...draft.settings, setting]
-                                : draft.settings.filter((existing) => existing !== setting),
-                          })
-                        }
-                      />
-                      {ACTIVITY_SETTING_LABELS[setting]}
-                    </label>
-                  ))}
-                </div>
-              </RemovableField>
-            )}
-            {draft.hasVenueHours && (
-              <RemovableField
-                label='Business hours'
-                removeLabel='Remove venue hours'
-                onRemove={() =>
-                  updateDraft({ hasVenueHours: false, venueOpenTime: '', venueCloseTime: '' })
-                }
-              >
-                <div className='grid gap-3 sm:grid-cols-2'>
-                  <Input
-                    type='time'
-                    aria-label='Opens at'
-                    value={draft.venueOpenTime}
-                    onChange={(event) => updateDraft({ venueOpenTime: event.target.value })}
-                  />
-                  <Input
-                    type='time'
-                    aria-label='Closes at'
-                    value={draft.venueCloseTime}
-                    onChange={(event) => updateDraft({ venueCloseTime: event.target.value })}
-                  />
-                </div>
-              </RemovableField>
-            )}
-            {draft.hasAttendeeOverride && (
-              <RemovableField
-                label={attendeesLabel}
-                removeLabel='Reset attendees'
-                onRemove={() =>
-                  updateDraft({
-                    hasAttendeeOverride: false,
-                    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
-                    assignedMemberIds: [],
-                  })
-                }
-              >
-                <div className='space-y-3'>
-                  <Select
-                    options={attendeeTargetOptions}
-                    value={draft.attendeeTargetType}
-                    onChange={(value) =>
-                      updateDraft({ attendeeTargetType: value as EventAttendeeTargetType })
-                    }
-                  />
-                  {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && (
-                    <div className='space-y-2'>
-                      {memberOptions.map((member) => (
-                        <label key={member.value} className='flex items-center gap-2 text-sm'>
-                          <Checkbox
-                            checked={draft.assignedMemberIds.includes(member.value)}
-                            onCheckedChange={(checked) =>
-                              updateDraft({
-                                assignedMemberIds: checked
-                                  ? [...draft.assignedMemberIds, member.value]
-                                  : draft.assignedMemberIds.filter((uid) => uid !== member.value),
-                              })
-                            }
-                          />
-                          {member.label}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </RemovableField>
-            )}
-            <AddFieldChips heading='Add to this event' chips={detailChips} onAdd={revealDetail} />
-            <ModalFooterActions
-              leftActions={
-                <>
-                  {event && onDelete && (
-                    <DeleteIconButton
-                      onClick={() => void handleDelete()}
-                      disabled={isSubmitting}
-                    />
-                  )}
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={() => setStep(1)}
-                  >
-                    Back
-                  </Button>
-                </>
-              }
-              rightActions={
-                <>
-                  {isTravel && transitType === 'FLIGHT' && (
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      disabled={isSubmitting}
-                      onClick={() => void handleSubmit(true)}
-                    >
-                      Add another flight
-                    </Button>
-                  )}
-                  <Button
-                    type='button'
-                    loading={isSubmitting}
-                    onClick={() => void handleSubmit()}
-                  >
-                    {isSubmitting ? 'Saving…' : event ? 'Save' : 'Add'}
-                  </Button>
-                </>
-              }
+                  {member.label}
+                </Pill>
+              ))}
+            </PillRow>
+          )}
+          <p className='text-muted-foreground text-xs'>
+            Your Overview shows only the events you&apos;re part of.
+          </p>
+        </div>
+        <SectionDivider label='More details' />
+        {draft.hasTitle && (
+          <RemovableField
+            label='Title'
+            removeLabel='Remove title'
+            onRemove={() => updateDraft({ hasTitle: false, title: '' })}
+          >
+            <Input
+              value={draft.title}
+              placeholder={getDerivedTitle(draft)}
+              onChange={(changeEvent) => updateDraft({ title: changeEvent.target.value })}
             />
-          </>
+          </RemovableField>
         )}
-        {error && <p className='text-destructive text-sm'>{error}</p>}
+        {isLinkable && draft.hasLink && (
+          <RemovableField
+            label='Link'
+            removeLabel='Remove link'
+            onRemove={() =>
+              updateDraft({ hasLink: false, linkUrl: '', linkPreview: null, linkKind: null })
+            }
+          >
+            <LinkAttachField
+              url={draft.linkUrl}
+              preview={draft.linkPreview}
+              label=''
+              startRevealed
+              placeholder='https://…'
+              onChange={(linkUrl, linkPreview) => updateDraft({ linkUrl, linkPreview })}
+              currentTitle={draft.hasTitle ? draft.title : ''}
+              onUseTitle={(title) => updateDraft({ title, hasTitle: true })}
+            />
+            {draft.linkUrl.trim() && (
+              <PillRow label='Link type'>
+                {EVENT_LINK_KINDS_BY_TYPE[draft.eventType].map((kind) => (
+                  <Pill
+                    key={kind}
+                    isSelected={(draft.linkKind ?? EVENT_LINK_KINDS_BY_TYPE[draft.eventType][0]) === kind}
+                    onClick={() => updateDraft({ linkKind: kind })}
+                  >
+                    {EVENT_LINK_KIND_LABELS[kind]}
+                  </Pill>
+                ))}
+              </PillRow>
+            )}
+          </RemovableField>
+        )}
+        {draft.eventType === 'DINING' && draft.hasCuisines && (
+          <RemovableField
+            label='Cuisine'
+            removeLabel='Remove cuisine'
+            onRemove={() => updateDraft({ hasCuisines: false, cuisines: '' })}
+          >
+            <Input
+              placeholder='Ramen, Japanese'
+              value={draft.cuisines}
+              onChange={(changeEvent) => updateDraft({ cuisines: changeEvent.target.value })}
+            />
+          </RemovableField>
+        )}
+        {draft.isGrouped && (
+          <RemovableField
+            label='Group'
+            removeLabel='Remove from group'
+            onRemove={() => updateDraft({ isGrouped: false, groupLabel: '' })}
+          >
+            <div className='space-y-2'>
+              {sameTypeGroupLabels.length > 0 && (
+                <Select
+                  options={[
+                    ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
+                    { value: ADD_NEW_OPTION, text: 'New group…' },
+                  ]}
+                  value={
+                    sameTypeGroupLabels.find(
+                      (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
+                    ) ?? ADD_NEW_OPTION
+                  }
+                  onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
+                />
+              )}
+              {!sameTypeGroupLabels.some(
+                (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
+              ) && (
+                <Input
+                  placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
+                  value={draft.groupLabel}
+                  onChange={(changeEvent) => updateDraft({ groupLabel: changeEvent.target.value })}
+                />
+              )}
+            </div>
+          </RemovableField>
+        )}
+        {draft.dayIndex !== null && draft.hasReminderOverride && (
+          <RemovableField
+            label='Reminder'
+            removeLabel='Reset reminder'
+            onRemove={() =>
+              updateDraft({
+                hasReminderOverride: false,
+                reminderEnabled: true,
+                reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
+              })
+            }
+          >
+            <div className='flex items-center gap-2'>
+              <Select
+                className='flex-1'
+                disabled={!draft.reminderEnabled}
+                options={reminderHourOptions}
+                value={String(Math.floor(draft.reminderMinutesBefore / 60))}
+                onChange={(value) =>
+                  updateDraft({
+                    reminderMinutesBefore: clampReminderMinutes(
+                      Number(value),
+                      draft.reminderMinutesBefore % 60,
+                    ),
+                  })
+                }
+              />
+              <Select
+                className='flex-1'
+                disabled={!draft.reminderEnabled}
+                options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
+                value={String(draft.reminderMinutesBefore % 60)}
+                onChange={(value) =>
+                  updateDraft({
+                    reminderMinutesBefore: clampReminderMinutes(
+                      Math.floor(draft.reminderMinutesBefore / 60),
+                      Number(value),
+                    ),
+                  })
+                }
+              />
+              <span className='text-muted-foreground shrink-0 text-sm'>before</span>
+            </div>
+            <label className='flex items-center gap-2 text-sm'>
+              <Checkbox
+                checked={!draft.reminderEnabled}
+                onCheckedChange={(checked) => updateDraft({ reminderEnabled: checked !== true })}
+              />
+              Don&apos;t remind me
+            </label>
+            {reminderText !== null && (
+              <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
+            )}
+          </RemovableField>
+        )}
+        {draft.eventType === 'ACTIVITY' && draft.hasSettings && (
+          <RemovableField
+            label='Indoor / outdoor'
+            removeLabel='Remove indoor / outdoor'
+            onRemove={() => updateDraft({ hasSettings: false, settings: [] })}
+          >
+            <PillRow label='Indoor or outdoor'>
+              {(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => (
+                <Pill
+                  key={setting}
+                  emoji={setting === 'INDOOR' ? '🏛️' : '🌲'}
+                  isSelected={draft.settings.includes(setting)}
+                  onClick={() =>
+                    updateDraft({
+                      settings: draft.settings.includes(setting)
+                        ? draft.settings.filter((existing) => existing !== setting)
+                        : [...draft.settings, setting],
+                    })
+                  }
+                >
+                  {ACTIVITY_SETTING_LABELS[setting]}
+                </Pill>
+              ))}
+            </PillRow>
+          </RemovableField>
+        )}
+        {draft.hasVenueHours && (
+          <RemovableField
+            label='Business hours'
+            removeLabel='Remove venue hours'
+            onRemove={() =>
+              updateDraft({ hasVenueHours: false, venueOpenTime: '', venueCloseTime: '' })
+            }
+          >
+            <div className='grid gap-3 sm:grid-cols-2'>
+              <Input
+                type='time'
+                aria-label='Opens at'
+                value={draft.venueOpenTime}
+                onChange={(changeEvent) => updateDraft({ venueOpenTime: changeEvent.target.value })}
+              />
+              <Input
+                type='time'
+                aria-label='Closes at'
+                value={draft.venueCloseTime}
+                onChange={(changeEvent) => updateDraft({ venueCloseTime: changeEvent.target.value })}
+              />
+            </div>
+          </RemovableField>
+        )}
+        <AddFieldChips heading='Add to this event' chips={detailChips} onAdd={revealDetail} />
+
+        {(error ?? timeError) && (
+          <p className='text-destructive text-sm'>{error ?? timeError}</p>
+        )}
+        <ModalFooterActions
+          leftActions={
+            event &&
+            onDelete && (
+              <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+            )
+          }
+          cancelAction={
+              <Button type='button' variant='secondary' onClick={onClose}>
+                Cancel
+              </Button>
+          }
+          rightActions={
+            <>
+              {isTravel && transitType === 'FLIGHT' && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  disabled={isSubmitting || timeError !== null}
+                  onClick={() => void handleSubmit(true)}
+                >
+                  Add another flight
+                </Button>
+              )}
+              <Button
+                type='button'
+                loading={isSubmitting}
+                disabled={isSubmitting || timeError !== null}
+                onClick={() => void handleSubmit()}
+              >
+                {isSubmitting ? 'Saving…' : event ? 'Save' : 'Add'}
+              </Button>
+            </>
+          }
+        />
       </div>
-    </Modal>
+    </FormScreen>
   );
 }
 

@@ -34,6 +34,13 @@ export const MEMBER_ROLE_LABELS: Record<UserRole, string> = {
   VIEWER: 'Viewer',
 };
 
+export const MEMBER_ROLE_EMOJIS: Record<UserRole, string> = {
+  ADMIN: '👑',
+  EDITOR: '✏️',
+  COMMENTER: '💬',
+  VIEWER: '👀',
+};
+
 export const MEMBER_ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   ADMIN:
     'Full control over this trip, including editing details and managing other members.',
@@ -224,6 +231,13 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   SNACK: 'Snack',
 };
 
+export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
+  BREAKFAST: '🥐',
+  LUNCH: '🥪',
+  DINNER: '🍝',
+  SNACK: '🍿',
+};
+
 export const ACTIVITY_SETTING_LABELS: Record<ActivitySetting, string> = {
   INDOOR: 'Indoor',
   OUTDOOR: 'Outdoor',
@@ -259,6 +273,12 @@ export const TIME_BLOCK_LABELS: Record<TimeBlock, string> = {
   EVENING: 'Evening',
 };
 
+export const TIME_BLOCK_EMOJIS: Record<TimeBlock, string> = {
+  MORNING: '🌅',
+  AFTERNOON: '☀️',
+  EVENING: '🌙',
+};
+
 export const TIME_BLOCK_START_TIMES: Record<TimeBlock, string> = {
   MORNING: '09:00',
   AFTERNOON: '14:00',
@@ -279,6 +299,14 @@ export const CHECKLIST_CATEGORIES: readonly ChecklistCategory[] = [
   'OTHER',
 ];
 
+export const CHECKLIST_CATEGORY_EMOJIS: Record<ChecklistCategory, string> = {
+  DOCUMENTS: '🛂',
+  PACKING: '🧳',
+  BOOKINGS: '🎟️',
+  LOGISTICS: '🗺️',
+  OTHER: '✨',
+};
+
 export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
   DOCUMENTS: 'Documents',
   PACKING: 'Packing',
@@ -296,6 +324,10 @@ export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
   'ACTIVITIES',
   'SHOPPING',
 ];
+
+/** How many days before the first day and after the last day an event, stay or rental may be dated,
+ * for the travel days around a trip. */
+export const MAX_DAYS_OUTSIDE_TRIP = 3;
 
 export const ADD_NEW_OPTION = '__add_new__';
 
@@ -331,6 +363,13 @@ export const STAY_TYPE_LABELS: Record<StayType, string> = {
   RENTAL: 'Rental',
   FRIEND_FAMILY: 'Friend or family',
   OTHER: 'Other',
+};
+
+export const STAY_TYPE_EMOJIS: Record<StayType, string> = {
+  HOTEL: '🏨',
+  RENTAL: '🏡',
+  FRIEND_FAMILY: '🛋️',
+  OTHER: '✨',
 };
 
 export const STAY_TYPE_OPTION_LABELS: Record<StayType, string> = {

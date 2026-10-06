@@ -4,18 +4,25 @@ export function createFirestoreCollectionListener<TDoc>({
   query: firestoreQuery,
   normalize,
   onData,
+  onError,
 }: {
   query: Query<DocumentData>;
   normalize: (id: string, data: DocumentData) => TDoc | Promise<TDoc>;
   onData: (docs: TDoc[]) => void;
+  /** For a listener whose denial or failure should degrade quietly instead of surfacing as an uncaught snapshot error. */
+  onError?: (error: Error) => void;
 }): () => void {
-  return onSnapshot(firestoreQuery, async (snapshot) => {
-    const docs = await Promise.all(
-      snapshot.docs.map((docSnapshot) =>
-        normalize(docSnapshot.id, docSnapshot.data()),
-      ),
-    );
+  return onSnapshot(
+    firestoreQuery,
+    async (snapshot) => {
+      const docs = await Promise.all(
+        snapshot.docs.map((docSnapshot) =>
+          normalize(docSnapshot.id, docSnapshot.data()),
+        ),
+      );
 
-    onData(docs);
-  });
+      onData(docs);
+    },
+    onError,
+  );
 }

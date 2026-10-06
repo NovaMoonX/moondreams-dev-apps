@@ -210,8 +210,7 @@ export const selectPreviewsWindowViewing = createSelector(
             viewing.status === 'PLANNED' &&
             viewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000 <=
               now &&
-            now <=
-              viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
+            now <= viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
         )
         .sort((left, right) => left.showtimeAt - right.showtimeAt)[0] ?? null;
     return result;

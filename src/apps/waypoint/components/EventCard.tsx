@@ -40,6 +40,8 @@ interface EventCardProps {
   showCover: boolean;
   showAttendees: boolean;
   isStacked: boolean;
+  /** The event belongs to a group of legs, so stacking it stacks the whole group. */
+  isGrouped?: boolean;
   /** Opens the stack editor for this event; `onSuccess` closes the mobile drawer once it's done. */
   onStack: (event: TimelineEvent, onSuccess?: () => void) => void;
   /** Only true once the trip has started — archiving is unavailable for an upcoming trip. */
@@ -206,6 +208,7 @@ export function EventCard({
   showCover,
   showAttendees,
   isStacked,
+  isGrouped = false,
   onStack,
   showArchiveToggle,
   onEdit,
@@ -216,6 +219,7 @@ export function EventCard({
   // An archived event is read-only for everyone but an admin, who may only unarchive it.
   const canModify = canEdit && !event.isArchived;
   const canToggleArchive = canArchive;
+  const stackActionLabel = isStacked ? 'Edit stack' : isGrouped ? 'Stack whole group' : 'Stack event';
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -289,7 +293,8 @@ export function EventCard({
                   type='button'
                   size='sm'
                   variant='secondary'
-                  aria-label={isStacked ? 'Edit stack' : 'Stack event'}
+                  aria-label={stackActionLabel}
+                  title={stackActionLabel}
                   onClick={() => onStack(event)}
                 >
                   <Layers className={join('h-4 w-4', isStacked && 'fill-current text-primary')} />
@@ -324,9 +329,9 @@ export function EventCard({
           imageUrl={getDisplayImage(event)}
           location={event}
           linkUrl={event.linkUrl}
-          onEdit={canModify ? () => onEdit(event, closeDrawer) : null}
-          stackLabel={isStacked ? 'Edit stack' : 'Stack event'}
-          onStack={canModify ? () => onStack(event, closeDrawer) : null}
+          onEdit={canModify ? () => { closeDrawer(); onEdit(event); } : null}
+          stackLabel={stackActionLabel}
+          onStack={canModify ? () => { closeDrawer(); onStack(event); } : null}
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >

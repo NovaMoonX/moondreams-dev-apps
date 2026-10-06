@@ -73,6 +73,17 @@ export interface TripJoinRequest {
   requestedAt: number;
 }
 
+/** An admin's standing "yes" for an email address: whoever signs in with it can join the trip as `role`
+ * without asking. Lives at `apps/waypoint/emailInvites/{tripId}_{email}`. */
+export interface TripEmailInvite {
+  tripId: string;
+  /** Lower-cased. */
+  email: string;
+  role: Exclude<UserRole, 'ADMIN'>;
+  invitedBy: string;
+  invitedAt: number;
+}
+
 export interface StayFieldChange {
   field:
     | 'checkInAt'
@@ -342,8 +353,11 @@ export interface TimelineEvent {
   /** "HH:mm" wall-clock time on `dayIndex`, floating — shown the same to every viewer. `RELATIVE` trips only. */
   startTime: string | null;
   endTime: string | null;
-  /** Zone override for this event's times; `null` uses the trip's `timezone`. */
+  /** Zone override for this event's start (and its end, unless `endTimezone` says otherwise); `null` uses the trip's `timezone`. */
   timezone: string | null;
+  /** Zone the end time is in when it differs from the start's, like a flight landing in another zone;
+   * `null` means the same zone as the start. Absent on events saved before it existed. */
+  endTimezone: string | null;
   locationName: string | null;
   address: string | null;
   latitude: number | null;

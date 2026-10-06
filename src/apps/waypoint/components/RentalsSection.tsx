@@ -94,7 +94,8 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
     <section className='space-y-4 pt-4'>
       <SectionHeader
         title='Rentals'
-        action={canAddRentals && <Button onClick={() => setIsModalOpen(true)}>Add rental</Button>}
+        subtitle={`${rentals.length} ${rentals.length === 1 ? 'rental' : 'rentals'}`}
+        action={canAddRentals && <Button onClick={() => setIsModalOpen(true)}>Add</Button>}
       />
       {rentals.length === 0 ? (
         <p className='text-muted-foreground text-sm'>

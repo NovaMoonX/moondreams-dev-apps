@@ -54,7 +54,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Edit & Remove Viewings: Fix a price, format, date or fee, or delete a viewing; the calendar, watchlist and savings update to match.
 - [x] Mark as Seen: A prompt after a planned movie ends that updates the watchlist and takes an optional star rating.
 - [x] Trailer Picks: In the half hour before a planned showing and the first ten minutes after it starts, a small bubble above the Calendar icon offers "Add from trailers": search, tap a title, and it is saved quietly as Want to See, ready for the next trailer. What you've added so far is listed right there, each with an Undo. Nothing pops up on its own; fold the bubble away and a small chip above the icon brings it back.
-- [x] Theaters: Find AMC theaters by zip code, city or your current location (only when you tap for it), save up to ten, pick a favorite, and tag each showing with one. Entry points: the last Setup step, the Dashboard's theaters row and a quiet nudge on the Calendar.
+- [x] Theaters: Find AMC theaters by zip code, city or your current location (only when you tap for it), save up to ten, pick a favorite, and tag each showing with one. A theater AMC doesn't list can be typed by name. Entry points: the last Setup step, the Dashboard's theaters row and a quiet nudge on the Calendar.
 - [x] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
 **Next Steps**

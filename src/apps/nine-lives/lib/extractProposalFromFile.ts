@@ -1,6 +1,6 @@
 import { generativeModel } from '@/lib/firebase/ai';
 
-import { compressIngestionImage } from '../utils/imageCompression';
+import { compressIngestionImage } from '@/utils/imageCompression';
 import {
   buildExtractionPrompt,
   dropFutureEvents,

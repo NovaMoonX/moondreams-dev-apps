@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, ChevronLeft, ChevronRight, Route } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Layers, Route } from 'lucide-react';
 
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
 import { getGroupBadge } from '@apps/waypoint/utils/eventBadge';
@@ -18,6 +18,8 @@ interface EventGroupCardProps {
   showAttendees: boolean;
   canEdit: boolean;
   onManage: (event: TimelineEvent) => void;
+  /** Stacks the whole group together with other travelers' itineraries. */
+  onStack: (event: TimelineEvent) => void;
   renderEvent: (event: TimelineEvent) => ReactNode;
 }
 
@@ -35,7 +37,7 @@ function formatLayover(trip: TripSpace, previous: TimelineEvent, next: TimelineE
   return label;
 }
 
-function EventGroupCard({ trip, group, showAttendees, canEdit, onManage, renderEvent }: EventGroupCardProps) {
+function EventGroupCard({ trip, group, showAttendees, canEdit, onManage, onStack, renderEvent }: EventGroupCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const isTravel = group.eventType === 'TRAVEL';
@@ -71,6 +73,18 @@ function EventGroupCard({ trip, group, showAttendees, canEdit, onManage, renderE
             type='button'
             variant='tertiary'
             size='icon'
+            aria-label='Stack group'
+            title='Stack this whole group'
+            onClick={() => onStack(group.events[0])}
+          >
+            <Layers className='h-4 w-4' />
+          </Button>
+        )}
+        {canEdit && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
             aria-label='Edit group'
             onClick={() => onManage(group.events[0])}
           >
@@ -92,7 +106,7 @@ function EventGroupCard({ trip, group, showAttendees, canEdit, onManage, renderE
         </div>
       </div>
       {isExpanded && (
-        <div className='ml-4 space-y-3 border-l-2 pl-4'>
+        <div className='ml-4 space-y-3 border-l-2 border-primary/30 pl-4'>
           {isTravel ? (
             <>
               <ol className='space-y-1'>

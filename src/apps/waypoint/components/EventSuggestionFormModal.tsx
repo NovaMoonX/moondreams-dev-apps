@@ -5,7 +5,6 @@ import {
   Form,
   FormFactories,
   Input,
-  Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
@@ -13,9 +12,11 @@ import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
 import { fromLocalDateAndTimeInputValues, toLocalTimeInputValue } from '@/utils/dateInputUtils';
-import { getDayCount, getDayIndex, getDayInputValue, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayIndex, getDayInputValue, getDayOptions } from '@/utils/dateRangeUtils';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { createTimeInputField } from '@/utils/formFactoryHelpers';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
@@ -214,7 +215,6 @@ function EventSuggestionFormModal({
   );
   const [formData, setFormData] = useState<SuggestionFormData>(initialData);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const times = parseTimes(trip, formData);
   const isFormComplete = formData.title.trim() !== '' && formData.time !== '' && times.error === null;
@@ -225,10 +225,9 @@ function EventSuggestionFormModal({
       select({
         name: 'dayIndex',
         label: 'Day',
-        options: Array.from({ length: dayCount }, (_, index) => ({
-          label: getDayLabel(trip.startDate, index),
-          value: String(index),
-        })),
+        options: getDayOptions(trip.startDate, trip.endDate, null, MAX_DAYS_OUTSIDE_TRIP).map(
+          ({ value, label }) => ({ value, label }),
+        ),
       }),
       createTimeInputField({ name: 'time', label: 'Start time', variant: 'outline' }),
       custom({
@@ -329,7 +328,7 @@ function EventSuggestionFormModal({
         },
       }),
     ],
-    [dayCount, trip.startDate, formData.title, placeBias],
+    [trip.startDate, trip.endDate, formData.title, placeBias],
   );
 
   const handleSubmit = async (data: SuggestionFormData) => {
@@ -363,7 +362,7 @@ function EventSuggestionFormModal({
   const displayedError = submitError ?? (formData.endTime.enabled ? times.error : null);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Suggested change'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Suggested change'>
       <Form
         id='waypoint-event-suggestion'
         form={fields}
@@ -375,25 +374,25 @@ function EventSuggestionFormModal({
         }}
         submitButton={
           <ModalFooterActions
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete}
                 >
                   {suggestion ? 'Save' : 'Suggest'}
                 </Button>
-              </>
             }
           />
         }
       />
       {displayedError && <p className='text-destructive mt-3 text-sm'>{displayedError}</p>}
-    </Modal>
+    </FormSheet>
   );
 }
 

@@ -1,13 +1,13 @@
 import type { DayForecast, HourForecast, WeatherForecast, WeatherRequest } from '@/lib/weather/types';
 import { roundCoordinate } from '@/lib/weather/weatherQueries';
 import { getDayCount, getDayInputValue } from '@/utils/dateRangeUtils';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventTime, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const FORECAST_WINDOW_DAYS = 14;
 // The provider serves 92 days of past data; stay clear of the edge.
 const MAX_PAST_DAYS = 90;
-const REGION_RADIUS_KM = 100;
 
 interface Located {
   latitude: number;
@@ -28,15 +28,19 @@ export interface WeatherPlan {
 
 export type WeatherForecasts = Record<string, WeatherForecast>;
 
-export function getWeatherDayIndexes(trip: TripSpace, todayIndex: number) {
+/** Every trip day inside the provider's window, however far the trip is from today: the next two
+ * weeks, and as far back as it keeps history — so a trip that is over still shows how it went. A few
+ * days either side of the trip count too when something is planned on them. */
+export function getWeatherDayIndexes(trip: TripSpace, todayIndex: number, events: TimelineEvent[] = []) {
   const dayCount = getDayCount(trip.startDate, trip.endDate);
-  if (trip.isArchived || todayIndex >= dayCount) {
-    return [];
-  }
-
-  const first = Math.max(0, todayIndex - MAX_PAST_DAYS);
-  const last = Math.min(dayCount - 1, todayIndex + FORECAST_WINDOW_DAYS - 1);
-  const result = Array.from({ length: Math.max(0, last - first + 1) }, (_, offset) => first + offset);
+  const eventDays = new Set(
+    events.filter((event) => !event.isArchived).map((event) => getEventTime(trip, event).dayIndex),
+  );
+  const first = todayIndex - MAX_PAST_DAYS;
+  const last = todayIndex + FORECAST_WINDOW_DAYS - 1;
+  const result = Array.from({ length: dayCount + MAX_DAYS_OUTSIDE_TRIP * 2 }, (_, offset) => offset - MAX_DAYS_OUTSIDE_TRIP).filter(
+    (day) => day >= first && day <= last && ((day >= 0 && day < dayCount) || eventDays.has(day)),
+  );
   return result;
 }
 
@@ -82,22 +86,6 @@ function getDayLocation(
   return fromStay ?? null;
 }
 
-function getDistanceKm(from: Located, to: Located) {
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-  const haversine = (angle: number) => Math.sin(angle / 2) ** 2;
-  const arc =
-    haversine(toRadians(to.latitude - from.latitude)) +
-    Math.cos(toRadians(from.latitude)) *
-      Math.cos(toRadians(to.latitude)) *
-      haversine(toRadians(to.longitude - from.longitude));
-  const result = 2 * 6371 * Math.asin(Math.sqrt(arc));
-  return result;
-}
-
-function isSingleRegion(points: Located[]) {
-  return points.every((from) => points.every((to) => getDistanceKm(from, to) <= REGION_RADIUS_KM));
-}
-
 function getLocationKey({ latitude, longitude, timezone }: Located) {
   return `${roundCoordinate(latitude)},${roundCoordinate(longitude)},${timezone ?? 'auto'}`;
 }
@@ -113,27 +101,26 @@ export function buildWeatherPlan(
   events: TimelineEvent[],
   stays: Stay[],
 ): WeatherPlan {
-  const dayIndexes = getWeatherDayIndexes(trip, todayIndex);
+  const dayIndexes = getWeatherDayIndexes(trip, todayIndex, events);
   const visibleDays = new Set(dayIndexes);
 
   const dayCount = getDayCount(trip.startDate, trip.endDate);
-  const ownLocations = Array.from({ length: dayCount }, (_, day) => getDayLocation(trip, day, events, stays));
-  const points = [
-    ...events.filter((event) => !event.isArchived).map((event) => toLocated(event.latitude, event.longitude, null)),
-    ...stays.map((stay) => toLocated(stay.latitude, stay.longitude, null)),
-  ].filter(isLocated);
-  // A day with nothing located borrows the nearest located day: always for today, otherwise
-  // only on a single-region trip, where a multi-city trip would show the wrong city's weather.
-  const isRegional = points.length > 0 && isSingleRegion(points);
+  const ownLocations = new Map(
+    Array.from({ length: dayCount + MAX_DAYS_OUTSIDE_TRIP * 2 }, (_, offset) => offset - MAX_DAYS_OUTSIDE_TRIP).map(
+      (day) => [day, getDayLocation(trip, day, events, stays)] as const,
+    ),
+  );
+  // A day with nothing located of its own takes the nearest located day (the earlier one on a tie):
+  // where you were is the best guess for where you still are, and a forecast beats a blank day.
   const getNearestLocation = (dayIndex: number) =>
-    ownLocations.reduce<{ location: Located; distance: number } | null>((nearest, location, day) => {
+    Array.from(ownLocations).reduce<{ location: Located; distance: number } | null>((nearest, [day, location]) => {
       const distance = Math.abs(day - dayIndex);
-      return location && (!nearest || distance < nearest.distance) ? { location, distance } : nearest;
+      const isBetter = !nearest || distance < nearest.distance || (distance === nearest.distance && day < dayIndex);
+      return location && isBetter ? { location, distance } : nearest;
     }, null)?.location ?? null;
 
   const dayNeeds = dayIndexes.flatMap((dayIndex) => {
-    const location =
-      ownLocations[dayIndex] ?? (isRegional || dayIndex === todayIndex ? getNearestLocation(dayIndex) : null);
+    const location = ownLocations.get(dayIndex) ?? getNearestLocation(dayIndex);
     return location ? [{ dayIndex, location, date: getDayInputValue(trip.startDate, dayIndex) }] : [];
   });
 

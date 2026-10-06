@@ -1,5 +1,5 @@
 export interface MembershipProfile {
-  /** Equals the document id; immutable. */
+  /** AMC's theatre number as digits, or `manual-…` for one the member typed; equals the document id; immutable. */
   uid: string;
   /** Before tax: what the member typed in Setup. */
   monthlyCostCents: number;
@@ -117,7 +117,7 @@ export interface Ticket {
 }
 
 export interface TheatreSnapshot {
-  /** AMC's theatre number, as digits. */
+  /** AMC's theatre number as digits, or `manual-…` for one the member typed. */
   theatreId: string;
   name: string;
   city: string | null;
@@ -126,7 +126,7 @@ export interface TheatreSnapshot {
 
 /** A theater the member goes to; the document id is `theatreId`. */
 export interface AListTheatre {
-  /** AMC's theatre number, as digits; equals the document id; immutable. */
+  /** Equals the document id; immutable. */
   theatreId: string;
   name: string;
   addressLine: string | null;
@@ -139,11 +139,11 @@ export interface AListTheatre {
   lastEditedAt: number;
 }
 
+/** A theater before it is saved. */
+export type TheatreDraft = Omit<AListTheatre, 'createdAt' | 'lastEditedAt'>;
+
 /** A theater found through AMC, before it is saved. */
-export interface TheatreSearchResult extends Omit<
-  AListTheatre,
-  'createdAt' | 'lastEditedAt'
-> {
+export interface TheatreSearchResult extends TheatreDraft {
   /** From the searched point; null when AMC didn't say. */
   distanceMiles: number | null;
 }

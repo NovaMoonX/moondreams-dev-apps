@@ -10,12 +10,12 @@ interface StatTileProps {
   detail?: ReactNode;
   /** Icon above the number instead of beside it, for tiles that sit three across. */
   isStacked?: boolean;
-  /** A help icon beside the label, for a number that needs explaining. */
+  /** A help icon for a number that needs explaining: beside the label from `sm` up, in the tile's top-right corner on a phone, where a label that wraps would strand it. */
   help?: ReactNode;
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
-  prompt?: { label: string; onClick: () => void };
+  prompt?: { label: string; ariaLabel: string; onClick: () => void };
   className?: string;
 }
 
@@ -39,7 +39,7 @@ function StatTile({
   return (
     <div
       className={join(
-        'border-border bg-card flex gap-3 rounded-2xl border px-3 py-3',
+        'border-border bg-card relative flex gap-3 rounded-2xl border px-3 py-3',
         isStacked ? 'flex-col items-center text-center' : 'items-center',
         isGoalMet && 'border-success/40 bg-success/10',
         prompt && 'border-dashed bg-transparent',
@@ -54,7 +54,12 @@ function StatTile({
           {icon}
         </span>
       )}
-      <div className='w-full min-w-0'>
+      <div
+        className={join(
+          'w-full min-w-0',
+          Boolean(help) && !isStacked && 'pr-5 sm:pr-0',
+        )}
+      >
         <p
           className={join(
             'leading-tight font-semibold tabular-nums',
@@ -71,7 +76,9 @@ function StatTile({
           )}
         >
           <span className='whitespace-nowrap'>{label}</span>
-          {help}
+          {help && (
+            <span className='absolute top-2 right-2 sm:static'>{help}</span>
+          )}
         </div>
         {prompt && (
           <Button
@@ -80,6 +87,7 @@ function StatTile({
             rounded='full'
             variant='secondary'
             className='mt-2 w-full text-xs'
+            aria-label={prompt.ariaLabel}
             onClick={prompt.onClick}
           >
             {prompt.label}
@@ -106,10 +114,19 @@ function StatTile({
           <p
             className={join(
               'text-xs',
-              isGoalMet ? 'text-success font-medium mt-1' : 'text-muted-foreground',
+              isGoalMet
+                ? 'text-success mt-1 font-medium'
+                : 'text-muted-foreground',
             )}
           >
-            {isGoalMet ? '🏆 Goal met' : detail}
+            {isGoalMet ? (
+              <>
+                <span aria-hidden='true'>🏆</span>{' '}
+                <span className='sr-only'>Goal </span>Met
+              </>
+            ) : (
+              detail
+            )}
           </p>
         )}
       </div>

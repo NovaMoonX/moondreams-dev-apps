@@ -47,11 +47,13 @@ import IdeasOverview from '@apps/waypoint/components/IdeasOverview';
 import IdeasSection from '@apps/waypoint/components/IdeasSection';
 import MembersSection from '@apps/waypoint/components/MembersSection';
 import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndicator';
+import NowPill from '@apps/waypoint/components/NowPill';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import Subview from '@/components/Subview';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
+import TravelPrompts from '@apps/waypoint/components/TravelPrompts';
 import TripBottomNav from '@apps/waypoint/components/TripBottomNav';
 import StaysEntry from '@apps/waypoint/components/StaysEntry';
 import RentalsSection from '@apps/waypoint/components/RentalsSection';
@@ -360,6 +362,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     (item): item is NonNullable<typeof item> => item !== null,
   );
 
+  const hasTripActions =
+    actionItems.length > 0 || groupedEditActionItems.length > 0 || standaloneActionItems.length > 0;
+
   const moreButtonTrigger = (
     <Button
       type='button'
@@ -417,7 +422,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         className={join(
           'mx-auto max-w-4xl',
           isActive ? 'space-y-2.5 pt-6 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
-          hasAppNav && 'pb-24',
+          hasAppNav ? (isActive ? 'pb-44' : 'pb-24') : isActive && 'pb-40 sm:pb-28',
         )}
       >
         <div className={join('flex items-center justify-between', isSmallScreen && 'mb-5')}>
@@ -450,7 +455,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               >
                 <Link className='h-4 w-4' />
               </Button>
-              {moreButtonTrigger}
+              {hasTripActions && moreButtonTrigger}
             </div>
           )}
         </div>
@@ -497,7 +502,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               </div>
               <div
                 className={join(
-                  'group mt-1 flex w-fit flex-wrap items-center gap-x-2 gap-y-0.5',
+                  'group mt-1 flex w-fit flex-col items-start gap-x-2 gap-y-0.5 sm:flex-row sm:flex-wrap sm:items-center',
                   !showHeaderExtras && 'hidden',
                   canEditDates && !isSmallScreen && 'cursor-pointer',
                 )}
@@ -509,7 +514,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 </p>
                 {trip.timezone && (
                   <>
-                    <span aria-hidden className='text-muted-foreground'>
+                    <span aria-hidden className='text-muted-foreground max-sm:hidden'>
                       ·
                     </span>
                     <p className='text-muted-foreground flex items-center gap-1 text-sm'>
@@ -539,7 +544,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 >
                   <Link className='h-4 w-4' />
                 </Button>
-                <DropdownMenu items={actionItems} trigger={moreButtonTrigger} placement='bottom' alignment='end' />
+                {hasTripActions && (
+                  <DropdownMenu items={actionItems} trigger={moreButtonTrigger} placement='bottom' alignment='end' />
+                )}
               </div>
             )}
           </div>
@@ -555,6 +562,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               trip={trip}
               currentUserId={currentUserId}
               onOpen={setSectionTab}
+              includeLogistics={isActive}
             />
           </div>
         )}
@@ -563,8 +571,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <OverviewSection trip={trip} currentUserId={currentUserId} onViewDay={handleViewDay} />
           </div>
         )}
+        {(hasAppNav ? sectionTab === '' : true) && (
+          <div className='mt-5'>
+            <TravelPrompts trip={trip} currentUserId={currentUserId} />
+          </div>
+        )}
         {canAddIdeas && ideasOverview}
-        {hasAppNav && sectionTab === '' && (
+        {hasAppNav && sectionTab === '' && !isActive && (
           <div className='mt-5 space-y-3'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
             <RentalsEntry onOpen={() => setSectionTab('rentals')} />
@@ -636,6 +649,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </TabsContent>
         </Tabs>
       </div>
+      {isActive && <NowPill trip={trip} currentUserId={currentUserId} />}
       {hasAppNav ? (
         <TripBottomNav
           trip={trip}

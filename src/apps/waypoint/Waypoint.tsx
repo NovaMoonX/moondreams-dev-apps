@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -14,10 +14,13 @@ import Loading from '@/ui/Loading';
 import CreateTripModal from '@apps/waypoint/components/CreateTripModal';
 import JoinWithCodeModal from '@apps/waypoint/components/JoinWithCodeModal';
 import JoinTripModal from '@apps/waypoint/components/JoinTripModal';
+import MyEmailInvites from '@apps/waypoint/components/MyEmailInvites';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
+import { getMyTripsParams } from '@apps/waypoint/utils/tripsUrl';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
+import { useWaypointTheme } from '@apps/waypoint/hooks/useWaypointTheme';
 import { requestToJoinTrip } from '@apps/waypoint/store/actions/membershipActions';
 import { createTrip } from '@apps/waypoint/store/actions/tripActions';
 import {
@@ -29,6 +32,7 @@ import {
 import type { TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
+  useWaypointTheme();
   const { user, loading } = useAuth();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -48,6 +52,7 @@ function Waypoint() {
   const pendingRequestsLoaded = useAppSelector(
     (state) => state.waypoint.pendingRequests.myRequestsLoaded,
   );
+  const emailInvites = useAppSelector((state) => state.waypoint.emailInvites.mine);
   const now = useNow();
   const inviteCode = searchParams.get('inviteCode')?.trim().toUpperCase() ?? '';
   const selectedTripId = searchParams.get('trip');
@@ -59,9 +64,18 @@ function Waypoint() {
   const isSelectedTripAdmin =
     selectedTrip?.members[user?.uid ?? '']?.role === 'ADMIN';
 
+  const isOnMyTrips = tripsLoaded && !selectedTrip;
+  useEffect(() => {
+    const cleaned = getMyTripsParams(searchParams);
+    if (isOnMyTrips && cleaned) {
+      setSearchParams(cleaned, { replace: true });
+    }
+  }, [isOnMyTrips, searchParams, setSearchParams]);
+
   useWaypointSync(user?.uid ?? null, {
     tripId: selectedTrip?.id ?? null,
     isTripAdmin: isSelectedTripAdmin,
+    email: user?.email ?? null,
   });
 
   const handleCreateTrip = async (values: {
@@ -236,13 +250,23 @@ function Waypoint() {
               </label>
             )}
             <div className='grid grid-cols-2 gap-3 sm:flex'>
-              <Button
-                variant='secondary'
-                className='whitespace-nowrap'
-                onClick={() => setIsJoinCodeModalOpen(true)}
-              >
-                Join with code
-              </Button>
+              <div className='flex gap-2'>
+                <Button
+                  variant='secondary'
+                  className='flex-1 whitespace-nowrap'
+                  onClick={() => setIsJoinCodeModalOpen(true)}
+                >
+                  Join with code
+                </Button>
+                <MyEmailInvites
+                  key={user.uid}
+                  uid={user.uid}
+                  invites={emailInvites.filter((invite) => !trips.some((trip) => trip.id === invite.tripId))}
+                  onViewTrip={handleViewInvitedTrip}
+                  isQuiet={Boolean(inviteCode)}
+                  focusTripId={selectedTripId}
+                />
+              </div>
               <Button
                 className='whitespace-nowrap'
                 onClick={() => setIsCreateModalOpen(true)}
@@ -305,6 +329,8 @@ function Waypoint() {
           key={inviteCode}
           inviteCode={inviteCode}
           isEnteredCode={isEnteredCode}
+          uid={user.uid}
+          emailInvites={emailInvites}
           myTrips={trips}
           pendingRequests={pendingRequests}
           isSubmitting={isInviteSubmitting}
