@@ -106,22 +106,21 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         key={itemView}
         role='status'
         className={join(
-          'bg-popover overflow-hidden rounded-full border shadow-lg transition-[max-width] duration-700 ease-in-out',
+          'bg-popover min-w-0 overflow-hidden rounded-full border shadow-lg',
           itemView === 'now' ? 'border-emerald-500/60' : 'border-border',
-          isExpanded ? 'max-w-[17rem]' : 'size-12 max-w-12',
         )}
       >
         <Button
           type='button'
           variant='tertiary'
           aria-label={isExpanded ? `${label}. Show details` : `Show ${itemView === 'now' ? 'what is happening now' : 'what is up next'}`}
-          className={join('h-12 gap-0 rounded-full p-0', isExpanded ? 'justify-start px-4' : 'w-12 min-w-12 justify-center')}
+          className='relative h-12 w-full min-w-0 justify-start gap-0 rounded-full p-0'
           onClick={() => (isExpanded ? open(target) : showView(itemView))}
         >
           <span
             className={join(
-              'flex shrink-0 items-center justify-center overflow-hidden transition-[width,opacity] duration-300',
-              isExpanded ? 'hidden' : 'size-12',
+              'absolute inset-y-0 left-0 flex w-12 items-center justify-center transition-opacity duration-700',
+              isExpanded ? 'opacity-0' : 'opacity-100',
             )}
           >
             {itemView === 'now' ? (
@@ -130,7 +129,14 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
               <SkipForward className='h-5 w-5' />
             )}
           </span>
-          {isExpanded && <span>{renderStatus(target, itemView)}</span>}
+          <span
+            className={join(
+              'min-w-0 flex-1 overflow-hidden px-4 whitespace-nowrap transition-opacity duration-700',
+              isExpanded ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            {renderStatus(target, itemView)}
+          </span>
         </Button>
       </div>
     );
@@ -140,7 +146,13 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     if (isPhone) {
       return (
         <div className='pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-30 flex justify-center px-4'>
-          <div className='pointer-events-auto flex max-w-full items-center gap-2'>
+          <div
+            className={join(
+              'pointer-events-auto grid w-[min(100%,22rem)] gap-2 transition-[grid-template-columns] duration-700 ease-in-out',
+              !canSwap && 'grid-cols-[1fr]',
+              canSwap && (view === 'now' ? 'grid-cols-[1fr_3rem]' : 'grid-cols-[3rem_1fr]'),
+            )}
+          >
             {activeEvent && renderPhoneItem(activeEvent, 'now')}
             {upNextEvent && renderPhoneItem(upNextEvent, 'next')}
           </div>
