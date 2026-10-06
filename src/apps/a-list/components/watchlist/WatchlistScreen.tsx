@@ -57,7 +57,9 @@ function WatchlistScreen() {
         (!isOpeningOn || row.item.movieKey in daysByMovie) &&
         (!isSeenOn || row.isSeen) &&
         (priorities.length === 0 ||
-          (priorities as string[]).includes(row.item.priority)),
+          (row.isSeen
+            ? isSeenOn
+            : (priorities as string[]).includes(row.item.priority))),
     );
 
     if (isOpeningOn) {
