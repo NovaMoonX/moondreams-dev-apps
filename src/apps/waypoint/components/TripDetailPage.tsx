@@ -1,5 +1,5 @@
 import FallbackImage from '@/components/FallbackImage';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -118,8 +118,15 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const subviewTitle = hasAppNav ? TRIP_SUBVIEW_LABELS[sectionTab as TripSectionTab] : undefined;
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
+  // The new tab renders in a transition so the tap answers at once (the nav moves, the old tab
+  // stays up) instead of the page freezing while a big tab builds.
+  const [isTabPending, startTabTransition] = useTransition();
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const navTab = isTabPending && pendingTab !== null ? pendingTab : sectionTab;
+
   const setSectionTab = (value: string) => {
-    setSelectedTab(value);
+    setPendingTab(value);
+    startTabTransition(() => setSelectedTab(value));
     if (hasAppNav) {
       window.scrollTo({ top: 0 });
     }
@@ -660,7 +667,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         <TripBottomNav
           trip={trip}
           now={now}
-          value={sectionTab}
+          value={navTab}
           showProgress={showProgress}
           onChange={setSectionTab}
         />

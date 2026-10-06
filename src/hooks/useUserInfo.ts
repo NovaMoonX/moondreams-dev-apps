@@ -38,13 +38,17 @@ function normalizeUserInfo(uid: string, value: unknown): UserInfo {
   };
 }
 
-// One Firestore listener per user, shared by every component that shows them and kept only while
-// someone is watching: a long timeline asks for the same people on every card.
+// One Firestore listener per user, shared by every component that shows them: a long timeline asks
+// for the same people on every card. After the last watcher leaves the listener lingers, because
+// switching tabs unmounts and remounts every avatar and a new listener costs far more than an idle one.
+const LINGER_MS = 5 * 60_000;
+
 interface UserEntry {
   info: UserInfo;
   rev: number;
   watchers: Set<() => void>;
   stop: (() => void) | null;
+  stopTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const entries = new Map<string, UserEntry>();
@@ -77,7 +81,7 @@ const getEntry = (uid: string) => {
   if (existing) {
     return existing;
   }
-  const entry: UserEntry = { info: normalizeUserInfo(uid, null), rev: 0, watchers: new Set(), stop: null };
+  const entry: UserEntry = { info: normalizeUserInfo(uid, null), rev: 0, watchers: new Set(), stop: null, stopTimer: null };
   entries.set(uid, entry);
   return entry;
 };
@@ -85,6 +89,10 @@ const getEntry = (uid: string) => {
 function watchUser(uid: string, onChange: () => void) {
   const entry = getEntry(uid);
   entry.watchers.add(onChange);
+  if (entry.stopTimer) {
+    clearTimeout(entry.stopTimer);
+    entry.stopTimer = null;
+  }
   if (!entry.stop) {
     entry.stop = onSnapshot(
       doc(db, 'users', uid),
@@ -100,9 +108,12 @@ function watchUser(uid: string, onChange: () => void) {
   return () => {
     entry.watchers.delete(onChange);
     pendingWatchers.delete(onChange);
-    if (entry.watchers.size === 0 && entry.stop) {
-      entry.stop();
-      entry.stop = null;
+    if (entry.watchers.size === 0 && entry.stop && !entry.stopTimer) {
+      entry.stopTimer = setTimeout(() => {
+        entry.stopTimer = null;
+        entry.stop?.();
+        entry.stop = null;
+      }, LINGER_MS);
     }
   };
 }

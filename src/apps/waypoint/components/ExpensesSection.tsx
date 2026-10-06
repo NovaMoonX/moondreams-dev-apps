@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import {
   Button,
@@ -12,6 +12,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import LazyMount from '@/components/LazyMount';
 import DetailSheet from '@/components/DetailSheet';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -142,6 +143,9 @@ function describeSplit(
     ? `Split · ${targetLabel} (custom)`
     : `Split · ${targetLabel} (even)`;
 }
+
+const EAGER_DAYS = 3;
+const ESTIMATED_ROW_HEIGHT = 72;
 
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
@@ -911,51 +915,53 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
         }
       >
-        <div className='space-y-5'>
-          <div className='divide-border divide-y'>
-            <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
-              Custom split only
-              <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
-            </label>
-            <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
-              Estimated range only
-              <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
-            </label>
-          </div>
-          {renderChipGroup(
-            'Status',
-            (['PAID', 'EXPECTED'] as const).map((status) => ({
-              value: status,
-              label: status === 'PAID' ? 'Paid' : 'Expecting',
-            })),
-            statusFilter,
-            (values) => setStatusFilter(values as ExpenseStatus[]),
-          )}
-          {renderChipGroup(
-            'Category',
-            categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
-            categoryFilter,
-            setCategoryFilter,
-          )}
-          {renderChipGroup(
-            'Day',
-            [
-              ...Array.from({ length: dayCount }, (_, index) => ({
-                value: String(index),
-                label: getDayLabel(trip.startDate, index, dayCount),
+        {isFilterDrawerOpen && (
+          <div className='space-y-5'>
+            <div className='divide-border divide-y'>
+              <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
+                Custom split only
+                <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
+              </label>
+              <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
+                Estimated range only
+                <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
+              </label>
+            </div>
+            {renderChipGroup(
+              'Status',
+              (['PAID', 'EXPECTED'] as const).map((status) => ({
+                value: status,
+                label: status === 'PAID' ? 'Paid' : 'Expecting',
               })),
-              { value: 'other', label: 'No specific day' },
-            ],
-            dayFilter,
-            setDayFilter,
-          )}
-          {renderChipGroup(
-            'Paid by',
-            memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) })),
-            payerFilter,
-            setPayerFilter,
-          )}
-        </div>
+              statusFilter,
+              (values) => setStatusFilter(values as ExpenseStatus[]),
+            )}
+            {renderChipGroup(
+              'Category',
+              categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
+              categoryFilter,
+              setCategoryFilter,
+            )}
+            {renderChipGroup(
+              'Day',
+              [
+                ...Array.from({ length: dayCount }, (_, index) => ({
+                  value: String(index),
+                  label: getDayLabel(trip.startDate, index, dayCount),
+                })),
+                { value: 'other', label: 'No specific day' },
+              ],
+              dayFilter,
+              setDayFilter,
+            )}
+            {renderChipGroup(
+              'Paid by',
+              memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) })),
+              payerFilter,
+              setPayerFilter,
+            )}
+          </div>
+        )}
       </Drawer>
       {filteredExpenses.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
@@ -978,10 +984,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
           </div>
           {dayGroups ? (
-            dayGroups.map(({ bucket, items }) => (
-              <div key={bucket} className='space-y-3'>
+            dayGroups.map(({ bucket, items }, dayPosition) => (
+              <div
+                key={bucket}
+                className='defer-offscreen space-y-3'
+                style={{ '--defer-size': `${items.length * ESTIMATED_ROW_HEIGHT}px` } as CSSProperties}
+              >
                 <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
-                <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
+                <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_ROW_HEIGHT}>
+                  <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
+                </LazyMount>
               </div>
             ))
           ) : (
@@ -1070,4 +1082,4 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   );
 }
 
-export default ExpensesSection;
+export default memo(ExpensesSection);

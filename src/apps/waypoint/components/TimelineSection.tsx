@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, memo } from 'react';
 
 import {
   Button,
@@ -28,6 +28,7 @@ import EventFormModal, {
   type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
+import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
@@ -73,6 +74,8 @@ import { selectActiveStaysForDay, selectStays } from '@apps/waypoint/store/selec
 import type { Stay } from '@apps/waypoint/types';
 
 const OUTSIDE_TAB = 'outside';
+const EAGER_DAYS = 2;
+const ESTIMATED_CARD_HEIGHT = 130;
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -404,14 +407,20 @@ export function TimelineSection({
     return (
       <div className='space-y-3'>
         {days.map(
-          ({ bucket, items }) => (
-            <div key={bucket} className='space-y-3'>
+          ({ bucket, items }, dayPosition) => (
+            <div
+              key={bucket}
+              className='defer-offscreen space-y-3'
+              style={{ '--defer-size': `${items.length * ESTIMATED_CARD_HEIGHT}px` } as CSSProperties}
+            >
               {renderDivider(
                 getBucketLabel(bucket, trip.startDate, dayCount),
                 typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
               )}
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
-              {renderEventItems(items)}
+              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_CARD_HEIGHT}>
+                {renderEventItems(items)}
+              </LazyMount>
             </div>
           ),
         )}
@@ -684,4 +693,4 @@ function StayBanner({ stay, showCover }: { stay: Stay; showCover: boolean }) {
   );
 }
 
-export default TimelineSection;
+export default memo(TimelineSection);

@@ -7,6 +7,13 @@
   @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
 }
 
+/* A long list's day or section: the browser skips style, layout and paint until it nears the screen.
+ * `--defer-size` is the section's estimated height; `auto` remembers the real one once seen, so the scrollbar stays steady. */
+@utility defer-offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--defer-size, 600px);
+}
+
 /* A mini-app's own header on a phone: it sticks under the site header while that is showing and takes
  * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
 @utility sticky-app-bar {
