@@ -6,13 +6,14 @@ import {
   Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
 import { PillGroup } from '@/components/PillGroup';
+import SearchInput from '@/components/SearchInput';
 import StatTile from '@/components/StatTile';
 import useNow from '@/hooks/useNow';
 import { formatDate } from '@/utils/formatUtils';
@@ -444,6 +445,8 @@ function AppConfigEditor({
 
 type UsageFilter = 'started' | 'active';
 
+type AdminView = 'apps' | 'users';
+
 function AppUsageSection({ app, users }: { app: AppMetadata; users: UserProfile[] }) {
   const [filter, setFilter] = useState<UsageFilter>('started');
   const now = useNow(60_000);
@@ -531,12 +534,104 @@ function AppUsageSection({ app, users }: { app: AppMetadata; users: UserProfile[
   );
 }
 
+function AllUsersView({ apps, users }: { apps: AppMetadata[]; users: UserProfile[] }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const now = useNow(60_000);
+  const usageQueries = useQueries({ queries: apps.map((app) => appUsageQueryOptions(app.id)) });
+
+  const activeSince = getActiveSince(now);
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const rows = users
+    .filter(
+      (profile) =>
+        normalizedSearch.length === 0 ||
+        profile.displayName?.toLowerCase().includes(normalizedSearch) ||
+        profile.email.toLowerCase().includes(normalizedSearch),
+    )
+    .map((profile) => ({
+      profile,
+      lastVisitedAt: profile.lastVisitedAt ?? null,
+      appUsage: apps.flatMap((app, index) => {
+        const entry = usageQueries[index]?.data?.find((usage) => usage.uid === profile.uid);
+        return entry ? [{ app, isActive: entry.lastActiveAt >= activeSince }] : [];
+      }),
+    }))
+    .sort((a, b) => (b.lastVisitedAt ?? 0) - (a.lastVisitedAt ?? 0));
+
+  return (
+    <section className='space-y-4'>
+      <div>
+        <p className='text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase'>
+          Everyone
+        </p>
+        <h2 className='text-foreground mt-1 text-2xl font-semibold'>
+          {users.length} {users.length === 1 ? 'member' : 'members'}
+        </h2>
+        <p className='text-muted-foreground mt-1 text-sm'>
+          Most recent visitors first. Apps in color were opened in the past {ACTIVE_WINDOW_MONTHS} months.
+        </p>
+      </div>
+
+      <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder='Search members by name or email' />
+
+      {rows.length === 0 ? (
+        <p className='text-muted-foreground text-sm'>
+          {users.length === 0 ? 'No one has signed in yet.' : 'No members match that search.'}
+        </p>
+      ) : (
+        <ul className='divide-border divide-y'>
+          {rows.map((row) => (
+            <li key={row.profile.uid} className='flex items-start gap-3 py-3'>
+              <UserAvatar user={row.profile} size='sm' />
+              <div className='min-w-0 flex-1'>
+                <div className='flex items-start justify-between gap-3'>
+                  <div className='min-w-0'>
+                    <div className='text-foreground truncate text-sm'>
+                      {row.profile.displayName ?? row.profile.email}
+                    </div>
+                    <div className='text-muted-foreground truncate text-xs'>{row.profile.email}</div>
+                  </div>
+                  <div className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
+                    {row.lastVisitedAt ? (
+                      <>
+                        <div>Last visited</div>
+                        <div>{formatDate(row.lastVisitedAt)}</div>
+                      </>
+                    ) : (
+                      <div>No visit yet</div>
+                    )}
+                  </div>
+                </div>
+                {row.appUsage.length > 0 ? (
+                  <div className='mt-2 flex flex-wrap gap-1.5'>
+                    {row.appUsage.map(({ app, isActive }) => (
+                      <Badge
+                        key={app.id}
+                        variant={isActive ? 'secondary' : 'muted'}
+                        outline={!isActive}
+                        size='sm'
+                      >
+                        {app.name}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const { allApps, updateAppMetadata } = useAppCatalog();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>('worth-the-wait');
   const [dirtyAppIds, setDirtyAppIds] = useState<string[]>([]);
+  const [view, setView] = useState<AdminView>('apps');
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -612,77 +707,91 @@ function AdminDashboard() {
           </div>
         </header>
 
-        <div className='grid gap-6 lg:grid-cols-[260px_1fr]'>
-          <aside className='border-border bg-card rounded-2xl border p-4'>
-            <h2 className='text-foreground text-sm font-medium'>Apps</h2>
-            {unconfiguredApps.length > 0 ? (
-              <div className='mt-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-2'>
-                <div className='text-xs font-medium tracking-[0.2em] text-amber-600 uppercase'>
-                  Needs setup
+        <PillGroup<AdminView>
+          label='Dashboard view'
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'apps', label: 'Apps' },
+            { value: 'users', label: `Everyone · ${users.length}` },
+          ]}
+        />
+
+        {view === 'users' ? (
+          <AllUsersView apps={allApps} users={users} />
+        ) : (
+          <div className='grid gap-6 lg:grid-cols-[260px_1fr]'>
+            <aside className='border-border bg-card rounded-2xl border p-4'>
+              <h2 className='text-foreground text-sm font-medium'>Apps</h2>
+              {unconfiguredApps.length > 0 ? (
+                <div className='mt-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-2'>
+                  <div className='text-xs font-medium tracking-[0.2em] text-amber-600 uppercase'>
+                    Needs setup
+                  </div>
+                  <div className='mt-2 space-y-2'>
+                    {unconfiguredApps.map((app) => (
+                      <button
+                        key={app.id}
+                        type='button'
+                        onClick={() => handleSelectApp(app.id)}
+                        className='text-foreground/80 w-full rounded-lg border border-dashed border-amber-500/60 bg-transparent px-2 py-2 text-left text-xs hover:bg-amber-500/5'
+                      >
+                        {app.id}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className='mt-2 space-y-2'>
-                  {unconfiguredApps.map((app) => (
+              ) : null}
+              <div className='mt-3 space-y-2'>
+                {allApps.map((app) => {
+                  const isDirty = dirtyAppIds.includes(app.id);
+
+                  return (
                     <button
                       key={app.id}
                       type='button'
                       onClick={() => handleSelectApp(app.id)}
-                      className='text-foreground/80 w-full rounded-lg border border-dashed border-amber-500/60 bg-transparent px-2 py-2 text-left text-xs hover:bg-amber-500/5'
+                      className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                        selectedApp?.id === app.id
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border text-foreground/70 hover:bg-muted/40 bg-transparent'
+                      }`}
                     >
-                      {app.id}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <div className='mt-3 space-y-2'>
-              {allApps.map((app) => {
-                const isDirty = dirtyAppIds.includes(app.id);
-
-                return (
-                  <button
-                    key={app.id}
-                    type='button'
-                    onClick={() => handleSelectApp(app.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                      selectedApp?.id === app.id
-                        ? 'border-primary bg-primary/10 text-foreground'
-                        : 'border-border text-foreground/70 hover:bg-muted/40 bg-transparent'
-                    }`}
-                  >
-                    <div className='flex items-center justify-between gap-2'>
-                      <div className='text-sm font-medium'>
-                        {app.name || app.id}
+                      <div className='flex items-center justify-between gap-2'>
+                        <div className='text-sm font-medium'>
+                          {app.name || app.id}
+                        </div>
+                        {isDirty ? (
+                          <span className='rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium tracking-[0.12em] text-amber-600 uppercase'>
+                            Changed
+                          </span>
+                        ) : null}
                       </div>
-                      {isDirty ? (
-                        <span className='rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium tracking-[0.12em] text-amber-600 uppercase'>
-                          Changed
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className='mt-1 text-xs opacity-70'>
-                      /{app.path.replace(/^\//, '') || app.id}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
+                      <div className='mt-1 text-xs opacity-70'>
+                        /{app.path.replace(/^\//, '') || app.id}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
 
-          {selectedApp ? (
-            <div className='min-w-0 space-y-6'>
-              <AppUsageSection key={`usage-${selectedApp.id}`} app={selectedApp} users={users} />
-              <AppConfigEditor
-                key={selectedApp.id}
-                app={selectedApp}
-                users={users}
-                onDirtyChange={handleDirtyChange}
-                onSave={updateAppMetadata}
-              />
-            </div>
-          ) : (
-            <p className='text-muted-foreground text-sm'>No app selected.</p>
-          )}
-        </div>
+            {selectedApp ? (
+              <div className='min-w-0 space-y-6'>
+                <AppUsageSection key={`usage-${selectedApp.id}`} app={selectedApp} users={users} />
+                <AppConfigEditor
+                  key={selectedApp.id}
+                  app={selectedApp}
+                  users={users}
+                  onDirtyChange={handleDirtyChange}
+                  onSave={updateAppMetadata}
+                />
+              </div>
+            ) : (
+              <p className='text-muted-foreground text-sm'>No app selected.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

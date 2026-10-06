@@ -62,6 +62,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         displayName: fixture.displayName,
         photoURL: '',
         isAdmin: fixture.uid === FIXTURE_USERS.admin.uid,
+        lastVisitedAt: context.now - (fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid ? 120 : 1) * 24 * 60 * 60 * 1000,
       },
       { merge: true },
     );

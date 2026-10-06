@@ -96,6 +96,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             displayName: firebaseUser.displayName ?? firebaseUser.email ?? '',
             photoURL: getProviderPhotoURL(firebaseUser) ?? '',
             isAdmin: isAdminUser,
+            lastVisitedAt: Date.now(),
           },
           { merge: true },
         ).catch((error) => console.error('Failed to sync user profile:', error));

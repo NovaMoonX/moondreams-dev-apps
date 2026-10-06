@@ -39,4 +39,6 @@ export interface UserProfile {
   photoURL?: string;
   customPhotoURL?: string | null;
   isAdmin?: boolean;
+  /** Instant: the last page load while signed in, anywhere on the site. Absent until the member next visits. */
+  lastVisitedAt?: number | null;
 }
