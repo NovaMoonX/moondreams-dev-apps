@@ -4,6 +4,7 @@ import {
   type SeedContext,
   type SeedResult,
 } from './types.ts';
+import { seedWaypointScaleTrip } from './waypointScale.ts';
 
 const TRIP_ID = 'seed-waypoint-trip';
 const ARCHIVED_TRIP_ID = 'seed-waypoint-trip-archived';
@@ -1788,8 +1789,17 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const scaleDocuments = await seedWaypointScaleTrip({
+    context,
+    tripStart: activeTripStart,
+    alexUid: alex.uid,
+    taylorUid: taylor.uid,
+    jamieUid: jamie.uid,
+    timezone: TRIP_TIMEZONE,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 78,
+    firestoreDocuments: 78 + scaleDocuments,
   };
 }

@@ -1,5 +1,5 @@
 import { doc, onSnapshot } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 
 import { db } from '@lib/firebase/config';
 import type { UserProfile } from '@lib/types/appCatalog';
@@ -38,6 +38,61 @@ function normalizeUserInfo(uid: string, value: unknown): UserInfo {
   };
 }
 
+// One Firestore listener per user, shared by every component that shows them and kept only while
+// someone is watching: a long timeline asks for the same people on every card.
+interface UserEntry {
+  info: UserInfo;
+  rev: number;
+  watchers: Set<() => void>;
+  stop: (() => void) | null;
+}
+
+const entries = new Map<string, UserEntry>();
+const pendingWatchers = new Set<() => void>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+// A long timeline loads many profiles in a burst; one render per burst, not one per profile
+// (each of those is a synchronous store update and, past 50 in a row, React aborts).
+const notifyWatchers = (watchers: Set<() => void>) => {
+  watchers.forEach((watcher) => pendingWatchers.add(watcher));
+  flushTimer ??= setTimeout(() => {
+    flushTimer = null;
+    const batch = [...pendingWatchers];
+    pendingWatchers.clear();
+    batch.forEach((watcher) => watcher());
+  }, 50);
+};
+
+const getEntry = (uid: string) => {
+  const existing = entries.get(uid);
+  if (existing) {
+    return existing;
+  }
+  const entry: UserEntry = { info: normalizeUserInfo(uid, null), rev: 0, watchers: new Set(), stop: null };
+  entries.set(uid, entry);
+  return entry;
+};
+
+function watchUser(uid: string, onChange: () => void) {
+  const entry = getEntry(uid);
+  entry.watchers.add(onChange);
+  if (!entry.stop) {
+    entry.stop = onSnapshot(doc(db, 'users', uid), (docSnapshot) => {
+      entry.info = normalizeUserInfo(uid, docSnapshot.data());
+      entry.rev += 1;
+      notifyWatchers(entry.watchers);
+    });
+  }
+
+  return () => {
+    entry.watchers.delete(onChange);
+    if (entry.watchers.size === 0 && entry.stop) {
+      entry.stop();
+      entry.stop = null;
+    }
+  };
+}
+
 export function useUserInfo(userId?: string | null): UserInfo | null;
 
 export function useUserInfo(userIds?: string[] | null): UserInfoMapResult | null;
@@ -50,62 +105,27 @@ export function useUserInfo(
       return [];
     }
 
-    const nextIds = Array.isArray(userIds) ? userIds : [userIds];
-    const filteredIds: string[] = [];
-
-    for (const uid of nextIds) {
-      if (!uid || filteredIds.includes(uid)) {
-        continue;
-      }
-
-      filteredIds.push(uid);
-    }
-
-    return filteredIds;
+    return Array.from(new Set((Array.isArray(userIds) ? userIds : [userIds]).filter(Boolean)));
   }, [userIds]);
 
-  const [users, setUsers] = useState<UserInfo[]>([]);
-
-  // Key the effect on the id set's content, not `ids`' array identity —
-  // callers often pass a freshly-mapped/filtered array each render, which
-  // would otherwise tear down and resubscribe every listener on every
-  // unrelated re-render. `idsKey` only triggers the effect; `ids` itself
-  // (not a join/split round-trip, which would corrupt an id containing a
-  // comma) is what the effect body actually uses.
+  // Callers often pass a freshly-built array each render, so the subscription is keyed on the ids'
+  // content (`ids` itself is used, not a join/split round trip that would corrupt an id with a comma).
   const idsKey = ids.join(',');
-
-  useEffect(() => {
-    if (ids.length === 0) {
-      return;
-    }
-
-    const listeners = ids.map((uid) => {
-      const userDocRef = doc(db, 'users', uid);
-
-      return onSnapshot(userDocRef, (docSnapshot) => {
-        const nextUser = normalizeUserInfo(uid, docSnapshot.data());
-
-        setUsers((current) => {
-          const filtered = current.filter((user) => user.uid !== uid);
-          return [...filtered, nextUser];
-        });
-      });
-    });
-
-    return () => {
-      listeners.forEach((unsubscribe) => unsubscribe());
-    };
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const stops = ids.map((uid) => watchUser(uid, onChange));
+      return () => stops.forEach((stop) => stop());
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey is ids' content signal
-  }, [idsKey]);
-
-  const usersMap = useMemo(
-    () =>
-      users.reduce<Record<string, UserInfo>>((acc, user) => {
-        acc[user.uid] = user;
-        return acc;
-      }, {}),
-    [users],
+    [idsKey],
   );
+  // A profile change re-renders only the components showing that person.
+  const getRevisions = useCallback(
+    () => ids.map((uid) => getEntry(uid).rev).join(','),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey is ids' content signal
+    [idsKey],
+  );
+  const revisions = useSyncExternalStore(subscribe, getRevisions);
 
   const result = useMemo(() => {
     if (ids.length === 0) {
@@ -113,25 +133,17 @@ export function useUserInfo(
     }
 
     if (Array.isArray(userIds)) {
-      const orderedUsers = ids.map(
-        (uid) => usersMap[uid] ?? normalizeUserInfo(uid, null),
-      );
-
-      const result: UserInfoMapResult = {
-        map: orderedUsers.reduce<Record<string, UserInfo>>((acc, user) => {
-          acc[user.uid] = user;
-          return acc;
-        }, {}),
+      const orderedUsers = ids.map((uid) => getEntry(uid).info);
+      const mapResult: UserInfoMapResult = {
+        map: Object.fromEntries(orderedUsers.map((user) => [user.uid, user])),
         users: orderedUsers,
       };
-
-      return result;
+      return mapResult;
     }
 
-    const singleUser =
-      usersMap[ids[0]] ?? normalizeUserInfo(ids[0], null);
-    return singleUser;
-  }, [ids, userIds, usersMap]);
+    return getEntry(ids[0]).info;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- revisions signals a changed profile
+  }, [ids, userIds, revisions]);
 
   return result;
 }

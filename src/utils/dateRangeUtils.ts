@@ -66,15 +66,16 @@ export function getDayLabel(rangeStart: number, dayIndex: number, count?: number
   return `Day ${dayIndex + 1} · ${date}`;
 }
 
+const dayFormatters = {
+  withWeekday: new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+  plain: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+};
+
 /** Just the calendar date ("Fri, Oct 3") of a day offset — for days outside a range, where "Day N" reads badly.
  * Pass `withWeekday: false` where the weekday is already drawn beside it. */
 export function getDayDateLabel(rangeStart: number, dayIndex: number, withWeekday = true) {
-  const result = new Date(rangeStart + dayIndex * 86_400_000).toLocaleDateString(undefined, {
-    ...(withWeekday && { weekday: 'short' }),
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+  const formatter = withWeekday ? dayFormatters.withWeekday : dayFormatters.plain;
+  const result = formatter.format(new Date(rangeStart + dayIndex * 86_400_000));
   return result;
 }
 

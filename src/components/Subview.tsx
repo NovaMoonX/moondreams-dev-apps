@@ -135,7 +135,7 @@ function Subview({
           <SubviewHeader
             title={title}
             onBack={onClose}
-            className='sticky-app-bar bg-background -mx-4 mb-3 px-4 py-2'
+            className='sticky-app-bar bg-background -mx-4 mb-3 min-h-14 px-4 py-2.5'
           />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>

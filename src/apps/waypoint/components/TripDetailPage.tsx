@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -410,6 +410,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     );
   };
 
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const backButton = (
     <Button
       type='button'
@@ -458,7 +459,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
       >
         {isSmallScreen ? (
-          <StickyAppBar title={trip.title} leading={backButton} trailing={phoneActions} className='mb-3' />
+          <StickyAppBar title={trip.title} titleRef={titleRef} leading={backButton} trailing={phoneActions} className='mb-3' />
         ) : (
           <div className='flex items-center justify-between'>{backButton}</div>
         )}
@@ -485,6 +486,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 onClick={canEdit && !isSmallScreen ? () => setEditingField('title') : undefined}
               >
                 <h1
+                  ref={titleRef}
                   className={join(
                     'font-semibold',
                     isActive ? 'text-2xl' : 'text-3xl',

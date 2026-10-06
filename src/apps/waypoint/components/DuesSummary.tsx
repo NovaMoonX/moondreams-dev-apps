@@ -228,12 +228,49 @@ function DuesSummary({
       return { key: `${item.expense.id}-${fromUid}`, text };
     });
   const visibleNotices = showAllNotices ? notices : notices.slice(0, MAX_VISIBLE_NOTICES);
-  const yoursFirst = [...settlements].sort(
-    (first, second) =>
-      Number([second.personA, second.personB].includes(currentUserId)) -
-      Number([first.personA, first.personB].includes(currentUserId)),
-  );
-  const visibleSettlements = showAllPairs ? yoursFirst : yoursFirst.slice(0, MAX_VISIBLE_PAIRS);
+  const involvesMe = (settlement: PairSettlement) => [settlement.personA, settlement.personB].includes(currentUserId);
+  const myPairs = settlements.filter(involvesMe);
+  const isSending = (settlement: PairSettlement) => getDirection(settlement).debtorUid === currentUserId;
+  const toSend = myPairs.filter((settlement) => isSending(settlement) && !isPairSettled(settlement));
+  const toCollect = myPairs.filter((settlement) => !isSending(settlement) && !isPairSettled(settlement));
+  const settledMine = myPairs.filter(isPairSettled);
+  const others = settlements.filter((settlement) => !involvesMe(settlement));
+  const visibleOthers = showAllPairs ? others : others.slice(0, MAX_VISIBLE_PAIRS);
+
+  const renderPair = (settlement: PairSettlement) => {
+    const { netAmount } = settlement;
+    const settled = isPairSettled(settlement);
+    const { debtorUid, creditorUid } = getDirection(settlement);
+
+    return (
+      <li key={getPairKey(settlement)}>
+        <Button
+          type='button'
+          variant='tertiary'
+          onClick={() => setSelectedPairKey(getPairKey(settlement))}
+          className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left focus:outline-transparent!'
+        >
+          <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
+            {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
+          </span>
+          <span className='flex shrink-0 items-center gap-1'>
+            <span className={join('text-sm tabular-nums', settled ? 'text-muted-foreground' : 'font-semibold')}>
+              {formatAmount(Math.abs(netAmount))}
+            </span>
+            <ChevronRight className='text-muted-foreground h-4 w-4' />
+          </span>
+        </Button>
+      </li>
+    );
+  };
+
+  const renderGroup = (heading: string, items: PairSettlement[]) =>
+    items.length === 0 ? null : (
+      <div key={heading} className='mt-3 first:mt-1'>
+        <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>{heading}</p>
+        <ul className='divide-border -mx-3 divide-y'>{items.map(renderPair)}</ul>
+      </div>
+    );
 
   const renderNetWorking = ({ personA, personB, netAmount, aOwesB, bOwesA, aPaidEarly, bPaidEarly }: PairSettlement) => {
     const held = (items: EarlyItem[]) =>
@@ -325,40 +362,11 @@ function DuesSummary({
           )}
         </div>
       )}
-      <ul className='divide-border -mx-3 mt-1 divide-y'>
-        {visibleSettlements.map((settlement) => {
-          const { netAmount } = settlement;
-          const settled = isPairSettled(settlement);
-          const { debtorUid, creditorUid } = getDirection(settlement);
-
-          return (
-            <li key={getPairKey(settlement)}>
-              <Button
-                type='button'
-                variant='tertiary'
-                onClick={() => setSelectedPairKey(getPairKey(settlement))}
-                className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left focus:outline-transparent!'
-              >
-                <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
-                  {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
-                </span>
-                <span className='flex shrink-0 items-center gap-1'>
-                  <span
-                    className={join(
-                      'text-sm tabular-nums',
-                      settled ? 'text-muted-foreground' : 'font-semibold',
-                    )}
-                  >
-                    {formatAmount(Math.abs(netAmount))}
-                  </span>
-                  <ChevronRight className='text-muted-foreground h-4 w-4' />
-                </span>
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
-      {settlements.length > MAX_VISIBLE_PAIRS && (
+      {renderGroup('Money to send', toSend)}
+      {renderGroup('Money to collect', toCollect)}
+      {renderGroup('All square', settledMine)}
+      {renderGroup(myPairs.length === 0 ? 'Between others' : 'Everyone else', visibleOthers)}
+      {others.length > MAX_VISIBLE_PAIRS && (
         <Button
           type='button'
           variant='link'
@@ -366,7 +374,7 @@ function DuesSummary({
           className='h-10 px-0!'
           onClick={() => setShowAllPairs((current) => !current)}
         >
-          {showAllPairs ? 'Show fewer' : `Show all ${settlements.length}`}
+          {showAllPairs ? 'Show fewer' : `Show all ${others.length} others`}
         </Button>
       )}
       <DetailSheet

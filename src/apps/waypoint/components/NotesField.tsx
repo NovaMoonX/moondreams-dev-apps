@@ -89,8 +89,8 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
           {canEdit && variant === 'link' && (
             <Button
               type='button'
-              variant='secondary'
-              className='h-11 w-full justify-start gap-3 px-4'
+              variant='tertiary'
+              className='border-border h-10 w-full justify-start gap-3 rounded-xl border px-3 text-sm font-normal'
               onClick={() => setDraft(notes ?? '')}
             >
               <Pencil className='text-muted-foreground h-4 w-4' aria-hidden='true' />

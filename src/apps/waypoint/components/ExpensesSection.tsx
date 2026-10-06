@@ -3,22 +3,26 @@ import { useMemo, useState } from 'react';
 import {
   Button,
   Drawer,
-  DropdownMenuFactories,
   Input,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ListFilter } from 'lucide-react';
+import { ChevronRight, ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import DetailSheet from '@/components/DetailSheet';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
-import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
+import {
+  EXPENSE_SORT_OPTIONS,
+  EXPENSE_TOTALS_VIEW_HINTS,
+  EXPENSE_TOTALS_VIEW_OPTIONS,
+} from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
@@ -72,8 +76,6 @@ import {
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
-
-const { option } = DropdownMenuFactories;
 
 interface ExpensesSectionProps {
   trip: TripSpace;
@@ -233,11 +235,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
+  const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
+  const isSmallScreen = useMediaQuery().isBelow('sm');
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const currency = 'USD';
-  const memberIds = Object.keys(trip.members);
+  const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
   const canAddExpenses = ['ADMIN', 'EDITOR'].includes(trip.members[currentUserId]?.role ?? '');
   const memberLabel = (uid: string) =>
@@ -308,8 +312,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     };
     return perPerson;
   };
-  const totals = computeExpenseTotals(expenses, memberIds);
-  const myTotals = computeMemberTotals(expenses, memberIds, currentUserId);
+  const totals = useMemo(() => computeExpenseTotals(expenses, memberIds), [expenses, memberIds]);
+  const myTotals = useMemo(
+    () => computeMemberTotals(expenses, memberIds, currentUserId),
+    [expenses, memberIds, currentUserId],
+  );
   const filteredTotal =
     totalsView === 'me'
       ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
@@ -326,7 +333,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           { label: 'Expected', total: toTotalsView(totals.expected) },
           { label: 'Total', total: toTotalsView(totals.total) },
         ];
-  const pairSettlements = computePairSettlements(expenses, memberIds);
+  const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
 
   const sortedExpenses =
     sortBy === 'day'
@@ -469,14 +476,88 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setEarlyExpense(null);
   };
 
-  const renderExpenseRow = (expense: TripExpense) => {
+  const getPayerLine = (expense: TripExpense) =>
+    expense.status === 'PAID'
+      ? expense.payerUid
+        ? `Paid by ${memberLabel(expense.payerUid)}`
+        : 'Paid by each person'
+      : 'Expected, not yet paid';
+
+  const getActions = (expense: TripExpense) => [
+    ...(canAddExpenses && expense.status === 'EXPECTED'
+      ? [
+          {
+            key: 'mark-paid',
+            label: 'Mark paid',
+            description: 'Record who covered it and what it cost.',
+            run: () => setPayingExpense(expense),
+          },
+        ]
+      : []),
+    ...(canAddExpenses && getResolvedExpenseAmount(expense) !== null
+      ? [
+          {
+            key: 'edit-split',
+            label: 'Edit split',
+            description: 'Choose who shares it and how much each owes.',
+            run: () => setSplittingExpense(expense),
+          },
+        ]
+      : []),
+    ...(canAddExpenses
+      ? [
+          {
+            key: 'modify',
+            label: 'Modify',
+            description: 'Change the details, or delete this expense.',
+            run: () => {
+              setEditingExpense(expense);
+              setIsModalOpen(true);
+            },
+          },
+        ]
+      : []),
+  ];
+
+  const renderEarlyPayments = (expense: TripExpense) => {
+    const entries = Object.entries(getEarlyPayments(expense));
+    const canRecord =
+      expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly;
+    if (entries.length === 0 && !canRecord) {
+      return null;
+    }
+
+    return (
+      <div className='mt-1 space-y-0.5'>
+        {entries.length > 0 && (
+          <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>Paid early</p>
+        )}
+        {entries.map(([fromUid, payment]) => (
+          <p key={fromUid} className='text-muted-foreground text-xs'>
+            {memberLabel(fromUid)} → {memberLabel(payment.toUid)} ·{' '}
+            {formatTotal(payment.amount, payment.amount, expense.currency)}
+            {payment.isReturned ? ' · sent back' : expense.status === 'EXPECTED' ? ' · waiting for this to be paid' : ''}
+          </p>
+        ))}
+        {canRecord && (
+          <Button
+            type='button'
+            variant='link'
+            className='h-10 px-0! text-xs'
+            onClick={() => {
+              setDetailExpenseId(null);
+              setEarlyExpense(expense);
+            }}
+          >
+            {getEarlyPayments(expense)[currentUserId] ? 'Edit my early payment' : 'Record an early payment'}
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  const renderExpenseDetail = (expense: TripExpense) => {
     const splitDescription = describeSplit(expense, memberIds, memberLabel);
-    const payerLine =
-      expense.status === 'PAID'
-        ? expense.payerUid
-          ? `Paid by ${memberLabel(expense.payerUid)}`
-          : 'Paid by each person'
-        : 'Expected, not yet paid';
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
     const splitBreakdown = getSplitBreakdown(expense, memberIds);
@@ -512,33 +593,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     };
 
     return (
-      <li
-        key={expense.id}
-        className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'
-      >
+      <>
         <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
-            {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {payerLine}
+            {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {getPayerLine(expense)}
           </p>
           {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
-          {Object.entries(getEarlyPayments(expense)).map(([fromUid, payment]) => (
-            <p key={fromUid} className='text-muted-foreground text-xs'>
-              {memberLabel(fromUid)} sent {memberLabel(payment.toUid)}{' '}
-              {formatTotal(payment.amount, payment.amount, expense.currency)} early
-              {payment.isReturned ? ' (sent back)' : ''}
-            </p>
-          ))}
-          {expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly && (
-            <Button
-              type='button'
-              variant='link'
-              className='h-10 px-0! text-xs'
-              onClick={() => setEarlyExpense(expense)}
-            >
-              {getEarlyPayments(expense)[currentUserId] ? 'Edit early payment' : 'I paid early'}
-            </Button>
-          )}
+          {renderEarlyPayments(expense)}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
         <div className='col-span-2'>
@@ -562,7 +624,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <div className='mt-0.5 space-y-1'>
               {splitBreakdown.perPersonLabel !== null ? (
                 <div className='flex items-baseline justify-end gap-2'>
-                  {/* Redundant with the "total for N people" line above for a per-person rate. */}
                   {!expense.isPerPerson && (
                     <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
                       {splitBreakdown.perPersonLabel}
@@ -590,55 +651,65 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </div>
           )}
         </div>
-        {canAddExpenses && (
-          <div className='col-start-2 row-start-1 self-start'>
-            <EllipsisDropdown
-              ariaLabel={`Actions for ${expense.title}`}
-              disabled={markingPaidId === expense.id}
-              variant='tertiary'
-              items={[
-                ...(expense.status === 'EXPECTED'
-                  ? [
-                      option({
-                        label: 'Mark paid',
-                        value: 'mark-paid',
-                        description: 'Record who covered it and what it cost.',
-                      }),
-                    ]
-                  : []),
-                ...(getResolvedExpenseAmount(expense) !== null
-                  ? [
-                      option({
-                        label: 'Edit split',
-                        value: 'edit-split',
-                        description: 'Choose who shares it and how much each owes.',
-                      }),
-                    ]
-                  : []),
-                option({
-                  label: 'Modify',
-                  value: 'modify',
-                  description: 'Change the details, or delete this expense.',
-                }),
-              ]}
-              onItemSelect={(value) => {
-                if (value === 'mark-paid') {
-                  setPayingExpense(expense);
-                  return;
-                }
-                if (value === 'edit-split') {
-                  setSplittingExpense(expense);
-                  return;
-                }
-                setEditingExpense(expense);
-                setIsModalOpen(true);
-              }}
-            />
+      </>
+    );
+  };
+
+  const renderExpenseRow = (expense: TripExpense) => {
+    if (isSmallScreen) {
+      const displayRange = getDisplayRange(expense);
+      const hasEarly = Object.values(getEarlyPayments(expense)).some((payment) => !payment.isReturned);
+      return (
+        <li key={expense.id}>
+          <Button
+            type='button'
+            variant='tertiary'
+            aria-label={`Open details for ${expense.title}`}
+            onClick={() => setDetailExpenseId(expense.id)}
+            className='h-auto w-full justify-between gap-3 rounded-none px-0 py-3 text-left font-normal'
+          >
+            <span className='min-w-0 flex-1'>
+              <span className='block truncate font-medium'>{expense.title}</span>
+              <span className='text-muted-foreground block truncate text-sm'>
+                {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
+                {expense.status === 'PAID' ? getPayerLine(expense) : 'Expected'}
+                {hasEarly ? ' · Paid early' : ''}
+              </span>
+            </span>
+            <span className='shrink-0 text-right font-medium whitespace-nowrap'>
+              {formatTotal(displayRange.min, displayRange.max, expense.currency)}
+            </span>
+            <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+          </Button>
+        </li>
+      );
+    }
+
+    return (
+      <li key={expense.id} className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'>
+        {renderExpenseDetail(expense)}
+        {getActions(expense).length > 0 && (
+          <div className='col-start-2 row-start-1 flex items-start gap-2 self-start'>
+            {getActions(expense).map((action) => (
+              <Button
+                key={action.key}
+                type='button'
+                size='sm'
+                variant='secondary'
+                disabled={markingPaidId === expense.id}
+                title={action.description}
+                onClick={action.run}
+              >
+                {action.label}
+              </Button>
+            ))}
           </div>
         )}
       </li>
     );
   };
+
+  const detailExpense = expenses.find((expense) => expense.id === detailExpenseId);
 
   const renderClusters = (items: TripExpense[]) =>
     clusterByGroup(items).map((cluster, index) => {
@@ -709,6 +780,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           value={totalsView}
           onChange={setTotalsView}
         />
+        <p className='text-muted-foreground text-xs'>{EXPENSE_TOTALS_VIEW_HINTS[totalsView]}</p>
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
           {totalCards.map(({ label, total }) => (
             <div
@@ -920,6 +992,34 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }}
         onClose={() => setPayingExpense(null)}
       />
+      {isSmallScreen && (
+        <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>
+          {detailExpense && (
+            <div className='space-y-4'>
+              <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense)}</div>
+              {getActions(detailExpense).length > 0 && (
+                <div className='border-border divide-border divide-y rounded-xl border'>
+                  {getActions(detailExpense).map((action) => (
+                    <Button
+                      key={action.key}
+                      type='button'
+                      variant='tertiary'
+                      className='h-auto w-full flex-col items-start gap-0 px-3 py-2.5 text-left font-normal'
+                      onClick={() => {
+                        setDetailExpenseId(null);
+                        action.run();
+                      }}
+                    >
+                      <span className='text-sm font-medium'>{action.label}</span>
+                      <span className='text-muted-foreground text-xs'>{action.description}</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DetailSheet>
+      )}
       <EarlyPaymentModal
         key={`early-${earlyExpense?.id ?? 'none'}`}
         isOpen={earlyExpense !== null}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -9,13 +9,16 @@ interface StickyAppBarProps {
   trailing?: ReactNode;
   /** Slides in beside the back control, on one line, once the bar has stuck to the top of the screen. */
   title: string;
+  /** The page's own title: the bar's copy appears once half of it has scrolled under the bar, and leaves as soon as half of it is back. */
+  titleRef?: RefObject<HTMLElement | null>;
   className?: string;
 }
 
 /** A mini-app header row on a phone that keeps back navigation on screen, and shows `title` beside it once stuck. */
-function StickyAppBar({ leading, trailing, title, className }: StickyAppBarProps) {
+function StickyAppBar({ leading, trailing, title, titleRef, className }: StickyAppBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
+  const [isTitleShown, setIsTitleShown] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,17 +27,21 @@ function StickyAppBar({ leading, trailing, title, className }: StickyAppBarProps
         return;
       }
       const stuckTop = parseFloat(getComputedStyle(bar).top) || 0;
-      setIsStuck(window.scrollY > 0 && bar.getBoundingClientRect().top <= stuckTop + 1);
+      const barRect = bar.getBoundingClientRect();
+      const stuck = window.scrollY > 0 && barRect.top <= stuckTop + 1;
+      const anchor = titleRef?.current?.getBoundingClientRect();
+      setIsStuck(stuck);
+      setIsTitleShown(anchor ? anchor.top + anchor.height / 2 < barRect.bottom : stuck);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [titleRef]);
 
   return (
     <div
       ref={barRef}
       className={join(
-        'sticky-app-bar -mx-4 flex items-center justify-between gap-2 px-4 py-1 transition-colors',
+        'sticky-app-bar -mx-4 flex min-h-14 items-center justify-between gap-2 px-4 py-2.5 transition-colors',
         isStuck && 'bg-background/90 border-border border-b backdrop-blur',
         className,
       )}
@@ -42,10 +49,10 @@ function StickyAppBar({ leading, trailing, title, className }: StickyAppBarProps
       <div className='flex min-w-0 flex-1 items-center gap-2'>
         {leading}
         <p
-          aria-hidden={!isStuck}
+          aria-hidden={!isTitleShown}
           className={join(
             'min-w-0 flex-1 truncate text-base font-semibold transition-all duration-200',
-            isStuck ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
+            isTitleShown ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
           )}
         >
           {title}

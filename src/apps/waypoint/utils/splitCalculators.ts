@@ -228,64 +228,78 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join('|');
 }
 
-// Every expense creditorUid paid where debtorUid owes a share, split into what's already
-// been marked repaid and what's still outstanding — this is the raw, un-netted relationship
-// between exactly these two people, so a circular pair (A owes B on one expense, B owes A on
-// another) shows both sides instead of only the minimized net difference.
-function getOwedInDirection(
-  debtorUid: string,
-  creditorUid: string,
-  expenses: TripExpense[],
-  currentMemberIds: string[],
-): DirectionalOwed {
-  return expenses.reduce<DirectionalOwed>(
-    (acc, expense) => {
-      if (expense.status !== 'PAID' || expense.payerUid !== creditorUid) {
-        return acc;
+const emptyOwed = (): DirectionalOwed => ({
+  items: [],
+  total: 0,
+  repaid: 0,
+  remaining: 0,
+  remainingExpenses: [],
+  repaidExpenses: [],
+});
+
+const directionKey = (debtorUid: string, creditorUid: string) => `${debtorUid}>${creditorUid}`;
+
+// Every expense a creditor paid where a debtor owes a share, split into what's already been marked
+// repaid and what's still outstanding. This is the raw, un-netted relationship between exactly two
+// people, so a circular pair (A owes B on one expense, B owes A on another) shows both sides. Each
+// expense is split once for all of its debtors, not once per pair, so a big group stays quick.
+function groupOwedByDirection(expenses: TripExpense[], currentMemberIds: string[]): Map<string, DirectionalOwed> {
+  const byDirection = new Map<string, DirectionalOwed>();
+  expenses.forEach((expense) => {
+    const creditorUid = expense.payerUid;
+    const total = getExpenseTotalAmount(expense, currentMemberIds);
+    if (expense.status !== 'PAID' || creditorUid === null || total === null) {
+      return;
+    }
+
+    const splitMemberIds = getSplitMemberIds(expense, currentMemberIds);
+    const amounts = getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(splitMemberIds, total);
+    splitMemberIds.forEach((debtorUid) => {
+      if (debtorUid === creditorUid) {
+        return;
       }
 
-      const splitMemberIds = getSplitMemberIds(expense, currentMemberIds);
-      const total = getExpenseTotalAmount(expense, currentMemberIds);
-      if (!splitMemberIds.includes(debtorUid) || total === null) {
-        return acc;
-      }
-
-      const amounts = getActiveSplitAmounts(expense, currentMemberIds) ?? computeEvenSplit(splitMemberIds, total);
       const share = amounts[debtorUid] ?? 0;
       const isRepaid = (expense.paidMemberStatus ?? {})[debtorUid]?.isPaid ?? false;
       const early = getEarlyPayments(expense)[debtorUid];
       const applied = early && early.toUid === creditorUid && !early.isReturned ? Math.min(early.amount, share) : 0;
       const covered = isRepaid ? share : applied;
       const isSettled = share - covered <= EPSILON;
-      return {
-        items: [...acc.items, { expense, share, isRepaid, applied }],
-        total: acc.total + share,
-        repaid: acc.repaid + covered,
-        remaining: acc.remaining + (share - covered),
-        remainingExpenses: isSettled ? acc.remainingExpenses : [...acc.remainingExpenses, expense],
-        repaidExpenses: isSettled ? [...acc.repaidExpenses, expense] : acc.repaidExpenses,
-      };
-    },
-    { items: [], total: 0, repaid: 0, remaining: 0, remainingExpenses: [], repaidExpenses: [] },
-  );
+      const key = directionKey(debtorUid, creditorUid);
+      const owed = byDirection.get(key) ?? emptyOwed();
+      owed.items.push({ expense, share, isRepaid, applied });
+      owed.total += share;
+      owed.repaid += covered;
+      owed.remaining += share - covered;
+      (isSettled ? owed.repaidExpenses : owed.remainingExpenses).push(expense);
+      byDirection.set(key, owed);
+    });
+  });
+  return byDirection;
 }
 
-function getEarlyItems(expenses: TripExpense[], currentMemberIds: string[], fromUid: string, toUid: string): EarlyItem[] {
-  return expenses.flatMap((expense): EarlyItem[] => {
-    const payment = getEarlyPayments(expense)[fromUid];
-    if (!payment || payment.toUid !== toUid) {
-      return [];
-    }
+function groupEarlyItems(expenses: TripExpense[], currentMemberIds: string[]): Map<string, EarlyItem[]> {
+  const toEarlyItem = (expense: TripExpense, fromUid: string, payment: EarlyPayment): EarlyItem => {
     if (payment.isReturned) {
-      return [{ expense, payment, state: 'RETURNED', applied: 0 }];
+      return { expense, payment, state: 'RETURNED', applied: 0 };
     }
     if (expense.status === 'EXPECTED') {
-      return [{ expense, payment, state: 'PENDING', applied: 0 }];
+      return { expense, payment, state: 'PENDING', applied: 0 };
     }
-    const share = expense.payerUid === toUid ? (getMemberShareRange(expense, currentMemberIds, fromUid)?.max ?? 0) : 0;
+    const share =
+      expense.payerUid === payment.toUid ? (getMemberShareRange(expense, currentMemberIds, fromUid)?.max ?? 0) : 0;
     const applied = Math.min(payment.amount, share);
-    return [{ expense, payment, state: applied > 0 ? ('APPLIED') : ('HELD'), applied }];
+    return { expense, payment, state: applied > 0 ? 'APPLIED' : 'HELD', applied };
+  };
+  const byDirection = new Map<string, EarlyItem[]>();
+  expenses.forEach((expense) => {
+    Object.entries(getEarlyPayments(expense)).forEach(([fromUid, payment]) => {
+      const item = toEarlyItem(expense, fromUid, payment);
+      const key = directionKey(fromUid, payment.toUid);
+      byDirection.set(key, [...(byDirection.get(key) ?? []), item]);
+    });
   });
+  return byDirection;
 }
 
 // Money the recipient is still holding for the sender: all of it until the expense is paid by the
@@ -312,12 +326,14 @@ export function computePairSettlements(
     });
   });
 
+  const owedByDirection = groupOwedByDirection(expenses, currentMemberIds);
+  const earlyByDirection = groupEarlyItems(expenses, currentMemberIds);
   return Array.from(pairKeys).map((key) => {
     const [personA, personB] = key.split('|');
-    const aOwesB = getOwedInDirection(personA, personB, expenses, currentMemberIds);
-    const bOwesA = getOwedInDirection(personB, personA, expenses, currentMemberIds);
-    const aPaidEarly = getEarlyItems(expenses, currentMemberIds, personA, personB);
-    const bPaidEarly = getEarlyItems(expenses, currentMemberIds, personB, personA);
+    const aOwesB = owedByDirection.get(directionKey(personA, personB)) ?? emptyOwed();
+    const bOwesA = owedByDirection.get(directionKey(personB, personA)) ?? emptyOwed();
+    const aPaidEarly = earlyByDirection.get(directionKey(personA, personB)) ?? [];
+    const bPaidEarly = earlyByDirection.get(directionKey(personB, personA)) ?? [];
     return {
       personA,
       personB,

@@ -106,6 +106,12 @@ html:has(
   }
 }
 
+/* A drawer never reaches the top of the screen: a strip of the page behind stays visible, so it reads as a
+   sheet over the app rather than a second page. */
+[role='dialog'][data-drawer-open] > .fixed.bottom-0 {
+  max-height: 92dvh;
+}
+
 /* Smooth height transitions for when keyboard appears on mobile */
 html, body {
   transition: height 0.3s ease;

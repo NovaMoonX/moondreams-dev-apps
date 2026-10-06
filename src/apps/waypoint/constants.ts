@@ -341,6 +341,12 @@ export const EXPENSE_TOTALS_VIEW_OPTIONS: { value: ExpenseTotalsView; label: str
   { value: 'me', label: 'Mine' },
 ];
 
+export const EXPENSE_TOTALS_VIEW_HINTS: Record<ExpenseTotalsView, string> = {
+  'per-person': 'Every cost split evenly across everyone on the trip.',
+  group: 'What the whole trip costs, added up.',
+  me: 'Only your own share, and what you have paid out of pocket.',
+};
+
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   FOOD: 'Food',
   TRANSPORT: 'Transport',

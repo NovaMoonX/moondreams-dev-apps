@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
-import { Archive, ExternalLink, Layers } from 'lucide-react';
+import { Archive, Layers } from 'lucide-react';
 
 import EnrichedImage from '@/components/EnrichedImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
@@ -37,7 +37,7 @@ export function PlaceDetailsDrawer({
   children,
 }: PlaceDetailsDrawerProps) {
   const canNavigate = getMapNavigationUrl(location) !== null;
-  const hasMoreActions = Boolean(onStack || onArchive || (linkUrl && canNavigate));
+  const hasMoreActions = Boolean(onStack || onArchive);
   const primaryLabel = canNavigate ? 'Navigate' : linkUrl ? 'Visit site' : onEdit ? 'Modify' : null;
 
   const getFooter = () => {
@@ -78,24 +78,12 @@ export function PlaceDetailsDrawer({
         )}
         <div className='space-y-2'>{children}</div>
         {hasMoreActions && (
-          <div className='bg-muted/50 divide-border divide-y rounded-xl'>
-            {linkUrl && canNavigate && (
-              <Button
-                href={linkUrl}
-                target='_blank'
-                rel='noreferrer'
-                variant='tertiary'
-                className='h-11 w-full justify-start gap-3 px-4'
-              >
-                <ExternalLink className='text-muted-foreground h-4 w-4' />
-                Visit site
-              </Button>
-            )}
+          <div className='border-border divide-border divide-y rounded-xl border'>
             {onStack && (
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-11 w-full justify-start gap-3 px-4'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
                 onClick={() => onStack()}
               >
                 <Layers className='text-muted-foreground h-4 w-4' />
@@ -106,7 +94,7 @@ export function PlaceDetailsDrawer({
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-11 w-full justify-start gap-3 px-4'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
                 onClick={() => onArchive()}
               >
                 <Archive className='text-muted-foreground h-4 w-4' />
