@@ -39,6 +39,6 @@ export interface UserProfile {
   photoURL?: string;
   customPhotoURL?: string | null;
   isAdmin?: boolean;
-  /** Instant: the last page load while signed in, anywhere on the site. Absent until the member next visits. */
-  lastVisitedAt?: number | null;
+  /** Instant: the last page load while signed in, anywhere on the site. Documents from before it existed lack the key, so read it as `?? null`. */
+  lastVisitedAt: number | null;
 }
