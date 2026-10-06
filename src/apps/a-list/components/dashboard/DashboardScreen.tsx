@@ -8,11 +8,11 @@ import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import StatTile from '@/components/StatTile';
 import PremiumSavingsHelp from '@apps/a-list/components/shared/PremiumSavingsHelp';
-import type { TicketsView } from '@apps/a-list/components/dashboard/TicketsList';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectSavingsSummary,
   selectSeenTicketGroups,
+  selectTheatres,
 } from '@apps/a-list/store/selectors';
 import type { MembershipProfile } from '@apps/a-list/types';
 import { formatCents } from '@apps/a-list/utils/money';
@@ -26,6 +26,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
   const now = useNow();
   const summary = useAppSelector((state) => selectSavingsSummary(state, now));
   const { paid, unpriced } = useAppSelector(selectSeenTicketGroups);
+  const theatres = useAppSelector(selectTheatres);
 
   const getMonthsLine = () => {
     if (!summary || summary.cyclesElapsed === 0)
@@ -37,8 +38,8 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
     return `${months} billed since ${formatDateUTC(membership.startDate)}`;
   };
 
-  const renderTicketsRow = (
-    view: TicketsView,
+  const renderEntryRow = (
+    onClick: () => void,
     emoji: string,
     label: string,
     count: number,
@@ -48,7 +49,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
       type='button'
       variant='tertiary'
       className='text-foreground! h-auto w-full justify-start gap-3 rounded-none px-3 py-2.5 font-normal'
-      onClick={() => openOverlay({ kind: 'tickets', view })}
+      onClick={onClick}
     >
       <span
         className='bg-secondary grid size-9 shrink-0 place-items-center rounded-full text-lg'
@@ -57,16 +58,18 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
         {emoji}
       </span>
       <span className='flex-1 text-left'>{label}</span>
-      <span
-        className={join(
-          'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
-          isHighlighted
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground',
-        )}
-      >
-        {count}
-      </span>
+      {count > 0 && (
+        <span
+          className={join(
+            'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
+            isHighlighted
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {count}
+        </span>
+      )}
       <ChevronRight className='text-muted-foreground h-4 w-4' />
     </Button>
   );
@@ -158,14 +161,27 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             {getMonthsLine()}
           </p>
           <div className='border-border bg-card divide-border divide-y overflow-hidden rounded-2xl border'>
-            {renderTicketsRow(
-              'unpriced',
+            {renderEntryRow(
+              () => openOverlay({ kind: 'tickets', view: 'unpriced' }),
               '🧾',
               'Needs a price',
               unpriced.length,
               unpriced.length > 0,
             )}
-            {renderTicketsRow('paid', '💵', 'Paid tickets', paid.length, false)}
+            {renderEntryRow(
+              () => openOverlay({ kind: 'tickets', view: 'paid' }),
+              '💵',
+              'Paid tickets',
+              paid.length,
+              false,
+            )}
+            {renderEntryRow(
+              () => openOverlay({ kind: 'theaters' }),
+              '📍',
+              theatres.length === 0 ? 'Add your theaters' : 'Your theaters',
+              theatres.length,
+              false,
+            )}
           </div>
           {summary.premiumUnpricedCount > 0 && (
             <p className='text-muted-foreground text-sm'>

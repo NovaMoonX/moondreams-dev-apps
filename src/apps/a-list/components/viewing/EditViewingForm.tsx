@@ -15,7 +15,8 @@ import {
   createTimeInputField,
 } from '@/utils/formFactoryHelpers';
 import StarRating from '@/components/StarRating';
-import type { Viewing } from '@apps/a-list/types';
+import TheaterPills from '@apps/a-list/components/viewing/TheaterPills';
+import type { TheatreSnapshot, Viewing } from '@apps/a-list/types';
 
 interface ShowtimeValues {
   date: string;
@@ -35,7 +36,11 @@ interface EditViewingFormProps {
   isSaving: boolean;
   onCancel: () => void;
   /** `rating` is only passed for a seen viewing. */
-  onSave: (showtimeAt: number, rating?: number | null) => void;
+  onSave: (changes: {
+    showtimeAt: number;
+    rating?: number | null;
+    theatre: TheatreSnapshot | null;
+  }) => void;
 }
 
 function EditViewingForm({
@@ -51,6 +56,9 @@ function EditViewingForm({
     time: toLocalTimeInputValue(viewing.showtimeAt),
   });
   const [rating, setRating] = useState<number | null>(viewing.rating ?? null);
+  const [theatre, setTheatre] = useState<TheatreSnapshot | null>(
+    viewing.theatre ?? null,
+  );
   const isSeen = viewing.status === 'SEEN';
   const showtimeAt = values.time
     ? fromLocalDateAndTimeInputValues(values.date, values.time)
@@ -63,6 +71,7 @@ function EditViewingForm({
   const hasChanged =
     showtimeAt !== undefined &&
     (showtimeAt !== viewing.showtimeAt ||
+      theatre?.theatreId !== viewing.theatre?.theatreId ||
       (isSeen && rating !== (viewing.rating ?? null)));
   const canSave = hasChanged && !isTooEarlyForSeen && !isBeforeStart;
 
@@ -76,6 +85,7 @@ function EditViewingForm({
         spacing='normal'
         onDataChange={(data) => setValues(data as ShowtimeValues)}
       />
+      <TheaterPills label='Theater' value={theatre} onChange={setTheatre} />
       {isSeen && (
         <div className='space-y-1'>
           <p className='text-sm font-medium'>Your rating</p>
@@ -110,7 +120,11 @@ function EditViewingForm({
               disabled={!canSave || isSaving}
               onClick={() =>
                 showtimeAt !== undefined &&
-                onSave(showtimeAt, isSeen ? rating : undefined)
+                onSave({
+                  showtimeAt,
+                  rating: isSeen ? rating : undefined,
+                  theatre,
+                })
               }
             >
               Save

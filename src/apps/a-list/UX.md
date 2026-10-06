@@ -48,7 +48,7 @@ block-beta
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart TD
-    A[First launch] --> B["Setup modal · 3 steps"]
+    A[First launch] --> B["Setup modal · steps"]
     B --> C{"Add movies you've already seen?"}
     C -->|Add past movies| P["Add drawer · past-movies mode: 'Add + another' loops back to pick"]
     P -->|Add & finish| D1["Calendar, filled in: posters, counters and savings so far"]
@@ -578,7 +578,7 @@ block-beta
 | PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
-| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached; with no goal set, a tile turns dashed and muted with a "Set a goal" button that opens Membership settings |
+| StatTile | Calendar, Dashboard | one number and a label (a help icon sits beside the label, or in the tile's top-right corner on a phone so a wrapping label never strands it); Calendar's week and month tiles carry a goal progress bar and turn green with "🏆 Met" once reached; with no goal set, a tile turns dashed and muted with a "🎯 Set" button that opens Membership settings |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
 | AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
 | ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |
@@ -588,6 +588,7 @@ block-beta
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |
+| TheaterNameForm, TheaterList, TheaterPills | Theaters subview and Setup's last step; the add and edit forms | one rounded input and an Add button, with a quiet line saying that picking from AMC's list is on its way; the saved list with a favorite star and a remove button; and one `Pill` per saved theater on the forms, the favorite preselected |
 | StarRating | Seen prompt, edit viewing, rows (read-only) | half stars from 0.5 to 5: tap a star's left or right half, or slide a finger or the mouse across the row; hovering with a mouse previews the value in a lighter tint until it is clicked; arrow keys step by a half (and work while hovering); a visible Clear button removes the rating (tapping the current rating does nothing); custom, since Dreamer UI has none |
 | HelpTip | Calendar's "Since Friday" tile, Dashboard's Premium formats tile, Membership settings' Goals, the standard-price field | a small help icon: a hover tooltip (with its arrow) on a computer, a modal on a phone (a tooltip inside a drawer, modal or subview); or a text link that opens the same explanation in a modal at every size |
 | OpeningTab | Watchlist | the first and default tab; carries an accent and a count when something opens in the next seven days; its empty state links to All |
@@ -604,8 +605,8 @@ block-beta
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Open app] --> B[Confirm perks] --> C["Cost, bill total and start date"] --> D[Goals]
-    D --> G{Add movies you've already seen?}
+    A[Open app] --> B[Confirm perks] --> C["Cost, bill total and start date"] --> D[Goals] --> T["Theaters · skippable"]
+    T --> G{Add movies you've already seen?}
     G -->|Yes| H[Pick a movie and fill details] --> I{Which button?}
     I -->|"Add + another" · primary| H
     I -->|Add & finish| J[Calendar, filled in]
@@ -657,6 +658,15 @@ flowchart LR
     C -->|Seen it| D[Optional stars] --> E[Watchlist shows Seen, counters update]
     C -->|Didn't go| F[Confirm remove] --> G[Viewing removed, movie stays on watchlist]
     C -->|Later| H[Dismissed until next open]
+```
+
+**Save theaters**
+```mermaid
+flowchart LR
+    A["Dashboard · Your theaters, or the Calendar nudge, or Setup's last step"] --> B[Theaters subview]
+    B --> C["+ Add"] --> E["Type the theater's name"]
+    E --> F["Add"] --> G["Saved; the first one becomes the favorite"]
+    B --> H["Star = favorite (preselected on new showings) · Trash = remove, the star moves to another theater"]
 ```
 
 **Edit or remove a viewing**
