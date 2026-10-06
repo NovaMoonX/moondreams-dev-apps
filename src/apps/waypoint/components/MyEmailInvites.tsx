@@ -18,19 +18,19 @@ interface MyEmailInvitesProps {
   onViewTrip: (tripId: string) => void;
 }
 
-const DISMISSED_KEY = 'waypoint.invitesDismissed';
+const dismissedKey = (uid: string) => `waypoint.invitesDismissed.${uid}`;
 
-const readDismissed = () => {
+const readDismissed = (uid: string): string[] => {
   try {
-    return sessionStorage.getItem(DISMISSED_KEY) === 'true';
+    return JSON.parse(sessionStorage.getItem(dismissedKey(uid)) ?? '[]') as string[];
   } catch {
-    return false;
+    return [];
   }
 };
 
-const writeDismissed = (value: boolean) => {
+const writeDismissed = (uid: string, tripIds: string[]) => {
   try {
-    sessionStorage.setItem(DISMISSED_KEY, String(value));
+    sessionStorage.setItem(dismissedKey(uid), JSON.stringify(tripIds));
   } catch {
     // The choice still holds for this visit without storage.
   }
@@ -41,15 +41,16 @@ function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
-  const [isDismissed, setIsDismissed] = useState(readDismissed);
+  const [dismissed, setDismissed] = useState(() => readDismissed(uid));
   const [pinned, setPinned] = useState<TripEmailInvite | null>(null);
-  const shown = pinned ?? (isDismissed ? null : (invites[0] ?? null));
+  const shown = pinned ?? invites.find((invite) => !dismissed.includes(invite.tripId)) ?? null;
   const { data: title } = useQuery({ ...tripTitleQueryOptions(shown?.tripId ?? ''), enabled: shown !== null });
 
   const close = () => {
+    const next = invites.map((invite) => invite.tripId);
     setPinned(null);
-    setIsDismissed(true);
-    writeDismissed(true);
+    setDismissed(next);
+    writeDismissed(uid, next);
   };
 
   const handleDecline = async (invite: TripEmailInvite) => {
@@ -84,8 +85,8 @@ function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
           aria-label={`Trip invitations (${invites.length})`}
           className='relative shrink-0'
           onClick={() => {
-            setIsDismissed(false);
-            writeDismissed(false);
+            setDismissed([]);
+            writeDismissed(uid, []);
           }}
         >
           <Mail className='h-4 w-4' />
@@ -102,7 +103,7 @@ function MyEmailInvites({ uid, invites, onViewTrip }: MyEmailInvitesProps) {
           onJoined={() => setPinned(shown)}
           onDecline={() => void handleDecline(shown)}
           onViewTrip={(tripId) => {
-            setPinned(null);
+            close();
             onViewTrip(tripId);
           }}
           onClose={close}

@@ -1756,6 +1756,8 @@ service cloud.firestore {
           && isTripMemberEntryValid(request.resource.data.members[uid], uid)
           && exists(invitePath)
           && get(invitePath).data.tripId == tripId
+          && get(invitePath).data.invitedBy in resource.data.members
+          && resource.data.members[get(invitePath).data.invitedBy].role == 'ADMIN'
           && get(invitePath).data.role == request.resource.data.members[uid].role
           && !existsAfter(invitePath);
       }
@@ -2859,14 +2861,14 @@ service cloud.firestore {
           && data.tripId is string
           && data.email is string
           && data.email == data.email.lower()
-          && data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+          && data.email.matches('^[^@ /]+@[^@ /]+[.][^@ /]+$')
           && data.role in ['EDITOR', 'COMMENTER', 'VIEWER']
           && data.invitedBy is string
           && isTimestampNumber(data.invitedAt);
       }
 
-      allow read: if resource != null
-        && (isInvitee(resource.data.email) || isMemberOfTrip(resource.data.tripId));
+      allow read: if resource != null && isInvitee(resource.data.email);
+      allow read: if resource != null && isMemberOfTrip(resource.data.tripId);
       allow create: if request.auth != null
         && isInviteShapeValid(request.resource.data)
         && inviteId == request.resource.data.tripId + '_' + request.resource.data.email

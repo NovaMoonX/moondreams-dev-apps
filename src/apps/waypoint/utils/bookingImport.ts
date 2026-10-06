@@ -1,6 +1,8 @@
 import type { AirlineOption } from '@/lib/airlines/airlinesQueries';
 import type { AirportOption } from '@/lib/airports/airportsQueries';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
+import { getDayCount } from '@/utils/dateRangeUtils';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import type { EventPrefill } from '@apps/waypoint/components/EventFormModal';
 import type {
@@ -27,10 +29,16 @@ const clean = (value: string | null | undefined) => value?.trim() || null;
 
 const isTime = (value: string | null | undefined): value is string => typeof value === 'string' && TIME_PATTERN.test(value.trim());
 
-/** A day number against the trip's first day, or `null` when the date is missing or unreadable. */
+/** A day number against the trip's first day, or `null` when the date is missing, unreadable or too far
+ * from the trip to be believed (a misread year), so it is reported rather than filled in. */
 export function getDayIndexForDate(trip: TripSpace, date: string | null | undefined) {
   const parsed = date ? fromDateInputValue(date.trim()) : undefined;
-  return parsed === undefined ? null : Math.round((parsed - trip.startDate) / DAY_MS);
+  if (parsed === undefined) {
+    return null;
+  }
+  const day = Math.round((parsed - trip.startDate) / DAY_MS);
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+  return day < -MAX_DAYS_OUTSIDE_TRIP || day >= dayCount + MAX_DAYS_OUTSIDE_TRIP ? null : day;
 }
 
 const unreadWhen = (labels: [string, string], day: number | null, time: string | null) => [

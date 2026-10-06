@@ -107,14 +107,16 @@ export function TimelineSection({
       (showArchived || !event.isArchived),
   );
   // The tab disappears once nothing is outside the range anymore, so don't stay parked on it.
-  const selectedTab = activeDayTab === OUTSIDE_TAB && !hasOutsideEvents ? 'all' : activeDayTab;
-  const activeDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? 0 : Number(selectedTab);
+  const isMissingTab = (tab: string) =>
+    tab === OUTSIDE_TAB ? !hasOutsideEvents : tab !== 'all' && !dayIndexes.includes(Number(tab));
   // The few days either side of the trip only get a tab when something is planned on them.
   const dayIndexes = Array.from({ length: dayCount + MAX_DAYS_OUTSIDE_TRIP * 2 }, (_, offset) => offset - MAX_DAYS_OUTSIDE_TRIP).filter(
     (day) =>
       (day >= 0 && day < dayCount) ||
       events.some((event) => event.dayIndex === day && (showArchived || !event.isArchived)),
   );
+  const selectedTab = isMissingTab(activeDayTab) ? 'all' : activeDayTab;
+  const activeDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? 0 : Number(selectedTab);
   const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex), shallowEqual);
   const members = useUserInfo(memberIds)?.map ?? {};
   const memberOptions = memberIds.map((uid) => ({

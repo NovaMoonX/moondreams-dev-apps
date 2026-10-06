@@ -40,7 +40,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
   const activeEvent = useAppSelector(selectActiveEvent(trip, now, currentUserId));
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
   const [preferred, setPreferred] = useState<View>('now');
-  const [isOpen, setIsOpen] = useState(false);
+  const [openEventId, setOpenEventId] = useState<string | null>(null);
 
   const getView = (): View | null => {
     if (preferred === 'next' && upNextEvent) return 'next';
@@ -55,8 +55,9 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
   }
 
   const canSwap = Boolean(activeEvent && upNextEvent);
+  const isOpen = openEventId === event.id;
   const open = () => {
-    setIsOpen(true);
+    setOpenEventId(event.id);
     void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: event.id }));
   };
   const details = (
@@ -123,7 +124,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
           <PlaceDetailsDrawer
             key={event.id}
             isOpen
-            onClose={() => setIsOpen(false)}
+            onClose={() => setOpenEventId(null)}
             title={event.title}
             imageUrl={getDisplayImage(event)}
             location={event}
@@ -133,7 +134,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
             {details}
           </PlaceDetailsDrawer>
         ) : (
-          <Modal isOpen onClose={() => setIsOpen(false)} title={event.title}>
+          <Modal isOpen onClose={() => setOpenEventId(null)} title={event.title}>
             <div className='space-y-4'>
               {details}
               <div className='flex items-center gap-2'>

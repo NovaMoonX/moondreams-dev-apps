@@ -152,7 +152,7 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
   );
 
   if (missing.length === 0) {
-    return null;
+    return leg ? modals : null;
   }
 
   if (isDismissed) {

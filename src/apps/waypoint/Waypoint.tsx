@@ -249,7 +249,11 @@ function Waypoint() {
                 >
                   Join with code
                 </Button>
-                <MyEmailInvites uid={user.uid} invites={emailInvites} onViewTrip={handleViewInvitedTrip} />
+                <MyEmailInvites
+                  uid={user.uid}
+                  invites={emailInvites.filter((invite) => !trips.some((trip) => trip.id === invite.tripId))}
+                  onViewTrip={handleViewInvitedTrip}
+                />
               </div>
               <Button
                 className='whitespace-nowrap'

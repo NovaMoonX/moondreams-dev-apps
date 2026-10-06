@@ -190,7 +190,18 @@ export function StayFormModal({
   );
   const applyUpload = (fields: StayFields) => {
     const uploaded = { ...fields, id: '', tripId: trip.id, createdBy: '', createdAt: 0, lastEditedAt: 0 } as Stay;
-    setDraft(getInitialDraft(trip, uploaded));
+    const next = getInitialDraft(trip, uploaded);
+    const readAddress = Boolean(fields.address) && fields.address !== fields.name;
+    setDraft((current) => ({
+      ...next,
+      name: next.name || current.name,
+      address: readAddress ? next.address : current.address || next.address,
+      ...(readAddress
+        ? {}
+        : { latitude: current.latitude, longitude: current.longitude, place: current.place }),
+      linkUrl: current.linkUrl,
+      linkPreview: current.linkPreview,
+    }));
     setRevealed((current) => (uploaded.confirmationCode && !current.includes('booking') ? [...current, 'booking'] : current));
   };
   const updateDraft = (changes: Partial<StayDraft>) =>
@@ -379,7 +390,7 @@ export function StayFormModal({
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Stay'>
       <div className='space-y-5'>
-        {!stay && (
+        {!stay && isRelative && (
           <UploadAutofill
             kind='stay'
             trip={trip}

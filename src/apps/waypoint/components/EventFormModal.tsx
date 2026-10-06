@@ -1015,7 +1015,7 @@ function EventFormModal({
             </PillRow>
           )}
         </div>
-        {isTravel && draft.quickField === 'FLIGHT' && !event && !legFrom && (
+        {isTravel && draft.quickField === 'FLIGHT' && !event && !legFrom && isRelative && (
           <UploadAutofill
             kind='flight'
             trip={trip}
@@ -1031,7 +1031,19 @@ function EventFormModal({
                   : undefined;
               return { ...result, note };
             }}
-            onFilled={({ value }) => setDraft(getPrefilledDraft(trip, value))}
+            onFilled={({ value }) =>
+              setDraft((current) => ({
+                ...getPrefilledDraft(trip, value),
+                title: current.title,
+                hasTitle: current.hasTitle,
+                linkUrl: current.linkUrl,
+                linkPreview: current.linkPreview,
+                linkKind: current.linkKind,
+                hasLink: current.hasLink,
+                groupLabel: current.groupLabel,
+                isGrouped: current.isGrouped,
+              }))
+            }
           />
         )}
 

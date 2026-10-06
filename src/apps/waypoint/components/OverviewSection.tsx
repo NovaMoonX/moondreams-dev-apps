@@ -148,7 +148,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
     !activeEvent &&
     (!upNextEvent || getEventTime(trip, upNextEvent).dayIndex !== todayIndex);
 
-  // Below `sm`, Active Now/Up Next/Checking-in cards are too tight for the full
+  // Below `sm`, the Checking-in and pickup cards are too tight for the full
   // details, so tapping opens the drawer — same split Timeline/EventCard use.
   // At `sm`+, the cards show everything inline instead and are never clickable.
   const openEventDrawer = (event: TimelineEvent) => {

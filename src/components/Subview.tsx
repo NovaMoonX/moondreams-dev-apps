@@ -70,7 +70,10 @@ function Subview({ children, onClose, title, className, overlay = false }: Subvi
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) {
+      const hasDialogOnTop = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(
+        (dialog) => !dialog.hasAttribute('data-subview-overlay'),
+      );
+      if (event.key === 'Escape' && !event.defaultPrevented && !hasDialogOnTop) {
         onClose();
       }
     };
@@ -85,6 +88,7 @@ function Subview({ children, onClose, title, className, overlay = false }: Subvi
     return createPortal(
       <div
         role='dialog'
+        data-subview-overlay=''
         aria-label={title}
         className='bg-background fixed inset-0 z-40 overflow-y-auto overscroll-contain'
       >

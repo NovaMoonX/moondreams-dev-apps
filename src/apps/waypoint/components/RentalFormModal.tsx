@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
+import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import { rentalToFields } from '@apps/waypoint/utils/bookingImport';
 
 import { Button, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
@@ -117,6 +118,8 @@ function toLocationDraft(result: PlaceSelectionResult): LocationDraft {
 
 type OptionalField = 'vehicle' | 'returnLocation' | 'timezone' | 'confirmationCode' | 'link';
 
+const ALL_OPTIONAL_FIELDS: OptionalField[] = ['vehicle', 'returnLocation', 'timezone', 'confirmationCode', 'link'];
+
 const OPTIONAL_FIELD_CHIPS: { key: OptionalField; label: string; icon: ReactNode }[] = [
   { key: 'vehicle', label: 'Vehicle', icon: <Car className='h-4 w-4' /> },
   { key: 'timezone', label: 'Time zone', icon: <Globe className='h-4 w-4' /> },
@@ -164,13 +167,22 @@ export function RentalFormModal({
   const [draft, setDraft] = useState(() => getInitialDraft(trip, rental));
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<OptionalField[]>(() =>
-    OPTIONAL_FIELD_CHIPS.map(({ key }) => key).filter((key) => hasInitialValue(key, rental)),
+    ALL_OPTIONAL_FIELDS.filter((key) => hasInitialValue(key, rental)),
   );
   const isBooked = revealed.includes('confirmationCode') || revealed.includes('link');
   const applyUpload = (fields: RentalFormFields) => {
     const uploaded = { ...fields, id: '', tripId: trip.id, createdBy: '', createdAt: 0, lastEditedAt: 0 } as Rental;
-    setDraft(getInitialDraft(trip, uploaded));
-    setRevealed(OPTIONAL_FIELD_CHIPS.map(({ key }) => key).filter((key) => hasInitialValue(key, uploaded)));
+    const next = getInitialDraft(trip, uploaded);
+    setDraft((current) => ({
+      ...next,
+      name: next.name || current.name,
+      vehicle: next.vehicle || current.vehicle,
+      pickup: fields.pickupAddress ? next.pickup : current.pickup,
+      returnLocation: fields.returnAddress ? next.returnLocation : current.returnLocation,
+      linkUrl: current.linkUrl,
+      linkPreview: current.linkPreview,
+    }));
+    setRevealed(ALL_OPTIONAL_FIELDS.filter((key) => hasInitialValue(key, uploaded)));
   };
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const updateDraft = (changes: Partial<RentalDraft>) =>
@@ -239,7 +251,7 @@ export function RentalFormModal({
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Car rental'>
       <div className='space-y-5'>
-        {!rental && (
+        {!rental && isRelativeTrip(trip) && (
           <UploadAutofill
             kind='rental'
             trip={trip}
