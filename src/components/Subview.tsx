@@ -132,7 +132,11 @@ function Subview({
     <div className='page'>
       <div className={join('mx-auto max-w-2xl py-6', className)}>
         {title !== undefined && (
-          <SubviewHeader title={title} onBack={onClose} />
+          <SubviewHeader
+            title={title}
+            onBack={onClose}
+            className='sticky-app-bar bg-background -mx-4 mb-3 px-4 py-2'
+          />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>
           {children}

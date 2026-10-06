@@ -50,6 +50,7 @@ import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndic
 import NowPill from '@apps/waypoint/components/NowPill';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
+import StickyAppBar from '@/components/StickyAppBar';
 import Subview from '@/components/Subview';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
@@ -409,6 +410,37 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     );
   };
 
+  const backButton = (
+    <Button
+      type='button'
+      variant='link'
+      className={join('px-0', (isActive || isSmallScreen) && 'h-auto p-0')}
+      aria-label={isNestedScreen ? 'Back to Overview' : 'Back to My Trips'}
+      onClick={isNestedScreen ? () => setSectionTab('') : onBack}
+    >
+      <ChevronLeft className={isSmallScreen ? 'h-6 w-6' : undefined} />
+      {!isSmallScreen && 'Back to My Trips'}
+    </Button>
+  );
+  const phoneActions = (
+    <div className='flex shrink-0 items-center gap-1.5'>
+      {isActive && <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen />}
+      {isActive && <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />}
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        aria-label='Copy trip link'
+        title='Copy trip link'
+        className='bg-transparent! px-2'
+        onClick={() => void handleCopyTripLink()}
+      >
+        <Link className='h-4 w-4' />
+      </Button>
+      {hasTripActions && moreButtonTrigger}
+    </div>
+  );
+
   return (
     <>
       {subviewTitle !== undefined && (
@@ -425,40 +457,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           hasAppNav ? (isActive ? 'pb-44' : 'pb-24') : isActive && 'pb-40 sm:pb-28',
         )}
       >
-        <div className={join('flex items-center justify-between', isSmallScreen && 'mb-5')}>
-          <Button
-            type='button'
-            variant='link'
-            className={join('px-0', (isActive || isSmallScreen) && 'h-auto p-0')}
-            aria-label={isNestedScreen ? 'Back to Overview' : 'Back to My Trips'}
-            onClick={isNestedScreen ? () => setSectionTab('') : onBack}
-          >
-            <ChevronLeft className={isSmallScreen ? 'h-6 w-6' : undefined} />
-            {!isSmallScreen && 'Back to My Trips'}
-          </Button>
-          {isSmallScreen && (
-            <div className='flex shrink-0 items-center gap-1.5'>
-              {isActive && (
-                <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen />
-              )}
-              {isActive && (
-                <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
-              )}
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                aria-label='Copy trip link'
-                title='Copy trip link'
-                className='bg-transparent! px-2'
-                onClick={() => void handleCopyTripLink()}
-              >
-                <Link className='h-4 w-4' />
-              </Button>
-              {hasTripActions && moreButtonTrigger}
-            </div>
-          )}
-        </div>
+        {isSmallScreen ? (
+          <StickyAppBar title={trip.title} leading={backButton} trailing={phoneActions} className='mb-3' />
+        ) : (
+          <div className='flex items-center justify-between'>{backButton}</div>
+        )}
         <div>
           {trip.coverImageUrl && showHeaderExtras && (
             <img

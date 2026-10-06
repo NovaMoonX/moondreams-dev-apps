@@ -7,6 +7,21 @@
   @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
 }
 
+/* A mini-app's own header on a phone: it sticks under the site header while that is showing and takes
+ * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
+@utility sticky-app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  @media (max-width: 767.98px) {
+    top: 5rem;
+    transition: top 300ms;
+    html[data-site-header='hidden'] & {
+      top: 0;
+    }
+  }
+}
+
 @theme app {
 	--color-background: var(--color-white);
 	--color-foreground: var(--color-zinc-950);
@@ -26,7 +41,10 @@
 
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  /* The body must never become a scroll container (it breaks `position: sticky`), and Dreamer UI's
+     modals leave `overflow: auto` on it inline after closing, so this wins over that. */
+  overflow-x: clip !important;
+  overflow-y: visible !important;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

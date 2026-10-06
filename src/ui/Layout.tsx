@@ -84,6 +84,10 @@ function Layout() {
   const networkStatus = useNetworkStatus();
   const isBannerVisible = networkStatus !== null;
   const isHeaderHidden = useHideOnScroll();
+
+  useEffect(() => {
+    document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
+  }, [isHeaderHidden]);
   useReminderToasts();
 
   useEffect(() => {

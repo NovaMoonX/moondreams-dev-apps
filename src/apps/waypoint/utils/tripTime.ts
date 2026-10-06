@@ -126,6 +126,26 @@ export function getEventTime(trip: TripSpace, event: EventTimeSource): ResolvedE
   return { dayIndex, endDayIndex, startTime, endTime, timezone, endTimezone, startMs, endMs, impliedEndMs };
 }
 
+/** An instant as a trip day number and clock time in the trip's own zone (the viewer's when it has none). */
+export function toTripDayTime(trip: TripSpace, ms: number) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: trip.timezone ?? undefined,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(ms);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? '00';
+  const dayStart = Date.UTC(Number(part('year')), Number(part('month')) - 1, Number(part('day')));
+  const result = {
+    dayIndex: Math.round((dayStart - trip.startDate) / DAY_MS),
+    time: `${part('hour')}:${part('minute')}`,
+  };
+  return result;
+}
+
 export interface DayTimeValue {
   dayIndex: number | null;
   time: string | null;
