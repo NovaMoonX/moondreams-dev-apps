@@ -66,6 +66,7 @@ import {
 import {
   computeEvenSplit,
   computeMemberTotals,
+  getMemberShareRange,
   computePairSettlements,
   getActiveSplitAmounts,
   getEarlyPaymentLimit,
@@ -659,6 +660,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     if (isSmallScreen) {
       const displayRange = getDisplayRange(expense);
       const hasEarly = Object.values(getEarlyPayments(expense)).some((payment) => !payment.isReturned);
+      const myShare = totalsView === 'me' ? getMemberShareRange(expense, memberIds, currentUserId) : null;
       return (
         <li key={expense.id}>
           <Button
@@ -676,8 +678,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 {hasEarly ? ' · Paid early' : ''}
               </span>
             </span>
-            <span className='shrink-0 text-right font-medium whitespace-nowrap'>
-              {formatTotal(displayRange.min, displayRange.max, expense.currency)}
+            <span className='shrink-0 text-right whitespace-nowrap'>
+              <span className='block font-medium'>{formatTotal(displayRange.min, displayRange.max, expense.currency)}</span>
+              {myShare && (
+                <span className='text-muted-foreground block text-xs'>
+                  Mine {formatTotal(myShare.min, myShare.max, expense.currency)}
+                </span>
+              )}
             </span>
             <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
           </Button>

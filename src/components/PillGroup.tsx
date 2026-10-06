@@ -76,7 +76,7 @@ export function PillOptions<T extends string>({
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
         </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={() => isClamped && setIsExpanded(true)}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={() => isClamped && isOverflowing && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}
