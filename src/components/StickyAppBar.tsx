@@ -33,8 +33,13 @@ function StickyAppBar({ leading, trailing, title, titleRef, className }: StickyA
       setIsStuck(stuck);
       setIsTitleShown(anchor ? anchor.top + anchor.height / 2 < barRect.bottom : stuck);
     };
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
   }, [titleRef]);
 
   return (

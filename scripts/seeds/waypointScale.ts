@@ -36,10 +36,7 @@ async function writeAll(firestore: Firestore, writes: { path: string; data: Reco
   }
 }
 
-/**
- * A deliberately oversized trip (120 members, hundreds of checklist items, dozens of stays and rentals,
- * a live 14-day timeline, 150 expenses). Use it to check that screens scale and stay fast. Returns the number of documents written.
- */
+/** Seeds a deliberately oversized trip (120 members, a live timeline, 150 expenses) for scale checks; returns the documents written. Emulators only. */
 export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylorUid, jamieUid, timezone }: ScaleInput) {
   const firestore = context.firestore;
   const joinedAt = context.now - DAY_MS;
@@ -285,8 +282,6 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     });
   });
 
-  // `jamieUid` keeps a COMMENTER seat, so the scale trip also exercises read-only roles.
-  void jamieUid;
   await writeAll(firestore, writes);
   return writes.length;
 }

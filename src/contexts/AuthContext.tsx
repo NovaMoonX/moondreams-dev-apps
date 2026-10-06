@@ -23,6 +23,7 @@ import {
 } from 'react';
 
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
+import { clearUserInfoStore } from '@/hooks/useUserInfo';
 import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (previousUserId !== undefined && previousUserId !== nextUserId) {
         dispatch(resetAllState());
         queryClient.clear();
+        clearUserInfoStore();
       }
 
       previousUserIdRef.current = nextUserId;

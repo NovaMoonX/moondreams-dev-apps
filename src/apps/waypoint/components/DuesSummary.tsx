@@ -235,7 +235,9 @@ function DuesSummary({
   const toCollect = myPairs.filter((settlement) => !isSending(settlement) && !isPairSettled(settlement));
   const settledMine = myPairs.filter(isPairSettled);
   const others = settlements.filter((settlement) => !involvesMe(settlement));
-  const visibleOthers = showAllPairs ? others : others.slice(0, MAX_VISIBLE_PAIRS);
+  const groups = [toSend, toCollect, settledMine, others];
+  const hiddenPairCount = groups.reduce((total, group) => total + Math.max(0, group.length - MAX_VISIBLE_PAIRS), 0);
+  const capGroup = (items: PairSettlement[]) => (showAllPairs ? items : items.slice(0, MAX_VISIBLE_PAIRS));
 
   const renderPair = (settlement: PairSettlement) => {
     const { netAmount } = settlement;
@@ -362,11 +364,11 @@ function DuesSummary({
           )}
         </div>
       )}
-      {renderGroup('Money to send', toSend)}
-      {renderGroup('Money to collect', toCollect)}
-      {renderGroup('All square', settledMine)}
-      {renderGroup(myPairs.length === 0 ? 'Between others' : 'Everyone else', visibleOthers)}
-      {others.length > MAX_VISIBLE_PAIRS && (
+      {renderGroup('Money to send', capGroup(toSend))}
+      {renderGroup('Money to collect', capGroup(toCollect))}
+      {renderGroup('All square', capGroup(settledMine))}
+      {renderGroup(myPairs.length === 0 ? 'Between others' : 'Everyone else', capGroup(others))}
+      {hiddenPairCount > 0 && (
         <Button
           type='button'
           variant='link'
@@ -374,7 +376,7 @@ function DuesSummary({
           className='h-10 px-0!'
           onClick={() => setShowAllPairs((current) => !current)}
         >
-          {showAllPairs ? 'Show fewer' : `Show all ${others.length} others`}
+          {showAllPairs ? 'Show fewer' : `Show ${hiddenPairCount} more`}
         </Button>
       )}
       <DetailSheet

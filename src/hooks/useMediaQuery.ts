@@ -35,6 +35,7 @@ let activeBreakpoint: ActiveBreakpoint | null = null;
 const getActiveBreakpoint = () => (activeBreakpoint ??= computeActiveBreakpoint());
 
 function subscribe(onChange: () => void) {
+  activeBreakpoint = computeActiveBreakpoint();
   const mediaQueryLists = BREAKPOINT_QUERIES.map(({ query }) => window.matchMedia(query));
   const handleChange = () => {
     activeBreakpoint = computeActiveBreakpoint();

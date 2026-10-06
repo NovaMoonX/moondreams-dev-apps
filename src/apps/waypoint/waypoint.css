@@ -63,6 +63,6 @@ html.waypoint-theme [data-pill][aria-pressed='true'] {
 
 /* A tertiary button is a row or a quiet action, not a link: its text stays the normal text color so
    a screen of tappable rows isn't a screen of blue. Anything that sets its own color with `!` wins. */
-html.waypoint-theme button.text-primary:not([class*='bg-']):not([class*='border-primary']) {
+html.waypoint-theme button.text-primary:not(:disabled):not([class*='bg-']):not([class*='border-primary']) {
   color: var(--color-foreground);
 }
