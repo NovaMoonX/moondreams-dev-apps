@@ -1,8 +1,9 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
+  EarlyPayment,
   ExpenseCategory,
   ExpenseStatus,
   ExpenseTargetType,
@@ -85,6 +86,7 @@ export const createExpense = createAsyncThunk<
     targetMemberIds: input.memberIds,
     splitAmounts: null,
     paidMemberStatus,
+    earlyPayments: {},
     note: input.note?.trim() || null,
     groupLabel: input.groupLabel?.trim() || null,
     createdBy: input.uid,
@@ -275,6 +277,57 @@ export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInp
           [uid]: { isPaid: !wasPaid, paidAt: wasPaid ? null : Date.now() },
         },
       });
+    });
+  },
+);
+
+const getExpenseRef = (tripId: string, expenseId: string) =>
+  doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
+
+interface EarlyPaymentTarget {
+  uid: string;
+  tripId: string;
+  expenseId: string;
+}
+
+interface SetEarlyPaymentInput extends EarlyPaymentTarget {
+  toUid: string;
+  amount: number;
+}
+
+// Each member writes only their own key, with a dotted path, so a teammate's concurrent early
+// payment (or an editor's save) is never overwritten.
+export const setEarlyPayment = createAsyncThunk<void, SetEarlyPaymentInput, { rejectValue: string }>(
+  'waypoint/expenses/setEarlyPayment',
+  async ({ uid, tripId, expenseId, toUid, amount }, { rejectWithValue }) => {
+    if (toUid === uid) {
+      return rejectWithValue('Choose who you paid.');
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return rejectWithValue('Enter an amount greater than zero.');
+    }
+    const payment: EarlyPayment = { toUid, amount, paidAt: Date.now(), isReturned: false, returnedAt: null };
+    await updateDoc(getExpenseRef(tripId, expenseId), { [`earlyPayments.${uid}`]: payment });
+  },
+);
+
+export const removeEarlyPayment = createAsyncThunk<void, EarlyPaymentTarget>(
+  'waypoint/expenses/removeEarlyPayment',
+  async ({ uid, tripId, expenseId }) => {
+    await updateDoc(getExpenseRef(tripId, expenseId), { [`earlyPayments.${uid}`]: deleteField() });
+  },
+);
+
+interface SetEarlyPaymentReturnedInput extends EarlyPaymentTarget {
+  isReturned: boolean;
+}
+
+export const setEarlyPaymentReturned = createAsyncThunk<void, SetEarlyPaymentReturnedInput>(
+  'waypoint/expenses/setEarlyPaymentReturned',
+  async ({ uid, tripId, expenseId, isReturned }) => {
+    await updateDoc(getExpenseRef(tripId, expenseId), {
+      [`earlyPayments.${uid}.isReturned`]: isReturned,
+      [`earlyPayments.${uid}.returnedAt`]: isReturned ? Date.now() : null,
     });
   },
 );

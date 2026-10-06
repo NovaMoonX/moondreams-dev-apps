@@ -6,6 +6,7 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import {
+  getEarlyPayments,
   getPerPersonMultiplier,
   getSplitMemberIds,
 } from '@apps/waypoint/utils/splitCalculators';
@@ -58,6 +59,9 @@ function MarkExpensePaidModal({
   const [keepAsRange, setKeepAsRange] = useState(false);
   const [formData, setFormData] = useState(initialData);
   const [error, setError] = useState<string | null>(null);
+  const memberLabel = (uid: string) => memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid;
+  const earlyPayers = Object.entries(expense ? getEarlyPayments(expense) : {}).filter(([, payment]) => !payment.isReturned);
+  const earlyPaidElsewhere = earlyPayers.filter(([, payment]) => payment.toUid !== (formData.payerUid || null));
   const parsedAmount = Number(formData.paidAmount.trim());
   const isValidAmount =
     formData.paidAmount.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount >= 0;
@@ -117,6 +121,14 @@ function MarkExpensePaidModal({
             : "Enter what was actually paid and we'll replace the estimate with it."}
           {isPerPerson &&
             ` We'll multiply it by ${headcount} ${headcount === 1 ? 'person' : 'people'}.`}
+        </p>
+      )}
+      {earlyPayers.length > 0 && (
+        <p className='bg-muted/50 mb-4 rounded-lg p-3 text-sm'>
+          {earlyPayers.map(([uid, payment]) => `${memberLabel(uid)} already sent ${memberLabel(payment.toUid)} money for this.`).join(' ')}{' '}
+          {earlyPaidElsewhere.length === 0
+            ? 'It will be counted toward their share.'
+            : `If ${memberLabel(earlyPaidElsewhere[0][1].toUid)} isn't who paid, they'll still owe it back.`}
         </p>
       )}
       <Form

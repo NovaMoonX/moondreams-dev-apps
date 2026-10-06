@@ -2736,7 +2736,7 @@ service cloud.firestore {
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
             'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'category',
             'customCategoryLabel', 'targetType', 'targetMemberIds', 'splitAmounts',
-            'paidMemberStatus', 'note', 'groupLabel', 'isPerPerson',
+            'paidMemberStatus', 'earlyPayments', 'note', 'groupLabel', 'isPerPerson',
             'createdBy', 'createdAt', 'lastEditedAt'
           ])
           && data.id == expenseId
@@ -2764,12 +2764,52 @@ service cloud.firestore {
           && data.targetMemberIds is list
           && (data.splitAmounts == null || data.splitAmounts is map)
           && data.paidMemberStatus is map
+          && data.get('earlyPayments', {}) is map
           && (data.note == null || data.note is string)
           && (data.groupLabel == null || isNonEmptyString(data.groupLabel))
           && data.get('isPerPerson', false) is bool
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);
+      }
+
+      function earlyPaymentsOf(data) {
+        return data.get('earlyPayments', {});
+      }
+
+      function isEarlyPaymentEntryValid(entry) {
+        return entry.keys().hasOnly(['toUid', 'amount', 'paidAt', 'isReturned', 'returnedAt'])
+          && entry.toUid is string
+          && entry.toUid != request.auth.uid
+          && entry.toUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
+          && entry.amount is number
+          && entry.amount > 0
+          && isTimestampNumber(entry.paidAt)
+          && entry.isReturned is bool
+          && (entry.returnedAt == null || isTimestampNumber(entry.returnedAt));
+      }
+
+      function isEarlyPaymentPartOfSplit() {
+        return resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
+          || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE'
+          || request.auth.uid in resource.data.targetMemberIds;
+      }
+
+      function isEarlyPaymentWriteValid(before, entry) {
+        return isEarlyPaymentEntryValid(entry)
+          && isEarlyPaymentPartOfSplit()
+          && (resource.data.status == 'EXPECTED'
+            || (request.auth.uid in before
+              && entry.diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt'])));
+      }
+
+      // A member writes only their own early-payment entry. It can be made, changed or removed while
+      // the expense is still expected; once paid, only its returned flag can change (or it be removed).
+      function isOwnEarlyPaymentChangeValid() {
+        let before = earlyPaymentsOf(resource.data);
+        let after = earlyPaymentsOf(request.resource.data);
+        return after.diff(before).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in after) || isEarlyPaymentWriteValid(before, after[request.auth.uid]));
       }
 
       allow read: if isTripExpenseMember();
@@ -2782,7 +2822,8 @@ service cloud.firestore {
         && request.resource.data.id == resource.data.id
         && request.resource.data.tripId == resource.data.tripId
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && earlyPaymentsOf(request.resource.data) == earlyPaymentsOf(resource.data);
       allow update: if isTripExpenseMember()
         && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
           || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
@@ -2792,7 +2833,11 @@ service cloud.firestore {
         && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
         && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null
           || isTimestampNumber(request.resource.data.paidMemberStatus[request.auth.uid].paidAt));
-      allow delete: if isTripExpenseEditor();
+      allow update: if isTripExpenseMember()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
+        && isOwnEarlyPaymentChangeValid();
+      allow delete: if isTripExpenseEditor()
+        && earlyPaymentsOf(resource.data).size() == 0;
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {

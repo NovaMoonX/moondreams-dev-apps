@@ -9,7 +9,7 @@ export type ExpenseTargetType =
   | 'SPECIFIC_MEMBERS';
 export type ExpenseStatus = 'PAID' | 'EXPECTED';
 export type ExpenseSortBy = 'day' | 'amount-desc' | 'amount-asc';
-export type ExpenseTotalsView = 'per-person' | 'group';
+export type ExpenseTotalsView = 'per-person' | 'group' | 'me';
 export type ExpenseCategory =
   | 'FOOD'
   | 'TRANSPORT'
@@ -178,6 +178,17 @@ export interface Rental {
   lastEditedAt: number;
 }
 
+/** Money one member sent another ahead of an expected expense, so the Dues summary can offset it
+ * once the expense is paid, or show it owed back if the plan falls through. */
+export interface EarlyPayment {
+  toUid: string;
+  amount: number;
+  paidAt: number;
+  /** The recipient sent it back (or it was settled outside the app), so it no longer offsets anything. */
+  isReturned: boolean;
+  returnedAt: number | null;
+}
+
 export interface TripExpense {
   id: string;
   tripId: string;
@@ -200,6 +211,9 @@ export interface TripExpense {
   targetMemberIds: string[];
   splitAmounts: Record<string, number> | null;
   paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
+  /** Keyed by the member who paid early (one per member per expense). Documents from before this
+   * existed lack the key: read it with `getEarlyPayments`. */
+  earlyPayments: Record<string, EarlyPayment>;
   note: string | null;
   groupLabel: string | null;
   createdBy: string;

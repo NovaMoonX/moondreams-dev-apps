@@ -11,7 +11,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
-import { MultiPillGroup } from '@/components/PillGroup';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -21,6 +21,7 @@ import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoin
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
@@ -33,6 +34,9 @@ import {
   createExpense,
   deleteExpense,
   markExpensePaid,
+  removeEarlyPayment,
+  setEarlyPayment,
+  setEarlyPaymentReturned,
   toggleExpenseRepaid,
   updateExpense,
   updateExpenseSplit,
@@ -56,8 +60,11 @@ import {
 } from '@apps/waypoint/utils/expenseCategories';
 import {
   computeEvenSplit,
+  computeMemberTotals,
   computePairSettlements,
   getActiveSplitAmounts,
+  getEarlyPaymentLimit,
+  getEarlyPayments,
   getExpenseTotalAmount,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
@@ -223,6 +230,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
+  const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
@@ -299,12 +307,23 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     return perPerson;
   };
   const totals = computeExpenseTotals(expenses, memberIds);
-  const filteredTotal = toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
-  const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
-    { label: 'Paid', total: toTotalsView(totals.paid) },
-    { label: 'Expected', total: toTotalsView(totals.expected) },
-    { label: 'Total', total: toTotalsView(totals.total) },
-  ];
+  const myTotals = computeMemberTotals(expenses, memberIds, currentUserId);
+  const filteredTotal =
+    totalsView === 'me'
+      ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
+      : toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
+  const totalCards: { label: string; total: TripExpenseTotals['total'] }[] =
+    totalsView === 'me'
+      ? [
+          { label: 'Paid by me', total: myTotals.paidByMe },
+          { label: 'Expected for me', total: myTotals.expectedForMe },
+          { label: 'My total', total: myTotals.myTotal },
+        ]
+      : [
+          { label: 'Paid', total: toTotalsView(totals.paid) },
+          { label: 'Expected', total: toTotalsView(totals.expected) },
+          { label: 'Total', total: toTotalsView(totals.total) },
+        ];
   const pairSettlements = computePairSettlements(expenses, memberIds);
 
   const sortedExpenses =
@@ -413,6 +432,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
   };
 
+  const handleSaveEarlyPayment = async (expense: TripExpense, values: { toUid: string; amount: number }) => {
+    await dispatch(
+      setEarlyPayment({ uid: currentUserId, tripId: trip.id, expenseId: expense.id, ...values }),
+    ).unwrap();
+    setEarlyExpense(null);
+  };
+
+  const handleRemoveEarlyPayment = async (expense: TripExpense) => {
+    await dispatch(removeEarlyPayment({ uid: currentUserId, tripId: trip.id, expenseId: expense.id })).unwrap();
+    setEarlyExpense(null);
+  };
+
   const renderExpenseRow = (expense: TripExpense) => {
     const splitDescription = describeSplit(expense, memberIds, memberLabel);
     const payerLine =
@@ -466,6 +497,23 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {payerLine}
           </p>
           {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
+          {Object.entries(getEarlyPayments(expense)).map(([fromUid, payment]) => (
+            <p key={fromUid} className='text-muted-foreground text-xs'>
+              {memberLabel(fromUid)} sent {memberLabel(payment.toUid)}{' '}
+              {formatTotal(payment.amount, payment.amount, expense.currency)} early
+              {payment.isReturned ? ' (sent back)' : ''}
+            </p>
+          ))}
+          {expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly && (
+            <Button
+              type='button'
+              variant='link'
+              className='h-10 px-0! text-xs'
+              onClick={() => setEarlyExpense(expense)}
+            >
+              {getEarlyPayments(expense)[currentUserId] ? 'Edit early payment' : 'I paid early'}
+            </Button>
+          )}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
         <div className='col-span-2'>
@@ -630,31 +678,19 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }
       />
       <div className='space-y-3'>
-        <div className='border-border flex w-fit items-center gap-1 rounded-md border p-0.5'>
-          {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              type='button'
-              variant={totalsView === option.value ? 'primary' : 'secondary'}
-              size='sm'
-              aria-pressed={totalsView === option.value}
-              className={join(
-                'h-6 px-2 text-xs',
-                totalsView !== option.value && 'bg-transparent',
-              )}
-              onClick={() => setTotalsView(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <PillGroup
+          label='Totals view'
+          options={EXPENSE_TOTALS_VIEW_OPTIONS}
+          value={totalsView}
+          onChange={setTotalsView}
+        />
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
           {totalCards.map(({ label, total }) => (
             <div
               key={label}
               className={join(
                 'border-border rounded-lg border p-3 text-center sm:text-left',
-                label === 'Total' && 'col-span-2 sm:col-span-1',
+                (label === 'Total' || label === 'My total') && 'col-span-2 sm:col-span-1',
               )}
             >
               <p className='text-muted-foreground text-sm'>{label}</p>
@@ -679,6 +715,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             formatAmount={(amount) => formatTotal(amount, amount, currency)}
             onToggleRepaid={(expenseId) =>
               void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+            }
+            onSetEarlyReturned={(expenseId, isReturned) =>
+              void dispatch(setEarlyPaymentReturned({ uid: currentUserId, tripId: trip.id, expenseId, isReturned }))
             }
           />
         )}
@@ -798,8 +837,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
             <p className='text-sm font-semibold whitespace-nowrap'>
               {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
-              {totalsView === 'per-person' && (
-                <span className='text-muted-foreground font-normal'> per person</span>
+              {totalsView !== 'group' && (
+                <span className='text-muted-foreground font-normal'>
+                  {totalsView === 'me' ? ' your share' : ' per person'}
+                </span>
               )}
             </p>
           </div>
@@ -843,6 +884,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }
         }}
         onClose={() => setPayingExpense(null)}
+      />
+      <EarlyPaymentModal
+        key={`early-${earlyExpense?.id ?? 'none'}`}
+        isOpen={earlyExpense !== null}
+        trip={trip}
+        expense={earlyExpense}
+        currentUserId={currentUserId}
+        formatAmount={(amount) => formatTotal(amount, amount, currency)}
+        onSubmit={(values) => (earlyExpense ? handleSaveEarlyPayment(earlyExpense, values) : Promise.resolve())}
+        onRemove={() => (earlyExpense ? handleRemoveEarlyPayment(earlyExpense) : Promise.resolve())}
+        onClose={() => setEarlyExpense(null)}
       />
       <ExpenseSplitModal
         key={splittingExpense?.id ?? 'none'}

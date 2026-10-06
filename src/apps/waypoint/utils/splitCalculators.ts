@@ -1,4 +1,4 @@
-import type { TripExpense } from '@apps/waypoint/types';
+import type { EarlyPayment, TripExpense } from '@apps/waypoint/types';
 
 const EPSILON = 0.005;
 
@@ -94,6 +94,97 @@ export function computeEvenSplit(
   );
 }
 
+export const getEarlyPayments = (expense: Pick<TripExpense, 'earlyPayments'>): Record<string, EarlyPayment> =>
+  expense.earlyPayments ?? {};
+
+export interface MoneyRange {
+  min: number;
+  max: number;
+}
+
+type ShareExpense = Pick<
+  TripExpense,
+  | 'amount'
+  | 'amountMin'
+  | 'amountMax'
+  | 'paidAmount'
+  | 'status'
+  | 'isPerPerson'
+  | 'targetType'
+  | 'targetMemberIds'
+  | 'payerUid'
+  | 'splitAmounts'
+>;
+
+/** What `uid` owes toward an expense, as a range when the amount is still an estimate; `null` when
+ * they aren't part of the split or there is no amount to share yet. */
+export function getMemberShareRange(
+  expense: ShareExpense,
+  currentMemberIds: string[],
+  uid: string,
+): MoneyRange | null {
+  const splitMemberIds = getSplitMemberIds(expense, currentMemberIds);
+  if (!splitMemberIds.includes(uid)) {
+    return null;
+  }
+
+  const multiplier = getPerPersonMultiplier(expense, splitMemberIds);
+  const getShare = (total: number) => computeEvenSplit(splitMemberIds, scaleAmount(total, multiplier))[uid] ?? 0;
+  const known = getResolvedExpenseAmount(expense);
+  if (known !== null) {
+    const total = scaleAmount(known, multiplier);
+    const custom = getActiveSplitAmounts(expense, currentMemberIds);
+    const share = custom ? (custom[uid] ?? 0) : (computeEvenSplit(splitMemberIds, total)[uid] ?? 0);
+    return { min: share, max: share };
+  }
+  if (expense.amountMin === null || expense.amountMax === null) {
+    return null;
+  }
+  return { min: getShare(expense.amountMin), max: getShare(expense.amountMax) };
+}
+
+/** What one member's own numbers look like: money they fronted, and their share of what is still
+ * expected and of everything. Ranges stay ranges. */
+export interface MemberTotals {
+  paidByMe: MoneyRange;
+  expectedForMe: MoneyRange;
+  myTotal: MoneyRange;
+}
+
+export function computeMemberTotals(expenses: TripExpense[], currentMemberIds: string[], uid: string): MemberTotals {
+  const add = (range: MoneyRange, value: MoneyRange | null): MoneyRange =>
+    value ? { min: range.min + value.min, max: range.max + value.max } : range;
+  const empty: MoneyRange = { min: 0, max: 0 };
+  return expenses.reduce<MemberTotals>(
+    (totals, expense) => {
+      const share = getMemberShareRange(expense, currentMemberIds, uid);
+      const fronted = expense.status === 'PAID' && expense.payerUid === uid ? getExpenseTotalAmount(expense, currentMemberIds) : null;
+      return {
+        paidByMe: add(totals.paidByMe, fronted === null ? null : { min: fronted, max: fronted }),
+        expectedForMe: expense.status === 'EXPECTED' ? add(totals.expectedForMe, share) : totals.expectedForMe,
+        myTotal: add(totals.myTotal, share),
+      };
+    },
+    { paidByMe: empty, expectedForMe: empty, myTotal: empty },
+  );
+}
+
+/** Whether `uid` could still pay early toward this expense, and the most they may send. */
+export function getEarlyPaymentLimit(
+  expense: TripExpense,
+  currentMemberIds: string[],
+  uid: string,
+): { canPayEarly: false; reason: string } | { canPayEarly: true; share: MoneyRange } {
+  if (expense.status !== 'EXPECTED') {
+    return { canPayEarly: false, reason: 'This expense is already paid.' };
+  }
+  const share = getMemberShareRange(expense, currentMemberIds, uid);
+  if (share === null) {
+    return { canPayEarly: false, reason: "You aren't part of this expense." };
+  }
+  return { canPayEarly: true, share };
+}
+
 export interface OwedItem {
   expense: TripExpense;
   share: number;
@@ -109,9 +200,20 @@ export interface DirectionalOwed {
   repaidExpenses: TripExpense[];
 }
 
+export interface EarlyItem {
+  expense: TripExpense;
+  payment: EarlyPayment;
+  /** `PENDING` until the expense is paid, then `APPLIED` when the recipient is the one who paid it,
+   * `HELD` when somebody else did (the recipient still has the money), or `RETURNED`. */
+  state: 'PENDING' | 'APPLIED' | 'HELD' | 'RETURNED';
+}
+
 export interface PairSettlement {
   personA: string;
   personB: string;
+  /** Money personA sent personB ahead of an expense, and the other way around. */
+  aPaidEarly: EarlyItem[];
+  bPaidEarly: EarlyItem[];
   /** Positive: personA owes personB net. Negative: personB owes personA net. ~0: settled net. */
   netAmount: number;
   aOwesB: DirectionalOwed;
@@ -160,12 +262,38 @@ function getOwedInDirection(
   );
 }
 
+function getEarlyState(expense: TripExpense, payment: EarlyPayment): EarlyItem['state'] {
+  if (payment.isReturned) {
+    return 'RETURNED';
+  }
+  if (expense.status === 'EXPECTED') {
+    return 'PENDING';
+  }
+  return expense.payerUid === payment.toUid ? 'APPLIED' : 'HELD';
+}
+
+// Money sent early is money the recipient is holding for the sender, until it is sent back: it
+// lowers what the sender owes the recipient, and when the expense is paid by the recipient it
+// cancels the sender's share of it. A returned one no longer counts.
+function getEarlyItems(expenses: TripExpense[], fromUid: string, toUid: string): EarlyItem[] {
+  return expenses.flatMap((expense) => {
+    const payment = getEarlyPayments(expense)[fromUid];
+    return payment && payment.toUid === toUid ? [{ expense, payment, state: getEarlyState(expense, payment) }] : [];
+  });
+}
+
+const sumHeld = (items: EarlyItem[]) =>
+  items.filter((item) => item.state !== 'RETURNED').reduce((total, item) => total + item.payment.amount, 0);
+
 export function computePairSettlements(
   expenses: TripExpense[],
   currentMemberIds: string[],
 ): PairSettlement[] {
   const pairKeys = new Set<string>();
   expenses.forEach((expense) => {
+    Object.entries(getEarlyPayments(expense)).forEach(([fromUid, payment]) => {
+      pairKeys.add(pairKey(fromUid, payment.toUid));
+    });
     if (expense.status !== 'PAID' || expense.payerUid === null) {
       return;
     }
@@ -180,10 +308,17 @@ export function computePairSettlements(
     const [personA, personB] = key.split('|');
     const aOwesB = getOwedInDirection(personA, personB, expenses, currentMemberIds);
     const bOwesA = getOwedInDirection(personB, personA, expenses, currentMemberIds);
+    const aPaidEarly = getEarlyItems(expenses, personA, personB);
+    const bPaidEarly = getEarlyItems(expenses, personB, personA);
     return {
       personA,
       personB,
-      netAmount: Math.round((aOwesB.remaining - bOwesA.remaining) * 100) / 100,
+      aPaidEarly,
+      bPaidEarly,
+      netAmount:
+        Math.round(
+          (aOwesB.remaining - bOwesA.remaining - sumHeld(aPaidEarly) + sumHeld(bPaidEarly)) * 100,
+        ) / 100,
       aOwesB,
       bOwesA,
     };

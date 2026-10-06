@@ -15,7 +15,8 @@ import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-r
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import Pill from '@/components/Pill';
-import { PillGroup, PillRow } from '@/components/PillGroup';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -44,7 +45,6 @@ import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
 import {
   ACTIVITY_SETTING_LABELS,
-  ADD_NEW_OPTION,
   DEFAULT_REMINDER_MINUTES_BEFORE,
   MAX_DAYS_OUTSIDE_TRIP,
   EVENT_LINK_KIND_LABELS,
@@ -1197,23 +1197,12 @@ function EventFormModal({
             ))}
           </PillRow>
           {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && attendeeChoice !== 'ME' && (
-            <PillRow label='People'>
-              {memberOptions.map((member) => (
-                <Pill
-                  key={member.value}
-                  isSelected={draft.assignedMemberIds.includes(member.value)}
-                  onClick={() =>
-                    updateDraft({
-                      assignedMemberIds: draft.assignedMemberIds.includes(member.value)
-                        ? draft.assignedMemberIds.filter((uid) => uid !== member.value)
-                        : [...draft.assignedMemberIds, member.value],
-                    })
-                  }
-                >
-                  {member.label}
-                </Pill>
-              ))}
-            </PillRow>
+            <MultiPillGroup
+              label='People'
+              options={memberOptions.map((member) => ({ value: member.value, label: member.label }))}
+              values={draft.assignedMemberIds}
+              onChange={(assignedMemberIds) => updateDraft({ assignedMemberIds })}
+            />
           )}
           <p className='text-muted-foreground text-xs'>
             Your Overview shows only the events you&apos;re part of.
@@ -1285,31 +1274,18 @@ function EventFormModal({
             removeLabel='Remove from group'
             onRemove={() => updateDraft({ isGrouped: false, groupLabel: '' })}
           >
-            <div className='space-y-2'>
-              {sameTypeGroupLabels.length > 0 && (
-                <Select
-                  options={[
-                    ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
-                    { value: ADD_NEW_OPTION, text: 'New group…' },
-                  ]}
-                  value={
-                    sameTypeGroupLabels.find(
-                      (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-                    ) ?? ADD_NEW_OPTION
-                  }
-                  onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
-                />
-              )}
-              {!sameTypeGroupLabels.some(
-                (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-              ) && (
-                <Input
-                  placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
-                  value={draft.groupLabel}
-                  onChange={(changeEvent) => updateDraft({ groupLabel: changeEvent.target.value })}
-                />
-              )}
-            </div>
+            <PickOrCreate
+              label='Group'
+              options={sameTypeGroupLabels.map((groupLabel) => ({ value: groupLabel, label: groupLabel }))}
+              choice={
+                sameTypeGroupLabels.find((groupLabel) => normalizeLabel(groupLabel) === normalizeLabel(draft.groupLabel)) ??
+                (draft.groupLabel === '' ? '' : NEW_CHOICE)
+              }
+              newText={sameTypeGroupLabels.some((groupLabel) => normalizeLabel(groupLabel) === normalizeLabel(draft.groupLabel)) ? '' : draft.groupLabel}
+              newPillLabel='New group'
+              newPlaceholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
+              onChange={(choice, newText) => updateDraft({ groupLabel: choice === NEW_CHOICE ? newText : choice })}
+            />
           </RemovableField>
         )}
         {draft.dayIndex !== null && draft.hasReminderOverride && (
