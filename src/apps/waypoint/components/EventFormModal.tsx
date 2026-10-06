@@ -198,6 +198,8 @@ interface EventDraft {
   hasLink: boolean;
   /** Attendees were filled in by the form (travel is for just you by default), not chosen by the person. */
   isAttendeeAuto: boolean;
+  /** Pick people was chosen, even if the only one picked so far is the signed-in user. */
+  isPickingPeople: boolean;
   hasCuisines: boolean;
   transit: TransitDraft;
   cuisines: string;
@@ -404,6 +406,7 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
     groupLabel: event?.groupLabel ?? '',
     isGrouped: Boolean(event?.groupLabel),
     isAttendeeAuto: false,
+    isPickingPeople: false,
     hasLink: Boolean(event?.linkUrl),
     hasCuisines: Boolean(
       event?.eventType === 'DINING' &&
@@ -906,6 +909,7 @@ function EventFormModal({
   const travelLocationLabel = TRANSIT_LOCATION_LABELS[transitType];
   const attendeeChoice: EventAttendeeTargetType | 'ME' =
     draft.attendeeTargetType === 'SPECIFIC_MEMBERS' &&
+    !draft.isPickingPeople &&
     draft.assignedMemberIds.length === 1 &&
     draft.assignedMemberIds[0] === currentUserId
       ? 'ME'
@@ -914,6 +918,7 @@ function EventFormModal({
   const chooseAttendees = (choice: EventAttendeeTargetType | 'ME') =>
     updateDraft({
       isAttendeeAuto: false,
+      isPickingPeople: choice === 'SPECIFIC_MEMBERS',
       attendeeTargetType: choice === 'ME' ? 'SPECIFIC_MEMBERS' : choice,
       assignedMemberIds:
         choice === 'ME'

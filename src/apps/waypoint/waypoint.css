@@ -52,18 +52,11 @@ html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='bo
    label is as readable as on an unchosen one (a solid fill swallows both). */
 html.waypoint-theme [data-pill] {
   min-height: 2.5rem;
+  transition: none;
 }
 
 html.waypoint-theme [data-pill][aria-pressed='true'] {
-  background-color: color-mix(in oklab, var(--color-primary) 12%, var(--color-background));
+  background-color: color-mix(in oklab, var(--color-primary) 22%, var(--color-secondary));
   color: var(--color-foreground);
-  box-shadow: inset 0 0 0 2px var(--color-primary);
-}
-
-/* A click leaves a button focused, and the library's focus: outline and ring flash on it.
-   Keyboard focus (:focus-visible) keeps its cue. */
-html.waypoint-theme :focus:not(:focus-visible) {
-  outline: none !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  box-shadow: inset 0 0 0 1.5px var(--color-primary);
 }
