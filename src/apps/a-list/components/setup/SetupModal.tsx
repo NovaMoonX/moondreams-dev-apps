@@ -15,6 +15,9 @@ import {
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import TheatersStep, {
+  type TheatersStepValues,
+} from '@apps/a-list/components/setup/TheatersStep';
 import CostStep from '@apps/a-list/components/setup/CostStep';
 import SetupStepper from '@apps/a-list/components/setup/SetupStepper';
 import StartDateStep from '@apps/a-list/components/setup/StartDateStep';
@@ -36,7 +39,7 @@ interface GoalValues {
   monthlyGoal: string;
 }
 
-const STEP_COUNT = 6;
+const STEP_COUNT = 7;
 const STEP_TITLES = [
   'Welcome',
   'Your membership',
@@ -44,6 +47,7 @@ const STEP_TITLES = [
   'Tax',
   'Start date',
   'Goals',
+  'Theaters',
 ];
 const { input } = FormFactories;
 
@@ -79,6 +83,10 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
   const [goalValues, setGoalValues] = useState<GoalValues>({
     weeklyGoal: '',
     monthlyGoal: '',
+  });
+  const [theatreValues, setTheatreValues] = useState<TheatersStepValues>({
+    theatres: [],
+    favoriteTheatreId: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +159,8 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
             startDate: cost.startDate,
             weeklyGoal: weekly.goal,
             monthlyGoal: monthly.goal,
+            theatres: theatreValues.theatres,
+            favoriteTheatreId: theatreValues.favoriteTheatreId,
           },
         }),
       ).unwrap();
@@ -265,6 +275,16 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
       };
     }
 
+    if (step === 6) {
+      return {
+        body: (
+          <TheatersStep values={theatreValues} onChange={setTheatreValues} />
+        ),
+        canContinue: true,
+        nextLabel: theatreValues.theatres.length > 0 ? 'Finish' : 'Skip',
+      };
+    }
+
     return {
       body: (
         <div className='space-y-4'>
@@ -290,7 +310,7 @@ function SetupModal({ uid, onComplete, onClose }: SetupModalProps) {
         </div>
       ),
       canContinue: weekly.isValid && monthly.isValid,
-      nextLabel: 'Finish',
+      nextLabel: 'Next',
     };
   };
 

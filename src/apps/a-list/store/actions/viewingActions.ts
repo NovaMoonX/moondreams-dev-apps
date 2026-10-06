@@ -7,6 +7,7 @@ import { DEFAULT_WATCH_PRIORITY } from '@apps/a-list/constants';
 import type {
   MovieSnapshot,
   Ticket,
+  TheatreSnapshot,
   Viewing,
   WatchlistItem,
 } from '@apps/a-list/types';
@@ -21,6 +22,7 @@ interface AddViewingInput {
   movie: MovieSnapshot;
   showtimeAt: number;
   ticket: Ticket | null;
+  theatre: TheatreSnapshot | null;
 }
 
 function toSnapshot(movie: MovieSnapshot): MovieSnapshot {
@@ -40,7 +42,10 @@ export const addViewing = createAsyncThunk<
   { rejectValue: string }
 >(
   'aList/viewings/add',
-  async ({ uid, movieKey, movie, showtimeAt, ticket }, { rejectWithValue }) => {
+  async (
+    { uid, movieKey, movie, showtimeAt, ticket, theatre },
+    { rejectWithValue },
+  ) => {
     const membershipPath = ['apps', 'a-list', 'memberships', uid] as const;
     const itemRef = doc(db, ...membershipPath, 'watchlist', movieKey);
     const viewingRef = doc(collection(db, ...membershipPath, 'viewings'));
@@ -72,6 +77,7 @@ export const addViewing = createAsyncThunk<
           endsAt,
           status: getInitialStatus(endsAt, now),
           ticket: ticket ?? null,
+          theatre: theatre ?? null,
           rating: null,
           createdAt: now,
           lastEditedAt: now,
@@ -90,7 +96,7 @@ export const addViewing = createAsyncThunk<
 );
 
 /** Keys added after the first viewings were written, with the empty value a legacy document gets. */
-const LATER_KEYS = { ticket: null, rating: null } as const;
+const LATER_KEYS = { ticket: null, rating: null, theatre: null } as const;
 
 /**
  * A field-scoped edit in a transaction: any later-added key the freshly read document still lacks
@@ -132,9 +138,11 @@ interface UpdateViewingInput {
   runtimeMinutes: number | null;
   /** Only for a seen viewing; a planned one has no rating. */
   rating?: number | null;
+  /** Omit to leave the theater alone; null clears it. */
+  theatre?: TheatreSnapshot | null;
 }
 
-/** Moves a showing (the showtime and its derived end are written together) and, once seen, its stars. */
+/** Moves a showing (the showtime and its derived end are written together) and edits its theater and, once seen, its stars. */
 export const updateViewing = createAsyncThunk<
   void,
   UpdateViewingInput,
@@ -142,7 +150,7 @@ export const updateViewing = createAsyncThunk<
 >(
   'aList/viewings/update',
   async (
-    { uid, id, showtimeAt, runtimeMinutes, rating },
+    { uid, id, showtimeAt, runtimeMinutes, rating, theatre },
     { rejectWithValue },
   ) => {
     try {
@@ -150,6 +158,7 @@ export const updateViewing = createAsyncThunk<
         showtimeAt,
         endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
         ...(rating === undefined ? {} : { rating }),
+        ...(theatre === undefined ? {} : { theatre }),
       });
     } catch (error) {
       return rejectWithValue(

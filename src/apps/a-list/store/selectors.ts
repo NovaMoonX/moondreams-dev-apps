@@ -26,7 +26,24 @@ export const selectAListLoadError = (state: RootState) =>
 export const selectIsAListLoaded = (state: RootState) =>
   state.aList.membership.isLoaded &&
   state.aList.watchlist.isLoaded &&
-  state.aList.viewings.isLoaded;
+  state.aList.viewings.isLoaded &&
+  state.aList.theatres.isLoaded;
+
+const selectTheatreItems = (state: RootState) => state.aList.theatres.items;
+
+/** The favorite first, then by name. */
+export const selectTheatres = createSelector(
+  [selectTheatreItems, selectMembership],
+  (theatres, membership) => {
+    const favoriteId = membership?.favoriteTheatreId ?? null;
+    const result = [...theatres].sort((left, right) => {
+      if (left.theatreId === favoriteId) return -1;
+      if (right.theatreId === favoriteId) return 1;
+      return left.name.localeCompare(right.name);
+    });
+    return result;
+  },
+);
 
 const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 
@@ -193,8 +210,7 @@ export const selectPreviewsWindowViewing = createSelector(
             viewing.status === 'PLANNED' &&
             viewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000 <=
               now &&
-            now <=
-              viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
+            now <= viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
         )
         .sort((left, right) => left.showtimeAt - right.showtimeAt)[0] ?? null;
     return result;
