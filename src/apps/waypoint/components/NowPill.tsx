@@ -7,14 +7,21 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { formatClockTime, formatCountdown, formatDuration } from '@/utils/formatUtils';
+import {
+  formatClockTime,
+  formatCountdown,
+  formatDuration,
+} from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import EnrichedImage from '@/components/EnrichedImage';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
-import { selectActiveEvent, selectUpNextEvent } from '@apps/waypoint/store/selectors';
+import {
+  selectActiveEvent,
+  selectUpNextEvent,
+} from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventTime } from '@apps/waypoint/utils/tripTime';
 
@@ -25,13 +32,20 @@ interface NowPillProps {
 
 type View = 'now' | 'next';
 
-function getStatusLine(trip: TripSpace, event: TimelineEvent, view: View, now: number) {
+function getStatusLine(
+  trip: TripSpace,
+  event: TimelineEvent,
+  view: View,
+  now: number,
+) {
   const { startTime, startMs, endMs } = getEventTime(trip, event);
   if (view === 'now') {
     return endMs !== null ? `Now · ${formatDuration(endMs - now)} left` : 'Now';
   }
   const when = startTime ? formatClockTime(startTime) : '';
-  return startMs !== null ? `Up next · ${when} · ${formatCountdown(startMs, now)}` : `Up next · ${when}`;
+  return startMs !== null
+    ? `Up next · ${when} · ${formatCountdown(startMs, now)}`
+    : `Up next · ${when}`;
 }
 
 /** What is happening and what comes after, kept in view while the rest of the trip is browsed. It changes minute to minute, so it never takes a place in the page: a floating pill on phones, a docked bar on tablets and a side card on wide screens. */
@@ -40,9 +54,15 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
   const dispatch = useAppDispatch();
   const breakpoints = useMediaQuery();
   const isPhone = breakpoints.isBelow('sm');
-  const activeEvent = useAppSelector(selectActiveEvent(trip, now, currentUserId));
-  const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
-  const [peekedFor, setPeekedFor] = useState<string | null | undefined>(undefined);
+  const activeEvent = useAppSelector(
+    selectActiveEvent(trip, now, currentUserId),
+  );
+  const upNextEvent = useAppSelector(
+    selectUpNextEvent(trip, now, currentUserId),
+  );
+  const [peekedFor, setPeekedFor] = useState<string | null | undefined>(
+    undefined,
+  );
   const [openEventId, setOpenEventId] = useState<string | null>(null);
 
   const getView = (): View | null => {
@@ -58,10 +78,15 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
   }
 
   const canSwap = Boolean(activeEvent && upNextEvent);
-  const openEvent = [activeEvent, upNextEvent].find((candidate) => candidate?.id === openEventId) ?? null;
+  const openEvent =
+    [activeEvent, upNextEvent].find(
+      (candidate) => candidate?.id === openEventId,
+    ) ?? null;
   const open = (target: TimelineEvent) => {
     setOpenEventId(target.id);
-    void dispatch(markEventSeen({ uid: currentUserId, trip, eventId: target.id }));
+    void dispatch(
+      markEventSeen({ uid: currentUserId, trip, eventId: target.id }),
+    );
   };
   const details = openEvent && (
     <EventDetailLines
@@ -79,12 +104,14 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     setPeekedFor(target === 'next' ? (activeEvent?.id ?? null) : undefined);
 
   const renderStatus = (target: TimelineEvent, rowView: View) => (
-    <span className='flex min-w-0 items-center gap-2.5'>
+    <span className='flex min-w-0 items-center gap-4'>
       <span
         aria-hidden
         className={join(
           'h-2.5 w-2.5 shrink-0 rounded-full',
-          rowView === 'now' ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
+          rowView === 'now'
+            ? 'animate-pulse bg-emerald-500'
+            : 'bg-muted-foreground/50',
         )}
       />
       <span className='min-w-0 text-left'>
@@ -114,7 +141,11 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         <Button
           type='button'
           variant='tertiary'
-          aria-label={isExpanded ? `${label}. Show details` : `Show ${itemView === 'now' ? 'what is happening now' : 'what is up next'}`}
+          aria-label={
+            isExpanded
+              ? `${label}. Show details`
+              : `Show ${itemView === 'now' ? 'what is happening now' : 'what is up next'}`
+          }
           className='relative h-12 w-full min-w-0 justify-start gap-0 rounded-full p-0'
           onClick={() => (isExpanded ? open(target) : showView(itemView))}
         >
@@ -132,7 +163,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
           </span>
           <span
             className={join(
-              'min-w-0 flex-1 overflow-hidden px-4 whitespace-nowrap transition-opacity duration-700',
+              'min-w-0 flex-1 overflow-hidden px-2 whitespace-nowrap transition-opacity duration-700',
               isExpanded ? 'opacity-100' : 'opacity-0',
             )}
           >
@@ -154,8 +185,11 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         </div>
       );
     }
-    const rows = [activeEvent && { target: activeEvent, rowView: 'now' as const }, upNextEvent && { target: upNextEvent, rowView: 'next' as const }].filter(
-      (row): row is { target: TimelineEvent; rowView: View } => Boolean(row),
+    const rows = [
+      activeEvent && { target: activeEvent, rowView: 'now' as const },
+      upNextEvent && { target: upNextEvent, rowView: 'next' as const },
+    ].filter((row): row is { target: TimelineEvent; rowView: View } =>
+      Boolean(row),
     );
     const shownIndex = rows.findIndex((row) => row.rowView === view);
     return (
@@ -167,14 +201,24 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
               style={{ transform: `translateY(-${shownIndex * 3}rem)` }}
             >
               {rows.map(({ target, rowView }) => (
-                <div key={rowView} className='flex h-12 items-center' aria-hidden={rowView !== view}>
+                <div
+                  key={rowView}
+                  className='flex h-12 items-center'
+                  aria-hidden={rowView !== view}
+                >
                   {renderStatus(target, rowView)}
                 </div>
               ))}
             </div>
           </div>
           <div className='flex shrink-0 items-center gap-2'>
-            <Button type='button' size='sm' variant='tertiary' className='h-10' onClick={() => open(event)}>
+            <Button
+              type='button'
+              size='sm'
+              variant='tertiary'
+              className='h-10'
+              onClick={() => open(event)}
+            >
               Details
             </Button>
             {canSwap && (
@@ -185,7 +229,9 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
                 className='h-10'
                 onClick={() => showView(view === 'now' ? 'next' : 'now')}
               >
-                {view === 'now' ? "See what's next" : "See what's happening now"}
+                {view === 'now'
+                  ? "See what's next"
+                  : "See what's happening now"}
               </Button>
             )}
           </div>
@@ -212,16 +258,29 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
             {details}
           </PlaceDetailsDrawer>
         ) : (
-          <Modal isOpen onClose={() => setOpenEventId(null)} title={openEvent.title}>
+          <Modal
+            isOpen
+            onClose={() => setOpenEventId(null)}
+            title={openEvent.title}
+          >
             <div className='space-y-4'>
               {getDisplayImage(openEvent) && (
-                <EnrichedImage src={getDisplayImage(openEvent) as string} alt='' className='aspect-video w-full rounded-lg object-cover' />
+                <EnrichedImage
+                  src={getDisplayImage(openEvent) as string}
+                  alt=''
+                  className='aspect-video w-full rounded-lg object-cover'
+                />
               )}
               {details}
               <div className='flex items-center gap-2'>
                 <MapNavigationButton {...openEvent} variant='primary' />
                 {openEvent.linkUrl && (
-                  <Button href={openEvent.linkUrl} target='_blank' rel='noreferrer' variant='secondary'>
+                  <Button
+                    href={openEvent.linkUrl}
+                    target='_blank'
+                    rel='noreferrer'
+                    variant='secondary'
+                  >
                     Visit site
                   </Button>
                 )}
