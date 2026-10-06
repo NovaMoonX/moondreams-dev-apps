@@ -6,6 +6,10 @@ import {
   startMyPendingRequestsListener,
   startTripPendingRequestsListener,
 } from '../store/listeners/pendingRequestsListeners';
+import {
+  startMyEmailInvitesListener,
+  startTripEmailInvitesListener,
+} from '../store/listeners/emailInviteListeners';
 import { startTripListener } from '../store/listeners/tripListeners';
 import { startTripExpensesListener } from '../store/listeners/expenseListeners';
 import { startTripEventsListener } from '../store/listeners/eventListeners';
@@ -19,6 +23,7 @@ import {
   setMyPendingRequests,
   setTripPendingRequests,
 } from '../store/slices/pendingRequestsSlice';
+import { setMyEmailInvites, setTripEmailInvites } from '../store/slices/emailInvitesSlice';
 import { setTrips } from '../store/slices/tripSlice';
 import { clearExpenses, setExpenses } from '../store/slices/expensesSlice';
 import { clearEvents, setEvents } from '../store/slices/eventsSlice';
@@ -38,11 +43,13 @@ import { clearRentals, setRentals } from '../store/slices/rentalsSlice';
 interface UseWaypointSyncOptions {
   tripId: string | null;
   isTripAdmin: boolean;
+  /** The signed-in user's email, to find invitations addressed to it. */
+  email: string | null;
 }
 
 export function useWaypointSync(
   uid: string | null,
-  { tripId, isTripAdmin }: UseWaypointSyncOptions,
+  { tripId, isTripAdmin, email }: UseWaypointSyncOptions,
 ) {
   const dispatch = useAppDispatch();
 
@@ -68,6 +75,20 @@ export function useWaypointSync(
       unsubscribeMyPendingRequests();
     };
   }, [dispatch, uid]);
+
+  useEffect(() => {
+    return startMyEmailInvitesListener(uid ? email : null, (invites) => {
+      dispatch(setMyEmailInvites(invites));
+    });
+  }, [dispatch, uid, email]);
+
+  useEffect(() => {
+    const activeTripId = isTripAdmin ? tripId : null;
+
+    return startTripEmailInvitesListener(activeTripId, (invites) => {
+      dispatch(setTripEmailInvites(invites));
+    });
+  }, [dispatch, tripId, isTripAdmin]);
 
   useEffect(() => {
     const activeTripId = isTripAdmin ? tripId : null;

@@ -133,16 +133,18 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  Active["ACTIVE NOW<br/>🍜 Dinner · 6-7:30 PM · Navigate"]:2
-  IdeasCollapsed["💡 Ideas (3 new) ▸"]:1
-  StatusCollapsed["📍 Status ▸"]:1
-  Next["UP NEXT<br/>🚕 Taxi · 8:00 PM"]:2
-  style Active fill:transparent,stroke:#888888,stroke-width:1px;
+  Pills["Members · Checklist · Stays · Rentals"]:2
+  CheckIn["CHECKING IN TODAY<br/>🛏️ Hotel · 3 PM"]:2
+  Agenda["TODAY<br/>✓ Breakfast · 8 AM<br/>🍜 Dinner · 6 PM"]:2
+  IdeasCollapsed["💡 Ideas (3 new) ▸"]:2
+  Pill(["● NOW · 12m left — Dinner  ›  [Up next]"]):2
+  style Pills fill:transparent,stroke:#888888,stroke-width:1px;
+  style CheckIn fill:transparent,stroke:#888888,stroke-width:1px;
+  style Agenda fill:transparent,stroke:#888888,stroke-width:1px;
   style IdeasCollapsed fill:transparent,stroke:#888888,stroke-width:1px;
-  style StatusCollapsed fill:transparent,stroke:#888888,stroke-width:1px;
-  style Next fill:transparent,stroke:#888888,stroke-width:1px;
+  style Pill fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Ideas and travel status moved up right below the Active Now hero — both collapsed by default (▸), expanding on tap rather than a persistent inline feed. Ideas can no longer be added at this point; an idea already on the itinerary is badged. I read "near the top" as "right below the hero," not literally above it, since Active Now is still the screen's whole reason for existing in live mode — flag it if you meant above.*
+*What is happening now and what comes next float as one pill over the main screens (Overview, Timeline, Expenses): it shows what is on, one button swaps to what is next, and a tap opens the details. The page keeps the static hub (today's check-ins and pickups, weather, agenda) and the entries to members, checklist, stays and rentals sit in one row at the top, with ideas below.*
 
 **Timeline**
 ```mermaid
@@ -311,7 +313,7 @@ block-beta
 |---|---|---|
 | `Card` (DreamerUI) | Trips, Events, Ideas, Expenses, Stays | the one bordered-container pattern, reused everywhere — DreamerUI already provides this, not a custom build |
 | RoleBadge | Members, header | Admin / Editor / Commenter / Viewer pill — built on DreamerUI's `Badge`, not from scratch |
-| MapNavigationButton | Timeline, Stays, Overview | 1-tap native map deep link — built on DreamerUI's `Button` with an icon; on small screens only Active Now / Up Next show it on the card |
+| MapNavigationButton | Timeline, Stays, Overview | 1-tap native map deep link — built on DreamerUI's `Button` with an icon; on small screens only the Now / Up next details show it |
 | LocationLink | Timeline, Stays, Overview | the location text itself as the same map deep link, so directions are one tap even without a button |
 | PlaceDetailsDrawer | Timeline, Stays (small screens) | tapping an event/stay card opens its full details in a DreamerUI `Drawer` with large Navigate / Visit site / Modify actions; larger screens keep the details and buttons on the card |
 | NotesField | Timeline & Stays cards, PlaceDetailsDrawer | an event's or stay's note as its own entry outside the event/stay form — muted left-bar text, with a subtle pencil button on larger cards and an "+ Add note" link in the drawer; editable by whoever can edit the event |
@@ -418,7 +420,7 @@ flowchart LR
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Overview → HUD] --> B[Active Now / Up Next] --> C[Tap map nav]
+    A[Any screen → Now / Up next pill] --> B[Tap for details] --> C[Tap map nav]
     A --> D[Post travel status]
     A --> E[Admin edits event time] --> F[ChangeBadge shown to everyone]
 ```

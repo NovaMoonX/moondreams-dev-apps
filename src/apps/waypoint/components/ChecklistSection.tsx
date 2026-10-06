@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 
 import {
   Button,
   Checkbox,
+  Drawer,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
@@ -54,6 +57,8 @@ export default function ChecklistSection({
   const { addToast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
+  const [detailItemId, setDetailItemId] = useState<string | null>(null);
+  const isPhone = useMediaQuery().isBelow('sm');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const items = useAppSelector((state) => state.waypoint.checklist.items);
@@ -74,7 +79,7 @@ export default function ChecklistSection({
   );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const dayGroups = useMemo(
-    () => groupByIndexBucket(visibleItems, (item) => item.completeByDayIndex, dayCount),
+    () => groupByIndexBucket(visibleItems, (item) => item.completeByDayIndex, dayCount, Number.POSITIVE_INFINITY),
     [visibleItems, dayCount],
   );
 
@@ -159,6 +164,8 @@ export default function ChecklistSection({
     }
   };
 
+  const detailItem = items.find((item) => item.id === detailItemId) ?? null;
+
   return (
     <section className='space-y-4 pt-4'>
       <SectionHeader
@@ -172,7 +179,7 @@ export default function ChecklistSection({
                 setIsModalOpen(true);
               }}
             >
-              Add item
+              Add
             </Button>
           )
         }
@@ -209,7 +216,7 @@ export default function ChecklistSection({
         <div className='space-y-4'>
           {dayGroups.map(({ bucket, items: dayItems }) => (
             <div key={bucket} className='space-y-2'>
-              <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
+              <SectionDivider label={getBucketLabel(bucket, trip.startDate, dayCount)} />
               <ul className='divide-border divide-y'>
                 {dayItems.map((item) => {
                   const assignedUsers = item.assignedToUids
@@ -219,9 +226,9 @@ export default function ChecklistSection({
                   return (
                     <li
                       key={item.id}
-                      className='flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0'
+                      className='flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0'
                     >
-                      <div className='flex min-w-0 items-center gap-3'>
+                      <div className='flex min-w-0 items-start gap-3'>
                         <Tooltip
                           message='Only assigned members or trip editors can update this item.'
                           placement='right'
@@ -229,7 +236,7 @@ export default function ChecklistSection({
                         >
                           {/* Checkbox doesn't forward children, so Tooltip's
                           child-cloning needs a plain wrapper to attach to. */}
-                          <span className='inline-flex'>
+                          <span className='mt-0.5 inline-flex'>
                             <Checkbox
                               checked={item.isCompleted}
                               disabled={!mayToggle(item)}
@@ -239,7 +246,23 @@ export default function ChecklistSection({
                             />
                           </span>
                         </Tooltip>
-                        <div className='min-w-0'>
+                        <div
+                          className={join('min-w-0', isPhone && canEditExisting && 'cursor-pointer')}
+                          {...(isPhone && canEditExisting
+                            ? {
+                                role: 'button',
+                                tabIndex: 0,
+                                'aria-label': `Details for ${item.title}`,
+                                onClick: () => setDetailItemId(item.id),
+                                onKeyDown: (event: KeyboardEvent) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    setDetailItemId(item.id);
+                                  }
+                                },
+                              }
+                            : {})}
+                        >
                           <div className='flex flex-wrap items-center gap-2'>
                             <span
                               className={
@@ -255,7 +278,7 @@ export default function ChecklistSection({
                             </Badge>
                           </div>
                           {item.note && (
-                            <p className='text-muted-foreground mt-1 text-sm italic'>{item.note}</p>
+                            <p className='text-muted-foreground mt-1 line-clamp-2 text-sm italic sm:line-clamp-none'>{item.note}</p>
                           )}
                         </div>
                       </div>
@@ -269,7 +292,7 @@ export default function ChecklistSection({
                             Everyone
                           </span>
                         )}
-                        {canEditExisting && (
+                        {canEditExisting && !isPhone && (
                           <Button
                             type='button'
                             size='sm'
@@ -291,6 +314,38 @@ export default function ChecklistSection({
           ))}
         </div>
       )}
+
+      <Drawer
+        isOpen={detailItem !== null}
+        onClose={() => setDetailItemId(null)}
+        title={detailItem?.title ?? 'Checklist item'}
+        showCloseButton
+        footer={
+          <div className='flex flex-col gap-2'>
+            <Button
+              type='button'
+              size='lg'
+              variant='secondary'
+              onClick={() => {
+                setEditingItem(detailItem);
+                setDetailItemId(null);
+                setIsModalOpen(true);
+              }}
+            >
+              Modify
+            </Button>
+          </div>
+        }
+      >
+        {detailItem && (
+          <div className='space-y-2 pb-2'>
+            <Badge variant='muted' outline>
+              {getChecklistCategoryLabel(detailItem)}
+            </Badge>
+            {detailItem.note && <p className='text-muted-foreground text-sm italic'>{detailItem.note}</p>}
+          </div>
+        )}
+      </Drawer>
 
       <ChecklistItemFormModal
         key={`${editingItem?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}

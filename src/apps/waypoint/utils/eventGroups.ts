@@ -78,8 +78,8 @@ export interface EventStack {
 export type TimelineItem = EventStack | EventGroup | SingleEvent;
 
 
-/** Stacks first, then groups among everything left over, all kept in timeline order. A stack
- * needs at least two itineraries to be worth showing as one; otherwise its events fall back. */
+/** Stacks first, then groups among everything left over, all kept in timeline order. A stack of
+ * one itinerary is still a stack, so it reads the same as a bigger one rather than as a loose event. */
 export function buildTimelineItems(events: TimelineEvent[]): TimelineItem[] {
   const byStack = events.reduce<Record<string, TimelineEvent[]>>((acc, event) => {
     const key = getStackKey(event);
@@ -87,18 +87,16 @@ export function buildTimelineItems(events: TimelineEvent[]): TimelineItem[] {
   }, {});
   const stacks = Object.entries(byStack).flatMap<EventStack>(([key, stackEvents]) => {
     const members = groupEventsByLabel(stackEvents);
-    return members.length < 2
-      ? []
-      : [
-          {
-            kind: 'stack',
-            key,
-            label: stackEvents[0].stackLabel?.trim() ?? '',
-            eventType: stackEvents[0].eventType,
-            members,
-            events: stackEvents,
-          },
-        ];
+    return [
+      {
+        kind: 'stack',
+        key,
+        label: stackEvents[0].stackLabel?.trim() ?? '',
+        eventType: stackEvents[0].eventType,
+        members,
+        events: stackEvents,
+      },
+    ];
   });
   const stackedIds = new Set(stacks.flatMap((stack) => stack.events.map((event) => event.id)));
   const rest = groupEventsByLabel(events.filter((event) => !stackedIds.has(event.id)));

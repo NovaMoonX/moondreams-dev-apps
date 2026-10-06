@@ -96,7 +96,12 @@ export function getDerivedTravelTitle(
   const record = (details ?? {}) as unknown as Record<string, unknown>;
   const identifier = asText(record.flightNumber) || asText(record.trainNumber);
   const label = TRANSIT_TYPE_LABELS[transitType];
-  const title = identifier.trim() ? `${label} ${identifier.trim()}` : label;
+  const name = identifier.trim() ? `${label} ${identifier.trim()}` : label;
+  const route = [
+    asText(record.departureAirportCode) || asText(record.departureStation) || asText(record.departurePort),
+    asText(record.arrivalAirportCode) || asText(record.arrivalStation) || asText(record.arrivalPort),
+  ].map((place) => place.trim());
+  const title = route.every(Boolean) ? `${name} · ${route.join(' → ')}` : name;
   return title;
 }
 

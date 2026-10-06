@@ -44,19 +44,19 @@ function EventGroupModal({
           </Button>
         </div>
         <ModalFooterActions
-          rightActions={
-            <>
+          cancelAction={
               <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button
+          }
+          rightActions={
+            <Button
                 type='button'
                 disabled={isSubmitting || !trimmedName || trimmedName === currentName}
                 onClick={() => onRename(trimmedName)}
               >
                 Rename
               </Button>
-            </>
           }
         />
       </div>

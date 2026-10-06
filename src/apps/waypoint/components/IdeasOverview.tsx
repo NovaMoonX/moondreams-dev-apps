@@ -53,9 +53,9 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
   const preview = undecided.filter((idea) => idea.ideaType === ideaType).slice(0, PREVIEW_COUNT);
 
   return (
-    <section className='space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30'>
+    <section className='border-accent-foreground/20 bg-accent/60 space-y-3 rounded-xl border p-4 [--color-primary-foreground:var(--color-background)] [--color-primary:var(--color-foreground)]'>
       <div className='flex items-start gap-3'>
-        <span className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-700 dark:bg-amber-900 dark:text-amber-200'>
+        <span className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground'>
           <Lightbulb className='h-4 w-4' />
         </span>
         <div className='min-w-0'>
@@ -71,7 +71,7 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
             <TabsTrigger
               key={type}
               value={type}
-              className='aria-selected:bg-amber-200! aria-selected:text-amber-900! dark:aria-selected:bg-amber-900! dark:aria-selected:text-amber-50!'
+              className='aria-selected:bg-accent! aria-selected:text-accent-foreground!'
             >
               {IDEA_TYPE_PLURAL_LABELS[type]}
             </TabsTrigger>

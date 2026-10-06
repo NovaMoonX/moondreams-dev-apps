@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   Button,
@@ -48,6 +48,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
 import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   getBucketLabel,
@@ -102,11 +103,19 @@ export function TimelineSection({
   const memberIds = Object.keys(trip.members);
   const hasOutsideEvents = events.some(
     (event) =>
-      getIndexBucket(event.dayIndex ?? null, dayCount) === 'outside' &&
+      getIndexBucket(event.dayIndex ?? null, dayCount, MAX_DAYS_OUTSIDE_TRIP) === 'outside' &&
       (showArchived || !event.isArchived),
   );
   // The tab disappears once nothing is outside the range anymore, so don't stay parked on it.
-  const selectedTab = activeDayTab === OUTSIDE_TAB && !hasOutsideEvents ? 'all' : activeDayTab;
+  const isMissingTab = (tab: string) =>
+    tab === OUTSIDE_TAB ? !hasOutsideEvents : tab !== 'all' && !dayIndexes.includes(Number(tab));
+  // The few days either side of the trip only get a tab when something is planned on them.
+  const dayIndexes = Array.from({ length: dayCount + MAX_DAYS_OUTSIDE_TRIP * 2 }, (_, offset) => offset - MAX_DAYS_OUTSIDE_TRIP).filter(
+    (day) =>
+      (day >= 0 && day < dayCount) ||
+      events.some((event) => event.dayIndex === day && (showArchived || !event.isArchived)),
+  );
+  const selectedTab = isMissingTab(activeDayTab) ? 'all' : activeDayTab;
   const activeDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? 0 : Number(selectedTab);
   const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex), shallowEqual);
   const members = useUserInfo(memberIds)?.map ?? {};
@@ -245,17 +254,14 @@ export function TimelineSection({
       </div>
     );
   };
-  const tabs = useMemo(
-    () => [
-      { value: 'all', label: 'All' },
-      ...Array.from({ length: dayCount }, (_, index) => ({
-        value: String(index),
-        label: getDayLabel(trip.startDate, index),
-      })),
-      ...(hasOutsideEvents ? [{ value: OUTSIDE_TAB, label: 'Outside trip dates' }] : []),
-    ],
-    [dayCount, trip.startDate, hasOutsideEvents],
-  );
+  const tabs = [
+    { value: 'all', label: 'All' },
+    ...dayIndexes.map((index) => ({
+      value: String(index),
+      label: getDayLabel(trip.startDate, index, dayCount),
+    })),
+    ...(hasOutsideEvents ? [{ value: OUTSIDE_TAB, label: 'Outside trip dates' }] : []),
+  ];
 
   const renderEventCard = (event: TimelineEvent) => (
     <div key={event.id} className='space-y-2'>
@@ -268,6 +274,7 @@ export function TimelineSection({
         showAttendees={showAttendees}
         weather={weather.getEvent(event.id)}
         isStacked={Boolean(event.stackLabel)}
+        isGrouped={Boolean(event.groupLabel)}
         onStack={(selectedEvent, onSuccess) => {
           setIsStackHeaderOrigin(false);
           setStackingEvent(selectedEvent);
@@ -321,6 +328,10 @@ export function TimelineSection({
             showAttendees={showAttendees}
             canEdit={canEdit}
             onManage={(selectedEvent) => setGroupingEvent(selectedEvent)}
+            onStack={(selectedEvent) => {
+              setIsStackHeaderOrigin(false);
+              setStackingEvent(selectedEvent);
+            }}
             renderEvent={renderEventCard}
           />
         );
@@ -343,7 +354,7 @@ export function TimelineSection({
     const visibleEvents = attendanceFilteredEvents.filter((event) => {
       if (scope === 'all') return true;
       if (scope === 'outside') {
-        return getIndexBucket(event.dayIndex ?? null, dayCount) === 'outside';
+        return getIndexBucket(event.dayIndex ?? null, dayCount, MAX_DAYS_OUTSIDE_TRIP) === 'outside';
       }
       return event.dayIndex === scope;
     });
@@ -371,12 +382,17 @@ export function TimelineSection({
       return <div className='space-y-3'>{renderEventItems(visibleEvents)}</div>;
     }
 
-    const eventDays = groupByIndexBucket(visibleEvents, (event) => event.dayIndex ?? null, dayCount);
-    const weatherOnlyDays = Array.from({ length: dayCount }, (_, day) => day)
+    const eventDays = groupByIndexBucket(
+      visibleEvents,
+      (event) => event.dayIndex ?? null,
+      dayCount,
+      MAX_DAYS_OUTSIDE_TRIP,
+    );
+    const weatherOnlyDays = dayIndexes
       .filter((day) => weather.getDay(day) && !eventDays.some(({ bucket }) => bucket === day))
       .map((day) => ({ bucket: day as IndexBucket, items: [] as TimelineEvent[] }));
     const getBucketOrder = (bucket: IndexBucket) =>
-      typeof bucket === 'number' ? bucket : bucket === 'outside' ? dayCount : dayCount + 1;
+      typeof bucket === 'number' ? bucket : bucket === 'outside' ? dayCount + MAX_DAYS_OUTSIDE_TRIP : dayCount + MAX_DAYS_OUTSIDE_TRIP + 1;
     const days = [...eventDays, ...weatherOnlyDays].sort(
       (first, second) => getBucketOrder(first.bucket) - getBucketOrder(second.bucket),
     );
@@ -387,7 +403,7 @@ export function TimelineSection({
           ({ bucket, items }) => (
             <div key={bucket} className='space-y-3'>
               {renderDivider(
-                getBucketLabel(bucket, trip.startDate),
+                getBucketLabel(bucket, trip.startDate, dayCount),
                 typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
               )}
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
@@ -455,7 +471,7 @@ export function TimelineSection({
     }
   };
 
-  const weatherDays = Array.from({ length: dayCount }, (_, dayIndex) => ({
+  const weatherDays = dayIndexes.map((dayIndex) => ({
     dayIndex,
     forecast: weather.getDay(dayIndex),
   })).flatMap(({ dayIndex, forecast }) => (forecast ? [{ dayIndex, forecast }] : []));
@@ -510,15 +526,17 @@ export function TimelineSection({
           title='Timeline'
           action={
             canAddEvents && (
-              <Button
-                type='button'
-                onClick={() => {
-                  setEditingEvent(undefined);
-                  setIsFormOpen(true);
-                }}
-              >
-                Add event
-              </Button>
+              <div className='flex items-center gap-2'>
+                <Button
+                  type='button'
+                  onClick={() => {
+                    setEditingEvent(undefined);
+                    setIsFormOpen(true);
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
             )
           }
         />
@@ -559,7 +577,7 @@ export function TimelineSection({
           <TabsContent value='all' className='pt-4'>
             {renderEvents()}
           </TabsContent>
-          {Array.from({ length: dayCount }, (_, index) => (
+          {dayIndexes.map((index) => (
             <TabsContent key={index} value={String(index)} className='pt-4 space-y-2'>
               {renderDayWeather(index)}
               {renderStayBanners(index)}
@@ -582,6 +600,11 @@ export function TimelineSection({
           events={events}
           isSubmitting={isStackSubmitting}
           canRemoveTrip={!isStackHeaderOrigin}
+          group={
+            stackingEvent.groupLabel
+              ? { label: stackingEvent.groupLabel, size: getGroupMembers(events, stackingEvent).length }
+              : null
+          }
           onStack={(name) => void saveStack(getItinerary(stackingEvent), name)}
           onRename={(name) => void saveStack(getStackMembers(events, stackingEvent), name)}
           onRemove={() => void saveStack(getItinerary(stackingEvent), null)}
@@ -609,6 +632,7 @@ export function TimelineSection({
         isOpen={isFormOpen}
         legFrom={legSeed}
         trip={trip}
+        currentUserId={currentUserId}
         memberOptions={memberOptions}
         event={editingEvent}
         events={events}

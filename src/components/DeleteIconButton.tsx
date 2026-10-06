@@ -12,12 +12,12 @@ function DeleteIconButton({ onClick, disabled, label = 'Delete' }: DeleteIconBut
   return (
     <Button
       type='button'
-      variant='secondary'
+      variant='tertiary'
       size='icon'
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className='bg-transparent text-destructive hover:bg-destructive/10'
+      className='text-destructive! hover:bg-destructive/10 size-10 min-w-10 shrink-0 p-0'
     >
       <Trash2 className='h-4 w-4' />
     </Button>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import DetailSheet from '@/components/DetailSheet';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
@@ -185,13 +187,13 @@ function DuesSummary({
           );
         })}
       </ul>
-      <Modal
+      <DetailSheet
         isOpen={selectedSettlement !== undefined}
         onClose={() => setSelectedPairKey(null)}
         title='Dues'
       >
         {selectedSettlement && renderBreakdown(selectedSettlement)}
-      </Modal>
+      </DetailSheet>
     </>
   );
 }

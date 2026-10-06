@@ -2,11 +2,9 @@ import { useMemo, useState } from 'react';
 
 import {
   Button,
-  Checkbox,
   Form,
   FormFactories,
   Input,
-  Modal,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -14,16 +12,19 @@ import { CalendarDays, Link2, StickyNote, Sun, Utensils } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import LinkAttachField from '@/components/forms/LinkAttachField';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   ACTIVITY_SETTING_LABELS,
   IDEA_TYPE_EMOJIS,
   IDEA_TYPE_LABELS,
   IDEA_TYPES,
+  TIME_BLOCK_EMOJIS,
   TIME_BLOCK_LABELS,
   TIME_BLOCKS,
 } from '@apps/waypoint/constants';
@@ -74,11 +75,12 @@ interface IdeaFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input, select } = FormFactories;
+const { custom, input } = FormFactories;
 
 const typeOptions = IDEA_TYPES.map((value) => ({
   value,
-  label: `${IDEA_TYPE_EMOJIS[value]} ${IDEA_TYPE_LABELS[value]}`,
+  label: IDEA_TYPE_LABELS[value],
+  emoji: IDEA_TYPE_EMOJIS[value],
 }));
 
 const EMPTY_EXTRAS: IdeaExtras = {
@@ -87,9 +89,6 @@ const EMPTY_EXTRAS: IdeaExtras = {
   when: { enabled: false, value: { days: [], blocks: [] } },
   note: { enabled: false, value: '' },
 };
-
-const toggleItem = <T,>(items: T[], item: T, isChecked: boolean) =>
-  isChecked ? [...items, item] : items.filter((existing) => existing !== item);
 
 const parseCuisines = (value: string) =>
   value
@@ -201,32 +200,21 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
               }
             />
           ) : (
-            <div className='flex flex-wrap gap-4'>
-              {(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => (
-                <label key={setting} className='flex items-center gap-2 text-sm'>
-                  <Checkbox
-                    checked={extras.details.value.settings.includes(setting)}
-                    onCheckedChange={(checked) =>
-                      onChange({
-                        ...extras,
-                        details: {
-                          ...extras.details,
-                          value: {
-                            ...extras.details.value,
-                            settings: toggleItem(
-                              extras.details.value.settings,
-                              setting,
-                              checked === true,
-                            ),
-                          },
-                        },
-                      })
-                    }
-                  />
-                  {ACTIVITY_SETTING_LABELS[setting]}
-                </label>
-              ))}
-            </div>
+            <MultiPillGroup
+              label='Indoor or outdoor'
+              options={(Object.keys(ACTIVITY_SETTING_LABELS) as ActivitySetting[]).map((setting) => ({
+                value: setting,
+                label: ACTIVITY_SETTING_LABELS[setting],
+                emoji: setting === 'INDOOR' ? '🏛️' : '🌲',
+              }))}
+              values={extras.details.value.settings}
+              onChange={(settings) =>
+                onChange({
+                  ...extras,
+                  details: { ...extras.details, value: { ...extras.details.value, settings } },
+                })
+              }
+            />
           )}
         </RemovableField>
       )}
@@ -236,51 +224,33 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
           removeLabel='Remove best day or time'
           onRemove={() => remove('when')}
         >
-          <div className='grid gap-3 sm:grid-cols-2'>
-            <div className='space-y-1.5'>
-              {getDayOptions(trip.startDate, trip.endDate).map(({ value, label }) => (
-                <label key={value} className='flex items-center gap-2 text-sm'>
-                  <Checkbox
-                    checked={extras.when.value.days.includes(Number(value))}
-                    onCheckedChange={(checked) =>
-                      onChange({
-                        ...extras,
-                        when: {
-                          ...extras.when,
-                          value: {
-                            ...extras.when.value,
-                            days: toggleItem(extras.when.value.days, Number(value), checked === true),
-                          },
-                        },
-                      })
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-            <div className='space-y-1.5'>
-              {TIME_BLOCKS.map((block) => (
-                <label key={block} className='flex items-center gap-2 text-sm'>
-                  <Checkbox
-                    checked={extras.when.value.blocks.includes(block)}
-                    onCheckedChange={(checked) =>
-                      onChange({
-                        ...extras,
-                        when: {
-                          ...extras.when,
-                          value: {
-                            ...extras.when.value,
-                            blocks: toggleItem(extras.when.value.blocks, block, checked === true),
-                          },
-                        },
-                      })
-                    }
-                  />
-                  {TIME_BLOCK_LABELS[block]}
-                </label>
-              ))}
-            </div>
+          <div className='space-y-3'>
+            <MultiPillGroup
+              label='Best days'
+              options={getDayOptions(trip.startDate, trip.endDate).map(({ value, label }) => ({
+                value,
+                label,
+              }))}
+              values={extras.when.value.days.map(String)}
+              onChange={(days) =>
+                onChange({
+                  ...extras,
+                  when: { ...extras.when, value: { ...extras.when.value, days: days.map(Number) } },
+                })
+              }
+            />
+            <MultiPillGroup
+              label='Best time of day'
+              options={TIME_BLOCKS.map((block) => ({
+                value: block,
+                label: TIME_BLOCK_LABELS[block],
+                emoji: TIME_BLOCK_EMOJIS[block],
+              }))}
+              values={extras.when.value.blocks}
+              onChange={(blocks) =>
+                onChange({ ...extras, when: { ...extras.when, value: { ...extras.when.value, blocks } } })
+              }
+            />
           </div>
         </RemovableField>
       )}
@@ -324,7 +294,18 @@ function IdeaFormModal({
 
   const fields = useMemo(
     () => [
-      select({ name: 'ideaType', label: 'Type', options: typeOptions }),
+      custom({
+        name: 'ideaType',
+        label: 'What kind of idea?',
+        renderComponent: (props) => (
+          <PillGroup
+            label='Idea type'
+            options={typeOptions}
+            value={props.value as IdeaType}
+            onChange={(value) => props.onValueChange(value)}
+          />
+        ),
+      }),
       input({
         name: 'title',
         label: 'Name',
@@ -388,7 +369,7 @@ function IdeaFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Idea'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Idea'>
       <Form
         id='waypoint-idea'
         form={fields}
@@ -404,19 +385,19 @@ function IdeaFormModal({
               idea &&
               onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
             }
-            rightActions={
-              <>
+            cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button
+            }
+            rightActions={
+              <Button
                   type='submit'
                   loading={isSubmitting}
                   disabled={isSubmitting || !isFormComplete || !canPost}
                 >
                   {idea ? 'Save' : 'Post'}
                 </Button>
-              </>
             }
           />
         }
@@ -427,7 +408,7 @@ function IdeaFormModal({
         </p>
       )}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
-    </Modal>
+    </FormSheet>
   );
 }
 

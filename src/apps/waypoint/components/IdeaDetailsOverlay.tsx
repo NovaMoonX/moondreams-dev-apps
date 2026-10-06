@@ -171,7 +171,7 @@ function IdeaDetailsBody({
               type='button'
               size='sm'
               variant='secondary'
-              className='text-destructive'
+              className='text-destructive!'
               onClick={onDelete}
             >
               Delete
@@ -339,7 +339,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
                     type='button'
                     size='lg'
                     variant='secondary'
-                    className='text-destructive'
+                    className='text-destructive!'
                     onClick={startAdminDelete}
                   >
                     Delete

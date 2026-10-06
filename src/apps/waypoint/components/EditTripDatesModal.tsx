@@ -25,6 +25,7 @@ import {
   selectTimelineEvents,
   selectTripExpenses,
 } from '@apps/waypoint/store/selectors';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { TripSpace } from '@apps/waypoint/types';
 import { getStayTime } from '@apps/waypoint/utils/tripTime';
 
@@ -88,8 +89,10 @@ function EditTripDatesModal({
     events.some((event) => event.dayIndex !== null) ||
     stays.length > 0 ||
     rentals.length > 0 ||
-    expenses.some((expense) => expense.dayIndex !== null) ||
-    checklistItems.some((item) => item.completeByDayIndex !== null);
+    expenses.some((expense) => expense.dayIndex !== null);
+  // Before-the-road items are due a set distance from the trip's start (any distance, including months
+  // before), so they always travel with the trip: never rebased, and never "outside" the dates.
+  const hasDatedChecklistItems = checklistItems.some((item) => item.completeByDayIndex !== null);
   const showKeepOriginalOption = hasDatedItems && deltaDays !== 0;
   const isRebasing = showKeepOriginalOption && keepOriginalDates;
 
@@ -102,7 +105,7 @@ function EditTripDatesModal({
     const shift = isRebasing ? deltaDays : 0;
     const isOutOfRange = (dayIndex: number | null) =>
       dayIndex !== null &&
-      (dayIndex - shift < 0 || dayIndex - shift >= newDayCount);
+      (dayIndex - shift < -MAX_DAYS_OUTSIDE_TRIP || dayIndex - shift >= newDayCount + MAX_DAYS_OUTSIDE_TRIP);
 
     const outOfRangeEvents = events.filter(
       (event) =>
@@ -122,16 +125,12 @@ function EditTripDatesModal({
     const outOfRangeExpenses = expenses.filter((expense) =>
       isOutOfRange(expense.dayIndex),
     );
-    const outOfRangeChecklist = checklistItems.filter((item) =>
-      isOutOfRange(item.completeByDayIndex),
-    );
 
     const result =
       outOfRangeEvents.length +
       outOfRangeStays.length +
       outOfRangeRentals.length +
-      outOfRangeExpenses.length +
-      outOfRangeChecklist.length;
+      outOfRangeExpenses.length;
     return result;
   };
   const outOfRangeCount = countItemsOutOfRange();
@@ -149,7 +148,7 @@ function EditTripDatesModal({
           />
         ),
       }),
-      ...(showKeepOriginalOption || outOfRangeCount > 0
+      ...(showKeepOriginalOption || outOfRangeCount > 0 || (hasDatedChecklistItems && deltaDays !== 0)
         ? [
             custom({
               name: 'keepOriginalDates',
@@ -176,8 +175,13 @@ function EditTripDatesModal({
                       {outOfRangeCount === 1
                         ? '1 item falls'
                         : `${outOfRangeCount} items fall`}{' '}
-                      outside the new dates and will show under Outside trip
+                      more than {MAX_DAYS_OUTSIDE_TRIP} days outside the new dates and will show under Outside trip
                       dates.
+                    </p>
+                  )}
+                  {hasDatedChecklistItems && deltaDays !== 0 && (
+                    <p className='text-muted-foreground text-xs'>
+                      🧳 Due dates on your checklist always move with the trip, however far ahead they are.
                     </p>
                   )}
                 </div>
@@ -198,7 +202,7 @@ function EditTripDatesModal({
         ),
       }),
     ],
-    [showKeepOriginalOption, outOfRangeCount, isSubmitting],
+    [showKeepOriginalOption, outOfRangeCount, hasDatedChecklistItems, deltaDays, isSubmitting],
   );
 
   if (!trip) {
@@ -249,19 +253,19 @@ function EditTripDatesModal({
           <div className='space-y-3'>
             {error && <p className='text-destructive text-sm'>{error}</p>}
             <ModalFooterActions
-              rightActions={
-                <>
+              cancelAction={
                   <Button type='button' variant='secondary' onClick={onClose}>
                     Cancel
                   </Button>
-                  <Button
+              }
+              rightActions={
+                <Button
                     type='submit'
                     loading={isSubmitting}
                     disabled={isSubmitting || !isFormComplete}
                   >
                     {isSubmitting ? 'Saving…' : 'Save'}
                   </Button>
-                </>
               }
             />
           </div>

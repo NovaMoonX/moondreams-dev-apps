@@ -6,6 +6,7 @@ import {
   pendingRequestsReducer,
   type PendingRequestsState,
 } from './slices/pendingRequestsSlice';
+import { emailInvitesReducer, type EmailInvitesState } from './slices/emailInvitesSlice';
 import { tripReducer, type TripState } from './slices/tripSlice';
 import {
   expensesReducer,
@@ -39,6 +40,7 @@ export interface WaypointState {
   stays: StaysState;
   rentals: RentalsState;
   pendingRequests: PendingRequestsState;
+  emailInvites: EmailInvitesState;
 }
 
 export const waypointReducer = combineReducers({
@@ -52,6 +54,7 @@ export const waypointReducer = combineReducers({
   stays: staysReducer,
   rentals: rentalsReducer,
   pendingRequests: pendingRequestsReducer,
+  emailInvites: emailInvitesReducer,
 });
 
 export const selectWaypoint = (state: RootState): WaypointState =>
@@ -59,6 +62,7 @@ export const selectWaypoint = (state: RootState): WaypointState =>
 
 export { type TripState } from './slices/tripSlice';
 export { type PendingRequestsState } from './slices/pendingRequestsSlice';
+export { type EmailInvitesState } from './slices/emailInvitesSlice';
 export { type ExpensesState } from './slices/expensesSlice';
 export { type EventsState } from './slices/eventsSlice';
 export { type EventSuggestionsState } from './slices/eventSuggestionsSlice';

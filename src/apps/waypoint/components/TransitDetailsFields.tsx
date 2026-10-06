@@ -21,6 +21,7 @@ interface TransitDetailsFieldsProps {
   value: TransitDraft;
   onChange: (value: TransitDraft) => void;
   onDepartureAirportPicked?: (airport: AirportOption) => void;
+  onArrivalAirportPicked?: (airport: AirportOption) => void;
   /** With an end time set the duration is implied, so the estimate isn't asked for. */
   hasEndTime: boolean;
   /** The event's location field, placed in the route section. */
@@ -169,6 +170,7 @@ function TransitDetailsFields({
   value,
   onChange,
   onDepartureAirportPicked,
+  onArrivalAirportPicked,
   hasEndTime,
   routeLocation,
 }: TransitDetailsFieldsProps) {
@@ -227,7 +229,9 @@ function TransitDetailsFields({
           fieldKey={spec.key}
           value={value}
           onChange={onChange}
-          onPicked={spec.key === 'departureAirportCode' ? onDepartureAirportPicked : undefined}
+          onPicked={
+            spec.key === 'departureAirportCode' ? onDepartureAirportPicked : onArrivalAirportPicked
+          }
         />
       ) : (
         <Input
