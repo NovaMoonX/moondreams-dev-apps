@@ -52,7 +52,6 @@ html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='bo
    label is as readable as on an unchosen one (a solid fill swallows both). */
 html.waypoint-theme [data-pill] {
   min-height: 2.5rem;
-  transition: none;
 }
 
 html.waypoint-theme [data-pill][aria-pressed='true'] {

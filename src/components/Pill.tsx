@@ -23,7 +23,7 @@ function Pill({ children, isSelected, onClick, emoji, className }: PillProps) {
       data-pill=''
       onClick={onClick}
       className={join(
-        'max-w-full shrink-0 gap-1.5 whitespace-nowrap',
+        'max-w-full shrink-0 gap-1.5 whitespace-nowrap !transition-none',
         className,
       )}
     >
