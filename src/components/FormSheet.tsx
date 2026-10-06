@@ -37,7 +37,7 @@ function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormShe
         disableCloseOnOverlayClick
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
       >
-        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-9')}>{children}</div>
+        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]')}>{children}</div>
       </Drawer>
     );
   }
