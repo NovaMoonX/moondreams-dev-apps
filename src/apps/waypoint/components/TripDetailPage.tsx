@@ -417,7 +417,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         </Subview>
       )}
       {subviewTitle === undefined && (
-    <div className='page'>
+    <div className={join('page', isActive && 'xl:pr-72')}>
       <div
         className={join(
           'mx-auto max-w-4xl',
