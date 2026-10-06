@@ -90,6 +90,37 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const usageEntries = fixtures
+    .filter((fixture) => fixture.uid !== FIXTURE_USERS.admin.uid)
+    .flatMap((fixture) =>
+      fixture.apps.flatMap((appName) => {
+        const app = APP_REGISTRY.find((candidate) => candidate.name === appName);
+        // Taylor opened Waypoint long ago, so the admin view shows a started-but-not-active member.
+        const isLapsed =
+          fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid && app?.id === 'waypoint';
+        return app
+          ? [
+              {
+                appId: app.id,
+                usage: {
+                  uid: fixture.uid,
+                  startedAt: context.now - 150 * DAY_MS,
+                  lastActiveAt: context.now - (isLapsed ? 120 : 1) * DAY_MS,
+                },
+              },
+            ]
+          : [];
+      }),
+    );
+
+  usageEntries.forEach(({ appId, usage }) => {
+    batch.set(
+      context.firestore.doc(`apps/${appId}/usage/${usage.uid}`),
+      usage,
+    );
+  });
+
   await batch.commit();
 
   const statuses = fixtures.map((fixture) => [
@@ -108,7 +139,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
-    firestoreDocuments: fixtures.length + APP_REGISTRY.length,
+    firestoreDocuments: fixtures.length + APP_REGISTRY.length + usageEntries.length,
     realtimePaths: fixtures.length,
   };
 

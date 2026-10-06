@@ -1,19 +1,28 @@
 import {
+  Badge,
   Button,
   Input,
   Modal,
   Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useQuery } from '@tanstack/react-query';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
+import HelpTip from '@/components/HelpTip';
+import { PillGroup } from '@/components/PillGroup';
+import StatTile from '@/components/StatTile';
+import useNow from '@/hooks/useNow';
+import { formatDate } from '@/utils/formatUtils';
 import NavButton from '@/ui/NavButton';
 import UserAvatar from '@/ui/UserAvatar';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { ADMIN_EMAIL, getUnconfiguredRegistryApps } from '@lib/app';
+import { ACTIVE_WINDOW_MONTHS, getActiveSince } from '@lib/appUsage/appUsage';
+import { appUsageQueryOptions } from '@lib/appUsage/appUsageQueries';
 import { db } from '@lib/firebase/config';
 import {
   APP_STATUS_OPTIONS,
@@ -433,6 +442,95 @@ function AppConfigEditor({
   );
 }
 
+type UsageFilter = 'started' | 'active';
+
+function AppUsageSection({ app, users }: { app: AppMetadata; users: UserProfile[] }) {
+  const [filter, setFilter] = useState<UsageFilter>('started');
+  const now = useNow(60_000);
+  const { data: usage, isPending, isError } = useQuery(appUsageQueryOptions(app.id));
+
+  const activeSince = getActiveSince(now);
+  const rows = (usage ?? []).flatMap((entry) => {
+    const profile = users.find((candidate) => candidate.uid === entry.uid);
+    return profile
+      ? [{ ...entry, profile, isActive: entry.lastActiveAt >= activeSince }]
+      : [];
+  });
+  const startedRows = [...rows].sort((a, b) => b.startedAt - a.startedAt);
+  const activeRows = rows
+    .filter((row) => row.isActive)
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  const visibleRows = filter === 'active' ? activeRows : startedRows;
+
+  const getEmptyMessage = () => {
+    if (isPending) return 'Loading…';
+    if (isError) return "We couldn't load usage just now.";
+    if (filter === 'active') return `Nobody has opened ${app.name} in the past ${ACTIVE_WINDOW_MONTHS} months.`;
+    return `Nobody has opened ${app.name} yet. People appear here the next time they open it.`;
+  };
+
+  return (
+    <section className='space-y-4'>
+      <div>
+        <p className='text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase'>
+          Usage
+        </p>
+        <h2 className='text-foreground mt-1 text-2xl font-semibold'>{app.name}</h2>
+      </div>
+
+      <div className='grid grid-cols-2 gap-3'>
+        <StatTile label='Started using' value={startedRows.length} />
+        <StatTile
+          label='Active'
+          value={activeRows.length}
+          help={
+            <HelpTip title='Active users'>
+              Members who opened {app.name} in the past {ACTIVE_WINDOW_MONTHS} months. Everyone who has ever opened it counts as having started using it.
+            </HelpTip>
+          }
+        />
+      </div>
+
+      <PillGroup<UsageFilter>
+        label='Show members'
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { value: 'started', label: `Started using · ${startedRows.length}` },
+          { value: 'active', label: `Active · ${activeRows.length}` },
+        ]}
+      />
+
+      {visibleRows.length === 0 ? (
+        <p className='text-muted-foreground text-sm'>{getEmptyMessage()}</p>
+      ) : (
+        <ul className='divide-border divide-y'>
+          {visibleRows.map((row) => (
+            <li key={row.uid} className='flex items-center gap-3 py-2.5'>
+              <UserAvatar user={row.profile} size='sm' />
+              <div className='min-w-0 flex-1'>
+                <div className='text-foreground flex items-center gap-2 text-sm'>
+                  <span className='truncate'>{row.profile.displayName ?? row.profile.email}</span>
+                  {row.isActive ? (
+                    <Badge variant='secondary' size='sm'>
+                      Active
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className='text-muted-foreground truncate text-xs'>{row.profile.email}</div>
+              </div>
+              <div className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
+                <div>Started {formatDate(row.startedAt)}</div>
+                <div>Last active {formatDate(row.lastActiveAt)}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const { allApps, updateAppMetadata } = useAppCatalog();
@@ -571,13 +669,16 @@ function AdminDashboard() {
           </aside>
 
           {selectedApp ? (
-            <AppConfigEditor
-              key={selectedApp.id}
-              app={selectedApp}
-              users={users}
-              onDirtyChange={handleDirtyChange}
-              onSave={updateAppMetadata}
-            />
+            <div className='min-w-0 space-y-6'>
+              <AppUsageSection key={`usage-${selectedApp.id}`} app={selectedApp} users={users} />
+              <AppConfigEditor
+                key={selectedApp.id}
+                app={selectedApp}
+                users={users}
+                onDirtyChange={handleDirtyChange}
+                onSave={updateAppMetadata}
+              />
+            </div>
           ) : (
             <p className='text-muted-foreground text-sm'>No app selected.</p>
           )}

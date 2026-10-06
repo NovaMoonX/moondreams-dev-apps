@@ -2893,6 +2893,19 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Cross-app: when each member started using an app and when they were last active. Only the
+    // `registerAppUsage` Function creates a record (Admin SDK), so `startedAt` can't be forged; the
+    // member may only move `lastActiveAt`, and only admins read the whole collection.
+    match /apps/{appId}/usage/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, delete: if false;
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActiveAt'])
+        && request.resource.data.lastActiveAt is number
+        && request.resource.data.lastActiveAt >= resource.data.lastActiveAt;
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;

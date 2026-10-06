@@ -22,6 +22,7 @@ import StatsSummary from './components/StatsSummary';
 import VisitsSection from './components/VisitsSection';
 import { AttentionFocusContext, type AttentionFocusRequest } from './context/attentionFocusContext';
 import { useMyPendingHouseholdRequests } from './hooks/useMyPendingHouseholdRequests';
+import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useNineLivesSync } from './hooks/useNineLivesSync';
 import LitterLogSection from './components/LitterLogSection';
 import DashboardQuickActions from './components/DashboardQuickActions';
@@ -65,6 +66,7 @@ function NineLives() {
   }, [households, selectedHouseholdId]);
 
   useNineLivesSync(selectedHousehold?.id ?? null, user?.uid ?? null);
+  useTrackAppUsage('nine-lives', user?.uid ?? null);
   const myPendingRequests = useMyPendingHouseholdRequests(user?.uid ?? null);
 
   const defaultHouseholdName = useMemo(
