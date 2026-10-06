@@ -15,12 +15,14 @@ interface TheatersStepProps {
 function TheatersStep({ values, onChange }: TheatersStepProps) {
   const { theatres, favoriteTheatreId } = values;
 
-  const handleAdd = (theatre: TheatreDraft) =>
+  const handleAdd = (theatre: TheatreDraft) => {
     onChange({
       theatres: [...theatres, theatre],
       favoriteTheatreId:
         theatres.length === 0 ? theatre.theatreId : favoriteTheatreId,
     });
+    return true;
+  };
 
   const handleRemove = (theatreId: string) => {
     const remaining = theatres.filter((item) => item.theatreId !== theatreId);
@@ -45,29 +47,31 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
           can skip this and add them any time.
         </p>
       </div>
+      <TheaterNameForm
+        savedNames={theatres.map((theatre) => theatre.name)}
+        onAdd={handleAdd}
+      />
       {theatres.length > 1 && (
         <p className='text-muted-foreground text-center text-sm'>
           Tap the star on the one you go to most.
         </p>
       )}
       {theatres.length > 0 && (
-        <TheaterList
-          theatres={theatres}
-          favoriteId={favoriteTheatreId}
-          onToggleFavorite={(theatreId) =>
-            onChange({
-              ...values,
-              favoriteTheatreId:
-                theatreId === favoriteTheatreId ? null : theatreId,
-            })
-          }
-          onRemove={(theatre) => handleRemove(theatre.theatreId)}
-        />
+        <div className='max-h-56 overflow-y-auto'>
+          <TheaterList
+            theatres={theatres}
+            favoriteId={favoriteTheatreId}
+            onToggleFavorite={(theatreId) =>
+              onChange({
+                ...values,
+                favoriteTheatreId:
+                  theatreId === favoriteTheatreId ? null : theatreId,
+              })
+            }
+            onRemove={(theatre) => handleRemove(theatre.theatreId)}
+          />
+        </div>
       )}
-      <TheaterNameForm
-        savedNames={theatres.map((theatre) => theatre.name)}
-        onAdd={handleAdd}
-      />
     </div>
   );
 }

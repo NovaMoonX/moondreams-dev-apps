@@ -42,19 +42,21 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
     setIsSaving(true);
     try {
       await action();
+      return true;
     } catch (error) {
       addToast({
         title: 'Something went wrong',
         description: getErrorMessage(error, fallback),
         type: 'error',
       });
+      return false;
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleAdd = (theatre: TheatreDraft) =>
-    run(
+  const handleAdd = async (theatre: TheatreDraft) => {
+    const didSave = await run(
       () =>
         dispatch(
           addTheatre({
@@ -65,6 +67,11 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
         ).unwrap(),
       'Unable to save this theater.',
     );
+    if (didSave) {
+      setIsAdding(false);
+    }
+    return didSave;
+  };
 
   const handleToggleFavorite = (theatreId: string) =>
     run(
@@ -114,7 +121,7 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
         <TheaterNameForm
           savedNames={theatres.map((theatre) => theatre.name)}
           isDisabled={isSaving}
-          onAdd={(theatre) => void handleAdd(theatre)}
+          onAdd={handleAdd}
         />
       </Subview>
     );

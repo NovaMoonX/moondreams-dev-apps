@@ -31,7 +31,6 @@ function TheaterPills({ label, value, onChange }: TheaterPillsProps) {
           return (
             <Pill
               key={theatre.theatreId}
-              emoji='📍'
               isSelected={isSelected}
               onClick={() => onChange(isSelected ? null : theatre)}
             >
