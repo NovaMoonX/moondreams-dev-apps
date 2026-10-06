@@ -79,7 +79,7 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
               size='xs'
               className='gap-1 rounded-full! whitespace-nowrap'
             >
-              <span aria-hidden='true'>🍿</span>
+              <span aria-hidden='true'>👀</span>
               Seen
             </Badge>
           ) : hasTopBadge ? (
