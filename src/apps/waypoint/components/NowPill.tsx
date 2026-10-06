@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronsRight, CircleDot } from 'lucide-react';
+import { CircleDot, SkipForward } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -127,7 +127,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
             {itemView === 'now' ? (
               <CircleDot className='h-5 w-5 text-emerald-500' />
             ) : (
-              <ChevronsRight className='h-5 w-5' />
+              <SkipForward className='h-5 w-5' />
             )}
           </span>
           <span className={join('transition-opacity duration-300', isExpanded ? 'opacity-100' : 'w-0 overflow-hidden opacity-0')}>
