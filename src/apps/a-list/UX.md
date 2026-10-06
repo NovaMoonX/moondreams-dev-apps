@@ -48,7 +48,7 @@ block-beta
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart TD
-    A[First launch] --> B["Setup modal · steps"]
+    A[First launch] --> B["Setup modal · 4 steps"]
     B --> C{"Add movies you've already seen?"}
     C -->|Add past movies| P["Add drawer · past-movies mode: 'Add + another' loops back to pick"]
     P -->|Add & finish| D1["Calendar, filled in: posters, counters and savings so far"]
