@@ -108,20 +108,20 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
         className={join(
           'bg-popover overflow-hidden rounded-full border shadow-lg transition-[max-width] duration-300 ease-in-out',
           itemView === 'now' ? 'border-emerald-500/60' : 'border-border',
-          isExpanded ? 'max-w-[19rem]' : 'max-w-12',
+          isExpanded ? 'max-w-[19rem]' : 'size-12 max-w-12',
         )}
       >
         <Button
           type='button'
           variant='tertiary'
           aria-label={isExpanded ? `${label}. Show details` : `Show ${itemView === 'now' ? 'what is happening now' : 'what is up next'}`}
-          className={join('h-12 min-w-12 justify-start gap-0 rounded-full p-0 transition-[padding] duration-300', isExpanded && 'pr-4 pl-4')}
+          className={join('h-12 gap-0 rounded-full p-0', isExpanded ? 'justify-start px-4' : 'w-12 min-w-12 justify-center')}
           onClick={() => (isExpanded ? open(target) : showView(itemView))}
         >
           <span
             className={join(
               'flex shrink-0 items-center justify-center overflow-hidden transition-[width,opacity] duration-300',
-              isExpanded ? 'w-0 opacity-0' : 'size-12 opacity-100',
+              isExpanded ? 'hidden' : 'size-12',
             )}
           >
             {itemView === 'now' ? (
@@ -130,9 +130,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
               <SkipForward className='h-5 w-5' />
             )}
           </span>
-          <span className={join('transition-opacity duration-300', isExpanded ? 'opacity-100' : 'w-0 overflow-hidden opacity-0')}>
-            {renderStatus(target, itemView)}
-          </span>
+          {isExpanded && <span>{renderStatus(target, itemView)}</span>}
         </Button>
       </div>
     );
