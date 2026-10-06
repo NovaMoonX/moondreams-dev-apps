@@ -278,7 +278,7 @@ export default function ChecklistSection({
                             </Badge>
                           </div>
                           {item.note && (
-                            <p className='text-muted-foreground mt-1 text-sm italic'>{item.note}</p>
+                            <p className='text-muted-foreground mt-1 line-clamp-2 text-sm italic sm:line-clamp-none'>{item.note}</p>
                           )}
                         </div>
                       </div>
@@ -321,19 +321,20 @@ export default function ChecklistSection({
         title={detailItem?.title ?? 'Checklist item'}
         showCloseButton
         footer={
-          <Button
-            type='button'
-            size='lg'
-            variant='secondary'
-            className='w-full'
-            onClick={() => {
-              setEditingItem(detailItem);
-              setDetailItemId(null);
-              setIsModalOpen(true);
-            }}
-          >
-            Modify
-          </Button>
+          <div className='flex flex-col gap-2'>
+            <Button
+              type='button'
+              size='lg'
+              variant='secondary'
+              onClick={() => {
+                setEditingItem(detailItem);
+                setDetailItemId(null);
+                setIsModalOpen(true);
+              }}
+            >
+              Modify
+            </Button>
+          </div>
         }
       >
         {detailItem && (
