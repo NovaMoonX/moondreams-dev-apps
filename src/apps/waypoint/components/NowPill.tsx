@@ -185,7 +185,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
                 className='h-10'
                 onClick={() => showView(view === 'now' ? 'next' : 'now')}
               >
-                {view === 'now' ? 'Up next' : 'Now'}
+                {view === 'now' ? "See what's next" : "See what's happening now"}
               </Button>
             )}
           </div>

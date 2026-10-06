@@ -53,7 +53,7 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
   const preview = undecided.filter((idea) => idea.ideaType === ideaType).slice(0, PREVIEW_COUNT);
 
   return (
-    <section className='border-accent-foreground/20 bg-accent/60 space-y-3 rounded-xl border p-4'>
+    <section className='border-accent-foreground/20 bg-accent/60 space-y-3 rounded-xl border p-4 [--color-primary-foreground:var(--color-background)] [--color-primary:var(--color-foreground)]'>
       <div className='flex items-start gap-3'>
         <span className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground'>
           <Lightbulb className='h-4 w-4' />
