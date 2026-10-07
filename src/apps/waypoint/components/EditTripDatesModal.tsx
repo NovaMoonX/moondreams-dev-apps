@@ -14,6 +14,7 @@ import DateRangeField, {
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
@@ -45,6 +46,12 @@ interface EditTripDatesModalProps {
 }
 
 const DAY_MS = 86_400_000;
+
+function describeOldStart(deltaDays: number) {
+  const dayIndex = -deltaDays;
+  const days = Math.abs(dayIndex);
+  return dayIndex < 0 ? `${days} ${days === 1 ? 'day' : 'days'} before the first day` : `Day ${dayIndex + 1}`;
+}
 
 function describeShift(deltaDays: number) {
   const days = Math.abs(deltaDays);
@@ -140,6 +147,7 @@ function EditTripDatesModal({
     return result;
   };
   const outOfRangeCount = countItemsOutOfRange();
+  const oldStartLabel = trip ? formatDateUTC(trip.startDate) : '';
 
   const fields = useMemo(
     () => [
@@ -175,8 +183,8 @@ function EditTripDatesModal({
                       />
                       <p className='text-muted-foreground text-xs'>
                         {props.value
-                          ? 'Each plan keeps its calendar date, so it may land on a different day of the trip.'
-                          : `Every plan slides ${describeShift(deltaDays)} with the trip, so Day 3 is still Day 3.`}
+                          ? `A plan on ${oldStartLabel} stays on that date, which is ${describeOldStart(deltaDays)} of the new dates.`
+                          : `Every plan slides ${describeShift(deltaDays)} with the trip and keeps its day number.`}
                       </p>
                     </div>
                   )}
@@ -212,7 +220,7 @@ function EditTripDatesModal({
         ),
       }),
     ],
-    [showKeepOriginalOption, outOfRangeCount, hasDatedChecklistItems, deltaDays, isSubmitting],
+    [showKeepOriginalOption, outOfRangeCount, hasDatedChecklistItems, deltaDays, isSubmitting, oldStartLabel],
   );
 
   if (!trip) {

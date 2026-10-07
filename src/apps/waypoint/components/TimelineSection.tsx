@@ -22,7 +22,7 @@ import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
-import { getEventSubject, getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
+import { getEventSubject, getExpenseLinkKey, isWorthFollowUp } from '@apps/waypoint/utils/relatedSubjects';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
   type EventFormValues,
@@ -462,7 +462,7 @@ export function TimelineSection({
         ).unwrap();
       } else {
         const created = await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
-        if (!options?.addLeg) {
+        if (!options?.addLeg && isWorthFollowUp(created)) {
           startFollowUp(getEventSubject(trip, created));
         }
       }

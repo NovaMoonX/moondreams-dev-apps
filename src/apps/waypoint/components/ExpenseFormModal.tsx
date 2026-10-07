@@ -13,6 +13,7 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatClockTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -202,11 +203,13 @@ function ExpenseFormModal({
       linkables.map((subject) => ({
         value: getExpenseLinkKey(subject.link),
         text: `${subject.emoji} ${subject.title}`,
-        description: `${LINK_KIND_LABELS[subject.link.kind]} · ${
+        description: [
+          LINK_KIND_LABELS[subject.link.kind],
           subject.dayIndex === null
             ? 'No specific day'
-            : getDayLabel(trip.startDate, subject.dayIndex, getDayCount(trip.startDate, trip.endDate))
-        }`,
+            : getDayLabel(trip.startDate, subject.dayIndex, getDayCount(trip.startDate, trip.endDate)),
+          ...(subject.time ? [formatClockTime(subject.time)] : []),
+        ].join(' · '),
       })),
     [linkables, trip.startDate, trip.endDate],
   );
@@ -285,7 +288,7 @@ function ExpenseFormModal({
             <PillGroup
               label='This price is for'
               options={[
-                { value: 'group', label: 'The whole group', emoji: '👥' },
+                { value: 'group', label: 'One total', emoji: '🧾' },
                 { value: 'each', label: 'Each person', emoji: '🙋' },
               ]}
               value={props.value === true ? 'each' : 'group'}
@@ -294,7 +297,7 @@ function ExpenseFormModal({
             <p className='text-muted-foreground text-xs'>
               {props.value === true
                 ? 'Everyone in the split pays this much, so the total grows with every person who joins.'
-                : 'We work out everyone’s share for you.'}
+                : 'We work out each person’s share for you.'}
             </p>
           </div>
         ),
@@ -302,14 +305,14 @@ function ExpenseFormModal({
       mode === 'amount'
         ? input({
             name: 'amount',
-            label: formData.isPerPerson ? 'What each person pays' : 'Total for the group',
+            label: formData.isPerPerson ? 'What each person pays' : 'Total to split',
             type: 'number',
             placeholder: '0.00',
             variant: 'outline',
           })
         : custom({
             name: 'amountRange',
-            label: formData.isPerPerson ? 'What each person might pay' : 'Estimated total for the group',
+            label: formData.isPerPerson ? 'What each person might pay' : 'Estimated total to split',
             renderComponent: (props) => {
               const range = props.value as AmountRange;
               return (
@@ -340,7 +343,7 @@ function ExpenseFormModal({
       nextFields.push(
         input({
           name: 'paidAmount',
-          label: formData.isPerPerson ? 'What each person paid' : 'What the group paid',
+          label: formData.isPerPerson ? 'What each person paid' : 'Total paid',
           type: 'number',
           placeholder: '0.00',
           variant: 'outline',
@@ -436,7 +439,7 @@ function ExpenseFormModal({
     }
     setFormData((current) => ({
       ...current,
-      title: picked.title,
+      title: current.title.trim() === '' ? picked.title : current.title,
       dayIndex: getDayValue(picked.dayIndex),
       category:
         picked.expenseCategory && current.category.choice === ''
@@ -525,7 +528,7 @@ function ExpenseFormModal({
             clearable
             options={linkOptions}
             value={linkKey}
-            placeholder='Pick an event, stay or rental'
+            placeholder='Pick an event, stay or rental to fill in its details'
             searchPlaceholder='Search your plans'
             onChange={(value) => (value === '' ? setLink(null) : pickLink(value))}
           />

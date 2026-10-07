@@ -8,7 +8,7 @@ import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import type { PlaceSelectionResult } from '@/lib/places/types';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
+import { getEventSubject, isWorthFollowUp } from '@apps/waypoint/utils/relatedSubjects';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
   type EventFormValues,
@@ -67,7 +67,9 @@ function IdeaToEventModal({ trip, idea, currentUserId, onClose }: IdeaToEventMod
     try {
       const created = await dispatch(convertIdeaToEvent({ uid: currentUserId, trip, idea, event })).unwrap();
       addToast({ title: `${idea.title} is on the itinerary`, type: 'success' });
-      startFollowUp(getEventSubject(trip, created));
+      if (isWorthFollowUp(created)) {
+        startFollowUp(getEventSubject(trip, created));
+      }
       onClose();
     } finally {
       setIsSubmitting(false);
