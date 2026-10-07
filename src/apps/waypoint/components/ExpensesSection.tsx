@@ -9,7 +9,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, ListFilter } from 'lucide-react';
+import { ChevronRight, ListFilter, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import LazyMount from '@/components/LazyMount';
@@ -31,6 +31,9 @@ import SectionHeader from '@/components/SectionHeader';
 import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
+import PersonalExpenseFormModal, {
+  type PersonalExpenseSubmitValues,
+} from '@apps/waypoint/components/PersonalExpenseFormModal';
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
 } from '@apps/waypoint/components/ExpenseSplitModal';
@@ -39,7 +42,9 @@ import MarkExpensePaidModal, {
 } from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
+  createPersonalExpense,
   deleteExpense,
+  deletePersonalExpense,
   markExpensePaid,
   removeEarlyPayment,
   setEarlyPayment,
@@ -47,9 +52,12 @@ import {
   toggleExpenseRepaid,
   updateExpense,
   updateExpenseSplit,
+  updatePersonalExpense,
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
+  computePersonalTotals,
+  selectPersonalExpenses,
   selectTripExpenses,
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
@@ -57,6 +65,7 @@ import type {
   ExpenseSortBy,
   ExpenseStatus,
   ExpenseTotalsView,
+  PersonalExpense,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
@@ -145,6 +154,7 @@ function describeSplit(
     : `Split · ${targetLabel} (even)`;
 }
 
+const PERSONAL_PREVIEW_COUNT = 5;
 const EAGER_DAYS = 3;
 const ESTIMATED_ROW_HEIGHT = 72;
 
@@ -235,6 +245,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
+  const personalExpenses = useAppSelector(selectPersonalExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
@@ -252,6 +263,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
+  const [personalFormExpense, setPersonalFormExpense] = useState<PersonalExpense | 'new' | null>(null);
+  const [isPersonalSubmitting, setIsPersonalSubmitting] = useState(false);
+  const [showAllPersonal, setShowAllPersonal] = useState(false);
   const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -275,7 +289,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ).sort(),
     [expenses],
   );
-  const categoryKeys = useMemo(() => getExpenseCategoryKeys(expenses), [expenses]);
+  const categoryKeys = useMemo(
+    () => getExpenseCategoryKeys([...expenses, ...personalExpenses]),
+    [expenses, personalExpenses],
+  );
+  const sortedPersonalExpenses = useMemo(
+    () =>
+      [...personalExpenses].sort(
+        (a, b) => (a.dayIndex ?? Infinity) - (b.dayIndex ?? Infinity) || a.createdAt - b.createdAt,
+      ),
+    [personalExpenses],
+  );
+  const personalTotals = useMemo(() => computePersonalTotals(personalExpenses), [personalExpenses]);
   const filteredExpenses = expenses.filter((expense) => {
     const matchesDay =
       dayFilter.length === 0 ||
@@ -339,17 +364,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     totalsView === 'me'
       ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
       : toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
-  const totalCards: { label: string; total: TripExpenseTotals['total'] }[] =
+  const totalCards: { label: string; total: TripExpenseTotals['total']; personal: number }[] =
     totalsView === 'me'
       ? [
-          { label: 'Paid by me', total: myTotals.paidByMe },
-          { label: 'Expected for me', total: myTotals.expectedForMe },
-          { label: 'My total', total: myTotals.myTotal },
+          { label: 'Paid by me', total: myTotals.paidByMe, personal: personalTotals.paid },
+          { label: 'Expected for me', total: myTotals.expectedForMe, personal: personalTotals.expected },
+          { label: 'My total', total: myTotals.myTotal, personal: personalTotals.total },
         ]
       : [
-          { label: 'Paid', total: toTotalsView(totals.paid) },
-          { label: 'Expected', total: toTotalsView(totals.expected) },
-          { label: 'Total', total: toTotalsView(totals.total) },
+          { label: 'Paid', total: toTotalsView(totals.paid), personal: personalTotals.paid },
+          { label: 'Expected', total: toTotalsView(totals.expected), personal: personalTotals.expected },
+          { label: 'Total', total: toTotalsView(totals.total), personal: personalTotals.total },
         ];
   const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
   const myOpenPairs = pairSettlements.filter(
@@ -416,6 +441,32 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePersonalSubmit = async (values: PersonalExpenseSubmitValues) => {
+    setIsPersonalSubmitting(true);
+    try {
+      if (personalFormExpense && personalFormExpense !== 'new') {
+        await dispatch(
+          updatePersonalExpense({ uid: currentUserId, expenseId: personalFormExpense.id, ...values }),
+        ).unwrap();
+      } else {
+        await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
+      }
+      setPersonalFormExpense(null);
+    } finally {
+      setIsPersonalSubmitting(false);
+    }
+  };
+
+  const handlePersonalDelete = async (expense: PersonalExpense) => {
+    setIsPersonalSubmitting(true);
+    try {
+      await dispatch(deletePersonalExpense({ uid: currentUserId, expenseId: expense.id })).unwrap();
+      setPersonalFormExpense(null);
+    } finally {
+      setIsPersonalSubmitting(false);
     }
   };
 
@@ -811,7 +862,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         />
         <p className='text-muted-foreground text-xs'>{EXPENSE_TOTALS_VIEW_HINTS[totalsView]}</p>
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
-          {totalCards.map(({ label, total }) => (
+          {totalCards.map(({ label, total, personal }) => (
             <div
               key={label}
               className={join(
@@ -823,6 +874,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               <p className='mt-1 text-base font-semibold text-balance sm:text-lg'>
                 {formatTotal(total.min, total.max, currency)}
               </p>
+              {personalExpenses.length > 0 && (
+                <>
+                  <p className='bg-accent text-accent-foreground mt-1.5 inline-block rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap'>
+                    + {formatTotal(personal, personal, currency)} personal
+                  </p>
+                  <p className='mt-1 text-sm font-semibold text-balance'>
+                    = {formatTotal(total.min + personal, total.max + personal, currency)}
+                    <span className='text-muted-foreground block text-xs font-normal'>with yours</span>
+                  </p>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -876,6 +938,63 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
           </div>
         </Disclosure>
+      </div>
+      <div className='space-y-1'>
+        <div className='flex items-center justify-between gap-3'>
+          <div className='min-w-0'>
+            <h3 className='flex items-center gap-1.5 text-sm font-medium'>
+              <Lock className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+              Just for me
+              {personalExpenses.length > 0 && (
+                <span className='text-muted-foreground font-normal'>
+                  · {formatTotal(personalTotals.total, personalTotals.total, currency)}
+                </span>
+              )}
+            </h3>
+            <p className='text-muted-foreground text-xs'>Only you can see these, and they stay out of everyone else&apos;s totals.</p>
+          </div>
+          <Button size='sm' variant='secondary' onClick={() => setPersonalFormExpense('new')}>
+            Add
+          </Button>
+        </div>
+        {personalExpenses.length === 0 ? (
+          <p className='text-muted-foreground py-2 text-sm'>
+            Something you&apos;re covering yourself? Add it here and see your full total.
+          </p>
+        ) : (
+          <>
+            <ul className='divide-border divide-y'>
+              {(showAllPersonal ? sortedPersonalExpenses : sortedPersonalExpenses.slice(0, PERSONAL_PREVIEW_COUNT)).map((expense) => (
+                <li key={expense.id}>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    aria-label={`Open ${expense.title}`}
+                    onClick={() => setPersonalFormExpense(expense)}
+                    className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
+                  >
+                    <span className='min-w-0 flex-1'>
+                      <span className='block truncate font-medium'>{expense.title}</span>
+                      <span className='text-muted-foreground line-clamp-2 block text-sm'>
+                        {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
+                        {expense.status === 'PAID' ? 'Paid' : 'Still to pay'}
+                        {expense.dayIndex !== null && ` · ${getDayLabel(trip.startDate, expense.dayIndex, dayCount)}`}
+                      </span>
+                    </span>
+                    <span className='shrink-0 font-semibold whitespace-nowrap'>
+                      {formatTotal(expense.amount, expense.amount, currency)}
+                    </span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            {personalExpenses.length > PERSONAL_PREVIEW_COUNT && (
+              <Button type='button' variant='link' size='sm' onClick={() => setShowAllPersonal((current) => !current)}>
+                {showAllPersonal ? 'Show fewer' : `Show all ${personalExpenses.length}`}
+              </Button>
+            )}
+          </>
+        )}
       </div>
       <div className='flex flex-wrap items-center gap-2'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
@@ -1035,6 +1154,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           setEditingExpense(null);
           setIsModalOpen(false);
         }}
+      />
+      <PersonalExpenseFormModal
+        key={personalFormExpense === null || personalFormExpense === 'new' ? 'new' : personalFormExpense.id}
+        isOpen={personalFormExpense !== null}
+        trip={trip}
+        initialExpense={personalFormExpense === null || personalFormExpense === 'new' ? undefined : personalFormExpense}
+        categoryKeys={categoryKeys}
+        isSubmitting={isPersonalSubmitting}
+        onSubmit={handlePersonalSubmit}
+        onDelete={
+          personalFormExpense === null || personalFormExpense === 'new'
+            ? undefined
+            : () => handlePersonalDelete(personalFormExpense)
+        }
+        onClose={() => setPersonalFormExpense(null)}
       />
       <MarkExpensePaidModal
         key={`paying-${payingExpense?.id ?? 'none'}`}

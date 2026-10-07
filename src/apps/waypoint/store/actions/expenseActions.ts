@@ -8,6 +8,7 @@ import type {
   ExpenseLink,
   ExpenseStatus,
   ExpenseTargetType,
+  PersonalExpense,
   TripExpense,
 } from '@apps/waypoint/types';
 
@@ -367,5 +368,76 @@ export const setEarlyPaymentReturned = createAsyncThunk<void, SetEarlyPaymentRet
       [`earlyPayments.${uid}.isReturned`]: isReturned,
       [`earlyPayments.${uid}.returnedAt`]: isReturned ? Date.now() : null,
     });
+  },
+);
+
+interface SavePersonalExpenseInput {
+  uid: string;
+  tripId: string;
+  title: string;
+  amount: number;
+  status: ExpenseStatus;
+  dayIndex: number | null;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
+}
+
+type PersonalExpenseFields = Omit<SavePersonalExpenseInput, 'uid' | 'tripId'>;
+
+const personalExpensesRef = (uid: string) => collection(db, 'apps', 'waypoint', 'personalExpenses', uid, 'items');
+
+function getPersonalExpenseFields(input: PersonalExpenseFields): PersonalExpenseFields | string {
+  const title = input.title.trim();
+  if (!title) {
+    return 'A title is required.';
+  }
+  if (!Number.isFinite(input.amount) || input.amount < 0) {
+    return 'Enter a valid amount.';
+  }
+  return { ...input, title, note: input.note?.trim() || null };
+}
+
+export const createPersonalExpense = createAsyncThunk<
+  PersonalExpense,
+  SavePersonalExpenseInput,
+  { rejectValue: string }
+>('waypoint/personalExpenses/create', async ({ uid, tripId, ...input }, { rejectWithValue }) => {
+  const fields = getPersonalExpenseFields(input);
+  if (typeof fields === 'string') {
+    return rejectWithValue(fields);
+  }
+
+  const expenseRef = doc(personalExpensesRef(uid));
+  const now = Date.now();
+  const expense: PersonalExpense = {
+    ...fields,
+    id: expenseRef.id,
+    tripId,
+    currency: 'USD',
+    createdAt: now,
+    lastEditedAt: now,
+  };
+  await setDoc(expenseRef, expense);
+  return expense;
+});
+
+export const updatePersonalExpense = createAsyncThunk<
+  void,
+  { uid: string; expenseId: string } & PersonalExpenseFields,
+  { rejectValue: string }
+>('waypoint/personalExpenses/update', async ({ uid, expenseId, ...input }, { rejectWithValue }) => {
+  const fields = getPersonalExpenseFields(input);
+  if (typeof fields === 'string') {
+    return rejectWithValue(fields);
+  }
+
+  await updateDoc(doc(personalExpensesRef(uid), expenseId), { ...fields, lastEditedAt: Date.now() });
+});
+
+export const deletePersonalExpense = createAsyncThunk<void, { uid: string; expenseId: string }>(
+  'waypoint/personalExpenses/delete',
+  async ({ uid, expenseId }) => {
+    await deleteDoc(doc(personalExpensesRef(uid), expenseId));
   },
 );

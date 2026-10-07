@@ -37,7 +37,9 @@ export function getExpenseCategoryKeyLabel(key: string): string {
   return customCategoryLabel ?? EXPENSE_CATEGORY_LABELS[category];
 }
 
-export function getExpenseCategoryKeys(expenses: TripExpense[]): string[] {
+export function getExpenseCategoryKeys(
+  expenses: Pick<TripExpense, 'category' | 'customCategoryLabel'>[],
+): string[] {
   const usedKeys = expenses.map(getExpenseCategoryKey);
   const customKeys = Array.from(
     new Set(usedKeys.filter((key) => !(PRESET_EXPENSE_CATEGORIES as readonly string[]).includes(key))),

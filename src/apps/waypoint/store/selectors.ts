@@ -19,6 +19,7 @@ import type {
   Rental,
   Stay,
   TimelineEvent,
+  PersonalExpense,
   TripExpense,
   TripIdea,
   TripSpace,
@@ -82,6 +83,9 @@ export const selectExpenseLinkKeys = createSelector(
     new Set(expenses.flatMap((expense) => (expense.linkedTo ? [getExpenseLinkKey(expense.linkedTo)] : []))),
 );
 
+export const selectPersonalExpenses = (state: RootState) =>
+  state.waypoint.personalExpenses.items;
+
 interface ExpenseTotal {
   min: number;
   max: number;
@@ -135,6 +139,18 @@ export function computeExpenseTotals(
   }
 
   return totals;
+}
+
+const roundCents = (value: number) => Math.round(value * 100) / 100;
+
+/** The viewer's own private expenses, summed by status. */
+export function computePersonalTotals(expenses: PersonalExpense[]) {
+  const sum = (items: PersonalExpense[]) => roundCents(items.reduce((total, item) => total + item.amount, 0));
+  return {
+    paid: sum(expenses.filter((expense) => expense.status === 'PAID')),
+    expected: sum(expenses.filter((expense) => expense.status !== 'PAID')),
+    total: sum(expenses),
+  };
 }
 
 export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals => {

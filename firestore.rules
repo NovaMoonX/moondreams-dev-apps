@@ -2926,6 +2926,41 @@ service cloud.firestore {
         && earlyPaymentsOf(resource.data).size() == 0;
     }
 
+    // Private to its owner: no one else on the trip can read or change it.
+    match /apps/waypoint/personalExpenses/{uid}/items/{expenseId} {
+      function isPersonalExpenseValid(data) {
+        return data.keys().hasOnly([
+            'id', 'tripId', 'dayIndex', 'title', 'amount', 'currency', 'status',
+            'category', 'customCategoryLabel', 'note', 'createdAt', 'lastEditedAt'
+          ])
+          && data.id == expenseId
+          && isNonEmptyString(data.tripId)
+          && (data.dayIndex == null || data.dayIndex is int)
+          && isNonEmptyString(data.title)
+          && data.title.size() <= 200
+          && data.amount is number
+          && data.amount >= 0
+          && isNonEmptyString(data.currency)
+          && data.status in ['PAID', 'EXPECTED']
+          && data.category in ['FOOD', 'TRANSPORT', 'LODGING', 'ACTIVITIES', 'SHOPPING', 'OTHER']
+          && (data.customCategoryLabel == null || isNonEmptyString(data.customCategoryLabel))
+          && (data.note == null || (data.note is string && data.note.size() <= 2000))
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.members
+        && isPersonalExpenseValid(request.resource.data);
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && isPersonalExpenseValid(request.resource.data)
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /apps/waypoint/pendingRequests/{requestId} {
       function requestUid() {
         return requestId.split('_')[0];

@@ -230,6 +230,22 @@ export interface TripExpense {
   lastEditedAt: number;
 }
 
+/** Private to the person who wrote it: stored under their own uid, never shared with the trip's totals or dues. */
+export interface PersonalExpense {
+  id: string;
+  tripId: string;
+  dayIndex: number | null;
+  title: string;
+  amount: number;
+  currency: string;
+  status: ExpenseStatus;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME';
 export type TransitType =
   | 'FLIGHT'

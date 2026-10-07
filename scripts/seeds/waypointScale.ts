@@ -292,6 +292,24 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     });
   });
 
+  Array.from({ length: 12 }).forEach((_, index) => {
+    add(`apps/waypoint/personalExpenses/${alexUid}/items/scale-personal-${index}`, {
+      id: `scale-personal-${index}`,
+      tripId: TRIP_ID,
+      dayIndex: index % TRIP_DAYS,
+      title: `${['Souvenirs', 'Coffee run', 'Sunscreen', 'Taxi home'][index % 4]} #${index + 1}`,
+      amount: 8 + (index % 5) * 9,
+      currency: 'USD',
+      status: index % 2 === 0 ? 'PAID' : 'EXPECTED',
+      category: EXPENSE_CATEGORIES[index % EXPENSE_CATEGORIES.length],
+      customCategoryLabel: null,
+      note: null,
+      createdAt: joinedAt,
+      lastEditedAt: joinedAt,
+    });
+  });
+
   await writeAll(firestore, writes);
+
   return writes.length;
 }

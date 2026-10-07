@@ -1794,6 +1794,25 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const personalExpenses = [
+    { id: 'seed-personal-souvenirs', title: 'Souvenirs for the kids', amount: 64.5, status: 'EXPECTED', category: 'SHOPPING', dayIndex: 2 },
+    { id: 'seed-personal-coffee', title: 'Airport coffee', amount: 12, status: 'PAID', category: 'FOOD', dayIndex: 0 },
+    { id: 'seed-personal-spa', title: 'Spa treatment', amount: 140, status: 'EXPECTED', category: 'ACTIVITIES', dayIndex: null },
+  ];
+  for (const personalExpense of personalExpenses) {
+    await context.firestore
+      .doc(`apps/waypoint/personalExpenses/${alex.uid}/items/${personalExpense.id}`)
+      .set({
+        ...personalExpense,
+        tripId: TRIP_ID,
+        currency: 'USD',
+        customCategoryLabel: null,
+        note: null,
+        createdAt: context.now,
+        lastEditedAt: context.now,
+      });
+  }
+
   const scaleDocuments = await seedWaypointScaleTrip({
     context,
     tripStart: activeTripStart,
@@ -1805,6 +1824,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 78 + scaleDocuments,
+    firestoreDocuments: 78 + personalExpenses.length + scaleDocuments,
   };
 }
