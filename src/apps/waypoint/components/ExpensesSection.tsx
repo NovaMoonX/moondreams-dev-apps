@@ -546,7 +546,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const handleMarkUnpaid = async (expense: TripExpense) => {
     const confirmed = await confirm({
       title: 'Mark as unpaid',
-      message: `Mark "${expense.title}" as not paid yet? It goes back to expected and leaves the dues until it is paid again.`,
+      message: `Mark "${expense.title}" as not paid yet? It goes back to expected and leaves the dues until it is paid again. Repayments marked on it are cleared, and the amount stays as entered.`,
     });
     if (!confirmed) {
       return;
@@ -630,16 +630,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses && expense.status === 'PAID'
-      ? [
-          {
-            key: 'mark-unpaid',
-            label: 'Mark as unpaid',
-            description: 'Put it back to expected if it was marked paid by mistake.',
-            run: () => void handleMarkUnpaid(expense),
-          },
-        ]
-      : []),
     ...(expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly
       ? [
           {
@@ -670,6 +660,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               setEditingExpense(expense);
               setIsModalOpen(true);
             },
+          },
+        ]
+      : []),
+    ...(canAddExpenses && expense.status === 'PAID'
+      ? [
+          {
+            key: 'mark-unpaid',
+            label: 'Mark as unpaid',
+            description: 'Put it back to expected if it was marked paid by mistake.',
+            run: () => void handleMarkUnpaid(expense),
           },
         ]
       : []),

@@ -699,8 +699,9 @@ export function TimelineSection({
               type='button'
               variant='tertiary'
               size='sm'
-              className="relative gap-2 whitespace-nowrap before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']"
+              className="relative gap-2 whitespace-nowrap before:absolute before:-inset-y-1.5 before:-inset-x-1 before:content-['']"
               aria-label='Copy timeline as Markdown'
+              title='Copy as Markdown'
               onClick={() => void handleCopyTimeline()}
             >
               <ClipboardCopy className='h-4 w-4' />
