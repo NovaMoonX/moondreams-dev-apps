@@ -345,7 +345,7 @@ function ExpenseFormModal({
               label='This price is for'
               options={[
                 { value: 'group', label: 'One total', emoji: '🧮' },
-                { value: 'each', label: 'Each person', emoji: '🙋' },
+                { value: 'each', label: 'Each person', emoji: '🧾' },
               ]}
               value={props.value === true ? 'each' : 'group'}
               onChange={(value) => props.onValueChange(value === 'each')}
@@ -416,12 +416,17 @@ function ExpenseFormModal({
                   onChange={(choice) => props.onValueChange({ ...split, choice })}
                 />
                 {split.choice === 'PICK' && (
-                  <MultiPillGroup
-                    label='People'
-                    options={memberPillOptions}
-                    values={split.memberIds}
-                    onChange={(memberIds) => props.onValueChange({ ...split, memberIds })}
-                  />
+                  <>
+                    <MultiPillGroup
+                      label='People'
+                      options={memberPillOptions}
+                      values={split.memberIds}
+                      onChange={(memberIds) => props.onValueChange({ ...split, memberIds })}
+                    />
+                    {split.memberIds.length === 0 && (
+                      <p className='text-muted-foreground text-sm'>Pick at least one person to share it.</p>
+                    )}
+                  </>
                 )}
               </div>
             );

@@ -10,7 +10,10 @@ interface HourlyWeatherStripProps {
   showNow?: boolean;
 }
 
-const formatHourLabel = (time: string) => {
+const FIRST_VISIBLE_HOUR = 7;
+const HOUR_CELL_WIDTH = 60;
+
+const formatHourLabel =(time: string) => {
   const hour = Number(time.slice(11, 13));
   const result = `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`;
   return result;
@@ -18,9 +21,16 @@ const formatHourLabel = (time: string) => {
 
 function HourlyWeatherStrip({ hours, showNow = true }: HourlyWeatherStripProps) {
   const showPrecip = hours.some((hour) => hour.precipChance !== null && hour.precipChance >= 20);
+  const firstDaytimeIndex = Math.max(0, hours.findIndex((hour) => Number(hour.time.slice(11, 13)) >= FIRST_VISIBLE_HOUR));
 
   return (
-    <ul className='-mx-1 flex gap-1 overflow-x-auto px-1' aria-label='Hour by hour weather'>
+    <ul
+      ref={(element) => {
+        if (element && !showNow) element.scrollLeft = firstDaytimeIndex * HOUR_CELL_WIDTH;
+      }}
+      className='-mx-1 flex gap-1 overflow-x-auto px-1'
+      aria-label='Hour by hour weather'
+    >
       {hours.map((hour, index) => {
         const condition = getWeatherCondition(hour.weatherCode);
         const { label } = condition;

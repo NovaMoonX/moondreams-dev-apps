@@ -63,7 +63,7 @@ function WeatherDetailSheet({ isOpen, onClose, title, details, onShowDay }: Weat
               className='absolute inset-0 -z-10 h-full w-full object-cover'
             />
           )}
-          <div className='flex min-h-44 flex-col justify-end gap-3 bg-linear-to-t from-black/70 via-black/25 to-transparent p-4 text-white'>
+          <div className='flex min-h-44 flex-col justify-end gap-3 bg-linear-to-t from-black/75 via-black/40 to-black/10 p-4 text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]'>
             <div className='flex items-center gap-3'>
               <WeatherEmoji condition={condition} className='text-4xl leading-none' />
               <div className='min-w-0'>

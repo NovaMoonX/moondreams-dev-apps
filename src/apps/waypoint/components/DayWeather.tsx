@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
 
 import type { DayForecast, HourForecast } from '@/lib/weather/types';
 import { getWeatherCondition } from '@/lib/weather/weatherCodes';
@@ -33,7 +34,7 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
         variant='tertiary'
         size='sm'
         aria-label={`Open the day's weather: ${label}`}
-        className='text-muted-foreground h-auto gap-1.5 p-0! text-xs font-normal'
+        className="text-muted-foreground relative h-auto gap-1.5 p-0! text-xs font-normal after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
         onClick={onOpen}
       >
         {chip}
@@ -44,7 +45,7 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
   }
 
   const summary = (
-    <div className='relative p-3'>
+    <div className='relative w-full p-3'>
       {bannerImage && (
         <img
           src={bannerImage}
@@ -59,13 +60,14 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
         <span className='bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-full'>
           <WeatherEmoji condition={condition} className='text-xl leading-none' />
         </span>
-        <div className='min-w-0'>
+        <div className='min-w-0 flex-1'>
           <p className='text-sm font-medium'>{label}</p>
           <p className='text-muted-foreground text-xs'>
             High {formatTemp(forecast.tempMax)} · Low {formatTemp(forecast.tempMin)}
             {forecast.precipChance !== null && forecast.precipChance > 0 && ` · ${forecast.precipChance}% chance of precipitation`}
           </p>
         </div>
+        {onOpen && <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />}
       </div>
     </div>
   );
@@ -77,7 +79,7 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
           type='button'
           variant='tertiary'
           aria-label={`Open the day's weather: ${label}`}
-          className='block h-auto w-full rounded-none p-0! text-left font-normal'
+          className='h-auto w-full justify-start rounded-none p-0! text-left font-normal'
           onClick={onOpen}
         >
           {summary}
