@@ -163,3 +163,8 @@ input[type="file"]:disabled::-webkit-file-upload-button {
 
 /* for TailwindCSS styles in library to be processed */
 @source "../node_modules/@moondreamsdev/dreamer-ui/dist/**/*.{js,jsx,ts,tsx}";
+
+/* Dreamer UI buttons fade every property (`transition-all`), which shows as a flash on a row or card when focus or hover leaves it. Buttons snap instead. */
+button[class*='transition-all'] {
+  transition: none;
+}
