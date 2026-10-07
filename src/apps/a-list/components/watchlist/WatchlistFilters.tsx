@@ -1,3 +1,5 @@
+import type { MouseEvent } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { X } from 'lucide-react';
 
@@ -22,6 +24,19 @@ function getFilterView(filter: WatchlistFilter) {
   return { emoji: WATCH_PRIORITY_EMOJIS[filter], label: WATCH_PRIORITY_LABELS[filter] };
 }
 
+/** The Clear button appearing shifts the row, so the clicked pill is centered after the re-render. */
+function centerClickedPill(event: MouseEvent<HTMLDivElement>) {
+  const pill = (event.target as HTMLElement).closest('[data-pill]');
+  if (!pill) return;
+  requestAnimationFrame(() =>
+    pill.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    }),
+  );
+}
+
 /** Pills that narrow the list. They scroll sideways on a phone, so every label stays whole. */
 function WatchlistFilters({
   value,
@@ -31,6 +46,7 @@ function WatchlistFilters({
 }: WatchlistFiltersProps) {
   return (
     <div
+      onClick={centerClickedPill}
       className='-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0'
       role='group'
       aria-label='Filter your watchlist'
