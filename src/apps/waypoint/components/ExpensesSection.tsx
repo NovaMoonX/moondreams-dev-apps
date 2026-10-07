@@ -51,6 +51,7 @@ import {
   deletePersonalExpense,
   markExpensePaid,
   markExpenseUnpaid,
+  setPersonalExpenseStatus,
   removeEarlyPayment,
   setEarlyPayment,
   setEarlyPaymentReturned,
@@ -264,9 +265,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
-  const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
-  const [justAddedExpenseId, setJustAddedExpenseId] = useState<string | null>(null);
+  const [paying, setPaying] = useState<{ id: string; isJustAdded: boolean } | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const payingExpense = paying ? (expenses.find((expense) => expense.id === paying.id) ?? null) : null;
   const [justAddedPersonal, setJustAddedPersonal] = useState<PersonalExpense | null>(null);
+  const [personalPromptError, setPersonalPromptError] = useState<string | null>(null);
+  const [isPersonalPromptSubmitting, setIsPersonalPromptSubmitting] = useState(false);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
@@ -442,8 +446,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             split: values.split ?? { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] },
           }),
         ).unwrap();
-        setJustAddedExpenseId(created.id);
-        setPayingExpense(created);
+        setPayError(null);
+        setPaying({ id: created.id, isJustAdded: true });
       }
       setEditingExpense(null);
       setIsModalOpen(false);
@@ -478,18 +482,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     if (!personalFormExpense) {
       return;
     }
-    const { title, amount, dayIndex, category, customCategoryLabel, note, status } = personalFormExpense;
     await dispatch(
-      updatePersonalExpense({
+      setPersonalExpenseStatus({
         uid: currentUserId,
         expenseId: personalFormExpense.id,
-        title,
-        amount,
-        dayIndex,
-        category,
-        customCategoryLabel,
-        note,
-        status: status === 'PAID' ? 'EXPECTED' : 'PAID',
+        status: personalFormExpense.status === 'PAID' ? 'EXPECTED' : 'PAID',
       }),
     ).unwrap();
     setPersonalFormExpense(null);
@@ -532,12 +529,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   const handleMarkPaid = async (expense: TripExpense, values: MarkExpensePaidValues) => {
     setMarkingPaidId(expense.id);
-    setError(null);
+    setPayError(null);
     try {
       await dispatch(markExpensePaid({ expense, ...values })).unwrap();
-      setPayingExpense(null);
+      setPaying(null);
     } catch (markError) {
-      setError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
+      setPayError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
     } finally {
       setMarkingPaidId(null);
     }
@@ -626,7 +623,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             key: 'mark-paid',
             label: 'Mark paid',
             description: 'Record who covered it and what it cost.',
-            run: () => setPayingExpense(expense),
+            run: () => {
+              setPayError(null);
+              setPaying({ id: expense.id, isJustAdded: false });
+            },
           },
         ]
       : []),
@@ -1297,32 +1297,41 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       )}
       <MarkExpensePaidModal
         key={`paying-${payingExpense?.id ?? 'none'}`}
-        isOpen={payingExpense !== null}
+        isOpen={payingExpense !== null && payingExpense.status !== 'PAID'}
         trip={trip}
         expense={payingExpense}
-        isJustAdded={payingExpense !== null && payingExpense.id === justAddedExpenseId}
+        isJustAdded={paying?.isJustAdded ?? false}
+        error={payError}
         isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
         onSubmit={(values) => {
           if (payingExpense) {
             void handleMarkPaid(payingExpense, values);
           }
         }}
-        onClose={() => setPayingExpense(null)}
+        onClose={() => setPaying(null)}
       />
       <PersonalPaymentPrompt
         title={justAddedPersonal?.title ?? null}
+        error={personalPromptError}
+        isSubmitting={isPersonalPromptSubmitting}
         onMarkPaid={() => {
           if (!justAddedPersonal) {
             return;
           }
-          const { title, amount, dayIndex, category, customCategoryLabel, note } = justAddedPersonal;
-          void dispatch(
-            updatePersonalExpense({ uid: currentUserId, expenseId: justAddedPersonal.id, title, amount, dayIndex, category, customCategoryLabel, note, status: 'PAID' }),
-          )
+          setIsPersonalPromptSubmitting(true);
+          setPersonalPromptError(null);
+          dispatch(setPersonalExpenseStatus({ uid: currentUserId, expenseId: justAddedPersonal.id, status: 'PAID' }))
             .unwrap()
-            .finally(() => setJustAddedPersonal(null));
+            .then(() => setJustAddedPersonal(null))
+            .catch((markError: unknown) =>
+              setPersonalPromptError(getErrorMessage(markError, 'Unable to mark this as paid.')),
+            )
+            .finally(() => setIsPersonalPromptSubmitting(false));
         }}
-        onClose={() => setJustAddedPersonal(null)}
+        onClose={() => {
+          setJustAddedPersonal(null);
+          setPersonalPromptError(null);
+        }}
       />
       {isSmallScreen && (
         <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>

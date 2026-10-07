@@ -30,6 +30,8 @@ interface MarkExpensePaidModalProps {
   expense: TripExpense | null;
   /** Asked right after an expense is added: "Not yet" closes it, and the title says it is the payment step. */
   isJustAdded?: boolean;
+  /** A failure of the last attempt, shown in the sheet so it never lands behind it. */
+  error?: string | null;
   isSubmitting?: boolean;
   onSubmit: (values: MarkExpensePaidValues) => Promise<void> | void;
   onClose: () => void;
@@ -42,6 +44,7 @@ function MarkExpensePaidModal({
   trip,
   expense,
   isJustAdded = false,
+  error: submitError = null,
   isSubmitting = false,
   onSubmit,
   onClose,
@@ -160,7 +163,7 @@ function MarkExpensePaidModal({
                 {keepAsRange ? 'Enter a known amount instead' : 'Keep as an estimated range instead'}
               </Button>
             )}
-            {error && <p className='text-destructive text-sm'>{error}</p>}
+            {(error ?? submitError) && <p className='text-destructive text-sm'>{error ?? submitError}</p>}
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>
                 {isJustAdded ? 'Not yet' : 'Cancel'}

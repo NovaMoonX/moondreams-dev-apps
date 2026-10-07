@@ -24,8 +24,6 @@ interface CreateExpenseInput {
   amountMin: number | null;
   amountMax: number | null;
   currency: string;
-  payerUid: string | null;
-  status: ExpenseStatus;
   dayIndex: number | null;
   category: ExpenseCategory;
   customCategoryLabel: string | null;
@@ -88,8 +86,8 @@ export const createExpense = createAsyncThunk<
     paidAmount: null,
     currency,
     isPerPerson: input.isPerPerson,
-    payerUid: input.status === 'PAID' ? input.payerUid : null,
-    status: input.status,
+    payerUid: null,
+    status: 'EXPECTED',
     category: input.category,
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
@@ -276,6 +274,9 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
       if (current.status === 'PAID') {
         throw new Error('Someone already marked this as paid.');
       }
+      if ((current.amount === null) !== (expense.amount === null)) {
+        throw new Error('The amount was changed while you were paying. Close this and try again.');
+      }
       const changes = {
         status: 'PAID' as const,
         payerUid,
@@ -447,6 +448,13 @@ export const createPersonalExpense = createAsyncThunk<
   await setDoc(expenseRef, expense);
   return expense;
 });
+
+export const setPersonalExpenseStatus = createAsyncThunk<void, { uid: string; expenseId: string; status: ExpenseStatus }>(
+  'waypoint/personalExpenses/setStatus',
+  async ({ uid, expenseId, status }) => {
+    await updateDoc(doc(personalExpensesRef(uid), expenseId), { status, lastEditedAt: Date.now() });
+  },
+);
 
 export const updatePersonalExpense = createAsyncThunk<
   void,

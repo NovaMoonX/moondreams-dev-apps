@@ -32,7 +32,6 @@ import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,
   ExpenseLink,
-  ExpenseStatus,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
@@ -116,11 +115,8 @@ export interface ExpenseSubmitValues {
   amount: number | null;
   amountMin: number | null;
   amountMax: number | null;
-  payerUid: string | null;
-  status: ExpenseStatus;
   dayIndex: number | null;
   currency: string;
-  paidAmount: number | null;
   category: ExpenseCategory;
   customCategoryLabel: string | null;
   note: string | null;
@@ -606,11 +602,8 @@ function ExpenseFormModal({
         amount,
         amountMin,
         amountMax,
-        payerUid: initialExpense?.payerUid ?? null,
-        status: initialExpense?.status ?? 'EXPECTED',
         dayIndex,
         currency: 'USD',
-        paidAmount: initialExpense?.paidAmount ?? null,
         category,
         customCategoryLabel,
         note: showNoteField ? data.note.trim() || null : null,

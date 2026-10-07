@@ -96,6 +96,7 @@ function PersonalExpenseFormModal({
     formData.amount !== String(initialExpense.amount) ||
     formData.dayIndex !== (initialExpense.dayIndex === null ? '' : String(initialExpense.dayIndex)) ||
     formData.note !== (initialExpense.note ?? '') ||
+    showNoteField !== Boolean(initialExpense.note) ||
     formData.category.choice !== getExpenseCategoryKey(initialExpense);
   const isFormComplete =
     formData.title.trim() !== '' && resolveCategory(formData.category) !== null && parseAmount(formData.amount) !== null;

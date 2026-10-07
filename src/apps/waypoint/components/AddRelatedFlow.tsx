@@ -15,9 +15,11 @@ import ExpenseFormModal, {
   type ExpenseSubmitValues,
 } from '@apps/waypoint/components/ExpenseFormModal';
 import { createChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
-import { createExpense } from '@apps/waypoint/store/actions/expenseActions';
+import MarkExpensePaidModal from '@apps/waypoint/components/MarkExpensePaidModal';
+import { createExpense, markExpensePaid } from '@apps/waypoint/store/actions/expenseActions';
 import { selectTripExpenses } from '@apps/waypoint/store/selectors';
-import type { TripSpace } from '@apps/waypoint/types';
+import type { TripExpense, TripSpace } from '@apps/waypoint/types';
+import { getErrorMessage } from '@/utils/errorUtils';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 import { getExpenseCategoryKeys } from '@apps/waypoint/utils/expenseCategories';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
@@ -31,7 +33,7 @@ interface AddRelatedFlowProps {
   onClose: () => void;
 }
 
-export type Step = 'menu' | 'expense' | 'checklist';
+export type Step = 'menu' | 'expense' | 'checklist' | 'pay';
 
 interface FollowUpRowProps {
   emoji: string;
@@ -73,6 +75,8 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
   const backToMenu = () => (initialStep === 'menu' ? setStep('menu') : onClose());
   const [added, setAdded] = useState({ expense: 0, checklist: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [justAdded, setJustAdded] = useState<TripExpense | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
   const canAdd = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const categoryKeys = useMemo(() => getExpenseCategoryKeys(expenses), [expenses]);
   const existingGroupLabels = useMemo(
@@ -108,7 +112,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
   const handleExpense = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
     try {
-      await dispatch(
+      const created = await dispatch(
         createExpense({
           uid: currentUserId,
           tripId: trip.id,
@@ -118,7 +122,9 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
         }),
       ).unwrap();
       setAdded((current) => ({ ...current, expense: current.expense + 1 }));
-      backToMenu();
+      setJustAdded(created);
+      setPayError(null);
+      setStep('pay');
     } finally {
       setIsSubmitting(false);
     }
@@ -179,6 +185,29 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
           existingGroupLabels={existingGroupLabels}
           isSubmitting={isSubmitting}
           onSubmit={handleExpense}
+          onClose={backToMenu}
+        />
+      )}
+      {step === 'pay' && justAdded && (
+        <MarkExpensePaidModal
+          isOpen
+          trip={trip}
+          expense={justAdded}
+          isJustAdded
+          error={payError}
+          isSubmitting={isSubmitting}
+          onSubmit={async (values) => {
+            setIsSubmitting(true);
+            setPayError(null);
+            try {
+              await dispatch(markExpensePaid({ expense: justAdded, ...values })).unwrap();
+              backToMenu();
+            } catch (markError) {
+              setPayError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
+            } finally {
+              setIsSubmitting(false);
+            }
+          }}
           onClose={backToMenu}
         />
       )}
