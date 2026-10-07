@@ -415,6 +415,11 @@ function ExpenseFormModal({
                   value={split.choice}
                   onChange={(choice) => props.onValueChange({ ...split, choice })}
                 />
+                {split.choice === 'ME' && (
+                  <p className='text-muted-foreground text-xs'>
+                    Everyone on the trip still sees this. For something only you should see, use Just for me on the Expenses screen.
+                  </p>
+                )}
                 {split.choice === 'PICK' && (
                   <>
                     <MultiPillGroup

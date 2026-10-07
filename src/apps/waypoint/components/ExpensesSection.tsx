@@ -13,6 +13,7 @@ import { ChevronRight, ListFilter, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import LazyMount from '@/components/LazyMount';
+import SearchInput from '@/components/SearchInput';
 import DetailSheet from '@/components/DetailSheet';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -22,6 +23,7 @@ import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   EXPENSE_SORT_OPTIONS,
+  LIST_SEARCH_THRESHOLD,
   EXPENSE_TOTALS_VIEW_HINTS,
   EXPENSE_TOTALS_VIEW_OPTIONS,
 } from '@apps/waypoint/constants';
@@ -266,6 +268,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [personalFormExpense, setPersonalFormExpense] = useState<PersonalExpense | 'new' | null>(null);
   const [isPersonalSubmitting, setIsPersonalSubmitting] = useState(false);
   const [showAllPersonal, setShowAllPersonal] = useState(false);
+  const [personalQuery, setPersonalQuery] = useState('');
   const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -289,7 +292,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ).sort(),
     [expenses],
   );
-  const categoryKeys = useMemo(
+  const categoryKeys = useMemo(() => getExpenseCategoryKeys(expenses), [expenses]);
+  const personalCategoryKeys = useMemo(
     () => getExpenseCategoryKeys([...expenses, ...personalExpenses]),
     [expenses, personalExpenses],
   );
@@ -300,6 +304,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       ),
     [personalExpenses],
   );
+  const showPersonalSearch = personalExpenses.length >= LIST_SEARCH_THRESHOLD;
+  const personalMatches = showPersonalSearch && personalQuery.trim() !== ''
+    ? sortedPersonalExpenses.filter((expense) =>
+        expense.title.toLowerCase().includes(personalQuery.trim().toLowerCase()),
+      )
+    : null;
+  const visiblePersonalExpenses =
+    personalMatches ?? (showAllPersonal ? sortedPersonalExpenses : sortedPersonalExpenses.slice(0, PERSONAL_PREVIEW_COUNT));
   const personalTotals = useMemo(() => computePersonalTotals(personalExpenses), [personalExpenses]);
   const filteredExpenses = expenses.filter((expense) => {
     const matchesDay =
@@ -861,6 +873,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           onChange={setTotalsView}
         />
         <p className='text-muted-foreground text-xs'>{EXPENSE_TOTALS_VIEW_HINTS[totalsView]}</p>
+        {personalTotals.total > 0 && (
+          <p className='text-muted-foreground flex items-start gap-1.5 text-xs'>
+            <Lock className='mt-0.5 h-3 w-3 shrink-0' aria-hidden='true' />
+            <span>The orange amount is what you&apos;re covering yourself. Only you see it, and it isn&apos;t in anyone else&apos;s totals.</span>
+          </p>
+        )}
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
           {totalCards.map(({ label, total, personal }) => (
             <div
@@ -874,14 +892,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               <p className='mt-1 text-base font-semibold text-balance sm:text-lg'>
                 {formatTotal(total.min, total.max, currency)}
               </p>
-              {personalExpenses.length > 0 && (
+              {personal > 0 && (
                 <>
-                  <p className='bg-accent text-accent-foreground mt-1.5 inline-block rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap'>
+                  <p className='bg-accent text-accent-foreground mt-1.5 inline-block max-w-full rounded-2xl px-2 py-0.5 text-xs font-medium text-balance'>
                     + {formatTotal(personal, personal, currency)} personal
                   </p>
                   <p className='mt-1 text-sm font-semibold text-balance'>
                     = {formatTotal(total.min + personal, total.max + personal, currency)}
-                    <span className='text-muted-foreground block text-xs font-normal'>with yours</span>
                   </p>
                 </>
               )}
@@ -894,6 +911,83 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           You&apos;ve sent {formatTotal(myTotals.sentEarly, myTotals.sentEarly, currency)} early toward expected expenses.
         </p>
       )}
+      <div className='space-y-1'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
+              <Lock className='h-4 w-4 shrink-0' aria-hidden='true' />
+              Just for me
+              {personalExpenses.length > 0 && (
+                <span className='text-muted-foreground font-normal'>
+                  · {formatTotal(personalTotals.total, personalTotals.total, currency)}
+                </span>
+              )}
+            </h3>
+            <p className='text-muted-foreground -mt-1 text-sm'>Only you can see these.</p>
+          </div>
+          <div className='flex h-10 shrink-0 items-center'>
+            <Button
+              size='sm'
+              variant='secondary'
+              className="relative after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
+              onClick={() => setPersonalFormExpense('new')}
+            >
+              Add
+            </Button>
+          </div>
+        </div>
+        {personalExpenses.length === 0 ? (
+          <p className='text-muted-foreground py-2 text-sm'>
+            Something you&apos;re covering yourself? Add it here and see your full total.
+          </p>
+        ) : (
+          <>
+            {showPersonalSearch && (
+              <SearchInput value={personalQuery} onChange={setPersonalQuery} placeholder='Search your personal expenses' />
+            )}
+            {personalMatches?.length === 0 && (
+              <p className='text-muted-foreground py-2 text-sm'>Nothing matches that.</p>
+            )}
+            <ul className='divide-border divide-y'>
+              {visiblePersonalExpenses.map((expense) => (
+                <li key={expense.id}>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    aria-label={`Open ${expense.title}`}
+                    onClick={() => setPersonalFormExpense(expense)}
+                    className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
+                  >
+                    <span className='min-w-0 flex-1'>
+                      <span className='block truncate font-medium'>{expense.title}</span>
+                      <span className='text-muted-foreground line-clamp-2 block text-sm'>
+                        {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
+                        {expense.status === 'PAID' ? 'Paid' : 'Still to pay'}
+                        {expense.dayIndex !== null && ` · ${getDayLabel(trip.startDate, expense.dayIndex, dayCount)}`}
+                      </span>
+                    </span>
+                    <span className='shrink-0 font-semibold whitespace-nowrap'>
+                      {formatTotal(expense.amount, expense.amount, currency)}
+                    </span>
+                    <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            {personalMatches === null && personalExpenses.length > PERSONAL_PREVIEW_COUNT && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='min-h-10 px-0!'
+                onClick={() => setShowAllPersonal((current) => !current)}
+              >
+                {showAllPersonal ? 'Show fewer' : `Show all ${personalExpenses.length}`}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
       <div className='border-border rounded-lg border'>
         <Disclosure
           label={
@@ -938,63 +1032,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
           </div>
         </Disclosure>
-      </div>
-      <div className='space-y-1'>
-        <div className='flex items-center justify-between gap-3'>
-          <div className='min-w-0'>
-            <h3 className='flex items-center gap-1.5 text-sm font-medium'>
-              <Lock className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-              Just for me
-              {personalExpenses.length > 0 && (
-                <span className='text-muted-foreground font-normal'>
-                  · {formatTotal(personalTotals.total, personalTotals.total, currency)}
-                </span>
-              )}
-            </h3>
-            <p className='text-muted-foreground text-xs'>Only you can see these, and they stay out of everyone else&apos;s totals.</p>
-          </div>
-          <Button size='sm' variant='secondary' onClick={() => setPersonalFormExpense('new')}>
-            Add
-          </Button>
-        </div>
-        {personalExpenses.length === 0 ? (
-          <p className='text-muted-foreground py-2 text-sm'>
-            Something you&apos;re covering yourself? Add it here and see your full total.
-          </p>
-        ) : (
-          <>
-            <ul className='divide-border divide-y'>
-              {(showAllPersonal ? sortedPersonalExpenses : sortedPersonalExpenses.slice(0, PERSONAL_PREVIEW_COUNT)).map((expense) => (
-                <li key={expense.id}>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    aria-label={`Open ${expense.title}`}
-                    onClick={() => setPersonalFormExpense(expense)}
-                    className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
-                  >
-                    <span className='min-w-0 flex-1'>
-                      <span className='block truncate font-medium'>{expense.title}</span>
-                      <span className='text-muted-foreground line-clamp-2 block text-sm'>
-                        {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
-                        {expense.status === 'PAID' ? 'Paid' : 'Still to pay'}
-                        {expense.dayIndex !== null && ` · ${getDayLabel(trip.startDate, expense.dayIndex, dayCount)}`}
-                      </span>
-                    </span>
-                    <span className='shrink-0 font-semibold whitespace-nowrap'>
-                      {formatTotal(expense.amount, expense.amount, currency)}
-                    </span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            {personalExpenses.length > PERSONAL_PREVIEW_COUNT && (
-              <Button type='button' variant='link' size='sm' onClick={() => setShowAllPersonal((current) => !current)}>
-                {showAllPersonal ? 'Show fewer' : `Show all ${personalExpenses.length}`}
-              </Button>
-            )}
-          </>
-        )}
       </div>
       <div className='flex flex-wrap items-center gap-2'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
@@ -1108,7 +1145,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <div className='space-y-3'>
           <div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
             <p className='text-sm font-medium whitespace-nowrap'>
-              {filteredExpenses.length === expenses.length ? 'All expenses' : 'Filtered expenses'}{' '}
+              {filteredExpenses.length === expenses.length ? 'All' : 'Filtered'}{' '}
+              {personalExpenses.length > 0 ? 'trip expenses' : 'expenses'}{' '}
               <span className='text-muted-foreground font-normal'>({filteredExpenses.length})</span>
             </p>
             <p className='text-sm font-semibold whitespace-nowrap'>
@@ -1156,11 +1194,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }}
       />
       <PersonalExpenseFormModal
-        key={personalFormExpense === null || personalFormExpense === 'new' ? 'new' : personalFormExpense.id}
+        key={`${personalFormExpense === null || personalFormExpense === 'new' ? 'new' : personalFormExpense.id}-${personalFormExpense === null ? 'closed' : 'open'}`}
         isOpen={personalFormExpense !== null}
         trip={trip}
         initialExpense={personalFormExpense === null || personalFormExpense === 'new' ? undefined : personalFormExpense}
-        categoryKeys={categoryKeys}
+        categoryKeys={personalCategoryKeys}
         isSubmitting={isPersonalSubmitting}
         onSubmit={handlePersonalSubmit}
         onDelete={

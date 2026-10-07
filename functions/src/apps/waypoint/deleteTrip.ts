@@ -10,7 +10,7 @@ if (getApps().length === 0) {
 const BATCH_LIMIT = 450;
 
 // The trip and its invite code go in one batch so an invite never outlives its trip;
-// the rest (subcollections, requests, email invitations, reminders, cover) is what a client deleteDoc can't reach.
+// the rest (subcollections, requests, email invitations, members' personal expenses, reminders, cover) is what a client deleteDoc can't reach.
 export const deleteTrip = onCall(
   {
     region: 'us-central1',
@@ -64,6 +64,13 @@ export const deleteTrip = onCall(
         .where('tripId', '==', tripId)
         .get();
 
+      const memberIds = Object.keys((trip.members as Record<string, unknown> | undefined) ?? {});
+      const personalSnapshots = await Promise.all(
+        memberIds.map((uid) =>
+          firestore.collection(`apps/waypoint/personalExpenses/${uid}/items`).where('tripId', '==', tripId).get(),
+        ),
+      );
+
       const batch = firestore.batch();
       batch.delete(tripRef);
       if (typeof trip.inviteCode === 'string' && trip.inviteCode) {
@@ -77,6 +84,7 @@ export const deleteTrip = onCall(
         ...reminderRefs,
         ...requestsSnapshot.docs.map((d) => d.ref),
         ...invitesSnapshot.docs.map((d) => d.ref),
+        ...personalSnapshots.flatMap((snapshot) => snapshot.docs.map((d) => d.ref)),
       ];
       for (let i = 0; i < looseRefs.length; i += BATCH_LIMIT) {
         const cleanup = firestore.batch();

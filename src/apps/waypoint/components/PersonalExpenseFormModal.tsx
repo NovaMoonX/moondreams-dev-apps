@@ -210,8 +210,13 @@ function PersonalExpenseFormModal({
       message: `Delete "${initialExpense?.title}"? This action cannot be undone.`,
       destructive: true,
     });
-    if (confirmed) {
+    if (!confirmed) {
+      return;
+    }
+    try {
       await onDelete();
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError, 'Unable to delete this expense.'));
     }
   };
 

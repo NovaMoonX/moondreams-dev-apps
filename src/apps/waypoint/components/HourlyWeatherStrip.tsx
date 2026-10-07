@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { HourForecast } from '@/lib/weather/types';
@@ -13,7 +15,7 @@ interface HourlyWeatherStripProps {
 const FIRST_VISIBLE_HOUR = 7;
 const HOUR_CELL_WIDTH = 60;
 
-const formatHourLabel =(time: string) => {
+const formatHourLabel = (time: string) => {
   const hour = Number(time.slice(11, 13));
   const result = `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`;
   return result;
@@ -21,13 +23,19 @@ const formatHourLabel =(time: string) => {
 
 function HourlyWeatherStrip({ hours, showNow = true }: HourlyWeatherStripProps) {
   const showPrecip = hours.some((hour) => hour.precipChance !== null && hour.precipChance >= 20);
+  const listRef = useRef<HTMLUListElement>(null);
   const firstDaytimeIndex = Math.max(0, hours.findIndex((hour) => Number(hour.time.slice(11, 13)) >= FIRST_VISIBLE_HOUR));
+
+  useLayoutEffect(() => {
+    if (showNow || !listRef.current) {
+      return;
+    }
+    listRef.current.scrollLeft = firstDaytimeIndex * HOUR_CELL_WIDTH;
+  }, [showNow, firstDaytimeIndex]);
 
   return (
     <ul
-      ref={(element) => {
-        if (element && !showNow) element.scrollLeft = firstDaytimeIndex * HOUR_CELL_WIDTH;
-      }}
+      ref={listRef}
       className='-mx-1 flex gap-1 overflow-x-auto px-1'
       aria-label='Hour by hour weather'
     >

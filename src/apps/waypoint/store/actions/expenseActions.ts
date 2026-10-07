@@ -395,7 +395,7 @@ function getPersonalExpenseFields(input: PersonalExpenseFields): PersonalExpense
   if (!Number.isFinite(input.amount) || input.amount < 0) {
     return 'Enter a valid amount.';
   }
-  return { ...input, title, note: input.note?.trim() || null };
+  return { ...input, title, amount: Math.round(input.amount * 100) / 100, note: input.note?.trim() || null };
 }
 
 export const createPersonalExpense = createAsyncThunk<
