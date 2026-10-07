@@ -2830,7 +2830,6 @@ service cloud.firestore {
           && isTimestampNumber(data.lastEditedAt);
       }
 
-      // A new expense is shared with everyone on the trip, or with the specific people picked when it is added.
       function isNewExpenseTargetValid(data) {
         return data.targetType == 'EVERYONE_CURRENT'
           || (data.targetType == 'SPECIFIC_MEMBERS'

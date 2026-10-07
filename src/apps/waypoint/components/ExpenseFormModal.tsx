@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -141,27 +141,37 @@ function resolveChoice({ choice, newLabel }: ChoiceValue): string | null {
   return choice;
 }
 
-function getSplitValue(attendeeIds: string[] | null | undefined, currentUserId: string): SplitValue {
-  if (!attendeeIds) {
+function getSplitValue(
+  attendeeIds: string[] | null | undefined,
+  currentUserId: string,
+  tripMemberIds: string[],
+): SplitValue {
+  const current = (attendeeIds ?? []).filter((uid) => tripMemberIds.includes(uid));
+  if (current.length === 0) {
     return { choice: 'EVERYONE', memberIds: [] };
   }
-  return attendeeIds.length === 1 && attendeeIds[0] === currentUserId
+  return current.length === 1 && current[0] === currentUserId
     ? { choice: 'ME', memberIds: [] }
-    : { choice: 'PICK', memberIds: attendeeIds };
+    : { choice: 'PICK', memberIds: current };
 }
 
-function getSplitTarget(split: SplitValue, currentUserId: string): NonNullable<ExpenseSubmitValues['split']> {
+function getSplitTarget(split: SplitValue, currentUserId: string, tripMemberIds: string[]): NonNullable<ExpenseSubmitValues['split']> {
   if (split.choice === 'EVERYONE') {
     return { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] };
   }
-  return { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: split.choice === 'ME' ? [currentUserId] : split.memberIds };
+  return { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: split.choice === 'ME' ? [currentUserId] : split.memberIds.filter((uid) => tripMemberIds.includes(uid)) };
 }
 
 function getDayValue(dayIndex: number | null | undefined): string {
   return dayIndex === null || dayIndex === undefined ? '' : String(dayIndex);
 }
 
-function getInitialFormData(currentUserId: string, initialExpense?: TripExpense, prefill?: ExpensePrefill): ExpenseFormData {
+function getInitialFormData(
+  currentUserId: string,
+  tripMemberIds: string[],
+  initialExpense?: TripExpense,
+  prefill?: ExpensePrefill,
+): ExpenseFormData {
   return {
     title: initialExpense?.title ?? prefill?.title ?? '',
     category: {
@@ -181,7 +191,7 @@ function getInitialFormData(currentUserId: string, initialExpense?: TripExpense,
     paidAmount: String(initialExpense?.paidAmount ?? ''),
     note: initialExpense?.note ?? '',
     group: { choice: initialExpense?.groupLabel ?? '', newLabel: '' },
-    split: getSplitValue(prefill?.attendeeIds, currentUserId),
+    split: getSplitValue(prefill?.attendeeIds, currentUserId, tripMemberIds),
   };
 }
 
@@ -211,15 +221,16 @@ function ExpenseFormModal({
     initialExpense?.amount === null ? 'range' : 'amount',
   );
   const [formData, setFormData] = useState<ExpenseFormData>(() =>
-    getInitialFormData(currentUserId, initialExpense, prefill),
+    getInitialFormData(currentUserId, Object.keys(trip.members), initialExpense, prefill),
   );
   // The form reads its data once, so picking an event remounts it with the filled-in values.
   const [formKey, setFormKey] = useState(0);
+  const autoSplit = useRef<SplitValue>(getInitialFormData(currentUserId, Object.keys(trip.members), initialExpense, prefill).split);
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
   const isEditing = Boolean(initialExpense);
-  const memberIds = Object.keys(trip.members);
+  const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
   const rangeMin = parseAmount(formData.amountRange.min);
   const rangeMax = parseAmount(formData.amountRange.max);
@@ -545,8 +556,14 @@ function ExpenseFormModal({
 
     setLink(picked.link);
     if (isEditing) {
+      if (formData.dayIndex === '' && picked.dayIndex !== null) {
+        setFormData((current) => ({ ...current, dayIndex: getDayValue(picked.dayIndex) }));
+        setFormKey((key) => key + 1);
+      }
       return;
     }
+    const nextSplit = getSplitValue(picked.attendeeIds, currentUserId, memberIds);
+    const isSplitUntouched = (split: SplitValue) => JSON.stringify(split) === JSON.stringify(autoSplit.current);
     setFormData((current) => ({
       ...current,
       title: current.title.trim() === '' ? picked.title : current.title,
@@ -555,8 +572,9 @@ function ExpenseFormModal({
         picked.expenseCategory && current.category.choice === ''
           ? { choice: picked.expenseCategory, newLabel: '' }
           : current.category,
-      split: getSplitValue(picked.attendeeIds, currentUserId),
+      split: isSplitUntouched(current.split) ? nextSplit : current.split,
     }));
+    autoSplit.current = nextSplit;
     setFormKey((key) => key + 1);
   };
 
@@ -602,7 +620,7 @@ function ExpenseFormModal({
         groupLabel: showGroupField ? resolveChoice(data.group) : null,
         isPerPerson: data.isPerPerson,
         linkedTo: link,
-        split: isEditing ? null : getSplitTarget(data.split, currentUserId),
+        split: isEditing ? null : getSplitTarget(data.split, currentUserId, memberIds),
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this expense.'));
@@ -656,18 +674,18 @@ function ExpenseFormModal({
         onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
         submitButton={
           <div className='contents'>
-            <div className='col-span-full mb-4'>
-              <AddFieldChips
-                heading='Add to this expense'
-                chips={[
-                  { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: showGroupField },
-                  { key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' />, isShown: showNoteField },
-                ]
-                  .filter((chip) => !chip.isShown)
-                  .map(({ key, label, icon }) => ({ key, label, icon }))}
-                onAdd={(key) => (key === 'group' ? setShowGroupField(true) : setShowNoteField(true))}
-              />
-            </div>
+            {(!showGroupField || !showNoteField) && (
+              <div className='col-span-full mb-4'>
+                <AddFieldChips
+                  heading='Add to this expense'
+                  chips={[
+                    ...(showGroupField ? [] : [{ key: 'group', label: 'Group', icon: <Route className='h-4 w-4' /> }]),
+                    ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
+                  ]}
+                  onAdd={(key) => (key === 'group' ? setShowGroupField(true) : setShowNoteField(true))}
+                />
+              </div>
+            )}
             <ModalFooterActions
               leftActions={
                 isEditing &&

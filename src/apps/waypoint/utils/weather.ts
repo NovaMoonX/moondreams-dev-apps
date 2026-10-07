@@ -73,7 +73,7 @@ function getDayLocation(
         event.latitude,
         event.longitude,
         getEventTime(trip, event).timezone,
-        event.locationName?.trim() || event.title,
+        event.locationName?.trim() || event.title.trim() || null,
       ),
     )
     .find(isLocated);

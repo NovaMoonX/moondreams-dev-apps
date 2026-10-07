@@ -344,8 +344,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       // Taylor already sent Alex their part, ahead of the reservation being paid.
       earlyPayments: {
         [taylor.uid]: { toUid: alex.uid, amount: 25, paidAt: context.now - 7_200_000, isReturned: false, returnedAt: null },
-        linkedTo: { kind: 'EVENT', id: 'seed-waypoint-dinner' },
-    },
+      },
+      linkedTo: { kind: 'EVENT', id: 'seed-waypoint-dinner' },
     },
     {
       id: 'seed-expense-parking',

@@ -10,7 +10,6 @@ interface DayWeatherProps {
   forecast: DayForecast;
   hours?: HourForecast[];
   isMinimized: boolean;
-  /** Opens the day's full weather; the card is a plain display without it. */
   onOpen?: () => void;
 }
 

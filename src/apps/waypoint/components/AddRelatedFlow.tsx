@@ -26,10 +26,12 @@ interface AddRelatedFlowProps {
   trip: TripSpace;
   currentUserId: string;
   subject: RelatedSubject;
+  /** Opening straight on the expense form closes the flow when that form does. */
+  initialStep?: Step;
   onClose: () => void;
 }
 
-type Step = 'menu' | 'expense' | 'checklist';
+export type Step = 'menu' | 'expense' | 'checklist';
 
 interface FollowUpRowProps {
   emoji: string;
@@ -62,12 +64,13 @@ function FollowUpRow({ emoji, title, description, addedCount, onClick }: FollowU
   );
 }
 
-function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlowProps) {
+function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', onClose }: AddRelatedFlowProps) {
   const dispatch = useAppDispatch();
   const expenses = useAppSelector(selectTripExpenses);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
-  const [step, setStep] = useState<Step>('menu');
+  const [step, setStep] = useState<Step>(initialStep);
+  const backToMenu = () => (initialStep === 'menu' ? setStep('menu') : onClose());
   const [added, setAdded] = useState({ expense: 0, checklist: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const canAdd = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
@@ -115,7 +118,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
         }),
       ).unwrap();
       setAdded((current) => ({ ...current, expense: current.expense + 1 }));
-      setStep('menu');
+      backToMenu();
     } finally {
       setIsSubmitting(false);
     }
@@ -126,7 +129,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
     try {
       await dispatch(createChecklistItem({ tripId: trip.id, uid: currentUserId, ...values })).unwrap();
       setAdded((current) => ({ ...current, checklist: current.checklist + 1 }));
-      setStep('menu');
+      backToMenu();
     } finally {
       setIsSubmitting(false);
     }
@@ -177,7 +180,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
           existingGroupLabels={existingGroupLabels}
           isSubmitting={isSubmitting}
           onSubmit={handleExpense}
-          onClose={() => setStep('menu')}
+          onClose={backToMenu}
         />
       )}
       {step === 'checklist' && (
@@ -189,7 +192,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
           memberOptions={memberOptions}
           isSubmitting={isSubmitting}
           onSubmit={handleChecklist}
-          onClose={() => setStep('menu')}
+          onClose={backToMenu}
         />
       )}
     </>

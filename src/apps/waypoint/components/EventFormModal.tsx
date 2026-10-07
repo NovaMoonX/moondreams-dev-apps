@@ -52,7 +52,6 @@ import {
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
-  ITINERARY_PICK_TRANSIT_TYPES,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
   MAX_REMINDER_MINUTES_BEFORE,
@@ -901,7 +900,7 @@ function EventFormModal({
         }
         className='mb-0' // overwrite space-y-4
       />
-      {isTravel && ITINERARY_PICK_TRANSIT_TYPES.includes(transitType) && (
+      {isTravel && TRANSIT_LOCATION_LABELS[transitType] !== null && (
         <ItineraryPlacePicks
           current={{ name: draft.locationName, address: draft.address }}
           excludeEventId={event?.id}

@@ -522,7 +522,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {
             key: 'early-payment',
             label: getEarlyPayments(expense)[currentUserId] ? 'Edit my early payment' : 'Record an early payment',
-            description: 'Money you already sent a teammate for this.',
+            description: 'Money you already sent someone for this.',
             run: () => setEarlyExpense(expense),
           },
         ]

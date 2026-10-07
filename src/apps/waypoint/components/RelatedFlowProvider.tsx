@@ -1,9 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
-import AddRelatedFlow from '@apps/waypoint/components/AddRelatedFlow';
-import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
+import AddRelatedFlow, { type Step } from '@apps/waypoint/components/AddRelatedFlow';
+import LinkExpenseSheet from '@apps/waypoint/components/LinkExpenseSheet';
 import { RelatedFlowContext } from '@apps/waypoint/hooks/useRelatedFlow';
 import type { TripSpace } from '@apps/waypoint/types';
+import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface RelatedFlowProviderProps {
   trip: TripSpace;
@@ -11,31 +13,47 @@ interface RelatedFlowProviderProps {
   children: ReactNode;
 }
 
-interface OpenFollowUp {
-  id: number;
-  subject: RelatedSubject;
-}
+type OpenFlow =
+  | { id: number; kind: 'follow-up'; subject: RelatedSubject; initialStep: Step }
+  | { id: number; kind: 'link'; subject: RelatedSubject };
 
 // Mounted above the trip's screens: an idea leaves its list the moment it is converted, taking its own children with it.
 function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProviderProps) {
-  const [followUp, setFollowUp] = useState<OpenFollowUp | null>(null);
+  const [flow, setFlow] = useState<OpenFlow | null>(null);
+  const canAddExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const value = useMemo(
     () => ({
-      startFollowUp: (subject: RelatedSubject) => setFollowUp((current) => ({ id: (current?.id ?? 0) + 1, subject })),
+      startFollowUp: (subject: RelatedSubject) =>
+        setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'follow-up', subject, initialStep: 'menu' })),
+      startLinkExpense: (subject: RelatedSubject) =>
+        setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'link', subject })),
+      canAddExpenses,
     }),
-    [],
+    [canAddExpenses],
   );
 
   return (
     <RelatedFlowContext.Provider value={value}>
       {children}
-      {followUp && (
+      {flow?.kind === 'follow-up' && (
         <AddRelatedFlow
-          key={followUp.id}
+          key={flow.id}
           trip={trip}
           currentUserId={currentUserId}
-          subject={followUp.subject}
-          onClose={() => setFollowUp(null)}
+          subject={flow.subject}
+          initialStep={flow.initialStep}
+          onClose={() => setFlow(null)}
+        />
+      )}
+      {flow?.kind === 'link' && (
+        <LinkExpenseSheet
+          key={flow.id}
+          trip={trip}
+          subject={flow.subject}
+          onAddNew={() =>
+            setFlow({ id: flow.id + 1, kind: 'follow-up', subject: flow.subject, initialStep: 'expense' })
+          }
+          onClose={() => setFlow(null)}
         />
       )}
     </RelatedFlowContext.Provider>

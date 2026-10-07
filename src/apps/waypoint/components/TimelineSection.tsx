@@ -87,6 +87,7 @@ import type { Stay } from '@apps/waypoint/types';
 const OUTSIDE_TAB = 'outside';
 const EAGER_DAYS = 2;
 const ESTIMATED_CARD_HEIGHT = 210;
+const ESTIMATED_LOGISTICS_HEIGHT = 44;
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -123,11 +124,13 @@ export function TimelineSection({
     () =>
       unpaidOnly
         ? new Map<number, LogisticsEntry[]>()
-        : getLogisticsEntries(trip, stays, rentals).reduce(
+        : getLogisticsEntries(trip, stays, rentals)
+            .filter((entry) => entry.dayIndex >= -MAX_DAYS_OUTSIDE_TRIP && entry.dayIndex < dayCount + MAX_DAYS_OUTSIDE_TRIP)
+            .reduce(
             (byDay, entry) => byDay.set(entry.dayIndex, [...(byDay.get(entry.dayIndex) ?? []), entry]),
             new Map<number, LogisticsEntry[]>(),
           ),
-    [trip, stays, rentals, unpaidOnly],
+    [trip, stays, rentals, unpaidOnly, dayCount],
   );
   const hasOutsideEvents = events.some(
     (event) =>
@@ -167,6 +170,7 @@ export function TimelineSection({
   const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
   const [weatherDay, setWeatherDay] = useState<number | null>(null);
+  const [isWeatherOpen, setIsWeatherOpen] = useState(false);
   const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
   const [minimizeWeather, setMinimizeWeather] = useLocalStoragePreference('waypoint:minimizeWeather', false);
   const now = useNow(60_000);
@@ -336,54 +340,66 @@ export function TimelineSection({
   );
 
   const renderTimelineItem = (item: TimelineItem) => {
-      if (item.kind === 'stack') {
-        return (
-          <EventStackCard
-            key={item.key}
-            trip={trip}
-            stack={item}
-            currentUserId={currentUserId}
-            showAttendees={showAttendees}
-            canEdit={canEdit}
-            onManage={(selectedEvent) => {
-              setIsStackHeaderOrigin(true);
-              setStackingEvent(selectedEvent);
-            }}
-            onManageGroup={(selectedEvent) => setGroupingEvent(selectedEvent)}
-            renderEvent={renderEventCard}
-          />
-        );
-      }
-      if (item.kind === 'group') {
-        return (
-          <EventGroupCard
-            key={item.key}
-            trip={trip}
-            group={item}
-            showAttendees={showAttendees}
-            canEdit={canEdit}
-            onManage={(selectedEvent) => setGroupingEvent(selectedEvent)}
-            onStack={(selectedEvent) => {
-              setIsStackHeaderOrigin(false);
-              setStackingEvent(selectedEvent);
-            }}
-            renderEvent={renderEventCard}
-          />
-        );
-      }
-      return renderEventCard(item.event);
+    if (item.kind === 'stack') {
+      return (
+        <EventStackCard
+          key={item.key}
+          trip={trip}
+          stack={item}
+          currentUserId={currentUserId}
+          showAttendees={showAttendees}
+          canEdit={canEdit}
+          onManage={(selectedEvent) => {
+            setIsStackHeaderOrigin(true);
+            setStackingEvent(selectedEvent);
+          }}
+          onManageGroup={(selectedEvent) => setGroupingEvent(selectedEvent)}
+          renderEvent={renderEventCard}
+        />
+      );
+    }
+    if (item.kind === 'group') {
+      return (
+        <EventGroupCard
+          key={item.key}
+          trip={trip}
+          group={item}
+          showAttendees={showAttendees}
+          canEdit={canEdit}
+          onManage={(selectedEvent) => setGroupingEvent(selectedEvent)}
+          onStack={(selectedEvent) => {
+            setIsStackHeaderOrigin(false);
+            setStackingEvent(selectedEvent);
+          }}
+          renderEvent={renderEventCard}
+        />
+      );
+    }
+    return renderEventCard(item.event);
   };
+
+  const getLogisticsHeight = (bucket: IndexBucket) =>
+    typeof bucket === 'number' ? (logisticsByDay.get(bucket)?.length ?? 0) * ESTIMATED_LOGISTICS_HEIGHT : 0;
 
   const renderEventItems = (items: TimelineEvent[], dayIndex?: number) => {
     const timelineNodes = buildTimelineItems(items).map((item) => {
       const first = item.kind === 'event' ? item.event : item.events[0];
-      return { minutes: toMinutes(getEventTime(trip, first).startTime) ?? Infinity, node: renderTimelineItem(item) };
+      return { minutes: toMinutes(getEventTime(trip, first).startTime) ?? 0, node: renderTimelineItem(item) };
     });
-    const logisticsNodes = (dayIndex === undefined ? [] : (logisticsByDay.get(dayIndex) ?? [])).map((entry) => ({
-      minutes: toMinutes(entry.time) ?? -1,
-      node: <LogisticsRow key={entry.key} entry={entry} />,
-    }));
-    return [...logisticsNodes, ...timelineNodes].sort((first, second) => first.minutes - second.minutes).map(({ node }) => node);
+    const logisticsRows = (dayIndex === undefined ? [] : (logisticsByDay.get(dayIndex) ?? []))
+      .map((entry) => ({ minutes: toMinutes(entry.time) ?? -1, node: <LogisticsRow key={entry.key} entry={entry} /> }))
+      .sort((first, second) => first.minutes - second.minutes);
+    const merged = timelineNodes.reduce<{ nodes: ReactNode[]; rest: typeof logisticsRows }>(
+      (acc, timelineNode) => {
+        const before = acc.rest.filter((row) => row.minutes <= timelineNode.minutes);
+        return {
+          nodes: [...acc.nodes, ...before.map((row) => row.node), timelineNode.node],
+          rest: acc.rest.slice(before.length),
+        };
+      },
+      { nodes: [], rest: logisticsRows },
+    );
+    return [...merged.nodes, ...merged.rest.map((row) => row.node)];
   };
 
   const renderDivider = (label: string, trailing?: ReactNode) => (
@@ -393,7 +409,10 @@ export function TimelineSection({
   const renderDayWeather = (dayIndex: number) => {
     const forecast = weather.getDay(dayIndex);
     return forecast ? (
-      <DayWeather forecast={forecast} isMinimized={minimizeWeather} onOpen={() => setWeatherDay(dayIndex)} />
+      <DayWeather forecast={forecast} isMinimized={minimizeWeather} onOpen={() => {
+        setWeatherDay(dayIndex);
+        setIsWeatherOpen(true);
+      }} />
     ) : null;
   };
 
@@ -459,14 +478,14 @@ export function TimelineSection({
             <div
               key={bucket}
               className='defer-offscreen space-y-3'
-              style={{ '--defer-size': `${items.length * ESTIMATED_CARD_HEIGHT}px` } as CSSProperties}
+              style={{ '--defer-size': `${(items.length * ESTIMATED_CARD_HEIGHT) + getLogisticsHeight(bucket)}px` } as CSSProperties}
             >
               {renderDivider(
                 getBucketLabel(bucket, trip.startDate, dayCount),
                 typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
               )}
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
-              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_CARD_HEIGHT}>
+              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_CARD_HEIGHT + getLogisticsHeight(bucket)}>
                 {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
               </LazyMount>
             </div>
@@ -616,7 +635,10 @@ export function TimelineSection({
             startDate={trip.startDate}
             todayIndex={weather.todayIndex}
             selectedDayIndex={selectedDayIndex}
-            onSelectDay={setWeatherDay}
+            onSelectDay={(day) => {
+              setWeatherDay(day);
+              setIsWeatherOpen(true);
+            }}
           />
         )}
         <div className='flex items-center justify-between gap-3'>
@@ -663,13 +685,13 @@ export function TimelineSection({
         {weather.hasWeather && <WeatherAttribution />}
       </section>
       <WeatherDetailSheet
-        isOpen={weatherDay !== null}
-        onClose={() => setWeatherDay(null)}
+        isOpen={isWeatherOpen}
+        onClose={() => setIsWeatherOpen(false)}
         title={weatherDay === null ? 'Weather' : getDayLabel(trip.startDate, weatherDay, dayCount)}
         details={weatherDay === null ? null : weather.getDayDetails(weatherDay)}
         onShowDay={() => {
           onActiveDayTabChange(weatherDay === null ? 'all' : String(weatherDay));
-          setWeatherDay(null);
+          setIsWeatherOpen(false);
         }}
       />
       {stackingEvent && (

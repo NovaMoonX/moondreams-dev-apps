@@ -1,3 +1,4 @@
+import { STAY_TYPE_EMOJIS } from '@apps/waypoint/constants';
 import type { Rental, Stay, TripSpace } from '@apps/waypoint/types';
 import { getStayTime } from '@apps/waypoint/utils/tripTime';
 
@@ -19,7 +20,6 @@ interface DayPoint {
 const isSamePoint = (first: DayPoint, second: DayPoint) =>
   first.dayIndex === second.dayIndex && first.time === second.time;
 
-/** The time the traveler handles a stay: the arrival or departure they set themselves, else the official check-in or check-out, else just the day. */
 function pickStayPoint(planned: DayPoint, official: DayPoint, plannedVerb: string, officialVerb: string) {
   const isPlanned = planned.time !== null && !isSamePoint(planned, official);
   if (isPlanned) {
@@ -40,7 +40,7 @@ export function getLogisticsEntries(trip: TripSpace, stays: Stay[], rentals: Ren
     ].flatMap(({ id, point, verb }) =>
       point.dayIndex === null
         ? []
-        : [{ key: `stay-${stay.id}-${id}`, dayIndex: point.dayIndex, time: point.time, emoji: '🏨', verb, name: stay.name }],
+        : [{ key: `stay-${stay.id}-${id}`, dayIndex: point.dayIndex, time: point.time, emoji: STAY_TYPE_EMOJIS[stay.stayType], verb, name: stay.name }],
     );
   });
 

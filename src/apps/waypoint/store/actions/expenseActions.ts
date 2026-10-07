@@ -43,8 +43,9 @@ export const createExpense = createAsyncThunk<
   if (!title) {
     return rejectWithValue('Expense title is required.');
   }
-  if (input.split.targetType === 'SPECIFIC_MEMBERS' && input.split.targetMemberIds.length === 0) {
-    return rejectWithValue('Pick at least one person to share it.');
+  const sharedWith = Array.from(new Set(input.split.targetMemberIds.filter((uid) => input.memberIds.includes(uid))));
+  if (input.split.targetType === 'SPECIFIC_MEMBERS' && sharedWith.length === 0) {
+    return rejectWithValue('Pick at least one person on the trip to share it.');
   }
   if (!currency) {
     return rejectWithValue('Currency is required.');
@@ -89,7 +90,7 @@ export const createExpense = createAsyncThunk<
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
     targetType: input.split.targetType,
-    targetMemberIds: input.split.targetType === 'EVERYONE_CURRENT' ? input.memberIds : input.split.targetMemberIds,
+    targetMemberIds: input.split.targetType === 'EVERYONE_CURRENT' ? input.memberIds : sharedWith,
     splitAmounts: null,
     paidMemberStatus,
     earlyPayments: {},
@@ -179,6 +180,35 @@ export const updateExpense = createAsyncThunk<
   );
   return { ...input.expense, ...changes };
 });
+
+interface LinkExpenseInput {
+  expense: TripExpense;
+  link: ExpenseLink;
+  /** The plan's day, used only when the expense has none of its own. */
+  dayIndex: number | null;
+}
+
+/** Attaches an expense to a plan without changing anything it already has; a day it lacks is filled in from the plan. */
+export const linkExpenseToPlan = createAsyncThunk<TripExpense, LinkExpenseInput>(
+  'waypoint/expenses/link',
+  async ({ expense, link, dayIndex }) => {
+    const expenseRef = doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id);
+    const linked = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        throw new Error('This expense was removed.');
+      }
+      const current = snapshot.data() as Partial<TripExpense>;
+      if (current.linkedTo) {
+        throw new Error('This expense is already linked to a plan.');
+      }
+      const changes = { linkedTo: link, dayIndex: current.dayIndex ?? dayIndex, lastEditedAt: Date.now() };
+      transaction.update(expenseRef, changes);
+      return { ...expense, ...changes };
+    });
+    return linked;
+  },
+);
 
 interface UpdateExpenseSplitInput {
   expense: TripExpense;
