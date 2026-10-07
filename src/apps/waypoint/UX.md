@@ -416,9 +416,13 @@ An expected expense row offers "I paid early" to anyone in its split: pick who y
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Expenses tab] --> B[+ Add] --> W[Who's this for? Everyone / Pick people / Just me]
+    A[Expenses tab] --> B[+ Add] --> Q[Is this for something already planned?]
+    Q -->|A plan| S[Paying for summary: title, category, day]
+    Q -->|Something else| T[Title and category]
+    S --> W[Who's this for? Everyone / Pick people / Just me]
+    T --> W
     W -->|Just me| P[Same form, private, saved to Just for me]
-    W --> L[Optional: what is it paying for? fills title, category, day] --> C[Title / category / how much / who paid]
+    W --> C[How much is it? then optional chips: Already paid, Trip day, Price per person, Group, Note]
     C --> D[Saved — Everyone means current members, split evenly]
     D --> E[Optional: tap Split] --> F[Everyone-current / Everyone-future / Just Me / Specific]
     F --> G[Auto-suggested even split] --> H[Adjust per person, or clear and redo]

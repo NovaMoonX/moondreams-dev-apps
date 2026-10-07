@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import CitySearchField from '@/components/forms/CitySearchField';
+import CitySelect from '@/components/forms/CitySelect';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { City } from '@/lib/cities/types';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -44,16 +44,27 @@ function EditTripCityModal({ isOpen, trip, isSubmitting = false, onSubmit, onClo
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='City'>
       <div className='space-y-3'>
-        <CitySearchField value={city} onChange={setCity} disabled={isSubmitting} />
+        <CitySelect value={city} onChange={setCity} disabled={isSubmitting} />
+        <p className='text-muted-foreground text-sm'>
+          {city ? (
+            <>
+              We&apos;ll show the weather for <strong className='text-foreground'>{city.name}</strong> on every day of
+              the trip.
+            </>
+          ) : (
+            <>
+              <strong className='text-foreground'>Pick the city you&apos;ll be in</strong> to see its weather on every
+              day. Without one, a day only shows weather if it has a plan with a place, like a dinner or an activity.
+            </>
+          )}
+        </p>
         {city?.timezone && trip.timezone && city.timezone !== trip.timezone && (
           <p className='text-muted-foreground text-sm'>
-            The trip&apos;s times stay in {formatTimezoneLabel(trip.timezone)}; the weather uses the city&apos;s own time.
+            Your trip&apos;s times stay in{' '}
+            <strong className='text-foreground'>{formatTimezoneLabel(trip.timezone)}</strong>. Only the weather uses{' '}
+            {city.name}&apos;s own time.
           </p>
         )}
-        <p className='text-muted-foreground text-sm'>
-          The weather for every day comes from this city. Without one, a day uses the first non-travel plan with a
-          location, and a day with neither shows no weather.
-        </p>
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions
           cancelAction={

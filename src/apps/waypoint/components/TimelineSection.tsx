@@ -29,6 +29,7 @@ import EventFormModal, {
   type NextLegSeed,
   type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
+import EventSuggestionHost, { type EventSuggestionHandle } from '@apps/waypoint/components/EventSuggestionHost';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
@@ -50,6 +51,7 @@ import {
   updateEvent,
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
@@ -73,6 +75,7 @@ import {
   canCreateItem,
   canEditExistingItem,
   hasTripStarted,
+  isTripMember,
 } from '@apps/waypoint/utils/roleGuards';
 import { buildTimelineItems, getGroupMembers, getStackMembers, type TimelineItem } from '@apps/waypoint/utils/eventGroups';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
@@ -123,6 +126,8 @@ export function TimelineSection({
   const memberIds = Object.keys(trip.members);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const logisticsDetailRef = useRef<LogisticsDetailHandle>(null);
+  const suggestionRef = useRef<EventSuggestionHandle>(null);
+  const isPhone = useMediaQuery().isBelow('sm');
   const stays = useAppSelector(selectStays);
   const rentals = useAppSelector(selectRentals);
   const logisticsByDay = useMemo(
@@ -318,6 +323,11 @@ export function TimelineSection({
         showCover={showCovers}
         showAttendees={showAttendees}
         weather={weather.getEvent(event.id)}
+        onSuggest={
+          isTripMember(trip, currentUserId) && !event.isArchived
+            ? (selectedEvent) => suggestionRef.current?.open(selectedEvent)
+            : undefined
+        }
         isStacked={Boolean(event.stackLabel)}
         isGrouped={Boolean(event.groupLabel)}
         onStack={(selectedEvent, onSuccess) => {
@@ -340,7 +350,13 @@ export function TimelineSection({
           void handleToggleArchived(selectedEvent, onSuccess)
         }
       />
-      <EventSuggestionsList trip={trip} event={event} currentUserId={currentUserId} />
+      <EventSuggestionsList
+        trip={trip}
+        event={event}
+        currentUserId={currentUserId}
+        showSuggestAction={!isPhone && event.eventType !== 'TRAVEL'}
+        onSuggest={(selectedEvent, suggestion) => suggestionRef.current?.open(selectedEvent, suggestion)}
+      />
     </div>
   );
 
@@ -695,6 +711,7 @@ export function TimelineSection({
         {weather.hasWeather && <WeatherAttribution />}
       </section>
       <LogisticsDetailHost trip={trip} handleRef={logisticsDetailRef} />
+      <EventSuggestionHost trip={trip} currentUserId={currentUserId} handleRef={suggestionRef} />
       <WeatherDetailSheet
         isOpen={isWeatherOpen}
         onClose={() => setIsWeatherOpen(false)}

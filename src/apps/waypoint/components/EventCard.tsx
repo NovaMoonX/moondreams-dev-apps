@@ -57,6 +57,8 @@ interface EventCardProps {
   onEdit: (event: TimelineEvent, onSuccess?: () => void) => void;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
   onToggleArchived: (event: TimelineEvent, onSuccess?: () => void) => void;
+  /** Offered in the opened details only; `undefined` when this person can't suggest. */
+  onSuggest?: (event: TimelineEvent) => void;
   weather?: HourForecast | null;
 }
 
@@ -234,6 +236,7 @@ export function EventCard({
   onEdit,
   onSaveNotes,
   onToggleArchived,
+  onSuggest,
   weather = null,
 }: EventCardProps) {
   // An archived event is read-only for everyone but an admin, who may only unarchive it.
@@ -289,6 +292,19 @@ export function EventCard({
           }}
         >
           <Layers className={join('h-4 w-4', isStacked && 'fill-current text-primary')} />
+        </Button>
+      )}
+      {onSuggest && (
+        <Button
+          type='button'
+          size='sm'
+          variant='secondary'
+          onClick={() => {
+            closeDrawer();
+            onSuggest(event);
+          }}
+        >
+          Suggest a change
         </Button>
       )}
       {canModify && (
@@ -427,6 +443,7 @@ export function EventCard({
           onEdit={canModify ? () => { closeDrawer(); onEdit(event); } : null}
           stackLabel={stackActionLabel}
           onStack={canModify ? () => { closeDrawer(); onStack(event); } : null}
+          onSuggest={onSuggest ? () => { closeDrawer(); onSuggest(event); } : null}
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >

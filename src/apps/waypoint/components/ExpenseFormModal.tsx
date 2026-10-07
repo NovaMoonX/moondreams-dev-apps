@@ -11,7 +11,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Route, StickyNote } from 'lucide-react';
+import { CalendarDays, Route, StickyNote, Users, Wallet } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime } from '@/utils/formatUtils';
@@ -220,6 +220,13 @@ function ExpenseFormModal({
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
+  const [showPaidField, setShowPaidField] = useState(initialExpense?.status === 'PAID');
+  const [showDayField, setShowDayField] = useState(
+    initialExpense ? initialExpense.dayIndex !== null : prefill?.dayIndex != null,
+  );
+  const [showEachField, setShowEachField] = useState(Boolean(initialExpense?.isPerPerson));
+  const [showTitleFields, setShowTitleFields] = useState(false);
+  const [isPlanAnswered, setIsPlanAnswered] = useState(false);
   const memberInfo = useUserInfo(memberIds);
   const { audience, memberIds: pickedIds } = audienceValue;
   const isPrivate = audience === 'ME';
@@ -238,6 +245,9 @@ function ExpenseFormModal({
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
+  const asksAboutPlan =
+    !isEditing && !prefill && canShare && !isPrivate && linkables.length > 0 && !isPlanAnswered;
+  const isLinked = !isEditing && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const linkOptions = useMemo(
     () => [
@@ -254,7 +264,7 @@ function ExpenseFormModal({
     ],
     [linkables, trip.startDate, dayCount],
   );
-  const showLinkPicker = linkables.length > 0 && !isPrivate;
+  const showLinkPicker = isEditing && linkables.length > 0;
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
@@ -294,28 +304,40 @@ function ExpenseFormModal({
   );
   const sharesPrice = !isPrivate && !(audience === 'PICK' && pickedIds.length <= 1);
 
+  const areTitleFieldsVisible = isEditing || !isLinked || showTitleFields || resolveChoice(formData.category) === null;
+  const hasDayField = showDayField && linkedDay === null;
+
+  const resetField = (patch: Partial<ExpenseFormData>) => {
+    setFormData((current) => ({ ...current, ...patch }));
+    setFormKey((key) => key + 1);
+  };
+
   const fields = useMemo(() => {
-    const nextFields: FormField[] = [
-      input({
-        name: 'title',
-        label: 'Expense title',
-        placeholder: 'Dinner reservation',
-        variant: 'outline',
-      }),
-      custom({
-        name: 'category',
-        label: 'Category',
-        renderComponent: (props) => (
-          <ChoiceField
-            value={props.value as ChoiceValue}
-            onValueChange={props.onValueChange as (value: ChoiceValue) => void}
-            label='Category'
-            options={categoryOptions}
-            newPillLabel='New category'
-            newPlaceholder='Souvenirs'
-          />
-        ),
-      }),
+    const nextFields: FormField[] = areTitleFieldsVisible
+      ? [
+          input({
+            name: 'title',
+            label: 'Expense title',
+            placeholder: 'Dinner reservation',
+            variant: 'outline',
+          }),
+          custom({
+            name: 'category',
+            label: 'Category',
+            renderComponent: (props) => (
+              <ChoiceField
+                value={props.value as ChoiceValue}
+                onValueChange={props.onValueChange as (value: ChoiceValue) => void}
+                label='Category'
+                options={categoryOptions}
+                newPillLabel='New category'
+                newPlaceholder='Souvenirs'
+              />
+            ),
+          }),
+        ]
+      : [];
+    nextFields.push(
       custom({
         name: 'price',
         label: '',
@@ -385,7 +407,7 @@ function ExpenseFormModal({
                   </div>
                 )}
               </div>
-              {sharesPrice && (
+              {sharesPrice && showEachField && (
                 <div className='space-y-1.5'>
                   <p className='text-muted-foreground text-sm'>Who does that price cover?</p>
                   <PillGroup
@@ -410,7 +432,7 @@ function ExpenseFormModal({
           );
         },
       }),
-    ];
+    );
 
     if (isEditing && price.mode === 'range' && initialExpense?.status === 'PAID') {
       nextFields.push(
@@ -424,59 +446,56 @@ function ExpenseFormModal({
       );
     }
 
-    nextFields.push(
-      custom({
-        name: 'status',
-        label: 'Status',
-        renderComponent: (props) => (
-          <PillGroup
-            label='Status'
-            options={
-              isPrivate
-                ? [
-                    { value: 'EXPECTED', label: 'Still to pay', emoji: '⏳' },
-                    { value: 'PAID', label: 'Already paid', emoji: '💸' },
-                  ]
-                : [
-                    { value: 'EXPECTED', label: 'Expected', emoji: '⏳' },
-                    { value: 'PAID', label: 'Paid', emoji: '💸' },
-                  ]
-            }
-            value={props.value as ExpenseFormData['status']}
-            onChange={(value) => props.onValueChange(value)}
-          />
-        ),
-      }),
-    );
-
-    if (formData.status === 'PAID' && !isPrivate) {
+    if (showPaidField) {
       nextFields.push(
         custom({
           name: 'payerUid',
-          label: 'Paid by',
+          label: '',
           renderComponent: (props) => (
-            <PillGroup
-              label='Paid by'
-              options={payerOptions}
-              value={props.value as string}
-              onChange={(value) => props.onValueChange(value)}
-            />
+            <RemovableField
+              label={isPrivate ? 'Already paid' : 'Paid by'}
+              removeLabel='Not paid yet'
+              onRemove={() => {
+                setShowPaidField(false);
+                resetField({ status: 'EXPECTED', payerUid: PAID_BY_EACH_PERSON });
+              }}
+            >
+              {isPrivate ? (
+                <p className='text-muted-foreground text-sm'>Marked as paid.</p>
+              ) : (
+                <PillGroup
+                  label='Paid by'
+                  options={payerOptions}
+                  value={props.value as string}
+                  onChange={(value) => props.onValueChange(value)}
+                />
+              )}
+            </RemovableField>
           ),
         }),
       );
     }
 
-    if (linkedDay === null) {
+    if (hasDayField) {
       nextFields.push(
         custom({
           name: 'dayIndex',
-          label: 'Trip day',
+          label: '',
           renderComponent: (props) => (
-            <Select
-              options={dayOptions.map(({ value, label }) => ({ value, text: label }))}
-              value={props.value as string}
-              onChange={(value) => props.onValueChange(value)}
-            />
+            <RemovableField
+              label='Trip day'
+              removeLabel='Remove day'
+              onRemove={() => {
+                setShowDayField(false);
+                resetField({ dayIndex: '' });
+              }}
+            >
+              <Select
+                options={dayOptions.map(({ value, label }) => ({ value, text: label }))}
+                value={props.value as string}
+                onChange={(value) => props.onValueChange(value)}
+              />
+            </RemovableField>
           ),
         }),
       );
@@ -525,22 +544,24 @@ function ExpenseFormModal({
 
     return nextFields;
   }, [
+    areTitleFieldsVisible,
     categoryOptions,
     dayOptions,
-    formData.status,
     groupOptions,
+    hasDayField,
     initialExpense?.status,
     isEditing,
     isPrivate,
-    linkedDay,
     payerOptions,
     price.isPerPerson,
     price.mode,
     audience,
     pickedIds.length,
     sharesPrice,
+    showEachField,
     showGroupField,
     showNoteField,
+    showPaidField,
   ]);
 
   const pickLink = (nextKey: string) => {
@@ -550,6 +571,7 @@ function ExpenseFormModal({
     }
 
     setLink(picked.link);
+    setIsPlanAnswered(true);
     if (isEditing) {
       if (formData.dayIndex === '' && picked.dayIndex !== null) {
         setFormData((current) => ({ ...current, dayIndex: getDayValue(picked.dayIndex) }));
@@ -581,7 +603,8 @@ function ExpenseFormModal({
     setFormKey((key) => key + 1);
   };
 
-  const handleSubmit = async (data: ExpenseFormData) => {
+  const handleSubmit = async (submitted: ExpenseFormData) => {
+    const data = { ...formData, ...submitted };
     const submittedMode = isPrivate ? 'amount' : data.price.mode;
     const amount = submittedMode === 'amount' ? parseAmount(data.price.amount) : null;
     const amountMin = submittedMode === 'range' ? parseAmount(data.price.min) : null;
@@ -673,114 +696,192 @@ function ExpenseFormModal({
   ];
   const privateNote = 'Only you can see this. It stays out of everyone’s list, totals and dues.';
 
+  const chips = [
+    ...(showPaidField ? [] : [{ key: 'paid', label: 'Already paid', icon: <Wallet className='h-4 w-4' /> }]),
+    ...(showDayField || linkedDay !== null ? [] : [{ key: 'day', label: 'Trip day', icon: <CalendarDays className='h-4 w-4' /> }]),
+    ...(showEachField || !sharesPrice ? [] : [{ key: 'each', label: 'Price per person', icon: <Users className='h-4 w-4' /> }]),
+    ...(showGroupField || isPrivate ? [] : [{ key: 'group', label: 'Group', icon: <Route className='h-4 w-4' /> }]),
+    ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
+  ];
+  const addChip = (key: string) => {
+    if (key === 'paid') {
+      setShowPaidField(true);
+      resetField({ status: 'PAID' });
+    } else if (key === 'day') {
+      setShowDayField(true);
+    } else if (key === 'each') {
+      setShowEachField(true);
+    } else if (key === 'group') {
+      setShowGroupField(true);
+    } else {
+      setShowNoteField(true);
+    }
+  };
+  const summaryDay = formData.dayIndex === '' ? null : getDayDateLabel(trip.startDate, Number(formData.dayIndex));
+  const summaryCategory = resolveChoice(formData.category);
+  const planQuestion = (
+    <div className='space-y-3'>
+      <div className='space-y-1.5'>
+        <Label>Is this for something you&apos;ve already planned?</Label>
+        <Select
+          searchable
+          options={linkOptions.filter((option) => option.value !== NO_LINK)}
+          value={linkKey}
+          placeholder='Pick an event, stay or rental'
+          searchPlaceholder='Search your plans'
+          onChange={pickLink}
+        />
+      </div>
+      <Button
+        type='button'
+        variant='secondary'
+        onClick={() => {
+          setLink(null);
+          setIsPlanAnswered(true);
+        }}
+      >
+        No, it&apos;s something else
+      </Button>
+    </div>
+  );
+
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={isPrivate ? 'Personal expense' : 'Expense'}>
-      {!isEditing && canShare && (
-        <div className='mb-4 space-y-2'>
-          <Label>Who&apos;s this for?</Label>
-          <PillGroup
-            label="Who's this for"
-            options={audienceOptions}
-            value={audience}
-            onChange={(next) => {
-              hasChosenAudience.current = true;
-              setAudienceValue((current) => ({ ...current, audience: next }));
-            }}
-          />
-          {audience === 'PICK' && (
-            <>
-              <MultiPillGroup
-                label='People'
-                options={memberPillOptions}
-                values={pickedIds}
-                onChange={(next) => {
-                  hasChosenAudience.current = true;
-                  setAudienceValue((current) => ({ ...current, memberIds: next }));
-                }}
-              />
-              {pickedIds.length === 0 && (
-                <p className='text-muted-foreground text-sm'>Pick at least one person to share it.</p>
-              )}
-            </>
-          )}
-          {isPrivate && <p className='text-muted-foreground text-xs'>{privateNote}</p>}
-        </div>
-      )}
-      {!isEditing && !canShare && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
-      {showLinkPicker && (
-        <div className='mb-4 space-y-1.5'>
-          <Label>What is this paying for?</Label>
-          <Select
-            searchable
-            options={linkOptions}
-            value={linkKey || NO_LINK}
-            placeholder='Pick an event, stay or rental to fill in its details'
-            searchPlaceholder='Search your plans'
-            onChange={(value) => (value === NO_LINK ? setLink(null) : pickLink(value))}
-          />
-          {linkedDay !== null && (
-            <p className='text-muted-foreground text-xs'>
-              {getDayDateLabel(trip.startDate, linkedDay)} comes from the plan. Its title and category are filled in
-              too, and you can still change them.
-            </p>
-          )}
-        </div>
-      )}
-      <Form
-        key={formKey}
-        id='waypoint-add-expense'
-        form={fields}
-        initialData={formData}
-        columns={1}
-        spacing='normal'
-        onDataChange={(data) => setFormData(data as ExpenseFormData)}
-        onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
-        submitButton={
-          <div className='contents'>
-            {((!showGroupField && !isPrivate) || !showNoteField) && (
-              <div className='col-span-full mb-4'>
-                <AddFieldChips
-                  heading='Add to this expense'
-                  chips={[
-                    ...(showGroupField || isPrivate ? [] : [{ key: 'group', label: 'Group', icon: <Route className='h-4 w-4' /> }]),
-                    ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
-                  ]}
-                  onAdd={(key) => (key === 'group' ? setShowGroupField(true) : setShowNoteField(true))}
-                />
-              </div>
-            )}
+      {asksAboutPlan ? (
+        <>
+          {planQuestion}
+          <div className='mt-6'>
             <ModalFooterActions
-              leftActions={
-                isEditing &&
-                onDelete && (
-                  <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
-                )
-              }
               cancelAction={
-                  <Button type='button' variant='secondary' onClick={onClose}>
-                    Cancel
-                  </Button>
+                <Button type='button' variant='secondary' onClick={onClose}>
+                  Cancel
+                </Button>
               }
-              rightActions={
-                <Button
-                    type='submit'
-                    loading={isSubmitting}
-                    disabled={isSubmitting || !isFormComplete}
-                  >
-                    {isSubmitting
-                      ? isEditing
-                        ? 'Saving…'
-                        : 'Adding…'
-                      : isEditing
-                        ? 'Save'
-                        : 'Add'}
-                  </Button>
-              }
+              rightActions={null}
             />
           </div>
-        }
-      />
-      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
+        </>
+      ) : (
+        <>
+          {isLinked && pickedSubject && (
+            <div className='bg-muted/50 mb-4 space-y-1 rounded-xl p-3'>
+              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Paying for</p>
+              <p className='font-semibold'>{formData.title || pickedSubject.title}</p>
+              <p className='text-muted-foreground text-sm'>
+                {[
+                  summaryCategory ? getExpenseCategoryKeyLabel(summaryCategory) : null,
+                  summaryDay,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'No category or day yet'}
+              </p>
+              <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='min-h-10 px-0!'
+                  onClick={() => setIsPlanAnswered(false)}
+                >
+                  Change plan
+                </Button>
+                {!showTitleFields && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='min-h-10 px-0!'
+                    onClick={() => setShowTitleFields(true)}
+                  >
+                    Edit title or category
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {!isEditing && canShare && (
+            <div className='mb-4 space-y-2'>
+              <Label>Who&apos;s this for?</Label>
+              <PillGroup
+                label="Who's this for"
+                options={audienceOptions}
+                value={audience}
+                onChange={(next) => {
+                  hasChosenAudience.current = true;
+                  setAudienceValue((current) => ({ ...current, audience: next }));
+                }}
+              />
+              {audience === 'PICK' && (
+                <>
+                  <MultiPillGroup
+                    label='People'
+                    options={memberPillOptions}
+                    values={pickedIds}
+                    onChange={(next) => {
+                      hasChosenAudience.current = true;
+                      setAudienceValue((current) => ({ ...current, memberIds: next }));
+                    }}
+                  />
+                  {pickedIds.length === 0 && (
+                    <p className='text-muted-foreground text-sm'>Pick at least one person to share it.</p>
+                  )}
+                </>
+              )}
+              {isPrivate && <p className='text-muted-foreground text-xs'>{privateNote}</p>}
+            </div>
+          )}
+          {!isEditing && !canShare && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
+          {showLinkPicker && (
+            <div className='mb-4 space-y-1.5'>
+              <Label>What is this paying for?</Label>
+              <Select
+                searchable
+                options={linkOptions}
+                value={linkKey || NO_LINK}
+                placeholder='Pick an event, stay or rental to fill in its details'
+                searchPlaceholder='Search your plans'
+                onChange={(value) => (value === NO_LINK ? setLink(null) : pickLink(value))}
+              />
+            </div>
+          )}
+          <Form
+            key={formKey}
+            id='waypoint-add-expense'
+            form={fields}
+            initialData={formData}
+            columns={1}
+            spacing='normal'
+            onDataChange={(data) => setFormData((current) => ({ ...current, ...(data as ExpenseFormData) }))}
+            onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
+            submitButton={
+              <div className='contents'>
+                {chips.length > 0 && (
+                  <div className='col-span-full mb-4'>
+                    <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
+                  </div>
+                )}
+                <ModalFooterActions
+                  leftActions={
+                    isEditing &&
+                    onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+                  }
+                  cancelAction={
+                    <Button type='button' variant='secondary' onClick={onClose}>
+                      Cancel
+                    </Button>
+                  }
+                  rightActions={
+                    <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
+                      {isSubmitting ? (isEditing ? 'Saving…' : 'Adding…') : isEditing ? 'Save' : 'Add'}
+                    </Button>
+                  }
+                />
+              </div>
+            }
+          />
+          {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
+        </>
+      )}
     </FormSheet>
   );
 }

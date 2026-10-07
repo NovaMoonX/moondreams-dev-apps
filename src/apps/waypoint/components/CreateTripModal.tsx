@@ -10,7 +10,7 @@ import {
 import DateRangeField, {
   type DateRangeValue,
 } from '@/components/forms/DateRangeField';
-import CitySearchField from '@/components/forms/CitySearchField';
+import CitySelect from '@/components/forms/CitySelect';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
@@ -86,7 +86,7 @@ function CreateTripModal({
         label: 'Where is it based?',
         renderComponent: (props) => (
           <div className='space-y-1.5'>
-            <CitySearchField
+            <CitySelect
               value={props.value as City | null}
               disabled={isSubmitting}
               onChange={(city) => {
