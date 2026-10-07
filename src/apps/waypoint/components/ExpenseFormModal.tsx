@@ -11,7 +11,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowLeftRight, CalendarDays, Pencil, Route, StickyNote } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Link2, Pencil, Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime } from '@/utils/formatUtils';
@@ -720,7 +720,7 @@ function ExpenseFormModal({
           {isLinked && pickedSubject && (
             <div className='bg-muted/50 mb-4 space-y-1 rounded-xl p-3'>
               <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Paying for</p>
-              {!showTitleFields && <p className='font-semibold'>{formData.title || pickedSubject.title}</p>}
+              <p className='font-semibold'>{pickedSubject.title}</p>
               <p className='text-muted-foreground text-sm'>
                 {[
                   summaryCategory ? getExpenseCategoryKeyLabel(summaryCategory) : null,
@@ -760,9 +760,10 @@ function ExpenseFormModal({
               type='button'
               variant='link'
               size='sm'
-              className='mb-2 min-h-10 px-0!'
+              className='mb-2 min-h-10 gap-1.5 px-0!'
               onClick={() => setIsPlanAnswered(false)}
             >
+              <Link2 className='h-3.5 w-3.5' aria-hidden='true' />
               Link it to a plan
             </Button>
           )}
@@ -804,7 +805,7 @@ function ExpenseFormModal({
           {!isEditing && !canShare && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
           {showLinkPicker && (
             <div className='mb-4 space-y-1.5'>
-              <Label>What is this paying for?</Label>
+              <Label>What&apos;s this expense for?</Label>
               <Select
                 searchable
                 options={linkOptions}

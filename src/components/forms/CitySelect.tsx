@@ -29,7 +29,7 @@ function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
     enabled: debounced.length >= MIN_QUERY_LENGTH,
   });
   const cities = useMemo(
-    () => (value ? [value, ...results.filter((city) => getCityKey(city) !== getCityKey(value))] : results),
+    () => (value ? [value, ...results.filter((city) => getCityKey(city) !== getCityKey(value) && getCityLabel(city) !== getCityLabel(value))] : results),
     [value, results],
   );
   const trimmedQuery = query.trim();

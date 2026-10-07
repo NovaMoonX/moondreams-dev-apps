@@ -91,7 +91,13 @@ function PersonalExpenseFormModal({
     dayIndex: initialExpense.dayIndex === null ? '' : String(initialExpense.dayIndex),
     note: initialExpense.note ?? '',
   });
-    const isFormComplete =
+  const isDirty =
+    formData.title !== initialExpense.title ||
+    formData.amount !== String(initialExpense.amount) ||
+    formData.dayIndex !== (initialExpense.dayIndex === null ? '' : String(initialExpense.dayIndex)) ||
+    formData.note !== (initialExpense.note ?? '') ||
+    formData.category.choice !== getExpenseCategoryKey(initialExpense);
+  const isFormComplete =
     formData.title.trim() !== '' && resolveCategory(formData.category) !== null && parseAmount(formData.amount) !== null;
   const dayOptions = useMemo(
     () => [
@@ -223,17 +229,21 @@ function PersonalExpenseFormModal({
       </p>
       <div className='bg-muted/50 mb-4 flex items-center justify-between gap-3 rounded-xl px-3'>
         <p className='text-sm font-medium'>{initialExpense.status === 'PAID' ? '💸 Paid' : '⏳ Still to pay'}</p>
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='min-h-10 px-0!'
-          loading={isToggling}
-          disabled={isToggling}
-          onClick={() => void handleToggleStatus()}
-        >
-          {initialExpense.status === 'PAID' ? 'Mark as unpaid' : 'Mark paid'}
-        </Button>
+        {isDirty ? (
+          <p className='text-muted-foreground text-xs'>Save your changes first</p>
+        ) : (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='min-h-10 px-0!'
+            loading={isToggling}
+            disabled={isToggling}
+            onClick={() => void handleToggleStatus()}
+          >
+            {initialExpense.status === 'PAID' ? 'Mark as unpaid' : 'Mark paid'}
+          </Button>
+        )}
       </div>
       <Form
         id='waypoint-personal-expense'
