@@ -91,6 +91,8 @@ import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const { option, custom } = DropdownMenuFactories;
 
+let latestMemberNames: Record<string, string> = {};
+
 interface TripDetailPageProps {
   trip: TripSpace;
   events: TimelineEvent[];
@@ -107,7 +109,6 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const { confirm } = useActionModal();
   const store = useStore<RootState>();
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
-  const memberInfo = useUserInfo(memberIds)?.map ?? {};
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [searchParams, setSearchParams] = useSearchParams();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
@@ -233,17 +234,21 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     const markdown = buildTripMarkdown({
       trip,
       events,
-      stays: selectSortedStays(state),
-      rentals: selectSortedRentals(state),
-      checklist: state.waypoint.checklist.items,
+      stays: state.waypoint.stays.tripId === trip.id ? selectSortedStays(state) : [],
+      rentals: state.waypoint.rentals.tripId === trip.id ? selectSortedRentals(state) : [],
+      checklist: state.waypoint.checklist.tripId === trip.id ? state.waypoint.checklist.items : [],
       ideas: selectSortedIdeas(state, trip.id),
-      memberNames: Object.fromEntries(memberIds.map((uid) => [uid, memberInfo[uid]?.displayName ?? ''])),
+      memberNames: latestMemberNames,
     });
     const copied = await copyToClipboard(markdown);
     addToast(
       copied
-        ? { title: 'Trip copied', description: 'Paste the whole itinerary anywhere as Markdown.' }
-        : { title: 'Unable to copy the trip', description: 'Please try again.', type: 'error' },
+        ? {
+            title: 'Trip copied',
+            description: 'Paste it anywhere as Markdown. It includes confirmation codes and notes.',
+            type: 'success',
+          }
+        : { title: 'Unable to copy the trip', description: 'Your browser blocked copying on this page.', type: 'error' },
     );
   };
 
@@ -420,7 +425,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       ))
     : null;
 
-  const actionItems = [copyMarkdownActionItem, announcementActionItem, archiveActionItem, cityActionItem, coverActionItem, deleteDesktopMenuItem].filter(
+  const actionItems = [cityActionItem, coverActionItem, announcementActionItem, copyMarkdownActionItem, archiveActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, coverActionItem].filter(
@@ -511,6 +516,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   return (
     <RelatedFlowProvider trip={trip} currentUserId={currentUserId}>
+      <MemberNamesProbe memberIds={memberIds} />
       {subviewTitle !== undefined && (
         <Subview title={subviewTitle} onClose={() => setSectionTab('')}>
           {renderSubviewSection()}
@@ -835,6 +841,15 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       </Drawer>
     </RelatedFlowProvider>
   );
+}
+
+/** Keeps member names where the copy action can read them without re-rendering the page on every profile update. */
+function MemberNamesProbe({ memberIds }: { memberIds: string[] }) {
+  const profiles = useUserInfo(memberIds)?.map;
+  useEffect(() => {
+    latestMemberNames = Object.fromEntries(memberIds.map((uid) => [uid, profiles?.[uid]?.displayName ?? '']));
+  }, [memberIds, profiles]);
+  return null;
 }
 
 export default TripDetailPage;

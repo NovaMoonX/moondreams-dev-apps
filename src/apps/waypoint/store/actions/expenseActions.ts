@@ -293,6 +293,26 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
   },
 );
 
+/** Puts a paid expense back to expected. A range that was turned into a known amount at payment stays as that amount. */
+export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripExpense }>(
+  'waypoint/expenses/markUnpaid',
+  async ({ expense }) => {
+    const changes = {
+      status: 'EXPECTED' as const,
+      payerUid: null,
+      paidAmount: null,
+      lastEditedAt: Date.now(),
+    };
+
+    await updateDoc(
+      doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
+      changes,
+    );
+    const updatedExpense: TripExpense = { ...expense, ...changes };
+    return updatedExpense;
+  },
+);
+
 interface ToggleExpenseRepaidInput {
   uid: string;
   tripId: string;

@@ -17,12 +17,14 @@ interface CitySelectProps {
 
 const MIN_QUERY_LENGTH = 2;
 
+const STATUS_KEY = '__status';
+
 const getCityKey = (city: City) => `${city.latitude},${city.longitude}`;
 
 function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS.autocomplete);
-  const { data: results = [] } = useQuery({
+  const { data: results = [], isFetching, isError } = useQuery({
     ...citySearchQueryOptions(debounced),
     enabled: debounced.length >= MIN_QUERY_LENGTH,
   });
@@ -30,9 +32,34 @@ function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
     () => (value ? [value, ...results.filter((city) => getCityKey(city) !== getCityKey(value))] : results),
     [value, results],
   );
+  const trimmedQuery = query.trim();
+  const isSearching = trimmedQuery.length >= MIN_QUERY_LENGTH && (isFetching || trimmedQuery !== debounced);
+  // The Select hides any option whose text and description lack the typed text, and the geocoder
+  // matches loosely (Montreal finds Montréal), so such results carry the typed text as a description.
+  const status = isSearching
+    ? 'Searching…'
+    : isError
+      ? 'Couldn’t search just now. You can add a city later.'
+      : trimmedQuery.length >= MIN_QUERY_LENGTH && results.length === 0
+        ? 'No city found'
+        : trimmedQuery.length < MIN_QUERY_LENGTH && !value
+          ? 'Type two letters to search'
+          : null;
   const options = useMemo(
-    () => cities.map((city) => ({ value: getCityKey(city), text: getCityLabel(city) })),
-    [cities],
+    () => [
+      ...cities.map((city) => {
+        const label = getCityLabel(city);
+        return {
+          value: getCityKey(city),
+          text: label,
+          ...(label.toLowerCase().includes(query.toLowerCase()) || (value && getCityKey(city) === getCityKey(value))
+            ? {}
+            : { description: `Matches “${query}”` }),
+        };
+      }),
+      ...(status ? [{ value: STATUS_KEY, text: status, description: `for “${query}”`, disabled: true }] : []),
+    ],
+    [cities, query, status, value],
   );
 
   return (
@@ -46,9 +73,12 @@ function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
         disabled={disabled}
         placeholder='Search for a city'
         searchPlaceholder='Type a city, like Seattle'
-        triggerClassName='pl-9'
+        triggerClassName='pr-14 pl-9'
         onSearch={setQuery}
         onChange={(key) => {
+          if (key === STATUS_KEY) {
+            return;
+          }
           setQuery('');
           onChange(cities.find((city) => getCityKey(city) === key) ?? null);
         }}

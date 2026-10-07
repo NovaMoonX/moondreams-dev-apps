@@ -49,7 +49,12 @@ const heading = (level: number, text: string) => `${'#'.repeat(level)} ${text}`;
 const bullet = (text: string, depth = 0) => `${'  '.repeat(depth)}- ${text}`;
 const quote = (text: string, depth: number) =>
   text.split('\n').map((line) => `${'  '.repeat(depth)}> ${line}`.trimEnd());
-const nameOf = (names: Record<string, string>, uid: string) => names[uid]?.trim() || 'Trip member';
+// A profile with no name carries its email as the name, which never leaves the app.
+const nameOf = (names: Record<string, string>, uid: string) => {
+  const name = names[uid]?.trim();
+  return name && !name.includes('@') ? name : 'Trip member';
+};
+const esc = (text: string) => text.replace(/([\\`*_[\]<>])/g, '\\$1');
 const MAX_LISTED_NAMES = 10;
 const nameList = (names: Record<string, string>, uids: string[]) =>
   uids.length > MAX_LISTED_NAMES
@@ -76,19 +81,19 @@ function getEventRow({ trip, memberNames }: TimelineMarkdownSource, event: Timel
   const attendeeIds = getEventAttendeeIds(event, memberIds).filter((uid) => memberIds.includes(uid));
   const kind = compact([
     details && 'mealType' in details && [MEAL_TYPE_LABELS[details.mealType] ?? details.mealType, ...(details.cuisines ?? [])].join(' · '),
-    details && 'settings' in details && details.settings.map((setting) => ACTIVITY_SETTING_LABELS[setting] ?? setting).join(' / '),
+    details && 'settings' in details && (details.settings ?? []).map((setting) => ACTIVITY_SETTING_LABELS[setting] ?? setting).join(' / '),
   ])[0];
   const transitLines =
     transitType && details && 'transitDetails' in details
       ? getTransitSummary(transitType, details.transitDetails, event.title, impliedDurationMs).map(
           ({ label, value }) => `${label}: ${value}`,
-        )
+        ).filter((line) => !line.includes('…'))
       : [];
-  const title = event.title.trim() || event.locationName || EVENT_TYPE_LABELS[event.eventType];
+  const title = esc(event.title.trim() || event.locationName || EVENT_TYPE_LABELS[event.eventType]);
   const emoji = (transitType && TRANSIT_TYPE_EMOJIS[transitType]) || EVENT_TYPE_EMOJIS[event.eventType];
   const detailLines = compact([
     kind,
-    [event.locationName, event.address].filter(Boolean).join(' · '),
+    esc([event.locationName, event.address].filter(Boolean).join(' · ')),
     ...transitLines,
     event.venueOpenTime &&
       event.venueCloseTime &&
@@ -116,7 +121,7 @@ function getLogisticsRows({ trip, stays, rentals }: TimelineMarkdownSource) {
     const code = (stay ?? rental)?.confirmationCode;
     const detailLines = compact([address, code && `Confirmation: ${code}`]);
     const lines = [
-      bullet(`${withTime(entry.time ? formatClockTime(entry.time) : null)}${entry.emoji} ${entry.verb} · ${entry.name}`),
+      bullet(`${withTime(entry.time ? formatClockTime(entry.time) : null)}${entry.emoji} ${entry.verb} · ${esc(entry.name)}`),
       ...detailLines.map((line) => bullet(line, 1)),
     ];
     return { dayIndex: entry.dayIndex, row: { minutes: toMinutes(entry.time) ?? -1, lines } };
@@ -150,7 +155,7 @@ function buildStaySections({ trip, stays }: TimelineMarkdownSource) {
   const lines = stays.flatMap((stay) => {
     const range = formatStayTimeRange(trip, stay).trim();
     return [
-      bullet(`${STAY_TYPE_EMOJIS[stay.stayType]} **${stay.name}**${range.length > 1 ? ` — ${range}` : ''}`),
+      bullet(`${STAY_TYPE_EMOJIS[stay.stayType]} **${esc(stay.name)}**${range.length > 1 ? ` — ${range}` : ''}`),
       ...compact([stay.address, stay.confirmationCode && `Confirmation: ${stay.confirmationCode}`, stay.linkUrl]).map(
         (line) => bullet(line, 1),
       ),
@@ -164,7 +169,7 @@ function buildRentalSections({ trip, rentals }: TimelineMarkdownSource) {
   const lines = rentals.flatMap((rental) => {
     const range = formatRentalTimeRange(trip, rental).trim();
     return [
-      bullet(`🚘 **${rental.name}**${rental.vehicle ? ` (${rental.vehicle})` : ''}${range.length > 1 ? ` — ${range}` : ''}`),
+      bullet(`🚘 **${esc(rental.name)}**${rental.vehicle ? ` (${esc(rental.vehicle)})` : ''}${range.length > 1 ? ` — ${range}` : ''}`),
       ...compact([
         rental.pickupAddress && `Pick up: ${rental.pickupAddress}`,
         rental.returnAddress && `Return: ${rental.returnAddress}`,
@@ -194,10 +199,10 @@ function buildChecklistSections({ trip, memberNames, checklist }: TripMarkdownSo
       ...items.flatMap((item) => {
         const extras = compact([
           item.completeByDayIndex !== null && `due ${getDayLabel(trip.startDate, item.completeByDayIndex, dayCount)}`,
-          item.assignedToUids.length > 0 && nameList(memberNames, item.assignedToUids),
+          item.assignedToUids.length > 0 && `assigned to ${nameList(memberNames, item.assignedToUids)}`,
         ]);
         return [
-          `- [${item.isCompleted ? 'x' : ' '}] ${item.title}${extras.length > 0 ? ` (${extras.join(' · ')})` : ''}`,
+          `- [${item.isCompleted ? 'x' : ' '}] ${esc(item.title)}${extras.length > 0 ? ` (${extras.join(' · ')})` : ''}`,
           ...(item.note?.trim() ? quote(item.note.trim(), 1) : []),
         ];
       }),
@@ -210,7 +215,7 @@ function buildIdeaLines({ ideas }: TripMarkdownSource) {
     .filter((idea) => idea.convertedToEntityId === null)
     .flatMap((idea) => [
       bullet(
-        `${IDEA_TYPE_EMOJIS[idea.ideaType]} **${idea.title}**${idea.voterUids.length > 0 ? ` — ${idea.voterUids.length} ${idea.voterUids.length === 1 ? 'vote' : 'votes'}` : ''}`,
+        `${IDEA_TYPE_EMOJIS[idea.ideaType]} **${esc(idea.title)}**${idea.voterUids.length > 0 ? ` — ${idea.voterUids.length} ${idea.voterUids.length === 1 ? 'vote' : 'votes'}` : ''}`,
       ),
       ...compact([idea.linkUrl]).map((line) => bullet(line, 1)),
       ...(idea.notes?.trim() ? quote(idea.notes.trim(), 1) : []),
@@ -225,9 +230,9 @@ export function buildTimelineMarkdown(source: TimelineMarkdownSource): string {
   const { trip } = source;
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const result = [
-    heading(1, `${trip.title} — Timeline`),
+    heading(1, `${esc(trip.title)} — Timeline`),
     '',
-    `${getDayDateLabel(trip.startDate, 0)} – ${getDayDateLabel(trip.startDate, dayCount - 1)}`,
+    `${getDayDateLabel(trip.startDate, 0)} – ${getDayDateLabel(trip.startDate, dayCount - 1)}${trip.timezone ? ` · times in ${formatTimezoneLabel(trip.timezone)}` : ''}`,
     '',
     ...buildTimelineSections(source, 2).flatMap((block) => [block, '']),
   ]
@@ -241,7 +246,7 @@ export function buildTripMarkdown(source: TripMarkdownSource): string {
   const { trip, memberNames } = source;
   const memberIds = Object.keys(trip.members);
   const lines = [
-    heading(1, trip.title),
+    heading(1, esc(trip.title)),
     '',
     ...getTripFacts(source).map((fact) => bullet(fact)),
     ...(memberIds.length > 0 ? [bullet(`👥 ${nameList(memberNames, memberIds)}`)] : []),

@@ -62,7 +62,7 @@ function EditTripCityModal({ isOpen, trip, isSubmitting = false, onSubmit, onClo
           <p className='text-muted-foreground text-sm'>
             Your trip&apos;s times stay in{' '}
             <strong className='text-foreground'>{formatTimezoneLabel(trip.timezone)}</strong>. Only the weather uses{' '}
-            {city.name}&apos;s own time.
+            {city.name}&apos;s own time. To change the trip&apos;s time zone, use Dates &amp; time zone in the trip menu.
           </p>
         )}
         {error && <p className='text-destructive text-sm'>{error}</p>}

@@ -49,6 +49,7 @@ import {
   deleteExpense,
   deletePersonalExpense,
   markExpensePaid,
+  markExpenseUnpaid,
   removeEarlyPayment,
   setEarlyPayment,
   setEarlyPaymentReturned,
@@ -471,6 +472,27 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
   };
 
+  const handleTogglePersonalStatus = async () => {
+    if (!personalFormExpense) {
+      return;
+    }
+    const { title, amount, dayIndex, category, customCategoryLabel, note, status } = personalFormExpense;
+    await dispatch(
+      updatePersonalExpense({
+        uid: currentUserId,
+        expenseId: personalFormExpense.id,
+        title,
+        amount,
+        dayIndex,
+        category,
+        customCategoryLabel,
+        note,
+        status: status === 'PAID' ? 'EXPECTED' : 'PAID',
+      }),
+    ).unwrap();
+    setPersonalFormExpense(null);
+  };
+
   const handlePersonalCreate = async (values: PersonalExpenseSubmitValues) => {
     setIsSubmitting(true);
     try {
@@ -515,6 +537,22 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       setError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
     } finally {
       setMarkingPaidId(null);
+    }
+  };
+
+  const handleMarkUnpaid = async (expense: TripExpense) => {
+    const confirmed = await confirm({
+      title: 'Mark as unpaid',
+      message: `Mark "${expense.title}" as not paid yet? It goes back to expected and leaves the dues until it is paid again.`,
+    });
+    if (!confirmed) {
+      return;
+    }
+    setError(null);
+    try {
+      await dispatch(markExpenseUnpaid({ expense })).unwrap();
+    } catch (markError) {
+      setError(getErrorMessage(markError, 'Unable to mark this expense as unpaid.'));
     }
   };
 
@@ -586,6 +624,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             label: 'Mark paid',
             description: 'Record who covered it and what it cost.',
             run: () => setPayingExpense(expense),
+          },
+        ]
+      : []),
+    ...(canAddExpenses && expense.status === 'PAID'
+      ? [
+          {
+            key: 'mark-unpaid',
+            label: 'Mark as unpaid',
+            description: 'Put it back to expected if it was marked paid by mistake.',
+            run: () => void handleMarkUnpaid(expense),
           },
         ]
       : []),
@@ -1240,6 +1288,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           isSubmitting={isPersonalSubmitting}
           onSubmit={handlePersonalSubmit}
           onDelete={() => handlePersonalDelete(personalFormExpense)}
+          onToggleStatus={handleTogglePersonalStatus}
           onClose={() => setPersonalFormExpense(null)}
         />
       )}

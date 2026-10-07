@@ -10,7 +10,6 @@ import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips'
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { PillGroup } from '@/components/PillGroup';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
@@ -54,6 +53,8 @@ interface PersonalExpenseFormModalProps {
   isSubmitting?: boolean;
   onSubmit: (values: PersonalExpenseSubmitValues) => Promise<void> | void;
   onDelete: () => Promise<void> | void;
+  /** Flips paid and still-to-pay on its own, apart from saving the details. */
+  onToggleStatus: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -75,6 +76,7 @@ function PersonalExpenseFormModal({
   isSubmitting = false,
   onSubmit,
   onDelete,
+  onToggleStatus,
   onClose,
 }: PersonalExpenseFormModalProps) {
   const { confirm } = useActionModal();
@@ -125,21 +127,6 @@ function PersonalExpenseFormModal({
             />
           );
         },
-      }),
-      custom({
-        name: 'status',
-        label: 'Status',
-        renderComponent: (props) => (
-          <PillGroup
-            label='Status'
-            options={[
-              { value: 'EXPECTED', label: 'Still to pay', emoji: '⏳' },
-              { value: 'PAID', label: 'Already paid', emoji: '💸' },
-            ]}
-            value={props.value as ExpenseStatus}
-            onChange={(value) => props.onValueChange(value)}
-          />
-        ),
       }),
       custom({
         name: 'dayIndex',
@@ -222,6 +209,18 @@ function PersonalExpenseFormModal({
         <Lock className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
         <span>Only you can see this. It stays out of everyone’s list, totals and dues.</span>
       </p>
+      <div className='bg-muted/50 mb-4 flex items-center justify-between gap-3 rounded-xl px-3'>
+        <p className='text-sm font-medium'>{initialExpense.status === 'PAID' ? '💸 Paid' : '⏳ Still to pay'}</p>
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className='min-h-10 px-0!'
+          onClick={() => void onToggleStatus()}
+        >
+          {initialExpense.status === 'PAID' ? 'Mark as unpaid' : 'Mark paid'}
+        </Button>
+      </div>
       <Form
         id='waypoint-personal-expense'
         form={fields}

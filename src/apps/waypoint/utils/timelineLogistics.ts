@@ -41,7 +41,7 @@ export function getLogisticsEntries(trip: TripSpace, stays: Stay[], rentals: Ren
     ].flatMap(({ id, point, verb }) =>
       point.dayIndex === null
         ? []
-        : [{ key: `stay-${stay.id}-${id}`, subject: { kind: 'STAY' as const, id: stay.id }, dayIndex: point.dayIndex, time: point.time, emoji: STAY_TYPE_EMOJIS[stay.stayType], verb, name: stay.name }],
+        : [{ key: `stay-${stay.id}-${id}`, subject: { kind: 'STAY' as const, id: stay.id }, dayIndex: point.dayIndex, time: point.time, emoji: STAY_TYPE_EMOJIS[stay.stayType] ?? STAY_TYPE_EMOJIS.OTHER, verb, name: stay.name }],
     );
   });
 

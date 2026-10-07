@@ -11,7 +11,8 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarDays, Route, StickyNote, Users, Wallet } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ArrowLeftRight, CalendarDays, Pencil, Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime } from '@/utils/formatUtils';
@@ -45,6 +46,33 @@ import {
 
 const PAID_BY_EACH_PERSON = '';
 
+const usd = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
+
+const describePrice = ({
+  isEach,
+  amount,
+  headcount,
+  isPick,
+}: {
+  isEach: boolean;
+  amount: number | null;
+  headcount: number;
+  isPick: boolean;
+}) => {
+  const people = `${headcount} ${headcount === 1 ? 'person' : 'people'}`;
+  if (amount !== null && headcount > 0) {
+    return isEach
+      ? `Each of the ${people} pays ${usd.format(amount)}, so ${usd.format(amount * headcount)} in total.`
+      : `${usd.format(amount)} shared by ${people} is ${usd.format(amount / headcount)} each.`;
+  }
+  if (isEach) {
+    return isPick
+      ? `Each of the ${people} you picked pays this much.`
+      : 'Everyone in the split pays this much, so the total grows with every person who joins.';
+  }
+  return 'We work out each person’s share for you.';
+};
+
 const NO_LINK = 'none';
 
 const LINK_KIND_LABELS: Record<ExpenseLink['kind'], string> = {
@@ -73,7 +101,6 @@ interface ExpenseFormData {
   payerUid: string;
   status: ExpenseStatus;
   dayIndex: string;
-  paidAmount: string;
   note: string;
   group: ChoiceValue;
 }
@@ -174,7 +201,6 @@ function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefi
     payerUid: initialExpense?.payerUid ?? PAID_BY_EACH_PERSON,
     status: initialExpense?.status ?? 'EXPECTED',
     dayIndex: getDayValue(initialExpense ? initialExpense.dayIndex : prefill?.dayIndex),
-    paidAmount: String(initialExpense?.paidAmount ?? ''),
     note: initialExpense?.note ?? '',
     group: { choice: initialExpense?.groupLabel ?? '', newLabel: '' },
   };
@@ -220,11 +246,9 @@ function ExpenseFormModal({
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
-  const [showPaidField, setShowPaidField] = useState(initialExpense?.status === 'PAID');
   const [showDayField, setShowDayField] = useState(
     initialExpense ? initialExpense.dayIndex !== null : prefill?.dayIndex != null,
   );
-  const [showEachField, setShowEachField] = useState(Boolean(initialExpense?.isPerPerson));
   const [showTitleFields, setShowTitleFields] = useState(false);
   const [isPlanAnswered, setIsPlanAnswered] = useState(false);
   const memberInfo = useUserInfo(memberIds);
@@ -247,7 +271,7 @@ function ExpenseFormModal({
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
   const asksAboutPlan =
     !isEditing && !prefill && canShare && !isPrivate && linkables.length > 0 && !isPlanAnswered;
-  const isLinked = !isEditing && Boolean(pickedSubject);
+  const isLinked = !isEditing && !isPrivate && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const linkOptions = useMemo(
     () => [
@@ -305,7 +329,8 @@ function ExpenseFormModal({
   const sharesPrice = !isPrivate && !(audience === 'PICK' && pickedIds.length <= 1);
 
   const areTitleFieldsVisible = isEditing || !isLinked || showTitleFields || resolveChoice(formData.category) === null;
-  const hasDayField = showDayField && linkedDay === null;
+  const isPaid = formData.status === 'PAID';
+  const hasDayField = linkedDay === null && (showDayField || formData.dayIndex !== '');
 
   const resetField = (patch: Partial<ExpenseFormData>) => {
     setFormData((current) => ({ ...current, ...patch }));
@@ -345,16 +370,20 @@ function ExpenseFormModal({
           const value = props.value as PriceValue;
           const valueMode = isPrivate ? 'amount' : value.mode;
           const isEach = value.isPerPerson && sharesPrice;
-          const amountLabel =
-            valueMode === 'range'
-              ? isEach
-                ? 'What each person might pay'
-                : 'Estimated total'
-              : isEach
-                ? 'What each person pays'
-                : sharesPrice
-                  ? 'Total to split'
-                  : 'Amount';
+          const priceToggle = sharesPrice && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-sm'>Price is</p>
+              <PillGroup
+                label='Price is'
+                options={[
+                  { value: 'group', label: 'Total' },
+                  { value: 'each', label: 'Per person' },
+                ]}
+                value={value.isPerPerson ? 'each' : 'group'}
+                onChange={(next) => props.onValueChange({ ...value, isPerPerson: next === 'each' })}
+              />
+            </div>
+          );
           return (
             <div className='space-y-3'>
               <Label>How much is it?</Label>
@@ -369,21 +398,26 @@ function ExpenseFormModal({
                   onChange={(next) => props.onValueChange({ ...value, mode: next })}
                 />
               )}
-              <div className='space-y-1.5'>
-                <p className='text-muted-foreground text-sm'>{amountLabel}</p>
-                {valueMode === 'amount' ? (
-                  <Input
-                    type='number'
-                    aria-label={amountLabel}
-                    placeholder='0.00'
-                    variant='outline'
-                    value={value.amount}
-                    onChange={(event) => props.onValueChange({ ...value, amount: event.target.value })}
-                  />
-                ) : (
+              {valueMode === 'amount' ? (
+                <div className={join('grid items-start gap-3', sharesPrice && 'grid-cols-2')}>
+                  <div className='space-y-1.5'>
+                    <p className='text-muted-foreground text-sm'>Amount</p>
+                    <Input
+                      type='number'
+                      aria-label='Amount'
+                      placeholder='0.00'
+                      variant='outline'
+                      value={value.amount}
+                      onChange={(event) => props.onValueChange({ ...value, amount: event.target.value })}
+                    />
+                  </div>
+                  {priceToggle}
+                </div>
+              ) : (
+                <>
                   <div className='grid grid-cols-2 gap-3'>
-                    <div className='space-y-1'>
-                      <p className='text-muted-foreground text-xs'>Lowest</p>
+                    <div className='space-y-1.5'>
+                      <p className='text-muted-foreground text-sm'>Lowest</p>
                       <Input
                         type='number'
                         aria-label='Lowest it could be'
@@ -393,8 +427,8 @@ function ExpenseFormModal({
                         onChange={(event) => props.onValueChange({ ...value, min: event.target.value })}
                       />
                     </div>
-                    <div className='space-y-1'>
-                      <p className='text-muted-foreground text-xs'>Highest</p>
+                    <div className='space-y-1.5'>
+                      <p className='text-muted-foreground text-sm'>Highest</p>
                       <Input
                         type='number'
                         aria-label='Highest it could be'
@@ -405,28 +439,18 @@ function ExpenseFormModal({
                       />
                     </div>
                   </div>
-                )}
-              </div>
-              {sharesPrice && showEachField && (
-                <div className='space-y-1.5'>
-                  <p className='text-muted-foreground text-sm'>Who does that price cover?</p>
-                  <PillGroup
-                    label='This price is for'
-                    options={[
-                      { value: 'group', label: 'One total', emoji: '🧮' },
-                      { value: 'each', label: 'Each person', emoji: '🙋' },
-                    ]}
-                    value={value.isPerPerson ? 'each' : 'group'}
-                    onChange={(next) => props.onValueChange({ ...value, isPerPerson: next === 'each' })}
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    {value.isPerPerson
-                      ? audience === 'PICK'
-                        ? `Each of the ${pickedIds.length} people you picked pays this much.`
-                        : 'Everyone in the split pays this much, so the total grows with every person who joins.'
-                      : 'We work out each person’s share for you.'}
-                  </p>
-                </div>
+                  {priceToggle}
+                </>
+              )}
+              {sharesPrice && (
+                <p className='text-muted-foreground text-xs'>
+                  {describePrice({
+                    isEach,
+                    amount: valueMode === 'amount' ? parseAmount(value.amount) : null,
+                    headcount: audience === 'PICK' ? pickedIds.length : memberIds.length,
+                    isPick: audience === 'PICK',
+                  })}
+                </p>
               )}
             </div>
           );
@@ -434,43 +458,44 @@ function ExpenseFormModal({
       }),
     );
 
-    if (isEditing && price.mode === 'range' && initialExpense?.status === 'PAID') {
+    if (!isEditing) {
       nextFields.push(
-        input({
-          name: 'paidAmount',
-          label: price.isPerPerson ? 'What each person paid' : 'Total paid',
-          type: 'number',
-          placeholder: '0.00',
-          variant: 'outline',
+        custom({
+          name: 'status',
+          label: '',
+          renderComponent: (props) => (
+            <div className='space-y-2'>
+              <Label>Already paid?</Label>
+              <PillGroup
+                label='Already paid'
+                options={[
+                  { value: 'EXPECTED', label: 'Not yet', emoji: '⏳' },
+                  { value: 'PAID', label: isPrivate ? 'Yes, I paid' : 'Yes, it’s paid', emoji: '💸' },
+                ]}
+                value={props.value as ExpenseStatus}
+                onChange={(next) => props.onValueChange(next)}
+              />
+            </div>
+          ),
         }),
       );
     }
 
-    if (showPaidField) {
+    if (isPaid && !isEditing && !isPrivate) {
       nextFields.push(
         custom({
           name: 'payerUid',
           label: '',
           renderComponent: (props) => (
-            <RemovableField
-              label={isPrivate ? 'Already paid' : 'Paid by'}
-              removeLabel='Not paid yet'
-              onRemove={() => {
-                setShowPaidField(false);
-                resetField({ status: 'EXPECTED', payerUid: PAID_BY_EACH_PERSON });
-              }}
-            >
-              {isPrivate ? (
-                <p className='text-muted-foreground text-sm'>Marked as paid.</p>
-              ) : (
-                <PillGroup
-                  label='Paid by'
-                  options={payerOptions}
-                  value={props.value as string}
-                  onChange={(value) => props.onValueChange(value)}
-                />
-              )}
-            </RemovableField>
+            <div className='space-y-2'>
+              <Label>Who paid?</Label>
+              <PillGroup
+                label='Paid by'
+                options={payerOptions}
+                value={props.value as string}
+                onChange={(next) => props.onValueChange(next)}
+              />
+            </div>
           ),
         }),
       );
@@ -549,19 +574,16 @@ function ExpenseFormModal({
     dayOptions,
     groupOptions,
     hasDayField,
-    initialExpense?.status,
     isEditing,
+    isPaid,
     isPrivate,
     payerOptions,
-    price.isPerPerson,
-    price.mode,
     audience,
+    memberIds.length,
     pickedIds.length,
     sharesPrice,
-    showEachField,
     showGroupField,
     showNoteField,
-    showPaidField,
   ]);
 
   const pickLink = (nextKey: string) => {
@@ -609,8 +631,6 @@ function ExpenseFormModal({
     const amount = submittedMode === 'amount' ? parseAmount(data.price.amount) : null;
     const amountMin = submittedMode === 'range' ? parseAmount(data.price.min) : null;
     const amountMax = submittedMode === 'range' ? parseAmount(data.price.max) : null;
-    const paidAmount =
-      isEditing && submittedMode === 'range' && initialExpense?.status === 'PAID' ? parseAmount(data.paidAmount) : null;
     const categoryChoice = resolveChoice(data.category);
 
     if (
@@ -646,11 +666,15 @@ function ExpenseFormModal({
         amount,
         amountMin,
         amountMax,
-        payerUid: data.status === 'PAID' && data.payerUid !== '' ? data.payerUid : null,
-        status: data.status,
+        payerUid: isEditing
+          ? (initialExpense?.payerUid ?? null)
+          : data.status === 'PAID' && data.payerUid !== ''
+            ? data.payerUid
+            : null,
+        status: initialExpense?.status ?? data.status,
         dayIndex,
         currency: 'USD',
-        paidAmount,
+        paidAmount: initialExpense?.paidAmount ?? null,
         category,
         customCategoryLabel,
         note: showNoteField ? data.note.trim() || null : null,
@@ -697,20 +721,13 @@ function ExpenseFormModal({
   const privateNote = 'Only you can see this. It stays out of everyone’s list, totals and dues.';
 
   const chips = [
-    ...(showPaidField ? [] : [{ key: 'paid', label: 'Already paid', icon: <Wallet className='h-4 w-4' /> }]),
-    ...(showDayField || linkedDay !== null ? [] : [{ key: 'day', label: 'Trip day', icon: <CalendarDays className='h-4 w-4' /> }]),
-    ...(showEachField || !sharesPrice ? [] : [{ key: 'each', label: 'Price per person', icon: <Users className='h-4 w-4' /> }]),
+    ...(hasDayField || linkedDay !== null ? [] : [{ key: 'day', label: 'Trip day', icon: <CalendarDays className='h-4 w-4' /> }]),
     ...(showGroupField || isPrivate ? [] : [{ key: 'group', label: 'Group', icon: <Route className='h-4 w-4' /> }]),
     ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
   ];
   const addChip = (key: string) => {
-    if (key === 'paid') {
-      setShowPaidField(true);
-      resetField({ status: 'PAID' });
-    } else if (key === 'day') {
+    if (key === 'day') {
       setShowDayField(true);
-    } else if (key === 'each') {
-      setShowEachField(true);
     } else if (key === 'group') {
       setShowGroupField(true);
     } else {
@@ -720,9 +737,9 @@ function ExpenseFormModal({
   const summaryDay = formData.dayIndex === '' ? null : getDayDateLabel(trip.startDate, Number(formData.dayIndex));
   const summaryCategory = resolveChoice(formData.category);
   const planQuestion = (
-    <div className='space-y-3'>
+    <div className='min-h-[44dvh] space-y-3'>
       <div className='space-y-1.5'>
-        <Label>Is this for something you&apos;ve already planned?</Label>
+        <Label>What&apos;s this expense for?</Label>
         <Select
           searchable
           options={linkOptions.filter((option) => option.value !== NO_LINK)}
@@ -740,7 +757,7 @@ function ExpenseFormModal({
           setIsPlanAnswered(true);
         }}
       >
-        No, it&apos;s something else
+        Something else
       </Button>
     </div>
   );
@@ -766,7 +783,7 @@ function ExpenseFormModal({
           {isLinked && pickedSubject && (
             <div className='bg-muted/50 mb-4 space-y-1 rounded-xl p-3'>
               <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Paying for</p>
-              <p className='font-semibold'>{formData.title || pickedSubject.title}</p>
+              {!showTitleFields && <p className='font-semibold'>{formData.title || pickedSubject.title}</p>}
               <p className='text-muted-foreground text-sm'>
                 {[
                   summaryCategory ? getExpenseCategoryKeyLabel(summaryCategory) : null,
@@ -780,24 +797,37 @@ function ExpenseFormModal({
                   type='button'
                   variant='link'
                   size='sm'
-                  className='min-h-10 px-0!'
+                  className='min-h-10 gap-1.5 px-0!'
                   onClick={() => setIsPlanAnswered(false)}
                 >
-                  Change plan
+                  <ArrowLeftRight className='h-3.5 w-3.5' aria-hidden='true' />
+                  Change
                 </Button>
                 {!showTitleFields && (
                   <Button
                     type='button'
                     variant='link'
                     size='sm'
-                    className='min-h-10 px-0!'
+                    className='min-h-10 gap-1.5 px-0!'
                     onClick={() => setShowTitleFields(true)}
                   >
+                    <Pencil className='h-3.5 w-3.5' aria-hidden='true' />
                     Edit title or category
                   </Button>
                 )}
               </div>
             </div>
+          )}
+          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && linkables.length > 0 && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='mb-2 min-h-10 px-0!'
+              onClick={() => setIsPlanAnswered(false)}
+            >
+              Link it to a plan
+            </Button>
           )}
           {!isEditing && canShare && (
             <div className='mb-4 space-y-2'>
@@ -808,7 +838,11 @@ function ExpenseFormModal({
                 value={audience}
                 onChange={(next) => {
                   hasChosenAudience.current = true;
+                  setIsPlanAnswered(true);
                   setAudienceValue((current) => ({ ...current, audience: next }));
+                  if (next === 'ME' && price.mode === 'range' && price.amount.trim() === '') {
+                    resetField({ price: { ...price, mode: 'amount', amount: price.max || price.min } });
+                  }
                 }}
               />
               {audience === 'PICK' && (

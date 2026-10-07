@@ -201,8 +201,12 @@ export function TimelineSection({
     const copied = await copyToClipboard(markdown);
     addToast(
       copied
-        ? { title: 'Timeline copied', description: 'Paste it anywhere as Markdown.' }
-        : { title: 'Unable to copy the timeline', description: 'Please try again.', type: 'error' },
+        ? {
+            title: 'Timeline copied',
+            description: 'Paste it anywhere as Markdown. It includes confirmation codes and notes.',
+            type: 'success',
+          }
+        : { title: 'Unable to copy the timeline', description: 'Your browser blocked copying on this page.', type: 'error' },
     );
   };
   const attendanceFilteredEvents = events
@@ -695,12 +699,12 @@ export function TimelineSection({
               type='button'
               variant='tertiary'
               size='sm'
-              className='gap-2'
+              className="relative gap-2 whitespace-nowrap before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']"
               aria-label='Copy timeline as Markdown'
               onClick={() => void handleCopyTimeline()}
             >
               <ClipboardCopy className='h-4 w-4' />
-              <span className='sm:hidden'>Copy</span>
+              <span className='hidden min-[360px]:inline sm:hidden'>Copy</span>
               <span className='max-sm:hidden'>Copy as Markdown</span>
             </Button>
             <TimelineViewOptions groups={viewOptionGroups} />
