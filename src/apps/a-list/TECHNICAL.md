@@ -82,6 +82,7 @@ interface MembershipProfile {
   monthlyGoal: number | null;
   favoriteTheatreId: string | null;  // the theater new showings default to; one pointer, so there can never be two favorites. Documents written before theaters existed lack the key (readers use `?? null`)
   setupCompletedAt: number;          // instant; its presence is what "Setup is done" means. Immutable
+  trailerReminderId: string | null;  // the pending push (`reminders/{id}`, `TRAILER_REMINDER_DELAY_MINUTES` after showtimeAt); documents written before it existed lack the key
   createdAt: number;
   lastEditedAt: number;
 }
@@ -198,7 +199,7 @@ interface TheatreSnapshot { theatreId: string; name: string; city: string | null
 | Opening tab contents and its count | watchlist release dates, local today | `selectOpeningRows` |
 | Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
 | Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
-| Previews window | the earliest `PLANNED` viewing with `showtimeAt − 30 min ≤ now ≤ showtimeAt + 10 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
+| Previews window | the earliest `PLANNED` viewing with `showtimeAt − 10 min ≤ now ≤ showtimeAt + 30 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
 | Format split (count and %), activity over time, rating groups, per-format premium averages (Next Steps) | viewings | `selectDashboardBreakdowns` |
 
 ---
@@ -466,7 +467,7 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 
 #### 11. The previews strip
 
-`selectPreviewsWindowViewing(state, now)` returns the earliest `PLANNED` viewing whose previews are near: `showtimeAt − 30 min ≤ now ≤ showtimeAt + 10 min` (display only, the viewer's local clock; `useNow`'s 15-second tick moves the edges). `PreviewsNudge` shows a small bubble for it above the Calendar icon, folds it into a chip when the user dismisses it (in component state, so until the next open; tapping the chip unfolds it again), and never opens an overlay: its button opens the ordinary add subview in `quick` mode. Because it is not a drawer it cannot stack on the Seen prompt, which may appear over it for an earlier showing. Quick mode saves a tapped result as `WANT_TO_SEE` with no preferred format and no details step, skips a title already on the watchlist (by key, or by title and year across providers) with an "Already on your watchlist" toast, and, when the details lookup fails (poor signal in a theater), saves what the search returned and leaves the rest to `useRefreshUnreleasedMovies`, which covers null-dated items.
+`selectPreviewsWindowViewing(state, now)` returns the earliest `PLANNED` viewing whose previews are near: `showtimeAt − 10 min ≤ now ≤ showtimeAt + 30 min` (display only, the viewer's local clock; `useNow`'s 15-second tick moves the edges). `PreviewsNudge` shows a small bubble for it above the Calendar icon, folds it into a chip when the user dismisses it (in component state, so until the next open; tapping the chip unfolds it again), and never opens an overlay: its button opens the ordinary add subview in `quick` mode. Because it is not a drawer it cannot stack on the Seen prompt, which may appear over it for an earlier showing. Quick mode saves a tapped result as `WANT_TO_SEE` with no preferred format and no details step, skips a title already on the watchlist (by key, or by title and year across providers) with an "Already on your watchlist" toast, and, when the details lookup fails (poor signal in a theater), saves what the search returned and leaves the rest to `useRefreshUnreleasedMovies`, which covers null-dated items.
 ---
 
 ## Security Rules Design Criteria
@@ -479,7 +480,7 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 6. **Cross-field integrity the client could get wrong:** `endsAt > showtimeAt`; `status == 'SEEN'` implies `showtimeAt ≤ request.time.toMillis()` (the server's clock, so a skewed device can't create a seen movie in the future); arriving at `SEEN` (a create, or a `PLANNED → SEEN` update) also requires `endsAt ≤ request.time.toMillis()`, so a movie can't be marked seen while it is still running; an update whose stored `status` is `SEEN` must keep `SEEN` (no `SEEN → PLANNED`); `status == 'PLANNED'` implies `rating == null`; `ticket.format == 'STANDARD'` implies `standardPriceCents == null`; `ticket.totalCents == priceCents + feeAvoidedCents + taxCents`; `monthlyTotalCents ≥ monthlyCostCents`.
 7. **Deletes:** the owner may delete viewings and watchlist items (both have UI). The membership document cannot be deleted (no UI; there is no "reset" in the MVP).
 8. **No cross-document rules.** A viewing doesn't require its watchlist item to exist: the app's "add viewing" writes both in one transaction for user-experience atomicity, but the data is the member's own, and nothing reads a viewing in a way that needs the watchlist document. This keeps the rules `get()`-free.
-9. **Rules tolerate older documents** the way every collection in this repo must: a field added later is validated on the *incoming* document with `request.resource.data.get('field', default)` (so a write that omits it still passes, and a write that sets it is checked), and `resource.data.get('field', default)` is used only to compare against the stored value (immutability, transitions). Every edit action backfills the new key with its empty value in the same write. (Older viewings lack `ticket`, `rating`, `theatre`; older memberships lack `favoriteTheatreId`.)
+9. **Rules tolerate older documents** the way every collection in this repo must: a field added later is validated on the *incoming* document with `request.resource.data.get('field', default)` (so a write that omits it still passes, and a write that sets it is checked), and `resource.data.get('field', default)` is used only to compare against the stored value (immutability, transitions). Every edit action backfills the new key with its empty value in the same write. (Older viewings lack `ticket`, `rating`, `theatre`, `trailerReminderId`; older memberships lack `favoriteTheatreId`.)
 10. **No `storage.rules` change.** The app stores no files.
 11. **The movie cache and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
 12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be `manual-…` and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range), and `createdAt` is immutable. `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
@@ -607,11 +608,11 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 | `addWatchlistItem(movie, priority, preferredFormat)` (a manual movie is just a snapshot built by `ManualMovieForm` with a `manual-<uuid>` key) | `setDoc` at `watchlist/{movieKey}`; **create-if-absent** inside a `runTransaction` so a double-tap or two devices can't overwrite an existing priority |
 | `updateWatchlistItem(movieKey, fields)` | field-scoped `updateDoc` |
 | `removeWatchlistItem(movieKey)` | `deleteDoc`, after `useActionModal().confirm({ destructive: true })`; viewings untouched |
-| `addViewing({ movie, showtimeAt, ticket, theatre })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action |
-| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`, `theatre`) |
+| `addViewing({ movie, showtimeAt, ticket, theatre })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action A showing still ahead also gets a `reminders` doc (`appId: 'a-list'`, title only, no movie details) scheduled after the transaction commits, best-effort, with its id pre-generated and stored as `trailerReminderId`. |
+| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`, `theatre`) and, for a future showtime, a fresh `trailerReminderId` (the previous reminder is cancelled and a new one scheduled after the write) |
 | `recordTicket(id, ticket)` | `updateDoc({ ticket, lastEditedAt })` — the form owns the whole object |
 | `markViewingSeen(id, rating)` | `updateDoc({ status: 'SEEN', rating, lastEditedAt })` |
-| `removeViewing(id)` | `deleteDoc` after a destructive confirm (also what "Didn't go" does) |
+| `removeViewing(id)` | a transaction that reads and deletes the viewing after a destructive confirm (also what "Didn't go" does); its pending trailer reminder is cancelled afterwards |
 
 No cached document is ever written back whole. A transaction is used only where one action must create two documents consistently or create-if-absent; the single-member data has no other concurrency hazard.
 

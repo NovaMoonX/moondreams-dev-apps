@@ -94,6 +94,8 @@ export interface Viewing {
   theatre: TheatreSnapshot | null;
   /** 0.5–5 stars in half steps, only once seen. Older documents hold whole stars, and those written before ratings existed lack the key. */
   rating: number | null;
+  /** The pending push that nudges them to add trailers once the showing starts. Documents written before it existed lack the key. */
+  trailerReminderId: string | null;
   createdAt: number;
   lastEditedAt: number;
 }

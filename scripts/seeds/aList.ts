@@ -331,6 +331,7 @@ function getViewingFixtures(now: number) {
         endsAt,
         status,
         ticket: SEED_TICKETS[id] ?? null,
+        trailerReminderId: null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
         ...(SEED_VIEWING_THEATRES[id] === undefined
           ? {}

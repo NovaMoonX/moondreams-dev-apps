@@ -234,8 +234,8 @@ service cloud.firestore {
       match /viewings/{viewingId} {
         function isViewingValid(data) {
           let required = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
-          // `ticket`, `rating` and `theatre` arrived later: legacy documents lack them, so they're allowed but not required.
-          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre'])) && data.keys().hasAll(required)
+          // `ticket`, `rating`, `theatre` and `trailerReminderId` arrived later: legacy documents lack them, so they're allowed but not required.
+          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre', 'trailerReminderId'])) && data.keys().hasAll(required)
             && data.id == viewingId
             && data.movieKey is string
             && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
@@ -247,6 +247,7 @@ service cloud.firestore {
             && (data.status == 'PLANNED' || data.showtimeAt <= request.time.toMillis())
             && (data.get('ticket', null) == null || isTicketValid(data.ticket))
             && (data.get('theatre', null) == null || isTheatreSnapshotValid(data.theatre))
+            && (data.get('trailerReminderId', null) == null || data.trailerReminderId is string)
             && isNullOrHalfStars(data.get('rating', null))
             && (data.status == 'SEEN' || data.get('rating', null) == null)
             && data.createdAt is int
