@@ -35,6 +35,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
+import LogisticsDetailSheet from '@apps/waypoint/components/LogisticsDetailSheet';
 import LogisticsRow from '@apps/waypoint/components/LogisticsRow';
 import { getLogisticsEntries, toMinutes, type LogisticsEntry } from '@apps/waypoint/utils/timelineLogistics';
 import WeatherDayStrip from '@apps/waypoint/components/WeatherDayStrip';
@@ -118,8 +119,14 @@ export function TimelineSection({
   const [showArchived, setShowArchived] = useState(false);
   const memberIds = Object.keys(trip.members);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [logisticsEntry, setLogisticsEntry] = useState<LogisticsEntry | null>(null);
   const stays = useAppSelector(selectStays);
   const rentals = useAppSelector(selectRentals);
+  const logisticsStay =
+    logisticsEntry?.subject.kind === 'STAY' ? stays.find((item) => item.id === logisticsEntry.subject.id) : undefined;
+  const logisticsRental =
+    logisticsEntry?.subject.kind === 'RENTAL' ? rentals.find((item) => item.id === logisticsEntry.subject.id) : undefined;
+  const logisticsSubject = logisticsStay ? { stay: logisticsStay } : logisticsRental ? { rental: logisticsRental } : null;
   const logisticsByDay = useMemo(
     () =>
       unpaidOnly
@@ -174,7 +181,7 @@ export function TimelineSection({
   const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
   const [minimizeWeather, setMinimizeWeather] = useLocalStoragePreference('waypoint:minimizeWeather', false);
   const now = useNow(60_000);
-  const weather = useTripWeather(trip, events, stays, now);
+  const weather = useTripWeather(trip, events, now);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
@@ -387,7 +394,7 @@ export function TimelineSection({
       return { minutes: toMinutes(getEventTime(trip, first).startTime) ?? 0, node: renderTimelineItem(item) };
     });
     const logisticsRows = (dayIndex === undefined ? [] : (logisticsByDay.get(dayIndex) ?? []))
-      .map((entry) => ({ minutes: toMinutes(entry.time) ?? -1, node: <LogisticsRow key={entry.key} entry={entry} /> }))
+      .map((entry) => ({ minutes: toMinutes(entry.time) ?? -1, node: <LogisticsRow key={entry.key} entry={entry} onOpen={setLogisticsEntry} /> }))
       .sort((first, second) => first.minutes - second.minutes);
     const merged = timelineNodes.reduce<{ nodes: ReactNode[]; rest: typeof logisticsRows }>(
       (acc, timelineNode) => {
@@ -684,15 +691,16 @@ export function TimelineSection({
         </Tabs>
         {weather.hasWeather && <WeatherAttribution />}
       </section>
+      <LogisticsDetailSheet
+        trip={trip}
+        subject={logisticsSubject}
+        onClose={() => setLogisticsEntry(null)}
+      />
       <WeatherDetailSheet
         isOpen={isWeatherOpen}
         onClose={() => setIsWeatherOpen(false)}
         title={weatherDay === null ? 'Weather' : getDayLabel(trip.startDate, weatherDay, dayCount)}
         details={weatherDay === null ? null : weather.getDayDetails(weatherDay)}
-        onShowDay={() => {
-          onActiveDayTabChange(weatherDay === null ? 'all' : String(weatherDay));
-          setIsWeatherOpen(false);
-        }}
       />
       {stackingEvent && (
         <EventStackModal

@@ -12,6 +12,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, ListFilter, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import DetailSheet from '@/components/DetailSheet';
@@ -265,7 +266,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
-  const [personalFormExpense, setPersonalFormExpense] = useState<PersonalExpense | 'new' | null>(null);
+  const [personalFormExpense, setPersonalFormExpense] = useState<PersonalExpense | null>(null);
+  const [newExpenseAudience, setNewExpenseAudience] = useState<'EVERYONE' | 'ME'>('EVERYONE');
   const [isPersonalSubmitting, setIsPersonalSubmitting] = useState(false);
   const [showAllPersonal, setShowAllPersonal] = useState(false);
   const [personalQuery, setPersonalQuery] = useState('');
@@ -457,18 +459,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const handlePersonalSubmit = async (values: PersonalExpenseSubmitValues) => {
+    if (!personalFormExpense) {
+      return;
+    }
     setIsPersonalSubmitting(true);
     try {
-      if (personalFormExpense && personalFormExpense !== 'new') {
-        await dispatch(
-          updatePersonalExpense({ uid: currentUserId, expenseId: personalFormExpense.id, ...values }),
-        ).unwrap();
-      } else {
-        await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
-      }
+      await dispatch(updatePersonalExpense({ uid: currentUserId, expenseId: personalFormExpense.id, ...values })).unwrap();
       setPersonalFormExpense(null);
     } finally {
       setIsPersonalSubmitting(false);
+    }
+  };
+
+  const handlePersonalCreate = async (values: PersonalExpenseSubmitValues) => {
+    setIsSubmitting(true);
+    try {
+      await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
+      setIsModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -853,16 +862,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       <SectionHeader
         title='Expenses'
         action={
-          canAddExpenses && (
-            <Button
-              onClick={() => {
-                setEditingExpense(null);
-                setIsModalOpen(true);
-              }}
-            >
-              Add
-            </Button>
-          )
+          <Button
+            onClick={() => {
+              setEditingExpense(null);
+              setNewExpenseAudience(canAddExpenses ? 'EVERYONE' : 'ME');
+              setIsModalOpen(true);
+            }}
+          >
+            Add
+          </Button>
         }
       />
       <div className='space-y-3'>
@@ -872,7 +880,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           value={totalsView}
           onChange={setTotalsView}
         />
-        <p className='text-muted-foreground text-xs'>{EXPENSE_TOTALS_VIEW_HINTS[totalsView]}</p>
+        <p className='text-muted-foreground text-xs'>
+          {EXPENSE_TOTALS_VIEW_HINTS[totalsView]}
+          {totalsView === 'me' && (
+            <>
+              {' '}
+              <HelpTip title='Your share' linkLabel='What do these mean?'>
+                <p>
+                  <strong>Paid by me</strong> is what you covered up front.
+                </p>
+                <p>
+                  <strong>Expected for me</strong> is your share of what is still to pay.
+                </p>
+                <p>
+                  <strong>My total</strong> is your share of everything, including what others covered.
+                </p>
+              </HelpTip>
+            </>
+          )}
+        </p>
         {personalTotals.total > 0 && (
           <p className='text-muted-foreground flex items-start gap-1.5 text-xs'>
             <Lock className='mt-0.5 h-3 w-3 shrink-0' aria-hidden='true' />
@@ -930,7 +956,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               size='sm'
               variant='secondary'
               className="relative after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
-              onClick={() => setPersonalFormExpense('new')}
+              onClick={() => {
+                setEditingExpense(null);
+                setNewExpenseAudience('ME');
+                setIsModalOpen(true);
+              }}
             >
               Add
             </Button>
@@ -1178,11 +1208,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <ExpenseFormModal
-        key={`${editingExpense?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
+        key={`${editingExpense?.id ?? 'new'}-${newExpenseAudience}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
         trip={trip}
         currentUserId={currentUserId}
         initialExpense={editingExpense ?? undefined}
+        initialAudience={newExpenseAudience}
+        canShare={canAddExpenses}
+        onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
         categoryKeys={categoryKeys}
         existingGroupLabels={existingGroupLabels}
         isSubmitting={isSubmitting}
@@ -1194,18 +1227,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }}
       />
       <PersonalExpenseFormModal
-        key={`${personalFormExpense === null || personalFormExpense === 'new' ? 'new' : personalFormExpense.id}-${personalFormExpense === null ? 'closed' : 'open'}`}
+        key={`${personalFormExpense?.id ?? 'none'}-${personalFormExpense === null ? 'closed' : 'open'}`}
         isOpen={personalFormExpense !== null}
         trip={trip}
-        initialExpense={personalFormExpense === null || personalFormExpense === 'new' ? undefined : personalFormExpense}
+        initialExpense={personalFormExpense ?? undefined}
         categoryKeys={personalCategoryKeys}
         isSubmitting={isPersonalSubmitting}
         onSubmit={handlePersonalSubmit}
-        onDelete={
-          personalFormExpense === null || personalFormExpense === 'new'
-            ? undefined
-            : () => handlePersonalDelete(personalFormExpense)
-        }
+        onDelete={personalFormExpense ? () => handlePersonalDelete(personalFormExpense) : undefined}
         onClose={() => setPersonalFormExpense(null)}
       />
       <MarkExpensePaidModal

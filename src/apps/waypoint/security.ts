@@ -1,4 +1,4 @@
-import type { TripSpace } from '@apps/waypoint/types';
+import type { TripCity, TripSpace } from '@apps/waypoint/types';
 
 export const TRIP_COLLECTION_PATH = ['apps', 'waypoint', 'trips'] as const;
 
@@ -8,6 +8,7 @@ export interface CreateTripValues {
   startDate: number;
   endDate: number;
   timezone: string;
+  city?: TripCity | null;
   createdBy: string;
   createdAt: number;
   inviteCode?: string | null;
@@ -35,6 +36,7 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
     sharedAlbumSetAt: null,
     timeModel: 'RELATIVE',
     timezone: values.timezone,
+    city: values.city ?? null,
     dateShiftStatus: null,
     createdBy: values.createdBy,
     createdAt: values.createdAt,

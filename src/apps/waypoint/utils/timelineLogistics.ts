@@ -4,6 +4,7 @@ import { getStayTime } from '@apps/waypoint/utils/tripTime';
 
 export interface LogisticsEntry {
   key: string;
+  subject: { kind: 'STAY' | 'RENTAL'; id: string };
   dayIndex: number;
   /** `HH:mm`; `null` when the day is known but not the time, which sits at the top of the day. */
   time: string | null;
@@ -40,21 +41,23 @@ export function getLogisticsEntries(trip: TripSpace, stays: Stay[], rentals: Ren
     ].flatMap(({ id, point, verb }) =>
       point.dayIndex === null
         ? []
-        : [{ key: `stay-${stay.id}-${id}`, dayIndex: point.dayIndex, time: point.time, emoji: STAY_TYPE_EMOJIS[stay.stayType], verb, name: stay.name }],
+        : [{ key: `stay-${stay.id}-${id}`, subject: { kind: 'STAY' as const, id: stay.id }, dayIndex: point.dayIndex, time: point.time, emoji: STAY_TYPE_EMOJIS[stay.stayType], verb, name: stay.name }],
     );
   });
 
   const rentalEntries = rentals.flatMap((rental) => [
     {
       key: `rental-${rental.id}-pickup`,
+      subject: { kind: 'RENTAL' as const, id: rental.id },
       dayIndex: rental.pickupDayIndex,
       time: rental.pickupTime || null,
-      emoji: '🚗',
+      emoji: '🚘',
       verb: 'Pick up',
       name: rental.name,
     },
     {
       key: `rental-${rental.id}-return`,
+      subject: { kind: 'RENTAL' as const, id: rental.id },
       dayIndex: rental.returnDayIndex,
       time: rental.returnTime || null,
       emoji: '🚗',

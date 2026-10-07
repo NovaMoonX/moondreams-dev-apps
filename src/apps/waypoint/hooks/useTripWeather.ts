@@ -4,7 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 
 import { getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { weatherForecastQueryOptions } from '@/lib/weather/weatherQueries';
-import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   buildWeatherPlan,
   getDayForecast,
@@ -17,11 +17,11 @@ import {
 
 /** Forecasts for a trip's visible days and events. A loading or failed request just reads as "no
  * weather", so nothing that renders from this ever waits on, or breaks because of, the provider. */
-export function useTripWeather(trip: TripSpace, events: TimelineEvent[], stays: Stay[], now: number) {
+export function useTripWeather(trip: TripSpace, events: TimelineEvent[], now: number) {
   const todayIndex = getLocalDayIndex(trip.startDate, now);
   const plan = useMemo(
-    () => buildWeatherPlan(trip, todayIndex, events, stays),
-    [trip, todayIndex, events, stays],
+    () => buildWeatherPlan(trip, todayIndex, events),
+    [trip, todayIndex, events],
   );
 
   const forecasts = useQueries({
@@ -44,7 +44,6 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], stays: 
           forecast,
           hours: getDayHours(plan, forecasts, dayIndex),
           placeName: target.placeName,
-          isBorrowed: target.isBorrowed,
         }
       : null;
   };

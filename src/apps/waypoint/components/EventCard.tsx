@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 
-import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Archive, ArchiveRestore, Layers } from 'lucide-react';
 
@@ -8,6 +8,7 @@ import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
 import EventWeatherChip from '@apps/waypoint/components/EventWeatherChip';
 import LocationLink from '@apps/waypoint/components/LocationLink';
+import SlimTimelineRow from '@apps/waypoint/components/SlimTimelineRow';
 import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
 import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
@@ -20,12 +21,13 @@ import type { HourForecast } from '@/lib/weather/types';
 import { formatClockTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { formatEventTimeRange, getEventTime, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
+import { formatEventStartTime, formatEventTimeRange, getEventTime, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_LINK_KIND_LABELS,
   EXPENSE_TRACKED_EVENT_TYPES,
   MEAL_TYPE_LABELS,
+  TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
@@ -57,7 +59,7 @@ interface EventCardProps {
   weather?: HourForecast | null;
 }
 
-function getQuickField(event: TimelineEvent): string | null {
+function getQuickField(event: TimelineEvent, isCompact: boolean): string | null {
   const details = event.eventDetails;
   if (event.eventType === 'TRAVEL' && details && 'transitType' in details) {
     return TRANSIT_TYPE_LABELS[details.transitType] ?? details.transitType;
@@ -69,7 +71,9 @@ function getQuickField(event: TimelineEvent): string | null {
       .join(' · ');
   }
   if (event.eventType === 'ACTIVITY' && details && 'settings' in details) {
-    return details.settings.map((setting) => ACTIVITY_SETTING_LABELS[setting] ?? setting).join(' / ');
+    return isCompact && details.settings.length > 1
+      ? 'Both'
+      : details.settings.map((setting) => ACTIVITY_SETTING_LABELS[setting] ?? setting).join(' / ');
   }
   return null;
 }
@@ -102,7 +106,9 @@ export function EventDetailLines({
   canEdit,
   onSaveNotes,
 }: EventDetailLinesProps) {
-  const quickField = getQuickField(event);
+  const isCompact = useMediaQuery().isBelow('sm');
+  const quickField = getQuickField(event, isCompact);
+  const isSettingField = isCompact && event.eventType === 'ACTIVITY';
   const badge = getEventBadge(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
   const { startMs, endMs } = getEventTime(trip, event);
@@ -135,6 +141,7 @@ export function EventDetailLines({
         <span className='text-muted-foreground text-sm'>
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
+        {isSettingField && quickField && <span className='text-muted-foreground text-sm'>· {quickField}</span>}
         {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
           <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
         )}
@@ -149,7 +156,7 @@ export function EventDetailLines({
         )}
       </div>
       {showTitle && <h3 className='pt-1 font-semibold'>{event.title}</h3>}
-      {quickField && !event.title.toLowerCase().includes(quickField.toLowerCase()) && (
+      {quickField && !isSettingField && !event.title.toLowerCase().includes(quickField.toLowerCase()) && (
         <p className='text-muted-foreground text-sm'>{quickField}</p>
       )}
       {transitLines.length > 0 && (
@@ -230,6 +237,9 @@ export function EventCard({
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
+  const isTravel = event.eventType === 'TRAVEL';
+  const transitEmoji =
+    event.eventDetails && 'transitType' in event.eventDetails ? TRANSIT_TYPE_EMOJIS[event.eventDetails.transitType] : '🧭';
   const drawerTriggerProps = isSmallScreen
     ? {
         role: 'button',
@@ -245,9 +255,64 @@ export function EventCard({
       }
     : {};
 
+  const actionButtons = (
+    <div className='flex flex-wrap gap-2'>
+      {!event.isArchived && <MapNavigationButton {...event} />}
+      {canToggleArchive && showArchiveToggle && (
+        <Button
+          type='button'
+          size='sm'
+          variant='secondary'
+          aria-label={event.isArchived ? 'Unarchive event' : 'Archive event'}
+          onClick={() => onToggleArchived(event, closeDrawer)}
+        >
+          {event.isArchived ? <ArchiveRestore className='h-4 w-4' /> : <Archive className='h-4 w-4' />}
+        </Button>
+      )}
+      {canModify && (
+        <Button
+          type='button'
+          size='sm'
+          variant='secondary'
+          aria-label={stackActionLabel}
+          title={stackActionLabel}
+          onClick={() => {
+            closeDrawer();
+            onStack(event);
+          }}
+        >
+          <Layers className={join('h-4 w-4', isStacked && 'fill-current text-primary')} />
+        </Button>
+      )}
+      {canModify && (
+        <Button
+          type='button'
+          size='sm'
+          variant='secondary'
+          onClick={() => {
+            closeDrawer();
+            onEdit(event);
+          }}
+        >
+          Modify
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <article
+      {isTravel && (
+        <SlimTimelineRow
+          emoji={transitEmoji}
+          label={event.title}
+          time={formatEventStartTime(trip, event) || undefined}
+          ariaLabel={`Open details for ${event.title}`}
+          className={event.isArchived ? 'opacity-60' : undefined}
+          onOpen={() => setIsDrawerOpen(true)}
+        />
+      )}
+      {!isTravel && <article
         {...drawerTriggerProps}
         className={join(
           'border-border bg-card overflow-hidden rounded-lg border',
@@ -326,7 +391,24 @@ export function EventCard({
             />
           </div>
         )}
-      </article>
+      </article>}
+      {isTravel && !isSmallScreen && (
+        <Modal isOpen={isDrawerOpen} onClose={closeDrawer} title={event.title}>
+          <div className='space-y-3'>
+            <EventDetailLines
+              trip={trip}
+              event={event}
+              zoneStyle='long'
+              weather={weather}
+              showTitle={false}
+              showNotes
+              canEdit={canModify}
+              onSaveNotes={onSaveNotes}
+            />
+            {actionButtons}
+          </div>
+        </Modal>
+      )}
       {isSmallScreen && (
         <PlaceDetailsDrawer
           isOpen={isDrawerOpen}

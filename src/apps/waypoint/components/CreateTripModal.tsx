@@ -10,15 +10,19 @@ import {
 import DateRangeField, {
   type DateRangeValue,
 } from '@/components/forms/DateRangeField';
+import CitySearchField from '@/components/forms/CitySearchField';
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import type { City } from '@/lib/cities/types';
+import type { TripCity } from '@apps/waypoint/types';
 
 interface CreateTripFormData {
   title: string;
   dates: DateRangeValue;
   timezone: string;
+  city: City | null;
 }
 
 interface CreateTripModalProps {
@@ -29,6 +33,7 @@ interface CreateTripModalProps {
     startDate: number;
     endDate: number;
     timezone: string;
+    city: TripCity | null;
   }) => Promise<void> | void;
   onClose: () => void;
 }
@@ -39,6 +44,7 @@ const INITIAL_DATA: CreateTripFormData = {
   title: '',
   dates: { startDate: '', endDate: '' },
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  city: null,
 };
 
 function CreateTripModal({
@@ -49,6 +55,7 @@ function CreateTripModal({
 }: CreateTripModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateTripFormData>(INITIAL_DATA);
+  const [formKey, setFormKey] = useState(0);
 
   const isFormComplete =
     formData.title.trim() !== '' &&
@@ -72,6 +79,29 @@ function CreateTripModal({
             onChange={(value) => props.onValueChange(value)}
             disabled={isSubmitting}
           />
+        ),
+      }),
+      custom({
+        name: 'city',
+        label: 'Where is it based?',
+        renderComponent: (props) => (
+          <div className='space-y-1.5'>
+            <CitySearchField
+              value={props.value as City | null}
+              disabled={isSubmitting}
+              onChange={(city) => {
+                setFormData((current) => ({
+                  ...current,
+                  city,
+                  timezone: city?.timezone ?? current.timezone,
+                }));
+                setFormKey((key) => key + 1);
+              }}
+            />
+            <p className='text-muted-foreground text-xs'>
+              Optional. It sets the time zone and the weather for every day.
+            </p>
+          </div>
         ),
       }),
       custom({
@@ -103,7 +133,19 @@ function CreateTripModal({
     setError(null);
 
     try {
-      await onSubmit({ title, startDate, endDate, timezone: data.timezone });
+      await onSubmit({
+        title,
+        startDate,
+        endDate,
+        timezone: data.timezone,
+        city: data.city && {
+          name: data.city.name,
+          region: data.city.region,
+          country: data.city.country,
+          latitude: data.city.latitude,
+          longitude: data.city.longitude,
+        },
+      });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to create this trip.'));
     }
@@ -112,9 +154,10 @@ function CreateTripModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='New trip'>
       <Form
+        key={formKey}
         id='waypoint-create-trip'
         form={fields}
-        initialData={INITIAL_DATA}
+        initialData={formData}
         columns={1}
         spacing='normal'
         onDataChange={(data) => setFormData(data as CreateTripFormData)}

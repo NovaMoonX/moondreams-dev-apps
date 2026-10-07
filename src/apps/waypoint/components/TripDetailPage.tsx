@@ -24,6 +24,7 @@ import {
   Image,
   Link,
   Megaphone,
+  MapPin,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -33,6 +34,7 @@ import { useAppDispatch } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { getCityLabel } from '@/lib/cities/cityApi';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -41,6 +43,7 @@ import AnnouncementFormModal from '@apps/waypoint/components/AnnouncementFormMod
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import EditTripCoverModal from '@apps/waypoint/components/EditTripCoverModal';
 import EditTripDatesModal from '@apps/waypoint/components/EditTripDatesModal';
+import EditTripCityModal from '@apps/waypoint/components/EditTripCityModal';
 import EditTripTitleModal from '@apps/waypoint/components/EditTripTitleModal';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import IdeaFormModal, { type IdeaFormFields } from '@apps/waypoint/components/IdeaFormModal';
@@ -73,11 +76,12 @@ import { createIdea } from '@apps/waypoint/store/actions/ideaActions';
 import {
   deleteTrip,
   editTrip,
+  setTripCity,
   setTripArchived,
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
-import type { IdeaType, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
@@ -90,7 +94,7 @@ interface TripDetailPageProps {
   onBack: () => void;
 }
 
-type EditingField = 'title' | 'dates' | 'cover' | null;
+type EditingField = 'title' | 'dates' | 'city' | 'cover' | null;
 
 function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageProps) {
   const now = useNow();
@@ -232,6 +236,16 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     }
   };
 
+  const handleSetCity = async (city: TripCity | null) => {
+    setIsSubmittingTripEdit(true);
+    try {
+      await dispatch(setTripCity({ uid: currentUserId, trip, city })).unwrap();
+      setEditingField(null);
+    } finally {
+      setIsSubmittingTripEdit(false);
+    }
+  };
+
   const handleToggleArchived = async () => {
     setIsMobileActionsOpen(false);
     if (!trip.isArchived) {
@@ -303,6 +317,17 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         },
       })
     : null;
+  const cityActionItem = canEdit
+    ? option({
+        label: trip.city ? 'Change city' : 'Set city',
+        value: 'city',
+        icon: <MapPin className='h-4 w-4' />,
+        onClick: () => {
+          setEditingField('city');
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
   const coverActionItem = canEdit
     ? option({
         label: 'Set cover photo',
@@ -362,10 +387,10 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       ))
     : null;
 
-  const actionItems = [announcementActionItem, archiveActionItem, coverActionItem, deleteDesktopMenuItem].filter(
+  const actionItems = [announcementActionItem, archiveActionItem, cityActionItem, coverActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
-  const groupedEditActionItems = [titleActionItem, datesActionItem, coverActionItem].filter(
+  const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, coverActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const standaloneActionItems = [announcementActionItem, archiveActionItem].filter(
@@ -526,6 +551,17 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 <p className='text-muted-foreground'>
                   {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
                 </p>
+                {trip.city && (
+                  <>
+                    <span aria-hidden className='text-muted-foreground max-sm:hidden'>
+                      ·
+                    </span>
+                    <p className='text-muted-foreground flex items-center gap-1 text-sm'>
+                      <MapPin className='h-3.5 w-3.5 shrink-0' />
+                      {getCityLabel(trip.city)}
+                    </p>
+                  </>
+                )}
                 {trip.timezone && (
                   <>
                     <span aria-hidden className='text-muted-foreground max-sm:hidden'>
@@ -704,6 +740,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         trip={trip}
         isSubmitting={isSubmittingTripEdit}
         onSubmit={handleEditTrip}
+        onClose={() => setEditingField(null)}
+      />
+      <EditTripCityModal
+        key={`city-${editingField === 'city' ? 'open' : 'closed'}`}
+        isOpen={editingField === 'city'}
+        trip={trip}
+        isSubmitting={isSubmittingTripEdit}
+        onSubmit={handleSetCity}
         onClose={() => setEditingField(null)}
       />
       <EditTripDatesModal

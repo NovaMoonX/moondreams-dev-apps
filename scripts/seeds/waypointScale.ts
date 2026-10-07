@@ -81,6 +81,7 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    city: null,
     dateShiftStatus: null,
     createdBy: alexUid,
     createdAt: joinedAt,

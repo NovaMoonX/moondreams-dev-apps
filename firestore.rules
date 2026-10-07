@@ -1591,6 +1591,23 @@ service cloud.firestore {
           && resource.data.members[request.auth.uid].role == 'ADMIN';
       }
 
+      function isTripCityValid(city) {
+        return city == null || (
+          city is map
+          && city.keys().hasOnly(['name', 'region', 'country', 'latitude', 'longitude'])
+          && isNonEmptyString(city.name)
+          && city.name.size() <= 120
+          && (city.region == null || (city.region is string && city.region.size() <= 120))
+          && (city.country == null || (city.country is string && city.country.size() <= 120))
+          && city.latitude is number
+          && city.latitude >= -90
+          && city.latitude <= 90
+          && city.longitude is number
+          && city.longitude >= -180
+          && city.longitude <= 180
+        );
+      }
+
       function isTripFieldSetValid(data) {
         return data.keys().hasOnly([
             'id',
@@ -1607,6 +1624,7 @@ service cloud.firestore {
             'sharedAlbumSetAt',
             'timeModel',
             'timezone',
+            'city',
             'dateShiftStatus',
             'createdBy',
             'createdAt',
@@ -1633,6 +1651,7 @@ service cloud.firestore {
             || isTimestampNumber(data.sharedAlbumSetAt))
           && (!('timeModel' in data) || data.timeModel in ['RELATIVE', 'ABSOLUTE'])
           && (!('timezone' in data) || data.timezone == null || isNonEmptyString(data.timezone))
+          && isTripCityValid(data.get('city', null))
           && (!('dateShiftStatus' in data)
             || data.dateShiftStatus == null
             || data.dateShiftStatus in ['IDLE', 'PENDING'])
@@ -1699,6 +1718,7 @@ service cloud.firestore {
             'startDate',
             'endDate',
             'timezone',
+            'city',
             'defaultCurrency',
             'lastEditedAt'
           ])

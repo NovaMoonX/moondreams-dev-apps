@@ -114,7 +114,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
   const stays = useAppSelector(selectStays);
   const events = useAppSelector(selectSortedTimelineEvents);
-  const weather = useTripWeather(trip, events, stays, now);
+  const weather = useTripWeather(trip, events, now);
   const rentals = useAppSelector(selectRentals);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
   const [isWeatherOpen, setIsWeatherOpen] = useState(false);

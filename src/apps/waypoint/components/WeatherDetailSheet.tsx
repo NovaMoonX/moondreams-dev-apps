@@ -13,7 +13,6 @@ export interface WeatherDayDetails {
   forecast: DayForecast;
   hours: HourForecast[];
   placeName: string | null;
-  isBorrowed: boolean;
 }
 
 interface WeatherDetailSheetProps {
@@ -21,18 +20,16 @@ interface WeatherDetailSheetProps {
   onClose: () => void;
   title: string;
   details: WeatherDayDetails | null;
-  /** Shown as the footer's primary action, e.g. to jump to that day's plans. */
-  onShowDay?: () => void;
 }
 
 const formatTemp = (value: number | null) => (value === null ? '–' : `${Math.round(value)}°`);
 
-function WeatherDetailSheet({ isOpen, onClose, title, details, onShowDay }: WeatherDetailSheetProps) {
+function WeatherDetailSheet({ isOpen, onClose, title, details }: WeatherDetailSheetProps) {
   if (!details) {
     return null;
   }
 
-  const { forecast, hours, placeName, isBorrowed } = details;
+  const { forecast, hours, placeName } = details;
   const condition = getWeatherCondition(forecast.weatherCode);
   const backdrop = WEATHER_BANNER_IMAGES[condition.id];
   const hasPrecip = forecast.precipChance !== null && forecast.precipChance > 0;
@@ -43,16 +40,12 @@ function WeatherDetailSheet({ isOpen, onClose, title, details, onShowDay }: Weat
       onClose={onClose}
       title={title}
       footer={
-        onShowDay && (
-          <div className='flex flex-col gap-2'>
-            <Button type='button' size='lg' onClick={onShowDay}>
-              Show this day&apos;s plans
-            </Button>
-          </div>
-        )
+        <Button type='button' size='lg' className='w-full' onClick={onClose}>
+          Sounds good
+        </Button>
       }
     >
-      <div className='space-y-4'>
+      <div className='space-y-3'>
         <div className='bg-muted relative isolate overflow-hidden rounded-xl'>
           {backdrop && (
             <img
@@ -63,7 +56,7 @@ function WeatherDetailSheet({ isOpen, onClose, title, details, onShowDay }: Weat
               className='absolute inset-0 -z-10 h-full w-full object-cover'
             />
           )}
-          <div className='flex min-h-44 flex-col justify-end gap-3 bg-linear-to-t from-black/75 via-black/40 to-black/10 p-4 text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]'>
+          <div className='flex min-h-40 flex-col justify-end gap-2 bg-linear-to-t from-black/75 via-black/40 to-black/10 p-4 text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]'>
             <div className='flex items-center gap-3'>
               <WeatherEmoji condition={condition} className='text-4xl leading-none' />
               <div className='min-w-0'>
@@ -78,7 +71,7 @@ function WeatherDetailSheet({ isOpen, onClose, title, details, onShowDay }: Weat
               <p className='flex items-start gap-1.5 text-sm text-white/85'>
                 <MapPin className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
                 <span className='min-w-0'>
-                  {isBorrowed ? 'Nearest place on your plans: ' : 'Based on '}
+                  Based on{' '}
                   <span className='font-medium text-white'>{placeName}</span>
                 </span>
               </p>
