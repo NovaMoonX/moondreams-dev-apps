@@ -44,8 +44,6 @@ import {
   toCustomCategoryKey,
 } from '@apps/waypoint/utils/expenseCategories';
 
-const PAID_BY_EACH_PERSON = '';
-
 const usd = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
 
 const describePrice = ({
@@ -59,8 +57,11 @@ const describePrice = ({
   headcount: number;
   isPick: boolean;
 }) => {
-  const people = `${headcount} ${headcount === 1 ? 'person' : 'people'}`;
-  if (amount !== null && headcount > 0) {
+  if (headcount <= 1) {
+    return 'It is just one person, so that is the whole amount.';
+  }
+  const people = `${headcount} people`;
+  if (amount !== null) {
     return isEach
       ? `Each of the ${people} pays ${usd.format(amount)}, so ${usd.format(amount * headcount)} in total.`
       : `${usd.format(amount)} shared by ${people} is ${usd.format(amount / headcount)} each.`;
@@ -98,8 +99,6 @@ interface ExpenseFormData {
   title: string;
   category: ChoiceValue;
   price: PriceValue;
-  payerUid: string;
-  status: ExpenseStatus;
   dayIndex: string;
   note: string;
   group: ChoiceValue;
@@ -198,8 +197,6 @@ function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefi
       min: String(initialExpense?.amountMin ?? ''),
       max: String(initialExpense?.amountMax ?? ''),
     },
-    payerUid: initialExpense?.payerUid ?? PAID_BY_EACH_PERSON,
-    status: initialExpense?.status ?? 'EXPECTED',
     dayIndex: getDayValue(initialExpense ? initialExpense.dayIndex : prefill?.dayIndex),
     note: initialExpense?.note ?? '',
     group: { choice: initialExpense?.groupLabel ?? '', newLabel: '' },
@@ -296,16 +293,6 @@ function ExpenseFormModal({
     ],
     [trip.startDate, trip.endDate, storedDayIndex],
   );
-  const payerOptions = useMemo(
-    () => [
-      { value: PAID_BY_EACH_PERSON, label: 'Paid by each person' },
-      ...memberIds.map((uid) => ({
-        value: uid,
-        label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
-      })),
-    ],
-    [memberIds, memberInfo],
-  );
   const memberPillOptions = useMemo(
     () =>
       memberIds.map((uid) => ({
@@ -329,7 +316,6 @@ function ExpenseFormModal({
   const sharesPrice = !isPrivate && !(audience === 'PICK' && pickedIds.length <= 1);
 
   const areTitleFieldsVisible = isEditing || !isLinked || showTitleFields || resolveChoice(formData.category) === null;
-  const isPaid = formData.status === 'PAID';
   const hasDayField = linkedDay === null && (showDayField || formData.dayIndex !== '');
 
   const resetField = (patch: Partial<ExpenseFormData>) => {
@@ -458,49 +444,6 @@ function ExpenseFormModal({
       }),
     );
 
-    if (!isEditing) {
-      nextFields.push(
-        custom({
-          name: 'status',
-          label: '',
-          renderComponent: (props) => (
-            <div className='space-y-2'>
-              <Label>Already paid?</Label>
-              <PillGroup
-                label='Already paid'
-                options={[
-                  { value: 'EXPECTED', label: 'Not yet', emoji: '⏳' },
-                  { value: 'PAID', label: isPrivate ? 'Yes, I paid' : 'Yes, it’s paid', emoji: '💸' },
-                ]}
-                value={props.value as ExpenseStatus}
-                onChange={(next) => props.onValueChange(next)}
-              />
-            </div>
-          ),
-        }),
-      );
-    }
-
-    if (isPaid && !isEditing && !isPrivate) {
-      nextFields.push(
-        custom({
-          name: 'payerUid',
-          label: '',
-          renderComponent: (props) => (
-            <div className='space-y-2'>
-              <Label>Who paid?</Label>
-              <PillGroup
-                label='Paid by'
-                options={payerOptions}
-                value={props.value as string}
-                onChange={(next) => props.onValueChange(next)}
-              />
-            </div>
-          ),
-        }),
-      );
-    }
-
     if (hasDayField) {
       nextFields.push(
         custom({
@@ -574,10 +517,7 @@ function ExpenseFormModal({
     dayOptions,
     groupOptions,
     hasDayField,
-    isEditing,
-    isPaid,
     isPrivate,
-    payerOptions,
     audience,
     memberIds.length,
     pickedIds.length,
@@ -653,7 +593,7 @@ function ExpenseFormModal({
         await onSubmitPersonal({
           title: data.title,
           amount,
-          status: data.status,
+          status: 'EXPECTED',
           dayIndex,
           category,
           customCategoryLabel,
@@ -666,12 +606,8 @@ function ExpenseFormModal({
         amount,
         amountMin,
         amountMax,
-        payerUid: isEditing
-          ? (initialExpense?.payerUid ?? null)
-          : data.status === 'PAID' && data.payerUid !== ''
-            ? data.payerUid
-            : null,
-        status: initialExpense?.status ?? data.status,
+        payerUid: initialExpense?.payerUid ?? null,
+        status: initialExpense?.status ?? 'EXPECTED',
         dayIndex,
         currency: 'USD',
         paidAmount: initialExpense?.paidAmount ?? null,

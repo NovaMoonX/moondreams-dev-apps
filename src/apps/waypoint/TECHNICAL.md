@@ -862,7 +862,7 @@ The flight (Travel + Flight), stay and rental forms show `UploadAutofill` when c
 
 ## Paid and unpaid
 
-A new expense carries its paid answer (`status`, `payerUid`) from the add form; editing never writes them (`updateExpense` receives the stored values back). `markExpensePaid` and `markExpenseUnpaid` are the only ways to flip it later, both field-scoped `updateDoc`s (unpaid writes `status`, `payerUid: null`, `paidAmount: null`, and leaves a range that became a known amount at payment as that amount, and leaves `paidMemberStatus` and `earlyPayments` alone). A personal expense's editor has the same pair as one button that saves the flipped status on its own.
+Details and payment are separate: the add and edit forms never carry `status`, `payerUid` or `paidAmount` (`createExpense` always starts an expense `EXPECTED`; `updateExpense` takes none of them and only clears a stored `paidAmount` when the amount becomes exact, which the rules require). `markExpensePaid` and `markExpenseUnpaid` are the only writers, each a `runTransaction` that re-reads the document and aborts with a readable message when it is already in the target state; unpaid also resets every `paidMemberStatus` entry (so paying again starts clean), clears `payerUid` and `paidAmount`, keeps a range that became a known amount at payment as that amount, and leaves `earlyPayments` alone. The payment step after an add is `MarkExpensePaidModal` with `isJustAdded` (and `PersonalPaymentPrompt` for a personal expense); a personal expense's editor has Paid / Mark as unpaid as one button that saves the flipped status on its own.
 
 ## Copy as Markdown
 

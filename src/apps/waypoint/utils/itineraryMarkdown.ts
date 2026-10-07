@@ -52,7 +52,7 @@ const quote = (text: string, depth: number) =>
 // A profile with no name carries its email as the name, which never leaves the app.
 const nameOf = (names: Record<string, string>, uid: string) => {
   const name = names[uid]?.trim();
-  return name && !name.includes('@') ? name : 'Trip member';
+  return name && !name.includes('@') ? esc(name) : 'Trip member';
 };
 const esc = (text: string) => text.replace(/([\\`*_[\]<>])/g, '\\$1');
 const MAX_LISTED_NAMES = 10;
@@ -85,9 +85,9 @@ function getEventRow({ trip, memberNames }: TimelineMarkdownSource, event: Timel
   ])[0];
   const transitLines =
     transitType && details && 'transitDetails' in details
-      ? getTransitSummary(transitType, details.transitDetails, event.title, impliedDurationMs).map(
-          ({ label, value }) => `${label}: ${value}`,
-        ).filter((line) => !line.includes('…'))
+      ? getTransitSummary(transitType, details.transitDetails, event.title, impliedDurationMs)
+          .filter(({ label, value }) => !(label === 'Route' && value.includes('…')))
+          .map(({ label, value }) => `${label}: ${esc(value)}`)
       : [];
   const title = esc(event.title.trim() || event.locationName || EVENT_TYPE_LABELS[event.eventType]);
   const emoji = (transitType && TRANSIT_TYPE_EMOJIS[transitType]) || EVENT_TYPE_EMOJIS[event.eventType];
@@ -119,7 +119,7 @@ function getLogisticsRows({ trip, stays, rentals }: TimelineMarkdownSource) {
     const isReturn = entry.key.endsWith('-return');
     const address = stay?.address ?? (isReturn ? (rental?.returnAddress ?? rental?.pickupAddress) : rental?.pickupAddress);
     const code = (stay ?? rental)?.confirmationCode;
-    const detailLines = compact([address, code && `Confirmation: ${code}`]);
+    const detailLines = compact([address && esc(address), code && `Confirmation: ${code}`]);
     const lines = [
       bullet(`${withTime(entry.time ? formatClockTime(entry.time) : null)}${entry.emoji} ${entry.verb} · ${esc(entry.name)}`),
       ...detailLines.map((line) => bullet(line, 1)),
@@ -156,7 +156,7 @@ function buildStaySections({ trip, stays }: TimelineMarkdownSource) {
     const range = formatStayTimeRange(trip, stay).trim();
     return [
       bullet(`${STAY_TYPE_EMOJIS[stay.stayType]} **${esc(stay.name)}**${range.length > 1 ? ` — ${range}` : ''}`),
-      ...compact([stay.address, stay.confirmationCode && `Confirmation: ${stay.confirmationCode}`, stay.linkUrl]).map(
+      ...compact([esc(stay.address), stay.confirmationCode && `Confirmation: ${stay.confirmationCode}`, stay.linkUrl]).map(
         (line) => bullet(line, 1),
       ),
       ...(stay.notes?.trim() ? quote(stay.notes.trim(), 1) : []),
@@ -171,8 +171,8 @@ function buildRentalSections({ trip, rentals }: TimelineMarkdownSource) {
     return [
       bullet(`🚘 **${esc(rental.name)}**${rental.vehicle ? ` (${esc(rental.vehicle)})` : ''}${range.length > 1 ? ` — ${range}` : ''}`),
       ...compact([
-        rental.pickupAddress && `Pick up: ${rental.pickupAddress}`,
-        rental.returnAddress && `Return: ${rental.returnAddress}`,
+        rental.pickupAddress && `Pick up: ${esc(rental.pickupAddress)}`,
+        rental.returnAddress && `Return: ${esc(rental.returnAddress)}`,
         rental.confirmationCode && `Confirmation: ${rental.confirmationCode}`,
         rental.linkUrl,
       ]).map((line) => bullet(line, 1)),

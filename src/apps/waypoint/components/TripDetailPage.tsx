@@ -83,7 +83,7 @@ import {
   setTripArchived,
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
-import { getTripStatus, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
+import { getTripStatus, selectIsTripDataLoaded, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import { buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
@@ -231,6 +231,10 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const handleCopyTripMarkdown = async () => {
     setIsMobileActionsOpen(false);
     const state = store.getState();
+    if (!selectIsTripDataLoaded(state, trip.id)) {
+      addToast({ title: 'Still loading this trip', description: 'Give it a moment, then copy again.' });
+      return;
+    }
     const markdown = buildTripMarkdown({
       trip,
       events,
@@ -848,6 +852,9 @@ function MemberNamesProbe({ memberIds }: { memberIds: string[] }) {
   const profiles = useUserInfo(memberIds)?.map;
   useEffect(() => {
     latestMemberNames = Object.fromEntries(memberIds.map((uid) => [uid, profiles?.[uid]?.displayName ?? '']));
+    return () => {
+      latestMemberNames = {};
+    };
   }, [memberIds, profiles]);
   return null;
 }

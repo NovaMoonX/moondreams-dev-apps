@@ -28,6 +28,8 @@ interface MarkExpensePaidModalProps {
   isOpen: boolean;
   trip: TripSpace;
   expense: TripExpense | null;
+  /** Asked right after an expense is added: "Not yet" closes it, and the title says it is the payment step. */
+  isJustAdded?: boolean;
   isSubmitting?: boolean;
   onSubmit: (values: MarkExpensePaidValues) => Promise<void> | void;
   onClose: () => void;
@@ -39,6 +41,7 @@ function MarkExpensePaidModal({
   isOpen,
   trip,
   expense,
+  isJustAdded = false,
   isSubmitting = false,
   onSubmit,
   onClose,
@@ -112,7 +115,12 @@ function MarkExpensePaidModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title='Paid'>
+    <Modal isOpen={isOpen} onClose={onClose} title={isJustAdded ? 'Payment' : 'Paid'}>
+      {isJustAdded && (
+        <p className='text-muted-foreground mb-4 text-sm'>
+          Added <strong className='text-foreground'>{expense?.title}</strong>. Has it been paid already?
+        </p>
+      )}
       {isRange && (
         <p className='text-muted-foreground mb-4 text-sm'>
           {expense?.title} was estimated as a range.{' '}
@@ -155,7 +163,7 @@ function MarkExpensePaidModal({
             {error && <p className='text-destructive text-sm'>{error}</p>}
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>
-                Cancel
+                {isJustAdded ? 'Not yet' : 'Cancel'}
               </Button>
               <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
                 {isSubmitting ? 'Marking…' : 'Mark paid'}

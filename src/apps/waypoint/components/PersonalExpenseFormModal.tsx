@@ -81,6 +81,7 @@ function PersonalExpenseFormModal({
 }: PersonalExpenseFormModalProps) {
   const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense.note));
   const [formData, setFormData] = useState<PersonalExpenseFormData>({
     title: initialExpense.title,
@@ -187,6 +188,17 @@ function PersonalExpenseFormModal({
     }
   };
 
+  const handleToggleStatus = async () => {
+    setIsToggling(true);
+    try {
+      await onToggleStatus();
+    } catch (toggleError) {
+      setError(getErrorMessage(toggleError, 'Unable to update this expense.'));
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
   const handleDelete = async () => {
     const confirmed = await confirm({
       title: 'Delete expense',
@@ -216,7 +228,9 @@ function PersonalExpenseFormModal({
           variant='link'
           size='sm'
           className='min-h-10 px-0!'
-          onClick={() => void onToggleStatus()}
+          loading={isToggling}
+          disabled={isToggling}
+          onClick={() => void handleToggleStatus()}
         >
           {initialExpense.status === 'PAID' ? 'Mark as unpaid' : 'Mark paid'}
         </Button>

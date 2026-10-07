@@ -12,6 +12,9 @@ import type {
   TripExpense,
 } from '@apps/waypoint/types';
 
+const getExpenseRef = (tripId: string, expenseId: string) =>
+  doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
+
 interface CreateExpenseInput {
   uid: string;
   tripId: string;
@@ -113,10 +116,7 @@ interface UpdateExpenseInput {
   amount: number | null;
   amountMin: number | null;
   amountMax: number | null;
-  payerUid: string | null;
-  status: ExpenseStatus;
   dayIndex: number | null;
-  paidAmount: number | null;
   category: ExpenseCategory;
   customCategoryLabel: string | null;
   note: string | null;
@@ -149,22 +149,14 @@ export const updateExpense = createAsyncThunk<
   ) {
     return rejectWithValue('Enter a valid amount.');
   }
-  if (
-    input.paidAmount !== null &&
-    (!Number.isFinite(input.paidAmount) || input.paidAmount < 0)
-  ) {
-    return rejectWithValue('Enter a valid paid amount.');
-  }
-
   const changes = {
     title,
     amount: input.amount,
     amountMin: input.amountMin,
     amountMax: input.amountMax,
-    payerUid: input.status === 'PAID' ? input.payerUid : null,
-    status: input.status,
     dayIndex: input.dayIndex,
-    paidAmount: input.expense.amount === null ? input.paidAmount : null,
+    // A paid-amount override only exists beside an estimated range, so an exact amount clears it.
+    ...(input.amount !== null ? { paidAmount: null } : {}),
     category: input.category,
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
@@ -272,43 +264,60 @@ interface MarkExpensePaidInput {
 export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
   async ({ expense, payerUid, paidAmount, knownAmount }) => {
-    // Only the fields this action owns are written — a whole-document write would clobber
-    // a debtor's concurrent repaid toggle held in `paidMemberStatus`.
-    const changes = {
-      status: 'PAID' as const,
-      payerUid,
-      amount: knownAmount ?? expense.amount,
-      amountMin: knownAmount !== null ? null : expense.amountMin,
-      amountMax: knownAmount !== null ? null : expense.amountMax,
-      paidAmount: knownAmount === null && expense.amount === null ? paidAmount : null,
-      lastEditedAt: Date.now(),
-    };
-
-    await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
-      changes,
-    );
-    const updatedExpense: TripExpense = { ...expense, ...changes };
+    const expenseRef = getExpenseRef(expense.tripId, expense.id);
+    // Re-read inside the transaction so a second person tapping Mark paid, or an edit that
+    // changed the amount, is never overwritten from a stale copy.
+    const updatedExpense = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        throw new Error('This expense no longer exists.');
+      }
+      const current = snapshot.data() as TripExpense;
+      if (current.status === 'PAID') {
+        throw new Error('Someone already marked this as paid.');
+      }
+      const changes = {
+        status: 'PAID' as const,
+        payerUid,
+        amount: knownAmount ?? current.amount,
+        amountMin: knownAmount !== null ? null : current.amountMin,
+        amountMax: knownAmount !== null ? null : current.amountMax,
+        paidAmount: knownAmount === null && current.amount === null ? paidAmount : null,
+        lastEditedAt: Date.now(),
+      };
+      transaction.update(expenseRef, changes);
+      return { ...current, ...changes } as TripExpense;
+    });
     return updatedExpense;
   },
 );
 
-/** Puts a paid expense back to expected. A range that was turned into a known amount at payment stays as that amount. */
+/** Puts a paid expense back to expected, clearing everyone's "repaid" marks so paying it again starts clean. */
 export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripExpense }>(
   'waypoint/expenses/markUnpaid',
   async ({ expense }) => {
-    const changes = {
-      status: 'EXPECTED' as const,
-      payerUid: null,
-      paidAmount: null,
-      lastEditedAt: Date.now(),
-    };
-
-    await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
-      changes,
-    );
-    const updatedExpense: TripExpense = { ...expense, ...changes };
+    const expenseRef = getExpenseRef(expense.tripId, expense.id);
+    const updatedExpense = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        throw new Error('This expense no longer exists.');
+      }
+      const current = snapshot.data() as TripExpense;
+      if (current.status !== 'PAID') {
+        throw new Error('This was already marked as unpaid.');
+      }
+      const changes = {
+        status: 'EXPECTED' as const,
+        payerUid: null,
+        paidAmount: null,
+        paidMemberStatus: Object.fromEntries(
+          Object.keys(current.paidMemberStatus ?? {}).map((uid) => [uid, { isPaid: false, paidAt: null }]),
+        ),
+        lastEditedAt: Date.now(),
+      };
+      transaction.update(expenseRef, changes);
+      return { ...current, ...changes } as TripExpense;
+    });
     return updatedExpense;
   },
 );
@@ -341,9 +350,6 @@ export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInp
     });
   },
 );
-
-const getExpenseRef = (tripId: string, expenseId: string) =>
-  doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
 
 interface EarlyPaymentTarget {
   uid: string;
