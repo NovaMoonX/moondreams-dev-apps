@@ -11,7 +11,6 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowLeftRight, CalendarDays, Pencil, Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -143,6 +142,8 @@ interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   initialExpense?: TripExpense;
+  /** Who "Add and mark paid" records as having paid. */
+  currentUserId: string;
   prefill?: ExpensePrefill;
   /** Where a new expense starts: for the whole trip, or private to the person adding it. */
   initialAudience?: 'EVERYONE' | 'ME';
@@ -207,6 +208,7 @@ function ExpenseFormModal({
   isOpen,
   trip,
   initialExpense,
+  currentUserId,
   prefill,
   initialAudience = 'EVERYONE',
   canShare = true,
@@ -356,18 +358,20 @@ function ExpenseFormModal({
           const value = props.value as PriceValue;
           const valueMode = isPrivate ? 'amount' : value.mode;
           const isEach = value.isPerPerson && sharesPrice;
-          const priceToggle = sharesPrice && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-sm'>Price is</p>
-              <PillGroup
-                label='Price is'
-                options={[
-                  { value: 'group', label: 'Total' },
-                  { value: 'each', label: 'Per person' },
-                ]}
-                value={value.isPerPerson ? 'each' : 'group'}
-                onChange={(next) => props.onValueChange({ ...value, isPerPerson: next === 'each' })}
-              />
+          const getAmountHeader = (label: string) => (
+            <div className='flex items-center justify-between gap-3'>
+              <p className='text-muted-foreground text-sm'>{label}</p>
+              {sharesPrice && (
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='min-h-10 px-0!'
+                  onClick={() => props.onValueChange({ ...value, isPerPerson: !value.isPerPerson })}
+                >
+                  {isEach ? 'Switch to total' : 'Switch to per person'}
+                </Button>
+              )}
             </div>
           );
           return (
@@ -385,25 +389,23 @@ function ExpenseFormModal({
                 />
               )}
               {valueMode === 'amount' ? (
-                <div className={join('grid items-start gap-3', sharesPrice && 'grid-cols-2')}>
-                  <div className='space-y-1.5'>
-                    <p className='text-muted-foreground text-sm'>Amount</p>
-                    <Input
-                      type='number'
-                      aria-label='Amount'
-                      placeholder='0.00'
-                      variant='outline'
-                      value={value.amount}
-                      onChange={(event) => props.onValueChange({ ...value, amount: event.target.value })}
-                    />
-                  </div>
-                  {priceToggle}
+                <div className='-mt-1'>
+                  {getAmountHeader(isEach ? 'Amount per person' : sharesPrice ? 'Total amount' : 'Amount')}
+                  <Input
+                    type='number'
+                    aria-label='Amount'
+                    placeholder='0.00'
+                    variant='outline'
+                    value={value.amount}
+                    onChange={(event) => props.onValueChange({ ...value, amount: event.target.value })}
+                  />
                 </div>
               ) : (
-                <>
+                <div className='-mt-1'>
+                  {getAmountHeader(isEach ? 'Estimate per person' : sharesPrice ? 'Estimated total' : 'Estimate')}
                   <div className='grid grid-cols-2 gap-3'>
                     <div className='space-y-1.5'>
-                      <p className='text-muted-foreground text-sm'>Lowest</p>
+                      <p className='text-muted-foreground text-xs'>Lowest</p>
                       <Input
                         type='number'
                         aria-label='Lowest it could be'
@@ -414,7 +416,7 @@ function ExpenseFormModal({
                       />
                     </div>
                     <div className='space-y-1.5'>
-                      <p className='text-muted-foreground text-sm'>Highest</p>
+                      <p className='text-muted-foreground text-xs'>Highest</p>
                       <Input
                         type='number'
                         aria-label='Highest it could be'
@@ -425,8 +427,7 @@ function ExpenseFormModal({
                       />
                     </div>
                   </div>
-                  {priceToggle}
-                </>
+                </div>
               )}
               {sharesPrice && (
                 <p className='text-muted-foreground text-xs'>
@@ -565,7 +566,7 @@ function ExpenseFormModal({
     setFormKey((key) => key + 1);
   };
 
-  const handleSubmit = async (submitted: ExpenseFormData) => {
+  const handleSubmit = async (submitted: ExpenseFormData, markPaid = false) => {
     const data = { ...formData, ...submitted };
     const submittedMode = isPrivate ? 'amount' : data.price.mode;
     const amount = submittedMode === 'amount' ? parseAmount(data.price.amount) : null;
@@ -593,7 +594,7 @@ function ExpenseFormModal({
         await onSubmitPersonal({
           title: data.title,
           amount,
-          status: 'EXPECTED',
+          status: markPaid ? 'PAID' : 'EXPECTED',
           dayIndex,
           category,
           customCategoryLabel,
@@ -606,8 +607,8 @@ function ExpenseFormModal({
         amount,
         amountMin,
         amountMax,
-        payerUid: initialExpense?.payerUid ?? null,
-        status: initialExpense?.status ?? 'EXPECTED',
+        payerUid: initialExpense ? initialExpense.payerUid : markPaid ? currentUserId : null,
+        status: initialExpense?.status ?? (markPaid ? 'PAID' : 'EXPECTED'),
         dayIndex,
         currency: 'USD',
         paidAmount: initialExpense?.paidAmount ?? null,
@@ -673,7 +674,7 @@ function ExpenseFormModal({
   const summaryDay = formData.dayIndex === '' ? null : getDayDateLabel(trip.startDate, Number(formData.dayIndex));
   const summaryCategory = resolveChoice(formData.category);
   const planQuestion = (
-    <div className='min-h-[44dvh] space-y-3'>
+    <div className='space-y-3'>
       <div className='space-y-1.5'>
         <Label>What&apos;s this expense for?</Label>
         <Select
@@ -828,6 +829,20 @@ function ExpenseFormModal({
                 {chips.length > 0 && (
                   <div className='col-span-full mb-4'>
                     <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
+                  </div>
+                )}
+                {!isEditing && (
+                  <div className='col-span-full mb-3 space-y-1'>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className='w-full'
+                      disabled={isSubmitting || !isFormComplete}
+                      onClick={() => void handleSubmit(formData, true)}
+                    >
+                      Add and mark paid
+                    </Button>
+                    {!isPrivate && <p className='text-muted-foreground text-center text-xs'>Recorded as paid by you.</p>}
                   </div>
                 )}
                 <ModalFooterActions

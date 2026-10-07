@@ -40,7 +40,6 @@ import PersonalExpenseFormModal, {
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
 } from '@apps/waypoint/components/ExpenseSplitModal';
-import PersonalPaymentPrompt from '@apps/waypoint/components/PersonalPaymentPrompt';
 import MarkExpensePaidModal, {
   type MarkExpensePaidValues,
 } from '@apps/waypoint/components/MarkExpensePaidModal';
@@ -265,8 +264,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
-  const [justAddedExpenseId, setJustAddedExpenseId] = useState<string | null>(null);
-  const [justAddedPersonal, setJustAddedPersonal] = useState<PersonalExpense | null>(null);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
@@ -433,7 +430,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }),
         ).unwrap();
       } else {
-        const created = await dispatch(
+        await dispatch(
           createExpense({
             uid: currentUserId,
             tripId: trip.id,
@@ -442,8 +439,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             split: values.split ?? { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] },
           }),
         ).unwrap();
-        setJustAddedExpenseId(created.id);
-        setPayingExpense(created);
       }
       setEditingExpense(null);
       setIsModalOpen(false);
@@ -498,9 +493,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const handlePersonalCreate = async (values: PersonalExpenseSubmitValues) => {
     setIsSubmitting(true);
     try {
-      const created = await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
+      await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
       setIsModalOpen(false);
-      setJustAddedPersonal(created);
     } finally {
       setIsSubmitting(false);
     }
@@ -1267,6 +1261,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={isModalOpen}
         trip={trip}
         initialExpense={editingExpense ?? undefined}
+        currentUserId={currentUserId}
         initialAudience={newExpenseAudience}
         canShare={canAddExpenses}
         onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
@@ -1300,7 +1295,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={payingExpense !== null}
         trip={trip}
         expense={payingExpense}
-        isJustAdded={payingExpense !== null && payingExpense.id === justAddedExpenseId}
         isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
         onSubmit={(values) => {
           if (payingExpense) {
@@ -1308,21 +1302,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }
         }}
         onClose={() => setPayingExpense(null)}
-      />
-      <PersonalPaymentPrompt
-        title={justAddedPersonal?.title ?? null}
-        onMarkPaid={() => {
-          if (!justAddedPersonal) {
-            return;
-          }
-          const { title, amount, dayIndex, category, customCategoryLabel, note } = justAddedPersonal;
-          void dispatch(
-            updatePersonalExpense({ uid: currentUserId, expenseId: justAddedPersonal.id, title, amount, dayIndex, category, customCategoryLabel, note, status: 'PAID' }),
-          )
-            .unwrap()
-            .finally(() => setJustAddedPersonal(null));
-        }}
-        onClose={() => setJustAddedPersonal(null)}
       />
       {isSmallScreen && (
         <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>

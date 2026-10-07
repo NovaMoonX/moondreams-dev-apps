@@ -412,7 +412,7 @@ An expected expense row offers "I paid early" to anyone in its split: pick who y
 
 **Slim timeline rows.** A day's check-ins, check-outs, rental pick-ups and returns, and its travel legs, are one-line tappable rows (a stay or rental opens read-only details, a travel leg its details with Modify), so the cards on the timeline are the plans people actually choose between.
 
-**Personal expenses.** Above the Dues summary, "🔒 Just for me" lists what the signed-in person is covering themselves, with its own Add (title, amount, category, trip day, optional note, then a Payment prompt: paid already or not yet; its editor has "Mark paid" / "Mark as unpaid" at the top; the form says only they can see it) and a search from 8 rows. Nobody else sees the list or the amounts. The totals cards keep the figures everyone sees and, for the owner, add a soft `+ $X personal` chip and a `= $Y` line beneath (only where that amount is above zero), with one muted line under the view hint saying the orange amount is theirs alone. Tapping a row edits it; the trash in the form deletes it.
+**Personal expenses.** Above the Dues summary, "🔒 Just for me" lists what the signed-in person is covering themselves, with its own Add (title, amount, category, trip day, optional note, with "Add and mark paid" beside "Add"; its editor has "Mark paid" / "Mark as unpaid" at the top; the form says only they can see it) and a search from 8 rows. Nobody else sees the list or the amounts. The totals cards keep the figures everyone sees and, for the owner, add a soft `+ $X personal` chip and a `= $Y` line beneath (only where that amount is above zero), with one muted line under the view hint saying the orange amount is theirs alone. Tapping a row edits it; the trash in the form deletes it.
 
 **Add & split an expense**
 ```mermaid
@@ -425,8 +425,8 @@ flowchart LR
     T --> W
     W -->|Just me| P[Same form, private, saved to Just for me]
     W --> C[How much is it? amount with Total / Per person, then optional chips: Trip day, Group, Note]
-    C --> Y[Saved — Everyone means current members, split evenly]
-    Y --> D[Payment: Has it been paid already? Not yet closes it; Mark paid picks who paid]
+    C --> Y[Add, or Add and mark paid — Everyone means current members, split evenly]
+    Y --> D[Later: Mark paid, with a pill row for who paid]
     D --> E[Optional: tap Split] --> F[Everyone-current / Everyone-future / Just Me / Specific]
     F --> G[Auto-suggested even split] --> H[Adjust per person, or clear and redo]
     D --> I[List + Dues Summary update]
