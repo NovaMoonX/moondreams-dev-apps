@@ -23,7 +23,8 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
-import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
+import Pill from '@/components/Pill';
+import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
 import type { PersonalExpenseSubmitValues } from '@apps/waypoint/components/PersonalExpenseFormModal';
 import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -74,6 +75,13 @@ const describePrice = ({
 };
 
 const NO_LINK = 'none';
+
+const PLAN_KIND_FILTERS: { value: 'ALL' | ExpenseLink['kind']; label: string; emoji?: string }[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'EVENT', label: 'Events', emoji: '🎟️' },
+  { value: 'STAY', label: 'Stays', emoji: '🏨' },
+  { value: 'RENTAL', label: 'Rentals', emoji: '🚘' },
+];
 
 const LINK_KIND_LABELS: Record<ExpenseLink['kind'], string> = {
   EVENT: 'Event',
@@ -251,6 +259,7 @@ function ExpenseFormModal({
   );
   const [showTitleFields, setShowTitleFields] = useState(false);
   const [isPlanAnswered, setIsPlanAnswered] = useState(false);
+  const [planKind, setPlanKind] = useState<'ALL' | ExpenseLink['kind']>('ALL');
   const memberInfo = useUserInfo(memberIds);
   const { audience, memberIds: pickedIds } = audienceValue;
   const isPrivate = audience === 'ME';
@@ -269,11 +278,13 @@ function ExpenseFormModal({
   const planPills = useMemo(
     () =>
       linkables
-        .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title }))
-        .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key))
-        .map(({ key, label }) => ({ value: key, label })),
+        .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title, kind: subject.link.kind }))
+        .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key)),
     [linkables, expenseLinkKeys, linkKey],
   );
+  const shownPlanPills = planPills
+    .filter(({ kind }) => planKind === 'ALL' || kind === planKind)
+    .map(({ key, label }) => ({ value: key, label }));
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
@@ -686,9 +697,22 @@ function ExpenseFormModal({
     <div className='space-y-4'>
       <div className='space-y-2'>
         <Label>What&apos;s this expense for?</Label>
+        <PillRow label='Kind of plan'>
+          {PLAN_KIND_FILTERS.map(({ value, label, emoji }) => (
+            <Pill
+              key={value}
+              emoji={emoji}
+              isSelected={planKind === value}
+              onClick={() => setPlanKind(value)}
+              className="relative h-6! min-h-0! px-2.5 py-0! text-xs before:absolute before:-inset-y-2 before:inset-x-0 before:content-['']"
+            >
+              {label}
+            </Pill>
+          ))}
+        </PillRow>
         <PillGroup
           label='Plans without an expense yet'
-          options={planPills}
+          options={shownPlanPills}
           value={linkKey || null}
           onChange={pickLink}
         />
