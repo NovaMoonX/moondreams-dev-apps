@@ -13,6 +13,8 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { getErrorMessage } from '@/utils/errorUtils';
+import { useAppSelector } from '@/store';
+import { selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayCount, getDayLabel, getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -21,16 +23,15 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
-import { EVENT_TYPE_EMOJIS, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
-  EventType,
   ExpenseCategory,
+  ExpenseLink,
   ExpenseStatus,
-  TimelineEvent,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
-import { getEventTime } from '@apps/waypoint/utils/tripTime';
+import { getExpenseLinkKey, getLinkableSubjects } from '@apps/waypoint/utils/relatedSubjects';
 import {
   getExpenseCategoryKey,
   getExpenseCategoryKeyLabel,
@@ -40,7 +41,11 @@ import {
 
 const PAID_BY_EACH_PERSON = '';
 
-const MAX_VISIBLE_EVENTS = 50;
+const LINK_KIND_LABELS: Record<ExpenseLink['kind'], string> = {
+  EVENT: 'Event',
+  STAY: 'Stay',
+  RENTAL: 'Rental',
+};
 
 interface ChoiceValue {
   choice: string;
@@ -82,9 +87,11 @@ export interface ExpenseSubmitValues {
   note: string | null;
   groupLabel: string | null;
   isPerPerson: boolean;
+  linkedTo: ExpenseLink | null;
 }
 
 export interface ExpensePrefill {
+  link: ExpenseLink;
   title: string;
   dayIndex: number | null;
   category: ExpenseCategory | null;
@@ -95,7 +102,6 @@ interface ExpenseFormModalProps {
   trip: TripSpace;
   initialExpense?: TripExpense;
   prefill?: ExpensePrefill;
-  events?: TimelineEvent[];
   categoryKeys: string[];
   existingGroupLabels: string[];
   isSubmitting?: boolean;
@@ -105,12 +111,6 @@ interface ExpenseFormModalProps {
 }
 
 const { custom, input, select } = FormFactories;
-
-const EVENT_CATEGORIES: Partial<Record<EventType, ExpenseCategory>> = {
-  DINING: 'FOOD',
-  TRAVEL: 'TRANSPORT',
-  ACTIVITY: 'ACTIVITIES',
-};
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
@@ -156,7 +156,6 @@ function ExpenseFormModal({
   trip,
   initialExpense,
   prefill,
-  events = [],
   categoryKeys,
   existingGroupLabels,
   isSubmitting = false,
@@ -166,6 +165,13 @@ function ExpenseFormModal({
 }: ExpenseFormModalProps) {
   const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
+  const events = useAppSelector(selectSortedTimelineEvents);
+  const stays = useAppSelector(selectSortedStays);
+  const rentals = useAppSelector(selectSortedRentals);
+  const linkables = useMemo(
+    () => (isOpen && !prefill ? getLinkableSubjects(trip, events, stays, rentals) : []),
+    [isOpen, prefill, trip, events, stays, rentals],
+  );
   const [mode, setMode] = useState<ExpenseFormData['amountMode']>(
     initialExpense?.amount === null ? 'range' : 'amount',
   );
@@ -174,7 +180,7 @@ function ExpenseFormModal({
   );
   // The form reads its data once, so picking an event remounts it with the filled-in values.
   const [formKey, setFormKey] = useState(0);
-  const [eventId, setEventId] = useState<string | null>(null);
+  const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
   const isEditing = Boolean(initialExpense);
@@ -188,30 +194,23 @@ function ExpenseFormModal({
     (mode === 'amount'
       ? parseAmount(formData.amount) !== null
       : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin);
-  const pickedEvent = events.find((candidate) => candidate.id === eventId);
-  const pickedDayIndex = pickedEvent ? getEventTime(trip, pickedEvent).dayIndex : null;
-  const storedDayIndex = initialExpense?.dayIndex ?? pickedDayIndex ?? prefill?.dayIndex ?? null;
-  const [eventTerm, setEventTerm] = useState('');
-  const eventOptions = useMemo(() => {
-    const query = eventTerm.trim().toLowerCase();
-    const options = events
-      .filter((candidate) => !candidate.isArchived)
-      .map((candidate) => {
-        const { dayIndex } = getEventTime(trip, candidate);
-        return {
-          value: candidate.id,
-          text: `${EVENT_TYPE_EMOJIS[candidate.eventType]} ${candidate.title}`,
-          description: dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex, getDayCount(trip.startDate, trip.endDate)),
-        };
-      });
-    const matches = query
-      ? options.filter((option) => `${option.text} ${option.description}`.toLowerCase().includes(query))
-      : options;
-    const top = matches.slice(0, MAX_VISIBLE_EVENTS);
-    const selected = options.find((option) => option.value === eventId);
-    return { hasAny: options.length > 0, visible: selected && !top.includes(selected) ? [selected, ...top] : top };
-  }, [events, eventId, eventTerm, trip]);
-  const showEventPicker = !isEditing && !prefill && eventOptions.hasAny;
+  const linkKey = link ? getExpenseLinkKey(link) : '';
+  const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
+  const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
+  const linkOptions = useMemo(
+    () =>
+      linkables.map((subject) => ({
+        value: getExpenseLinkKey(subject.link),
+        text: `${subject.emoji} ${subject.title}`,
+        description: `${LINK_KIND_LABELS[subject.link.kind]} · ${
+          subject.dayIndex === null
+            ? 'No specific day'
+            : getDayLabel(trip.startDate, subject.dayIndex, getDayCount(trip.startDate, trip.endDate))
+        }`,
+      })),
+    [linkables, trip.startDate, trip.endDate],
+  );
+  const showLinkPicker = linkOptions.length > 0;
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
@@ -425,19 +424,24 @@ function ExpenseFormModal({
     showNoteField,
   ]);
 
-  const pickEvent = (nextEventId: string) => {
-    const picked = events.find((candidate) => candidate.id === nextEventId);
+  const pickLink = (nextKey: string) => {
+    const picked = linkables.find((subject) => getExpenseLinkKey(subject.link) === nextKey);
     if (!picked) {
       return;
     }
 
-    const category = EVENT_CATEGORIES[picked.eventType];
-    setEventId(nextEventId);
+    setLink(picked.link);
+    if (isEditing) {
+      return;
+    }
     setFormData((current) => ({
       ...current,
       title: picked.title,
-      dayIndex: getDayValue(getEventTime(trip, picked).dayIndex),
-      category: category && current.category.choice === '' ? { choice: category, newLabel: '' } : current.category,
+      dayIndex: getDayValue(picked.dayIndex),
+      category:
+        picked.expenseCategory && current.category.choice === ''
+          ? { choice: picked.expenseCategory, newLabel: '' }
+          : current.category,
     }));
     setFormKey((key) => key + 1);
   };
@@ -483,6 +487,7 @@ function ExpenseFormModal({
         note: showNoteField ? data.note.trim() || null : null,
         groupLabel: showGroupField ? resolveChoice(data.group) : null,
         isPerPerson: data.isPerPerson,
+        linkedTo: link,
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this expense.'));
@@ -512,18 +517,17 @@ function ExpenseFormModal({
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Expense'>
-      {showEventPicker && (
+      {showLinkPicker && (
         <div className='mb-4 space-y-1.5'>
-          <Label>Is this for an event?</Label>
+          <Label>What is this paying for?</Label>
           <Select
             searchable
             clearable
-            options={eventOptions.visible}
-            value={eventId ?? ''}
-            placeholder='Pick an event to fill in the day'
-            searchPlaceholder='Search your events'
-            onSearch={setEventTerm}
-            onChange={(value) => (value === '' ? setEventId(null) : pickEvent(value))}
+            options={linkOptions}
+            value={linkKey}
+            placeholder='Pick an event, stay or rental'
+            searchPlaceholder='Search your plans'
+            onChange={(value) => (value === '' ? setLink(null) : pickLink(value))}
           />
         </div>
       )}

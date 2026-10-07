@@ -8,6 +8,7 @@ import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
 import EventWeatherChip from '@apps/waypoint/components/EventWeatherChip';
 import LocationLink from '@apps/waypoint/components/LocationLink';
+import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
@@ -22,6 +23,7 @@ import { formatEventTimeRange, getEventTime, type ZoneStyle } from '@apps/waypoi
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_LINK_KIND_LABELS,
+  EXPENSE_TRACKED_EVENT_TYPES,
   MEAL_TYPE_LABELS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
@@ -132,6 +134,9 @@ export function EventDetailLines({
         <span className='text-muted-foreground text-sm'>
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
+        {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
+          <NotPaidForBadge kind='EVENT' id={event.id} />
+        )}
         {weather && <EventWeatherChip weather={weather} />}
         {showNotesIndicator && event.notes && (
           <span

@@ -64,8 +64,8 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
           updateRental({ uid: currentUserId, trip, rentalId: editingRental.id, rental }),
         ).unwrap();
       } else {
-        await dispatch(createRental({ uid: currentUserId, trip, rental })).unwrap();
-        startFollowUp(getRentalSubject(rental));
+        const created = await dispatch(createRental({ uid: currentUserId, trip, rental })).unwrap();
+        startFollowUp(getRentalSubject(created));
       }
       closeModal();
     } finally {

@@ -80,7 +80,12 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
     [expenses],
   );
   const expensePrefill = useMemo<ExpensePrefill>(
-    () => ({ title: subject.title, dayIndex: subject.dayIndex, category: subject.expenseCategory }),
+    () => ({
+      link: subject.link,
+      title: subject.title,
+      dayIndex: subject.dayIndex,
+      category: subject.expenseCategory,
+    }),
     [subject],
   );
   const checklistPrefill = useMemo<ChecklistPrefill>(

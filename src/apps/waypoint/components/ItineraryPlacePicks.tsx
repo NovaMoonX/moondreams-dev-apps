@@ -35,8 +35,7 @@ interface ItineraryPlacePicksProps {
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
-const getPlaceKey = ({ place, address }: Pick<ItineraryPlace, 'place' | 'address'>) =>
-  place?.placeId ?? normalize(address);
+const getPlaceKey = ({ address }: Pick<ItineraryPlace, 'address'>) => normalize(address);
 
 const getEventPicks = (events: TimelineEvent[], excludeEventId?: string): ItineraryPick[] =>
   events
@@ -44,7 +43,7 @@ const getEventPicks = (events: TimelineEvent[], excludeEventId?: string): Itiner
     .map((event) => {
       const address = event.address?.trim() ?? '';
       return {
-        key: getPlaceKey({ place: event.place, address }),
+        key: getPlaceKey({ address }),
         label: event.locationName?.trim() || address,
         emoji: EVENT_TYPE_EMOJIS[event.eventType],
         name: event.locationName?.trim() || address,
@@ -74,7 +73,7 @@ const getRentalPicks = (rentals: Rental[]): ItineraryPick[] =>
     ...(rental.pickupAddress.trim()
       ? [
           {
-            key: getPlaceKey({ place: rental.pickupPlace, address: rental.pickupAddress }),
+            key: getPlaceKey({ address: rental.pickupAddress }),
             label: `${rental.name} pickup`,
             emoji: '🚗',
             name: `${rental.name} pickup`,
@@ -88,7 +87,7 @@ const getRentalPicks = (rentals: Rental[]): ItineraryPick[] =>
     ...(rental.returnAddress?.trim()
       ? [
           {
-            key: getPlaceKey({ place: rental.returnPlace, address: rental.returnAddress }),
+            key: getPlaceKey({ address: rental.returnAddress }),
             label: `${rental.name} return`,
             emoji: '🚗',
             name: `${rental.name} return`,

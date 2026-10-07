@@ -189,6 +189,14 @@ export interface EarlyPayment {
   returnedAt: number | null;
 }
 
+export type ExpenseLinkKind = 'EVENT' | 'STAY' | 'RENTAL';
+
+/** The event, stay or rental an expense pays for. A target that was deleted since reads as no link. */
+export interface ExpenseLink {
+  kind: ExpenseLinkKind;
+  id: string;
+}
+
 export interface TripExpense {
   id: string;
   tripId: string;
@@ -215,6 +223,8 @@ export interface TripExpense {
   earlyPayments: Record<string, EarlyPayment>;
   note: string | null;
   groupLabel: string | null;
+  /** Older documents lack it. */
+  linkedTo: ExpenseLink | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

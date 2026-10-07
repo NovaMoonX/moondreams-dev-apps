@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase/config';
 import type {
   EarlyPayment,
   ExpenseCategory,
+  ExpenseLink,
   ExpenseStatus,
   ExpenseTargetType,
   TripExpense,
@@ -27,6 +28,7 @@ interface CreateExpenseInput {
   note: string | null;
   groupLabel: string | null;
   isPerPerson: boolean;
+  linkedTo: ExpenseLink | null;
 }
 
 export const createExpense = createAsyncThunk<
@@ -89,6 +91,7 @@ export const createExpense = createAsyncThunk<
     earlyPayments: {},
     note: input.note?.trim() || null,
     groupLabel: input.groupLabel?.trim() || null,
+    linkedTo: input.linkedTo,
     createdBy: input.uid,
     createdAt: now,
     lastEditedAt: now,
@@ -113,6 +116,7 @@ interface UpdateExpenseInput {
   note: string | null;
   groupLabel: string | null;
   isPerPerson: boolean;
+  linkedTo: ExpenseLink | null;
 }
 
 export const updateExpense = createAsyncThunk<
@@ -161,6 +165,7 @@ export const updateExpense = createAsyncThunk<
     note: input.note?.trim() || null,
     groupLabel: input.groupLabel?.trim() || null,
     isPerPerson: input.isPerPerson,
+    linkedTo: input.linkedTo,
     lastEditedAt: Date.now(),
   };
 
@@ -196,6 +201,7 @@ export const updateExpenseSplit = createAsyncThunk<
     note: input.expense.note,
     groupLabel: input.expense.groupLabel,
     isPerPerson: input.expense.isPerPerson,
+    linkedTo: input.expense.linkedTo,
     lastEditedAt: Date.now(),
   };
 

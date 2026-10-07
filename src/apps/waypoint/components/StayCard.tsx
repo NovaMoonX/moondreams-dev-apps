@@ -4,6 +4,7 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import LocationLink from '@apps/waypoint/components/LocationLink';
+import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
@@ -72,6 +73,7 @@ export function StayDetailLines({
         <Badge variant='muted' outline>
           {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
         </Badge>
+        <NotPaidForBadge kind='STAY' id={stay.id} />
         {showNotesIndicator && stay.notes && (
           <span
             className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'

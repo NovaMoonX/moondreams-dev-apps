@@ -55,8 +55,8 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
           updateStay({ uid: currentUserId, trip, stayId: editingStay.id, stay, previousStay: editingStay }),
         ).unwrap();
       } else {
-        await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();
-        startFollowUp(getStaySubject(trip, stay));
+        const created = await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();
+        startFollowUp(getStaySubject(trip, created));
       }
       setIsModalOpen(false);
       setEditingStay(undefined);

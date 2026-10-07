@@ -65,9 +65,9 @@ function IdeaToEventModal({ trip, idea, currentUserId, onClose }: IdeaToEventMod
   const handleSubmit = async (event: EventFormValues) => {
     setIsSubmitting(true);
     try {
-      await dispatch(convertIdeaToEvent({ uid: currentUserId, trip, idea, event })).unwrap();
+      const created = await dispatch(convertIdeaToEvent({ uid: currentUserId, trip, idea, event })).unwrap();
       addToast({ title: `${idea.title} is on the itinerary`, type: 'success' });
-      startFollowUp(getEventSubject(trip, event));
+      startFollowUp(getEventSubject(trip, created));
       onClose();
     } finally {
       setIsSubmitting(false);

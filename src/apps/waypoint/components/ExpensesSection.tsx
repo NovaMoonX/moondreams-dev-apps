@@ -50,7 +50,6 @@ import {
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
-  selectSortedTimelineEvents,
   selectTripExpenses,
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
@@ -236,7 +235,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
-  const events = useAppSelector(selectSortedTimelineEvents);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
@@ -391,6 +389,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             note: values.note,
             groupLabel: values.groupLabel,
             isPerPerson: values.isPerPerson,
+            linkedTo: values.linkedTo,
           }),
         ).unwrap();
       } else {
@@ -1025,7 +1024,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={isModalOpen}
         trip={trip}
         initialExpense={editingExpense ?? undefined}
-        events={events}
         categoryKeys={categoryKeys}
         existingGroupLabels={existingGroupLabels}
         isSubmitting={isSubmitting}

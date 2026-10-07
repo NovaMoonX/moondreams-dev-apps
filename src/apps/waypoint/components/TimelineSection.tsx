@@ -22,7 +22,7 @@ import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
-import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
+import { getEventSubject, getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
   type EventFormValues,
@@ -51,7 +51,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
 import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
+import { EXPENSE_TRACKED_EVENT_TYPES, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   getBucketLabel,
@@ -72,7 +72,7 @@ import { buildTimelineItems, getGroupMembers, getStackMembers } from '@apps/wayp
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
-import { selectActiveStaysForDay, selectStays } from '@apps/waypoint/store/selectors';
+import { selectActiveStaysForDay, selectExpenseLinkKeys, selectStays } from '@apps/waypoint/store/selectors';
 import type { Stay } from '@apps/waypoint/types';
 
 const OUTSIDE_TAB = 'outside';
@@ -143,6 +143,8 @@ export function TimelineSection({
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
   const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
   const [minimizeWeather, setMinimizeWeather] = useLocalStoragePreference('waypoint:minimizeWeather', false);
   const stays = useAppSelector(selectStays);
   const now = useNow(60_000);
@@ -150,7 +152,13 @@ export function TimelineSection({
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
-    .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId));
+    .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId))
+    .filter(
+      (event) =>
+        !unpaidOnly ||
+        (EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) &&
+          !expenseLinkKeys.has(getExpenseLinkKey({ kind: 'EVENT', id: event.id }))),
+    );
 
   const [stackingEvent, setStackingEvent] = useState<TimelineEvent | undefined>();
   const [isStackHeaderOrigin, setIsStackHeaderOrigin] = useState(false);
@@ -453,9 +461,9 @@ export function TimelineSection({
           }),
         ).unwrap();
       } else {
-        await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
+        const created = await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
         if (!options?.addLeg) {
-          startFollowUp(getEventSubject(trip, event));
+          startFollowUp(getEventSubject(trip, created));
         }
       }
       setEditingEvent(undefined);
@@ -532,6 +540,12 @@ export function TimelineSection({
           checked: attendingOnly,
           onChange: setAttendingOnly,
           isCustomized: attendingOnly,
+        },
+        {
+          label: 'Only activities not paid for yet',
+          checked: unpaidOnly,
+          onChange: setUnpaidOnly,
+          isCustomized: unpaidOnly,
         },
         { label: 'Show archived', checked: showArchived, onChange: setShowArchived, isCustomized: showArchived },
       ],

@@ -4,6 +4,7 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import LocationLink from '@apps/waypoint/components/LocationLink';
+import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import NotesField from '@apps/waypoint/components/NotesField';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -80,6 +81,7 @@ export function RentalDetailLines({
         <Badge variant='muted' outline>
           {RENTAL_TYPE_LABELS[rental.rentalType ?? 'CAR']}
         </Badge>
+        <NotPaidForBadge kind='RENTAL' id={rental.id} />
       </div>
       {rental.vehicle && <p className='text-sm'>{rental.vehicle}</p>}
       <div className='flex flex-col items-start gap-1'>

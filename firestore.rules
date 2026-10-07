@@ -2776,13 +2776,24 @@ service cloud.firestore {
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
+      // Shape only: a target deleted later leaves a link that reads as none, and must never block editing the expense.
+      function isExpenseLinkValid(link) {
+        return link == null || (
+          link is map
+          && link.keys().hasOnly(['kind', 'id'])
+          && link.kind in ['EVENT', 'STAY', 'RENTAL']
+          && isNonEmptyString(link.id)
+          && link.id.size() <= 128
+        );
+      }
+
       function isTripExpenseValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
             'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'category',
             'customCategoryLabel', 'targetType', 'targetMemberIds', 'splitAmounts',
             'paidMemberStatus', 'earlyPayments', 'note', 'groupLabel', 'isPerPerson',
-            'createdBy', 'createdAt', 'lastEditedAt'
+            'linkedTo', 'createdBy', 'createdAt', 'lastEditedAt'
           ])
           && data.id == expenseId
           && data.tripId == tripId
@@ -2813,6 +2824,7 @@ service cloud.firestore {
           && (data.note == null || data.note is string)
           && (data.groupLabel == null || isNonEmptyString(data.groupLabel))
           && data.get('isPerPerson', false) is bool
+          && isExpenseLinkValid(data.get('linkedTo', null))
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);

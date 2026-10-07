@@ -310,6 +310,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     note?: string | null;
     groupLabel?: string | null;
     isPerPerson?: boolean;
+    linkedTo?: { kind: 'EVENT' | 'STAY' | 'RENTAL'; id: string } | null;
     targetType?: 'EVERYONE_CURRENT' | 'EVERYONE_INCLUDING_FUTURE' | 'JUST_ME' | 'SPECIFIC_MEMBERS';
     targetMemberIds?: string[];
     splitAmounts?: Record<string, number> | null;
@@ -343,7 +344,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       // Taylor already sent Alex their part, ahead of the reservation being paid.
       earlyPayments: {
         [taylor.uid]: { toUid: alex.uid, amount: 25, paidAt: context.now - 7_200_000, isReturned: false, returnedAt: null },
-      },
+        linkedTo: { kind: 'EVENT', id: 'seed-waypoint-dinner' },
+    },
     },
     {
       id: 'seed-expense-parking',
@@ -370,6 +372,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       status: 'PAID',
       category: 'ACTIVITIES',
       repaidBy: [jamie.uid],
+      linkedTo: { kind: 'EVENT', id: 'seed-waypoint-hike' },
     },
     {
       id: 'seed-expense-ferry',
@@ -409,6 +412,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       payerUid: taylor.uid,
       status: 'PAID',
       category: 'TRANSPORT',
+      linkedTo: { kind: 'RENTAL', id: 'seed-waypoint-rental-sea' },
     },
     {
       id: 'seed-expense-museum-tickets',
@@ -509,6 +513,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       note: seedExpense.note ?? null,
       groupLabel: seedExpense.groupLabel ?? null,
       isPerPerson: seedExpense.isPerPerson ?? false,
+      linkedTo: seedExpense.linkedTo ?? null,
       createdBy: alex.uid,
       createdAt: context.now,
       lastEditedAt: context.now,

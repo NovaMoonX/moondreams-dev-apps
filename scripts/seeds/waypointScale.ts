@@ -285,6 +285,7 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
       earlyPayments: !isPaid && index % 6 === 0 ? { [taylorUid]: { toUid: alexUid, amount: 2, paidAt: context.now - 3_600_000, isReturned: false, returnedAt: null } } : {},
       note: null,
       groupLabel: index % 10 === 0 ? `Day ${(index % TRIP_DAYS) + 1} meals` : null,
+      linkedTo: index % 4 === 0 ? { kind: 'EVENT', id: `scale-event-${index}` } : null,
       createdBy: alexUid,
       createdAt: joinedAt,
       lastEditedAt: context.now,

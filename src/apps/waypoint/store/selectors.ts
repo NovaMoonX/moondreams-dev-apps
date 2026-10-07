@@ -9,6 +9,7 @@ import {
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
 import { isEventForMember } from '@apps/waypoint/utils/attendeeCalculators';
+import { getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
 import { getEventTime, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import type {
   Announcement,
@@ -73,6 +74,13 @@ export function selectShouldShowAlbumReminder(
 
 export const selectTripExpenses = (state: RootState) =>
   state.waypoint.expenses.items;
+
+/** Keys (`getExpenseLinkKey`) of every event, stay and rental that has an expense attached. */
+export const selectExpenseLinkKeys = createSelector(
+  [selectTripExpenses],
+  (expenses): ReadonlySet<string> =>
+    new Set(expenses.flatMap((expense) => (expense.linkedTo ? [getExpenseLinkKey(expense.linkedTo)] : []))),
+);
 
 interface ExpenseTotal {
   min: number;

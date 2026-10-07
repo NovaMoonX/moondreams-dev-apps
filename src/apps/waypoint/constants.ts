@@ -202,6 +202,9 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
 
 export const ITINERARY_PICK_TRANSIT_TYPES: readonly TransitType[] = ['DRIVE', 'WALK', 'BIKE', 'SCOOTER', 'OTHER'];
 
+// Event types whose cost belongs on an expense: one without an attached expense reads "Not paid for yet".
+export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {
   TRAIN: 'departureStation',
