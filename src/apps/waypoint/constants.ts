@@ -377,7 +377,7 @@ export const STAY_TYPE_EMOJIS: Record<StayType, string> = {
   HOTEL: '🏨',
   RENTAL: '🏡',
   FRIEND_FAMILY: '🛋️',
-  OTHER: '✨',
+  OTHER: '🛏️',
 };
 
 export const STAY_TYPE_OPTION_LABELS: Record<StayType, string> = {
