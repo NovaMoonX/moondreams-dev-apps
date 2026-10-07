@@ -292,7 +292,7 @@ function ExpenseFormModal({
             <PillGroup
               label='This price is for'
               options={[
-                { value: 'group', label: 'One total', emoji: '🧾' },
+                { value: 'group', label: 'One total', emoji: '🧮' },
                 { value: 'each', label: 'Each person', emoji: '🙋' },
               ]}
               value={props.value === true ? 'each' : 'group'}
