@@ -79,8 +79,11 @@ export const DEFAULT_RUNTIME_MINUTES = 120;
 export const PREVIEWS_BUFFER_MINUTES = 20;
 export const DEFAULT_SHOWTIME = '19:00';
 /** The "add from trailers" strip shows from this long before a planned showing until this long after it starts. */
-export const PREVIEWS_WINDOW_BEFORE_MINUTES = 30;
-export const PREVIEWS_WINDOW_AFTER_MINUTES = 10;
+export const PREVIEWS_WINDOW_BEFORE_MINUTES = 10;
+/** Trailers run about 20 minutes past the listed start, plus a 10-minute buffer. */
+export const PREVIEWS_WINDOW_AFTER_MINUTES = 30;
+/** Push sent this long after a planned showing starts, once the trailers are rolling. */
+export const TRAILER_REMINDER_DELAY_MINUTES = 5;
 /** AMC's week turns over on Friday (5), when new releases open; the calendar grid itself still starts on Sunday. */
 export const WEEK_STARTS_ON = 5;
 

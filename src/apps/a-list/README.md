@@ -53,7 +53,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Mark as Paid: Format, ticket price, standard-format price for premium showings, the convenience fee you skipped (past fees as one-tap chips) and the tax amount, all in dollars as on the AMC receipt.
 - [x] Edit & Remove Viewings: Fix a price, format, date or fee, or delete a viewing; the calendar, watchlist and savings update to match.
 - [x] Mark as Seen: A prompt after a planned movie ends that updates the watchlist and takes an optional star rating.
-- [x] Trailer Picks: In the half hour before a planned showing and the first ten minutes after it starts, a small bubble above the Calendar icon offers "Add from trailers": search, tap a title, and it is saved quietly as Want to See, ready for the next trailer. What you've added so far is listed right there, each with an Undo. Nothing pops up on its own; fold the bubble away and a small chip above the icon brings it back.
+- [x] Trailer Picks: From ten minutes before a planned showing until half an hour after it starts (trailers run about twenty minutes past the listed time), a small bubble above the Calendar icon offers "Add from trailers": search, tap a title, and it is saved quietly as Want to See, ready for the next trailer. What you've added so far is listed right there, each with an Undo. Five minutes after a planned showing starts, a push notification nudges you to add a movie you like from the previews (showings planned before this update get it the next time they're edited; it needs notifications allowed in the browser). Nothing pops up on its own; fold the bubble away and a small chip above the icon brings it back.
 - [x] Theaters: Type the name of the theaters you go to (searching AMC's list comes later), save up to ten, pick a favorite, and tag each showing with one. Entry points: the last Setup step, the Dashboard's theaters row and a quiet nudge on the Calendar.
 - [x] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
@@ -64,7 +64,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [ ] Dashboard — Premium Insights: Average premium difference and savings for each premium format.
 
 **Stretch Goals**
-- [ ] Showtime Reminders: A nudge before a planned showing (time to head out) and after it ends (mark it seen, log what you paid).
+- [ ] Showtime Reminders: A nudge before a planned showing (time to head out) and after it ends (mark it seen, log what you paid). The trailers nudge five minutes after a showing starts already ships (see Trailer Picks).
 - [ ] Convenience Fee Estimates: Suggest a likely fee for a new payment based on factors like format and past entries, shown alongside the one-tap chips.
 - [ ] Monthly Recap: A shareable summary card of your month in movies.
 - [ ] Membership Price History: Record when your monthly cost changes, so cost incurred and break-even stay right across a price change instead of applying today's price to every month.

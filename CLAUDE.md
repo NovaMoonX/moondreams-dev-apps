@@ -134,6 +134,7 @@ Each mini-app may have its own personality on top of the shared playful base; A-
   - **An edit form's save** → `updateDoc` with only the fields the form owns, never `setDoc` of the cached object: that silently overwrites a concurrent vote, seen-mark, or archive. Reference: `updateEvent`, `updateStay`, `markExpensePaid`.
   - **A pointer to another document** (`favoriteTheatreId`) → a transaction that confirms the target still exists, and removing the target re-points it (to another candidate, or none) in the same transaction on every surface that removes it; a dangling pointer reads as none.
   - **A prompt driven by a timestamp field** (`purchase.startedAt`) is cleared in the same write that answers it, and bounded by the item's status, so it can't re-ask after the answer or for something already over.
+  - **A side effect keyed by a stored id** (a scheduled push's `trailerReminderId`) is rescheduled only when the field it derives from changed in that edit (compare with the document the transaction read), cancelled only while still ahead, and never awaited after the write: a slow or offline network must not hold the save UI.
   - A `writeBatch` is for independent writes with no reads. Thunks that only assign caller-supplied values to disjoint scalar fields need none of this. Reference: Waypoint `membershipActions.ts`.
 
 ## Firestore and Storage rules
