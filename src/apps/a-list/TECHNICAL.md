@@ -82,7 +82,6 @@ interface MembershipProfile {
   monthlyGoal: number | null;
   favoriteTheatreId: string | null;  // the theater new showings default to; one pointer, so there can never be two favorites. Documents written before theaters existed lack the key (readers use `?? null`)
   setupCompletedAt: number;          // instant; its presence is what "Setup is done" means. Immutable
-  trailerReminderId: string | null;  // the pending push (`reminders/{id}`, `TRAILER_REMINDER_DELAY_MINUTES` after showtimeAt); documents written before it existed lack the key
   createdAt: number;
   lastEditedAt: number;
 }
@@ -137,6 +136,7 @@ interface Viewing {
   rating: number | null;             // 0.5–5 stars in half steps (older ones are whole stars); only meaningful when SEEN
   ticket: Ticket | null;             // null until "Mark paid" or the add form's "Yes, I paid"
   theatre: TheatreSnapshot | null;   // copied when picked, so a showing outlives a removed theater; documents written before theaters existed lack the key
+  trailerReminderId: string | null;  // the pending push (`reminders/{id}`, `TRAILER_REMINDER_DELAY_MINUTES` after showtimeAt); documents written before it existed lack the key
   createdAt: number;
   lastEditedAt: number;
 }
@@ -608,11 +608,11 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 | `addWatchlistItem(movie, priority, preferredFormat)` (a manual movie is just a snapshot built by `ManualMovieForm` with a `manual-<uuid>` key) | `setDoc` at `watchlist/{movieKey}`; **create-if-absent** inside a `runTransaction` so a double-tap or two devices can't overwrite an existing priority |
 | `updateWatchlistItem(movieKey, fields)` | field-scoped `updateDoc` |
 | `removeWatchlistItem(movieKey)` | `deleteDoc`, after `useActionModal().confirm({ destructive: true })`; viewings untouched |
-| `addViewing({ movie, showtimeAt, ticket, theatre })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action A showing still ahead also gets a `reminders` doc (`appId: 'a-list'`, title only, no movie details) scheduled after the transaction commits, best-effort, with its id pre-generated and stored as `trailerReminderId`. |
-| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`, `theatre`) and, for a future showtime, a fresh `trailerReminderId` (the previous reminder is cancelled and a new one scheduled after the write) |
+| `addViewing({ movie, showtimeAt, ticket, theatre })` | **one `runTransaction`**: `transaction.get` the watchlist item; if absent `transaction.set` it (priority default, no preferred format); `transaction.set` the new viewing. `status` and `endsAt` are derived inside the action. A showing still ahead also gets a `reminders` doc (`appId: 'a-list'`, a fixed title and a body that names the movie) scheduled after the transaction commits, best-effort, with its id pre-generated and stored as `trailerReminderId`. |
+| `updateViewing(id, fields)` | field-scoped `updateDoc` of what the edit form owns (`showtimeAt` + recomputed `endsAt`, `ticket`, `rating`, `theatre`) and, only when the showtime moved, a fresh `trailerReminderId` (a still-pending previous reminder is cancelled and a new one scheduled after the write, neither awaited); any other edit leaves the reminder alone |
 | `recordTicket(id, ticket)` | `updateDoc({ ticket, lastEditedAt })` — the form owns the whole object |
 | `markViewingSeen(id, rating)` | `updateDoc({ status: 'SEEN', rating, lastEditedAt })` |
-| `removeViewing(id)` | a transaction that reads and deletes the viewing after a destructive confirm (also what "Didn't go" does); its pending trailer reminder is cancelled afterwards |
+| `removeViewing(id)` | a transaction (so it needs a connection) that reads and deletes the viewing after a destructive confirm (also what "Didn't go" does); a trailer reminder still ahead is cancelled afterwards, not awaited |
 
 No cached document is ever written back whole. A transaction is used only where one action must create two documents consistently or create-if-absent; the single-member data has no other concurrency hazard.
 
@@ -706,7 +706,7 @@ Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineCh
 - `src/store/index.ts`: `aList` reducer and `RootState`.
 - `firestore.rules`: the block above (including the three server-only deny blocks), in alphabetical order, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
 - `functions/src/index.ts`: export `searchMovies` and `getMovie`; set the `TMDB_API_KEY` and `OMDB_API_KEY` secrets (create `TMDB_API_KEY` in production before the PR merges); after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
-- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, one day with four movies, and one that starts 20 minutes after the seed runs so the trailers strip shows (it leaves the window about 40 minutes later). Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
+- `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, one day with four movies, and one that starts 5 minutes after the seed runs so the trailers strip shows (it leaves the window about 35 minutes later) and carries a pending trailer reminder. Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
 - `SITE_VERSION` bumped (minor) in `src/lib/app/app.constants.ts` in each PR; `README.md`, `UX.md`, `TECHNICAL.md` current.
 
 ---

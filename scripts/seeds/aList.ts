@@ -89,6 +89,9 @@ function getWatchlistFixtures(now: number) {
 }
 
 const PREVIEWS_MINUTES = 20;
+const TRAILER_REMINDER_DELAY_MINUTES = 5;
+const PREVIEWS_VIEWING_ID = 'seed-viewing-previews';
+const PREVIEWS_REMINDER_ID = 'seed-a-list-trailer-reminder';
 const DEFAULT_RUNTIME = 120;
 
 const SEED_TIMEZONE = 'America/Los_Angeles';
@@ -254,9 +257,9 @@ function getViewingFixtures(now: number) {
       hour: 14,
       awaiting: true,
     },
-    // Starts 5 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 40 minutes).
+    // Starts 5 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 35 minutes).
     {
-      id: 'seed-viewing-previews',
+      id: PREVIEWS_VIEWING_ID,
       movieKey: 'imdb-tt99000004',
       daysFromNow: 0,
       minutesFromNow: 5,
@@ -331,7 +334,8 @@ function getViewingFixtures(now: number) {
         endsAt,
         status,
         ticket: SEED_TICKETS[id] ?? null,
-        trailerReminderId: null,
+        trailerReminderId:
+          id === PREVIEWS_VIEWING_ID ? PREVIEWS_REMINDER_ID : null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
         ...(SEED_VIEWING_THEATRES[id] === undefined
           ? {}
@@ -401,9 +405,33 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const previewsViewing = viewings.find(
+    (viewing) => viewing.id === PREVIEWS_VIEWING_ID,
+  );
+  if (previewsViewing) {
+    await context.firestore
+      .collection('reminders')
+      .doc(PREVIEWS_REMINDER_ID)
+      .set({
+        id: PREVIEWS_REMINDER_ID,
+        appId: 'a-list',
+        targetUids: [alex.uid],
+        title: 'Previews time 📽️',
+        body: `Spot a movie you like at ${previewsViewing.movie.title}? Add it to your watchlist while it’s fresh.`,
+        scheduledFor:
+          previewsViewing.showtimeAt + TRAILER_REMINDER_DELAY_MINUTES * 60_000,
+        status: 'pending',
+        channels: ['push'],
+        relatedEntityPath: `apps/a-list/memberships/${alex.uid}/viewings/${PREVIEWS_VIEWING_ID}`,
+        recurrence: 'none',
+        createdBy: alex.uid,
+        createdAt: context.now,
+      });
+  }
+
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      1 + SEED_THEATRES.length + watchlist.length + viewings.length,
+      2 + SEED_THEATRES.length + watchlist.length + viewings.length,
   };
 }

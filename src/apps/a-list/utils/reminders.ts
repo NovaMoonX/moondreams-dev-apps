@@ -4,9 +4,18 @@ import { db } from '@/lib/firebase/config';
 import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
 import { TRAILER_REMINDER_DELAY_MINUTES } from '@apps/a-list/constants';
 
-/** A fresh id to store on the viewing before the reminder itself exists. */
-export function newTrailerReminderId() {
-  const result = doc(collection(db, 'reminders')).id;
+/** Whether a showing's trailer push is still ahead of us. */
+export function isTrailerReminderAhead(showtimeAt: number) {
+  const result =
+    showtimeAt + TRAILER_REMINDER_DELAY_MINUTES * 60_000 > Date.now();
+  return result;
+}
+
+/** The id to store on the viewing, or null when the push would already be past. */
+export function newTrailerReminderId(showtimeAt: number) {
+  const result = isTrailerReminderAhead(showtimeAt)
+    ? doc(collection(db, 'reminders')).id
+    : null;
   return result;
 }
 
@@ -15,26 +24,23 @@ export async function scheduleTrailerReminder({
   uid,
   reminderId,
   viewingId,
+  movieTitle,
   showtimeAt,
 }: {
   uid: string;
   reminderId: string;
   viewingId: string;
+  movieTitle: string;
   showtimeAt: number;
 }) {
-  const scheduledFor = showtimeAt + TRAILER_REMINDER_DELAY_MINUTES * 60_000;
-  if (scheduledFor <= Date.now()) {
-    return;
-  }
-
   try {
     await scheduleReminder({
       id: reminderId,
       appId: 'a-list',
       targetUids: [uid],
-      title: '📽️ Trailers are rolling',
-      body: 'Spot one you like? Add it to your watchlist while it’s fresh.',
-      scheduledFor,
+      title: 'Previews time 📽️',
+      body: `Spot a movie you like at ${movieTitle}? Add it to your watchlist while it’s fresh.`,
+      scheduledFor: showtimeAt + TRAILER_REMINDER_DELAY_MINUTES * 60_000,
       createdBy: uid,
       relatedEntityPath: `apps/a-list/memberships/${uid}/viewings/${viewingId}`,
     });
