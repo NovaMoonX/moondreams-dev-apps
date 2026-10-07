@@ -21,10 +21,10 @@
   top: 0;
   z-index: 20;
   @media (max-width: 767.98px) {
-    top: 4rem;
+    top: calc(4rem - 1px);
     transition: top 300ms;
     html[data-site-banner='true'] & {
-      top: 6.25rem;
+      top: calc(6.25rem - 1px);
     }
     html[data-site-header='hidden'] & {
       top: 0;
