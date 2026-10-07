@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, memo } from 'react';
 
 import {
   Button,
@@ -14,7 +14,7 @@ import { shallowEqual } from 'react-redux';
 
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions } from '@/lib/airports/airportsQueries';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import DayWeather from '@apps/waypoint/components/DayWeather';
 import EventCard from '@apps/waypoint/components/EventCard';
@@ -28,6 +28,7 @@ import EventFormModal, {
   type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
+import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
@@ -73,6 +74,8 @@ import { selectActiveStaysForDay, selectStays } from '@apps/waypoint/store/selec
 import type { Stay } from '@apps/waypoint/types';
 
 const OUTSIDE_TAB = 'outside';
+const EAGER_DAYS = 2;
+const ESTIMATED_CARD_HEIGHT = 210;
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -370,7 +373,11 @@ export function TimelineSection({
             .sort((first, second) => first - second)
             .map((day) => (
               <div key={day} className='space-y-3'>
-                {renderDivider(getDayDateLabel(trip.startDate, day))}
+                {renderDivider(
+                  getDayDateLabel(trip.startDate, day),
+                  minimizeWeather ? renderDayWeather(day) : undefined,
+                )}
+                {!minimizeWeather && renderDayWeather(day)}
                 {renderEventItems(visibleEvents.filter((event) => event.dayIndex === day))}
               </div>
             ))}
@@ -400,14 +407,20 @@ export function TimelineSection({
     return (
       <div className='space-y-3'>
         {days.map(
-          ({ bucket, items }) => (
-            <div key={bucket} className='space-y-3'>
+          ({ bucket, items }, dayPosition) => (
+            <div
+              key={bucket}
+              className='defer-offscreen space-y-3'
+              style={{ '--defer-size': `${items.length * ESTIMATED_CARD_HEIGHT}px` } as CSSProperties}
+            >
               {renderDivider(
                 getBucketLabel(bucket, trip.startDate, dayCount),
                 typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
               )}
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
-              {renderEventItems(items)}
+              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_CARD_HEIGHT}>
+                {renderEventItems(items)}
+              </LazyMount>
             </div>
           ),
         )}
@@ -658,7 +671,7 @@ function StayBanner({ stay, showCover }: { stay: Stay; showCover: boolean }) {
   return (
     <div className='border-border bg-card flex overflow-hidden rounded-lg border'>
       {imageUrl && (
-        <EnrichedImage
+        <FallbackImage
           src={imageUrl}
           alt=''
           className='w-28 shrink-0 object-cover sm:w-44'
@@ -680,4 +693,4 @@ function StayBanner({ stay, showCover }: { stay: Stay; showCover: boolean }) {
   );
 }
 
-export default TimelineSection;
+export default memo(TimelineSection);

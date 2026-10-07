@@ -248,7 +248,7 @@ Reworked from the last pass, all flagged for the TDD reconciliation pass:
 - **Grouped by day now**, mirroring Timeline's day tabs (including the same "All" option) rather than one flat running list — easier to reason about "what did we spend on Day 3." An **"Other" tab** holds expenses that aren't tied to any specific day — paying for the whole hotel stay upfront, for instance. This means `TripExpense` needs a nullable `dayIndex` it currently doesn't have at all.
 - **Add and Dues are now separate blocks** — cramming "you owe Sam $4" and the add button into one node was genuinely confusing, not just a layout accident.
 - **Add creates an expense; Split is a distinct, later step**, not the same action. Creating one only needs title, amount (or a range), and who paid — it defaults to split evenly among everyone, and "Split" is an explicit follow-up to customize that. See the reworked journey below.
-- **Totals now show three figures**: paid-so-far, expected/upcoming, and their combined total — an expense can be a range instead of one fixed number ("$10-$30 est.") for cases like a farmer's market where the exact cost isn't known ahead of time, so "Total" is itself a range when any expected expense is.
+- **Totals have three views (Per person, Group, Mine) as pills**; Mine shows what you paid, what is still expected for you and your total share, and a muted line for money you sent early. Each view shows three figures: paid-so-far, expected/upcoming, and their combined total — an expense can be a range instead of one fixed number ("$10-$30 est.") for cases like a farmer's market where the exact cost isn't known ahead of time, so "Total" is itself a range when any expected expense is.
 - **Who an expense is for needs one more distinction than just "everyone"**: Everyone (current members only, a fixed snapshot) vs. Everyone (including anyone who joins later — a live reference) are genuinely different outcomes as the trip's membership changes, so both need to be offered explicitly rather than picking one silently. Alongside Just Me and Specific Members. Whichever is chosen, the split itself is auto-suggested (even, across whoever's included) and then freely adjustable or clearable — the whole flow needs to stay simple to use even with this extra choice built in.
 
 **Ideas**
@@ -401,6 +401,10 @@ flowchart LR
     E -->|Not needed| H[Remove it]
 ```
 *Defaults to driving since that's the most common case, but downtime between events (no real travel happening) is just as common — converting straight to Free Time needs to be as easy as accepting the default, not just delete-or-keep. The total-travel-time rollup this would have fed is a separate, Stretch-tier idea — see Timeline above.*
+
+**Paid early**
+
+An expected expense row offers "I paid early" to anyone in its split: pick who you paid (pills, search past 12 people), the amount (capped at your share; an estimate defaults to the share of its minimum), Save. The Dues summary opens with a notice about your own early payments; the pair sheet adds a "paid early" block (Got it back, Remove) and "How the net adds up". When the recipient pays the expense it covers the sender's share and any excess stays owed back.
 
 **Add & split an expense**
 ```mermaid

@@ -49,7 +49,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
             weekday: 'short',
             timeZone: 'UTC',
           });
-          const dateLabel = getDayDateLabel(startDate, dayIndex);
+          const dateLabel = getDayDateLabel(startDate, dayIndex, false);
 
           return (
             <Button

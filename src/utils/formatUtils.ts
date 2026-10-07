@@ -14,17 +14,22 @@ export function formatList(names: string[]) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
+// Intl formatters are slow to build and cheap to reuse, and these run for every row of a long timeline.
+const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+const clockTimes = new Map<string, string>();
+
 export function formatTime(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return timeFormatter.format(new Date(timestamp));
 }
 
 export function formatClockTime(hhmm: string) {
+  const known = clockTimes.get(hhmm);
+  if (known !== undefined) {
+    return known;
+  }
   const [hours, minutes] = hhmm.split(':').map(Number);
   const formatted = formatTime(new Date(2000, 0, 1, hours, minutes).getTime());
+  clockTimes.set(hhmm, formatted);
   return formatted;
 }
 

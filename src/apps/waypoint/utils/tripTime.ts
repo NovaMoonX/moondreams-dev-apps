@@ -92,7 +92,7 @@ export type EventTimeSource = Pick<
 > &
   Partial<Pick<TimelineEvent, 'endTimezone'>>;
 
-export function getEventTime(trip: TripSpace, event: EventTimeSource): ResolvedEventTime {
+function resolveEventTime(trip: TripSpace, event: EventTimeSource): ResolvedEventTime {
   if (!isRelativeTrip(trip)) {
     const startAt = event.startAt ?? null;
     const endAt = event.endAt ?? null;
@@ -124,6 +124,35 @@ export function getEventTime(trip: TripSpace, event: EventTimeSource): ResolvedE
   const impliedEndMs = isTimed ? (endMs ?? toTripMoment(trip, dayIndex + 1, '00:00', timezone)) : null;
 
   return { dayIndex, endDayIndex, startTime, endTime, timezone, endTimezone, startMs, endMs, impliedEndMs };
+}
+
+/** An instant as a trip day number and clock time in the trip's own zone (the viewer's when it has none). */
+export function toTripDayTime(trip: TripSpace, ms: number) {
+  const format = (timeZone: string | undefined) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(ms);
+  const getParts = () => {
+    try {
+      return format(trip.timezone ?? undefined);
+    } catch {
+      return format(undefined);
+    }
+  };
+  const parts = getParts();
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? '00';
+  const dayStart = Date.UTC(Number(part('year')), Number(part('month')) - 1, Number(part('day')));
+  const result = {
+    dayIndex: Math.round((dayStart - trip.startDate) / DAY_MS),
+    time: `${part('hour')}:${part('minute')}`,
+  };
+  return result;
 }
 
 export interface DayTimeValue {
@@ -164,7 +193,7 @@ export type StayTimeSource = Pick<
   | 'plannedDepartureTime'
 >;
 
-export function getStayTime(trip: TripSpace, stay: StayTimeSource): ResolvedStayTime {
+function resolveStayTime(trip: TripSpace, stay: StayTimeSource): ResolvedStayTime {
   if (!isRelativeTrip(trip)) {
     const absolute = (timestamp: number | null | undefined): DayTimeValue => ({
       dayIndex: getAbsoluteDayIndex(trip, timestamp ?? null),
@@ -221,7 +250,7 @@ export interface ResolvedRentalTime {
   returnMs: number | null;
 }
 
-export function getRentalTime(trip: TripSpace, rental: RentalTimeSource): ResolvedRentalTime {
+function resolveRentalTime(trip: TripSpace, rental: RentalTimeSource): ResolvedRentalTime {
   const timezone = getEffectiveTimezone(trip, rental.timezone);
   const toMs = (dayIndex: number, time: string) =>
     isInTripRange(trip, dayIndex) ? toTripMoment(trip, dayIndex, time, timezone) : null;
@@ -246,6 +275,25 @@ export interface EventTimeDraft {
   /** `null` keeps the end in the start's zone. */
   endTimezone: string | null;
 }
+
+// Resolving a time builds zone offsets, and nearly every screen asks for it per event on every render,
+// so a result is kept per item until the item or its trip is replaced.
+function memoizeByItem<Item extends object, Result>(resolve: (trip: TripSpace, item: Item) => Result) {
+  const cache = new WeakMap<Item, { trip: TripSpace; result: Result }>();
+  return (trip: TripSpace, item: Item): Result => {
+    const cached = cache.get(item);
+    if (cached && cached.trip === trip) {
+      return cached.result;
+    }
+    const result = resolve(trip, item);
+    cache.set(item, { trip, result });
+    return result;
+  };
+}
+
+export const getEventTime = memoizeByItem(resolveEventTime);
+export const getStayTime = memoizeByItem(resolveStayTime);
+export const getRentalTime = memoizeByItem(resolveRentalTime);
 
 /** `null` when a legacy draft has no day to build a timestamp from. */
 export function buildEventTimeFields(trip: TripSpace, draft: EventTimeDraft): EventTimeFields | null {

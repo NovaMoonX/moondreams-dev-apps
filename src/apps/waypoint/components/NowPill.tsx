@@ -13,7 +13,7 @@ import {
   formatDuration,
 } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -265,7 +265,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
           >
             <div className='space-y-4'>
               {getDisplayImage(openEvent) && (
-                <EnrichedImage
+                <FallbackImage
                   src={getDisplayImage(openEvent) as string}
                   alt=''
                   className='aspect-video w-full rounded-lg object-cover'

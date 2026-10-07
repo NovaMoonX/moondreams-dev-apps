@@ -4,6 +4,7 @@ import {
   type SeedContext,
   type SeedResult,
 } from './types.ts';
+import { seedWaypointScaleTrip } from './waypointScale.ts';
 
 const TRIP_ID = 'seed-waypoint-trip';
 const ARCHIVED_TRIP_ID = 'seed-waypoint-trip-archived';
@@ -313,6 +314,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     targetMemberIds?: string[];
     splitAmounts?: Record<string, number> | null;
     repaidBy?: string[];
+    earlyPayments?: Record<string, { toUid: string; amount: number; paidAt: number; isReturned: boolean; returnedAt: number | null }>;
   }> = [
     {
       id: 'seed-expense-breakfast',
@@ -338,6 +340,10 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       payerUid: null,
       status: 'EXPECTED',
       category: 'FOOD',
+      // Taylor already sent Alex their part, ahead of the reservation being paid.
+      earlyPayments: {
+        [taylor.uid]: { toUid: alex.uid, amount: 25, paidAt: context.now - 7_200_000, isReturned: false, returnedAt: null },
+      },
     },
     {
       id: 'seed-expense-parking',
@@ -499,6 +505,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
           (seedExpense.repaidBy ?? []).map((uid) => [uid, { isPaid: true, paidAt: context.now - 3_600_000 }]),
         ),
       },
+      earlyPayments: seedExpense.earlyPayments ?? {},
       note: seedExpense.note ?? null,
       groupLabel: seedExpense.groupLabel ?? null,
       isPerPerson: seedExpense.isPerPerson ?? false,
@@ -1782,8 +1789,17 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const scaleDocuments = await seedWaypointScaleTrip({
+    context,
+    tripStart: activeTripStart,
+    alexUid: alex.uid,
+    taylorUid: taylor.uid,
+    jamieUid: jamie.uid,
+    timezone: TRIP_TIMEZONE,
+  });
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 78,
+    firestoreDocuments: 78 + scaleDocuments,
   };
 }
