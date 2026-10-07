@@ -106,7 +106,7 @@ function Layout() {
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top,transform] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 max-md:h-16 max-md:py-2 transition-[top,transform] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
           isBannerVisible ? 'top-9' : 'top-0',
           isHeaderHidden && 'max-md:-translate-y-full',
         )}
