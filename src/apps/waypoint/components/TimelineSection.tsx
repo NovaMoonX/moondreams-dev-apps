@@ -10,6 +10,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
+import { ClipboardCopy } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
@@ -57,7 +58,9 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
 import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { buildTimelineMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { getEventTime } from '@apps/waypoint/utils/tripTime';
 import { EXPENSE_TRACKED_EVENT_TYPES, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -186,6 +189,22 @@ export function TimelineSection({
   const now = useNow(60_000);
   const weather = useTripWeather(trip, events, now);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
+
+  const handleCopyTimeline = async () => {
+    const markdown = buildTimelineMarkdown({
+      trip,
+      events,
+      stays,
+      rentals,
+      memberNames: Object.fromEntries(memberIds.map((uid) => [uid, members[uid]?.displayName ?? ''])),
+    });
+    const copied = await copyToClipboard(markdown);
+    addToast(
+      copied
+        ? { title: 'Timeline copied', description: 'Paste it anywhere as Markdown.' }
+        : { title: 'Unable to copy the timeline', description: 'Please try again.', type: 'error' },
+    );
+  };
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId))
@@ -671,7 +690,21 @@ export function TimelineSection({
           <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             View by day
           </p>
-          <TimelineViewOptions groups={viewOptionGroups} />
+          <div className='flex items-center gap-1'>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='gap-2'
+              aria-label='Copy timeline as Markdown'
+              onClick={() => void handleCopyTimeline()}
+            >
+              <ClipboardCopy className='h-4 w-4' />
+              <span className='sm:hidden'>Copy</span>
+              <span className='max-sm:hidden'>Copy as Markdown</span>
+            </Button>
+            <TimelineViewOptions groups={viewOptionGroups} />
+          </div>
         </div>
         <Select
           className='sm:hidden'

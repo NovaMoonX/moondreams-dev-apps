@@ -1,5 +1,6 @@
 import FallbackImage from '@/components/FallbackImage';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useStore } from 'react-redux';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -20,6 +21,7 @@ import {
   Archive,
   ArchiveRestore,
   Calendar,
+  ClipboardCopy,
   Globe,
   Image,
   Link,
@@ -30,9 +32,10 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, type RootState } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
+import { useUserInfo } from '@/hooks/useUserInfo';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getCityLabel } from '@/lib/cities/cityApi';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -80,9 +83,10 @@ import {
   setTripArchived,
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
-import { getTripStatus } from '@apps/waypoint/store/selectors';
+import { getTripStatus, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+import { buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const { option, custom } = DropdownMenuFactories;
@@ -101,6 +105,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
+  const store = useStore<RootState>();
+  const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
+  const memberInfo = useUserInfo(memberIds)?.map ?? {};
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [searchParams, setSearchParams] = useSearchParams();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
@@ -217,6 +224,26 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             description: 'Please try again.',
             type: 'error',
           },
+    );
+  };
+
+  const handleCopyTripMarkdown = async () => {
+    setIsMobileActionsOpen(false);
+    const state = store.getState();
+    const markdown = buildTripMarkdown({
+      trip,
+      events,
+      stays: selectSortedStays(state),
+      rentals: selectSortedRentals(state),
+      checklist: state.waypoint.checklist.items,
+      ideas: selectSortedIdeas(state, trip.id),
+      memberNames: Object.fromEntries(memberIds.map((uid) => [uid, memberInfo[uid]?.displayName ?? ''])),
+    });
+    const copied = await copyToClipboard(markdown);
+    addToast(
+      copied
+        ? { title: 'Trip copied', description: 'Paste the whole itinerary anywhere as Markdown.' }
+        : { title: 'Unable to copy the trip', description: 'Please try again.', type: 'error' },
     );
   };
 
@@ -350,6 +377,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         },
       })
     : null;
+  const copyMarkdownActionItem = option({
+    label: 'Copy trip as Markdown',
+    value: 'copy-markdown',
+    icon: <ClipboardCopy className='h-4 w-4' />,
+    onClick: () => void handleCopyTripMarkdown(),
+  });
   const archiveActionItem = isAdmin
     ? option({
         label: trip.isArchived ? 'Unarchive trip' : 'Archive trip',
@@ -387,13 +420,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       ))
     : null;
 
-  const actionItems = [announcementActionItem, archiveActionItem, cityActionItem, coverActionItem, deleteDesktopMenuItem].filter(
+  const actionItems = [copyMarkdownActionItem, announcementActionItem, archiveActionItem, cityActionItem, coverActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, coverActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
-  const standaloneActionItems = [announcementActionItem, archiveActionItem].filter(
+  const standaloneActionItems = [announcementActionItem, copyMarkdownActionItem, archiveActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
 

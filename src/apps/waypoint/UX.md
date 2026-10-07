@@ -406,6 +406,8 @@ flowchart LR
 
 An expected expense row offers "I paid early" to anyone in its split: pick who you paid (pills, search past 12 people), the amount (capped at your share; an estimate defaults to the share of its minimum), Save. The Dues summary opens with a notice about your own early payments; the pair sheet adds a "paid early" block (Got it back, Remove) and "How the net adds up". When the recipient pays the expense it covers the sender's share and any excess stays owed back.
 
+**Copy as Markdown.** The trip menu's "Copy trip as Markdown" (every member sees it) copies the whole itinerary; the Timeline's "Copy" button beside View options copies only the timeline. Both toast once the text is on the clipboard and ignore the view options and filters.
+
 **Trip city and weather.** Creating a trip has an optional "Where is it based?" city search (it sets the time zone too); "Set city" / "Change city" in the trip menu edits it, and the city shows under the title on the trip card and in the header. Tapping any weather card opens its details sheet, whose one button ("Sounds good") just closes it.
 
 **Slim timeline rows.** A day's check-ins, check-outs, rental pick-ups and returns, and its travel legs, are one-line tappable rows (a stay or rental opens read-only details, a travel leg its details with Modify), so the cards on the timeline are the plans people actually choose between.
