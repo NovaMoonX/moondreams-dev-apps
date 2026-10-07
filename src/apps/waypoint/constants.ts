@@ -329,8 +329,6 @@ export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
  * for the travel days around a trip. */
 export const MAX_DAYS_OUTSIDE_TRIP = 3;
 
-export const ADD_NEW_OPTION = '__add_new__';
-
 export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
   { value: 'day', text: 'Day' },
   { value: 'amount-desc', text: 'Amount (high to low)' },
@@ -340,7 +338,14 @@ export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
 export const EXPENSE_TOTALS_VIEW_OPTIONS: { value: ExpenseTotalsView; label: string }[] = [
   { value: 'per-person', label: 'Per person' },
   { value: 'group', label: 'Group' },
+  { value: 'me', label: 'Mine' },
 ];
+
+export const EXPENSE_TOTALS_VIEW_HINTS: Record<ExpenseTotalsView, string> = {
+  'per-person': 'Every cost split evenly across everyone on the trip.',
+  group: 'What the whole trip costs, added up.',
+  me: 'Your own share of every cost. "Paid by me" is what you covered up front, "Expected for me" is your share of what is still to pay, and "My total" is your share of everything, including what others covered.',
+};
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   FOOD: 'Food',
@@ -420,3 +425,6 @@ export const WEATHER_BANNER_IMAGES: Record<WeatherConditionId, string | null> = 
   thunderstorms: '/by-app/waypoint/weather/thunderstorms.webp',
   unknown: null,
 };
+
+/** Lists with at least this many rows (members, checklist items) get a search field. */
+export const LIST_SEARCH_THRESHOLD = 8;

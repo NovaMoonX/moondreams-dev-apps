@@ -59,3 +59,9 @@ html.waypoint-theme [data-pill][aria-pressed='true'] {
   color: var(--color-foreground);
   box-shadow: inset 0 0 0 1.5px var(--color-primary);
 }
+
+/* A tertiary button is a row or a quiet action, not a link: its text stays the normal text color so
+   a screen of tappable rows isn't a screen of blue. Anything that sets its own color with `!` wins, and a link-variant button (underline on hover) stays blue. */
+html.waypoint-theme button.text-primary:not(:disabled):not([class*='bg-']):not([class*='border-primary']):not([class*='underline-offset']) {
+  color: var(--color-foreground);
+}

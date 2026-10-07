@@ -7,7 +7,7 @@ import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
@@ -141,7 +141,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
         )}
       >
         {imageUrl && (
-          <EnrichedImage
+          <FallbackImage
             src={imageUrl}
             alt=''
             className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0'

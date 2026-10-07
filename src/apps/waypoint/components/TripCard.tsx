@@ -1,3 +1,4 @@
+import FallbackImage from '@/components/FallbackImage';
 import { Badge, Button, CopyButton } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -22,7 +23,7 @@ function TripCard({
   return (
     <div className='border-border bg-card rounded-lg border p-4'>
       {trip.coverImageUrl && (
-        <img
+        <FallbackImage
           src={trip.coverImageUrl}
           alt={`${trip.title} cover`}
           className='mb-4 h-40 w-full rounded-md object-cover'

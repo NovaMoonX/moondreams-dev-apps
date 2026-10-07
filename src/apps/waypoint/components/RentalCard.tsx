@@ -7,7 +7,7 @@ import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import NotesField from '@apps/waypoint/components/NotesField';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
@@ -148,7 +148,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
         )}
       >
         {imageUrl && (
-          <EnrichedImage
+          <FallbackImage
             src={imageUrl}
             alt=''
             className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0'

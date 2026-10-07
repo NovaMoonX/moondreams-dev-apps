@@ -5,7 +5,6 @@ import {
   Form,
   FormFactories,
   Input,
-  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
@@ -18,7 +17,9 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
-import { ADD_NEW_OPTION, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
+import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,
   ExpenseStatus,
@@ -96,7 +97,7 @@ function parseAmount(value: string): number | null {
 }
 
 function resolveChoice({ choice, newLabel }: ChoiceValue): string | null {
-  if (choice === ADD_NEW_OPTION || choice === '') {
+  if (choice === NEW_CHOICE || choice === '') {
     return newLabel.trim() || null;
   }
   return choice;
@@ -202,8 +203,9 @@ function ExpenseFormModal({
           <ChoiceField
             value={props.value as ChoiceValue}
             onValueChange={props.onValueChange as (value: ChoiceValue) => void}
+            label='Category'
             options={categoryOptions}
-            placeholder='Choose a category'
+            newPillLabel='New category'
             newPlaceholder='Souvenirs'
           />
         ),
@@ -313,8 +315,9 @@ function ExpenseFormModal({
             <ChoiceField
               value={props.value as ChoiceValue}
               onValueChange={props.onValueChange as (value: ChoiceValue) => void}
+              label='Group'
               options={groupOptions}
-              placeholder='Choose a group'
+              newPillLabel='New group'
               newPlaceholder='Dinner at Ichiran'
             />
           ),
@@ -376,7 +379,7 @@ function ExpenseFormModal({
     }
 
     const categoryKey =
-      data.category.choice === ADD_NEW_OPTION ? toCustomCategoryKey(categoryChoice) : categoryChoice;
+      data.category.choice === NEW_CHOICE ? toCustomCategoryKey(categoryChoice) : categoryChoice;
     const { category, customCategoryLabel } = parseExpenseCategoryKey(categoryKey);
 
     setError(null);
@@ -404,6 +407,10 @@ function ExpenseFormModal({
 
   const handleDelete = async () => {
     if (!onDelete) {
+      return;
+    }
+    if (initialExpense && Object.keys(getEarlyPayments(initialExpense)).length > 0) {
+      setError('Someone recorded paying toward this early. Remove it from the Dues summary (Remove, next to the early payment) before deleting.');
       return;
     }
 
@@ -494,39 +501,30 @@ function ExpenseFormModal({
 }
 
 function ChoiceField({
+  label,
   value,
   onValueChange,
   options,
-  placeholder,
+  newPillLabel,
   newPlaceholder,
 }: {
+  label: string;
   value: ChoiceValue;
   onValueChange: (value: ChoiceValue) => void;
   options: { value: string; text: string }[];
-  placeholder: string;
+  newPillLabel: string;
   newPlaceholder: string;
 }) {
-  const isAddingNew = options.length === 0 || value.choice === ADD_NEW_OPTION;
-
   return (
-    <div className='space-y-2'>
-      {options.length > 0 && (
-        <Select
-          options={[...options, { value: ADD_NEW_OPTION, text: 'Add new…' }]}
-          value={value.choice}
-          placeholder={placeholder}
-          onChange={(choice) => onValueChange({ ...value, choice })}
-        />
-      )}
-      {isAddingNew && (
-        <Input
-          value={value.newLabel}
-          placeholder={newPlaceholder}
-          variant='outline'
-          onChange={(event) => onValueChange({ ...value, newLabel: event.target.value })}
-        />
-      )}
-    </div>
+    <PickOrCreate
+      label={label}
+      options={options.map((option) => ({ value: option.value, label: option.text }))}
+      choice={value.choice}
+      newText={value.newLabel}
+      newPillLabel={newPillLabel}
+      newPlaceholder={newPlaceholder}
+      onChange={(choice, newLabel) => onValueChange({ choice, newLabel })}
+    />
   );
 }
 

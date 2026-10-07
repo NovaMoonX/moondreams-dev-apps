@@ -7,7 +7,7 @@ import { Car, KeyRound, LogIn } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { formatClockTime, formatCountdown } from '@/utils/formatUtils';
 import { getDayCount, getLocalDayIndex } from '@/utils/dateRangeUtils';
@@ -360,7 +360,7 @@ function CheckInStayCard({
     >
       <div className='flex items-start gap-3'>
         {imageUrl && (
-          <EnrichedImage
+          <FallbackImage
             src={imageUrl}
             alt=''
             className='h-12 w-12 shrink-0 rounded-lg object-cover sm:h-16 sm:w-16'
@@ -452,7 +452,7 @@ function RentalTodayCard({
     >
       <div className='flex items-start gap-3'>
         {imageUrl && (
-          <EnrichedImage
+          <FallbackImage
             src={imageUrl}
             alt=''
             className='h-12 w-12 shrink-0 rounded-lg object-cover sm:h-16 sm:w-16'

@@ -7,6 +7,7 @@ import { APP_REGISTRY_PATH_MAP, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
+import { useHideOnScroll } from '@hooks/useHideOnScroll';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
@@ -82,6 +83,12 @@ function LocationSync() {
 function Layout() {
   const networkStatus = useNetworkStatus();
   const isBannerVisible = networkStatus !== null;
+  const isHeaderHidden = useHideOnScroll();
+
+  useEffect(() => {
+    document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
+    document.documentElement.dataset.siteBanner = String(isBannerVisible);
+  }, [isHeaderHidden, isBannerVisible]);
   useReminderToasts();
 
   useEffect(() => {
@@ -96,11 +103,12 @@ function Layout() {
       <OfflineBanner />
       <EmulatorStatus />
 
-      {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only */}
+      {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 z-10 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-10 flex h-20 items-center gap-3 px-4 py-4 transition-[top,transform] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
           isBannerVisible ? 'top-9' : 'top-0',
+          isHeaderHidden && 'max-md:-translate-y-full',
         )}
       >
         <div className='pointer-events-auto flex flex-1 items-center justify-start'>

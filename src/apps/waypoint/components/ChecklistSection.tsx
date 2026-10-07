@@ -21,7 +21,8 @@ import UserAvatar from '@/ui/UserAvatar';
 import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormModal';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
-import { CHECKLIST_CATEGORY_LABELS } from '@apps/waypoint/constants';
+import SearchInput from '@/components/SearchInput';
+import { CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
   ChecklistItem,
@@ -61,6 +62,7 @@ export default function ChecklistSection({
   const isPhone = useMediaQuery().isBelow('sm');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
+  const [query, setQuery] = useState('');
   const items = useAppSelector((state) => state.waypoint.checklist.items);
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
@@ -70,12 +72,19 @@ export default function ChecklistSection({
   const mayToggle = (item: ChecklistItem) =>
     canEdit || item.assignedToUids.includes(currentUserId);
 
+  const showSearch = items.length >= LIST_SEARCH_THRESHOLD;
+  const needle = showSearch ? query.trim().toLowerCase() : '';
   const visibleItems = useMemo(
     () =>
-      assignedToMeOnly
-        ? items.filter((item) => item.assignedToUids.includes(currentUserId))
-        : items,
-    [assignedToMeOnly, currentUserId, items],
+      items.filter(
+        (item) =>
+          (!assignedToMeOnly || item.assignedToUids.includes(currentUserId)) &&
+          (needle === '' ||
+            [item.title, item.note ?? '', getChecklistCategoryLabel(item)].some((text) =>
+              text.toLowerCase().includes(needle),
+            )),
+      ),
+    [assignedToMeOnly, currentUserId, items, needle],
   );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const dayGroups = useMemo(
@@ -197,6 +206,7 @@ export default function ChecklistSection({
           style={{ width: `${completionPercent}%` }}
         />
       </div>
+      {showSearch && <SearchInput value={query} onChange={setQuery} placeholder='Search the checklist' />}
       <label className='text-muted-foreground flex items-center gap-2 text-sm'>
         <AppToggle
           size='sm'

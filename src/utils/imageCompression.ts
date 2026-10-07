@@ -1,4 +1,5 @@
-/** Shrinks a photo before it is sent to the AI extraction models; anything that is not an image passes through. */
+/** Shrinks a photo before it is sent to the AI extraction models; anything that is not an image, or that
+ * the browser can't decode (the models read HEIC themselves), passes through untouched. */
 const MAX_IMAGE_DIMENSION = 2_000;
 const WEBP_QUALITY = 0.82;
 
@@ -40,6 +41,8 @@ export async function compressIngestionImage(file: File): Promise<File> {
       type: 'image/webp',
       lastModified: file.lastModified,
     });
+  } catch {
+    return file;
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

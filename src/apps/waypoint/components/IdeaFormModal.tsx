@@ -13,6 +13,7 @@ import { CalendarDays, Link2, StickyNote, Sun, Utensils } from 'lucide-react';
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
@@ -147,6 +148,7 @@ interface IdeaExtrasFieldsProps {
 
 function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFieldsProps) {
   const detailsLabel = isRestaurant ? 'Cuisine' : 'Indoor / outdoor';
+  const whenLabel = useMediaQuery().isBelow('sm') ? 'Window' : 'Best day or time';
   const chips = [
     { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
     {
@@ -154,7 +156,7 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
       label: detailsLabel,
       icon: isRestaurant ? <Utensils className='h-4 w-4' /> : <Sun className='h-4 w-4' />,
     },
-    { key: 'when', label: 'Best day or time', icon: <CalendarDays className='h-4 w-4' /> },
+    { key: 'when', label: whenLabel, icon: <CalendarDays className='h-4 w-4' /> },
     { key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> },
   ].filter((chip) => !extras[chip.key as keyof IdeaExtras].enabled);
 
@@ -220,8 +222,8 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
       )}
       {extras.when.enabled && (
         <RemovableField
-          label='Best day or time'
-          removeLabel='Remove best day or time'
+          label={whenLabel}
+          removeLabel={`Remove ${whenLabel.toLowerCase()}`}
           onRemove={() => remove('when')}
         >
           <div className='space-y-3'>

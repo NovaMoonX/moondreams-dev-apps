@@ -7,6 +7,34 @@
   @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
 }
 
+/* A long list's day or section: the browser skips style, layout and paint until it nears the screen.
+ * `--defer-size` is the section's estimated height; `auto` remembers the real one once seen, so the scrollbar stays steady. */
+@utility defer-offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--defer-size, 600px);
+}
+
+/* A mini-app's own header on a phone: it sticks under the site header while that is showing and takes
+ * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
+@utility sticky-app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  @media (max-width: 767.98px) {
+    top: 4rem;
+    transition: top 300ms;
+    html[data-site-banner='true'] & {
+      top: 6.25rem;
+    }
+    html[data-site-header='hidden'] & {
+      top: 0;
+    }
+    html[data-site-header='hidden'][data-site-banner='true'] & {
+      top: 2.25rem;
+    }
+  }
+}
+
 @theme app {
 	--color-background: var(--color-white);
 	--color-foreground: var(--color-zinc-950);
@@ -26,7 +54,10 @@
 
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  /* The body must never become a scroll container (it breaks `position: sticky`), and Dreamer UI's
+     modals leave `overflow: auto` on it inline after closing, so this wins over that. */
+  overflow-x: clip !important;
+  overflow-y: visible !important;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -87,6 +118,12 @@ html:has(
     --tw-ring-shadow: 0 0 #0000 !important;
     --tw-ring-offset-shadow: 0 0 #0000 !important;
   }
+}
+
+/* A drawer never reaches the top of the screen: a strip of the page behind stays visible, so it reads as a
+   sheet over the app rather than a second page. */
+[role='dialog'][data-drawer-open] > .fixed.bottom-0 {
+  max-height: 92dvh;
 }
 
 /* Smooth height transitions for when keyboard appears on mobile */

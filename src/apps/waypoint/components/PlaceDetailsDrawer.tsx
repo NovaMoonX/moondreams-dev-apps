@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Archive, Layers } from 'lucide-react';
 
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
 import type { TimelineEvent } from '@apps/waypoint/types';
 
@@ -36,58 +37,72 @@ export function PlaceDetailsDrawer({
   children,
 }: PlaceDetailsDrawerProps) {
   const canNavigate = getMapNavigationUrl(location) !== null;
+  const hasMoreActions = Boolean(onStack || onArchive);
+  const primaryLabel = canNavigate ? 'Navigate' : linkUrl ? 'Visit site' : onEdit ? 'Modify' : null;
+
+  const getFooter = () => {
+    if (primaryLabel === null) {
+      return undefined;
+    }
+    return (
+      <div className='flex items-center gap-2'>
+        {primaryLabel === 'Navigate' && (
+          <Button type='button' size='lg' className='flex-1' onClick={() => openMapNavigation(location)}>
+            Navigate
+          </Button>
+        )}
+        {primaryLabel === 'Visit site' && linkUrl && (
+          <Button href={linkUrl} target='_blank' rel='noreferrer' size='lg' className='flex-1'>
+            Visit site
+          </Button>
+        )}
+        {primaryLabel === 'Modify' && onEdit && (
+          <Button type='button' size='lg' className='flex-1' onClick={() => onEdit()}>
+            Modify
+          </Button>
+        )}
+        {primaryLabel !== 'Modify' && onEdit && (
+          <Button type='button' size='lg' variant='secondary' onClick={() => onEdit()}>
+            Modify
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <Drawer
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      showCloseButton={true}
-      footer={
-        <div className='flex flex-col gap-2'>
-          {canNavigate && (
-            <Button type='button' size='lg' onClick={() => openMapNavigation(location)}>
-              Navigate
-            </Button>
-          )}
-          {linkUrl && (
-            <Button href={linkUrl} target='_blank' rel='noreferrer' size='lg' variant='secondary'>
-              Visit site
-            </Button>
-          )}
-          {onEdit && (
-            <Button
-              type='button'
-              size='lg'
-              variant='secondary'
-              onClick={() => onEdit()}
-            >
-              Modify
-            </Button>
-          )}
-          {onStack && (
-            <Button type='button' size='lg' variant='secondary' onClick={() => onStack()}>
-              {stackLabel}
-            </Button>
-          )}
-          {onArchive && (
-            <Button
-              type='button'
-              size='lg'
-              variant='secondary'
-              onClick={() => onArchive()}
-            >
-              {archiveLabel}
-            </Button>
-          )}
-        </div>
-      }
-    >
+    <Drawer isOpen={isOpen} onClose={onClose} title={title} showCloseButton={true} footer={getFooter()}>
       <div className='space-y-4'>
         {imageUrl && (
-          <EnrichedImage src={imageUrl} alt='' className='aspect-video w-full rounded-lg object-cover' />
+          <FallbackImage src={imageUrl} alt='' className='aspect-video max-h-36 w-full rounded-lg object-cover' />
         )}
         <div className='space-y-2'>{children}</div>
+        {hasMoreActions && (
+          <div className='border-border divide-border divide-y rounded-xl border'>
+            {onStack && (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
+                onClick={() => onStack()}
+              >
+                <Layers className='text-muted-foreground h-4 w-4' />
+                {stackLabel}
+              </Button>
+            )}
+            {onArchive && (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
+                onClick={() => onArchive()}
+              >
+                <Archive className='text-muted-foreground h-4 w-4' />
+                {archiveLabel}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </Drawer>
   );

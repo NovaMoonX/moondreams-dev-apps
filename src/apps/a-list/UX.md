@@ -575,7 +575,7 @@ block-beta
 
 | Component | Used in | Purpose |
 |---|---|---|
-| PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
+| PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `FallbackImage` renders nothing on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
 | StatTile | Calendar, Dashboard | one number and a label (a help icon sits beside the label, or in the tile's top-right corner on a phone so a wrapping label never strands it); Calendar's week and month tiles carry a goal progress bar and turn green with "🏆 Goal met" once reached ("🏆 Met" on a phone); with no goal set, a tile turns dashed and muted with a "🎯 Set a goal" button ("🎯 Set" on a phone) that opens Membership settings |

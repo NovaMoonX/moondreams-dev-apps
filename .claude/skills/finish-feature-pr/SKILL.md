@@ -22,7 +22,7 @@ rest of step 0.
 
 ## 0. Orient
 
-- **0a. Find or create the PR.** Look up whether an open pull request already
+- **0a. Find or create the PR.** This is a standing instruction: whenever work on something new is finished and pushed, a draft PR is opened automatically, in every session and without asking, even when the session itself was not asked for a PR. Look up whether an open pull request already
   exists for the current branch (list pull requests filtered by head branch —
   `gh pr view --json number,url,isDraft` if `gh` is available in this
   environment, otherwise the equivalent GitHub API/MCP call). If none exists,

@@ -11,7 +11,7 @@ import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import type { HourForecast } from '@/lib/weather/types';
@@ -250,7 +250,7 @@ export function EventCard({
         )}
       >
         {imageUrl && (
-          <EnrichedImage
+          <FallbackImage
             src={imageUrl}
             alt=''
             className='aspect-video w-full object-cover sm:aspect-2/1'

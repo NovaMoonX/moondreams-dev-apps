@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
-import { Button, Input, Label, Modal, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label, Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import { ADD_NEW_OPTION } from '@apps/waypoint/constants';
 import { getStackKey, normalizeLabel } from '@apps/waypoint/utils/eventGroups';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { TimelineEvent } from '@apps/waypoint/types';
 
@@ -45,9 +45,11 @@ function EventStackModal({
       (label, index, all) =>
         all.findIndex((candidate) => normalizeLabel(candidate) === normalizeLabel(label)) === index,
     );
-  const [choice, setChoice] = useState(sameTypeStacks[0] ?? ADD_NEW_OPTION);
+  const [choice, setChoice] = useState('');
   const [name, setName] = useState(currentName ?? '');
-  const isNewStack = choice === ADD_NEW_OPTION;
+  const [newName, setNewName] = useState('');
+  const isNewStack = choice === NEW_CHOICE;
+  const stackToJoin = isNewStack ? newName.trim() : choice;
   const stackedCount = currentName
     ? events.filter((other) => getStackKey(other) === getStackKey(event)).length
     : 0;
@@ -106,29 +108,21 @@ function EventStackModal({
             Stack the trips of everyone heading to the same place, so the whole itinerary sits together and each person can flip to their own.
           </p>
           {groupNote}
-          {sameTypeStacks.length > 0 && (
-            <div className='space-y-1.5'>
-              <Label>Add to</Label>
-              <Select
-                options={[
-                  ...sameTypeStacks.map((stack) => ({ value: stack, text: stack })),
-                  { value: ADD_NEW_OPTION, text: 'New stack…' },
-                ]}
-                value={choice}
-                onChange={setChoice}
-              />
-            </div>
-          )}
-          {isNewStack && (
-            <div className='space-y-1.5'>
-              <Label>Stack name</Label>
-              <Input
-                placeholder='Flights to Lisbon'
-                value={name}
-                onChange={(changeEvent) => setName(changeEvent.target.value)}
-              />
-            </div>
-          )}
+          <div className='space-y-1.5'>
+            <Label>{sameTypeStacks.length > 0 ? 'Add to' : 'Stack name'}</Label>
+            <PickOrCreate
+              label='Stack'
+              options={sameTypeStacks.map((stack) => ({ value: stack, label: stack }))}
+              choice={choice}
+              newText={newName}
+              newPillLabel='New stack'
+              newPlaceholder='Name this stack'
+              onChange={(nextChoice, nextName) => {
+                setChoice(nextChoice);
+                setNewName(nextName);
+              }}
+            />
+          </div>
           <ModalFooterActions
             cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
@@ -138,8 +132,8 @@ function EventStackModal({
             rightActions={
               <Button
                   type='button'
-                  disabled={isSubmitting || (isNewStack && !trimmedName)}
-                  onClick={() => onStack(isNewStack ? trimmedName : choice)}
+                  disabled={isSubmitting || stackToJoin === ''}
+                  onClick={() => onStack(stackToJoin)}
                 >
                   Stack
                 </Button>

@@ -1,26 +1,34 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import {
-  Badge,
   Button,
+  Disclosure,
   Drawer,
-  DropdownMenuFactories,
   Input,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ListFilter } from 'lucide-react';
+import { ChevronRight, ListFilter } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
-import EllipsisDropdown from '@/components/EllipsisDropdown';
+import LazyMount from '@/components/LazyMount';
+import DetailSheet from '@/components/DetailSheet';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
+import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { EXPENSE_SORT_OPTIONS, EXPENSE_TOTALS_VIEW_OPTIONS } from '@apps/waypoint/constants';
+import {
+  EXPENSE_SORT_OPTIONS,
+  EXPENSE_TOTALS_VIEW_HINTS,
+  EXPENSE_TOTALS_VIEW_OPTIONS,
+} from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ExpenseSplitModal, {
@@ -33,6 +41,9 @@ import {
   createExpense,
   deleteExpense,
   markExpensePaid,
+  removeEarlyPayment,
+  setEarlyPayment,
+  setEarlyPaymentReturned,
   toggleExpenseRepaid,
   updateExpense,
   updateExpenseSplit,
@@ -56,16 +67,19 @@ import {
 } from '@apps/waypoint/utils/expenseCategories';
 import {
   computeEvenSplit,
+  computeMemberTotals,
+  getMemberShareRange,
   computePairSettlements,
+  isPairSettled,
   getActiveSplitAmounts,
+  getEarlyPaymentLimit,
+  getEarlyPayments,
   getExpenseTotalAmount,
   getPerPersonMultiplier,
   getResolvedExpenseAmount,
   getSplitMemberIds,
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
-
-const { option } = DropdownMenuFactories;
 
 interface ExpensesSectionProps {
   trip: TripSpace;
@@ -131,13 +145,18 @@ function describeSplit(
     : `Split · ${targetLabel} (even)`;
 }
 
+const EAGER_DAYS = 3;
+const ESTIMATED_ROW_HEIGHT = 72;
+
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
+// An en dash, not a hyphen: it lets a long range wrap there instead of overflowing its box.
 function formatTotal(min: number, max: number, currency: string) {
-  const formatter = new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-  });
+  const formatter =
+    currencyFormatters.get(currency) ?? new Intl.NumberFormat(undefined, { style: 'currency', currency });
+  currencyFormatters.set(currency, formatter);
   const minimum = formatter.format(min);
-  return min === max ? minimum : `${minimum}-${formatter.format(max)}`;
+  return min === max ? minimum : `${minimum}\u2013${formatter.format(max)}`;
 }
 
 interface SplitShare {
@@ -151,6 +170,8 @@ interface SplitBreakdown {
   perPersonLabel: string | null;
   /** Every debtor (payer excluded — they don't owe themselves). */
   shares: SplitShare[];
+  /** The payer's own part of a custom split, shown last so the list adds up to the total. */
+  payerShare: SplitShare | null;
 }
 
 function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBreakdown | null {
@@ -180,7 +201,13 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
       ? `${formatTotal(amounts[splitMemberIds[0]] ?? 0, amounts[splitMemberIds[0]] ?? 0, expense.currency)} per person`
       : null;
 
-  return { perPersonLabel, shares };
+  const payerAmount = expense.payerUid === null ? undefined : amounts[expense.payerUid];
+  const payerShare =
+    customAmounts !== null && expense.payerUid !== null && payerAmount !== undefined
+      ? { uid: expense.payerUid, amountLabel: formatTotal(payerAmount, payerAmount, expense.currency), isPaid: true }
+      : null;
+
+  return { perPersonLabel, shares, payerShare };
 }
 
 interface ExpenseCluster {
@@ -206,6 +233,7 @@ function clusterByGroup(items: TripExpense[]): ExpenseCluster[] {
 
 function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
@@ -223,11 +251,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
+  const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
+  const [isDuesOpen, setIsDuesOpen] = useState(true);
+  const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
+  const isSmallScreen = useMediaQuery().isBelow('sm');
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const currency = 'USD';
-  const memberIds = Object.keys(trip.members);
+  const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
   const canAddExpenses = ['ADMIN', 'EDITOR'].includes(trip.members[currentUserId]?.role ?? '');
   const memberLabel = (uid: string) =>
@@ -278,8 +310,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     categoryFilter.length +
     Number(rangedOnly) +
     Number(splitOnly);
-  const toggleFilterValue = <T,>(current: T[], value: T): T[] =>
-    current.includes(value) ? current.filter((filterValue) => filterValue !== value) : [...current, value];
   const clearFilters = () => {
     setDayFilter([]);
     setPayerFilter([]);
@@ -300,14 +330,31 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     };
     return perPerson;
   };
-  const totals = computeExpenseTotals(expenses, memberIds);
-  const filteredTotal = toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
-  const totalCards: { label: string; total: TripExpenseTotals['total'] }[] = [
-    { label: 'Paid', total: toTotalsView(totals.paid) },
-    { label: 'Expected', total: toTotalsView(totals.expected) },
-    { label: 'Total', total: toTotalsView(totals.total) },
-  ];
-  const pairSettlements = computePairSettlements(expenses, memberIds);
+  const totals = useMemo(() => computeExpenseTotals(expenses, memberIds), [expenses, memberIds]);
+  const myTotals = useMemo(
+    () => computeMemberTotals(expenses, memberIds, currentUserId),
+    [expenses, memberIds, currentUserId],
+  );
+  const filteredTotal =
+    totalsView === 'me'
+      ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
+      : toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
+  const totalCards: { label: string; total: TripExpenseTotals['total'] }[] =
+    totalsView === 'me'
+      ? [
+          { label: 'Paid by me', total: myTotals.paidByMe },
+          { label: 'Expected for me', total: myTotals.expectedForMe },
+          { label: 'My total', total: myTotals.myTotal },
+        ]
+      : [
+          { label: 'Paid', total: toTotalsView(totals.paid) },
+          { label: 'Expected', total: toTotalsView(totals.expected) },
+          { label: 'Total', total: toTotalsView(totals.total) },
+        ];
+  const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
+  const myOpenPairs = pairSettlements.filter(
+    (settlement) => [settlement.personA, settlement.personB].includes(currentUserId) && !isPairSettled(settlement),
+  ).length;
 
   const sortedExpenses =
     sortBy === 'day'
@@ -415,14 +462,116 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
   };
 
-  const renderExpenseRow = (expense: TripExpense) => {
+  const runAction = async (action: Promise<unknown>, fallback: string) => {
+    setError(null);
+    try {
+      await action;
+    } catch (actionError) {
+      setError(getErrorMessage(actionError, fallback));
+    }
+  };
+
+  const handleRemoveEarlyFromDues = async (expenseId: string, fromUid: string) => {
+    const confirmed = await confirm({
+      title: 'Remove early payment',
+      message: `Remove the early payment ${memberLabel(fromUid)} recorded? It stops counting in the Dues summary.`,
+      destructive: true,
+    });
+    if (confirmed) {
+      await runAction(
+        dispatch(removeEarlyPayment({ uid: fromUid, tripId: trip.id, expenseId })).unwrap(),
+        'Unable to remove this early payment.',
+      );
+    }
+  };
+
+  const handleSaveEarlyPayment = async (expense: TripExpense, values: { toUid: string; amount: number }) => {
+    await dispatch(
+      setEarlyPayment({ uid: currentUserId, tripId: trip.id, expenseId: expense.id, ...values }),
+    ).unwrap();
+    setEarlyExpense(null);
+  };
+
+  const handleRemoveEarlyPayment = async (expense: TripExpense) => {
+    await dispatch(removeEarlyPayment({ uid: currentUserId, tripId: trip.id, expenseId: expense.id })).unwrap();
+    setEarlyExpense(null);
+  };
+
+  const getPayerLine = (expense: TripExpense) =>
+    expense.status === 'PAID'
+      ? expense.payerUid
+        ? `Paid by ${memberLabel(expense.payerUid)}`
+        : 'Paid by each person'
+      : 'Expected, not yet paid';
+
+  const getActions = (expense: TripExpense) => [
+    ...(canAddExpenses && expense.status === 'EXPECTED'
+      ? [
+          {
+            key: 'mark-paid',
+            label: 'Mark paid',
+            description: 'Record who covered it and what it cost.',
+            run: () => setPayingExpense(expense),
+          },
+        ]
+      : []),
+    ...(expense.status === 'EXPECTED' && getEarlyPaymentLimit(expense, memberIds, currentUserId).canPayEarly
+      ? [
+          {
+            key: 'early-payment',
+            label: getEarlyPayments(expense)[currentUserId] ? 'Edit my early payment' : 'Record an early payment',
+            description: 'Money you already sent a teammate for this.',
+            run: () => setEarlyExpense(expense),
+          },
+        ]
+      : []),
+    ...(canAddExpenses && getResolvedExpenseAmount(expense) !== null
+      ? [
+          {
+            key: 'edit-split',
+            label: 'Edit split',
+            description: 'Choose who shares it and how much each owes.',
+            run: () => setSplittingExpense(expense),
+          },
+        ]
+      : []),
+    ...(canAddExpenses
+      ? [
+          {
+            key: 'modify',
+            label: 'Modify',
+            description: 'Change the details, or delete this expense.',
+            run: () => {
+              setEditingExpense(expense);
+              setIsModalOpen(true);
+            },
+          },
+        ]
+      : []),
+  ];
+
+  const renderEarlyPayments = (expense: TripExpense) => {
+    const entries = Object.entries(getEarlyPayments(expense));
+    if (entries.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className='mt-1 space-y-0.5'>
+        <p className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>Paid early</p>
+        {entries.map(([fromUid, payment]) => (
+          <p key={fromUid} className='text-muted-foreground text-xs'>
+            {memberLabel(fromUid)} → {memberLabel(payment.toUid)} ·{' '}
+            {formatTotal(payment.amount, payment.amount, expense.currency)}
+            {payment.isReturned ? ' · sent back' : expense.status === 'EXPECTED' ? ' · waiting for this to be paid' : ''}
+          </p>
+        ))}
+      </div>
+    );
+  };
+
+  const renderExpenseDetail = (expense: TripExpense) => {
     const splitDescription = describeSplit(expense, memberIds, memberLabel);
-    const payerLine =
-      expense.status === 'PAID'
-        ? expense.payerUid
-          ? `Paid by ${memberLabel(expense.payerUid)}`
-          : 'Paid by each person'
-        : 'Expected, not yet paid';
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
     const splitBreakdown = getSplitBreakdown(expense, memberIds);
@@ -441,7 +590,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       if (!share.isPaid) {
         return (
-          <Button type='button' variant='link' className='h-10 shrink-0 text-xs' onClick={toggle}>
+          <Button type='button' variant='secondary' size='sm' className='h-10 shrink-0' onClick={toggle}>
             Mark as repaid
           </Button>
         );
@@ -450,7 +599,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
           <span className='text-muted-foreground text-xs'>You repaid this</span>
-          <Button type='button' variant='link' className='text-xs' onClick={toggle}>
+          <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
         </span>
@@ -458,16 +607,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     };
 
     return (
-      <li
-        key={expense.id}
-        className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'
-      >
+      <>
         <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
-            {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {payerLine}
+            {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {getPayerLine(expense)}
           </p>
           {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
+          {renderEarlyPayments(expense)}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
         </div>
         <div className='col-span-2'>
@@ -491,7 +638,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <div className='mt-0.5 space-y-1'>
               {splitBreakdown.perPersonLabel !== null ? (
                 <div className='flex items-baseline justify-end gap-2'>
-                  {/* Redundant with the "total for N people" line above for a per-person rate. */}
                   {!expense.isPerPerson && (
                     <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
                       {splitBreakdown.perPersonLabel}
@@ -511,6 +657,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   </div>
                 ))
               )}
+              {splitBreakdown.payerShare && (
+                <p className='text-muted-foreground text-xs'>
+                  {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
+                </p>
+              )}
               {expense.payerUid === currentUserId && repaidNames.length > 0 && (
                 <p className='text-muted-foreground text-right text-xs'>
                   Repaid so far: {repaidNames.join(', ')}
@@ -519,55 +670,73 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </div>
           )}
         </div>
-        {canAddExpenses && (
-          <div className='col-start-2 row-start-1 self-start'>
-            <EllipsisDropdown
-              ariaLabel={`Actions for ${expense.title}`}
-              disabled={markingPaidId === expense.id}
-              variant='tertiary'
-              items={[
-                ...(expense.status === 'EXPECTED'
-                  ? [
-                      option({
-                        label: 'Mark paid',
-                        value: 'mark-paid',
-                        description: 'Record who covered it and what it cost.',
-                      }),
-                    ]
-                  : []),
-                ...(getResolvedExpenseAmount(expense) !== null
-                  ? [
-                      option({
-                        label: 'Edit split',
-                        value: 'edit-split',
-                        description: 'Choose who shares it and how much each owes.',
-                      }),
-                    ]
-                  : []),
-                option({
-                  label: 'Modify',
-                  value: 'modify',
-                  description: 'Change the details, or delete this expense.',
-                }),
-              ]}
-              onItemSelect={(value) => {
-                if (value === 'mark-paid') {
-                  setPayingExpense(expense);
-                  return;
-                }
-                if (value === 'edit-split') {
-                  setSplittingExpense(expense);
-                  return;
-                }
-                setEditingExpense(expense);
-                setIsModalOpen(true);
-              }}
-            />
+      </>
+    );
+  };
+
+  const renderExpenseRow = (expense: TripExpense) => {
+    if (isSmallScreen) {
+      const displayRange = getDisplayRange(expense);
+      const hasEarly = Object.values(getEarlyPayments(expense)).some((payment) => !payment.isReturned);
+      const myShare = totalsView === 'me' ? getMemberShareRange(expense, memberIds, currentUserId) : null;
+      return (
+        <li key={expense.id}>
+          <Button
+            type='button'
+            variant='tertiary'
+            aria-label={`Open details for ${expense.title}`}
+            onClick={() => setDetailExpenseId(expense.id)}
+            className='h-auto w-full justify-between gap-3 rounded-none px-0 py-3 text-left font-normal'
+          >
+            <span className='min-w-0 flex-1'>
+              <span className='block truncate font-medium'>{expense.title}</span>
+              <span className='text-muted-foreground line-clamp-2 block text-sm'>
+                {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
+                {expense.status === 'PAID' ? getPayerLine(expense) : 'Expected'}
+                {hasEarly ? ' · Paid early' : ''}
+              </span>
+            </span>
+            <span className='max-w-32 shrink-0 text-right'>
+              <span className='block font-medium'>{formatTotal(displayRange.min, displayRange.max, expense.currency)}</span>
+              {myShare && (
+                <span className='text-muted-foreground block text-xs'>
+                  Mine {formatTotal(myShare.min, myShare.max, expense.currency)}
+                </span>
+              )}
+              {!myShare && expense.isPerPerson && <span className='text-muted-foreground block text-xs'>per person</span>}
+            </span>
+            <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+          </Button>
+        </li>
+      );
+    }
+
+    const actions = getActions(expense);
+    return (
+      <li key={expense.id} className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'>
+        {renderExpenseDetail(expense)}
+        {actions.length > 0 && (
+          <div className='col-start-2 row-start-1 flex items-start gap-2 self-start'>
+            {actions.map((action) => (
+              <Button
+                key={action.key}
+                type='button'
+                size='sm'
+                variant='secondary'
+                disabled={markingPaidId === expense.id}
+                title={action.description}
+                onClick={action.run}
+              >
+                {action.label}
+              </Button>
+            ))}
           </div>
         )}
       </li>
     );
   };
+
+  const detailExpense = expenses.find((expense) => expense.id === detailExpenseId);
 
   const renderClusters = (items: TripExpense[]) =>
     clusterByGroup(items).map((cluster, index) => {
@@ -581,12 +750,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <li key={`group-${cluster.groupLabel}-${index}`} className='py-3'>
           <div className='grid grid-cols-[1fr_auto] gap-x-3'>
             <div className='min-w-0'>
-              <p className='font-medium'>{cluster.groupLabel}</p>
-              <p className='text-muted-foreground text-sm'>
+              <p className='text-sm font-medium'>{cluster.groupLabel}</p>
+              <p className='text-muted-foreground text-xs'>
                 {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
               </p>
             </div>
-            <p className='pr-2 font-medium whitespace-nowrap'>
+            <p className='text-muted-foreground max-w-32 pr-2 text-right text-sm'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
             </p>
           </div>
@@ -601,30 +770,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     label: string,
     options: { value: string; label: string }[],
     selected: string[],
-    onToggle: (value: string) => void,
+    onChange: (values: string[]) => void,
   ) => (
     <div className='space-y-2'>
       <p className='text-muted-foreground text-sm font-medium'>{label}</p>
-      <div role='group' aria-label={`Filter by ${label.toLowerCase()}`} className='flex flex-wrap gap-2'>
-        {options.map((option) => {
-          const isSelected = selected.includes(option.value);
-
-          return (
-            <Button
-              key={option.value}
-              type='button'
-              variant='base'
-              size='sm'
-              aria-pressed={isSelected}
-              onClick={() => onToggle(option.value)}
-            >
-              <Badge variant={isSelected ? 'primary' : 'muted'} outline={!isSelected}>
-                {option.label}
-              </Badge>
-            </Button>
-          );
-        })}
-      </div>
+      <MultiPillGroup
+        label={`Filter by ${label.toLowerCase()}`}
+        options={options}
+        values={selected}
+        onChange={onChange}
+      />
     </div>
   );
 
@@ -646,58 +801,79 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }
       />
       <div className='space-y-3'>
-        <div className='border-border flex w-fit items-center gap-1 rounded-md border p-0.5'>
-          {EXPENSE_TOTALS_VIEW_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              type='button'
-              variant={totalsView === option.value ? 'primary' : 'secondary'}
-              size='sm'
-              aria-pressed={totalsView === option.value}
-              className={join(
-                'h-6 px-2 text-xs',
-                totalsView !== option.value && 'bg-transparent',
-              )}
-              onClick={() => setTotalsView(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <PillGroup
+          label='Totals view'
+          options={EXPENSE_TOTALS_VIEW_OPTIONS}
+          value={totalsView}
+          onChange={setTotalsView}
+        />
+        <p className='text-muted-foreground text-xs'>{EXPENSE_TOTALS_VIEW_HINTS[totalsView]}</p>
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
           {totalCards.map(({ label, total }) => (
             <div
               key={label}
               className={join(
-                'border-border rounded-lg border p-3 text-center sm:text-left',
-                label === 'Total' && 'col-span-2 sm:col-span-1',
+                'border-border min-w-0 rounded-lg border p-3 text-center sm:text-left',
+                (label === 'Total' || label === 'My total') && 'col-span-2 sm:col-span-1',
               )}
             >
               <p className='text-muted-foreground text-sm'>{label}</p>
-              <p className='mt-1 text-lg font-semibold'>
+              <p className='mt-1 text-base font-semibold text-balance sm:text-lg'>
                 {formatTotal(total.min, total.max, currency)}
               </p>
             </div>
           ))}
         </div>
       </div>
-      <div className='border-border rounded-lg border p-3'>
-        <p className='text-sm font-medium'>Dues summary</p>
-        {pairSettlements.length === 0 ? (
-          <p className='text-muted-foreground mt-1 text-sm'>
-            Everyone&apos;s settled up.
-          </p>
-        ) : (
-          <DuesSummary
-            settlements={pairSettlements}
-            currentUserId={currentUserId}
-            memberLabel={memberLabel}
-            formatAmount={(amount) => formatTotal(amount, amount, currency)}
-            onToggleRepaid={(expenseId) =>
-              void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
-            }
-          />
-        )}
+      {totalsView === 'me' && myTotals.sentEarly > 0 && (
+        <p className='text-muted-foreground -mt-2 text-sm'>
+          You&apos;ve sent {formatTotal(myTotals.sentEarly, myTotals.sentEarly, currency)} early toward expected expenses.
+        </p>
+      )}
+      <div className='border-border rounded-lg border'>
+        <Disclosure
+          label={
+            <span className='text-sm font-medium'>
+              Dues summary
+              {myOpenPairs > 0 && (
+                <span className='text-muted-foreground font-normal'>
+                  {' '}
+                  · {myOpenPairs} to settle
+                </span>
+              )}
+            </span>
+          }
+          isOpen={isDuesOpen}
+          onToggle={setIsDuesOpen}
+          buttonClassName='px-3 py-2.5 hover:bg-muted/40'
+          className='overflow-visible'
+        >
+          <div className='border-border border-t px-3 pb-3'>
+          {pairSettlements.length === 0 ? (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              Everyone&apos;s settled up.
+            </p>
+          ) : (
+            <DuesSummary
+              settlements={pairSettlements}
+              currentUserId={currentUserId}
+              memberLabel={memberLabel}
+              formatAmount={(amount) => formatTotal(amount, amount, currency)}
+              onToggleRepaid={(expenseId) =>
+                void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+              }
+              onSetEarlyReturned={(expenseId, isReturned) =>
+                void runAction(
+                  dispatch(setEarlyPaymentReturned({ uid: currentUserId, tripId: trip.id, expenseId, isReturned })).unwrap(),
+                  'Unable to update this early payment.',
+                )
+              }
+              canRemoveEarly={(fromUid) => fromUid === currentUserId || canAddExpenses}
+              onRemoveEarly={(expenseId, fromUid) => void handleRemoveEarlyFromDues(expenseId, fromUid)}
+            />
+          )}
+          </div>
+        </Disclosure>
       </div>
       <div className='flex flex-wrap items-center gap-2'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
@@ -755,51 +931,53 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
         }
       >
-        <div className='space-y-5'>
-          <div className='flex flex-col gap-3'>
-            <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
-              <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
-              Custom split only
-            </label>
-            <label className='text-muted-foreground inline-flex w-fit items-center gap-2 text-sm'>
-              <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
-              Estimated range only
-            </label>
-          </div>
-          {renderChipGroup(
-            'Status',
-            (['PAID', 'EXPECTED'] as const).map((status) => ({
-              value: status,
-              label: status === 'PAID' ? 'Paid' : 'Expecting',
-            })),
-            statusFilter,
-            (value) => setStatusFilter((current) => toggleFilterValue(current, value as ExpenseStatus)),
-          )}
-          {renderChipGroup(
-            'Category',
-            categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
-            categoryFilter,
-            (value) => setCategoryFilter((current) => toggleFilterValue(current, value)),
-          )}
-          {renderChipGroup(
-            'Day',
-            [
-              ...Array.from({ length: dayCount }, (_, index) => ({
-                value: String(index),
-                label: `Day ${index + 1}`,
+        {isFilterDrawerOpen && (
+          <div className='space-y-5'>
+            <div className='divide-border divide-y'>
+              <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
+                Custom split only
+                <AppToggle size='sm' checked={splitOnly} onCheckedChange={setSplitOnly} />
+              </label>
+              <label className='flex items-center justify-between gap-4 py-2.5 text-sm'>
+                Estimated range only
+                <AppToggle size='sm' checked={rangedOnly} onCheckedChange={setRangedOnly} />
+              </label>
+            </div>
+            {renderChipGroup(
+              'Status',
+              (['PAID', 'EXPECTED'] as const).map((status) => ({
+                value: status,
+                label: status === 'PAID' ? 'Paid' : 'Expecting',
               })),
-              { value: 'other', label: 'No specific day' },
-            ],
-            dayFilter,
-            (value) => setDayFilter((current) => toggleFilterValue(current, value)),
-          )}
-          {renderChipGroup(
-            'Paid by',
-            memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) })),
-            payerFilter,
-            (value) => setPayerFilter((current) => toggleFilterValue(current, value)),
-          )}
-        </div>
+              statusFilter,
+              (values) => setStatusFilter(values as ExpenseStatus[]),
+            )}
+            {renderChipGroup(
+              'Category',
+              categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
+              categoryFilter,
+              setCategoryFilter,
+            )}
+            {renderChipGroup(
+              'Day',
+              [
+                ...Array.from({ length: dayCount }, (_, index) => ({
+                  value: String(index),
+                  label: getDayLabel(trip.startDate, index, dayCount),
+                })),
+                { value: 'other', label: 'No specific day' },
+              ],
+              dayFilter,
+              setDayFilter,
+            )}
+            {renderChipGroup(
+              'Paid by',
+              memberIds.map((uid) => ({ value: uid, label: memberLabel(uid) })),
+              payerFilter,
+              setPayerFilter,
+            )}
+          </div>
+        )}
       </Drawer>
       {filteredExpenses.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
@@ -814,16 +992,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             </p>
             <p className='text-sm font-semibold whitespace-nowrap'>
               {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
-              {totalsView === 'per-person' && (
-                <span className='text-muted-foreground font-normal'> per person</span>
+              {totalsView !== 'group' && (
+                <span className='text-muted-foreground font-normal'>
+                  {totalsView === 'me' ? ' your share' : ' per person'}
+                </span>
               )}
             </p>
           </div>
           {dayGroups ? (
-            dayGroups.map(({ bucket, items }) => (
-              <div key={bucket} className='space-y-3'>
+            dayGroups.map(({ bucket, items }, dayPosition) => (
+              <div
+                key={bucket}
+                className='defer-offscreen space-y-3'
+                style={{ '--defer-size': `${items.length * ESTIMATED_ROW_HEIGHT}px` } as CSSProperties}
+              >
                 <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
-                <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
+                <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_ROW_HEIGHT}>
+                  <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
+                </LazyMount>
               </div>
             ))
           ) : (
@@ -860,6 +1046,45 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         }}
         onClose={() => setPayingExpense(null)}
       />
+      {isSmallScreen && (
+        <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>
+          {detailExpense && (
+            <div className='space-y-4'>
+              <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense)}</div>
+              {getActions(detailExpense).length > 0 && (
+                <div className='border-border divide-border divide-y rounded-xl border'>
+                  {getActions(detailExpense).map((action) => (
+                    <Button
+                      key={action.key}
+                      type='button'
+                      variant='tertiary'
+                      className='h-auto w-full flex-col items-start gap-0 px-3 py-2.5 text-left font-normal'
+                      onClick={() => {
+                        setDetailExpenseId(null);
+                        action.run();
+                      }}
+                    >
+                      <span className='text-sm font-medium'>{action.label}</span>
+                      <span className='text-muted-foreground text-xs'>{action.description}</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DetailSheet>
+      )}
+      <EarlyPaymentModal
+        key={`early-${earlyExpense?.id ?? 'none'}`}
+        isOpen={earlyExpense !== null}
+        trip={trip}
+        expense={earlyExpense}
+        currentUserId={currentUserId}
+        formatAmount={(amount) => formatTotal(amount, amount, currency)}
+        onSubmit={(values) => (earlyExpense ? handleSaveEarlyPayment(earlyExpense, values) : Promise.resolve())}
+        onRemove={() => (earlyExpense ? handleRemoveEarlyPayment(earlyExpense) : Promise.resolve())}
+        onClose={() => setEarlyExpense(null)}
+      />
       <ExpenseSplitModal
         key={splittingExpense?.id ?? 'none'}
         isOpen={splittingExpense !== null}
@@ -873,4 +1098,4 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   );
 }
 
-export default ExpensesSection;
+export default memo(ExpensesSection);
