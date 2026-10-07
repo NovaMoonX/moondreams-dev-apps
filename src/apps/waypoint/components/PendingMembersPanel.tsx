@@ -124,7 +124,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
     <section className='space-y-3'>
       <div className='flex items-center justify-between gap-3'>
         <h3 className='text-lg font-semibold'>Pending requests</h3>
-        {!loading && (
+        {!loading && requests.length > 0 && (
           <span className='bg-secondary text-secondary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold'>
             {requests.length}
           </span>

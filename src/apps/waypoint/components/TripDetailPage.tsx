@@ -380,7 +380,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       variant='tertiary'
       size='sm'
       aria-label='Trip actions'
-      className='bg-transparent! px-2'
+      className='h-10 min-w-10 bg-transparent! px-2'
       onClick={isSmallScreen ? () => setIsMobileActionsOpen(true) : undefined}
     >
       <MoreHorizontal className='h-4 w-4' />
@@ -423,7 +423,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     <Button
       type='button'
       variant='link'
-      className={join('px-0', (isActive || isSmallScreen) && 'h-auto p-0')}
+      className={join('px-0', isSmallScreen ? '-ml-2 h-10 w-10 justify-center p-0' : isActive && 'h-auto p-0')}
       aria-label={isNestedScreen ? 'Back to Overview' : 'Back to My Trips'}
       onClick={isNestedScreen ? () => setSectionTab('') : onBack}
     >
@@ -441,7 +441,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         size='sm'
         aria-label='Copy trip link'
         title='Copy trip link'
-        className='bg-transparent! px-2'
+        className='h-10 min-w-10 bg-transparent! px-2'
         onClick={() => void handleCopyTripLink()}
       >
         <Link className='h-4 w-4' />

@@ -75,7 +75,7 @@ import type { Stay } from '@apps/waypoint/types';
 
 const OUTSIDE_TAB = 'outside';
 const EAGER_DAYS = 2;
-const ESTIMATED_CARD_HEIGHT = 130;
+const ESTIMATED_CARD_HEIGHT = 210;
 
 interface TimelineSectionProps {
   trip: TripSpace;

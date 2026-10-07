@@ -70,6 +70,7 @@ import {
   computeMemberTotals,
   getMemberShareRange,
   computePairSettlements,
+  isPairSettled,
   getActiveSplitAmounts,
   getEarlyPaymentLimit,
   getEarlyPayments,
@@ -351,6 +352,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           { label: 'Total', total: toTotalsView(totals.total) },
         ];
   const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
+  const myOpenPairs = pairSettlements.filter(
+    (settlement) => [settlement.personA, settlement.personB].includes(currentUserId) && !isPairSettled(settlement),
+  ).length;
 
   const sortedExpenses =
     sortBy === 'day'
@@ -586,7 +590,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       if (!share.isPaid) {
         return (
-          <Button type='button' variant='secondary' size='sm' className='shrink-0' onClick={toggle}>
+          <Button type='button' variant='secondary' size='sm' className='h-10 shrink-0' onClick={toggle}>
             Mark as repaid
           </Button>
         );
@@ -595,7 +599,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
           <span className='text-muted-foreground text-xs'>You repaid this</span>
-          <Button type='button' variant='tertiary' size='sm' onClick={toggle}>
+          <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
         </span>
@@ -655,7 +659,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               )}
               {splitBreakdown.payerShare && (
                 <p className='text-muted-foreground text-xs'>
-                  {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (their own share)
+                  {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
                 </p>
               )}
               {expense.payerUid === currentUserId && repaidNames.length > 0 && (
@@ -686,7 +690,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           >
             <span className='min-w-0 flex-1'>
               <span className='block truncate font-medium'>{expense.title}</span>
-              <span className='text-muted-foreground block truncate text-sm'>
+              <span className='text-muted-foreground line-clamp-2 block text-sm'>
                 {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
                 {expense.status === 'PAID' ? getPayerLine(expense) : 'Expected'}
                 {hasEarly ? ' · Paid early' : ''}
@@ -699,6 +703,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                   Mine {formatTotal(myShare.min, myShare.max, expense.currency)}
                 </span>
               )}
+              {!myShare && expense.isPerPerson && <span className='text-muted-foreground block text-xs'>per person</span>}
             </span>
             <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
           </Button>
@@ -827,7 +832,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       )}
       <div className='border-border rounded-lg border'>
         <Disclosure
-          label={<span className='text-sm font-medium'>Dues summary</span>}
+          label={
+            <span className='text-sm font-medium'>
+              Dues summary
+              {myOpenPairs > 0 && (
+                <span className='text-muted-foreground font-normal'>
+                  {' '}
+                  · {myOpenPairs} to settle
+                </span>
+              )}
+            </span>
+          }
           isOpen={isDuesOpen}
           onToggle={setIsDuesOpen}
           buttonClassName='px-3 py-2.5 hover:bg-muted/40'

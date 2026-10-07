@@ -15,6 +15,7 @@ import {
 
 const MAX_VISIBLE_NOTICES = 3;
 const MAX_VISIBLE_PAIRS = 6;
+const PAIRS_PER_PAGE = 20;
 
 const EPSILON = 0.005;
 
@@ -44,7 +45,7 @@ function DuesSummary({
 }: DuesSummaryProps) {
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
   const [showAllNotices, setShowAllNotices] = useState(false);
-  const [showAllPairs, setShowAllPairs] = useState(false);
+  const [visiblePairs, setVisiblePairs] = useState(MAX_VISIBLE_PAIRS);
   const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
 
   const getDirection = ({ personA, personB, netAmount, aOwesB, bOwesA }: PairSettlement) => {
@@ -232,8 +233,8 @@ function DuesSummary({
   const settledMine = myPairs.filter(isPairSettled);
   const others = settlements.filter((settlement) => !involvesMe(settlement));
   const groups = [toSend, toCollect, settledMine, others];
-  const hiddenPairCount = groups.reduce((total, group) => total + Math.max(0, group.length - MAX_VISIBLE_PAIRS), 0);
-  const capGroup = (items: PairSettlement[]) => (showAllPairs ? items : items.slice(0, MAX_VISIBLE_PAIRS));
+  const hiddenPairCount = groups.reduce((total, group) => total + Math.max(0, group.length - visiblePairs), 0);
+  const capGroup = (items: PairSettlement[]) => items.slice(0, visiblePairs);
 
   const renderPair = (settlement: PairSettlement) => {
     const { netAmount } = settlement;
@@ -377,16 +378,31 @@ function DuesSummary({
       {renderGroup('Money to collect', capGroup(toCollect))}
       {renderGroup('All square', capGroup(settledMine))}
       {renderGroup(myPairs.length === 0 ? 'Between others' : 'Everyone else', capGroup(others))}
-      {hiddenPairCount > 0 && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
-          onClick={() => setShowAllPairs((current) => !current)}
-        >
-          {showAllPairs ? 'Show fewer' : `Show ${hiddenPairCount} more`}
-        </Button>
+      {(hiddenPairCount > 0 || visiblePairs > MAX_VISIBLE_PAIRS) && (
+        <div className='flex gap-4'>
+          {hiddenPairCount > 0 && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-10 px-0!'
+              onClick={() => setVisiblePairs((current) => current + PAIRS_PER_PAGE)}
+            >
+              Show {Math.min(PAIRS_PER_PAGE, hiddenPairCount)} more
+            </Button>
+          )}
+          {visiblePairs > MAX_VISIBLE_PAIRS && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-10 px-0!'
+              onClick={() => setVisiblePairs(MAX_VISIBLE_PAIRS)}
+            >
+              Show fewer
+            </Button>
+          )}
+        </div>
       )}
       <DetailSheet
         isOpen={selectedSettlement !== undefined}

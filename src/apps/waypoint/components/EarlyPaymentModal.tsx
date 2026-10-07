@@ -108,8 +108,7 @@ function EarlyPaymentModal({
         ) : (
           <>
             <p className='text-muted-foreground text-sm'>
-              {getShareLine()} Already sent your part to someone ahead of time? Record it here. It comes off what you owe them
-              right away, covers your share once they pay, and is owed back to you if plans change.
+              {getShareLine()} Sent your part to someone ahead of time? It comes off what you owe them until they pay.
             </p>
             <div className='space-y-2'>
               <Label>Who did you pay?</Label>
@@ -119,6 +118,7 @@ function EarlyPaymentModal({
                 value={toUid === '' ? null : toUid}
                 onChange={setToUid}
               />
+              {toUid === '' && <p className='text-muted-foreground text-xs'>Pick who you paid to continue.</p>}
             </div>
             <div className='space-y-2'>
               <Label>How much did you send?</Label>
