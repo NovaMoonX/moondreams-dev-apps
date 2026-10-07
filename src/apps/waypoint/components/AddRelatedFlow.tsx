@@ -174,7 +174,6 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
           key={`expense-${added.expense}`}
           isOpen
           trip={trip}
-          currentUserId={currentUserId}
           prefill={expensePrefill}
           categoryKeys={categoryKeys}
           existingGroupLabels={existingGroupLabels}

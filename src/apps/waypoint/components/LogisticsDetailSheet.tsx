@@ -23,6 +23,9 @@ interface Line {
 const formatPoint = (trip: TripSpace, dayIndex: number | null, time: string | null) =>
   dayIndex === null ? null : `${getDayDateLabel(trip.startDate, dayIndex)}${time ? `, ${formatClockTime(time)}` : ''}`;
 
+const isSamePoint = (first: { dayIndex: number | null; time: string | null }, second: { dayIndex: number | null; time: string | null }) =>
+  first.dayIndex === second.dayIndex && first.time === second.time;
+
 const toLines = (entries: { label: string; value: string | null }[]): Line[] =>
   entries.flatMap(({ label, value }) => (value ? [{ label, value }] : []));
 
@@ -31,8 +34,8 @@ function getStayLines(trip: TripSpace, stay: Stay): Line[] {
   return toLines([
     { label: 'Check in', value: formatPoint(trip, checkIn.dayIndex, checkIn.time) },
     { label: 'Check out', value: formatPoint(trip, checkOut.dayIndex, checkOut.time) },
-    { label: 'Arriving', value: formatPoint(trip, plannedArrival.dayIndex, plannedArrival.time) },
-    { label: 'Leaving', value: formatPoint(trip, plannedDeparture.dayIndex, plannedDeparture.time) },
+    { label: 'Arriving', value: isSamePoint(plannedArrival, checkIn) ? null : formatPoint(trip, plannedArrival.dayIndex, plannedArrival.time) },
+    { label: 'Leaving', value: isSamePoint(plannedDeparture, checkOut) ? null : formatPoint(trip, plannedDeparture.dayIndex, plannedDeparture.time) },
     { label: 'Time zone', value: getStayTimezoneLabel(trip, stay, 'long') },
     { label: 'Confirmation', value: stay.confirmationCode },
   ]);
@@ -98,10 +101,12 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
         {places.map(({ label, name, address, latitude, longitude }) => (
           <div key={label ?? 'place'} className='space-y-1'>
             {label && <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>{label}</p>}
-            {address ? (
-              <LocationLink locationName={name} address={address} latitude={latitude} longitude={longitude} label={address} />
-            ) : null}
-            <MapNavigationButton locationName={name} address={address} latitude={latitude} longitude={longitude} />
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+              {address ? (
+                <LocationLink locationName={name} address={address} latitude={latitude} longitude={longitude} label={address} />
+              ) : null}
+              <MapNavigationButton locationName={name} address={address} latitude={latitude} longitude={longitude} />
+            </div>
           </div>
         ))}
         {linkUrl && <ExternalLinkText href={linkUrl} />}

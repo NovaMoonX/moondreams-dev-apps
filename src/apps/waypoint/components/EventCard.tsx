@@ -30,6 +30,7 @@ import {
   TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
 } from '@apps/waypoint/constants';
+import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 import { getFlightTrackingUrl, getTransitSummary } from '@apps/waypoint/utils/transitDetails';
 
@@ -57,6 +58,12 @@ interface EventCardProps {
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
   onToggleArchived: (event: TimelineEvent, onSuccess?: () => void) => void;
   weather?: HourForecast | null;
+}
+
+function getTravelRowTime(trip: TripSpace, event: TimelineEvent) {
+  const start = formatEventStartTime(trip, event);
+  const { timezone, startMs } = getEventTime(trip, event);
+  return start ? `${start}${timezone && timezone !== trip.timezone ? ` ${formatTimezoneAbbreviation(timezone, startMs ?? undefined)}` : ''}` : undefined;
 }
 
 function getQuickField(event: TimelineEvent, isCompact: boolean): string | null {
@@ -141,7 +148,7 @@ export function EventDetailLines({
         <span className='text-muted-foreground text-sm'>
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
-        {isSettingField && quickField && <span className='text-muted-foreground text-sm'>· {quickField}</span>}
+        {isSettingField && quickField && <span className='text-muted-foreground text-sm whitespace-nowrap'>· {quickField}</span>}
         {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
           <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
         )}
@@ -306,7 +313,7 @@ export function EventCard({
         <SlimTimelineRow
           emoji={transitEmoji}
           label={event.title}
-          time={formatEventStartTime(trip, event) || undefined}
+          time={getTravelRowTime(trip, event)}
           ariaLabel={`Open details for ${event.title}`}
           className={event.isArchived ? 'opacity-60' : undefined}
           onOpen={() => setIsDrawerOpen(true)}

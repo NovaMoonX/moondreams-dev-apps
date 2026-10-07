@@ -885,7 +885,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {totalsView === 'me' && (
             <>
               {' '}
-              <HelpTip title='Your share' linkLabel='What do these mean?'>
+              <HelpTip
+                title='Your share'
+                linkLabel='What do these mean?'
+                className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
+              >
                 <p>
                   <strong>Paid by me</strong> is what you covered up front.
                 </p>
@@ -1211,12 +1215,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         key={`${editingExpense?.id ?? 'new'}-${newExpenseAudience}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
         trip={trip}
-        currentUserId={currentUserId}
         initialExpense={editingExpense ?? undefined}
         initialAudience={newExpenseAudience}
         canShare={canAddExpenses}
         onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
         categoryKeys={categoryKeys}
+        personalCategoryKeys={personalCategoryKeys}
         existingGroupLabels={existingGroupLabels}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
@@ -1226,17 +1230,19 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           setIsModalOpen(false);
         }}
       />
-      <PersonalExpenseFormModal
-        key={`${personalFormExpense?.id ?? 'none'}-${personalFormExpense === null ? 'closed' : 'open'}`}
-        isOpen={personalFormExpense !== null}
-        trip={trip}
-        initialExpense={personalFormExpense ?? undefined}
-        categoryKeys={personalCategoryKeys}
-        isSubmitting={isPersonalSubmitting}
-        onSubmit={handlePersonalSubmit}
-        onDelete={personalFormExpense ? () => handlePersonalDelete(personalFormExpense) : undefined}
-        onClose={() => setPersonalFormExpense(null)}
-      />
+      {personalFormExpense && (
+        <PersonalExpenseFormModal
+          key={personalFormExpense.id}
+          isOpen
+          trip={trip}
+          initialExpense={personalFormExpense}
+          categoryKeys={personalCategoryKeys}
+          isSubmitting={isPersonalSubmitting}
+          onSubmit={handlePersonalSubmit}
+          onDelete={() => handlePersonalDelete(personalFormExpense)}
+          onClose={() => setPersonalFormExpense(null)}
+        />
+      )}
       <MarkExpensePaidModal
         key={`paying-${payingExpense?.id ?? 'none'}`}
         isOpen={payingExpense !== null}

@@ -49,11 +49,11 @@ export interface PersonalExpenseSubmitValues {
 interface PersonalExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
-  initialExpense?: PersonalExpense;
+  initialExpense: PersonalExpense;
   categoryKeys: string[];
   isSubmitting?: boolean;
   onSubmit: (values: PersonalExpenseSubmitValues) => Promise<void> | void;
-  onDelete?: () => Promise<void> | void;
+  onDelete: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -79,26 +79,25 @@ function PersonalExpenseFormModal({
 }: PersonalExpenseFormModalProps) {
   const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
-  const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
+  const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense.note));
   const [formData, setFormData] = useState<PersonalExpenseFormData>({
-    title: initialExpense?.title ?? '',
-    category: { choice: initialExpense ? getExpenseCategoryKey(initialExpense) : '', newLabel: '' },
-    amount: initialExpense ? String(initialExpense.amount) : '',
-    status: initialExpense?.status ?? 'EXPECTED',
-    dayIndex: initialExpense?.dayIndex == null ? '' : String(initialExpense.dayIndex),
-    note: initialExpense?.note ?? '',
+    title: initialExpense.title,
+    category: { choice: getExpenseCategoryKey(initialExpense), newLabel: '' },
+    amount: String(initialExpense.amount),
+    status: initialExpense.status,
+    dayIndex: initialExpense.dayIndex === null ? '' : String(initialExpense.dayIndex),
+    note: initialExpense.note ?? '',
   });
-  const isEditing = Boolean(initialExpense);
-  const isFormComplete =
+    const isFormComplete =
     formData.title.trim() !== '' && resolveCategory(formData.category) !== null && parseAmount(formData.amount) !== null;
   const dayOptions = useMemo(
     () => [
       { value: '', text: 'No specific day' },
-      ...getDayOptions(trip.startDate, trip.endDate, initialExpense?.dayIndex ?? null, MAX_DAYS_OUTSIDE_TRIP).map(
+      ...getDayOptions(trip.startDate, trip.endDate, initialExpense.dayIndex, MAX_DAYS_OUTSIDE_TRIP).map(
         ({ value, label }) => ({ value, text: label }),
       ),
     ],
-    [trip.startDate, trip.endDate, initialExpense?.dayIndex],
+    [trip.startDate, trip.endDate, initialExpense.dayIndex],
   );
   const categoryOptions = useMemo(
     () => categoryKeys.map((key) => ({ value: key, label: getExpenseCategoryKeyLabel(key) })),
@@ -107,8 +106,8 @@ function PersonalExpenseFormModal({
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
-      input({ name: 'title', label: 'What is it?', placeholder: 'Souvenirs for the kids', variant: 'outline' }),
-      input({ name: 'amount', label: 'Amount', type: 'number', placeholder: '0.00', variant: 'outline' }),
+      input({ name: 'title', label: 'Expense title', placeholder: 'Dinner reservation', variant: 'outline' }),
+      input({ name: 'amount', label: 'How much is it?', type: 'number', placeholder: '0.00', variant: 'outline' }),
       custom({
         name: 'category',
         label: 'Category',
@@ -202,12 +201,9 @@ function PersonalExpenseFormModal({
   };
 
   const handleDelete = async () => {
-    if (!onDelete) {
-      return;
-    }
     const confirmed = await confirm({
       title: 'Delete expense',
-      message: `Delete "${initialExpense?.title}"? This action cannot be undone.`,
+      message: `Delete "${initialExpense.title}"? This action cannot be undone.`,
       destructive: true,
     });
     if (!confirmed) {
@@ -224,7 +220,7 @@ function PersonalExpenseFormModal({
     <FormSheet isOpen={isOpen} onClose={onClose} title='Personal expense'>
       <p className='text-muted-foreground mb-4 flex items-start gap-2 text-sm'>
         <Lock className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
-        <span>Only you can see this. It never shows up in anyone else&apos;s list, totals or dues.</span>
+        <span>Only you can see this. It stays out of everyone’s list, totals and dues.</span>
       </p>
       <Form
         id='waypoint-personal-expense'
@@ -247,7 +243,7 @@ function PersonalExpenseFormModal({
             )}
             <ModalFooterActions
               leftActions={
-                isEditing && onDelete && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
+                <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
               }
               cancelAction={
                 <Button type='button' variant='secondary' onClick={onClose}>
@@ -256,7 +252,7 @@ function PersonalExpenseFormModal({
               }
               rightActions={
                 <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
-                  {isSubmitting ? (isEditing ? 'Saving…' : 'Adding…') : isEditing ? 'Save' : 'Add'}
+                  {isSubmitting ? 'Saving…' : 'Save'}
                 </Button>
               }
             />

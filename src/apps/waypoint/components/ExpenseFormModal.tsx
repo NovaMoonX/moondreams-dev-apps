@@ -116,7 +116,6 @@ export interface ExpensePrefill {
 interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
-  currentUserId: string;
   initialExpense?: TripExpense;
   prefill?: ExpensePrefill;
   /** Where a new expense starts: for the whole trip, or private to the person adding it. */
@@ -124,6 +123,8 @@ interface ExpenseFormModalProps {
   /** `false` for someone who can't add trip expenses: the form is then only for private ones. */
   canShare?: boolean;
   categoryKeys: string[];
+  /** Categories offered to a private expense: the trip's plus the person's own custom ones. */
+  personalCategoryKeys?: string[];
   existingGroupLabels: string[];
   isSubmitting?: boolean;
   onSubmit: (values: ExpenseSubmitValues) => Promise<void> | void;
@@ -137,7 +138,7 @@ const { custom, input } = FormFactories;
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
-  return value.trim() === '' || !Number.isFinite(parsed) ? null : parsed;
+  return value.trim() === '' || !Number.isFinite(parsed) || parsed < 0 ? null : parsed;
 }
 
 function resolveChoice({ choice, newLabel }: ChoiceValue): string | null {
@@ -187,6 +188,7 @@ function ExpenseFormModal({
   initialAudience = 'EVERYONE',
   canShare = true,
   categoryKeys,
+  personalCategoryKeys,
   existingGroupLabels,
   isSubmitting = false,
   onSubmit,
@@ -213,8 +215,8 @@ function ExpenseFormModal({
       ? { audience: 'ME', memberIds: [] }
       : getAudienceFromAttendees(prefill?.attendeeIds, memberIds),
   );
-  const autoAudience = useRef<AudienceValue>(audienceValue);
-  const autoFill = useRef({ title: prefill?.title ?? '', category: prefill?.category ?? '' });
+  const autoFill = useRef({ title: prefill?.title ?? '', category: prefill?.category ?? '', dayIndex: getDayValue(prefill?.dayIndex) });
+  const hasChosenAudience = useRef(false);
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
@@ -279,8 +281,12 @@ function ExpenseFormModal({
     [memberIds, memberInfo],
   );
   const categoryOptions = useMemo(
-    () => categoryKeys.map((key) => ({ value: key, text: getExpenseCategoryKeyLabel(key) })),
-    [categoryKeys],
+    () =>
+      (isPrivate ? (personalCategoryKeys ?? categoryKeys) : categoryKeys).map((key) => ({
+        value: key,
+        text: getExpenseCategoryKeyLabel(key),
+      })),
+    [categoryKeys, isPrivate, personalCategoryKeys],
   );
   const groupOptions = useMemo(
     () => existingGroupLabels.map((label) => ({ value: label, text: label })),
@@ -354,31 +360,38 @@ function ExpenseFormModal({
                   />
                 ) : (
                   <div className='grid grid-cols-2 gap-3'>
-                    <Input
-                      type='number'
-                      aria-label='Lowest it could be'
-                      placeholder='Lowest'
-                      variant='outline'
-                      value={value.min}
-                      onChange={(event) => props.onValueChange({ ...value, min: event.target.value })}
-                    />
-                    <Input
-                      type='number'
-                      aria-label='Highest it could be'
-                      placeholder='Highest'
-                      variant='outline'
-                      value={value.max}
-                      onChange={(event) => props.onValueChange({ ...value, max: event.target.value })}
-                    />
+                    <div className='space-y-1'>
+                      <p className='text-muted-foreground text-xs'>Lowest</p>
+                      <Input
+                        type='number'
+                        aria-label='Lowest it could be'
+                        placeholder='0.00'
+                        variant='outline'
+                        value={value.min}
+                        onChange={(event) => props.onValueChange({ ...value, min: event.target.value })}
+                      />
+                    </div>
+                    <div className='space-y-1'>
+                      <p className='text-muted-foreground text-xs'>Highest</p>
+                      <Input
+                        type='number'
+                        aria-label='Highest it could be'
+                        placeholder='0.00'
+                        variant='outline'
+                        value={value.max}
+                        onChange={(event) => props.onValueChange({ ...value, max: event.target.value })}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
               {sharesPrice && (
                 <div className='space-y-1.5'>
+                  <p className='text-muted-foreground text-sm'>Who does that price cover?</p>
                   <PillGroup
                     label='This price is for'
                     options={[
-                      { value: 'group', label: 'Everyone together', emoji: '🧮' },
+                      { value: 'group', label: 'One total', emoji: '🧮' },
                       { value: 'each', label: 'Each person', emoji: '🙋' },
                     ]}
                     value={value.isPerPerson ? 'each' : 'group'}
@@ -386,7 +399,9 @@ function ExpenseFormModal({
                   />
                   <p className='text-muted-foreground text-xs'>
                     {value.isPerPerson
-                      ? 'Everyone in the split pays this much, so the total grows with every person who joins.'
+                      ? audience === 'PICK'
+                        ? `Each of the ${pickedIds.length} people you picked pays this much.`
+                        : 'Everyone in the split pays this much, so the total grows with every person who joins.'
                       : 'We work out each person’s share for you.'}
                   </p>
                 </div>
@@ -521,6 +536,8 @@ function ExpenseFormModal({
     payerOptions,
     price.isPerPerson,
     price.mode,
+    audience,
+    pickedIds.length,
     sharesPrice,
     showGroupField,
     showNoteField,
@@ -541,21 +558,25 @@ function ExpenseFormModal({
       return;
     }
     const nextAudience = getAudienceFromAttendees(picked.attendeeIds, memberIds);
-    const isAudienceUntouched = JSON.stringify(audienceValue) === JSON.stringify(autoAudience.current);
+    const isAudienceUntouched = !hasChosenAudience.current;
     const previous = autoFill.current;
     setFormData((current) => ({
       ...current,
       title: current.title.trim() === '' || current.title === previous.title ? picked.title : current.title,
-      dayIndex: picked.dayIndex === null ? current.dayIndex : getDayValue(picked.dayIndex),
+      dayIndex:
+        current.dayIndex === previous.dayIndex || current.dayIndex === '' ? getDayValue(picked.dayIndex) : current.dayIndex,
       category:
         picked.expenseCategory && (current.category.choice === '' || current.category.choice === previous.category)
           ? { choice: picked.expenseCategory, newLabel: '' }
           : current.category,
     }));
-    autoFill.current = { title: picked.title, category: picked.expenseCategory ?? previous.category };
+    autoFill.current = {
+      title: picked.title,
+      category: picked.expenseCategory ?? previous.category,
+      dayIndex: getDayValue(picked.dayIndex),
+    };
     if (isAudienceUntouched) {
       setAudienceValue(nextAudience);
-      autoAudience.current = nextAudience;
     }
     setFormKey((key) => key + 1);
   };
@@ -661,7 +682,10 @@ function ExpenseFormModal({
             label="Who's this for"
             options={audienceOptions}
             value={audience}
-            onChange={(next) => setAudienceValue((current) => ({ ...current, audience: next }))}
+            onChange={(next) => {
+              hasChosenAudience.current = true;
+              setAudienceValue((current) => ({ ...current, audience: next }));
+            }}
           />
           {audience === 'PICK' && (
             <>
@@ -669,7 +693,10 @@ function ExpenseFormModal({
                 label='People'
                 options={memberPillOptions}
                 values={pickedIds}
-                onChange={(next) => setAudienceValue((current) => ({ ...current, memberIds: next }))}
+                onChange={(next) => {
+                  hasChosenAudience.current = true;
+                  setAudienceValue((current) => ({ ...current, memberIds: next }));
+                }}
               />
               {pickedIds.length === 0 && (
                 <p className='text-muted-foreground text-sm'>Pick at least one person to share it.</p>

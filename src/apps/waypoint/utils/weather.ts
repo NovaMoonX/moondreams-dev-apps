@@ -62,7 +62,7 @@ const isLocated = (value: Located | null): value is Located => value !== null;
 
 function getTripCityLocation(trip: TripSpace): Located | null {
   const { city } = trip;
-  return city ? toLocated(city.latitude, city.longitude, trip.timezone, city.name) : null;
+  return city ? toLocated(city.latitude, city.longitude, null, city.name) : null;
 }
 
 // Travel legs start from wherever each person is, so the first plan that isn't travel says where the day is.

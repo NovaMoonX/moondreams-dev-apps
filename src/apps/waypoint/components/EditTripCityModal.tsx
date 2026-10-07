@@ -6,6 +6,7 @@ import CitySearchField from '@/components/forms/CitySearchField';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { City } from '@/lib/cities/types';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import type { TripCity, TripSpace } from '@apps/waypoint/types';
 
 interface EditTripCityModalProps {
@@ -44,6 +45,11 @@ function EditTripCityModal({ isOpen, trip, isSubmitting = false, onSubmit, onClo
     <Modal isOpen={isOpen} onClose={onClose} title='City'>
       <div className='space-y-3'>
         <CitySearchField value={city} onChange={setCity} disabled={isSubmitting} />
+        {city?.timezone && trip.timezone && city.timezone !== trip.timezone && (
+          <p className='text-muted-foreground text-sm'>
+            The trip&apos;s times stay in {formatTimezoneLabel(trip.timezone)}; the weather uses the city&apos;s own time.
+          </p>
+        )}
         <p className='text-muted-foreground text-sm'>
           The weather for every day comes from this city. Without one, a day uses the first non-travel plan with a
           location, and a day with neither shows no weather.

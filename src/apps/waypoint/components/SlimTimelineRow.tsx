@@ -13,7 +13,6 @@ interface SlimTimelineRowProps {
   onOpen: () => void;
 }
 
-/** One quiet line on the timeline that opens its details on tap. */
 function SlimTimelineRow({ emoji, label, name, time, ariaLabel, className, onOpen }: SlimTimelineRowProps) {
   return (
     <Button
@@ -23,14 +22,14 @@ function SlimTimelineRow({ emoji, label, name, time, ariaLabel, className, onOpe
       title={name ? `${label} · ${name}` : label}
       onClick={onOpen}
       className={join(
-        'bg-muted/60 border-border/60 text-foreground h-auto min-h-11 w-full justify-start gap-3 rounded-lg border px-3 py-2 text-left text-sm font-normal',
+        'bg-muted/60 border-border/60 text-foreground! h-auto min-h-11 w-full justify-start gap-3 rounded-lg border px-3 py-2 text-left text-sm font-normal',
         className,
       )}
     >
       <span className='w-5 shrink-0 text-center' aria-hidden='true'>
         {emoji}
       </span>
-      <span className='min-w-0 flex-1 truncate'>
+      <span className='min-w-0 flex-1 line-clamp-2'>
         <span className='font-medium'>{label}</span>
         {name && <span className='text-muted-foreground'> · {name}</span>}
       </span>

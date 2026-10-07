@@ -35,9 +35,10 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
-import LogisticsDetailSheet from '@apps/waypoint/components/LogisticsDetailSheet';
+import LogisticsDetailHost, { type LogisticsDetailHandle } from '@apps/waypoint/components/LogisticsDetailHost';
 import LogisticsRow from '@apps/waypoint/components/LogisticsRow';
 import { getLogisticsEntries, toMinutes, type LogisticsEntry } from '@apps/waypoint/utils/timelineLogistics';
+import { getWeatherDayIndexes } from '@apps/waypoint/utils/weather';
 import WeatherDayStrip from '@apps/waypoint/components/WeatherDayStrip';
 import WeatherDetailSheet from '@apps/waypoint/components/WeatherDetailSheet';
 import {
@@ -89,6 +90,8 @@ const OUTSIDE_TAB = 'outside';
 const EAGER_DAYS = 2;
 const ESTIMATED_CARD_HEIGHT = 210;
 const ESTIMATED_LOGISTICS_HEIGHT = 44;
+const getItemHeight = (items: TimelineEvent[]) =>
+  items.reduce((total, item) => total + (item.eventType === 'TRAVEL' ? ESTIMATED_LOGISTICS_HEIGHT : ESTIMATED_CARD_HEIGHT), 0);
 
 interface TimelineSectionProps {
   trip: TripSpace;
@@ -119,14 +122,9 @@ export function TimelineSection({
   const [showArchived, setShowArchived] = useState(false);
   const memberIds = Object.keys(trip.members);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
-  const [logisticsEntry, setLogisticsEntry] = useState<LogisticsEntry | null>(null);
+  const logisticsDetailRef = useRef<LogisticsDetailHandle>(null);
   const stays = useAppSelector(selectStays);
   const rentals = useAppSelector(selectRentals);
-  const logisticsStay =
-    logisticsEntry?.subject.kind === 'STAY' ? stays.find((item) => item.id === logisticsEntry.subject.id) : undefined;
-  const logisticsRental =
-    logisticsEntry?.subject.kind === 'RENTAL' ? rentals.find((item) => item.id === logisticsEntry.subject.id) : undefined;
-  const logisticsSubject = logisticsStay ? { stay: logisticsStay } : logisticsRental ? { rental: logisticsRental } : null;
   const logisticsByDay = useMemo(
     () =>
       unpaidOnly
@@ -394,7 +392,7 @@ export function TimelineSection({
       return { minutes: toMinutes(getEventTime(trip, first).startTime) ?? 0, node: renderTimelineItem(item) };
     });
     const logisticsRows = (dayIndex === undefined ? [] : (logisticsByDay.get(dayIndex) ?? []))
-      .map((entry) => ({ minutes: toMinutes(entry.time) ?? -1, node: <LogisticsRow key={entry.key} entry={entry} onOpen={setLogisticsEntry} /> }))
+      .map((entry) => ({ minutes: toMinutes(entry.time) ?? -1, node: <LogisticsRow key={entry.key} entry={entry} onOpen={(opened) => logisticsDetailRef.current?.open(opened)} /> }))
       .sort((first, second) => first.minutes - second.minutes);
     const merged = timelineNodes.reduce<{ nodes: ReactNode[]; rest: typeof logisticsRows }>(
       (acc, timelineNode) => {
@@ -485,14 +483,14 @@ export function TimelineSection({
             <div
               key={bucket}
               className='defer-offscreen space-y-3'
-              style={{ '--defer-size': `${(items.length * ESTIMATED_CARD_HEIGHT) + getLogisticsHeight(bucket)}px` } as CSSProperties}
+              style={{ '--defer-size': `${getItemHeight(items) + getLogisticsHeight(bucket)}px` } as CSSProperties}
             >
               {renderDivider(
                 getBucketLabel(bucket, trip.startDate, dayCount),
                 typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
               )}
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
-              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_CARD_HEIGHT + getLogisticsHeight(bucket)}>
+              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
                 {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
               </LazyMount>
             </div>
@@ -636,6 +634,11 @@ export function TimelineSection({
             )
           }
         />
+        {canEdit && !trip.city && getWeatherDayIndexes(trip, weather.todayIndex, events).some((day) => day >= 0 && day < dayCount && !weather.getDay(day)) && (
+          <p className='text-muted-foreground text-sm'>
+            Some days have no weather. Set a city from the trip menu (⋯, then Set city) to see it every day.
+          </p>
+        )}
         {weatherDays.length > 0 && (
           <WeatherDayStrip
             days={weatherDays}
@@ -691,11 +694,7 @@ export function TimelineSection({
         </Tabs>
         {weather.hasWeather && <WeatherAttribution />}
       </section>
-      <LogisticsDetailSheet
-        trip={trip}
-        subject={logisticsSubject}
-        onClose={() => setLogisticsEntry(null)}
-      />
+      <LogisticsDetailHost trip={trip} handleRef={logisticsDetailRef} />
       <WeatherDetailSheet
         isOpen={isWeatherOpen}
         onClose={() => setIsWeatherOpen(false)}

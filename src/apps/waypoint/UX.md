@@ -416,8 +416,10 @@ An expected expense row offers "I paid early" to anyone in its split: pick who y
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Expenses tab] --> B[+ Add Expense] --> C[Title / amount or range / payer]
-    C --> D[Saved — defaults to Everyone, current members, split evenly]
+    A[Expenses tab] --> B[+ Add] --> W[Who's this for? Everyone / Pick people / Just me]
+    W -->|Just me| P[Same form, private, saved to Just for me]
+    W --> L[Optional: what is it paying for? fills title, category, day] --> C[Title / category / how much / who paid]
+    C --> D[Saved — Everyone means current members, split evenly]
     D --> E[Optional: tap Split] --> F[Everyone-current / Everyone-future / Just Me / Specific]
     F --> G[Auto-suggested even split] --> H[Adjust per person, or clear and redo]
     D --> I[List + Dues Summary update]
@@ -456,11 +458,11 @@ flowchart LR
 
 | Entity | Initial (create) | Later (edit only) | Grouping |
 |---|---|---|---|
-| Trip Space | title, start/end dates (framed as estimates) | destination labels, tags, currency, cover image | none |
+| Trip Space | title, start/end dates (framed as estimates) | city (a search; sets the time zone when creating), destination labels, tags, currency, cover image | none |
 | Timeline Event | **Step 1, what & when:** `eventType`, its sub-type (transit type; meal type, defaulted from the start time), day, departs/starts time, time zone. **Step 2, details:** a section per type — flight/train/ferry carrier + route (the departing place *is* the location), a drive/walk/bike/scooter's "going to" (the location), dining/activity location first | end/arrival time, title (derived when left out), address, travel time (only without an end time), notes, cuisines, indoor/outdoor, hours, link kind, group, reminder, attendees — as add-detail chips; a flight's **Next leg** button saves it and reopens the form with the same airline, booking, travelers and group, departing from where it landed | **Steps** |
 | Stay | name, address, official check-in/out | confirmation code, notes¹ | none |
 | Checklist Item | title, category (incl. a custom "Other" option with its own label), assignees | — | none |
-| Expense | an optional event, stay or rental it pays for, who is sharing it (everyone, just me or picked people, pre-selected from the event's attendees) (fills the title, day and category, and marks that plan as paid for), title, amount (or a min-max range) with a "This price is for" pick (one total split between everyone, or each person), currency (defaulted), payer, day (or "Other" for none); saving an event, stay or rental offers this form, already filled in, along with a checklist item | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |
+| Expense | an optional event, stay or rental it pays for, who it is for first (everyone, picked people pre-selected from the event's attendees, or just me for a private personal expense) (fills the title, day and category, and marks that plan as paid for), title, amount (or a min-max range) with a "This price is for" pick (one total split between everyone, or each person), currency (defaulted), payer, day (or "Other" for none); saving an event, stay or rental offers this form, already filled in, along with a checklist item | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |
 | Comment/Proposal | text (+ proposal fields) | — | none |
 | Idea — Restaurant | title, link, cuisines, suggested time block(s)³, suggested day(s)³ | notes | none |
 | Idea — Activity | title, link, settings (indoor/outdoor, multi-select), suggested time block(s)³, suggested day(s)³ | notes | none |

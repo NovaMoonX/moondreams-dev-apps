@@ -18,7 +18,6 @@ interface CitySearchFieldProps {
 
 const MIN_QUERY_LENGTH = 2;
 
-/** Search for a city and pick it; the pick shows as a chip with a visible remove button. */
 function CitySearchField({ value, onChange, placeholder = 'Search for a city', disabled = false }: CitySearchFieldProps) {
   const [text, setText] = useState('');
   const debounced = useDebouncedValue(text.trim(), DEBOUNCE_MS.autocomplete);
@@ -40,7 +39,7 @@ function CitySearchField({ value, onChange, placeholder = 'Search for a city', d
           size='icon'
           rounded='full'
           aria-label='Remove city'
-          className='h-8 w-8 shrink-0'
+          className="relative h-8 w-8 shrink-0 after:absolute after:-inset-1 after:content-['']"
           disabled={disabled}
           onClick={() => onChange(null)}
         >
@@ -60,6 +59,11 @@ function CitySearchField({ value, onChange, placeholder = 'Search for a city', d
         value={text}
         disabled={disabled}
         onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+          }
+        }}
       />
       {isSearching && <p className='text-muted-foreground text-sm'>Searching…</p>}
       {!isSearching && isReady && !isError && results.length === 0 && (
@@ -69,7 +73,7 @@ function CitySearchField({ value, onChange, placeholder = 'Search for a city', d
         <p className='text-muted-foreground text-sm'>We couldn&apos;t search just now. You can add a city later.</p>
       )}
       {!isSearching && results.length > 0 && (
-        <ul className='divide-border divide-y'>
+        <ul className='divide-border max-h-44 divide-y overflow-y-auto'>
           {results.map((city) => (
             <li key={`${city.latitude},${city.longitude}`}>
               <Button

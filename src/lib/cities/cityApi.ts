@@ -16,10 +16,13 @@ interface GeocodingResponse {
 export const getCityLabel = ({ name, region, country }: Pick<City, 'name' | 'region' | 'country'>) =>
   [name, region, country].filter(Boolean).join(', ');
 
-/** Open-Meteo's geocoder is keyless, like its forecast API (CC BY 4.0). */
+const SEARCH_TIMEOUT_MS = 6000;
+
 export async function searchCities(query: string): Promise<City[]> {
   const params = new URLSearchParams({ name: query, count: '6', language: 'en', format: 'json' });
-  const response = await fetch(`${GEOCODING_URL}?${params.toString()}`);
+  const response = await fetch(`${GEOCODING_URL}?${params.toString()}`, {
+    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`City search failed (${response.status})`);
   }

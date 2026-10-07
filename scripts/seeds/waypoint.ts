@@ -1117,7 +1117,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: null,
     latitude: null,
     longitude: null,
-    eventDetails: { settings: ['INDOOR'] },
+    eventDetails: { settings: ['INDOOR', 'OUTDOOR'] },
     notes: null,
     attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: [],
