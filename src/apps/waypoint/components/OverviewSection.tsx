@@ -16,6 +16,7 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { formatTimezoneAbbreviation, formatTimezoneLabel } from '@/utils/timezoneUtils';
 
 import DayWeather from '@apps/waypoint/components/DayWeather';
+import WeatherDetailSheet from '@apps/waypoint/components/WeatherDetailSheet';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { RentalDetailLines } from '@apps/waypoint/components/RentalCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
@@ -116,6 +117,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const weather = useTripWeather(trip, events, stays, now);
   const rentals = useAppSelector(selectRentals);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
+  const [isWeatherOpen, setIsWeatherOpen] = useState(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
 
   if (!isLive) {
@@ -166,6 +168,12 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
   return (
     <div className='space-y-5 sm:space-y-3'>
+      <WeatherDetailSheet
+        isOpen={isWeatherOpen}
+        onClose={() => setIsWeatherOpen(false)}
+        title="Today's weather"
+        details={weather.getDayDetails(todayIndex)}
+      />
       <div className='space-y-3'>
         {checkInStays.map((stay) => (
           <CheckInStayCard
@@ -204,6 +212,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
               forecast={todayWeather}
               hours={weather.getRemainingHoursToday(todayIndex)}
               isMinimized={false}
+              onOpen={() => setIsWeatherOpen(true)}
             />
             <WeatherAttribution />
           </section>

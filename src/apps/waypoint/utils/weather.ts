@@ -13,6 +13,8 @@ interface Located {
   latitude: number;
   longitude: number;
   timezone: string | null;
+  /** The plan the forecast is for, so the details can say where the weather is from. */
+  placeName: string | null;
 }
 
 export interface WeatherGroup {
@@ -22,7 +24,7 @@ export interface WeatherGroup {
 
 export interface WeatherPlan {
   groups: WeatherGroup[];
-  days: Record<number, { key: string; date: string }>;
+  days: Record<number, { key: string; date: string; placeName: string | null; isBorrowed: boolean }>;
   events: Record<string, { key: string; time: string }>;
 }
 
@@ -48,11 +50,12 @@ function toLocated(
   latitude: number | null | undefined,
   longitude: number | null | undefined,
   timezone: string | null,
+  placeName: string | null = null,
 ): Located | null {
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
     return null;
   }
-  return { latitude, longitude, timezone };
+  return { latitude, longitude, timezone, placeName };
 }
 
 const isLocated = (value: Located | null): value is Located => value !== null;
@@ -65,7 +68,14 @@ function getDayLocation(
 ): Located | null {
   const fromEvent = events
     .filter((event) => !event.isArchived && getEventTime(trip, event).dayIndex === dayIndex)
-    .map((event) => toLocated(event.latitude, event.longitude, getEventTime(trip, event).timezone))
+    .map((event) =>
+      toLocated(
+        event.latitude,
+        event.longitude,
+        getEventTime(trip, event).timezone,
+        event.locationName?.trim() || event.title,
+      ),
+    )
     .find(isLocated);
   if (fromEvent) {
     return fromEvent;
@@ -81,7 +91,7 @@ function getDayLocation(
         dayIndex <= plannedDeparture.dayIndex
       );
     })
-    .map((stay) => toLocated(stay.latitude, stay.longitude, getStayTime(trip, stay).timezone))
+    .map((stay) => toLocated(stay.latitude, stay.longitude, getStayTime(trip, stay).timezone, stay.name))
     .find(isLocated);
   return fromStay ?? null;
 }
@@ -120,8 +130,11 @@ export function buildWeatherPlan(
     }, null)?.location ?? null;
 
   const dayNeeds = dayIndexes.flatMap((dayIndex) => {
-    const location = ownLocations.get(dayIndex) ?? getNearestLocation(dayIndex);
-    return location ? [{ dayIndex, location, date: getDayInputValue(trip.startDate, dayIndex) }] : [];
+    const own = ownLocations.get(dayIndex) ?? null;
+    const location = own ?? getNearestLocation(dayIndex);
+    return location
+      ? [{ dayIndex, location, isBorrowed: own === null, date: getDayInputValue(trip.startDate, dayIndex) }]
+      : [];
   });
 
   // Legacy absolute trips store instants without a zone, so an event's hour can't be placed reliably.
@@ -169,7 +182,10 @@ export function buildWeatherPlan(
   const result: WeatherPlan = {
     groups: Object.values(groupsByKey),
     days: Object.fromEntries(
-      dayNeeds.map(({ dayIndex, location, date }) => [dayIndex, { key: getLocationKey(location), date }]),
+      dayNeeds.map(({ dayIndex, location, date, isBorrowed }) => [
+        dayIndex,
+        { key: getLocationKey(location), date, placeName: location.placeName, isBorrowed },
+      ]),
     ),
     events: Object.fromEntries(
       eventNeeds.map(({ eventId, location, time }) => [eventId, { key: getLocationKey(location), time }]),
@@ -185,6 +201,13 @@ export function getDayForecast(
 ): DayForecast | null {
   const target = plan.days[dayIndex];
   const result = target ? (forecasts[target.key]?.days.find((day) => day.date === target.date) ?? null) : null;
+  return result;
+}
+
+/** Every hour of the day, in the location's own time. */
+export function getDayHours(plan: WeatherPlan, forecasts: WeatherForecasts, dayIndex: number): HourForecast[] {
+  const target = plan.days[dayIndex];
+  const result = target ? (forecasts[target.key]?.hours.filter((hour) => hour.time.startsWith(target.date)) ?? []) : [];
   return result;
 }
 

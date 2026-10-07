@@ -2830,6 +2830,14 @@ service cloud.firestore {
           && isTimestampNumber(data.lastEditedAt);
       }
 
+      // A new expense is shared with everyone on the trip, or with the specific people picked when it is added.
+      function isNewExpenseTargetValid(data) {
+        return data.targetType == 'EVERYONE_CURRENT'
+          || (data.targetType == 'SPECIFIC_MEMBERS'
+            && data.targetMemberIds.size() > 0
+            && data.targetMemberIds.hasOnly(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members.keys()));
+      }
+
       function earlyPaymentsOf(data) {
         return data.get('earlyPayments', {});
       }
@@ -2887,7 +2895,7 @@ service cloud.firestore {
       allow read: if isTripExpenseMember();
       allow create: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
-        && request.resource.data.targetType == 'EVERYONE_CURRENT'
+        && isNewExpenseTargetValid(request.resource.data)
         && earlyPaymentsOf(request.resource.data).size() == 0
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripExpenseEditor()

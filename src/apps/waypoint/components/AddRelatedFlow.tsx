@@ -82,6 +82,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
   const expensePrefill = useMemo<ExpensePrefill>(
     () => ({
       link: subject.link,
+      attendeeIds: subject.attendeeIds,
       title: subject.title,
       dayIndex: subject.dayIndex,
       category: subject.expenseCategory,
@@ -104,7 +105,15 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
   const handleExpense = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
     try {
-      await dispatch(createExpense({ uid: currentUserId, tripId: trip.id, memberIds, ...values })).unwrap();
+      await dispatch(
+        createExpense({
+          uid: currentUserId,
+          tripId: trip.id,
+          memberIds,
+          ...values,
+          split: values.split ?? { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] },
+        }),
+      ).unwrap();
       setAdded((current) => ({ ...current, expense: current.expense + 1 }));
       setStep('menu');
     } finally {
@@ -162,6 +171,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
           key={`expense-${added.expense}`}
           isOpen
           trip={trip}
+          currentUserId={currentUserId}
           prefill={expensePrefill}
           categoryKeys={categoryKeys}
           existingGroupLabels={existingGroupLabels}

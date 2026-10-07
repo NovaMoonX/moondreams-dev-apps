@@ -200,7 +200,7 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
   OTHER: 'Where to navigate',
 };
 
-export const ITINERARY_PICK_TRANSIT_TYPES: readonly TransitType[] = ['DRIVE', 'WALK', 'BIKE', 'SCOOTER', 'OTHER'];
+export const ITINERARY_PICK_TRANSIT_TYPES: readonly TransitType[] = ['DRIVE', 'TRAIN', 'FERRY', 'WALK', 'BIKE', 'SCOOTER', 'OTHER'];
 
 // Event types whose cost belongs on an expense: one without an attached expense reads "Not paid for yet".
 export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];

@@ -18,6 +18,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
+import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
@@ -59,6 +60,14 @@ function describeShift(deltaDays: number) {
 }
 
 const { custom } = FormFactories;
+
+function ChecklistHelp() {
+  return (
+    <HelpTip title='Checklist due dates' placement='top' noModal>
+      <p>Due dates on your checklist always move with the trip, however far ahead they are.</p>
+    </HelpTip>
+  );
+}
 
 function EditTripDatesModal({
   isOpen,
@@ -171,7 +180,10 @@ function EditTripDatesModal({
                 <div className='space-y-2'>
                   {showKeepOriginalOption && (
                     <div className='space-y-1.5'>
-                      <Label>What happens to your plans?</Label>
+                      <div className='flex items-center gap-1.5'>
+                        <Label>What happens to your plans?</Label>
+                        {hasDatedChecklistItems && <ChecklistHelp />}
+                      </div>
                       <PillGroup
                         label='What happens to your plans'
                         options={[
@@ -188,6 +200,12 @@ function EditTripDatesModal({
                       </p>
                     </div>
                   )}
+                  {!showKeepOriginalOption && hasDatedChecklistItems && deltaDays !== 0 && (
+                    <div className='flex items-center gap-1.5'>
+                      <Label>Checklist due dates</Label>
+                      <ChecklistHelp />
+                    </div>
+                  )}
                   {outOfRangeCount > 0 && (
                     <p className='text-warning text-sm'>
                       {outOfRangeCount === 1
@@ -195,11 +213,6 @@ function EditTripDatesModal({
                         : `${outOfRangeCount} items fall`}{' '}
                       more than {MAX_DAYS_OUTSIDE_TRIP} days outside the new dates and will show under Outside trip
                       dates.
-                    </p>
-                  )}
-                  {hasDatedChecklistItems && deltaDays !== 0 && (
-                    <p className='text-muted-foreground text-xs'>
-                      🧳 Due dates on your checklist always move with the trip, however far ahead they are.
                     </p>
                   )}
                 </div>

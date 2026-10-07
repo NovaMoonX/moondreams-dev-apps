@@ -6,6 +6,8 @@ import WeatherEmoji from '@apps/waypoint/components/WeatherEmoji';
 
 interface HourlyWeatherStripProps {
   hours: HourForecast[];
+  /** Labels the first hour "Now"; off for a whole day, whose first hour is midnight. */
+  showNow?: boolean;
 }
 
 const formatHourLabel = (time: string) => {
@@ -14,7 +16,7 @@ const formatHourLabel = (time: string) => {
   return result;
 };
 
-function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
+function HourlyWeatherStrip({ hours, showNow = true }: HourlyWeatherStripProps) {
   const showPrecip = hours.some((hour) => hour.precipChance !== null && hour.precipChance >= 20);
 
   return (
@@ -22,7 +24,8 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
       {hours.map((hour, index) => {
         const condition = getWeatherCondition(hour.weatherCode);
         const { label } = condition;
-        const timeLabel = index === 0 ? 'Now' : formatHourLabel(hour.time);
+        const isNow = showNow && index === 0;
+        const timeLabel = isNow ? 'Now' : formatHourLabel(hour.time);
         const tempLabel = hour.temp === null ? 'temperature unavailable' : `${Math.round(hour.temp)} degrees`;
         return (
           <li
@@ -31,13 +34,13 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
             aria-label={`${timeLabel}: ${label}, ${tempLabel}`}
             className={join(
               'flex w-14 shrink-0 flex-col items-center gap-1 rounded-md px-1 py-1.5 text-xs',
-              index === 0 && 'bg-primary/10',
+              isNow && 'bg-primary/10',
             )}
           >
             <span
               className={join(
                 'text-muted-foreground leading-4 whitespace-nowrap',
-                index === 0 && 'text-foreground font-medium',
+                isNow && 'text-foreground font-medium',
               )}
             >
               {timeLabel}

@@ -8,6 +8,7 @@ import type { Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   buildWeatherPlan,
   getDayForecast,
+  getDayHours,
   getDayTimezone,
   getEventForecast,
   getRemainingHours,
@@ -35,6 +36,19 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], stays: 
   const getDay = (dayIndex: number) => getDayForecast(plan, forecasts, dayIndex);
   const hasWeather = Object.keys(plan.days).some((dayIndex) => getDay(Number(dayIndex)) !== null);
 
+  const getDayDetails = (dayIndex: number) => {
+    const forecast = getDay(dayIndex);
+    const target = plan.days[dayIndex];
+    return forecast && target
+      ? {
+          forecast,
+          hours: getDayHours(plan, forecasts, dayIndex),
+          placeName: target.placeName,
+          isBorrowed: target.isBorrowed,
+        }
+      : null;
+  };
+
   const getRemainingHoursToday = (dayIndex: number) =>
     dayIndex === todayIndex ? getRemainingHours(plan, forecasts, dayIndex, now) : [];
 
@@ -42,6 +56,7 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], stays: 
     todayIndex,
     hasWeather,
     getDay,
+    getDayDetails,
     getTimezone: (dayIndex: number) => getDayTimezone(plan, forecasts, dayIndex),
     getRemainingHoursToday,
     getEvent: (eventId: string) => getEventForecast(plan, forecasts, eventId),

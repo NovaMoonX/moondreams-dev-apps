@@ -399,6 +399,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             tripId: trip.id,
             memberIds: Object.keys(trip.members),
             ...values,
+            split: values.split ?? { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] },
           }),
         ).unwrap();
       }
@@ -1023,6 +1024,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         key={`${editingExpense?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
         trip={trip}
+        currentUserId={currentUserId}
         initialExpense={editingExpense ?? undefined}
         categoryKeys={categoryKeys}
         existingGroupLabels={existingGroupLabels}

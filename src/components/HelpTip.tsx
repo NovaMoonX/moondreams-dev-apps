@@ -14,6 +14,8 @@ interface HelpTipProps {
   linkLabel?: string;
   /** Keeps a phone from opening a modal, for a help icon that sits inside a drawer, modal or subview. */
   noModal?: boolean;
+  /** Which side of the icon the tooltip opens on. */
+  placement?: 'top' | 'bottom';
   className?: string;
 }
 
@@ -23,6 +25,7 @@ function HelpTip({
   children,
   linkLabel,
   noModal = false,
+  placement = 'bottom',
   className,
 }: HelpTipProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -101,7 +104,7 @@ function HelpTip({
         trigger
       ) : (
         <Tooltip
-          placement='bottom'
+          placement={placement}
           showArrow
           className='border-border w-64 border px-3 py-2 text-left'
           message={

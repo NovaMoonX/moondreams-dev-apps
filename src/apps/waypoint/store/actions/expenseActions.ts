@@ -29,6 +29,7 @@ interface CreateExpenseInput {
   groupLabel: string | null;
   isPerPerson: boolean;
   linkedTo: ExpenseLink | null;
+  split: { targetType: 'EVERYONE_CURRENT' | 'SPECIFIC_MEMBERS'; targetMemberIds: string[] };
 }
 
 export const createExpense = createAsyncThunk<
@@ -41,6 +42,9 @@ export const createExpense = createAsyncThunk<
 
   if (!title) {
     return rejectWithValue('Expense title is required.');
+  }
+  if (input.split.targetType === 'SPECIFIC_MEMBERS' && input.split.targetMemberIds.length === 0) {
+    return rejectWithValue('Pick at least one person to share it.');
   }
   if (!currency) {
     return rejectWithValue('Currency is required.');
@@ -84,8 +88,8 @@ export const createExpense = createAsyncThunk<
     category: input.category,
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
-    targetType: 'EVERYONE_CURRENT',
-    targetMemberIds: input.memberIds,
+    targetType: input.split.targetType,
+    targetMemberIds: input.split.targetType === 'EVERYONE_CURRENT' ? input.memberIds : input.split.targetMemberIds,
     splitAmounts: null,
     paidMemberStatus,
     earlyPayments: {},

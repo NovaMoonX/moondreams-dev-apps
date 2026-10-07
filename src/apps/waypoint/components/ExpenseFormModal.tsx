@@ -11,6 +11,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime } from '@/utils/formatUtils';
@@ -21,7 +22,8 @@ import { getDayCount, getDayLabel, getDayOptions } from '@/utils/dateRangeUtils'
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { PillGroup } from '@/components/PillGroup';
+import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
@@ -73,6 +75,14 @@ interface ExpenseFormData {
   paidAmount: string;
   note: string;
   group: ChoiceValue;
+  split: SplitValue;
+}
+
+type SplitChoice = 'EVERYONE' | 'ME' | 'PICK';
+
+interface SplitValue {
+  choice: SplitChoice;
+  memberIds: string[];
 }
 
 export interface ExpenseSubmitValues {
@@ -91,9 +101,12 @@ export interface ExpenseSubmitValues {
   groupLabel: string | null;
   isPerPerson: boolean;
   linkedTo: ExpenseLink | null;
+  /** Who shares it; `null` when editing, where the split has its own action. */
+  split: { targetType: 'EVERYONE_CURRENT' | 'SPECIFIC_MEMBERS'; targetMemberIds: string[] } | null;
 }
 
 export interface ExpensePrefill {
+  attendeeIds: string[] | null;
   link: ExpenseLink;
   title: string;
   dayIndex: number | null;
@@ -103,6 +116,7 @@ export interface ExpensePrefill {
 interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
+  currentUserId: string;
   initialExpense?: TripExpense;
   prefill?: ExpensePrefill;
   categoryKeys: string[];
@@ -113,7 +127,7 @@ interface ExpenseFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input, select } = FormFactories;
+const { custom, input } = FormFactories;
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
@@ -127,11 +141,27 @@ function resolveChoice({ choice, newLabel }: ChoiceValue): string | null {
   return choice;
 }
 
+function getSplitValue(attendeeIds: string[] | null | undefined, currentUserId: string): SplitValue {
+  if (!attendeeIds) {
+    return { choice: 'EVERYONE', memberIds: [] };
+  }
+  return attendeeIds.length === 1 && attendeeIds[0] === currentUserId
+    ? { choice: 'ME', memberIds: [] }
+    : { choice: 'PICK', memberIds: attendeeIds };
+}
+
+function getSplitTarget(split: SplitValue, currentUserId: string): NonNullable<ExpenseSubmitValues['split']> {
+  if (split.choice === 'EVERYONE') {
+    return { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] };
+  }
+  return { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: split.choice === 'ME' ? [currentUserId] : split.memberIds };
+}
+
 function getDayValue(dayIndex: number | null | undefined): string {
   return dayIndex === null || dayIndex === undefined ? '' : String(dayIndex);
 }
 
-function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefill): ExpenseFormData {
+function getInitialFormData(currentUserId: string, initialExpense?: TripExpense, prefill?: ExpensePrefill): ExpenseFormData {
   return {
     title: initialExpense?.title ?? prefill?.title ?? '',
     category: {
@@ -151,12 +181,14 @@ function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefi
     paidAmount: String(initialExpense?.paidAmount ?? ''),
     note: initialExpense?.note ?? '',
     group: { choice: initialExpense?.groupLabel ?? '', newLabel: '' },
+    split: getSplitValue(prefill?.attendeeIds, currentUserId),
   };
 }
 
 function ExpenseFormModal({
   isOpen,
   trip,
+  currentUserId,
   initialExpense,
   prefill,
   categoryKeys,
@@ -179,7 +211,7 @@ function ExpenseFormModal({
     initialExpense?.amount === null ? 'range' : 'amount',
   );
   const [formData, setFormData] = useState<ExpenseFormData>(() =>
-    getInitialFormData(initialExpense, prefill),
+    getInitialFormData(currentUserId, initialExpense, prefill),
   );
   // The form reads its data once, so picking an event remounts it with the filled-in values.
   const [formKey, setFormKey] = useState(0);
@@ -196,7 +228,8 @@ function ExpenseFormModal({
     resolveChoice(formData.category) !== null &&
     (mode === 'amount'
       ? parseAmount(formData.amount) !== null
-      : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin);
+      : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin) &&
+    (isEditing || formData.split.choice !== 'PICK' || formData.split.memberIds.length > 0);
   const linkKey = link ? getExpenseLinkKey(link) : '';
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
@@ -233,6 +266,14 @@ function ExpenseFormModal({
         label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
       })),
     ],
+    [memberIds, memberInfo],
+  );
+  const memberPillOptions = useMemo(
+    () =>
+      memberIds.map((uid) => ({
+        value: uid,
+        label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
+      })),
     [memberIds, memberInfo],
   );
   const categoryOptions = useMemo(
@@ -343,6 +384,41 @@ function ExpenseFormModal({
           }),
     ];
 
+    if (!isEditing) {
+      nextFields.push(
+        custom({
+          name: 'split',
+          label: '',
+          renderComponent: (props) => {
+            const split = props.value as SplitValue;
+            return (
+              <div className='space-y-2'>
+                <Label>Who&apos;s sharing it?</Label>
+                <PillGroup
+                  label="Who's sharing it"
+                  options={[
+                    { value: 'EVERYONE', label: 'Everyone', emoji: '👥' },
+                    { value: 'ME', label: 'Just me', emoji: '🙋' },
+                    { value: 'PICK', label: 'Pick people', emoji: '🎯' },
+                  ]}
+                  value={split.choice}
+                  onChange={(choice) => props.onValueChange({ ...split, choice })}
+                />
+                {split.choice === 'PICK' && (
+                  <MultiPillGroup
+                    label='People'
+                    options={memberPillOptions}
+                    values={split.memberIds}
+                    onChange={(memberIds) => props.onValueChange({ ...split, memberIds })}
+                  />
+                )}
+              </div>
+            );
+          },
+        }),
+      );
+    }
+
     if (isEditing && mode === 'range' && initialExpense?.status === 'PAID') {
       nextFields.push(
         input({
@@ -374,25 +450,52 @@ function ExpenseFormModal({
     );
 
     if (formData.status === 'PAID') {
-      nextFields.push(select({ name: 'payerUid', label: 'Paid by', options: payerOptions }));
+      nextFields.push(
+        custom({
+          name: 'payerUid',
+          label: 'Paid by',
+          renderComponent: (props) => (
+            <PillGroup
+              label='Paid by'
+              options={payerOptions}
+              value={props.value as string}
+              onChange={(value) => props.onValueChange(value)}
+            />
+          ),
+        }),
+      );
     }
 
-    nextFields.push(select({ name: 'dayIndex', label: 'Trip day', options: dayOptions }));
+    nextFields.push(
+      custom({
+        name: 'dayIndex',
+        label: 'Trip day',
+        renderComponent: (props) => (
+          <Select
+            options={dayOptions.map(({ value, label }) => ({ value, text: label }))}
+            value={props.value as string}
+            onChange={(value) => props.onValueChange(value)}
+          />
+        ),
+      }),
+    );
 
     if (showGroupField) {
       nextFields.push(
         custom({
           name: 'group',
-          label: 'Group',
+          label: '',
           renderComponent: (props) => (
-            <ChoiceField
-              value={props.value as ChoiceValue}
-              onValueChange={props.onValueChange as (value: ChoiceValue) => void}
-              label='Group'
-              options={groupOptions}
-              newPillLabel='New group'
-              newPlaceholder='Dinner at Ichiran'
-            />
+            <RemovableField label='Group' removeLabel='Remove from group' onRemove={() => setShowGroupField(false)}>
+              <ChoiceField
+                value={props.value as ChoiceValue}
+                onValueChange={props.onValueChange as (value: ChoiceValue) => void}
+                label='Group'
+                options={groupOptions}
+                newPillLabel='New group'
+                newPlaceholder='Dinner at Ichiran'
+              />
+            </RemovableField>
           ),
         }),
       );
@@ -402,15 +505,17 @@ function ExpenseFormModal({
       nextFields.push(
         custom({
           name: 'note',
-          label: 'Note',
+          label: '',
           renderComponent: (props) => (
-            <Textarea
-              rows={2}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-              variant='outline'
-              placeholder='Anything worth remembering about this expense'
-            />
+            <RemovableField label='Note' removeLabel='Remove note' onRemove={() => setShowNoteField(false)}>
+              <Textarea
+                rows={2}
+                value={props.value as string}
+                onChange={(event) => props.onValueChange(event.target.value)}
+                variant='outline'
+                placeholder='Anything worth remembering about this expense'
+              />
+            </RemovableField>
           ),
         }),
       );
@@ -425,6 +530,7 @@ function ExpenseFormModal({
     groupOptions,
     initialExpense?.status,
     isEditing,
+    memberPillOptions,
     mode,
     payerOptions,
     showGroupField,
@@ -449,6 +555,7 @@ function ExpenseFormModal({
         picked.expenseCategory && current.category.choice === ''
           ? { choice: picked.expenseCategory, newLabel: '' }
           : current.category,
+      split: getSplitValue(picked.attendeeIds, currentUserId),
     }));
     setFormKey((key) => key + 1);
   };
@@ -495,6 +602,7 @@ function ExpenseFormModal({
         groupLabel: showGroupField ? resolveChoice(data.group) : null,
         isPerPerson: data.isPerPerson,
         linkedTo: link,
+        split: isEditing ? null : getSplitTarget(data.split, currentUserId),
       });
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this expense.'));
@@ -548,32 +656,18 @@ function ExpenseFormModal({
         onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
         submitButton={
           <div className='contents'>
-            {(!showGroupField || !showNoteField) && (
-              <div className='col-span-full mb-4 flex flex-wrap gap-x-4 gap-y-1'>
-                {!showGroupField && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className='h-auto p-0'
-                    onClick={() => setShowGroupField(true)}
-                  >
-                    + Add to a group
-                  </Button>
-                )}
-                {!showNoteField && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    size='sm'
-                    className='h-auto p-0'
-                    onClick={() => setShowNoteField(true)}
-                  >
-                    + Add note
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className='col-span-full mb-4'>
+              <AddFieldChips
+                heading='Add to this expense'
+                chips={[
+                  { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: showGroupField },
+                  { key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' />, isShown: showNoteField },
+                ]
+                  .filter((chip) => !chip.isShown)
+                  .map(({ key, label, icon }) => ({ key, label, icon }))}
+                onAdd={(key) => (key === 'group' ? setShowGroupField(true) : setShowNoteField(true))}
+              />
+            </div>
             <ModalFooterActions
               leftActions={
                 isEditing &&
