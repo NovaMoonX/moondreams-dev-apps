@@ -921,6 +921,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       <div className='space-y-3'>
         <PillGroup
           label='Totals view'
+          isThin
           options={EXPENSE_TOTALS_VIEW_OPTIONS}
           value={totalsView}
           onChange={setTotalsView}

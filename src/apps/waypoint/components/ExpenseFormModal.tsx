@@ -28,11 +28,12 @@ import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
 import type { PersonalExpenseSubmitValues } from '@apps/waypoint/components/PersonalExpenseFormModal';
 import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
-import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
+import { EVENT_TYPE_EMOJIS, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,
   ExpenseLink,
   ExpenseStatus,
+  TimelineEvent,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
@@ -76,12 +77,25 @@ const describePrice = ({
 
 const NO_LINK = 'none';
 
-const PLAN_KIND_FILTERS: { value: 'ALL' | ExpenseLink['kind']; label: string; emoji?: string }[] = [
+type PlanGroup = 'TRAVEL' | 'ACTIVITY' | 'DINING' | 'STAY' | 'RENTAL' | 'OTHER';
+
+const PLAN_GROUP_FILTERS: { value: 'ALL' | PlanGroup; label: string; emoji?: string }[] = [
   { value: 'ALL', label: 'All' },
-  { value: 'EVENT', label: 'Events', emoji: '🎟️' },
+  { value: 'TRAVEL', label: 'Travel', emoji: EVENT_TYPE_EMOJIS.TRAVEL },
+  { value: 'ACTIVITY', label: 'Activities', emoji: EVENT_TYPE_EMOJIS.ACTIVITY },
+  { value: 'DINING', label: 'Dining', emoji: EVENT_TYPE_EMOJIS.DINING },
   { value: 'STAY', label: 'Stays', emoji: '🏨' },
   { value: 'RENTAL', label: 'Rentals', emoji: '🚘' },
+  { value: 'OTHER', label: 'Other' },
 ];
+
+const getPlanGroup = (link: ExpenseLink, events: TimelineEvent[]): PlanGroup => {
+  if (link.kind !== 'EVENT') {
+    return link.kind;
+  }
+  const type = events.find((event) => event.id === link.id)?.eventType;
+  return type === 'TRAVEL' || type === 'ACTIVITY' || type === 'DINING' ? type : 'OTHER';
+};
 
 const LINK_KIND_LABELS: Record<ExpenseLink['kind'], string> = {
   EVENT: 'Event',
@@ -259,7 +273,7 @@ function ExpenseFormModal({
   );
   const [showTitleFields, setShowTitleFields] = useState(false);
   const [isPlanAnswered, setIsPlanAnswered] = useState(false);
-  const [planKind, setPlanKind] = useState<'ALL' | ExpenseLink['kind']>('ALL');
+  const [planGroup, setPlanGroup] = useState<'ALL' | PlanGroup>('ALL');
   const memberInfo = useUserInfo(memberIds);
   const { audience, memberIds: pickedIds } = audienceValue;
   const isPrivate = audience === 'ME';
@@ -278,12 +292,12 @@ function ExpenseFormModal({
   const planPills = useMemo(
     () =>
       linkables
-        .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title, kind: subject.link.kind }))
+        .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title, group: getPlanGroup(subject.link, events) }))
         .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key)),
-    [linkables, expenseLinkKeys, linkKey],
+    [linkables, expenseLinkKeys, linkKey, events],
   );
   const shownPlanPills = planPills
-    .filter(({ kind }) => planKind === 'ALL' || kind === planKind)
+    .filter(({ group }) => planGroup === 'ALL' || group === planGroup)
     .map(({ key, label }) => ({ value: key, label }));
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
@@ -698,13 +712,13 @@ function ExpenseFormModal({
       <div className='space-y-2'>
         <Label>What&apos;s this expense for?</Label>
         <PillRow label='Kind of plan'>
-          {PLAN_KIND_FILTERS.map(({ value, label, emoji }) => (
+          {PLAN_GROUP_FILTERS.filter(({ value }) => value === 'ALL' || planPills.some(({ group }) => group === value)).map(({ value, label, emoji }) => (
             <Pill
               key={value}
               emoji={emoji}
-              isSelected={planKind === value}
-              onClick={() => setPlanKind(value)}
-              className="relative h-6! min-h-0! px-2.5 py-0! text-xs before:absolute before:-inset-y-2 before:inset-x-0 before:content-['']"
+              isSelected={planGroup === value}
+              onClick={() => setPlanGroup(value)}
+              isThin
             >
               {label}
             </Pill>
@@ -870,12 +884,14 @@ function ExpenseFormModal({
                       type='button'
                       variant='secondary'
                       className='w-full'
-                      disabled={isSubmitting || !isFormComplete}
+                      disabled={isSubmitting || !isFormComplete || mode === 'range'}
                       onClick={() => void handleSubmit(formData, true)}
                     >
                       Add and mark paid
                     </Button>
-                    {!isPrivate && <p className='text-muted-foreground text-center text-xs'>Recorded as paid by you.</p>}
+                    <p className='text-muted-foreground text-center text-xs'>
+                      {mode === 'range' ? 'Pick an exact amount to mark it paid.' : isPrivate ? null : 'Recorded as paid by you.'}
+                    </p>
                   </div>
                 )}
                 <ModalFooterActions

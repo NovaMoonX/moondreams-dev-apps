@@ -34,6 +34,7 @@ interface PillOptionsProps<T extends string> {
   /** A pill that always comes first and is never filtered out, like "New group". */
   leading?: ReactNode;
   selectedCount?: number;
+  isThin?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
@@ -44,6 +45,7 @@ export function PillOptions<T extends string>({
   onToggle,
   leading,
   selectedCount = 0,
+  isThin = false,
 }: PillOptionsProps<T>) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [query, setQuery] = useState('');
@@ -84,6 +86,7 @@ export function PillOptions<T extends string>({
               <Pill
                 key={option.value}
                 emoji={option.emoji}
+                isThin={isThin}
                 isSelected={isSelected(option.value)}
                 onClick={() => onToggle(option.value)}
               >
@@ -123,15 +126,17 @@ interface PillGroupProps<T extends string> {
   value: T | null;
   onChange: (value: T) => void;
   leading?: ReactNode;
+  isThin?: boolean;
 }
 
 /** Pick exactly one of a few options. */
-export function PillGroup<T extends string>({ label, options, value, onChange, leading }: PillGroupProps<T>) {
+export function PillGroup<T extends string>({ label, options, value, onChange, leading, isThin }: PillGroupProps<T>) {
   return (
     <PillOptions
       label={label}
       options={options}
       leading={leading}
+      isThin={isThin}
       selectedCount={value === null ? 0 : 1}
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}
