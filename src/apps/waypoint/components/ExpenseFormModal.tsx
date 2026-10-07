@@ -42,6 +42,8 @@ import {
 
 const PAID_BY_EACH_PERSON = '';
 
+const NO_LINK = 'none';
+
 const LINK_KIND_LABELS: Record<ExpenseLink['kind'], string> = {
   EVENT: 'Event',
   STAY: 'Stay',
@@ -199,8 +201,9 @@ function ExpenseFormModal({
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const linkOptions = useMemo(
-    () =>
-      linkables.map((subject) => ({
+    () => [
+      { value: NO_LINK, text: 'Not for a plan', description: 'Just a cost on its own' },
+      ...linkables.map((subject) => ({
         value: getExpenseLinkKey(subject.link),
         text: `${subject.emoji} ${subject.title}`,
         description: [
@@ -211,9 +214,10 @@ function ExpenseFormModal({
           ...(subject.time ? [formatClockTime(subject.time)] : []),
         ].join(' · '),
       })),
+    ],
     [linkables, trip.startDate, trip.endDate],
   );
-  const showLinkPicker = linkOptions.length > 0;
+  const showLinkPicker = linkables.length > 0;
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
@@ -525,12 +529,11 @@ function ExpenseFormModal({
           <Label>What is this paying for?</Label>
           <Select
             searchable
-            clearable
             options={linkOptions}
-            value={linkKey}
+            value={linkKey || NO_LINK}
             placeholder='Pick an event, stay or rental to fill in its details'
             searchPlaceholder='Search your plans'
-            onChange={(value) => (value === '' ? setLink(null) : pickLink(value))}
+            onChange={(value) => (value === NO_LINK ? setLink(null) : pickLink(value))}
           />
         </div>
       )}
@@ -544,9 +547,9 @@ function ExpenseFormModal({
         onDataChange={(data) => setFormData(data as ExpenseFormData)}
         onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
         submitButton={
-          <div className='col-span-full space-y-4'>
+          <div className='contents'>
             {(!showGroupField || !showNoteField) && (
-              <div className='flex flex-wrap gap-x-4 gap-y-1'>
+              <div className='col-span-full mb-4 flex flex-wrap gap-x-4 gap-y-1'>
                 {!showGroupField && (
                   <Button
                     type='button'

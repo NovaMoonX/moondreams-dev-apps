@@ -6,7 +6,7 @@ import type { PlaceSelectionBias } from '@/lib/places/types';
 import { normalizeString } from '@/utils/stringUtils';
 import { waypointQueryKeys } from '@apps/waypoint/queries/tripTitleQueries';
 
-const LOOKUP_TIMEOUT_MS = 4000;
+const LOOKUP_TIMEOUT_MS = 2500;
 
 const timeout = () =>
   new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Place lookup timed out.')), LOOKUP_TIMEOUT_MS));

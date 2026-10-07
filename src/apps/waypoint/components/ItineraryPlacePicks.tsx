@@ -1,7 +1,5 @@
 import { useMemo } from 'react';
 
-import { Label } from '@moondreamsdev/dreamer-ui/components';
-
 import { PillGroup } from '@/components/PillGroup';
 import { useAppSelector } from '@/store';
 import type { PlaceRef } from '@/lib/places/types';
@@ -130,8 +128,8 @@ function ItineraryPlacePicks({ current, excludeEventId, onPick }: ItineraryPlace
   }
 
   return (
-    <div className='space-y-1.5'>
-      <Label>Or pick a place on your itinerary</Label>
+    <div className='mt-2 space-y-2'>
+      <p className='text-muted-foreground text-xs'>Or pick a place on your itinerary</p>
       <PillGroup
         label='Places on your itinerary'
         options={picks.map((pick) => ({ value: pick.key, label: pick.label, emoji: pick.emoji }))}

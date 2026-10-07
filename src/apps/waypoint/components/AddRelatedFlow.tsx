@@ -130,9 +130,11 @@ function AddRelatedFlow({ trip, currentUserId, subject, onClose }: AddRelatedFlo
         onClose={onClose}
         title={subject.title}
         footer={
-          <Button type='button' size='lg' className='w-full' onClick={onClose}>
-            Done
-          </Button>
+          <div className='flex flex-col gap-2'>
+            <Button type='button' size='lg' onClick={onClose}>
+              Done
+            </Button>
+          </div>
         }
       >
         <div className='space-y-3'>
