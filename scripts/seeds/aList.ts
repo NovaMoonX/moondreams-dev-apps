@@ -254,12 +254,12 @@ function getViewingFixtures(now: number) {
       hour: 14,
       awaiting: true,
     },
-    // Starts 20 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 40 minutes).
+    // Starts 5 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 40 minutes).
     {
       id: 'seed-viewing-previews',
       movieKey: 'imdb-tt99000004',
       daysFromNow: 0,
-      minutesFromNow: 20,
+      minutesFromNow: 5,
     },
     {
       id: 'seed-viewing-starlight',
