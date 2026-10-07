@@ -86,7 +86,7 @@ import {
 import { getTripStatus, selectIsTripDataLoaded, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
-import { buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
+import { buildTimelineMarkdown, buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const { option, custom } = DropdownMenuFactories;
@@ -253,6 +253,31 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             type: 'success',
           }
         : { title: 'Unable to copy the trip', description: 'Your browser blocked copying on this page.', type: 'error' },
+    );
+  };
+
+  const handleCopyTimelineMarkdown = async () => {
+    const state = store.getState();
+    if (!selectIsTripDataLoaded(state, trip.id)) {
+      addToast({ title: 'Still loading this trip', description: 'Give it a moment, then copy again.' });
+      return;
+    }
+    const markdown = buildTimelineMarkdown({
+      trip,
+      events,
+      stays: selectSortedStays(state),
+      rentals: selectSortedRentals(state),
+      memberNames: latestMemberNames,
+    });
+    const copied = await copyToClipboard(markdown);
+    addToast(
+      copied
+        ? {
+            title: 'Timeline copied',
+            description: 'Paste it anywhere as Markdown. It includes confirmation codes and notes.',
+            type: 'success',
+          }
+        : { title: 'Unable to copy the timeline', description: 'Your browser blocked copying on this page.', type: 'error' },
     );
   };
 
@@ -500,9 +525,22 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     </Button>
   );
   const phoneActions = (
-    <div className='flex shrink-0 items-center gap-1.5'>
+    <div className='flex shrink-0 items-center gap-1.5 pl-2'>
       {isActive && <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen />}
       {isActive && <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />}
+      {sectionTab === 'overview' && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          aria-label='Copy timeline as Markdown'
+          title='Copy timeline as Markdown'
+          className='h-10 min-w-10 bg-transparent! px-2'
+          onClick={() => void handleCopyTimelineMarkdown()}
+        >
+          <ClipboardCopy className='h-4 w-4' />
+        </Button>
+      )}
       <Button
         type='button'
         variant='tertiary'
@@ -715,6 +753,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               currentUserId={currentUserId}
               activeDayTab={dayTab}
               onActiveDayTabChange={setDayTab}
+              onCopyTimeline={() => void handleCopyTimelineMarkdown()}
             />
           </TabsContent>
           <TabsContent value='members'>

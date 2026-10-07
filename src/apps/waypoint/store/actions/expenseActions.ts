@@ -24,6 +24,8 @@ interface CreateExpenseInput {
   amountMin: number | null;
   amountMax: number | null;
   currency: string;
+  payerUid: string | null;
+  status: ExpenseStatus;
   dayIndex: number | null;
   category: ExpenseCategory;
   customCategoryLabel: string | null;
@@ -86,8 +88,8 @@ export const createExpense = createAsyncThunk<
     paidAmount: null,
     currency,
     isPerPerson: input.isPerPerson,
-    payerUid: null,
-    status: 'EXPECTED',
+    payerUid: input.status === 'PAID' ? input.payerUid : null,
+    status: input.status,
     category: input.category,
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,

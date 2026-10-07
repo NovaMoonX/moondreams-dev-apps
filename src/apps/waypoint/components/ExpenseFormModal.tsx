@@ -11,13 +11,12 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowLeftRight, CalendarDays, Link2, Pencil, Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
-import { selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
+import { selectExpenseLinkKeys, selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayCount, getDayDateLabel, getDayLabel, getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -32,6 +31,7 @@ import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
   ExpenseCategory,
   ExpenseLink,
+  ExpenseStatus,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
@@ -115,8 +115,11 @@ export interface ExpenseSubmitValues {
   amount: number | null;
   amountMin: number | null;
   amountMax: number | null;
+  payerUid: string | null;
+  status: ExpenseStatus;
   dayIndex: number | null;
   currency: string;
+  paidAmount: number | null;
   category: ExpenseCategory;
   customCategoryLabel: string | null;
   note: string | null;
@@ -139,6 +142,8 @@ interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   initialExpense?: TripExpense;
+  /** Who "Add and mark paid" records as having paid. */
+  currentUserId: string;
   prefill?: ExpensePrefill;
   /** Where a new expense starts: for the whole trip, or private to the person adding it. */
   initialAudience?: 'EVERYONE' | 'ME';
@@ -203,6 +208,7 @@ function ExpenseFormModal({
   isOpen,
   trip,
   initialExpense,
+  currentUserId,
   prefill,
   initialAudience = 'EVERYONE',
   canShare = true,
@@ -222,6 +228,7 @@ function ExpenseFormModal({
   const rentals = useAppSelector(selectSortedRentals);
   const isEditing = Boolean(initialExpense);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
+  const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
   const linkables = useMemo(
     () => (isOpen && !prefill ? getLinkableSubjects(trip, events, stays, rentals) : []),
     [isOpen, prefill, trip, events, stays, rentals],
@@ -259,11 +266,19 @@ function ExpenseFormModal({
       : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin) &&
     (isEditing || audience !== 'PICK' || pickedIds.length > 0);
   const linkKey = link ? getExpenseLinkKey(link) : '';
+  const planPills = useMemo(
+    () =>
+      linkables
+        .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title }))
+        .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key))
+        .map(({ key, label }) => ({ value: key, label })),
+    [linkables, expenseLinkKeys, linkKey],
+  );
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
   const asksAboutPlan =
-    !isEditing && !prefill && canShare && !isPrivate && linkables.length > 0 && !isPlanAnswered;
+    !isEditing && !prefill && canShare && !isPrivate && planPills.length > 0 && !isPlanAnswered;
   const isLinked = !isEditing && !isPrivate && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const linkOptions = useMemo(
@@ -352,18 +367,20 @@ function ExpenseFormModal({
           const value = props.value as PriceValue;
           const valueMode = isPrivate ? 'amount' : value.mode;
           const isEach = value.isPerPerson && sharesPrice;
-          const priceToggle = sharesPrice && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-sm'>Price is</p>
-              <PillGroup
-                label='Price is'
-                options={[
-                  { value: 'group', label: 'Total' },
-                  { value: 'each', label: 'Per person' },
-                ]}
-                value={value.isPerPerson ? 'each' : 'group'}
-                onChange={(next) => props.onValueChange({ ...value, isPerPerson: next === 'each' })}
-              />
+          const getAmountHeader = (label: string) => (
+            <div className='flex items-center justify-between gap-3'>
+              <p className='text-muted-foreground text-sm'>{label}</p>
+              {sharesPrice && (
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='min-h-10 px-0!'
+                  onClick={() => props.onValueChange({ ...value, isPerPerson: !value.isPerPerson })}
+                >
+                  {isEach ? 'Switch to total' : 'Switch to per person'}
+                </Button>
+              )}
             </div>
           );
           return (
@@ -381,25 +398,23 @@ function ExpenseFormModal({
                 />
               )}
               {valueMode === 'amount' ? (
-                <div className={join('grid items-start gap-3', sharesPrice && 'min-[360px]:grid-cols-2')}>
-                  <div className='space-y-1.5'>
-                    <p className='text-muted-foreground text-sm'>Amount</p>
-                    <Input
-                      type='number'
-                      aria-label='Amount'
-                      placeholder='0.00'
-                      variant='outline'
-                      value={value.amount}
-                      onChange={(event) => props.onValueChange({ ...value, amount: event.target.value })}
-                    />
-                  </div>
-                  {priceToggle}
+                <div className='-mt-1'>
+                  {getAmountHeader(isEach ? 'Amount per person' : sharesPrice ? 'Total amount' : 'Amount')}
+                  <Input
+                    type='number'
+                    aria-label='Amount'
+                    placeholder='0.00'
+                    variant='outline'
+                    value={value.amount}
+                    onChange={(event) => props.onValueChange({ ...value, amount: event.target.value })}
+                  />
                 </div>
               ) : (
-                <>
+                <div className='-mt-1'>
+                  {getAmountHeader(isEach ? 'Estimate per person' : sharesPrice ? 'Estimated total' : 'Estimate')}
                   <div className='grid grid-cols-2 gap-3'>
                     <div className='space-y-1.5'>
-                      <p className='text-muted-foreground text-sm'>Lowest</p>
+                      <p className='text-muted-foreground text-xs'>Lowest</p>
                       <Input
                         type='number'
                         aria-label='Lowest it could be'
@@ -410,7 +425,7 @@ function ExpenseFormModal({
                       />
                     </div>
                     <div className='space-y-1.5'>
-                      <p className='text-muted-foreground text-sm'>Highest</p>
+                      <p className='text-muted-foreground text-xs'>Highest</p>
                       <Input
                         type='number'
                         aria-label='Highest it could be'
@@ -421,8 +436,7 @@ function ExpenseFormModal({
                       />
                     </div>
                   </div>
-                  {priceToggle}
-                </>
+                </div>
               )}
               {sharesPrice && (
                 <p className='text-muted-foreground text-xs'>
@@ -561,7 +575,7 @@ function ExpenseFormModal({
     setFormKey((key) => key + 1);
   };
 
-  const handleSubmit = async (submitted: ExpenseFormData) => {
+  const handleSubmit = async (submitted: ExpenseFormData, markPaid = false) => {
     const data = { ...formData, ...submitted };
     const submittedMode = isPrivate ? 'amount' : data.price.mode;
     const amount = submittedMode === 'amount' ? parseAmount(data.price.amount) : null;
@@ -589,7 +603,7 @@ function ExpenseFormModal({
         await onSubmitPersonal({
           title: data.title,
           amount,
-          status: 'EXPECTED',
+          status: markPaid ? 'PAID' : 'EXPECTED',
           dayIndex,
           category,
           customCategoryLabel,
@@ -602,8 +616,11 @@ function ExpenseFormModal({
         amount,
         amountMin,
         amountMax,
+        payerUid: initialExpense ? initialExpense.payerUid : markPaid ? currentUserId : null,
+        status: initialExpense?.status ?? (markPaid ? 'PAID' : 'EXPECTED'),
         dayIndex,
         currency: 'USD',
+        paidAmount: initialExpense?.paidAmount ?? null,
         category,
         customCategoryLabel,
         note: showNoteField ? data.note.trim() || null : null,
@@ -666,21 +683,20 @@ function ExpenseFormModal({
   const summaryDay = formData.dayIndex === '' ? null : getDayDateLabel(trip.startDate, Number(formData.dayIndex));
   const summaryCategory = resolveChoice(formData.category);
   const planQuestion = (
-    <div className='space-y-3 max-sm:min-h-[44dvh]'>
-      <div className='space-y-1.5'>
+    <div className='space-y-4'>
+      <div className='space-y-2'>
         <Label>What&apos;s this expense for?</Label>
-        <Select
-          searchable
-          options={linkOptions.filter((option) => option.value !== NO_LINK)}
-          value={linkKey}
-          placeholder='Pick an event, stay or rental'
-          searchPlaceholder='Search your plans'
+        <PillGroup
+          label='Plans without an expense yet'
+          options={planPills}
+          value={linkKey || null}
           onChange={pickLink}
         />
       </div>
       <Button
         type='button'
-        variant='secondary'
+        variant='primary'
+        className='w-full'
         onClick={() => {
           setLink(null);
           setIsPlanAnswered(true);
@@ -747,7 +763,7 @@ function ExpenseFormModal({
               </div>
             </div>
           )}
-          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && linkables.length > 0 && (
+          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && planPills.length > 0 && (
             <Button
               type='button'
               variant='link'
@@ -822,6 +838,20 @@ function ExpenseFormModal({
                 {chips.length > 0 && (
                   <div className='col-span-full mb-4'>
                     <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
+                  </div>
+                )}
+                {!isEditing && (
+                  <div className='col-span-full mb-3 space-y-1'>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className='w-full'
+                      disabled={isSubmitting || !isFormComplete}
+                      onClick={() => void handleSubmit(formData, true)}
+                    >
+                      Add and mark paid
+                    </Button>
+                    {!isPrivate && <p className='text-muted-foreground text-center text-xs'>Recorded as paid by you.</p>}
                   </div>
                 )}
                 <ModalFooterActions

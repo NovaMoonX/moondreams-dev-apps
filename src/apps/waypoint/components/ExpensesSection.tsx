@@ -40,7 +40,6 @@ import PersonalExpenseFormModal, {
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
 } from '@apps/waypoint/components/ExpenseSplitModal';
-import PersonalPaymentPrompt from '@apps/waypoint/components/PersonalPaymentPrompt';
 import MarkExpensePaidModal, {
   type MarkExpensePaidValues,
 } from '@apps/waypoint/components/MarkExpensePaidModal';
@@ -265,12 +264,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
-  const [paying, setPaying] = useState<{ id: string; isJustAdded: boolean } | null>(null);
+  const [paying, setPaying] = useState<{ id: string } | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const payingExpense = paying ? (expenses.find((expense) => expense.id === paying.id) ?? null) : null;
-  const [justAddedPersonal, setJustAddedPersonal] = useState<PersonalExpense | null>(null);
-  const [personalPromptError, setPersonalPromptError] = useState<string | null>(null);
-  const [isPersonalPromptSubmitting, setIsPersonalPromptSubmitting] = useState(false);
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
@@ -437,7 +433,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }),
         ).unwrap();
       } else {
-        const created = await dispatch(
+        await dispatch(
           createExpense({
             uid: currentUserId,
             tripId: trip.id,
@@ -446,8 +442,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             split: values.split ?? { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] },
           }),
         ).unwrap();
-        setPayError(null);
-        setPaying({ id: created.id, isJustAdded: true });
       }
       setEditingExpense(null);
       setIsModalOpen(false);
@@ -495,9 +489,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const handlePersonalCreate = async (values: PersonalExpenseSubmitValues) => {
     setIsSubmitting(true);
     try {
-      const created = await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
+      await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
       setIsModalOpen(false);
-      setJustAddedPersonal(created);
     } finally {
       setIsSubmitting(false);
     }
@@ -625,7 +618,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             description: 'Record who covered it and what it cost.',
             run: () => {
               setPayError(null);
-              setPaying({ id: expense.id, isJustAdded: false });
+              setPaying({ id: expense.id });
             },
           },
         ]
@@ -1267,6 +1260,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={isModalOpen}
         trip={trip}
         initialExpense={editingExpense ?? undefined}
+        currentUserId={currentUserId}
         initialAudience={newExpenseAudience}
         canShare={canAddExpenses}
         onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
@@ -1300,7 +1294,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={payingExpense !== null && payingExpense.status !== 'PAID'}
         trip={trip}
         expense={payingExpense}
-        isJustAdded={paying?.isJustAdded ?? false}
         error={payError}
         isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
         onSubmit={(values) => {
@@ -1309,29 +1302,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           }
         }}
         onClose={() => setPaying(null)}
-      />
-      <PersonalPaymentPrompt
-        title={justAddedPersonal?.title ?? null}
-        error={personalPromptError}
-        isSubmitting={isPersonalPromptSubmitting}
-        onMarkPaid={() => {
-          if (!justAddedPersonal) {
-            return;
-          }
-          setIsPersonalPromptSubmitting(true);
-          setPersonalPromptError(null);
-          dispatch(setPersonalExpenseStatus({ uid: currentUserId, expenseId: justAddedPersonal.id, status: 'PAID' }))
-            .unwrap()
-            .then(() => setJustAddedPersonal(null))
-            .catch((markError: unknown) =>
-              setPersonalPromptError(getErrorMessage(markError, 'Unable to mark this as paid.')),
-            )
-            .finally(() => setIsPersonalPromptSubmitting(false));
-        }}
-        onClose={() => {
-          setJustAddedPersonal(null);
-          setPersonalPromptError(null);
-        }}
       />
       {isSmallScreen && (
         <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>

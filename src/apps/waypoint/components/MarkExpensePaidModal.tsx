@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 
+import { PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import {
@@ -28,8 +29,6 @@ interface MarkExpensePaidModalProps {
   isOpen: boolean;
   trip: TripSpace;
   expense: TripExpense | null;
-  /** Asked right after an expense is added: "Not yet" closes it, and the title says it is the payment step. */
-  isJustAdded?: boolean;
   /** A failure of the last attempt, shown in the sheet so it never lands behind it. */
   error?: string | null;
   isSubmitting?: boolean;
@@ -37,13 +36,12 @@ interface MarkExpensePaidModalProps {
   onClose: () => void;
 }
 
-const { input, select } = FormFactories;
+const { input, custom } = FormFactories;
 
 function MarkExpensePaidModal({
   isOpen,
   trip,
   expense,
-  isJustAdded = false,
   error: submitError = null,
   isSubmitting = false,
   onSubmit,
@@ -75,16 +73,23 @@ function MarkExpensePaidModal({
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
-      select({
+      custom({
         name: 'payerUid',
         label: 'Paid by',
-        options: [
-          { value: PAID_BY_EACH_PERSON, label: 'Paid by each person' },
-          ...memberIds.map((uid) => ({
-            value: uid,
-            label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
-          })),
-        ],
+        renderComponent: (props) => (
+          <PillGroup
+            label='Paid by'
+            options={[
+              { value: PAID_BY_EACH_PERSON, label: 'Each person' },
+              ...memberIds.map((uid) => ({
+                value: uid,
+                label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
+              })),
+            ]}
+            value={props.value as string}
+            onChange={(next) => props.onValueChange(next)}
+          />
+        ),
       }),
     ];
 
@@ -118,12 +123,7 @@ function MarkExpensePaidModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isJustAdded ? 'Payment' : 'Paid'}>
-      {isJustAdded && (
-        <p className='text-muted-foreground mb-4 text-sm'>
-          Added <strong className='text-foreground'>{expense?.title}</strong>. Has it been paid already?
-        </p>
-      )}
+    <Modal isOpen={isOpen} onClose={onClose} title='Paid'>
       {isRange && (
         <p className='text-muted-foreground mb-4 text-sm'>
           {expense?.title} was estimated as a range.{' '}
@@ -166,7 +166,7 @@ function MarkExpensePaidModal({
             {(error ?? submitError) && <p className='text-destructive text-sm'>{error ?? submitError}</p>}
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>
-                {isJustAdded ? 'Not yet' : 'Cancel'}
+                Cancel
               </Button>
               <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
                 {isSubmitting ? 'Marking…' : 'Mark paid'}

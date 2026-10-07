@@ -247,7 +247,7 @@ block-beta
 Reworked from the last pass, all flagged for the TDD reconciliation pass:
 - **Grouped by day now**, mirroring Timeline's day tabs (including the same "All" option) rather than one flat running list — easier to reason about "what did we spend on Day 3." An **"Other" tab** holds expenses that aren't tied to any specific day — paying for the whole hotel stay upfront, for instance. This means `TripExpense` needs a nullable `dayIndex` it currently doesn't have at all.
 - **Add and Dues are now separate blocks** — cramming "you owe Sam $4" and the add button into one node was genuinely confusing, not just a layout accident.
-- **Add creates an expense; Split is a distinct, later step**, not the same action. Creating one only needs title, amount (or a range) — a Payment step follows it ("Has it been paid already?") — and it defaults to split evenly among everyone, and "Split" is an explicit follow-up to customize that. See the reworked journey below.
+- **Add creates an expense; Split is a distinct, later step**, not the same action. Creating one only needs title, amount (or a range) (and "Add and mark paid" records it as paid by the person adding) and it defaults to split evenly among everyone, and "Split" is an explicit follow-up to customize that. See the reworked journey below.
 - **Totals have three views (Per person, Group, Mine) as pills**; Mine shows what you paid, what is still expected for you and your total share, and a muted line for money you sent early. Each view shows three figures: paid-so-far, expected/upcoming, and their combined total — an expense can be a range instead of one fixed number ("$10-$30 est.") for cases like a farmer's market where the exact cost isn't known ahead of time, so "Total" is itself a range when any expected expense is.
 - **Who an expense is for needs one more distinction than just "everyone"**: Everyone (current members only, a fixed snapshot) vs. Everyone (including anyone who joins later — a live reference) are genuinely different outcomes as the trip's membership changes, so both need to be offered explicitly rather than picking one silently. Alongside Just Me and Specific Members. Whichever is chosen, the split itself is auto-suggested (even, across whoever's included) and then freely adjustable or clearable — the whole flow needs to stay simple to use even with this extra choice built in.
 
@@ -412,7 +412,7 @@ An expected expense row offers "I paid early" to anyone in its split: pick who y
 
 **Slim timeline rows.** A day's check-ins, check-outs, rental pick-ups and returns, and its travel legs, are one-line tappable rows (a stay or rental opens read-only details, a travel leg its details with Modify), so the cards on the timeline are the plans people actually choose between.
 
-**Personal expenses.** Above the Dues summary, "🔒 Just for me" lists what the signed-in person is covering themselves, with its own Add (title, amount, category, trip day, optional note, then a Payment prompt: paid already or not yet; its editor has "Mark paid" / "Mark as unpaid" at the top; the form says only they can see it) and a search from 8 rows. Nobody else sees the list or the amounts. The totals cards keep the figures everyone sees and, for the owner, add a soft `+ $X personal` chip and a `= $Y` line beneath (only where that amount is above zero), with one muted line under the view hint saying the orange amount is theirs alone. Tapping a row edits it; the trash in the form deletes it.
+**Personal expenses.** Above the Dues summary, "🔒 Just for me" lists what the signed-in person is covering themselves, with its own Add (title, amount, category, trip day, optional note, with "Add and mark paid" beside "Add"; its editor has "Mark paid" / "Mark as unpaid" at the top; the form says only they can see it) and a search from 8 rows. Nobody else sees the list or the amounts. The totals cards keep the figures everyone sees and, for the owner, add a soft `+ $X personal` chip and a `= $Y` line beneath (only where that amount is above zero), with one muted line under the view hint saying the orange amount is theirs alone. Tapping a row edits it; the trash in the form deletes it.
 
 **Add & split an expense**
 ```mermaid
@@ -425,8 +425,8 @@ flowchart LR
     T --> W
     W -->|Just me| P[Same form, private, saved to Just for me]
     W --> C[How much is it? amount with Total / Per person, then optional chips: Trip day, Group, Note]
-    C --> Y[Saved — Everyone means current members, split evenly]
-    Y --> D[Payment: Has it been paid already? Not yet closes it; Mark paid picks who paid]
+    C --> Y[Add, or Add and mark paid — Everyone means current members, split evenly]
+    Y --> D[Later: Mark paid, with a pill row for who paid]
     D --> E[Optional: tap Split] --> F[Everyone-current / Everyone-future / Just Me / Specific]
     F --> G[Auto-suggested even split] --> H[Adjust per person, or clear and redo]
     D --> I[List + Dues Summary update]
