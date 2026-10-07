@@ -48,7 +48,7 @@ function TodayAgenda({ trip, currentUserId, title, dayIndex, now, limit, onViewA
           variant='tertiary'
           onClick={() => onOpenEvent(event)}
           className={join(
-            'h-auto w-full justify-start gap-3 rounded-none px-3 py-2.5 text-left',
+            'h-auto w-full justify-start gap-3 rounded-none px-3 py-2.5 text-left transition-none',
             isNested && 'pl-6',
           )}
         >

@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import {
   Button,
-  Checkbox,
   Input,
   Label,
   Select,
@@ -853,7 +852,7 @@ function EventFormModal({
       key: 'reminder',
       label: 'Reminder',
       icon: <Bell className='h-4 w-4' />,
-      isShown: draft.dayIndex === null || draft.hasReminderOverride,
+      isShown: draft.dayIndex === null || (draft.hasReminderOverride && draft.reminderEnabled),
     },
   ].filter((chip) => !chip.isShown);
 
@@ -867,7 +866,7 @@ function EventFormModal({
         location: { hasLocation: true },
         address: { hasAddress: true },
         group: { isGrouped: true },
-        reminder: { hasReminderOverride: true },
+        reminder: { hasReminderOverride: true, reminderEnabled: true },
         venueHours: { hasVenueHours: true },
       }[key] ?? {},
     );
@@ -1288,14 +1287,14 @@ function EventFormModal({
             />
           </RemovableField>
         )}
-        {draft.dayIndex !== null && draft.hasReminderOverride && (
+        {draft.dayIndex !== null && draft.hasReminderOverride && draft.reminderEnabled && (
           <RemovableField
             label='Reminder'
-            removeLabel='Reset reminder'
+            removeLabel="Don't remind me"
             onRemove={() =>
               updateDraft({
                 hasReminderOverride: false,
-                reminderEnabled: true,
+                reminderEnabled: false,
                 reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
               })
             }
@@ -1303,7 +1302,6 @@ function EventFormModal({
             <div className='flex items-center gap-2'>
               <Select
                 className='flex-1'
-                disabled={!draft.reminderEnabled}
                 options={reminderHourOptions}
                 value={String(Math.floor(draft.reminderMinutesBefore / 60))}
                 onChange={(value) =>
@@ -1317,7 +1315,6 @@ function EventFormModal({
               />
               <Select
                 className='flex-1'
-                disabled={!draft.reminderEnabled}
                 options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
                 value={String(draft.reminderMinutesBefore % 60)}
                 onChange={(value) =>
@@ -1331,13 +1328,6 @@ function EventFormModal({
               />
               <span className='text-muted-foreground shrink-0 text-sm'>before</span>
             </div>
-            <label className='flex items-center gap-2 text-sm'>
-              <Checkbox
-                checked={!draft.reminderEnabled}
-                onCheckedChange={(checked) => updateDraft({ reminderEnabled: checked !== true })}
-              />
-              Don&apos;t remind me
-            </label>
             {reminderText !== null && (
               <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
             )}
