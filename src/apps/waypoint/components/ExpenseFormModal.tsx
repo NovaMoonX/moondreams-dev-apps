@@ -16,7 +16,7 @@ import { ArrowLeftRight, CalendarDays, Link2, Pencil, Route, StickyNote } from '
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatClockTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
-import { selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
+import { selectExpenseLinkKeys, selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getDayCount, getDayDateLabel, getDayLabel, getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -228,6 +228,7 @@ function ExpenseFormModal({
   const rentals = useAppSelector(selectSortedRentals);
   const isEditing = Boolean(initialExpense);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
+  const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
   const linkables = useMemo(
     () => (isOpen && !prefill ? getLinkableSubjects(trip, events, stays, rentals) : []),
     [isOpen, prefill, trip, events, stays, rentals],
@@ -265,11 +266,19 @@ function ExpenseFormModal({
       : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin) &&
     (isEditing || audience !== 'PICK' || pickedIds.length > 0);
   const linkKey = link ? getExpenseLinkKey(link) : '';
+  const planPills = useMemo(
+    () =>
+      linkables
+        .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title }))
+        .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key))
+        .map(({ key, label }) => ({ value: key, label })),
+    [linkables, expenseLinkKeys, linkKey],
+  );
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
   const asksAboutPlan =
-    !isEditing && !prefill && canShare && !isPrivate && linkables.length > 0 && !isPlanAnswered;
+    !isEditing && !prefill && canShare && !isPrivate && planPills.length > 0 && !isPlanAnswered;
   const isLinked = !isEditing && !isPrivate && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const linkOptions = useMemo(
@@ -674,21 +683,20 @@ function ExpenseFormModal({
   const summaryDay = formData.dayIndex === '' ? null : getDayDateLabel(trip.startDate, Number(formData.dayIndex));
   const summaryCategory = resolveChoice(formData.category);
   const planQuestion = (
-    <div className='space-y-3'>
-      <div className='space-y-1.5'>
+    <div className='space-y-4'>
+      <div className='space-y-2'>
         <Label>What&apos;s this expense for?</Label>
-        <Select
-          searchable
-          options={linkOptions.filter((option) => option.value !== NO_LINK)}
-          value={linkKey}
-          placeholder='Pick an event, stay or rental'
-          searchPlaceholder='Search your plans'
+        <PillGroup
+          label='Plans without an expense yet'
+          options={planPills}
+          value={linkKey || null}
           onChange={pickLink}
         />
       </div>
       <Button
         type='button'
-        variant='secondary'
+        variant='primary'
+        className='w-full'
         onClick={() => {
           setLink(null);
           setIsPlanAnswered(true);
@@ -755,7 +763,7 @@ function ExpenseFormModal({
               </div>
             </div>
           )}
-          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && linkables.length > 0 && (
+          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && planPills.length > 0 && (
             <Button
               type='button'
               variant='link'
