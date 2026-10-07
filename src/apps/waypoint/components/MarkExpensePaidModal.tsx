@@ -29,6 +29,8 @@ interface MarkExpensePaidModalProps {
   isOpen: boolean;
   trip: TripSpace;
   expense: TripExpense | null;
+  /** A failure of the last attempt, shown in the sheet so it never lands behind it. */
+  error?: string | null;
   isSubmitting?: boolean;
   onSubmit: (values: MarkExpensePaidValues) => Promise<void> | void;
   onClose: () => void;
@@ -40,6 +42,7 @@ function MarkExpensePaidModal({
   isOpen,
   trip,
   expense,
+  error: submitError = null,
   isSubmitting = false,
   onSubmit,
   onClose,
@@ -160,7 +163,7 @@ function MarkExpensePaidModal({
                 {keepAsRange ? 'Enter a known amount instead' : 'Keep as an estimated range instead'}
               </Button>
             )}
-            {error && <p className='text-destructive text-sm'>{error}</p>}
+            {(error ?? submitError) && <p className='text-destructive text-sm'>{error ?? submitError}</p>}
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>
                 Cancel
