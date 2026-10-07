@@ -58,9 +58,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
 import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
-import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { buildTimelineMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { getEventTime } from '@apps/waypoint/utils/tripTime';
 import { EXPENSE_TRACKED_EVENT_TYPES, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -105,6 +103,8 @@ interface TimelineSectionProps {
   currentUserId: string;
   activeDayTab: string;
   onActiveDayTabChange: (value: string) => void;
+  /** Copies the timeline as Markdown; phones have it in the page header instead. */
+  onCopyTimeline: () => void;
 }
 
 export function TimelineSection({
@@ -113,6 +113,7 @@ export function TimelineSection({
   currentUserId,
   activeDayTab,
   onActiveDayTabChange,
+  onCopyTimeline,
 }: TimelineSectionProps) {
   const dispatch = useAppDispatch();
   const { startFollowUp } = useRelatedFlow();
@@ -190,25 +191,6 @@ export function TimelineSection({
   const weather = useTripWeather(trip, events, now);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
 
-  const handleCopyTimeline = async () => {
-    const markdown = buildTimelineMarkdown({
-      trip,
-      events,
-      stays,
-      rentals,
-      memberNames: Object.fromEntries(memberIds.map((uid) => [uid, members[uid]?.displayName ?? ''])),
-    });
-    const copied = await copyToClipboard(markdown);
-    addToast(
-      copied
-        ? {
-            title: 'Timeline copied',
-            description: 'Paste it anywhere as Markdown. It includes confirmation codes and notes.',
-            type: 'success',
-          }
-        : { title: 'Unable to copy the timeline', description: 'Your browser blocked copying on this page.', type: 'error' },
-    );
-  };
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId))
@@ -695,6 +677,7 @@ export function TimelineSection({
             View by day
           </p>
           <div className='flex items-center gap-1'>
+            {!isPhone && (
             <Button
               type='button'
               variant='tertiary'
@@ -702,12 +685,12 @@ export function TimelineSection({
               className="relative gap-2 whitespace-nowrap before:absolute before:-inset-y-1.5 before:-inset-x-1 before:content-['']"
               aria-label='Copy timeline as Markdown'
               title='Copy as Markdown'
-              onClick={() => void handleCopyTimeline()}
+              onClick={onCopyTimeline}
             >
               <ClipboardCopy className='h-4 w-4' />
-              <span className='hidden min-[360px]:inline sm:hidden'>Copy</span>
-              <span className='max-sm:hidden'>Copy as Markdown</span>
+              Copy as Markdown
             </Button>
+            )}
             <TimelineViewOptions groups={viewOptionGroups} />
           </div>
         </div>
