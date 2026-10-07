@@ -5,6 +5,8 @@ import {
   Form,
   FormFactories,
   Input,
+  Label,
+  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
@@ -12,20 +14,23 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { getDayOptions } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayLabel, getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
-import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
+import { EVENT_TYPE_EMOJIS, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
+  EventType,
   ExpenseCategory,
   ExpenseStatus,
+  TimelineEvent,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
+import { getEventTime } from '@apps/waypoint/utils/tripTime';
 import {
   getExpenseCategoryKey,
   getExpenseCategoryKeyLabel,
@@ -34,6 +39,8 @@ import {
 } from '@apps/waypoint/utils/expenseCategories';
 
 const PAID_BY_EACH_PERSON = '';
+
+const MAX_VISIBLE_EVENTS = 50;
 
 interface ChoiceValue {
   choice: string;
@@ -77,10 +84,18 @@ export interface ExpenseSubmitValues {
   isPerPerson: boolean;
 }
 
+export interface ExpensePrefill {
+  title: string;
+  dayIndex: number | null;
+  category: ExpenseCategory | null;
+}
+
 interface ExpenseFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   initialExpense?: TripExpense;
+  prefill?: ExpensePrefill;
+  events?: TimelineEvent[];
   categoryKeys: string[];
   existingGroupLabels: string[];
   isSubmitting?: boolean;
@@ -89,7 +104,13 @@ interface ExpenseFormModalProps {
   onClose: () => void;
 }
 
-const { checkbox, custom, input, select } = FormFactories;
+const { custom, input, select } = FormFactories;
+
+const EVENT_CATEGORIES: Partial<Record<EventType, ExpenseCategory>> = {
+  DINING: 'FOOD',
+  TRAVEL: 'TRANSPORT',
+  ACTIVITY: 'ACTIVITIES',
+};
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
@@ -103,11 +124,15 @@ function resolveChoice({ choice, newLabel }: ChoiceValue): string | null {
   return choice;
 }
 
-function getInitialFormData(initialExpense?: TripExpense): ExpenseFormData {
+function getDayValue(dayIndex: number | null | undefined): string {
+  return dayIndex === null || dayIndex === undefined ? '' : String(dayIndex);
+}
+
+function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefill): ExpenseFormData {
   return {
-    title: initialExpense?.title ?? '',
+    title: initialExpense?.title ?? prefill?.title ?? '',
     category: {
-      choice: initialExpense ? getExpenseCategoryKey(initialExpense) : '',
+      choice: initialExpense ? getExpenseCategoryKey(initialExpense) : (prefill?.category ?? ''),
       newLabel: '',
     },
     amountMode: initialExpense?.amount === null ? 'range' : 'amount',
@@ -119,10 +144,7 @@ function getInitialFormData(initialExpense?: TripExpense): ExpenseFormData {
     isPerPerson: initialExpense?.isPerPerson ?? false,
     payerUid: initialExpense?.payerUid ?? PAID_BY_EACH_PERSON,
     status: initialExpense?.status ?? 'EXPECTED',
-    dayIndex:
-      initialExpense?.dayIndex === null || initialExpense?.dayIndex === undefined
-        ? ''
-        : String(initialExpense.dayIndex),
+    dayIndex: getDayValue(initialExpense ? initialExpense.dayIndex : prefill?.dayIndex),
     paidAmount: String(initialExpense?.paidAmount ?? ''),
     note: initialExpense?.note ?? '',
     group: { choice: initialExpense?.groupLabel ?? '', newLabel: '' },
@@ -133,6 +155,8 @@ function ExpenseFormModal({
   isOpen,
   trip,
   initialExpense,
+  prefill,
+  events = [],
   categoryKeys,
   existingGroupLabels,
   isSubmitting = false,
@@ -146,8 +170,11 @@ function ExpenseFormModal({
     initialExpense?.amount === null ? 'range' : 'amount',
   );
   const [formData, setFormData] = useState<ExpenseFormData>(() =>
-    getInitialFormData(initialExpense),
+    getInitialFormData(initialExpense, prefill),
   );
+  // The form reads its data once, so picking an event remounts it with the filled-in values.
+  const [formKey, setFormKey] = useState(0);
+  const [eventId, setEventId] = useState<string | null>(null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
   const isEditing = Boolean(initialExpense);
@@ -161,7 +188,30 @@ function ExpenseFormModal({
     (mode === 'amount'
       ? parseAmount(formData.amount) !== null
       : rangeMin !== null && rangeMax !== null && rangeMax >= rangeMin);
-  const storedDayIndex = initialExpense?.dayIndex ?? null;
+  const pickedEvent = events.find((candidate) => candidate.id === eventId);
+  const pickedDayIndex = pickedEvent ? getEventTime(trip, pickedEvent).dayIndex : null;
+  const storedDayIndex = initialExpense?.dayIndex ?? pickedDayIndex ?? prefill?.dayIndex ?? null;
+  const [eventTerm, setEventTerm] = useState('');
+  const eventOptions = useMemo(() => {
+    const query = eventTerm.trim().toLowerCase();
+    const options = events
+      .filter((candidate) => !candidate.isArchived)
+      .map((candidate) => {
+        const { dayIndex } = getEventTime(trip, candidate);
+        return {
+          value: candidate.id,
+          text: `${EVENT_TYPE_EMOJIS[candidate.eventType]} ${candidate.title}`,
+          description: dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, dayIndex, getDayCount(trip.startDate, trip.endDate)),
+        };
+      });
+    const matches = query
+      ? options.filter((option) => `${option.text} ${option.description}`.toLowerCase().includes(query))
+      : options;
+    const top = matches.slice(0, MAX_VISIBLE_EVENTS);
+    const selected = options.find((option) => option.value === eventId);
+    return { hasAny: options.length > 0, visible: selected && !top.includes(selected) ? [selected, ...top] : top };
+  }, [events, eventId, eventTerm, trip]);
+  const showEventPicker = !isEditing && !prefill && eventOptions.hasAny;
   const dayOptions = useMemo(
     () => [
       { value: '', label: 'No specific day' },
@@ -228,17 +278,39 @@ function ExpenseFormModal({
           />
         ),
       }),
+      custom({
+        name: 'isPerPerson',
+        label: 'This price is for',
+        renderComponent: (props) => (
+          <div className='space-y-1.5'>
+            <PillGroup
+              label='This price is for'
+              options={[
+                { value: 'group', label: 'The whole group', emoji: '👥' },
+                { value: 'each', label: 'Each person', emoji: '🙋' },
+              ]}
+              value={props.value === true ? 'each' : 'group'}
+              onChange={(value) => props.onValueChange(value === 'each')}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {props.value === true
+                ? 'Everyone in the split pays this much, so the total grows with every person who joins.'
+                : 'We work out everyone’s share for you.'}
+            </p>
+          </div>
+        ),
+      }),
       mode === 'amount'
         ? input({
             name: 'amount',
-            label: formData.isPerPerson ? 'Amount per person' : 'Amount',
+            label: formData.isPerPerson ? 'What each person pays' : 'Total for the group',
             type: 'number',
             placeholder: '0.00',
             variant: 'outline',
           })
         : custom({
             name: 'amountRange',
-            label: formData.isPerPerson ? 'Estimated range per person' : 'Estimated range',
+            label: formData.isPerPerson ? 'What each person might pay' : 'Estimated total for the group',
             renderComponent: (props) => {
               const range = props.value as AmountRange;
               return (
@@ -263,18 +335,13 @@ function ExpenseFormModal({
               );
             },
           }),
-      checkbox({
-        name: 'isPerPerson',
-        label: '',
-        text: 'Per person — multiplied by everyone in the split',
-      }),
     ];
 
     if (isEditing && mode === 'range' && initialExpense?.status === 'PAID') {
       nextFields.push(
         input({
           name: 'paidAmount',
-          label: formData.isPerPerson ? 'Paid amount per person' : 'Paid amount',
+          label: formData.isPerPerson ? 'What each person paid' : 'What the group paid',
           type: 'number',
           placeholder: '0.00',
           variant: 'outline',
@@ -358,6 +425,23 @@ function ExpenseFormModal({
     showNoteField,
   ]);
 
+  const pickEvent = (nextEventId: string) => {
+    const picked = events.find((candidate) => candidate.id === nextEventId);
+    if (!picked) {
+      return;
+    }
+
+    const category = EVENT_CATEGORIES[picked.eventType];
+    setEventId(nextEventId);
+    setFormData((current) => ({
+      ...current,
+      title: picked.title,
+      dayIndex: getDayValue(getEventTime(trip, picked).dayIndex),
+      category: category && current.category.choice === '' ? { choice: category, newLabel: '' } : current.category,
+    }));
+    setFormKey((key) => key + 1);
+  };
+
   const handleSubmit = async (data: ExpenseFormData) => {
     const amount = mode === 'amount' ? parseAmount(data.amount) : null;
     const amountMin = mode === 'range' ? parseAmount(data.amountRange.min) : null;
@@ -428,7 +512,23 @@ function ExpenseFormModal({
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Expense'>
+      {showEventPicker && (
+        <div className='mb-4 space-y-1.5'>
+          <Label>Is this for an event?</Label>
+          <Select
+            searchable
+            clearable
+            options={eventOptions.visible}
+            value={eventId ?? ''}
+            placeholder='Pick an event to fill in the day'
+            searchPlaceholder='Search your events'
+            onSearch={setEventTerm}
+            onChange={(value) => (value === '' ? setEventId(null) : pickEvent(value))}
+          />
+        </div>
+      )}
       <Form
+        key={formKey}
         id='waypoint-add-expense'
         form={fields}
         initialData={formData}

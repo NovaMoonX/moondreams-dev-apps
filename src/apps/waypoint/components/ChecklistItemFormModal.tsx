@@ -33,20 +33,28 @@ interface ChecklistFormData {
   assignedToUids: string[];
 }
 
+export interface ChecklistPrefill {
+  category: ChecklistCategory;
+  completeByDayIndex: number | null;
+}
+
+export interface ChecklistSubmitValues {
+  title: string;
+  category: ChecklistCategory;
+  customCategoryLabel: string | null;
+  completeByDayIndex: number | null;
+  note: string | null;
+  assignedToUids: string[];
+}
+
 interface ChecklistItemFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   item?: ChecklistItem | null;
+  prefill?: ChecklistPrefill;
   isSubmitting?: boolean;
-  onSubmit: (values: {
-    title: string;
-    category: ChecklistCategory;
-    customCategoryLabel: string | null;
-    completeByDayIndex: number | null;
-    note: string | null;
-    assignedToUids: string[];
-  }) => Promise<void> | void;
+  onSubmit: (values: ChecklistSubmitValues) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
@@ -73,15 +81,20 @@ function describeDueDay(trip: TripSpace, dayIndex: number) {
   return `Day ${dayIndex + 1} of the trip`;
 }
 
-function getInitialFormData(trip: TripSpace, item?: ChecklistItem | null): ChecklistFormData {
+function getInitialFormData(
+  trip: TripSpace,
+  item?: ChecklistItem | null,
+  prefill?: ChecklistPrefill,
+): ChecklistFormData {
+  const dueDayIndex = item ? item.completeByDayIndex : (prefill?.completeByDayIndex ?? null);
   return {
     title: item?.title ?? '',
-    category: item?.category ?? 'DOCUMENTS',
+    category: item?.category ?? prefill?.category ?? 'DOCUMENTS',
     customCategoryLabel: item?.customCategoryLabel ?? '',
     dueDate:
-      item?.completeByDayIndex === null || item?.completeByDayIndex === undefined
+      dueDayIndex === null
         ? { enabled: false, date: getDayInputValue(trip.startDate, 0) }
-        : { enabled: true, date: getDayInputValue(trip.startDate, item.completeByDayIndex) },
+        : { enabled: true, date: getDayInputValue(trip.startDate, dueDayIndex) },
     note: item?.note ?? '',
     assignedToUids: item?.assignedToUids ?? [],
   };
@@ -92,13 +105,14 @@ export default function ChecklistItemFormModal({
   trip,
   memberOptions,
   item = null,
+  prefill,
   isSubmitting = false,
   onSubmit,
   onDelete,
   onClose,
 }: ChecklistItemFormModalProps) {
   const { confirm } = useActionModal();
-  const initialData = useMemo(() => getInitialFormData(trip, item), [trip, item]);
+  const initialData = useMemo(() => getInitialFormData(trip, item, prefill), [trip, item, prefill]);
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));

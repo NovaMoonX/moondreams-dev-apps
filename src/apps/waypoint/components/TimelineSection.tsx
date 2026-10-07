@@ -22,6 +22,8 @@ import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
+import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
+import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
   type EventFormValues,
   type NextLegSeed,
@@ -93,6 +95,7 @@ export function TimelineSection({
   onActiveDayTabChange,
 }: TimelineSectionProps) {
   const dispatch = useAppDispatch();
+  const { startFollowUp } = useRelatedFlow();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -451,6 +454,9 @@ export function TimelineSection({
         ).unwrap();
       } else {
         await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
+        if (!options?.addLeg) {
+          startFollowUp(getEventSubject(trip, event));
+        }
       }
       setEditingEvent(undefined);
       if (options?.addLeg) {

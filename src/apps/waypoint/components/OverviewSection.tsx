@@ -403,7 +403,7 @@ function CheckInStayCard({
             </p>
           )}
           {(stay.linkUrl || stay.notes) && (
-            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+            <div className='flex min-w-0 items-center gap-x-3'>
               <NotesViewButton title={stay.name} notes={stay.notes} />
               {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
             </div>
@@ -482,7 +482,7 @@ function RentalTodayCard({
             </p>
           )}
           {(rental.linkUrl || rental.notes) && (
-            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+            <div className='flex min-w-0 items-center gap-x-3'>
               <NotesViewButton title={rental.name} notes={rental.notes} />
               {rental.linkUrl && <ExternalLinkText href={rental.linkUrl} />}
             </div>

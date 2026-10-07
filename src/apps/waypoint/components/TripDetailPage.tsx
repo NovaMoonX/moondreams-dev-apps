@@ -52,6 +52,7 @@ import NowPill from '@apps/waypoint/components/NowPill';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StickyAppBar from '@/components/StickyAppBar';
+import RelatedFlowProvider from '@apps/waypoint/components/RelatedFlowProvider';
 import Subview from '@/components/Subview';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
@@ -451,7 +452,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   );
 
   return (
-    <>
+    <RelatedFlowProvider trip={trip} currentUserId={currentUserId}>
       {subviewTitle !== undefined && (
         <Subview title={subviewTitle} onClose={() => setSectionTab('')}>
           {renderSubviewSection()}
@@ -462,7 +463,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       <div
         className={join(
           'mx-auto max-w-4xl',
-          isActive ? 'space-y-2.5 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
+          isActive ? 'space-y-2.5 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 pb-8 sm:py-8',
           hasAppNav ? (isActive ? 'pb-44' : 'pb-24') : isActive && 'pb-40 sm:pb-28',
         )}
       >
@@ -755,7 +756,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           )}
         </div>
       </Drawer>
-    </>
+    </RelatedFlowProvider>
   );
 }
 

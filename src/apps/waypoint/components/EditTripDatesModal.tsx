@@ -4,8 +4,8 @@ import {
   Button,
   Form,
   FormFactories,
+  Label,
   Modal,
-  RadioGroup,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import DateRangeField, {
@@ -18,6 +18,7 @@ import { getDayCount } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { PillGroup } from '@/components/PillGroup';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import {
   selectRentals,
@@ -44,6 +45,11 @@ interface EditTripDatesModalProps {
 }
 
 const DAY_MS = 86_400_000;
+
+function describeShift(deltaDays: number) {
+  const days = Math.abs(deltaDays);
+  return `${days} ${days === 1 ? 'day' : 'days'} ${deltaDays > 0 ? 'later' : 'earlier'}`;
+}
 
 const { custom } = FormFactories;
 
@@ -156,19 +162,23 @@ function EditTripDatesModal({
               renderComponent: (props) => (
                 <div className='space-y-2'>
                   {showKeepOriginalOption && (
-                    <RadioGroup
-                      value={props.value ? 'keep' : 'move'}
-                      onChange={(value) =>
-                        props.onValueChange(value === 'keep')
-                      }
-                      options={[
-                        { label: 'Move my plans with the trip', value: 'move' },
-                        {
-                          label: 'Keep my plans on their original dates',
-                          value: 'keep',
-                        },
-                      ]}
-                    />
+                    <div className='space-y-1.5'>
+                      <Label>What happens to your plans?</Label>
+                      <PillGroup
+                        label='What happens to your plans'
+                        options={[
+                          { value: 'move', label: 'They move with the trip', emoji: '➡️' },
+                          { value: 'keep', label: 'They stay on their dates', emoji: '📌' },
+                        ]}
+                        value={props.value ? 'keep' : 'move'}
+                        onChange={(value) => props.onValueChange(value === 'keep')}
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        {props.value
+                          ? 'Each plan keeps its calendar date, so it may land on a different day of the trip.'
+                          : `Every plan slides ${describeShift(deltaDays)} with the trip, so Day 3 is still Day 3.`}
+                      </p>
+                    </div>
                   )}
                   {outOfRangeCount > 0 && (
                     <p className='text-warning text-sm'>

@@ -40,6 +40,7 @@ import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ItineraryPlacePicks from '@apps/waypoint/components/ItineraryPlacePicks';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
@@ -51,6 +52,7 @@ import {
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
+  ITINERARY_PICK_TRANSIT_TYPES,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
   MAX_REMINDER_MINUTES_BEFORE,
@@ -123,6 +125,7 @@ export interface EventPrefill {
   timezone?: string | null;
   endTimezone?: string | null;
   locationName?: string;
+  place?: PlaceSelectionResult;
   groupLabel?: string;
 }
 
@@ -321,8 +324,13 @@ function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
     hasCuisines: prefill.cuisines.length > 0,
     linkUrl: prefill.linkUrl ?? '',
     hasLink: Boolean(prefill.linkUrl),
-    locationName: prefill.locationName ?? '',
-    hasLocation: Boolean(prefill.locationName),
+    locationName: prefill.place?.name ?? prefill.locationName ?? '',
+    hasLocation: Boolean(prefill.place ?? prefill.locationName),
+    address: prefill.place?.address ?? '',
+    hasAddress: Boolean(prefill.place?.address),
+    latitude: prefill.place?.latitude ?? null,
+    longitude: prefill.place?.longitude ?? null,
+    place: prefill.place?.place ?? null,
     isGrouped: Boolean(prefill.groupLabel),
     groupLabel: prefill.groupLabel ?? '',
     attendeeTargetType: isSpecific ? 'SPECIFIC_MEMBERS' : base.attendeeTargetType,
@@ -893,6 +901,22 @@ function EventFormModal({
         }
         className='mb-0' // overwrite space-y-4
       />
+      {isTravel && ITINERARY_PICK_TRANSIT_TYPES.includes(transitType) && (
+        <ItineraryPlacePicks
+          current={{ name: draft.locationName, address: draft.address }}
+          excludeEventId={event?.id}
+          onPick={(pick) =>
+            updateDraft({
+              locationName: pick.name,
+              address: pick.address,
+              hasAddress: true,
+              latitude: pick.latitude,
+              longitude: pick.longitude,
+              place: pick.place,
+            })
+          }
+        />
+      )}
       {isAddressShown && (
         <RemovableField
           label='Address'

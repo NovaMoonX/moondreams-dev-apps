@@ -86,7 +86,7 @@ function MarkExpensePaidModal({
       nextFields.push(
         input({
           name: 'paidAmount',
-          label: isPerPerson ? 'Amount paid per person' : 'Amount paid',
+          label: isPerPerson ? 'What each person paid' : 'What the group paid',
           type: 'number',
           placeholder: keepAsRange ? 'Leave blank to keep the estimated range' : '0.00',
           variant: 'outline',

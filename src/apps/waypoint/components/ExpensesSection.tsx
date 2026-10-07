@@ -50,6 +50,7 @@ import {
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
+  selectSortedTimelineEvents,
   selectTripExpenses,
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
@@ -235,6 +236,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
+  const events = useAppSelector(selectSortedTimelineEvents);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
@@ -686,7 +688,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             variant='tertiary'
             aria-label={`Open details for ${expense.title}`}
             onClick={() => setDetailExpenseId(expense.id)}
-            className='h-auto w-full justify-between gap-3 rounded-none px-0 py-3 text-left font-normal'
+            className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
           >
             <span className='min-w-0 flex-1'>
               <span className='block truncate font-medium'>{expense.title}</span>
@@ -1023,6 +1025,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={isModalOpen}
         trip={trip}
         initialExpense={editingExpense ?? undefined}
+        events={events}
         categoryKeys={categoryKeys}
         existingGroupLabels={existingGroupLabels}
         isSubmitting={isSubmitting}

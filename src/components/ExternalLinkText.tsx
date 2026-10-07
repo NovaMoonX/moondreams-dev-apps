@@ -18,7 +18,7 @@ function formatLinkLabel(href: string) {
   }
 }
 
-/** A single-line, truncated outbound link. The parent needs `min-w-0` for truncation to kick in inside flex layouts. */
+/** A single-line, truncated outbound link. Beside a label, put both in a no-wrap flex row so the link shrinks instead of dropping to its own line. */
 function ExternalLinkText({ href, className, label }: ExternalLinkTextProps) {
   return (
     <a
@@ -26,7 +26,7 @@ function ExternalLinkText({ href, className, label }: ExternalLinkTextProps) {
       target='_blank'
       rel='noreferrer'
       className={join(
-        'text-primary inline-flex max-w-full items-center gap-1 text-sm hover:underline',
+        'text-primary inline-flex max-w-full min-w-0 items-center gap-1 text-sm hover:underline',
         className,
       )}
     >

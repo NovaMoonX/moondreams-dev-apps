@@ -172,9 +172,9 @@ export function EventDetailLines({
         </p>
       )}
       {event.linkUrl && (
-        <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+        <div className='flex min-w-0 items-center gap-1.5' onClick={(clickEvent) => clickEvent.stopPropagation()}>
           {event.linkKind && (
-            <span className='text-muted-foreground mr-1.5 text-sm'>
+            <span className='text-muted-foreground shrink-0 text-sm'>
               {EVENT_LINK_KIND_LABELS[event.linkKind]}:
             </span>
           )}
