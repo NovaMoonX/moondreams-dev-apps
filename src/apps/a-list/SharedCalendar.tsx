@@ -232,6 +232,9 @@ function SharedCalendar() {
 
   useAListTheme();
 
+  
+  // Asks search engines not to list this page in results; removed on leaving so other pages aren't affected.
+  // The worker also sends this as a header, for crawlers that don't run JS.
   useEffect(() => {
     const robots = document.createElement('meta');
     robots.name = 'robots';
