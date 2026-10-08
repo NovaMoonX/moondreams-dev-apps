@@ -43,11 +43,18 @@ function firebaseMessagingSwConfig(): Plugin {
   };
 }
 
+// A phone on the same Wi-Fi can only use a private LAN address; VPN and Tailscale interfaces (100.x) get no QR.
+function isPrivateLanUrl(url: string) {
+  const host = new URL(url).hostname;
+  const result = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  return result;
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    qrcode(),
+    qrcode({ filter: isPrivateLanUrl }),
     firebaseMessagingSwConfig(),
     VitePWA({
       injectRegister: null, // Handles registration manually

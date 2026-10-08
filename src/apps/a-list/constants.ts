@@ -1,7 +1,10 @@
+import type { PillOption } from '@/components/PillGroup';
+import type { SortOrder } from '@/components/SortControl';
 import type {
   AListTab,
   AmcFormat,
   WatchlistFilter,
+  WatchlistSort,
   WatchPriority,
 } from '@apps/a-list/types';
 
@@ -96,7 +99,32 @@ export const MAX_TAX_CHIPS = 4;
 /** The Opening tab lists unseen movies releasing from today through this many days out. */
 export const OPENING_WINDOW_DAYS = 7;
 
-/** Pills that narrow the watchlist; none on means everything. Priorities combine with "or", the rest with "and". */
+export const WATCHLIST_SORT_OPTIONS: PillOption<WatchlistSort>[] = [
+  { value: 'default', label: 'Default', emoji: '🎟️' },
+  { value: 'releaseDate', label: 'Release date', emoji: '📅' },
+  { value: 'title', label: 'Title', emoji: '🔤' },
+  { value: 'addedAt', label: 'Date added', emoji: '🕒' },
+];
+
+/** The first option is each sort's natural direction, the second its flip. */
+export const WATCHLIST_SORT_ORDERS: Partial<
+  Record<WatchlistSort, [PillOption<SortOrder>, PillOption<SortOrder>]>
+> = {
+  releaseDate: [
+    { value: 'natural', label: 'Newest first' },
+    { value: 'reversed', label: 'Oldest first' },
+  ],
+  title: [
+    { value: 'natural', label: 'A to Z' },
+    { value: 'reversed', label: 'Z to A' },
+  ],
+  addedAt: [
+    { value: 'natural', label: 'Newest first' },
+    { value: 'reversed', label: 'Oldest first' },
+  ],
+};
+
+/** Pills that narrow the watchlist; none on means everything unseen. Priorities combine with "or", the rest with "and"; Seen swaps the list to movies already watched. */
 export const WATCHLIST_FILTERS: WatchlistFilter[] = [
   'opening',
   'MUST_SEE',

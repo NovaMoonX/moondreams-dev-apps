@@ -26,6 +26,8 @@ export type AmcFormat =
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
 export type WatchlistFilter = 'opening' | WatchPriority | 'seen';
+
+export type WatchlistSort = 'default' | 'releaseDate' | 'title' | 'addedAt';
 export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
 
 export interface MovieSnapshot {

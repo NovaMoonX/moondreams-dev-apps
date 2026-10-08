@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { X } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 import Pill from '@/components/Pill';
 import {
@@ -14,8 +14,10 @@ import type { WatchlistFilter } from '@apps/a-list/types';
 interface WatchlistFiltersProps {
   value: WatchlistFilter[];
   openingCount: number;
+  /** True while the search, a filter or the sort differs from the default. */
+  canReset: boolean;
   onToggle: (filter: WatchlistFilter) => void;
-  onClear: () => void;
+  onReset: () => void;
 }
 
 function getFilterView(filter: WatchlistFilter) {
@@ -41,8 +43,9 @@ function centerClickedPill(event: MouseEvent<HTMLDivElement>) {
 function WatchlistFilters({
   value,
   openingCount,
+  canReset,
   onToggle,
-  onClear,
+  onReset,
 }: WatchlistFiltersProps) {
   return (
     <div
@@ -51,16 +54,16 @@ function WatchlistFilters({
       role='group'
       aria-label='Filter your watchlist'
     >
-      {value.length > 0 && (
+      {canReset && (
         <Button
           type='button'
           size='sm'
           rounded='full'
           variant='outline'
           className='shrink-0 gap-1 whitespace-nowrap'
-          onClick={onClear}
+          onClick={onReset}
         >
-          <X className='h-3.5 w-3.5' /> Clear
+          <RotateCcw className='h-3.5 w-3.5' /> Reset
         </Button>
       )}
       {WATCHLIST_FILTERS.map((filter) => {
