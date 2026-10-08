@@ -54,6 +54,16 @@
   }
 }
 
+/* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
+@media (max-width: 639.98px) {
+  [role='region'][aria-label='Notifications'] {
+    left: max(1rem, env(safe-area-inset-left));
+    right: max(1rem, env(safe-area-inset-right));
+    width: auto;
+    max-width: none;
+  }
+}
+
 @theme app {
 	--color-background: var(--color-white);
 	--color-foreground: var(--color-zinc-950);

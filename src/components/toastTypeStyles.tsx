@@ -12,7 +12,7 @@ interface ToastTypeStyle {
 // `customComponent`, this map is the actual (and only) source of truth for styling.
 export const TOAST_TYPE_STYLES: Record<string, ToastTypeStyle> = {
   info: {
-    className: 'bg-popover text-popover-foreground border-border',
+    className: 'bg-background text-foreground border-border',
     icon: <Info className='h-5 w-5' />,
   },
   error: {
@@ -20,7 +20,7 @@ export const TOAST_TYPE_STYLES: Record<string, ToastTypeStyle> = {
     icon: <X className='h-5 w-5' />,
   },
   reminder: {
-    className: 'bg-popover text-popover-foreground border-border',
+    className: 'bg-background text-foreground border-border',
     icon: <Bell className='h-5 w-5' />,
   },
 };

@@ -9,6 +9,7 @@ import { TOAST_APP_LABELS, TOAST_TYPE_STYLES } from '@components/toastTypeStyles
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80;
 const CLICK_MOVEMENT_THRESHOLD_PX = 5;
+const AXIS_LOCK_PX = 8;
 
 interface AppToastProps extends Omit<ToastData, 'type'> {
   /** Loosened from `ToastData`'s `ToastType`: `addToast` accepts any string, including
@@ -27,9 +28,11 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const axisRef = useRef<'x' | 'y' | null>(null);
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     dragStartRef.current = { x: event.clientX, y: event.clientY };
+    axisRef.current = null;
     setIsDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -39,12 +42,27 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
     if (!dragStart) {
       return;
     }
-    setOffset({ x: event.clientX - dragStart.x, y: event.clientY - dragStart.y });
+    const dx = event.clientX - dragStart.x;
+    const dy = event.clientY - dragStart.y;
+    if (axisRef.current === null) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < AXIS_LOCK_PX) {
+        return;
+      }
+      if (dx > 0 && dx >= Math.abs(dy)) {
+        axisRef.current = 'x';
+      } else if (dy < 0 && -dy > Math.abs(dx)) {
+        axisRef.current = 'y';
+      } else {
+        return;
+      }
+    }
+    setOffset(axisRef.current === 'x' ? { x: Math.max(0, dx), y: 0 } : { x: 0, y: Math.min(0, dy) });
   };
 
   const handlePointerUp = () => {
     const dragStart = dragStartRef.current;
     dragStartRef.current = null;
+    axisRef.current = null;
     setIsDragging(false);
     if (!dragStart) {
       return;
