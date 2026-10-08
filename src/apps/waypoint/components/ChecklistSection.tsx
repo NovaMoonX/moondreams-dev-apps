@@ -65,7 +65,11 @@ export default function ChecklistSection({
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const [query, setQuery] = useState('');
   const sharedItems = useAppSelector((state) => state.waypoint.checklist.items);
-  const personalItems = useAppSelector(selectPersonalChecklistItems);
+  const allPersonalItems = useAppSelector(selectPersonalChecklistItems);
+  const personalItems = useMemo(
+    () => allPersonalItems.filter((item) => item.tripId === trip.id),
+    [allPersonalItems, trip.id],
+  );
   const items = useMemo(() => [...sharedItems, ...personalItems], [sharedItems, personalItems]);
   const privateIds = useMemo(() => new Set(personalItems.map((item) => item.id)), [personalItems]);
   const isPrivateItem = (item: ChecklistItem) => privateIds.has(item.id);
@@ -375,6 +379,12 @@ export default function ChecklistSection({
               <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[detailItem.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
               {getChecklistCategoryLabel(detailItem)}
             </p>
+            {isPrivateItem(detailItem) && (
+              <p className='text-muted-foreground inline-flex items-center gap-1 text-xs'>
+                <Lock className='h-3 w-3' aria-hidden='true' />
+                Just me
+              </p>
+            )}
             {detailItem.note && <p className='text-muted-foreground text-sm italic'>{detailItem.note}</p>}
           </div>
         )}

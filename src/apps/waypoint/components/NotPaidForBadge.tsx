@@ -1,7 +1,7 @@
 import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { useHasExpense } from '@apps/waypoint/hooks/useHasExpense';
+import { useHasExpense, useIsNoExpense } from '@apps/waypoint/hooks/useHasExpense';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
@@ -18,10 +18,26 @@ function NotPaidForBadge({ getSubject, isStatic = false, variant = 'inline' }: N
   const tabClassName = 'bg-card border-border -mt-px rounded-t-none rounded-b-lg border border-t-0 px-3 py-1';
   const { link } = getSubject();
   const hasExpense = useHasExpense(link.kind, link.id);
-  const { startLinkExpense, canAddExpenses } = useRelatedFlow();
+  const isNoExpense = useIsNoExpense(link.kind, link.id);
+  const { startLinkExpense, undoNoExpense, canAddExpenses } = useRelatedFlow();
 
   if (hasExpense) {
     return null;
+  }
+
+  if (isNoExpense) {
+    return isStatic && canAddExpenses ? (
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className="text-muted-foreground relative h-auto px-0! text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-2 after:content-['']"
+        aria-label='No expense needed: undo'
+        onClick={() => undoNoExpense(getSubject())}
+      >
+        No expense needed · Undo
+      </Button>
+    ) : null;
   }
 
   if (!canAddExpenses || isStatic) {

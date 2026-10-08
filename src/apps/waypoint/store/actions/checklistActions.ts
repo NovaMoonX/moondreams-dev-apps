@@ -27,7 +27,7 @@ interface CreateChecklistItemInput {
   completeByDayIndex: number | null;
   assignedToUids: string[];
   /** Kept under the member's own uid: no one else sees it, and Overview never lists it. */
-  isPrivate?: boolean;
+  isPrivate: boolean;
 }
 
 export const createChecklistItem = createAsyncThunk<
@@ -46,7 +46,7 @@ export const createChecklistItem = createAsyncThunk<
       note,
       completeByDayIndex,
       assignedToUids,
-      isPrivate = false,
+      isPrivate,
     },
     { rejectWithValue },
   ) => {
@@ -91,7 +91,7 @@ interface ToggleChecklistItemInput {
   itemId: string;
   uid: string;
   isCompleted: boolean;
-  isPrivate?: boolean;
+  isPrivate: boolean;
 }
 
 interface UpdateChecklistItemInput {
@@ -104,7 +104,7 @@ interface UpdateChecklistItemInput {
   note: string | null;
   completeByDayIndex: number | null;
   assignedToUids: string[];
-  isPrivate?: boolean;
+  isPrivate: boolean;
 }
 
 export const updateChecklistItem = createAsyncThunk<
@@ -124,7 +124,7 @@ export const updateChecklistItem = createAsyncThunk<
       note,
       completeByDayIndex,
       assignedToUids,
-      isPrivate = false,
+      isPrivate,
     },
     { rejectWithValue },
   ) => {
@@ -160,7 +160,7 @@ interface DeleteChecklistItemInput {
   trip: TripSpace;
   uid: string;
   itemId: string;
-  isPrivate?: boolean;
+  isPrivate: boolean;
 }
 
 export const deleteChecklistItem = createAsyncThunk<
@@ -169,7 +169,7 @@ export const deleteChecklistItem = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/checklist/delete',
-  async ({ trip, uid, itemId, isPrivate = false }, { rejectWithValue }) => {
+  async ({ trip, uid, itemId, isPrivate }, { rejectWithValue }) => {
     if (!isPrivate && !canEditExistingItem(trip, uid)) {
       return rejectWithValue('You do not have permission to delete checklist items.');
     }
@@ -183,7 +183,7 @@ export const toggleChecklistItem = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/checklist/toggle',
-  async ({ tripId, itemId, uid, isCompleted, isPrivate = false }) => {
+  async ({ tripId, itemId, uid, isCompleted, isPrivate }) => {
     await updateDoc(
       getItemRef(tripId, uid, itemId, isPrivate),
       {

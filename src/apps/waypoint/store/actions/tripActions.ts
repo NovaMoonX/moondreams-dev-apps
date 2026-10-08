@@ -278,7 +278,7 @@ export const setPlanNeedsNoExpense = createAsyncThunk<
   TripSpace,
   { uid: string; trip: TripSpace; linkKey: string; needsNone: boolean },
   { rejectValue: string }
->('waypoint/trips/setPlanNeedsNoExpense', async ({ uid, trip, linkKey, needsNone }, { dispatch, rejectWithValue }) => {
+>('waypoint/trips/setPlanNeedsNoExpense', async ({ uid, trip, linkKey, needsNone }, { rejectWithValue }) => {
   if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
     return rejectWithValue('You do not have permission to edit this trip.');
   }
@@ -288,10 +288,7 @@ export const setPlanNeedsNoExpense = createAsyncThunk<
     noExpenseKeys: needsNone ? arrayUnion(linkKey) : arrayRemove(linkKey),
     lastEditedAt,
   });
-  const others = (trip.noExpenseKeys ?? []).filter((key) => key !== linkKey);
-  const updatedTrip: TripSpace = { ...trip, noExpenseKeys: needsNone ? [...others, linkKey] : others, lastEditedAt };
-  dispatch(upsertTrip(updatedTrip));
-  return updatedTrip;
+  return { ...trip, lastEditedAt };
 });
 
 export const setTripArchived = createAsyncThunk<

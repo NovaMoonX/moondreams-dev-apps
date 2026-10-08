@@ -208,8 +208,8 @@ export default function ChecklistItemFormModal({
             ) : null}
             {audience === 'private' && (
               <p className='text-muted-foreground text-sm'>
-                <span className='text-foreground font-medium'>Only you see this task.</span> It stays off everyone
-                else&apos;s checklist and Overview.
+                <span className='text-foreground font-medium'>Only you see this task,</span> in your own checklist. It
+                doesn&apos;t show on Overview.{canShare && item ? ' To share it, add it again for everyone.' : ''}
               </p>
             )}
             {audience === 'pick' && (
@@ -279,7 +279,7 @@ export default function ChecklistItemFormModal({
     }
 
     return nextFields;
-  }, [trip, formData.category, formData.dueDate.enabled, audience, isAudienceAsked, item, memberOptions, showNoteField]);
+  }, [trip, formData.category, formData.dueDate.enabled, audience, isAudienceAsked, canShare, item, memberOptions, showNoteField]);
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();

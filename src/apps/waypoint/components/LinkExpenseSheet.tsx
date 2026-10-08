@@ -71,7 +71,11 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
       await dispatch(
         setPlanNeedsNoExpense({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone: true }),
       ).unwrap();
-      addToast({ title: `No expense needed for ${subject.title}`, type: 'success' });
+      addToast({
+        title: `No expense needed for ${subject.title}`,
+        description: "You can undo it from the plan's details.",
+        type: 'success',
+      });
       onClose();
     } catch (markError) {
       addToast({
@@ -93,16 +97,19 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
           <Button type='button' size='lg' disabled={linkingId !== null} onClick={onAddNew}>
             Add a new expense
           </Button>
-          <Button type='button' variant='secondary' size='lg' disabled={linkingId !== null} onClick={() => void markNoExpense()}>
+          <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={linkingId !== null} onClick={() => void markNoExpense()}>
             No expense needed
           </Button>
+          <p className='text-muted-foreground text-center text-xs'>
+            <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from the plan&apos;s details.
+          </p>
         </div>
       }
     >
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
-          For <span className='text-foreground font-medium'>{subject.title}</span>. Pick one that&apos;s already on your
-          list; we&apos;ll only fill in a missing day.
+          For <span className='text-foreground font-medium'>{subject.title}</span>.
+          {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
         </p>
         {unlinked.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
