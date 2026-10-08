@@ -40,7 +40,11 @@ import type {
   TheatreSnapshot,
   Ticket,
 } from '@apps/a-list/types';
-import { describePurchase, toPurchasePlan } from '@apps/a-list/utils/purchase';
+import {
+  canBuyTickets,
+  describePurchase,
+  toPurchasePlan,
+} from '@apps/a-list/utils/purchase';
 import { formatCents } from '@apps/a-list/utils/money';
 
 type DrawerView = 'details' | 'edit' | 'ticket' | 'seen' | 'buy';
@@ -263,7 +267,7 @@ export function ViewingPanel({
             <StarRating value={viewing.rating} />
           ) : null}
         </div>
-        {!ticket && viewing.purchase && (
+        {viewing.purchase && canBuyTickets(viewing, now) && (
           <p className='text-muted-foreground flex gap-1.5 text-xs'>
             <span className='w-5 shrink-0 text-center' aria-hidden='true'>
               🎟️
@@ -400,7 +404,7 @@ export function ViewingPanel({
               <CircleCheck className='h-4 w-4' /> Mark seen
             </Button>
           )}
-          {viewing.status === 'PLANNED' && !ticket && viewing.endsAt > now && (
+          {canBuyTickets(viewing, now) && (
             <Button
               type='button'
               variant='tertiary'

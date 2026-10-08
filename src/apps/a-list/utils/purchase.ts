@@ -1,5 +1,5 @@
 import { AMC_FORMAT_LABELS } from '@apps/a-list/constants';
-import type { PurchasePlan, ShowtimeOption } from '@apps/a-list/types';
+import type { PurchasePlan, ShowtimeOption, Viewing } from '@apps/a-list/types';
 import {
   getInitialTicketDraft,
   type TicketDraft,
@@ -53,5 +53,30 @@ export function describePurchase(
   ]
     .filter(Boolean)
     .join(' · ');
+  return result;
+}
+
+/** Tickets can be bought for a planned showing that has none yet and hasn't started. */
+export function canBuyTickets(
+  viewing: Pick<Viewing, 'status' | 'ticket' | 'showtimeAt'>,
+  now: number,
+): boolean {
+  const result =
+    viewing.status === 'PLANNED' &&
+    (viewing.ticket ?? null) === null &&
+    viewing.showtimeAt > now;
+  return result;
+}
+
+/** The welcome-back question is for a showing the member left to buy that has no ticket yet and hasn't ended. */
+export function shouldAskAboutPurchase(
+  viewing: Pick<Viewing, 'status' | 'ticket' | 'purchase' | 'endsAt'>,
+  now: number,
+): boolean {
+  const result =
+    viewing.status === 'PLANNED' &&
+    (viewing.ticket ?? null) === null &&
+    viewing.purchase?.startedAt != null &&
+    viewing.endsAt > now;
   return result;
 }

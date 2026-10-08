@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import PurchaseReturnPrompt from '@apps/a-list/components/viewing/PurchaseReturnPrompt';
@@ -13,6 +14,7 @@ import {
 } from '@apps/a-list/store/actions/viewingActions';
 import { selectPendingPurchaseReturns } from '@apps/a-list/store/selectors';
 import type { Ticket } from '@apps/a-list/types';
+import { shouldAskAboutPurchase } from '@apps/a-list/utils/purchase';
 
 interface PurchaseReturnHostProps {
   /** True while a seen prompt is up, so the two questions never show together. */
@@ -26,6 +28,7 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
   const { addToast } = useToast();
   const { overlay } = useAListOverlay();
   const pending = useAppSelector(selectPendingPurchaseReturns);
+  const now = useNow();
   // "Not yet" lasts until the next time the app is opened, so it's plain component state.
   const [laterIds, setLaterIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,6 +51,7 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
     pending.find(
       (viewing) =>
         !laterIds.includes(viewing.id) &&
+        shouldAskAboutPurchase(viewing, now) &&
         (viewing.purchase?.startedAt ?? Number.POSITIVE_INFINITY) <
           Math.max(openedAt, returnedAt),
     ) ?? null;

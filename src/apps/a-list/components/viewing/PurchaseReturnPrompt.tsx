@@ -5,7 +5,7 @@ import { Button, Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
 import MoneyInput from '@/components/MoneyInput';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
-import { formatDate, formatTime } from '@/utils/formatUtils';
+import { formatDate } from '@/utils/formatUtils';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
@@ -25,6 +25,7 @@ import {
   describePurchase,
   getPurchaseTicketDraft,
 } from '@apps/a-list/utils/purchase';
+import { formatShowtimeForTheatre } from '@apps/a-list/utils/theatreTime';
 import {
   evaluateTicketDraft,
   type TicketDraft,
@@ -68,6 +69,9 @@ function PurchaseReturnPrompt({
 
   const content = (
     <div className='space-y-4'>
+      <p className='text-lg leading-snug font-semibold'>
+        Did you get your ticket to {viewing.movie.title}?
+      </p>
       <div className='flex gap-3'>
         <span className='h-20 w-14 shrink-0 overflow-hidden rounded-xl shadow-md'>
           <PosterCover
@@ -75,14 +79,19 @@ function PurchaseReturnPrompt({
             posterUrl={viewing.movie.posterUrl}
           />
         </span>
-        <div className='min-w-0 space-y-0.5'>
-          <p className='font-semibold'>{viewing.movie.title}</p>
-          <p className='text-muted-foreground text-sm'>
-            {formatDate(viewing.showtimeAt)} · {formatTime(viewing.showtimeAt)}
+        <div className='min-w-0 space-y-0.5 self-center'>
+          <p className='text-sm font-medium'>
+            {formatDate(viewing.showtimeAt)} ·{' '}
+            {formatShowtimeForTheatre(
+              viewing.showtimeAt,
+              viewing.theatre?.timeZone ?? null,
+            )}
           </p>
-          <p className='text-muted-foreground text-sm'>
-            {describePurchase(purchase)}
-          </p>
+          {viewing.theatre && (
+            <p className='text-muted-foreground text-sm'>
+              📍 {viewing.theatre.name}
+            </p>
+          )}
         </div>
       </div>
       {isChangingPlan ? (
@@ -186,11 +195,11 @@ function PurchaseReturnPrompt({
   );
 
   return isPhone ? (
-    <Drawer isOpen onClose={onLater} title='Did you get your tickets?'>
+    <Drawer isOpen onClose={onLater} title='Welcome back'>
       {content}
     </Drawer>
   ) : (
-    <Modal isOpen onClose={onLater} title='Did you get your tickets?'>
+    <Modal isOpen onClose={onLater} title='Welcome back'>
       {content}
     </Modal>
   );

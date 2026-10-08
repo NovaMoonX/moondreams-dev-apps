@@ -267,10 +267,15 @@ export interface DayShowtime extends ShowtimeOption {
 function fixtureDay(date: string): DayShowtime[] {
   const at = (time: string) => Date.parse(`${date}T${time}:00-05:00`);
   return [
+    ['10:30', 'STANDARD', 1189],
+    ['11:45', 'STANDARD', 1189],
     ['13:10', 'STANDARD', 1489],
+    ['14:30', 'IMAX', 1949],
     ['16:00', 'IMAX', 2149],
+    ['17:20', 'STANDARD', 1689],
     ['19:00', 'STANDARD', 1689],
     ['19:40', 'DOLBY_CINEMA', 2049],
+    ['21:10', 'IMAX', 2149],
     ['22:15', 'STANDARD', 1689],
   ].map(([time, format, priceCents], index) => ({
     showtimeId: `${date.replaceAll('-', '')}${index}`,
@@ -279,7 +284,7 @@ function fixtureDay(date: string): DayShowtime[] {
     priceCents: priceCents as number,
     standardPriceCents: null,
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
-    isSoldOut: index === 4,
+    isSoldOut: index === 9,
     // Matches every title, so any movie the emulator is asked about has showings.
     movieTitle: '*',
   }));

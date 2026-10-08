@@ -1,15 +1,22 @@
+import { useState } from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
 import Pill from '@/components/Pill';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
-import { formatTime } from '@/utils/formatUtils';
 import { AMC_FORMAT_LABELS } from '@apps/a-list/constants';
 import { findShowtimesQueryOptions } from '@apps/a-list/queries/showtimeQueries';
 import type { ShowtimeOption, TheatreSnapshot } from '@apps/a-list/types';
 import { formatCents } from '@apps/a-list/utils/money';
 import { isTypedTheatre } from '@apps/a-list/utils/theatres';
+import {
+  formatTimeInZone,
+  getZoneName,
+  sharesClockWithDevice,
+} from '@apps/a-list/utils/theatreTime';
 
 interface ShowtimePickerProps {
   theatre: TheatreSnapshot;
@@ -23,6 +30,8 @@ interface ShowtimePickerProps {
   offersAmcFallback?: boolean;
 }
 
+const COLLAPSED_COUNT = 6;
+
 /** Upcoming showings of a movie at a theater, from AMC, each with its format and list price. Past days get an honest note instead. */
 function ShowtimePicker({
   theatre,
@@ -33,6 +42,7 @@ function ShowtimePicker({
   onPick,
   offersAmcFallback = false,
 }: ShowtimePickerProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const isPastDay = dateKey < toLocalDateInputValue(now);
   const isTyped = isTypedTheatre(theatre);
   const showtimes = useQuery({
@@ -48,8 +58,6 @@ function ShowtimePicker({
 
   const getNote = () => {
     if (dateKey === '') return null;
-    if (isPastDay)
-      return 'AMC only shares showtimes and prices for upcoming days, so this one is yours to enter.';
     if (isTyped)
       return `${theatre.name} was typed in by hand, so AMC can't list its showtimes. This one is yours to enter.`;
     if (isLooking) return 'Looking up showtimes…';
@@ -63,12 +71,30 @@ function ShowtimePicker({
     return null;
   };
 
+  if (isPastDay) {
+    return null;
+  }
+
   const upcoming = (showtimes.data ?? []).filter(
     (option) => option.startsAt > now,
   );
   const open = upcoming.filter((option) => !option.isSoldOut);
   const soldOutCount = upcoming.length - open.length;
   const note = getNote();
+  const hiddenCount = Math.max(0, open.length - COLLAPSED_COUNT);
+  const visible = isExpanded
+    ? open
+    : open.filter(
+        (option, index) =>
+          index < COLLAPSED_COUNT || option.showtimeId === selectedShowtimeId,
+      );
+  const timeZone = theatre.timeZone ?? null;
+  const picked = open.find(
+    (option) => option.showtimeId === selectedShowtimeId,
+  );
+  const firstStart = open[0]?.startsAt ?? now;
+  const isDifferentClock =
+    timeZone !== null && !sharesClockWithDevice(firstStart, timeZone);
 
   return (
     <div className='space-y-2'>
@@ -92,17 +118,29 @@ function ShowtimePicker({
           label='Buy on amctheatres.com instead'
         />
       )}
+      {open.length > 0 && timeZone && (
+        <p className='text-muted-foreground flex gap-1.5 text-xs'>
+          <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+            🌎
+          </span>
+          <span className='min-w-0'>
+            Times are the theater&apos;s own:{' '}
+            {getZoneName(firstStart, timeZone)}
+            {isDifferentClock ? ', which isn’t your time zone' : ''}.
+          </span>
+        </p>
+      )}
       {open.length > 0 && (
         <div className='flex flex-wrap gap-2'>
-          {open.map((option) => (
+          {visible.map((option) => (
             <Pill
               key={option.showtimeId}
-              className='min-h-9'
+              className='min-h-10'
               isSelected={option.showtimeId === selectedShowtimeId}
               onClick={() => onPick(option)}
             >
               {[
-                formatTime(option.startsAt),
+                formatTimeInZone(option.startsAt, timeZone),
                 option.format === 'STANDARD'
                   ? null
                   : AMC_FORMAT_LABELS[option.format],
@@ -115,6 +153,25 @@ function ShowtimePicker({
             </Pill>
           ))}
         </div>
+      )}
+      {hiddenCount > 0 && (
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className='h-10 px-0!'
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((current) => !current)}
+        >
+          {isExpanded ? 'Show fewer' : `Show ${hiddenCount} more`}
+        </Button>
+      )}
+      {picked && isDifferentClock && (
+        <p className='text-muted-foreground text-xs'>
+          {formatTimeInZone(picked.startsAt, timeZone)} there is{' '}
+          {formatTimeInZone(picked.startsAt, null)} for you, which is how it
+          shows on your calendar.
+        </p>
       )}
       {open.length > 0 && (
         <p className='text-muted-foreground text-xs'>

@@ -2,10 +2,10 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ExternalLink } from 'lucide-react';
 
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
-import { formatTime } from '@/utils/formatUtils';
 import ShowtimePicker from '@apps/a-list/components/viewing/ShowtimePicker';
 import type { ShowtimeOption, Viewing } from '@apps/a-list/types';
 import { describePurchase } from '@apps/a-list/utils/purchase';
+import { formatShowtimeForTheatre } from '@apps/a-list/utils/theatreTime';
 
 interface BuyTicketsPanelProps {
   viewing: Viewing;
@@ -63,8 +63,12 @@ function BuyTicketsPanel({
               🎟️
             </span>
             <span className='min-w-0'>
-              You picked {formatTime(viewing.showtimeAt)} ·{' '}
-              {describePurchase(purchase)}
+              You picked{' '}
+              {formatShowtimeForTheatre(
+                viewing.showtimeAt,
+                viewing.theatre?.timeZone ?? null,
+              )}{' '}
+              · {describePurchase(purchase)}
             </span>
           </p>
           <div className='border-primary/30 bg-primary/5 space-y-2 rounded-2xl border p-3'>
