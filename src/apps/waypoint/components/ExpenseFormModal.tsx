@@ -934,7 +934,11 @@ function ExpenseFormModal({
                       Add and mark paid
                     </Button>
                     <p className='text-muted-foreground text-center text-xs'>
-                      {mode === 'range' ? 'Pick an exact amount to mark it paid.' : isPrivate ? null : 'Recorded as paid by you.'}
+                      {mode === 'range' ? (
+                        'Pick an exact amount to mark it paid.'
+                      ) : isPrivate ? null : (
+                        <strong className='font-semibold'>Recorded as paid by you.</strong>
+                      )}
                     </p>
                   </div>
                 )}
