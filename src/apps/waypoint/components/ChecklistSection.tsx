@@ -289,7 +289,7 @@ export default function ChecklistSection({
                             {getChecklistCategoryLabel(item)}
                           </p>
                           {item.note && (
-                            <p className='text-muted-foreground mt-1 line-clamp-2 text-sm italic sm:line-clamp-none'>{item.note}</p>
+                            <p className='text-muted-foreground mt-1 truncate text-sm italic'>{item.note}</p>
                           )}
                         </div>
                       </div>
