@@ -13,7 +13,7 @@ export interface WeatherDayDetails {
   forecast: DayForecast;
   hours: HourForecast[];
   placeName: string | null;
-  also?: { placeName: string | null; forecast: DayForecast }[];
+  also?: { key: string; placeName: string | null; forecast: DayForecast }[];
 }
 
 interface WeatherDetailSheetProps {
@@ -91,10 +91,10 @@ function WeatherDetailSheet({ isOpen, onClose, title, details }: WeatherDetailSh
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Also on this day</p>
             <ul className='divide-border divide-y'>
-              {also.map(({ placeName: alsoPlace, forecast: alsoForecast }) => {
+              {also.map(({ key, placeName: alsoPlace, forecast: alsoForecast }) => {
                 const alsoCondition = getWeatherCondition(alsoForecast.weatherCode);
                 return (
-                  <li key={alsoPlace ?? alsoForecast.date} className='flex items-center gap-3 py-2'>
+                  <li key={key} className='flex items-center gap-3 py-2'>
                     <WeatherEmoji condition={alsoCondition} className='text-2xl leading-none' />
                     <span className='min-w-0 flex-1'>
                       <span className='block truncate text-sm font-medium'>{alsoPlace ?? 'Another place'}</span>

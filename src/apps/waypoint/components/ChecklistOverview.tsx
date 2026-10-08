@@ -63,7 +63,7 @@ function ChecklistOverview({ trip, currentUserId, onOpen }: ChecklistOverviewPro
       <ul className='divide-border divide-y'>
         {open.slice(0, PREVIEW_COUNT).map((item) => (
           <li key={item.id} className='flex items-center gap-3 py-2 pl-1.5'>
-            <span className='-m-1 inline-flex p-2'>
+            <span className='-m-3 inline-flex p-3'>
               <Checkbox
                 size={16}
                 checked={false}

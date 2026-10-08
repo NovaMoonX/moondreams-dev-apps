@@ -60,7 +60,14 @@ function toLocated(
   placeName: string | null = null,
   count = 1,
 ): Located | null {
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+  if (
+    typeof latitude !== 'number' ||
+    typeof longitude !== 'number' ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  ) {
     return null;
   }
   return { latitude, longitude, timezone, placeName, count };
@@ -74,8 +81,8 @@ function getTripCityLocation(trip: TripSpace): Located | null {
 /** The town from a US-style address ("3801 Discovery Park Blvd, Seattle, WA" is Seattle); otherwise the venue's own name. */
 function getPlaceLabel(event: TimelineEvent) {
   const parts = (event.address ?? '').split(',').map((part) => part.trim());
-  const isStateLast = /^[A-Z]{2}(\s+\d{5})?$/.test(parts.at(-1) ?? '');
-  const town = isStateLast && parts.length >= 2 ? parts.at(-2) : null;
+  const isState = (part: string | undefined) => /^[A-Z]{2}(\s+\d{5})?$/.test(part ?? '');
+  const town = isState(parts.at(-1)) ? parts.at(-2) : isState(parts.at(-2)) ? parts.at(-3) : null;
   return town || event.locationName?.trim() || event.title.trim() || null;
 }
 
@@ -92,8 +99,8 @@ function getDistanceKm(first: Located, second: Located) {
 
 /** A day's places, from its plans in time order: plans within `CLUSTER_KM` of a place's first plan belong to it.
  * Travel legs start from wherever each person is, so they don't say where the day is. The main place has
- * the most plans (the latest wins a tie: where the day ends is where people are); `others` keep the order
- * their first plan happens. */
+ * the most plans (a tie goes to the place whose first plan comes later, a good guess at where the day ends);
+ * `others` keep the order their first plan happens. */
 function getDayPlaces(trip: TripSpace, dayIndex: number, events: TimelineEvent[], city: Located | null) {
   const located = events
     .filter(
@@ -118,8 +125,14 @@ function getDayPlaces(trip: TripSpace, dayIndex: number, events: TimelineEvent[]
       ? [...acc, location]
       : acc.map((cluster, position) => (position === index ? { ...cluster, count: cluster.count + 1 } : cluster));
   }, []);
+  // The cluster nearest the trip city (if any is within range) is the city itself, which keeps its requests to one.
+  const nearCity = city
+    ? clusters
+        .filter((cluster) => getDistanceKm(city, cluster) <= CLUSTER_KM)
+        .sort((first, second) => getDistanceKm(city, first) - getDistanceKm(city, second))[0]
+    : undefined;
   const labelled = clusters.map((cluster) =>
-    city && getDistanceKm(city, cluster) <= CLUSTER_KM ? { ...cluster, placeName: city.placeName } : cluster,
+    city && cluster === nearCity ? { ...city, count: cluster.count } : cluster,
   );
   const main = labelled.reduce<Located | null>(
     (best, cluster) => (best === null || cluster.count >= best.count ? cluster : best),
@@ -267,7 +280,7 @@ export function getDayAlso(plan: WeatherPlan, forecasts: WeatherForecasts, dayIn
   const target = plan.days[dayIndex];
   const result = (target?.also ?? []).flatMap(({ key, placeName }) => {
     const forecast = forecasts[key]?.days.find((day) => day.date === target?.date) ?? null;
-    return forecast ? [{ placeName, forecast }] : [];
+    return forecast ? [{ key, placeName, forecast }] : [];
   });
   return result;
 }

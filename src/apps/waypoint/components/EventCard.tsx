@@ -427,8 +427,13 @@ export function EventCard({
             />
           </div>
         )}
+        {!isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
+          <div className='flex justify-end px-4 pb-3'>
+            <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} />
+          </div>
+        )}
       </article>
-      {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
+      {isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
         <div className='flex justify-end pr-4'>
           <NotPaidForBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
         </div>

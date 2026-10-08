@@ -194,10 +194,17 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
             </div>
           )}
         </div>
+        {!isSmallScreen && (
+          <div className='flex justify-end px-4 pb-3'>
+            <NotPaidForBadge getSubject={() => getRentalSubject(rental)} />
+          </div>
+        )}
       </article>
-      <div className='flex justify-end pr-4'>
-        <NotPaidForBadge variant='tab' getSubject={() => getRentalSubject(rental)} />
-      </div>
+      {isSmallScreen && (
+        <div className='flex justify-end pr-4'>
+          <NotPaidForBadge variant='tab' getSubject={() => getRentalSubject(rental)} />
+        </div>
+      )}
       </div>
       {isSmallScreen && (
         <PlaceDetailsDrawer

@@ -34,6 +34,8 @@ interface PillOptionsProps<T extends string> {
   leading?: ReactNode;
   selectedCount?: number;
   isThin?: boolean;
+  /** One answer: picking collapses the list, clears its search and floats the chosen option to the front. */
+  isSingle?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
@@ -45,6 +47,7 @@ export function PillOptions<T extends string>({
   leading,
   selectedCount = 0,
   isThin = false,
+  isSingle = false,
 }: PillOptionsProps<T>) {
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -69,7 +72,7 @@ export function PillOptions<T extends string>({
 
   // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
   const visible =
-    trimmedQuery === '' && !isExpanded && isOverflowing
+    isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
       ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
       : filtered;
   const showToggle = trimmedQuery === '' && (isOverflowing || isExpanded);
@@ -93,8 +96,10 @@ export function PillOptions<T extends string>({
                 isSelected={isSelected(option.value)}
                 onClick={() => {
                   onToggle(option.value);
-                  setIsExpanded(false);
-                  setQuery('');
+                  if (isSingle) {
+                    setIsExpanded(false);
+                    setQuery('');
+                  }
                 }}
               >
                 {option.label}
@@ -144,6 +149,7 @@ export function PillGroup<T extends string>({ label, options, value, onChange, l
       options={options}
       leading={leading}
       isThin={isThin}
+      isSingle
       selectedCount={value === null ? 0 : 1}
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}

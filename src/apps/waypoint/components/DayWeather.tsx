@@ -13,7 +13,7 @@ interface DayWeatherProps {
   /** Set when the weather isn't simply the trip city's: which place it is for. */
   placeName?: string | null;
   /** The day's other places, in the order their first plan happens. */
-  also?: { placeName: string | null; forecast: DayForecast }[];
+  also?: { key: string; placeName: string | null; forecast: DayForecast }[];
   isMinimized: boolean;
   onOpen?: () => void;
 }
@@ -100,11 +100,11 @@ function DayWeather({ forecast, hours = [], placeName = null, also = [], isMinim
       )}
       {also.length > 0 && (
         <div className='flex flex-wrap gap-1.5 px-3 pb-3'>
-          {also.map(({ placeName: alsoPlace, forecast: alsoForecast }) => {
+          {also.map(({ key, placeName: alsoPlace, forecast: alsoForecast }) => {
             const alsoCondition = getWeatherCondition(alsoForecast.weatherCode);
             return (
               <span
-                key={alsoPlace ?? alsoForecast.date}
+                key={key}
                 className='bg-background/70 text-muted-foreground inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs'
               >
                 <span className='shrink-0'>Also</span>

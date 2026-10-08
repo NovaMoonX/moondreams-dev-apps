@@ -18,7 +18,8 @@ function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
 
   useEffect(() => {
     const element = ref.current;
-    if (!isSticky || !element) {
+    const day = element?.parentElement;
+    if (!isSticky || !element || !day) {
       return;
     }
     let frame = 0;
@@ -29,11 +30,22 @@ function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
         setIsStuck(element.getBoundingClientRect().top <= stickTop + 0.5);
       });
     };
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
+    // Only a day that is on screen is measured, so skipped (off-screen) days are never forced to lay out.
+    const observer = new IntersectionObserver(([entry]) => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      if (entry?.isIntersecting) {
+        update();
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+      }
+    });
+    observer.observe(day);
+    element.addEventListener('transitionend', update);
     return () => {
       cancelAnimationFrame(frame);
+      observer.disconnect();
+      element.removeEventListener('transitionend', update);
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
     };

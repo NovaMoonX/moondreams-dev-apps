@@ -188,10 +188,17 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
             </div>
           )}
         </div>
+        {!isSmallScreen && (
+          <div className='flex justify-end px-4 pb-3'>
+            <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} />
+          </div>
+        )}
       </article>
-      <div className='flex justify-end pr-4'>
-        <NotPaidForBadge variant='tab' getSubject={() => getStaySubject(trip, stay)} />
-      </div>
+      {isSmallScreen && (
+        <div className='flex justify-end pr-4'>
+          <NotPaidForBadge variant='tab' getSubject={() => getStaySubject(trip, stay)} />
+        </div>
+      )}
       </div>
       {isSmallScreen && (
         <PlaceDetailsDrawer
