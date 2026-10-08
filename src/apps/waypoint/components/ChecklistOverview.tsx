@@ -62,9 +62,10 @@ function ChecklistOverview({ trip, currentUserId, onOpen }: ChecklistOverviewPro
       </div>
       <ul className='divide-border divide-y'>
         {open.slice(0, PREVIEW_COUNT).map((item) => (
-          <li key={item.id} className='flex items-center gap-3 px-3 py-2'>
-            <span className='inline-flex'>
+          <li key={item.id} className='flex items-center gap-3 py-2 pl-1.5'>
+            <span className='-m-1 inline-flex p-2'>
               <Checkbox
+                size={16}
                 checked={false}
                 aria-label={`Mark done: ${item.title}`}
                 disabled={!canEdit && !item.assignedToUids.includes(currentUserId)}
