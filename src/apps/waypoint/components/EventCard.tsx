@@ -119,8 +119,9 @@ export function EventDetailLines({
   onSaveNotes,
 }: EventDetailLinesProps) {
   const isCompact = useMediaQuery().isBelow('sm');
-  const quickField = getQuickField(event, isCompact);
-  const isSettingField = isCompact && event.eventType === 'ACTIVITY';
+  const quickField = getQuickField(event, isCompact && showTitle);
+  // On a phone the card leaves an activity's setting for its details drawer.
+  const isSettingHidden = isCompact && showTitle && event.eventType === 'ACTIVITY';
   const badge = getEventBadge(event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
   const { startMs, endMs } = getEventTime(trip, event);
@@ -161,7 +162,6 @@ export function EventDetailLines({
         </span>
       </div>
       {(event.isArchived ||
-        (isSettingField && quickField) ||
         (EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived)) && (
         <div className='flex flex-wrap items-center gap-2'>
           {event.isArchived && (
@@ -169,14 +169,13 @@ export function EventDetailLines({
               <Archive className='h-3 w-3' /> Archived
             </Badge>
           )}
-          {isSettingField && quickField && <span className='text-muted-foreground text-sm whitespace-nowrap'>{quickField}</span>}
           {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
             <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
           )}
         </div>
       )}
       {showTitle && <h3 className='font-semibold'>{event.title}</h3>}
-      {quickField && !isSettingField && !event.title.toLowerCase().includes(quickField.toLowerCase()) && (
+      {quickField && !isSettingHidden && !event.title.toLowerCase().includes(quickField.toLowerCase()) && (
         <p className='text-muted-foreground text-sm'>{quickField}</p>
       )}
       {transitLines.length > 0 && (
@@ -363,7 +362,7 @@ export function EventCard({
           />
         )}
         <div className='flex items-start justify-between gap-3 p-4'>
-          <div className='min-w-0 space-y-1'>
+          <div className='min-w-0 flex-1 space-y-1'>
             <EventDetailLines
               trip={trip}
               event={event}
