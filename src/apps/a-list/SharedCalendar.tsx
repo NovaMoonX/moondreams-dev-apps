@@ -94,8 +94,8 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
           spellCheck={false}
           placeholder='••••'
           className={join(
-            'px-12 text-center text-lg font-semibold tracking-[0.4em] uppercase',
-            !isShown && pin.length > 0 && 'pt-3',
+            'h-12 px-12 py-0 text-center text-lg font-semibold tracking-[0.4em] uppercase',
+            !isShown && pin.length > 0 && 'pt-3.5',
           )}
           value={isShown ? pin : '*'.repeat(pin.length)}
           onPaste={(event) => {
