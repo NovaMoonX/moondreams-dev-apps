@@ -2,14 +2,14 @@ import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import {
   Button,
-  Disclosure,
+  Clickable,
   Drawer,
   Input,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, ListFilter, Lock } from 'lucide-react';
+import { ChevronRight, HandCoins, ListFilter, Lock, Receipt } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
@@ -159,7 +159,7 @@ function describeSplit(
     : `Split · ${targetLabel} (even)`;
 }
 
-const PERSONAL_PREVIEW_COUNT = 5;
+const PERSONAL_PREVIEW_COUNT = 3;
 const EAGER_DAYS = 3;
 const ESTIMATED_ROW_HEIGHT = 72;
 
@@ -274,6 +274,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [newExpenseAudience, setNewExpenseAudience] = useState<'EVERYONE' | 'ME'>('EVERYONE');
   const [isPersonalSubmitting, setIsPersonalSubmitting] = useState(false);
   const [showAllPersonal, setShowAllPersonal] = useState(false);
+  const [isPersonalListOpen, setIsPersonalListOpen] = useState(false);
   const [personalQuery, setPersonalQuery] = useState('');
   const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
@@ -548,6 +549,31 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       setError(getErrorMessage(markError, 'Unable to mark this expense as unpaid.'));
     }
   };
+
+  const renderPersonalList = (items: PersonalExpense[], onOpen: (expense: PersonalExpense) => void) => (
+    <ul className='divide-border divide-y'>
+      {items.map((expense) => (
+        <li key={expense.id}>
+          <Clickable onButtonClick={() => onOpen(expense)} buttonProps={{ 'aria-label': `Open ${expense.title}` }}>
+            <div className='flex w-full items-center gap-3 py-3 text-left'>
+              <span className='min-w-0 flex-1'>
+                <span className='block truncate font-medium'>{expense.title}</span>
+                <span className='text-muted-foreground line-clamp-2 block text-sm'>
+                  {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
+                  {expense.status === 'PAID' ? 'Paid' : 'Still to pay'}
+                  {expense.dayIndex !== null && ` · ${getDayLabel(trip.startDate, expense.dayIndex, dayCount)}`}
+                </span>
+              </span>
+              <span className='shrink-0 font-semibold whitespace-nowrap'>
+                {formatTotal(expense.amount, expense.amount, currency)}
+              </span>
+              <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+            </div>
+          </Clickable>
+        </li>
+      ))}
+    </ul>
+  );
 
   const handleSplitSubmit = async (values: ExpenseSplitSubmitValues) => {
     if (!splittingExpense) {
@@ -1027,70 +1053,54 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             {personalMatches?.length === 0 && (
               <p className='text-muted-foreground py-2 text-sm'>Nothing matches that.</p>
             )}
-            <ul className='divide-border divide-y'>
-              {visiblePersonalExpenses.map((expense) => (
-                <li key={expense.id}>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    aria-label={`Open ${expense.title}`}
-                    onClick={() => setPersonalFormExpense(expense)}
-                    className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
-                  >
-                    <span className='min-w-0 flex-1'>
-                      <span className='block truncate font-medium'>{expense.title}</span>
-                      <span className='text-muted-foreground line-clamp-2 block text-sm'>
-                        {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
-                        {expense.status === 'PAID' ? 'Paid' : 'Still to pay'}
-                        {expense.dayIndex !== null && ` · ${getDayLabel(trip.startDate, expense.dayIndex, dayCount)}`}
-                      </span>
-                    </span>
-                    <span className='shrink-0 font-semibold whitespace-nowrap'>
-                      {formatTotal(expense.amount, expense.amount, currency)}
-                    </span>
-                    <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            {renderPersonalList(visiblePersonalExpenses, (expense) => setPersonalFormExpense(expense))}
             {personalMatches === null && personalExpenses.length > PERSONAL_PREVIEW_COUNT && (
               <Button
                 type='button'
                 variant='link'
                 size='sm'
                 className='min-h-10 px-0!'
-                onClick={() => setShowAllPersonal((current) => !current)}
+                onClick={() =>
+                  isSmallScreen ? setIsPersonalListOpen(true) : setShowAllPersonal((current) => !current)
+                }
               >
-                {showAllPersonal ? 'Show fewer' : `Show all ${personalExpenses.length}`}
+                {!isSmallScreen && showAllPersonal ? 'Show fewer' : `View all ${personalExpenses.length}`}
               </Button>
             )}
           </>
         )}
       </div>
-      <div className='border-border rounded-lg border'>
-        <Disclosure
-          label={
-            <span className='text-sm font-medium'>
+      <div className='space-y-1'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
+              <HandCoins className='h-4 w-4 shrink-0' aria-hidden='true' />
               Dues summary
-              {myOpenPairs > 0 && (
-                <span className='text-muted-foreground font-normal'>
-                  {' '}
-                  · {myOpenPairs} to settle
-                </span>
-              )}
-            </span>
-          }
-          isOpen={isDuesOpen}
-          onToggle={setIsDuesOpen}
-          buttonClassName='px-3 py-2.5 hover:bg-muted/40'
-          className='overflow-visible'
-        >
-          <div className='border-border border-t px-3 pb-3'>
-          {pairSettlements.length === 0 ? (
-            <p className='text-muted-foreground mt-1 text-sm'>
-              Everyone&apos;s settled up.
+            </h3>
+            <p className='text-muted-foreground -mt-1 text-sm'>
+              {pairSettlements.length === 0
+                ? 'Nothing to settle yet.'
+                : myOpenPairs > 0
+                  ? `${myOpenPairs} to settle`
+                  : 'You’re all square.'}
             </p>
-          ) : (
+          </div>
+          <div className='flex h-10 shrink-0 items-center'>
+            {pairSettlements.length > 0 && (
+            <Button
+              size='sm'
+              variant='secondary'
+              aria-expanded={isDuesOpen}
+              className="relative after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
+              onClick={() => setIsDuesOpen((open) => !open)}
+            >
+              {isDuesOpen ? 'Hide' : 'Show'}
+            </Button>
+            )}
+          </div>
+        </div>
+        {isDuesOpen && pairSettlements.length > 0 && (
+          <div>
             <DuesSummary
               settlements={pairSettlements}
               currentUserId={currentUserId}
@@ -1108,9 +1118,26 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               canRemoveEarly={(fromUid) => fromUid === currentUserId || canAddExpenses}
               onRemoveEarly={(expenseId, fromUid) => void handleRemoveEarlyFromDues(expenseId, fromUid)}
             />
-          )}
           </div>
-        </Disclosure>
+        )}
+      </div>
+      <div className='space-y-1'>
+        <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
+          <Receipt className='h-4 w-4 shrink-0' aria-hidden='true' />
+          All expenses
+        </h3>
+        <p className='text-muted-foreground -mt-2 text-sm'>
+          {filteredExpenses.length === expenses.length
+            ? `${expenses.length} ${expenses.length === 1 ? 'expense' : 'expenses'}`
+            : `${filteredExpenses.length} of ${expenses.length}`}
+          {filteredExpenses.length > 0 && (
+            <>
+              {' · '}
+              {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
+              {totalsView !== 'group' && (totalsView === 'me' ? ' your share' : ' per person')}
+            </>
+          )}
+        </p>
       </div>
       <div className='flex flex-wrap items-center gap-2'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
@@ -1222,21 +1249,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </p>
       ) : (
         <div className='space-y-3'>
-          <div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
-            <p className='text-sm font-medium whitespace-nowrap'>
-              {filteredExpenses.length === expenses.length ? 'All' : 'Filtered'}{' '}
-              {personalExpenses.length > 0 ? 'trip expenses' : 'expenses'}{' '}
-              <span className='text-muted-foreground font-normal'>({filteredExpenses.length})</span>
-            </p>
-            <p className='text-sm font-semibold whitespace-nowrap'>
-              {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
-              {totalsView !== 'group' && (
-                <span className='text-muted-foreground font-normal'>
-                  {totalsView === 'me' ? ' your share' : ' per person'}
-                </span>
-              )}
-            </p>
-          </div>
           {dayGroups ? (
             dayGroups.map(({ bucket, items }, dayPosition) => (
               <div
@@ -1290,6 +1302,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           onClose={() => setPersonalFormExpense(null)}
         />
       )}
+      <DetailSheet isOpen={isPersonalListOpen} onClose={() => setIsPersonalListOpen(false)} title='Just for me'>
+        <div className='space-y-2'>
+          {showPersonalSearch && (
+            <SearchInput value={personalQuery} onChange={setPersonalQuery} placeholder='Search your personal expenses' />
+          )}
+          {personalMatches?.length === 0 && <p className='text-muted-foreground py-2 text-sm'>Nothing matches that.</p>}
+          {renderPersonalList(personalMatches ?? sortedPersonalExpenses, (expense) => {
+            setIsPersonalListOpen(false);
+            setPersonalFormExpense(expense);
+          })}
+        </div>
+      </DetailSheet>
       <MarkExpensePaidModal
         key={`paying-${payingExpense?.id ?? 'none'}`}
         isOpen={payingExpense !== null && payingExpense.status !== 'PAID'}

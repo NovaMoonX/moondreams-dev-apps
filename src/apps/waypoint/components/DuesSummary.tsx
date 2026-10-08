@@ -2,6 +2,8 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+
 import DetailSheet from '@/components/DetailSheet';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, ChevronRight, Circle, HandCoins } from 'lucide-react';
@@ -43,6 +45,8 @@ function DuesSummary({
   canRemoveEarly,
   onRemoveEarly,
 }: DuesSummaryProps) {
+  const isPhone = useMediaQuery().isBelow('sm');
+  const [isNoticesOpen, setIsNoticesOpen] = useState(false);
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
   const [showAllNotices, setShowAllNotices] = useState(false);
   const [visiblePairs, setVisiblePairs] = useState(MAX_VISIBLE_PAIRS);
@@ -218,6 +222,7 @@ function DuesSummary({
     .sort((first, second) => second.item.payment.paidAt - first.item.payment.paidAt)
     .map(({ item, fromUid, toUid }) => ({
       key: `${item.expense.id}-${fromUid}`,
+      expenseId: item.expense.id,
       fromUid,
       toUid,
       amount: formatAmount(item.payment.amount),
@@ -338,42 +343,90 @@ function DuesSummary({
     );
   };
 
+  type Notice = (typeof notices)[number];
+  const renderNoticeList = (items: Notice[], isInSheet: boolean) => (
+    <>
+      {isInSheet && (
+        <p className='text-muted-foreground bg-muted/50 mb-3 flex items-start gap-2 rounded-xl p-3 text-xs'>
+          <HandCoins className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+          <span>
+            <span className='text-foreground block text-sm font-medium'>Paid early</span>
+            Money sent ahead of an expense comes off what&apos;s owed until the expense is paid. Newest first.
+          </span>
+        </p>
+      )}
+      <ul className='divide-border divide-y'>
+        {items.map((notice) => (
+          <li key={notice.key} className='flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0'>
+            <span className='min-w-0'>
+              {memberLabel(notice.fromUid)} sent {memberLabel(notice.toUid)}{' '}
+              <span className='font-medium whitespace-nowrap'>{notice.amount}</span>
+              <span className='text-muted-foreground block text-xs'>
+                {notice.title}
+                {notice.isHeld ? ' · being held until it is sent back' : ''}
+              </span>
+            </span>
+            <span className='flex shrink-0 items-center'>
+              {notice.fromUid === currentUserId && canRemoveEarly(notice.fromUid) && (
+                <Button
+                  type='button'
+                  variant='link'
+                  className='h-10 text-xs'
+                  onClick={() => onRemoveEarly(notice.expenseId, notice.fromUid)}
+                >
+                  Undo
+                </Button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
   return (
     <>
-      {notices.length > 0 && (
-        <div className='bg-muted/50 mt-2 space-y-2 rounded-xl p-3'>
-          <p className='text-muted-foreground flex items-start gap-2 text-xs'>
-            <HandCoins className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
-            <span>
-              <span className='text-foreground block text-sm font-medium'>Paid early</span>
-              Money sent ahead of an expense comes off what&apos;s owed until the expense is paid. Newest first.
-            </span>
-          </p>
-          <ul className='divide-border divide-y'>
-            {visibleNotices.map((notice) => (
-              <li key={notice.key} className='py-2 text-sm first:pt-0 last:pb-0'>
-                {memberLabel(notice.fromUid)} sent {memberLabel(notice.toUid)}{' '}
-                <span className='font-medium whitespace-nowrap'>{notice.amount}</span>
-                <span className='text-muted-foreground block text-xs'>
-                  {notice.title}
-                  {notice.isHeld ? ' · being held until it is sent back' : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {notices.length > MAX_VISIBLE_NOTICES && (
+      {notices.length > 0 &&
+        (isPhone ? (
+          <>
             <Button
               type='button'
-              variant='link'
-              size='sm'
-              className='h-10 px-0!'
-              onClick={() => setShowAllNotices((current) => !current)}
+              variant='tertiary'
+              onClick={() => setIsNoticesOpen(true)}
+              className='bg-muted/50 mt-2 h-auto w-full justify-start gap-3 rounded-xl px-3! py-3 text-left'
             >
-              {showAllNotices ? 'Show fewer' : `Show ${notices.length - MAX_VISIBLE_NOTICES} more`}
+              <HandCoins className='h-4 w-4 shrink-0' aria-hidden='true' />
+              <span className='min-w-0 flex-1 text-sm font-medium'>Paid early</span>
+              <span className='text-muted-foreground shrink-0 text-sm tabular-nums'>{notices.length}</span>
+              <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
             </Button>
-          )}
-        </div>
-      )}
+            <DetailSheet isOpen={isNoticesOpen} onClose={() => setIsNoticesOpen(false)} title='Dues summary'>
+              {renderNoticeList(notices, true)}
+            </DetailSheet>
+          </>
+        ) : (
+          <div className='bg-muted/50 mt-2 space-y-2 rounded-xl p-3'>
+            <p className='text-muted-foreground flex items-start gap-2 text-xs'>
+              <HandCoins className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+              <span>
+                <span className='text-foreground block text-sm font-medium'>Paid early</span>
+                Money sent ahead of an expense comes off what&apos;s owed until the expense is paid. Newest first.
+              </span>
+            </p>
+            {renderNoticeList(visibleNotices, false)}
+            {notices.length > MAX_VISIBLE_NOTICES && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='h-10 px-0!'
+                onClick={() => setShowAllNotices((current) => !current)}
+              >
+                {showAllNotices ? 'Show fewer' : `Show ${notices.length - MAX_VISIBLE_NOTICES} more`}
+              </Button>
+            )}
+          </div>
+        ))}
       {renderGroup('Money to send', capGroup(toSend))}
       {renderGroup('Money to collect', capGroup(toCollect))}
       {renderGroup('All square', capGroup(settledMine))}
