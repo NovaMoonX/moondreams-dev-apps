@@ -175,7 +175,7 @@ interface ExpenseFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input } = FormFactories;
+const { custom } = FormFactories;
 
 function parseAmount(value: string): number | null {
   const parsed = Number(value);
@@ -338,13 +338,41 @@ function ExpenseFormModal({
   };
 
   const fields = useMemo(() => {
+    const itemDay = pickedSubject?.dayIndex == null ? null : String(pickedSubject.dayIndex);
     const nextFields: FormField[] = areTitleFieldsVisible
       ? [
-          input({
+          custom({
             name: 'title',
-            label: 'Expense title',
-            placeholder: 'Dinner reservation',
-            variant: 'outline',
+            label: '',
+            renderComponent: (props) => {
+              const title = props.value as string;
+              const itemTitle = pickedSubject?.title ?? null;
+              return (
+                <div className='space-y-1.5'>
+                  <Label>Expense title</Label>
+                  <Input
+                    aria-label='Expense title'
+                    placeholder='Dinner reservation'
+                    variant='outline'
+                    value={title}
+                    onChange={(event) => props.onValueChange(event.target.value)}
+                  />
+                  {itemTitle !== null && title.trim() !== itemTitle && (
+                    <div className='flex justify-end'>
+                      <Button
+                        type='button'
+                        variant='link'
+                        size='sm'
+                        className='text-muted-foreground h-auto px-0! py-0! text-xs font-normal'
+                        onClick={() => props.onValueChange(itemTitle)}
+                      >
+                        Use the itinerary item title
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            },
           }),
           custom({
             name: 'category',
@@ -476,6 +504,19 @@ function ExpenseFormModal({
                 value={props.value as string}
                 onChange={(value) => props.onValueChange(value)}
               />
+              {itemDay !== null && props.value !== itemDay && (
+                <div className='mt-1 flex justify-end'>
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='sm'
+                    className='text-muted-foreground h-auto px-0! py-0! text-xs font-normal'
+                    onClick={() => props.onValueChange(itemDay)}
+                  >
+                    Use the itinerary item day
+                  </Button>
+                </div>
+              )}
             </RemovableField>
           ),
         }),
@@ -526,6 +567,8 @@ function ExpenseFormModal({
     return nextFields;
   }, [
     areTitleFieldsVisible,
+    pickedSubject?.title,
+    pickedSubject?.dayIndex,
     categoryOptions,
     dayOptions,
     groupOptions,
