@@ -59,8 +59,8 @@ function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
     <div
       ref={ref}
       className={join(
-        'sticky-day-bar flex min-h-10 items-center px-1 transition-colors',
-        isStuck && 'bg-background/80 border-border border-b backdrop-blur',
+        'sticky-day-bar flex min-h-10 items-center border-b border-transparent px-1',
+        isStuck && 'bg-background/80 border-border backdrop-blur',
       )}
     >
       {isStuck ? (

@@ -46,8 +46,8 @@ function StickyAppBar({ leading, trailing, title, titleRef, className }: StickyA
     <div
       ref={barRef}
       className={join(
-        'sticky-app-bar -mx-4 flex min-h-14 items-center justify-between gap-2 px-4 py-2.5 transition-colors',
-        isStuck && 'bg-background/80 border-border border-b backdrop-blur',
+        'sticky-app-bar -mx-4 flex min-h-14 items-center justify-between gap-2 border-b border-transparent px-4 py-2.5',
+        isStuck && 'bg-background/80 border-border backdrop-blur',
         className,
       )}
     >
