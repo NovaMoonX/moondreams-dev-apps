@@ -49,6 +49,18 @@ function WatchlistScreen() {
         : [...current, filter],
     );
 
+  const canReset =
+    filters.length > 0 ||
+    query.trim() !== '' ||
+    chosenSort !== 'default' ||
+    order !== 'natural';
+  const resetAll = () => {
+    setFilters([]);
+    setQuery('');
+    setSort('default');
+    setOrder('natural');
+  };
+
   const daysByMovie = Object.fromEntries(
     openingRows.map((row) => [row.item.movieKey, row.daysUntil]),
   );
@@ -172,12 +184,9 @@ function WatchlistScreen() {
             variant='link'
             size='sm'
             className='h-auto p-0'
-            onClick={() => {
-              setFilters([]);
-              setQuery('');
-            }}
+            onClick={resetAll}
           >
-            Clear search and filters
+            Reset search, filters and sort
           </Button>
         </p>
       );
@@ -232,8 +241,9 @@ function WatchlistScreen() {
       <WatchlistFilters
         value={filters}
         openingCount={openingRows.length}
+        canReset={canReset}
         onToggle={toggleFilter}
-        onClear={() => setFilters([])}
+        onReset={resetAll}
       />
       {visibleRows.length === 0 ? (
         <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>
