@@ -286,6 +286,46 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // A calendar share is addressed by an unguessable id, so it can't nest under the owner's uid;
+    // `ownerUid` stands in. Visitors never read it: the getCalendarShare function (admin SDK)
+    // checks the PIN and returns only the allowlisted fields.
+    match /apps/a-list/calendarShares/{shareId} {
+      function isShareOwner() {
+        return request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
+
+      function isSharePin(value) {
+        return value == null || (value is string && value.matches('^[2-9A-HJ-NP-Z]{4}$'));
+      }
+
+      function isShareCreateValid(data) {
+        let keys = ['id', 'ownerUid', 'startDate', 'endDate', 'pin', 'viewings', 'createdAt', 'lastEditedAt'];
+        return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          && data.id == shareId
+          && shareId.matches('^[2-9a-hj-np-z]{26}$')
+          && data.ownerUid == request.auth.uid
+          && data.startDate is int && data.endDate is int
+          && data.endDate >= data.startDate
+          && data.endDate - data.startDate <= 365 * 86400000
+          && isSharePin(data.pin)
+          && data.viewings is list && data.viewings.size() > 0 && data.viewings.size() <= 400
+          && data.createdAt is int
+          && data.lastEditedAt is int;
+      }
+
+      // A share is a snapshot: the only thing the owner can change afterwards is its PIN.
+      function isShareUpdateValid() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin', 'lastEditedAt'])
+          && isSharePin(request.resource.data.pin)
+          && request.resource.data.lastEditedAt is int;
+      }
+
+      allow read, delete: if isShareOwner();
+      allow create: if request.auth != null && isShareCreateValid(request.resource.data)
+        && exists(/databases/$(database)/documents/apps/a-list/memberships/$(request.auth.uid));
+      allow update: if isShareOwner() && isShareUpdateValid();
+    }
+
     // --- App: nine-lives ---
 
     match /apps/nine-lives {

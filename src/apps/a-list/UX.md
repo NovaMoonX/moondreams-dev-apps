@@ -67,6 +67,8 @@ flowchart TD
     H --> J["Edit · swaps in place"]
     H --> K[Remove confirm]
     D -->|+ Add| G["Add drawer · pick, then details"]
+    D -->|Share| SH["Shared calendars subview · up to 10 links; + New picks the dates and an optional PIN"]
+    SH -.->|a friend opens the link, no sign-in| SV["Shared calendar page · PIN gate if locked"]
     D -.->|showtime ended| L[Seen prompt drawer]
     E -->|+ Add| M["Add drawer · pick, then details"]
     E -->|tap an item| N[Watchlist drawer]

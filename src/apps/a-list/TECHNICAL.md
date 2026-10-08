@@ -187,6 +187,39 @@ interface TheatreSnapshot { theatreId: string; name: string; city: string | null
 - **Two devices can race the favorite** (one removes the last theater while another adds, or the next-in-line theater vanishes mid-removal): the worst outcome is a saved theater with no star, which still works (pills, tagging) and is fixed by tapping a star. Accepted. **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite hands the star to another saved theater in the same transaction (Setup does the same), and unstarring it is the only way to have none. Setting a favorite is a single field write on the membership.
 - **Indexes:** none (a whole-collection listener).
 
+#### 5. Calendar share
+
+Path: `apps/a-list/calendarShares/{shareId}` (flat, not under the member's uid: a link has to find its document from the id alone, so `ownerUid` stands in for the nesting)
+
+```typescript
+interface CalendarShare {
+  id: string;                  // equals the document id and the token in the link; 26 characters, immutable
+  ownerUid: string;            // immutable; never sent to a visitor
+  startDate: number;           // date-only (UTC midnight): first day included
+  endDate: number;             // date-only (UTC midnight): last day included
+  pin: string | null;          // 4 characters of A–Z/2–9 (no I or O), or null for an open link
+  viewings: SharedViewing[];   // the frozen copy, 1–400 showings
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+interface SharedViewing {
+  title: string; posterUrl: string | null; runtimeMinutes: number | null; contentRating: string | null;
+  showtimeAt: number; status: 'PLANNED' | 'SEEN'; format: AmcFormat | null; theatreName: string | null;
+}
+```
+
+- **A snapshot, copied at creation and never refreshed.** Quick ranges are resolved to the member's local days when they tap Create: this/next week run Sunday to Saturday (the calendar grid's week, not AMC's Friday week), this/next month are the calendar month. A custom range is two local day keys, up to 366 days. A showing is in the range when its local day key falls between the two, the same rule the calendar uses. Nothing is stored for an empty range: Create is disabled.
+- **Allowlisted, not spread.** `SharedViewing` copies eight fields from a viewing by name. It has no viewing id, `movieKey`, ticket, price, fee, rating, `trailerReminderId`, theater id, city or state, and the share holds no display name, email or `uid` besides `ownerUid` (which the function strips). `format` is the ticket's format, so it is `null` until a ticket is on record.
+- **Visitors never read Firestore.** The rules give only the owner read access. A visitor opens `/a-list/shared/{shareId}`, which calls the `getCalendarShare` callable (no sign-in), which reads the document with the admin SDK, checks the PIN, and returns `{ status: 'ok', calendar }` or `pin_required`, `wrong_pin`, `not_found`. A malformed, unknown or deleted id is `not_found`, so ids can't be probed for which exist. The function rebuilds each showing from the allowlist again, so a field added to a document later (or written by a modified client) can't reach a visitor.
+- **The id is the secret.** `generateToken(26)` is 26 characters over 32 symbols (130 bits) from `crypto.getRandomValues`; nothing about the link can be guessed or enumerated, and no listing of shares exists for visitors.
+- **The PIN** is `generateToken(4)` uppercased, stored in plain text because the owner has to read it back to send it; only the owner can read the document and the function never returns it. Turning the lock off writes `null`; turning it on writes a fresh PIN, so off-then-on retires the old one. Entry is case-insensitive and trimmed, and compared in constant time. **There is no attempt limit** (an accepted trade-off: 32^4 is about a million PINs, and a link is already unlisted); add one in the function if a share ever holds something more sensitive.
+- **At most 10 shares per member** (`MAX_CALENDAR_SHARES`) is enforced in the client only: the create thunk counts the member's shares on the server (`getCountFromServer`, so a stale tab can't slip past it, and offline fails instead of making a link that doesn't exist yet), and the UI hides "+ New" at 10. A modified client could exceed it; accepted, since it only costs the owner storage.
+- **Deleting is the only way to stop sharing** and is immediate (the next open is `not_found`). There is no rename and no re-snapshot: the only edit is the PIN. Create a new link for new plans.
+- **Times** are instants shown in the *viewer's* local time, like everywhere in the app, so a friend in another time zone sees the showtime shifted. Storing the sharer's zone to fix that is a follow-up.
+- **Link previews** (Cloudflare worker) say only that a movie calendar was shared, whether or not it has a PIN. `<meta name="robots" content="noindex">` is added on the page.
+- **Indexes:** none (`where('ownerUid', '==', uid)` is a single-field equality query).
+
 #### Derived values (never stored)
 
 | Value | Computed from | Where |
@@ -484,6 +517,7 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 10. **No `storage.rules` change.** The app stores no files.
 11. **The movie cache and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
 12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be `manual-…` and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range), and `createdAt` is immutable. `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
+13. **Calendar shares:** `apps/a-list/calendarShares/{shareId}` is readable and deletable only by `ownerUid`, creatable only by a member (their membership document must exist) whose `ownerUid` is their uid, with the id matching the 26-character share alphabet and equal to the field, exact keys, `endDate ≥ startDate` and at most 365 days later, a null-or-valid PIN, and 1–400 viewings. An update may change only `pin` and `lastEditedAt`. Visitors have no read; the function uses the admin SDK.
 
 The shape of the block (helpers are declared in the `memberships/{uid}` match so the nested matches reuse them):
 
@@ -566,6 +600,13 @@ match /apps/a-list/memberships/{uid} {
 match /apps/a-list/searchCache/{key}   { allow read, write: if false; }
 match /apps/a-list/movieCache/{key}    { allow read, write: if false; }
 match /apps/a-list/lookupUsage/{key}   { allow read, write: if false; }
+
+// Owner-only; visitors go through the getCalendarShare function.
+match /apps/a-list/calendarShares/{shareId} {
+  allow read, delete: if isShareOwner();
+  allow create: if isMember() /* && isShareCreateValid(request.resource.data) */;
+  allow update: if isShareOwner() /* && only pin and lastEditedAt change, pin valid */;
+}
 ```
 
 (The commented placeholders are the helper calls the implementation PR writes out in full; the structure and every constraint are as listed in the criteria above.)
@@ -651,7 +692,7 @@ No cached document is ever written back whole. A transaction is used only where 
 
 ## Security & Privacy Requirements
 
-- **Private by construction.** One member's membership, watchlist and viewings are readable and writable only by them. There is no sharing and no admin read; the rules in Security Rules Design Criteria #1–2 are the whole access model.
+- **Private by construction.** One member's membership, watchlist and viewings are readable and writable only by them. There is no admin read; the rules in Security Rules Design Criteria #1–2 are the whole access model. The one thing that leaves is a calendar share the member makes on purpose (Data Schema #5): a frozen, allowlisted copy behind an unguessable link, optionally PIN-locked, served by a function and deletable at any time.
 - **What leaves the app, and where it goes.** Movie search text and a chosen `movieKey` go to the app's own Cloud Functions, which forward them to the movie provider; the provider sees the function's address and the text, never the member's identity, and the functions don't log the text. The functions do keep a shared cache of results and per-member lookup counts (server-only, no text, no identity beyond a `uid` in a counter's document id). Nothing else leaves the app: there is no location, and tax is never looked up. Posters load straight from the host OMDb names in its response, which sees the viewer's address when they load, as with any image; the app sets `referrerPolicy='no-referrer'` as `FallbackImage` does.
 - **The provider credential never reaches the browser, a response, or a log** (Functions secret). Inputs to the callables are validated and length-capped; every callable requires an authenticated caller.
 - **Stored data minimization.** No location of any kind is collected or stored. No ticket confirmation numbers or card data are ever collected. The only venue detail is the theater's name (and AMC's id once theaters come from AMC), stored on the member's own theater list and copied onto a showing; address and coordinates stay `null`.

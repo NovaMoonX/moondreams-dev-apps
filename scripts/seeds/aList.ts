@@ -351,6 +351,24 @@ function getViewingFixtures(now: number) {
   );
 }
 
+// Ids use the share alphabet (no 0, 1, i or o) and are 26 characters, like a generated one.
+const SEED_SHARE_OPEN_ID = `seedshare${'2'.repeat(17)}`;
+const SEED_SHARE_PIN_ID = `seedsharepass${'3'.repeat(13)}`;
+const SEED_SHARE_PIN = 'K7M2';
+
+function toSharedViewing(viewing: ReturnType<typeof getViewingFixtures>[number]) {
+  return {
+    title: viewing.movie.title,
+    posterUrl: viewing.movie.posterUrl,
+    runtimeMinutes: viewing.movie.runtimeMinutes,
+    contentRating: viewing.movie.contentRating,
+    showtimeAt: viewing.showtimeAt,
+    status: viewing.status,
+    format: viewing.ticket?.format ?? null,
+    theatreName: viewing.theatre?.name ?? null,
+  };
+}
+
 // Alex has a finished membership; every other fixture account lands on Setup.
 export async function seedAList(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -405,6 +423,31 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const upcoming = viewings.filter((viewing) => viewing.status === 'PLANNED');
+  const seedShares = [
+    { id: SEED_SHARE_OPEN_ID, pin: null, items: viewings },
+    { id: SEED_SHARE_PIN_ID, pin: SEED_SHARE_PIN, items: upcoming },
+  ];
+  await Promise.all(
+    seedShares.map(({ id, pin, items }) =>
+      context.firestore
+        .collection('apps')
+        .doc('a-list')
+        .collection('calendarShares')
+        .doc(id)
+        .set({
+          id,
+          ownerUid: alex.uid,
+          startDate: getDayUtc(context.now, 75),
+          endDate: getDayUtcAhead(context.now, 45),
+          pin,
+          viewings: items.map(toSharedViewing),
+          createdAt: context.now - DAY_MS,
+          lastEditedAt: context.now - DAY_MS,
+        }),
+    ),
+  );
+
   const previewsViewing = viewings.find(
     (viewing) => viewing.id === PREVIEWS_VIEWING_ID,
   );
@@ -432,6 +475,10 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      2 + SEED_THEATRES.length + watchlist.length + viewings.length,
+      2 +
+      SEED_THEATRES.length +
+      watchlist.length +
+      viewings.length +
+      seedShares.length,
   };
 }

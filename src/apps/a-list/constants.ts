@@ -1,6 +1,7 @@
 import type {
   AListTab,
   AmcFormat,
+  ShareRangeKind,
   WatchlistFilter,
   WatchPriority,
 } from '@apps/a-list/types';
@@ -103,4 +104,25 @@ export const WATCHLIST_FILTERS: WatchlistFilter[] = [
   'WANT_TO_SEE',
   'IF_I_HAVE_TIME',
   'seen',
+];
+
+export const MAX_CALENDAR_SHARES = 10;
+export const MAX_SHARE_RANGE_DAYS = 366;
+/** Matches the rules' cap on the viewings one share can hold. */
+export const MAX_SHARED_VIEWINGS = 400;
+export const SHARE_PIN_LENGTH = 4;
+export const SHARE_ID_LENGTH = 26;
+/** The calendar grid starts on Sunday, unlike AMC's Friday week. */
+export const CALENDAR_GRID_WEEK_STARTS_ON = 0;
+
+export const SHARE_RANGE_OPTIONS: {
+  value: ShareRangeKind;
+  label: string;
+  emoji: string;
+}[] = [
+  { value: 'THIS_MONTH', label: 'This month', emoji: '🗓️' },
+  { value: 'NEXT_MONTH', label: 'Next month', emoji: '➡️' },
+  { value: 'THIS_WEEK', label: 'This week', emoji: '⭐' },
+  { value: 'NEXT_WEEK', label: 'Next week', emoji: '⏭️' },
+  { value: 'CUSTOM', label: 'Pick dates', emoji: '✏️' },
 ];
