@@ -300,7 +300,7 @@ export default function ChecklistSection({
                                 title='Only you see this'
                               >
                                 <Lock className='h-3 w-3' aria-hidden='true' />
-                                Just me
+                                Private
                               </span>
                             )}
                           </div>
@@ -382,7 +382,7 @@ export default function ChecklistSection({
             {isPrivateItem(detailItem) && (
               <p className='text-muted-foreground inline-flex items-center gap-1 text-xs'>
                 <Lock className='h-3 w-3' aria-hidden='true' />
-                Just me
+                Private
               </p>
             )}
             {detailItem.note && <p className='text-muted-foreground text-sm italic'>{detailItem.note}</p>}
@@ -394,6 +394,7 @@ export default function ChecklistSection({
         key={`${editingItem?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
         trip={trip}
+        currentUserId={currentUserId}
         item={editingItem}
         isItemPrivate={editingItem !== null && isPrivateItem(editingItem)}
         canShare={canEdit}

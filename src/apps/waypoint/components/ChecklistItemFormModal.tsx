@@ -12,6 +12,7 @@ import { Input } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AppToggle from '@/components/AppToggle';
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
@@ -54,6 +55,7 @@ export interface ChecklistSubmitValues {
 interface ChecklistItemFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
+  currentUserId: string;
   memberOptions: { label: string; value: string }[];
   item?: ChecklistItem | null;
   /** The item being edited is one only its owner sees. */
@@ -111,6 +113,7 @@ function getInitialFormData(
 export default function ChecklistItemFormModal({
   isOpen,
   trip,
+  currentUserId,
   memberOptions,
   item = null,
   isItemPrivate = false,
@@ -126,11 +129,15 @@ export default function ChecklistItemFormModal({
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));
-  const [audience, setAudience] = useState<'everyone' | 'pick' | 'private'>(() => {
-    if (isItemPrivate || !canShare) return 'private';
-    return (item?.assignedToUids.length ?? 0) > 0 ? 'pick' : 'everyone';
+  const [audience, setAudience] = useState<'everyone' | 'pick' | 'me'>(() => {
+    const assigned = item?.assignedToUids ?? [];
+    if (isItemPrivate || !canShare) return 'me';
+    if (assigned.length === 1 && assigned[0] === currentUserId) return 'me';
+    return assigned.length > 0 ? 'pick' : 'everyone';
   });
+  const [keepPrivate, setKeepPrivate] = useState(false);
   const isAudienceAsked = canShare && !isItemPrivate;
+  const isPrivate = isItemPrivate || !canShare || (!item && audience === 'me' && keepPrivate);
   // The form reads its data once, so a change made from outside it remounts it.
   const [formKey, setFormKey] = useState(0);
   const resetField = (patch: Partial<ChecklistFormData>) => {
@@ -194,7 +201,7 @@ export default function ChecklistItemFormModal({
                   options={[
                     { value: 'everyone', label: 'Everyone', emoji: '👥' },
                     { value: 'pick', label: 'Pick people', emoji: '🎯' },
-                    ...(item ? [] : [{ value: 'private', label: 'Just me', emoji: '🔒' }]),
+                    { value: 'me', label: 'Just me', emoji: '🙋' },
                   ]}
                   value={audience}
                   onChange={(value) => {
@@ -206,7 +213,20 @@ export default function ChecklistItemFormModal({
                 />
               </>
             ) : null}
-            {audience === 'private' && (
+            {isAudienceAsked && audience === 'me' && !item && (
+              <label className='flex items-start gap-3 text-sm'>
+                <AppToggle size='sm' checked={keepPrivate} onCheckedChange={setKeepPrivate} />
+                <span>
+                  <span className='font-medium'>Keep it private</span>
+                  <span className='text-muted-foreground block'>
+                    {keepPrivate
+                      ? "Only you see it, and it stays off Overview. It can't be shared later."
+                      : "Everyone can follow along, with you as the person on it."}
+                  </span>
+                </span>
+              </label>
+            )}
+            {!isAudienceAsked && (
               <p className='text-muted-foreground text-sm'>
                 <span className='text-foreground font-medium'>Only you see this task,</span> in your own checklist. It
                 doesn&apos;t show on Overview.{canShare && item ? ' To share it, add it again for everyone.' : ''}
@@ -279,7 +299,13 @@ export default function ChecklistItemFormModal({
     }
 
     return nextFields;
-  }, [trip, formData.category, formData.dueDate.enabled, audience, isAudienceAsked, canShare, item, memberOptions, showNoteField]);
+  }, [trip, formData.category, formData.dueDate.enabled, audience, keepPrivate, isAudienceAsked, canShare, item, memberOptions, showNoteField]);
+
+  const getAssignedUids = (data: ChecklistFormData) => {
+    if (isPrivate) return [];
+    if (audience === 'me') return [currentUserId];
+    return audience === 'pick' ? data.assignedToUids : [];
+  };
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();
@@ -305,8 +331,8 @@ export default function ChecklistItemFormModal({
         customCategoryLabel,
         completeByDayIndex,
         note: data.note.trim() || null,
-        assignedToUids: audience === 'pick' ? data.assignedToUids : [],
-        isPrivate: audience === 'private',
+        assignedToUids: getAssignedUids(data),
+        isPrivate,
       });
     } catch (submitError) {
       setError(
