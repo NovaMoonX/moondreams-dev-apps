@@ -131,6 +131,13 @@ export const TRANSIT_TYPE_EMOJIS: Record<TransitType, string> = {
   OTHER: '🧭',
 };
 
+/** Only trips on a schedule ask when they arrive; a drive, walk or ride just offers an optional end time. */
+export const TRANSIT_ARRIVAL: Partial<Record<TransitType, { emoji: string; question: string; zoneLabel: string }>> = {
+  FLIGHT: { emoji: '🛬', question: 'Know when you land?', zoneLabel: 'Lands in' },
+  TRAIN: { emoji: '🚉', question: 'Know when you arrive?', zoneLabel: 'Arrives in' },
+  FERRY: { emoji: '⚓', question: 'Know when you arrive?', zoneLabel: 'Arrives in' },
+};
+
 export interface TransitFieldSpec {
   key: string;
   label: string;
@@ -357,6 +364,15 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   ACTIVITIES: 'Activities',
   SHOPPING: 'Shopping',
   OTHER: 'Other',
+};
+
+export const EXPENSE_CATEGORY_EMOJIS: Record<ExpenseCategory, string> = {
+  FOOD: '🍽️',
+  TRANSPORT: '🚗',
+  LODGING: '🏨',
+  ACTIVITIES: '🎟️',
+  SHOPPING: '🛍️',
+  OTHER: '🧾',
 };
 
 export const STAY_TYPES: readonly StayType[] = [

@@ -5,7 +5,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
@@ -47,7 +46,6 @@ export function PillOptions<T extends string>({
   selectedCount = 0,
   isThin = false,
 }: PillOptionsProps<T>) {
-  const isPhone = useMediaQuery().isBelow('sm');
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
@@ -56,7 +54,7 @@ export function PillOptions<T extends string>({
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const visible =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
-  const isClamped = isPhone && trimmedQuery === '' && !isExpanded;
+  const isClamped = trimmedQuery === '' && !isExpanded;
 
   useEffect(() => {
     const content = contentRef.current;
@@ -69,7 +67,7 @@ export function PillOptions<T extends string>({
     return () => observer.disconnect();
   }, []);
 
-  const showToggle = isPhone && trimmedQuery === '' && (isOverflowing || isExpanded);
+  const showToggle = trimmedQuery === '' && (isOverflowing || isExpanded);
 
   return (
     <div className='space-y-2'>

@@ -9,7 +9,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, HandCoins, ListFilter, Lock, Receipt } from 'lucide-react';
+import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
@@ -76,6 +76,7 @@ import type {
 } from '@apps/waypoint/types';
 import {
   getExpenseCategoryKey,
+  getExpenseCategoryKeyEmoji,
   getExpenseCategoryKeyLabel,
   getExpenseCategoryKeys,
 } from '@apps/waypoint/utils/expenseCategories';
@@ -556,6 +557,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <li key={expense.id}>
           <Clickable onButtonClick={() => onOpen(expense)} buttonProps={{ 'aria-label': `Open ${expense.title}` }}>
             <div className='flex w-full items-center gap-3 py-3 text-left'>
+              <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
+                {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
+              </span>
               <span className='min-w-0 flex-1'>
                 <span className='block truncate font-medium'>{expense.title}</span>
                 <span className='text-muted-foreground line-clamp-2 block text-sm'>
@@ -752,14 +756,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
     return (
       <>
-        <div className='min-w-0'>
+        <div className='flex min-w-0 gap-3'>
+          <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
+            {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
+          </span>
+          <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
             {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {getPayerLine(expense)}
           </p>
-          {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
+          {expense.status === 'PAID' && (
+            <p className='text-muted-foreground flex items-center gap-1 text-xs'>
+              <Users className='h-3 w-3 shrink-0' aria-hidden='true' />
+              {splitDescription}
+            </p>
+          )}
           {renderEarlyPayments(expense)}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
+          </div>
         </div>
         <div className='col-span-2'>
           <p className='whitespace-nowrap font-medium'>
@@ -832,6 +846,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             onClick={() => setDetailExpenseId(expense.id)}
             className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
           >
+            <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
+              {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
+            </span>
             <span className='min-w-0 flex-1'>
               <span className='block truncate font-medium'>{expense.title}</span>
               <span className='text-muted-foreground line-clamp-2 block text-sm'>

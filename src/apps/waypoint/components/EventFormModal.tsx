@@ -48,6 +48,7 @@ import {
   DEFAULT_REMINDER_MINUTES_BEFORE,
   MAX_DAYS_OUTSIDE_TRIP,
   EVENT_LINK_KIND_LABELS,
+  TRANSIT_ARRIVAL,
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
@@ -504,6 +505,7 @@ function EventFormModal({
     [events, draft.eventType],
   );
   const isTravel = draft.eventType === 'TRAVEL';
+  const arrival = isTravel ? TRANSIT_ARRIVAL[draft.quickField as TransitType] : undefined;
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
   const startZone = draft.timezone ?? trip.timezone;
@@ -979,7 +981,7 @@ function EventFormModal({
       </div>
       {isRelative && endZone && (
         <ZoneField
-          label={isTravel ? 'Lands in' : 'Ends in'}
+          label={arrival ? arrival.zoneLabel : 'Ends in'}
           zone={endZone}
           at={endDayAt}
           isTripDefault={false}
@@ -1115,10 +1117,12 @@ function EventFormModal({
             />
           )}
         </div>
-        {draft.dayIndex === null ? null : isTravel ? (
+        {draft.dayIndex === null ? null : arrival ? (
           <div className='space-y-3'>
             <div className='space-y-2'>
-              <Label>🛬 Know when you arrive?</Label>
+              <Label>
+                {arrival.emoji} {arrival.question}
+              </Label>
               <PillGroup
                 label='Arrival time'
                 options={[

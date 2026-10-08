@@ -40,6 +40,7 @@ import type {
 import { getExpenseLinkKey, getLinkableSubjects } from '@apps/waypoint/utils/relatedSubjects';
 import {
   getExpenseCategoryKey,
+  getExpenseCategoryKeyEmoji,
   getExpenseCategoryKeyLabel,
   parseExpenseCategoryKey,
   toCustomCategoryKey,
@@ -342,6 +343,7 @@ function ExpenseFormModal({
       (isPrivate ? (personalCategoryKeys ?? categoryKeys) : categoryKeys).map((key) => ({
         value: key,
         text: getExpenseCategoryKeyLabel(key),
+        emoji: getExpenseCategoryKeyEmoji(key),
       })),
     [categoryKeys, isPrivate, personalCategoryKeys],
   );
@@ -931,14 +933,14 @@ function ChoiceField({
   label: string;
   value: ChoiceValue;
   onValueChange: (value: ChoiceValue) => void;
-  options: { value: string; text: string }[];
+  options: { value: string; text: string; emoji?: string }[];
   newPillLabel: string;
   newPlaceholder: string;
 }) {
   return (
     <PickOrCreate
       label={label}
-      options={options.map((option) => ({ value: option.value, label: option.text }))}
+      options={options.map((option) => ({ value: option.value, label: option.text, emoji: option.emoji }))}
       choice={value.choice}
       newText={value.newLabel}
       newPillLabel={newPillLabel}

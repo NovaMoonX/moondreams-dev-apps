@@ -193,7 +193,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     );
     const shownIndex = rows.findIndex((row) => row.rowView === view);
     return (
-      <div className='bg-background/95 border-border fixed inset-x-0 bottom-9 z-20 border-t backdrop-blur'>
+      <div className='bg-background/95 border-border fixed inset-x-0 bottom-10 z-20 border-t backdrop-blur'>
         <div className='mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-1'>
           <div role='status' className='h-12 min-w-0 flex-1 overflow-hidden'>
             <div

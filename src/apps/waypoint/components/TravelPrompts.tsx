@@ -68,6 +68,10 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
     `waypoint:travelPrompt:${trip.id}:${currentUserId}`,
     false,
   );
+  const [isNeverAsk, setIsNeverAsk] = useLocalStoragePreference(
+    `waypoint:travelPromptNever:${trip.id}:${currentUserId}`,
+    false,
+  );
   const [leg, setLeg] = useState<Leg | null>(null);
   const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
   const [formKey, setFormKey] = useState(0);
@@ -155,6 +159,10 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
     return leg ? modals : null;
   }
 
+  if (isNeverAsk) {
+    return modals;
+  }
+
   if (isDismissed) {
     return (
       <>
@@ -208,6 +216,16 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
             🏠 My trip home
           </Button>
         )}
+        <Button
+          type='button'
+          size='sm'
+          rounded='full'
+          variant='tertiary'
+          className='text-muted-foreground!'
+          onClick={() => setIsNeverAsk(true)}
+        >
+          Don&apos;t ask again
+        </Button>
       </div>
       {modals}
     </section>

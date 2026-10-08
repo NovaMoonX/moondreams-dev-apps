@@ -792,7 +792,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         />
       ) : (
         showProgress && (
-          <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-10 border-t backdrop-blur'>
+          <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-10 flex h-10 items-center border-t backdrop-blur'>
             <TripProgressBar trip={trip} now={now} />
           </div>
         )
