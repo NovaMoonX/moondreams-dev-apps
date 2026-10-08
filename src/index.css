@@ -128,6 +128,20 @@ html:has(
   }
 }
 
+/* An installed app (`data-installed-app`, set from `IS_INSTALLED_APP` in main.tsx) shows no scrollbar anywhere at any width; !important so no component or library style can bring one back. Scrolling itself is untouched. */
+html[data-installed-app],
+html[data-installed-app] * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html[data-installed-app]::-webkit-scrollbar,
+html[data-installed-app] *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* A control that took focus from a mouse or touch keeps its focus outline/ring after the click,
    then fades it out when focus moves on, which reads as a border flashing on the one just left
    (a pill, or a card the drawer handed focus back to). Keyboard focus (:focus-visible) keeps its

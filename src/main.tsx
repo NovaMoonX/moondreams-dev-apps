@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { watchForAppUpdates } from './lib/app/appUpdate';
 import { installVersionPeek } from './lib/app/versionPeek';
+import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import './index.css';
 
 // Ensures a single Service Worker handles caching for the entire origin
@@ -11,6 +12,7 @@ import './index.css';
 // to match the user's active sub-route (/app-a, /app-b) when triggering 
 // the "Add to Home Screen" prompt
 registerSW({ immediate: true });
+document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();
 
 // A tab opened before a deploy can't fetch the new build's lazy chunks; reload once to pick them up.
