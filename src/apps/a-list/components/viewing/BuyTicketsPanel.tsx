@@ -50,6 +50,7 @@ function BuyTicketsPanel({
       <ShowtimePicker
         theatre={theatre}
         dateKey={toLocalDateInputValue(viewing.showtimeAt)}
+        showingAt={viewing.showtimeAt}
         title={viewing.movie.title}
         now={now}
         selectedShowtimeId={purchase?.showtimeId ?? null}

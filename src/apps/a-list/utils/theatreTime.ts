@@ -62,3 +62,14 @@ export function formatShowtimeForTheatre(
       : `${time} ${getZoneAbbreviation(epoch, timeZone)}`;
   return result;
 }
+
+/** "YYYY-MM-DD" of that moment on the calendar of `timeZone`; the device's own day when none is known. */
+export function getDayInZone(epoch: number, timeZone: string | null) {
+  const result = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: toValidZone(timeZone),
+  }).format(epoch);
+  return result;
+}

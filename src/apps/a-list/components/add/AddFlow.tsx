@@ -596,6 +596,7 @@ export function AddFlow({
           <ShowtimePicker
             theatre={theatre}
             dateKey={showtimeValues.date}
+            showingAt={showtimeAt ?? null}
             title={movie.title}
             now={now}
             selectedShowtimeId={activePick?.showtimeId ?? null}

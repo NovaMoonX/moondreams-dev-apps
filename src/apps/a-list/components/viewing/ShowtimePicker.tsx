@@ -6,7 +6,6 @@ import { FirebaseError } from 'firebase/app';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
 import Pill from '@/components/Pill';
-import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { AMC_FORMAT_LABELS } from '@apps/a-list/constants';
 import { findShowtimesQueryOptions } from '@apps/a-list/queries/showtimeQueries';
 import type { ShowtimeOption, TheatreSnapshot } from '@apps/a-list/types';
@@ -14,14 +13,17 @@ import { formatCents } from '@apps/a-list/utils/money';
 import { isTypedTheatre } from '@apps/a-list/utils/theatres';
 import {
   formatTimeInZone,
+  getDayInZone,
   getZoneName,
   sharesClockWithDevice,
 } from '@apps/a-list/utils/theatreTime';
 
 interface ShowtimePickerProps {
   theatre: TheatreSnapshot;
-  /** The viewer's local day to look up, "YYYY-MM-DD". */
+  /** The day to look up, "YYYY-MM-DD", used until the showing has a time. */
   dateKey: string;
+  /** When the showing is set, the day looked up is that moment's day at the theater, so a late show never lands on the next day for a viewer in another zone. */
+  showingAt?: number | null;
   title: string;
   now: number;
   selectedShowtimeId: string | null;
@@ -35,7 +37,8 @@ const COLLAPSED_COUNT = 6;
 /** Upcoming showings of a movie at a theater, from AMC, each with its format and list price. Past days get an honest note instead. */
 function ShowtimePicker({
   theatre,
-  dateKey,
+  dateKey: pickedDateKey,
+  showingAt = null,
   title,
   now,
   selectedShowtimeId,
@@ -43,7 +46,12 @@ function ShowtimePicker({
   offersAmcFallback = false,
 }: ShowtimePickerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const isPastDay = dateKey < toLocalDateInputValue(now);
+  const timeZone = theatre.timeZone ?? null;
+  const dateKey =
+    showingAt !== null && timeZone
+      ? getDayInZone(showingAt, timeZone)
+      : pickedDateKey;
+  const isPastDay = dateKey < getDayInZone(now, timeZone);
   const isTyped = isTypedTheatre(theatre);
   const showtimes = useQuery({
     ...findShowtimesQueryOptions({
@@ -88,7 +96,6 @@ function ShowtimePicker({
         (option, index) =>
           index < COLLAPSED_COUNT || option.showtimeId === selectedShowtimeId,
       );
-  const timeZone = theatre.timeZone ?? null;
   const picked = open.find(
     (option) => option.showtimeId === selectedShowtimeId,
   );
