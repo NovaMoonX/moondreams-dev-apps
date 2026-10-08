@@ -21,7 +21,7 @@ import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormM
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SearchInput from '@/components/SearchInput';
-import { Users } from 'lucide-react';
+import { Lock, Users } from 'lucide-react';
 import { CHECKLIST_CATEGORY_EMOJIS, CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
@@ -34,6 +34,7 @@ import {
   toggleChecklistItem,
   updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
+import { selectPersonalChecklistItems } from '@apps/waypoint/store/selectors';
 import {
   canEditExistingItem,
   hasTripRole,
@@ -63,14 +64,19 @@ export default function ChecklistSection({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const [query, setQuery] = useState('');
-  const items = useAppSelector((state) => state.waypoint.checklist.items);
+  const sharedItems = useAppSelector((state) => state.waypoint.checklist.items);
+  const personalItems = useAppSelector(selectPersonalChecklistItems);
+  const items = useMemo(() => [...sharedItems, ...personalItems], [sharedItems, personalItems]);
+  const privateIds = useMemo(() => new Set(personalItems.map((item) => item.id)), [personalItems]);
+  const isPrivateItem = (item: ChecklistItem) => privateIds.has(item.id);
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditExisting = canEditExistingItem(trip, currentUserId);
+  const mayModify = (item: ChecklistItem) => isPrivateItem(item) || canEditExisting;
 
   const mayToggle = (item: ChecklistItem) =>
-    canEdit || item.assignedToUids.includes(currentUserId);
+    isPrivateItem(item) || canEdit || item.assignedToUids.includes(currentUserId);
 
   const showSearch = items.length >= LIST_SEARCH_THRESHOLD;
   const needle = showSearch ? query.trim().toLowerCase() : '';
@@ -78,13 +84,13 @@ export default function ChecklistSection({
     () =>
       items.filter(
         (item) =>
-          (!assignedToMeOnly || item.assignedToUids.includes(currentUserId)) &&
+          (!assignedToMeOnly || privateIds.has(item.id) || item.assignedToUids.includes(currentUserId)) &&
           (needle === '' ||
             [item.title, item.note ?? '', getChecklistCategoryLabel(item)].some((text) =>
               text.toLowerCase().includes(needle),
             )),
       ),
-    [assignedToMeOnly, currentUserId, items, needle],
+    [assignedToMeOnly, currentUserId, items, needle, privateIds],
   );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const dayGroups = useMemo(
@@ -108,6 +114,7 @@ export default function ChecklistSection({
           itemId: item.id,
           uid: currentUserId,
           isCompleted,
+          isPrivate: isPrivateItem(item),
         }),
       ).unwrap();
     } catch (error) {
@@ -126,6 +133,7 @@ export default function ChecklistSection({
     completeByDayIndex: number | null;
     note: string | null;
     assignedToUids: string[];
+    isPrivate: boolean;
   }) => {
     setIsSubmitting(true);
     try {
@@ -136,6 +144,7 @@ export default function ChecklistSection({
             uid: currentUserId,
             itemId: editingItem.id,
             ...values,
+            isPrivate: isPrivateItem(editingItem),
           }),
         ).unwrap();
       } else {
@@ -158,7 +167,7 @@ export default function ChecklistSection({
     setIsSubmitting(true);
     try {
       await dispatch(
-        deleteChecklistItem({ trip, uid: currentUserId, itemId: item.id }),
+        deleteChecklistItem({ trip, uid: currentUserId, itemId: item.id, isPrivate: isPrivateItem(item) }),
       ).unwrap();
       setIsModalOpen(false);
       setEditingItem(null);
@@ -181,16 +190,14 @@ export default function ChecklistSection({
         title='Before the Road'
         subtitle={`${completedCount} of ${items.length} complete`}
         action={
-          canEdit && (
-            <Button
-              onClick={() => {
-                setEditingItem(null);
-                setIsModalOpen(true);
-              }}
-            >
-              Add
-            </Button>
-          )
+          <Button
+            onClick={() => {
+              setEditingItem(null);
+              setIsModalOpen(true);
+            }}
+          >
+            Add
+          </Button>
         }
       />
       <div
@@ -257,8 +264,8 @@ export default function ChecklistSection({
                           </span>
                         </Tooltip>
                         <div
-                          className={join('min-w-0', isPhone && canEditExisting && 'cursor-pointer')}
-                          {...(isPhone && canEditExisting
+                          className={join('min-w-0', isPhone && mayModify(item) && 'cursor-pointer')}
+                          {...(isPhone && mayModify(item)
                             ? {
                                 role: 'button',
                                 tabIndex: 0,
@@ -283,6 +290,15 @@ export default function ChecklistSection({
                             >
                               {item.title}
                             </span>
+                            {isPrivateItem(item) && (
+                              <span
+                                className='text-muted-foreground inline-flex items-center gap-1 text-xs whitespace-nowrap'
+                                title='Only you see this'
+                              >
+                                <Lock className='h-3 w-3' aria-hidden='true' />
+                                Just me
+                              </span>
+                            )}
                           </div>
                           <p className='text-muted-foreground mt-0.5 text-sm'>
                             <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[item.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
@@ -294,7 +310,7 @@ export default function ChecklistSection({
                         </div>
                       </div>
                       <div className='flex shrink-0 items-center gap-1'>
-                        {assignedUsers.length > 0 ? (
+                        {isPrivateItem(item) ? null : assignedUsers.length > 0 ? (
                           assignedUsers.map((user) => (
                             <UserAvatar key={user.uid} user={user} size='sm' />
                           ))
@@ -308,7 +324,7 @@ export default function ChecklistSection({
                             <Users className='h-3.5 w-3.5' aria-hidden='true' />
                           </span>
                         )}
-                        {canEditExisting && !isPhone && (
+                        {mayModify(item) && !isPhone && (
                           <Button
                             type='button'
                             size='sm'
@@ -369,6 +385,8 @@ export default function ChecklistSection({
         isOpen={isModalOpen}
         trip={trip}
         item={editingItem}
+        isItemPrivate={editingItem !== null && isPrivateItem(editingItem)}
+        canShare={canEdit}
         memberOptions={memberIds.map((uid) => ({
           label:
             members[uid]?.displayName?.trim() ||

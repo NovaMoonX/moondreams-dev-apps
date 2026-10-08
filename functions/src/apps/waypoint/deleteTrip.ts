@@ -66,8 +66,10 @@ export const deleteTrip = onCall(
 
       const memberIds = Object.keys((trip.members as Record<string, unknown> | undefined) ?? {});
       const personalSnapshots = await Promise.all(
-        memberIds.map((uid) =>
-          firestore.collection(`apps/waypoint/personalExpenses/${uid}/items`).where('tripId', '==', tripId).get(),
+        memberIds.flatMap((uid) =>
+          ['personalExpenses', 'personalChecklist'].map((root) =>
+            firestore.collection(`apps/waypoint/${root}/${uid}/items`).where('tripId', '==', tripId).get(),
+          ),
         ),
       );
 

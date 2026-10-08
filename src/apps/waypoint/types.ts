@@ -68,6 +68,8 @@ export interface TripSpace {
   timezone: string | null;
   /** Older documents lack it. */
   city: TripCity | null;
+  /** Link keys (`getExpenseLinkKey`) of plans whose owner said no expense is needed. Older documents lack it. */
+  noExpenseKeys: string[];
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
    * field keep their history. New trips write `null`.

@@ -26,7 +26,7 @@ function NotPaidForBadge({ getSubject, isStatic = false, variant = 'inline' }: N
 
   if (!canAddExpenses || isStatic) {
     return (
-      <Badge variant='muted' outline className={join('whitespace-nowrap', variant === 'tab' && tabClassName)}>
+      <Badge variant='muted' outline data-paid-tab={variant === 'tab' ? '' : undefined} className={join('whitespace-nowrap', variant === 'tab' && tabClassName)}>
         💸 Not paid for yet
       </Badge>
     );
@@ -37,6 +37,7 @@ function NotPaidForBadge({ getSubject, isStatic = false, variant = 'inline' }: N
       type='button'
       variant='tertiary'
       size='sm'
+      data-paid-tab={variant === 'tab' ? '' : undefined}
       aria-label='Not paid for yet: link or add an expense'
       className={join(
         "text-muted-foreground relative h-auto text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-2 after:content-['']",

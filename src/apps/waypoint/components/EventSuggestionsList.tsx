@@ -166,7 +166,13 @@ function EventSuggestionsList({
   }
 
   return (
-    <div className='ml-4 space-y-2 border-l-2 border-dashed pl-4'>
+    <div
+      className={join(
+        'relative ml-4 space-y-2 border-l-2 border-dashed pl-4',
+        "before:absolute before:-top-2 before:-left-0.5 before:h-2 before:border-l-2 before:border-dashed before:content-['']",
+        '[div:has([data-paid-tab])+&]:before:-top-8 [div:has([data-paid-tab])+&]:before:h-8',
+      )}
+    >
       {suggestions.map((suggestion) => (
         <SuggestionRow
           key={suggestion.id}

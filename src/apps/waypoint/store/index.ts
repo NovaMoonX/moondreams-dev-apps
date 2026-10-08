@@ -16,6 +16,10 @@ import {
   personalExpensesReducer,
   type PersonalExpensesState,
 } from './slices/personalExpensesSlice';
+import {
+  personalChecklistReducer,
+  type PersonalChecklistState,
+} from './slices/personalChecklistSlice';
 import { eventsReducer, type EventsState } from './slices/eventsSlice';
 import {
   eventSuggestionsReducer,
@@ -37,6 +41,7 @@ export interface WaypointState {
   trip: TripState;
   expenses: ExpensesState;
   personalExpenses: PersonalExpensesState;
+  personalChecklist: PersonalChecklistState;
   events: EventsState;
   eventSuggestions: EventSuggestionsState;
   announcements: AnnouncementsState;
@@ -52,6 +57,7 @@ export const waypointReducer = combineReducers({
   trip: tripReducer,
   expenses: expensesReducer,
   personalExpenses: personalExpensesReducer,
+  personalChecklist: personalChecklistReducer,
   events: eventsReducer,
   eventSuggestions: eventSuggestionsReducer,
   announcements: announcementsReducer,
@@ -71,6 +77,7 @@ export { type PendingRequestsState } from './slices/pendingRequestsSlice';
 export { type EmailInvitesState } from './slices/emailInvitesSlice';
 export { type ExpensesState } from './slices/expensesSlice';
 export { type PersonalExpensesState } from './slices/personalExpensesSlice';
+export { type PersonalChecklistState } from './slices/personalChecklistSlice';
 export { type EventsState } from './slices/eventsSlice';
 export { type EventSuggestionsState } from './slices/eventSuggestionsSlice';
 export { type AnnouncementsState } from './slices/announcementsSlice';

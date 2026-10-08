@@ -48,6 +48,7 @@ export interface ChecklistSubmitValues {
   completeByDayIndex: number | null;
   note: string | null;
   assignedToUids: string[];
+  isPrivate: boolean;
 }
 
 interface ChecklistItemFormModalProps {
@@ -55,6 +56,10 @@ interface ChecklistItemFormModalProps {
   trip: TripSpace;
   memberOptions: { label: string; value: string }[];
   item?: ChecklistItem | null;
+  /** The item being edited is one only its owner sees. */
+  isItemPrivate?: boolean;
+  /** A Commenter can only keep private tasks, so the audience question is skipped. */
+  canShare?: boolean;
   prefill?: ChecklistPrefill;
   isSubmitting?: boolean;
   onSubmit: (values: ChecklistSubmitValues) => Promise<void> | void;
@@ -108,6 +113,8 @@ export default function ChecklistItemFormModal({
   trip,
   memberOptions,
   item = null,
+  isItemPrivate = false,
+  canShare = true,
   prefill,
   isSubmitting = false,
   onSubmit,
@@ -119,7 +126,11 @@ export default function ChecklistItemFormModal({
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));
-  const [isPicking, setIsPicking] = useState((item?.assignedToUids.length ?? 0) > 0);
+  const [audience, setAudience] = useState<'everyone' | 'pick' | 'private'>(() => {
+    if (isItemPrivate || !canShare) return 'private';
+    return (item?.assignedToUids.length ?? 0) > 0 ? 'pick' : 'everyone';
+  });
+  const isAudienceAsked = canShare && !isItemPrivate;
   // The form reads its data once, so a change made from outside it remounts it.
   const [formKey, setFormKey] = useState(0);
   const resetField = (patch: Partial<ChecklistFormData>) => {
@@ -175,22 +186,33 @@ export default function ChecklistItemFormModal({
         label: '',
         renderComponent: (props) => (
           <div className='space-y-2'>
-            <Label>Who&apos;s on it?</Label>
-            <PillGroup
-              label="Who's on it"
-              options={[
-                { value: 'everyone', label: 'Everyone', emoji: '👥' },
-                { value: 'pick', label: 'Pick people', emoji: '🎯' },
-              ]}
-              value={isPicking ? 'pick' : 'everyone'}
-              onChange={(value) => {
-                setIsPicking(value === 'pick');
-                if (value === 'everyone') {
-                  props.onValueChange([]);
-                }
-              }}
-            />
-            {isPicking && (
+            {isAudienceAsked ? (
+              <>
+                <Label>Who&apos;s on it?</Label>
+                <PillGroup
+                  label="Who's on it"
+                  options={[
+                    { value: 'everyone', label: 'Everyone', emoji: '👥' },
+                    { value: 'pick', label: 'Pick people', emoji: '🎯' },
+                    ...(item ? [] : [{ value: 'private', label: 'Just me', emoji: '🔒' }]),
+                  ]}
+                  value={audience}
+                  onChange={(value) => {
+                    setAudience(value as typeof audience);
+                    if (value !== 'pick') {
+                      props.onValueChange([]);
+                    }
+                  }}
+                />
+              </>
+            ) : null}
+            {audience === 'private' && (
+              <p className='text-muted-foreground text-sm'>
+                <span className='text-foreground font-medium'>Only you see this task.</span> It stays off everyone
+                else&apos;s checklist and Overview.
+              </p>
+            )}
+            {audience === 'pick' && (
               <MultiPillGroup
                 label='People'
                 options={memberOptions}
@@ -257,7 +279,7 @@ export default function ChecklistItemFormModal({
     }
 
     return nextFields;
-  }, [trip, formData.category, formData.dueDate.enabled, isPicking, memberOptions, showNoteField]);
+  }, [trip, formData.category, formData.dueDate.enabled, audience, isAudienceAsked, item, memberOptions, showNoteField]);
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();
@@ -283,7 +305,8 @@ export default function ChecklistItemFormModal({
         customCategoryLabel,
         completeByDayIndex,
         note: data.note.trim() || null,
-        assignedToUids: data.assignedToUids,
+        assignedToUids: audience === 'pick' ? data.assignedToUids : [],
+        isPrivate: audience === 'private',
       });
     } catch (submitError) {
       setError(

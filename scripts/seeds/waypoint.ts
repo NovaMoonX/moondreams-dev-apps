@@ -194,6 +194,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: { name: 'Seattle', region: 'Washington', country: 'United States', latitude: 47.60621, longitude: -122.33207 },
+    noExpenseKeys: [],
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -222,6 +223,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: null,
+    noExpenseKeys: [],
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -268,6 +270,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: null,
+    noExpenseKeys: [],
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -1531,6 +1534,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: null,
+    noExpenseKeys: [],
     dateShiftStatus: 'IDLE',
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -1574,6 +1578,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       sharedAlbumSetByUid: null,
       sharedAlbumSetAt: null,
       city: null,
+      noExpenseKeys: [],
       dateShiftStatus: null,
       createdBy: alex.uid,
       createdAt: joinedAt,
@@ -1860,6 +1865,23 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       });
   }
 
+  await context.firestore.doc(`apps/waypoint/personalChecklist/${alex.uid}/items/seed-personal-checklist-gift`).set({
+    id: 'seed-personal-checklist-gift',
+    tripId: TRIP_ID,
+    title: 'Wrap the anniversary gift',
+    category: 'PACKING',
+    customCategoryLabel: null,
+    note: null,
+    completeByDayIndex: null,
+    assignedToUids: [],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    createdBy: alex.uid,
+    createdAt: context.now,
+    lastEditedAt: context.now,
+  });
+
   const scaleDocuments = await seedWaypointScaleTrip({
     context,
     tripStart: activeTripStart,
@@ -1871,6 +1893,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 80 + personalExpenses.length + scaleDocuments,
+    firestoreDocuments: 81 + personalExpenses.length + scaleDocuments,
   };
 }

@@ -10,14 +10,16 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import { linkExpenseToPlan } from '@apps/waypoint/store/actions/expenseActions';
+import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
 import { selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import { getExpenseCategoryKey, getExpenseCategoryKeyLabel } from '@apps/waypoint/utils/expenseCategories';
-import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
+import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface LinkExpenseSheetProps {
   trip: TripSpace;
   subject: RelatedSubject;
+  currentUserId: string;
   onAddNew: () => void;
   onClose: () => void;
 }
@@ -34,7 +36,7 @@ function formatAmount(expense: TripExpense) {
     : `${formatter.format(expense.amountMin ?? 0)}–${formatter.format(expense.amountMax ?? 0)}`;
 }
 
-function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheetProps) {
+function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: LinkExpenseSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const expenses = useAppSelector(selectTripExpenses);
@@ -63,6 +65,24 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
     }
   };
 
+  const markNoExpense = async () => {
+    setLinkingId('none');
+    try {
+      await dispatch(
+        setPlanNeedsNoExpense({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone: true }),
+      ).unwrap();
+      addToast({ title: `No expense needed for ${subject.title}`, type: 'success' });
+      onClose();
+    } catch (markError) {
+      addToast({
+        title: 'Unable to save that',
+        description: getErrorMessage(markError, 'Please try again.'),
+        type: 'error',
+      });
+      setLinkingId(null);
+    }
+  };
+
   return (
     <DetailSheet
       isOpen
@@ -70,8 +90,11 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
       title='Link an expense'
       footer={
         <div className='flex flex-col gap-2'>
-          <Button type='button' size='lg' onClick={onAddNew}>
+          <Button type='button' size='lg' disabled={linkingId !== null} onClick={onAddNew}>
             Add a new expense
+          </Button>
+          <Button type='button' variant='tertiary' size='lg' disabled={linkingId !== null} onClick={() => void markNoExpense()}>
+            No expense needed
           </Button>
         </div>
       }

@@ -50,6 +50,7 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
           key={flow.id}
           trip={trip}
           subject={flow.subject}
+          currentUserId={currentUserId}
           onAddNew={() =>
             setFlow({ id: flow.id + 1, kind: 'follow-up', subject: flow.subject, initialStep: 'expense' })
           }
