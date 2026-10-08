@@ -10,14 +10,16 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import { linkExpenseToPlan } from '@apps/waypoint/store/actions/expenseActions';
+import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
 import { selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import { getExpenseCategoryKey, getExpenseCategoryKeyLabel } from '@apps/waypoint/utils/expenseCategories';
-import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
+import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface LinkExpenseSheetProps {
   trip: TripSpace;
   subject: RelatedSubject;
+  currentUserId: string;
   onAddNew: () => void;
   onClose: () => void;
 }
@@ -34,7 +36,9 @@ function formatAmount(expense: TripExpense) {
     : `${formatter.format(expense.amountMin ?? 0)}–${formatter.format(expense.amountMax ?? 0)}`;
 }
 
-function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheetProps) {
+const KIND_NOUNS = { EVENT: 'event', STAY: 'stay', RENTAL: 'rental' } as const;
+
+function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: LinkExpenseSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const expenses = useAppSelector(selectTripExpenses);
@@ -63,6 +67,28 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
     }
   };
 
+  const markNoExpense = async () => {
+    setLinkingId('none');
+    try {
+      await dispatch(
+        setPlanNeedsNoExpense({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone: true }),
+      ).unwrap();
+      addToast({
+        title: `No expense needed for ${subject.title}`,
+        description: `You can undo it from this ${KIND_NOUNS[subject.link.kind]}'s details.`,
+        type: 'success',
+      });
+      onClose();
+    } catch (markError) {
+      addToast({
+        title: 'Unable to save that',
+        description: getErrorMessage(markError, 'Please try again.'),
+        type: 'error',
+      });
+      setLinkingId(null);
+    }
+  };
+
   return (
     <DetailSheet
       isOpen
@@ -70,22 +96,28 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
       title='Link an expense'
       footer={
         <div className='flex flex-col gap-2'>
-          <Button type='button' size='lg' onClick={onAddNew}>
+          <Button type='button' size='lg' disabled={linkingId !== null} onClick={onAddNew}>
             Add a new expense
           </Button>
+          <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={linkingId !== null} onClick={() => void markNoExpense()}>
+            No expense needed
+          </Button>
+          <p className='text-muted-foreground text-center text-xs'>
+            <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from this {KIND_NOUNS[subject.link.kind]}&apos;s details.
+          </p>
         </div>
       }
     >
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
-          For <span className='text-foreground font-medium'>{subject.title}</span>. Pick one that&apos;s already on your
-          list; we&apos;ll only fill in a missing day.
+          For <span className='text-foreground font-medium'>{subject.title}</span>.
+          {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
         </p>
         {unlinked.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
         )}
         {unlinked.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>Every expense is already linked to a plan.</p>
+          <p className='text-muted-foreground text-sm'>Every expense is already linked to an event, stay or rental.</p>
         ) : visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No expense matches.</p>
         ) : (

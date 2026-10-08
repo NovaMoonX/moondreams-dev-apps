@@ -28,7 +28,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 
 **Core MVP**
 - [ ] Trip Space Setup & Roles: Start a trip with a title and dates (given as an estimate, editable anytime — plans move with them, or stay put on their original dates if you'd rather) and a default time zone — destination, cover photo, and default currency are editable afterward, not required upfront. Roles are admin, editor, commenter, viewer. New members request access via an invite link and join once an admin approves them and sets their role.
-- [ ] Before the Road Checklist: Departure task list with completion states and member assignments.
+- [ ] Before the Road Checklist: Departure task list with completion states and member assignments. Any member can also keep a private task that only they see (never on Overview).
 - [ ] Expense Allocation & Splitter: Itemized expenses assigned to everyone, specific members, or individuals, tracking who's paid and rolling it up into a clear "who owes who" summary.
 - [ ] Day-by-Day Timeline & Directions: Structured timeline grouped by day with event times, transit types, locations, and 1-tap native map navigation.
 - [ ] Multi-Destination Itineraries: A trip isn't locked to one home base — a given day can be its own city, state, or leg of the journey, and the timeline reflects wherever that day actually is.
@@ -39,6 +39,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 
 **Next Steps**
 - [ ] Comment & Proposal Approval Workflow: Commenters submit event changes/proposals; Editors accept or decline.
+- [x] Arrive By: A dining or activity event can say when to be there, before it starts, with an optional note on why ("the lot fills up by 9"). The card reads "Arrive by 9:00 AM · starts 10:00 AM" under the title, and the Now pill and today's agenda lead with the arrival.
 - [x] Active Trip HUD: Automatic detection of the current trip day, with a floating "Now / Up next" pill over the main screens (Overview, Timeline, Expenses).
 - [x] Transit Detail Cards: Specialized fields for flights (airline, flight number, confirmation code), driving routes, and train schedules — plus an estimated travel time for the leg — visible to the group so anyone can check a flight's status. Group the legs of one trip into a collapsible card, and stack several travelers' trips into one named itinerary.
 - [ ] Live Travel Status: Members can post a quick status update — checking bags, landed, passing through a city — visible to the group during active trip mode.
@@ -54,6 +55,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 - [x] Copy as Markdown: "Copy trip as Markdown" in the trip menu copies the whole itinerary (dates, city, people, timeline, stays, car rentals, checklist, ideas), and "Copy" beside the Timeline's View options copies just the timeline, one heading per day with the trip's time zone stated once. Confirmation codes and notes go with it; expenses and member emails never do.
 - [x] Trip City: A trip can be based in a city (searched when creating the trip, which also sets its time zone, or changed from the trip menu). It shows under the trip's title. A day's weather follows the day's own located plans (a day entirely in another place shows that place; a day split between places shows the main one plus "also" chips); the trip city covers days with no located plan, and a day with neither shows no weather.
 - [x] Slim Logistics: Stays, rentals and travel legs ride the timeline as one-line rows placed by time; tapping one opens its details (read-only for a stay or rental).
+- [x] No expense needed: An event, stay or rental with no cost can be marked so its "Not paid for yet" reminder goes away for everyone, with an Undo in its details.
 - [x] Personal Expenses: A private "Just for me" list on the Expenses screen for what someone is covering themselves. Only its owner sees it; the totals show everyone's figure with the owner's personal amount added in a different color and the combined total beneath, so nobody does the math.
 - [ ] Auto-Suggested Transit Between Events: Adding an event proposes a default driving leg to and from it, editable, convertible to downtime, or removable, so commutes between plans aren't forgotten by default.
 

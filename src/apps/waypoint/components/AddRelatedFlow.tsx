@@ -188,6 +188,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
           key={`checklist-${added.checklist}`}
           isOpen
           trip={trip}
+          currentUserId={currentUserId}
           prefill={checklistPrefill}
           memberOptions={memberOptions}
           isSubmitting={isSubmitting}

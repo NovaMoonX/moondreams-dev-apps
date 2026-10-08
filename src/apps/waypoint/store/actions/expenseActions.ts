@@ -193,7 +193,7 @@ export const linkExpenseToPlan = createAsyncThunk<TripExpense, LinkExpenseInput>
       }
       const current = snapshot.data() as Partial<TripExpense>;
       if (current.linkedTo) {
-        throw new Error('This expense is already linked to a plan.');
+        throw new Error('This expense is already linked to something else.');
       }
       const changes = { linkedTo: link, dayIndex: current.dayIndex ?? dayIndex, lastEditedAt: Date.now() };
       transaction.update(expenseRef, changes);

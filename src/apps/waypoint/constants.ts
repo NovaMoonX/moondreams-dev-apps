@@ -91,6 +91,7 @@ export const EVENT_FIELD_LABELS: Record<EventFieldChange['field'], string> = {
   endAt: 'End time',
   startTime: 'Start time',
   endTime: 'End time',
+  arriveByTime: 'Arrive by',
   locationName: 'Location',
   dayIndex: 'Day',
   endDayIndex: 'End day',
@@ -213,6 +214,9 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
   SCOOTER: 'Going to',
   OTHER: 'Where to navigate',
 };
+
+// Event types that can ask for an earlier arrival than their start.
+export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'];
 
 // Event types whose cost belongs on an expense: one without an attached expense reads "Not paid for yet".
 export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];

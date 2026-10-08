@@ -61,6 +61,7 @@ import {
   TRANSIT_LOCATION_MIRROR_KEYS,
   TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
+  ARRIVE_BY_EVENT_TYPES,
 } from '@apps/waypoint/constants';
 import type {
   ActivitySetting,
@@ -87,6 +88,7 @@ import {
   getEventTime,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 export type EventFormValues = Omit<
   TimelineEvent,
@@ -209,6 +211,9 @@ interface EventDraft {
   cuisines: string;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
+  hasArriveBy: boolean;
+  arriveByTime: string;
+  arriveByNote: string;
   hasVenueHours: boolean;
   venueOpenTime: string;
   venueCloseTime: string;
@@ -231,6 +236,34 @@ function getMealForTime(time: string): MealType {
   if (hour >= 11 && hour < 15) return 'LUNCH';
   if (hour >= 15 && hour < 17) return 'SNACK';
   return 'DINNER';
+}
+
+function getClockMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function fromClockMinutes(total: number) {
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Moving the start moves a chosen arrival with it, keeping its lead; it is dropped when nothing earlier fits. */
+function getShiftedArriveBy(draft: EventDraft, nextTime: string): Partial<EventDraft> {
+  if (!draft.hasArriveBy || !draft.arriveByTime || !draft.time || !nextTime) {
+    return {};
+  }
+  const latest = getClockMinutes(nextTime) - 1;
+  if (latest < 0) {
+    return { hasArriveBy: false, arriveByTime: '', arriveByNote: '' };
+  }
+  const shifted = getClockMinutes(draft.arriveByTime) + getClockMinutes(nextTime) - getClockMinutes(draft.time);
+  return { arriveByTime: fromClockMinutes(Math.min(Math.max(shifted, 0), latest)) };
+}
+
+/** Half an hour before the start, kept on the same day; empty when the start is too early to fit one. */
+function getSuggestedArriveBy(startTime: string) {
+  const total = getClockMinutes(startTime) - 30;
+  return Number.isNaN(total) || total < 0 ? '' : fromClockMinutes(total);
 }
 
 function getDefaultSubtype(eventType: EventType, time: string): string {
@@ -433,6 +466,9 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
         : '',
     attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
+    hasArriveBy: Boolean(event?.arriveByTime),
+    arriveByTime: event?.arriveByTime ?? '',
+    arriveByNote: event?.arriveByNote ?? '',
     hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
     venueOpenTime: event?.venueOpenTime ?? '',
     venueCloseTime: event?.venueCloseTime ?? '',
@@ -506,6 +542,8 @@ function EventFormModal({
     [events, draft.eventType],
   );
   const isTravel = draft.eventType === 'TRAVEL';
+  const canArriveEarly =
+    isRelative && ARRIVE_BY_EVENT_TYPES.includes(draft.eventType) && draft.dayIndex !== null && draft.time !== '';
   const arrival = isTravel ? TRANSIT_ARRIVAL[draft.quickField as TransitType] : undefined;
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
@@ -524,6 +562,7 @@ function EventFormModal({
         ...(draft.eventType === 'DINING' && !draft.isMealTouched
           ? { quickField: getMealForTime(nextTime) }
           : {}),
+        ...getShiftedArriveBy(draft, nextTime),
         ...changes,
       });
     if (nextDayIndex === null) {
@@ -644,6 +683,14 @@ function EventFormModal({
     if (!draft.time || (draft.dayIndex === null && !isRelative)) {
       return 'Pick a day and a start time.';
     }
+    if (canArriveEarly && draft.hasArriveBy) {
+      if (!draft.arriveByTime) {
+        return 'Pick an arrival time, or remove it.';
+      }
+      if (draft.arriveByTime >= draft.time) {
+        return 'The arrival needs to be before the start time.';
+      }
+    }
     if (!draft.hasEndTime) {
       return null;
     }
@@ -753,6 +800,8 @@ function EventFormModal({
         notes: event?.notes ?? prefill?.notes ?? null,
         attendeeTargetType: draft.attendeeTargetType,
         assignedMemberIds,
+        arriveByTime: canArriveEarly && draft.hasArriveBy ? draft.arriveByTime || null : null,
+        arriveByNote: canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByNote.trim() || null : null,
         venueOpenTime: draft.hasVenueHours ? draft.venueOpenTime || null : null,
         venueCloseTime: draft.hasVenueHours ? draft.venueCloseTime || null : null,
         changeHistory: event?.changeHistory ?? [],
@@ -804,7 +853,8 @@ function EventFormModal({
     }
     if (isRelative) {
       const { time } = fromDayMinutes(
-        toDayMinutes(timeFields.dayIndex, draft.time) - draft.reminderMinutesBefore,
+        toDayMinutes(timeFields.dayIndex, canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByTime : draft.time) -
+          draft.reminderMinutesBefore,
       );
       return formatClockTime(time);
     }
@@ -1163,6 +1213,52 @@ function EventFormModal({
           >
             + Add end time
           </Button>
+        )}
+
+        {canArriveEarly && draft.hasArriveBy ? (
+          <RemovableField
+            label='Arrive by'
+            removeLabel='Remove arrival time'
+            onRemove={() => updateDraft({ hasArriveBy: false, arriveByTime: '', arriveByNote: '' })}
+          >
+            <div className='space-y-3'>
+              <Input
+                type='time'
+                aria-label='Arrival time'
+                value={draft.arriveByTime}
+                onChange={(changeEvent) => updateDraft({ arriveByTime: changeEvent.target.value })}
+              />
+              <p
+                className={join(
+                  'text-xs',
+                  draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time
+                  ? `The arrival needs to be before the start time, ${formatClockTime(draft.time)}.`
+                  : `Starts at ${draft.time ? formatClockTime(draft.time) : 'the start time'}. Arrive before that.`}
+              </p>
+              <Input
+                aria-label='Why arrive early'
+                placeholder='Why? Parking fills up early'
+                maxLength={500}
+                value={draft.arriveByNote}
+                onChange={(changeEvent) => updateDraft({ arriveByNote: changeEvent.target.value })}
+              />
+            </div>
+          </RemovableField>
+        ) : (
+          canArriveEarly && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto px-0! py-0!'
+              onClick={() => updateDraft({ hasArriveBy: true, arriveByTime: draft.arriveByTime || getSuggestedArriveBy(draft.time) })}
+            >
+              + Add arrival time
+            </Button>
+          )
         )}
 
         {isTravel && (

@@ -23,7 +23,7 @@ import {
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { getEventTime } from '@apps/waypoint/utils/tripTime';
+import { formatEventArriveBy, getEventArriveByMs, getEventTime } from '@apps/waypoint/utils/tripTime';
 
 interface NowPillProps {
   trip: TripSpace;
@@ -43,6 +43,11 @@ function getStatusLine(
     return endMs !== null ? `Now · ${formatDuration(endMs - now)} left` : 'Now';
   }
   const when = startTime ? formatClockTime(startTime) : '';
+  const arriveBy = formatEventArriveBy(trip, event);
+  const arriveByMs = getEventArriveByMs(trip, event);
+  if (arriveBy && arriveByMs !== null && arriveByMs - now >= 60_000) {
+    return `Up next · Arrive ${arriveBy} · ${formatCountdown(arriveByMs, now)}`;
+  }
   return startMs !== null
     ? `Up next · ${when} · ${formatCountdown(startMs, now)}`
     : `Up next · ${when}`;

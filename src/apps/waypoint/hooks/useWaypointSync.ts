@@ -13,6 +13,7 @@ import {
 import { startTripListener } from '../store/listeners/tripListeners';
 import { startTripExpensesListener } from '../store/listeners/expenseListeners';
 import { startPersonalExpensesListener } from '../store/listeners/personalExpenseListeners';
+import { startPersonalChecklistListener } from '../store/listeners/personalChecklistListeners';
 import { startTripEventsListener } from '../store/listeners/eventListeners';
 import { startEventSuggestionsListener } from '../store/listeners/eventSuggestionListeners';
 import { startAnnouncementsListener } from '../store/listeners/announcementListeners';
@@ -28,6 +29,7 @@ import { setMyEmailInvites, setTripEmailInvites } from '../store/slices/emailInv
 import { setTrips } from '../store/slices/tripSlice';
 import { clearExpenses, setExpenses } from '../store/slices/expensesSlice';
 import { clearPersonalExpenses, setPersonalExpenses } from '../store/slices/personalExpensesSlice';
+import { clearPersonalChecklist, setPersonalChecklist } from '../store/slices/personalChecklistSlice';
 import { clearEvents, setEvents } from '../store/slices/eventsSlice';
 import {
   clearEventSuggestions,
@@ -119,6 +121,17 @@ export function useWaypointSync(
 
     return startPersonalExpensesListener(uid, tripId, (expenses) => {
       dispatch(setPersonalExpenses({ tripId, expenses }));
+    });
+  }, [dispatch, uid, tripId]);
+
+  useEffect(() => {
+    if (!tripId || !uid) {
+      dispatch(clearPersonalChecklist());
+      return;
+    }
+
+    return startPersonalChecklistListener(uid, tripId, (items) => {
+      dispatch(setPersonalChecklist({ tripId, items }));
     });
   }, [dispatch, uid, tripId]);
 

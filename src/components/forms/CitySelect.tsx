@@ -73,7 +73,7 @@ function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
         disabled={disabled}
         placeholder='Search for a city'
         searchPlaceholder='Type a city, like Seattle'
-        triggerClassName='pr-14 pl-9'
+        triggerClassName='pl-9 [&>span]:mr-6'
         onSearch={setQuery}
         onChange={(key) => {
           if (key === STATUS_KEY) {
