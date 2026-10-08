@@ -33,6 +33,7 @@ import EventFormModal, {
 import EventSuggestionHost, { type EventSuggestionHandle } from '@apps/waypoint/components/EventSuggestionHost';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import LazyMount from '@/components/LazyMount';
+import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import DayHeader from '@apps/waypoint/components/DayHeader';
 import SectionHeader from '@/components/SectionHeader';
@@ -130,6 +131,9 @@ export function TimelineSection({
   const [showArchived, setShowArchived] = useState(false);
   const memberIds = Object.keys(trip.members);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [hideCompact, setHideCompact] = useState(false);
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
   const logisticsDetailRef = useRef<LogisticsDetailHandle>(null);
   const suggestionRef = useRef<EventSuggestionHandle>(null);
   const isPhone = useMediaQuery().isBelow('sm');
@@ -137,15 +141,16 @@ export function TimelineSection({
   const rentals = useAppSelector(selectRentals);
   const logisticsByDay = useMemo(
     () =>
-      unpaidOnly
+      unpaidOnly || hideCompact
         ? new Map<number, LogisticsEntry[]>()
         : getLogisticsEntries(trip, stays, rentals)
             .filter((entry) => entry.dayIndex >= -MAX_DAYS_OUTSIDE_TRIP && entry.dayIndex < dayCount + MAX_DAYS_OUTSIDE_TRIP)
+            .filter((entry) => needle === '' || `${entry.verb} ${entry.name}`.toLowerCase().includes(needle))
             .reduce(
             (byDay, entry) => byDay.set(entry.dayIndex, [...(byDay.get(entry.dayIndex) ?? []), entry]),
             new Map<number, LogisticsEntry[]>(),
           ),
-    [trip, stays, rentals, unpaidOnly, dayCount],
+    [trip, stays, rentals, unpaidOnly, hideCompact, needle, dayCount],
   );
   const hasOutsideEvents = events.some(
     (event) =>
@@ -195,6 +200,12 @@ export function TimelineSection({
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
     .filter((event) => !attendingOnly || getEventAttendeeIds(event, memberIds).includes(currentUserId))
+    .filter((event) => !hideCompact || event.eventType !== 'TRAVEL')
+    .filter(
+      (event) =>
+        needle === '' ||
+        [event.title, event.locationName, event.address, event.notes].some((text) => text?.toLowerCase().includes(needle)),
+    )
     .filter(
       (event) =>
         !unpaidOnly ||
@@ -462,8 +473,12 @@ export function TimelineSection({
     });
 
     const hasLogistics = scope === 'all' ? logisticsByDay.size > 0 : typeof scope === 'number' && logisticsByDay.has(scope);
-    if (visibleEvents.length === 0 && !hasLogistics && (scope !== 'all' || !weather.hasWeather)) {
-      return <p className='text-muted-foreground py-6 text-sm'>No events planned yet.</p>;
+    if (visibleEvents.length === 0 && !hasLogistics && (scope !== 'all' || !weather.hasWeather || needle !== '')) {
+      return (
+        <p className='text-muted-foreground py-6 text-sm'>
+          {needle !== '' ? 'Nothing in the itinerary matches that.' : 'No events planned yet.'}
+        </p>
+      );
     }
 
     if (scope === 'outside') {
@@ -499,7 +514,7 @@ export function TimelineSection({
       MAX_DAYS_OUTSIDE_TRIP,
     );
     const weatherOnlyDays = dayIndexes
-      .filter((day) => (weather.getDay(day) || logisticsByDay.has(day)) && !eventDays.some(({ bucket }) => bucket === day))
+      .filter((day) => ((needle === '' && weather.getDay(day)) || logisticsByDay.has(day)) && !eventDays.some(({ bucket }) => bucket === day))
       .map((day) => ({ bucket: day as IndexBucket, items: [] as TimelineEvent[] }));
     const getBucketOrder = (bucket: IndexBucket) =>
       typeof bucket === 'number' ? bucket : bucket === 'outside' ? dayCount + MAX_DAYS_OUTSIDE_TRIP : dayCount + MAX_DAYS_OUTSIDE_TRIP + 1;
@@ -602,11 +617,12 @@ export function TimelineSection({
     {
       heading: 'On each card',
       options: [
-        { label: 'Show covers', checked: showCovers, onChange: setShowCovers, isCustomized: !showCovers },
+        { label: 'Show covers', checked: showCovers, onChange: setShowCovers, defaultChecked: true, isCustomized: !showCovers },
         {
           label: "Show who's attending",
           checked: showAttendees,
           onChange: setShowAttendees,
+          defaultChecked: true,
           isCustomized: !showAttendees,
         },
       ],
@@ -620,6 +636,7 @@ export function TimelineSection({
                 label: 'Compact weather',
                 checked: minimizeWeather,
                 onChange: setMinimizeWeather,
+                defaultChecked: false,
                 isCustomized: minimizeWeather,
               },
             ],
@@ -633,15 +650,30 @@ export function TimelineSection({
           label: "Only events I'm attending",
           checked: attendingOnly,
           onChange: setAttendingOnly,
+          defaultChecked: false,
           isCustomized: attendingOnly,
         },
         {
           label: 'Only activities not paid for yet',
           checked: unpaidOnly,
           onChange: setUnpaidOnly,
+          defaultChecked: false,
           isCustomized: unpaidOnly,
         },
-        { label: 'Show archived', checked: showArchived, onChange: setShowArchived, isCustomized: showArchived },
+        {
+          label: 'Hide travel, stays and rentals',
+          checked: hideCompact,
+          onChange: setHideCompact,
+          defaultChecked: false,
+          isCustomized: hideCompact,
+        },
+        {
+          label: 'Show archived',
+          checked: showArchived,
+          onChange: setShowArchived,
+          defaultChecked: false,
+          isCustomized: showArchived,
+        },
       ],
     },
   ];
@@ -706,6 +738,7 @@ export function TimelineSection({
             <TimelineViewOptions groups={viewOptionGroups} />
           </div>
         </div>
+        <SearchInput value={query} onChange={setQuery} placeholder='Search the itinerary' />
         <Select
           className='sm:hidden'
           options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}

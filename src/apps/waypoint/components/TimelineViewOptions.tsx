@@ -11,6 +11,7 @@ interface ViewOption {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  defaultChecked: boolean;
   /** Counts toward the badge on the trigger when the option differs from its default. */
   isCustomized: boolean;
 }
@@ -36,6 +37,9 @@ function TimelineViewOptions({ groups }: TimelineViewOptionsProps) {
     </Button>
   );
 
+  const resetToDefaults = () =>
+    groups.flatMap((group) => group.options).forEach((option) => option.checked !== option.defaultChecked && option.onChange(option.defaultChecked));
+
   const content = (
     <div className='space-y-4'>
       {groups.map((group) => (
@@ -51,6 +55,11 @@ function TimelineViewOptions({ groups }: TimelineViewOptionsProps) {
           </div>
         </div>
       ))}
+      {customizedCount > 0 && (
+        <Button type='button' variant='secondary' size='sm' className='w-full' onClick={resetToDefaults}>
+          Reset to defaults
+        </Button>
+      )}
     </div>
   );
 
