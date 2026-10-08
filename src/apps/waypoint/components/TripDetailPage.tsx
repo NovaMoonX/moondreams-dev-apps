@@ -43,6 +43,7 @@ import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import AnnouncementFormModal from '@apps/waypoint/components/AnnouncementFormModal';
+import ChecklistOverview from '@apps/waypoint/components/ChecklistOverview';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import EditTripCoverModal from '@apps/waypoint/components/EditTripCoverModal';
 import EditTripDatesModal from '@apps/waypoint/components/EditTripDatesModal';
@@ -708,6 +709,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </div>
         )}
         {canAddIdeas && ideasOverview}
+        {(hasAppNav ? sectionTab === '' : true) && (
+          <ChecklistOverview trip={trip} currentUserId={currentUserId} onOpen={() => setSectionTab('checklist')} />
+        )}
         {hasAppNav && sectionTab === '' && !isActive && (
           <div className='mt-5 space-y-3'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
