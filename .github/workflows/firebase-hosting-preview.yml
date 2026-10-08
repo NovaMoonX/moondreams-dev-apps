@@ -7,7 +7,6 @@ on: workflow_dispatch
 permissions:
   checks: write
   contents: read
-  pull-requests: write
 jobs:
   build_and_preview:
     runs-on: ubuntu-latest
@@ -23,11 +22,13 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
       - id: channel
-        run: echo "id=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40)" >> "$GITHUB_OUTPUT"
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+        run: echo "id=preview-$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40 | sed 's/-*$//')" >> "$GITHUB_OUTPUT"
+      - id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
           projectId: moondreams-dev-apps
           channelId: ${{ steps.channel.outputs.id }}
           expires: 7d
+      - run: echo "Preview: ${{ steps.deploy.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"

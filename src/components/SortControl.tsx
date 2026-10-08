@@ -69,7 +69,7 @@ function SortControl<T extends string>({
     <>
       {trigger}
       <Drawer
-        isOpen={isOpen}
+        isOpen={isOpen && isPhone}
         onClose={() => setIsOpen(false)}
         title='Sort by'
         showCloseButton

@@ -27,6 +27,8 @@ import {
 import type { WatchlistFilter, WatchlistSort } from '@apps/a-list/types';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
+const titleCollator = new Intl.Collator();
+
 function WatchlistScreen() {
   const { openOverlay } = useAListOverlay();
   const now = useNow();
@@ -34,7 +36,8 @@ function WatchlistScreen() {
   const openingRows = useAppSelector((state) => selectOpeningRows(state, now));
   const [filters, setFilters] = useState<WatchlistFilter[]>([]);
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<WatchlistSort>('default');
+  const [chosenSort, setSort] = useState<WatchlistSort>('default');
+  const sort = rows.length > 1 ? chosenSort : 'default';
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
   const toggleFilter = (filter: WatchlistFilter) =>
@@ -53,7 +56,7 @@ function WatchlistScreen() {
     right: WatchlistRowData,
   ): number => {
     if (sort === 'title')
-      return left.item.movie.title.localeCompare(right.item.movie.title);
+      return titleCollator.compare(left.item.movie.title, right.item.movie.title);
     if (sort === 'addedAt') return right.item.createdAt - left.item.createdAt;
     const leftRelease = left.item.movie.releaseDate;
     const rightRelease = right.item.movie.releaseDate;
@@ -62,7 +65,7 @@ function WatchlistScreen() {
     return rightRelease - leftRelease;
   };
 
-  // Rows arrive in priority order. Seen movies only show under the Seen pill; each other pill narrows the unseen ones.
+  // Rows arrive in priority order. Seen movies only show under the Seen pill; every other pill narrows whichever side is showing.
   const getVisibleRows = (): WatchlistRowData[] => {
     const priorities = filters.filter((filter) =>
       WATCH_PRIORITIES.includes(filter as (typeof WATCH_PRIORITIES)[number]),
@@ -74,11 +77,9 @@ function WatchlistScreen() {
       (row) =>
         normalizeString(row.item.movie.title).includes(normalizedQuery) &&
         (!isOpeningOn || row.item.movieKey in daysByMovie) &&
-        (isSeenOn
-          ? row.isSeen
-          : !row.isSeen &&
-            (priorities.length === 0 ||
-              (priorities as string[]).includes(row.item.priority))),
+        row.isSeen === isSeenOn &&
+        (priorities.length === 0 ||
+          (priorities as string[]).includes(row.item.priority)),
     );
 
     if (sort !== 'default') return [...matches].sort(compareRows);
@@ -173,6 +174,8 @@ function WatchlistScreen() {
           </Button>
         </p>
       );
+    if (rows.every((row) => row.isSeen))
+      return <p>Everything you've watched is under Seen.</p>;
     return <p>Nothing here right now.</p>;
   };
 
