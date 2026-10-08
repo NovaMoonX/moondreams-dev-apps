@@ -14,7 +14,7 @@ const DAY_MS = 86_400_000;
 const POINT_CACHE_MS = 30 * DAY_MS;
 const NEARBY_CACHE_MS = 7 * DAY_MS;
 // Bump when the shape of results changes, so older cached lookups are not served.
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MIN_QUERY_LENGTH = 3;
 const MAX_QUERY_LENGTH = 60;
 

@@ -160,6 +160,7 @@ const SEED_THEATRES = [
     postalCode: '66202',
     latitude: 38.99,
     longitude: -94.66,
+    timeZone: 'America/Chicago',
   },
   {
     theatreId: '2105',
@@ -170,6 +171,18 @@ const SEED_THEATRES = [
     postalCode: '66211',
     latitude: 38.9,
     longitude: -94.62,
+    timeZone: 'America/Chicago',
+  },
+  {
+    theatreId: 'manual-seed-theatre-southlake',
+    name: 'AMC Southlake 24',
+    addressLine: null,
+    city: null,
+    state: null,
+    postalCode: null,
+    latitude: null,
+    longitude: null,
+    timeZone: null,
   },
 ];
 
@@ -178,8 +191,9 @@ function toTheatreSnapshot({
   name,
   city,
   state,
+  timeZone,
 }: (typeof SEED_THEATRES)[number]) {
-  return { theatreId, name, city, state };
+  return { theatreId, name, city, state, timeZone };
 }
 
 // Viewings not listed here have no theater, like the ones written before theaters existed.
@@ -187,6 +201,7 @@ const SEED_VIEWING_THEATRES: Record<string, number> = {
   'seed-viewing-matrix': 0,
   'seed-viewing-dune-1': 0,
   'seed-viewing-dune-2': 1,
+  'seed-viewing-late': 2,
 };
 
 const SEED_TICKETS: Record<string, object> = {

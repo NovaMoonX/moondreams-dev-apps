@@ -127,6 +127,8 @@ export interface TheatreSnapshot {
   name: string;
   city: string | null;
   state: string | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
 }
 
 /** A theater the member goes to; the document id is `theatreId`. */
@@ -140,6 +142,8 @@ export interface AListTheatre {
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
   createdAt: number;
   lastEditedAt: number;
 }

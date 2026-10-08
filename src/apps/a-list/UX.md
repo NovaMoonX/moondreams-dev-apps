@@ -596,7 +596,7 @@ block-beta
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |
-| TheaterFinder, TheaterNameForm, TheaterList, TheaterPills | Theaters subview and Setup's last step; the add and edit forms | a "Use my current location" button (the only thing that asks for a position) and a zip/city search over AMC's nearest theaters (with a "Can't find it? Add it by name" link that reveals one input); the saved list with a favorite star and a remove button; and one `Pill` per saved theater on the forms, the favorite preselected |
+| TheaterFinder, TheaterNameForm, TheaterList (a typed row carries "Not linked to AMC" and a "Link to AMC" button), TheaterPills | Theaters subview and Setup's last step; the add and edit forms | a "Use my current location" button (the only thing that asks for a position) and a zip/city search over AMC's nearest theaters (with a "Can't find it? Add it by name" link that reveals one input); the saved list with a favorite star and a remove button; and one `Pill` per saved theater on the forms, the favorite preselected |
 | StarRating | Seen prompt, edit viewing, rows (read-only) | half stars from 0.5 to 5: tap a star's left or right half, or slide a finger or the mouse across the row; hovering with a mouse previews the value in a lighter tint until it is clicked; arrow keys step by a half (and work while hovering); a visible Clear button removes the rating (tapping the current rating does nothing); custom, since Dreamer UI has none |
 | HelpTip | Calendar's "Since Friday" tile, Dashboard's Premium formats tile, Membership settings' Goals, the standard-price field | a small help icon: a hover tooltip (with its arrow) on a computer, a modal on a phone (a tooltip inside a drawer, modal or subview); or a text link that opens the same explanation in a modal at every size |
 | OpeningTab | Watchlist | the first and default tab; carries an accent and a count when something opens in the next seven days; its empty state links to All |
@@ -676,6 +676,7 @@ flowchart LR
     D -->|"Use my current location (asks the browser on tap)"| E[Nearest AMC theaters]
     D -->|Zip code or city| E
     D -->|"Can't find it? Add it by name"| F
+    B --> L["A typed theater says so · Link to AMC"] --> E2["Pick it in AMC's list"] --> M["Its showings and star switch over; nothing is re-tagged"]
     E --> F["Add"] --> G["Saved; the first one becomes the favorite"]
     B --> H["Star = favorite (preselected on new showings) · Trash = remove, the star moves to another theater"]
 ```

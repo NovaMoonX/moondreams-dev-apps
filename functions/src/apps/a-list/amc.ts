@@ -20,6 +20,7 @@ interface AmcSuggestionsResponse {
 interface AmcTheatre {
   id?: number | string;
   name?: string;
+  timezone?: string;
   location?: {
     addressLine1?: string;
     city?: string;
@@ -117,6 +118,19 @@ function toText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function toTimeZone(value: unknown) {
+  const zone = toText(value);
+  if (!zone) {
+    return null;
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone;
+  } catch {
+    return null;
+  }
+}
+
 function toNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -137,6 +151,7 @@ function toTheatreResult(theatre: AmcTheatre | undefined, distance: unknown): Th
     postalCode: toText(theatre?.location?.postalCode),
     latitude: toNumber(theatre?.location?.latitude),
     longitude: toNumber(theatre?.location?.longitude),
+    timeZone: toTimeZone(theatre?.timezone),
     distanceMiles: toNumber(distance),
   };
   return result;
@@ -147,6 +162,7 @@ const FIXTURE_THEATRES: TheatreResult[] = [
   ['2078', 'AMC Dine-In Mission Valley 20', '5000 Metcalf Ave', 'Overland Park', 'KS', '66202', 38.99, -94.66, 1.2],
   ['2236', 'AMC Barrywoods 24', '8600 N Church Rd', 'Kansas City', 'MO', '64157', 39.25, -94.57, 19.4],
 ].map(([theatreId, name, addressLine, city, state, postalCode, latitude, longitude, distanceMiles]) => ({
+  timeZone: 'America/Chicago',
   theatreId: theatreId as string,
   name: name as string,
   addressLine: addressLine as string,

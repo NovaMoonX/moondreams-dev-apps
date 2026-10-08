@@ -148,9 +148,15 @@ service cloud.firestore {
         return value == null || (value is string && value.size() > 0 && value.size() <= maxSize);
       }
 
+      function isNullOrTimeZone(value) {
+        return value == null || (value is string && value.size() <= 64 && value.matches('^[A-Za-z]+(/[A-Za-z0-9_+-]+)+$'));
+      }
+
       function isTheatreSnapshotValid(theatre) {
         let keys = ['theatreId', 'name', 'city', 'state'];
-        return theatre is map && theatre.keys().hasOnly(keys) && theatre.keys().hasAll(keys)
+        // `timeZone` arrived later: older snapshots lack it, so it is allowed but not required.
+        return theatre is map && theatre.keys().hasOnly(keys.concat(['timeZone'])) && theatre.keys().hasAll(keys)
+          && isNullOrTimeZone(theatre.get('timeZone', null))
           && isTheatreId(theatre.theatreId)
           && theatre.name is string && theatre.name.size() > 0 && theatre.name.size() <= 120
           && isOptionalText(theatre.city, 80)
@@ -161,7 +167,9 @@ service cloud.firestore {
         function isTheatreValid(data) {
           let keys = ['theatreId', 'name', 'addressLine', 'city', 'state', 'postalCode',
                       'latitude', 'longitude', 'createdAt', 'lastEditedAt'];
-          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          // `timeZone` arrived later: older documents lack it, so it is allowed but not required.
+          return data.keys().hasOnly(keys.concat(['timeZone'])) && data.keys().hasAll(keys)
+            && isNullOrTimeZone(data.get('timeZone', null))
             && data.theatreId == theatreId
             && isTheatreId(theatreId)
             && data.name is string && data.name.size() > 0 && data.name.size() <= 120

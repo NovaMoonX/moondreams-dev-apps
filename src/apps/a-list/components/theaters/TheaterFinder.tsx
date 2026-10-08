@@ -29,6 +29,8 @@ interface TheaterFinderProps {
   savedIds: string[];
   onAdd: (theatre: TheatreSearchResult) => void;
   isDisabled?: boolean;
+  /** The button on each result; "Link" when the pick replaces a typed theater. */
+  actionLabel?: string;
 }
 
 const NO_SEARCH: TheatreSearch = { kind: 'text', query: '' };
@@ -37,6 +39,7 @@ function TheaterFinder({
   savedIds,
   onAdd,
   isDisabled = false,
+  actionLabel = 'Add',
 }: TheaterFinderProps) {
   const [query, setQuery] = useState('');
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
@@ -180,7 +183,7 @@ function TheaterFinder({
                         disabled={isDisabled || isFull}
                         onClick={() => onAdd(theatre)}
                       >
-                        Add
+                        {actionLabel}
                       </Button>
                     )
                   }

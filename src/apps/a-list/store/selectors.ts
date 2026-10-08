@@ -87,6 +87,17 @@ export const selectWatchlistItems = createSelector(
 
 const selectViewingItems = (state: RootState) => state.aList.viewings.items;
 
+export const selectShowingCountByTheatreId = createSelector(
+  [selectViewingItems],
+  (viewings) =>
+    viewings.reduce<Record<string, number>>((counts, viewing) => {
+      const theatreId = viewing.theatre?.theatreId;
+      return theatreId
+        ? { ...counts, [theatreId]: (counts[theatreId] ?? 0) + 1 }
+        : counts;
+    }, {}),
+);
+
 /** Day key → that day's viewings in showtime order: what each calendar cell and the day panel read. */
 export const selectViewingsByDay = createSelector(
   [selectViewingItems],

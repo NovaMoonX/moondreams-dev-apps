@@ -13,7 +13,7 @@ Server-side code for the mini-apps. Every function:
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
-| `findTheatres` | callable | A-List Tracker | `{ query }` (zip code or city) or `{ latitude, longitude }` → `{ theatres, area }`: the closest AMC theaters (up to 10, nearest first) from the AMC Theatres API |
+| `findTheatres` | callable | A-List Tracker | `{ query }` (zip code or city) or `{ latitude, longitude }` → `{ theatres, area }`: the closest AMC theaters (up to 10, nearest first, each with its time zone when AMC gives one) from the AMC Theatres API |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |

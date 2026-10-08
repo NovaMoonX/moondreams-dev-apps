@@ -19,6 +19,7 @@ export function toTheatreSnapshot(theatre: TheatreSnapshot): TheatreSnapshot {
     name: theatre.name,
     city: theatre.city ?? null,
     state: theatre.state ?? null,
+    timeZone: theatre.timeZone ?? null,
   };
 }
 
@@ -33,5 +34,12 @@ export function createTypedTheatre(name: string): TheatreDraft {
     postalCode: null,
     latitude: null,
     longitude: null,
+    timeZone: null,
   };
+}
+
+/** True for a theater typed in by name, which AMC has no record of. */
+export function isTypedTheatre(theatre: { theatreId: string }): boolean {
+  const result = theatre.theatreId.startsWith('manual-');
+  return result;
 }

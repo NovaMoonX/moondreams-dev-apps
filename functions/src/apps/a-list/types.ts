@@ -24,6 +24,8 @@ export interface TheatreResult {
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** IANA zone like "America/Chicago"; null when AMC didn't say or it isn't a real zone. */
+  timeZone: string | null;
   /** From the searched point; null when AMC didn't say. */
   distanceMiles: number | null;
 }
