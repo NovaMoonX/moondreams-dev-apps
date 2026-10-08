@@ -22,7 +22,8 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
       - id: channel
-        run: echo "id=preview-$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40 | sed 's/-*$//')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "id=preview-$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40 | sed 's/-*$//')" >> "$GITHUB_OUTPUT"
       - id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -31,4 +32,5 @@ jobs:
           projectId: moondreams-dev-apps
           channelId: ${{ steps.channel.outputs.id }}
           expires: 7d
-      - run: echo "Preview: ${{ steps.deploy.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"
+      - run: |
+          echo "Preview: ${{ steps.deploy.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"
