@@ -52,7 +52,7 @@ function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
       )}
     >
       {isStuck ? (
-        <div className='flex min-w-0 items-center gap-2'>
+        <div className='flex w-full min-w-0 items-center justify-center gap-2'>
           <span className='text-foreground truncate text-sm font-semibold'>{label}</span>
           {trailing}
         </div>
