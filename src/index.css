@@ -35,6 +35,25 @@
   }
 }
 
+/* A section label that rides under `sticky-app-bar` on a phone (Waypoint's day headers), following it as the site header hides and returns. The 3.75rem is the app bar's height. */
+@utility sticky-day-bar {
+  position: sticky;
+  z-index: 10;
+  @media (max-width: 767.98px) {
+    top: calc(4rem + 3.75rem - 2px);
+    transition: top 300ms;
+    html[data-site-banner='true'] & {
+      top: calc(6.25rem + 3.75rem - 2px);
+    }
+    html[data-site-header='hidden'] & {
+      top: calc(3.75rem - 1px);
+    }
+    html[data-site-header='hidden'][data-site-banner='true'] & {
+      top: calc(2.25rem + 3.75rem - 1px);
+    }
+  }
+}
+
 @theme app {
 	--color-background: var(--color-white);
 	--color-foreground: var(--color-zinc-950);

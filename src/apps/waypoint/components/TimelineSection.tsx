@@ -34,6 +34,7 @@ import EventSuggestionHost, { type EventSuggestionHandle } from '@apps/waypoint/
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
+import DayHeader from '@apps/waypoint/components/DayHeader';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
@@ -506,10 +507,11 @@ export function TimelineSection({
               className='defer-offscreen space-y-3'
               style={{ '--defer-size': `${getItemHeight(items) + getLogisticsHeight(bucket)}px` } as CSSProperties}
             >
-              {renderDivider(
-                getBucketLabel(bucket, trip.startDate, dayCount),
-                typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined,
-              )}
+              <DayHeader
+                isSticky={isPhone}
+                label={getBucketLabel(bucket, trip.startDate, dayCount)}
+                trailing={typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined}
+              />
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
               <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
                 {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
