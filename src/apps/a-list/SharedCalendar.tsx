@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
+import { useNoIndex } from '@/hooks/useNoIndex';
 import { formatDate, formatDuration, formatTime } from '@/utils/formatUtils';
 import { fromLocalDateAndTimeInputValues } from '@/utils/dateInputUtils';
 import Loading from '@/ui/Loading';
@@ -232,16 +233,7 @@ function SharedCalendar() {
 
   useAListTheme();
 
-  
-  // Asks search engines not to list this page in results; removed on leaving so other pages aren't affected.
-  // The worker also sends this as a header, for crawlers that don't run JS.
-  useEffect(() => {
-    const robots = document.createElement('meta');
-    robots.name = 'robots';
-    robots.content = 'noindex';
-    document.head.appendChild(robots);
-    return () => robots.remove();
-  }, []);
+  useNoIndex();
 
   const getContent = () => {
     if (query.isError) {

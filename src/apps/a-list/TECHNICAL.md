@@ -218,7 +218,7 @@ interface SharedViewing {
 - **Deleting is the only way to stop sharing** and is immediate (the next open is `not_found`). There is no rename and no re-snapshot: the only edit is the PIN. Create a new link for new plans.
 - **Times** are instants shown in the *viewer's* local time, like everywhere in the app, and the page says so ("Times are shown in your time zone"). A friend in another zone sees a shifted showtime and may see a late showing on the next day; storing the sharer's zone to show theirs is a follow-up.
 - **Free text is shown as typed.** A title added by hand or a theater name can hold anything the member wrote, and the form's note says so. Poster URLs are kept only when `https` and on the movie providers' image hosts (`image.tmdb.org`, `m.media-amazon.com`), so a modified client can't make the page load an arbitrary image.
-- **Link previews** (Cloudflare worker) say only that a movie calendar was shared, whether or not it has a PIN. `noindex` is sent as an `X-Robots-Tag` header by the worker and as a meta tag by the page.
+- **Link previews** (Cloudflare worker) say only that a movie calendar was shared, whether or not it has a PIN. `noindex` is sent as an `X-Robots-Tag` header by the worker and as a meta tag by the shared `useNoIndex` hook.
 - **The token never reaches presence.** The site shell writes the signed-in person's current path to the world-readable Realtime Database, so `Layout` shortens `/a-list/shared/<id>` to `a-list/shared` first.
 - **Indexes:** none (`where('ownerUid', '==', uid)` is a single-field equality query).
 
