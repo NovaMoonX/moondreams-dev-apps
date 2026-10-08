@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { RotateCcw } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
 import SortControl, { type SortOrder } from '@/components/SortControl';
@@ -171,29 +172,54 @@ function WatchlistScreen() {
   );
 
   const getEmptyState = () => {
+    const typed = query.trim();
     if (rows.length === 0)
-      return (
-        <p>Nothing on your list yet. Add the movies you can't wait to see.</p>
-      );
-    if (filters.length > 0 || query.trim() !== '')
-      return (
-        <p>
-          Nothing matches that.{' '}
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-auto p-0'
-            onClick={resetAll}
-          >
-            Reset search, filters and sort
-          </Button>
-        </p>
-      );
+      return {
+        emoji: '🎬',
+        title: 'Your watchlist is empty',
+        body: "Add the movies you can't wait to see and they'll line up here.",
+      };
+    if (typed !== '')
+      return {
+        emoji: '🔎',
+        title: `Nothing matches "${typed}"`,
+        body:
+          filters.length > 0
+            ? 'Try a different title, or loosen the filters.'
+            : 'Check the spelling, or try fewer letters.',
+      };
+    if (filters.includes('seen'))
+      return {
+        emoji: '🍿',
+        title: 'Nothing watched yet',
+        body: "Movies you've seen show up here once they're marked seen.",
+      };
+    if (filters.includes('opening'))
+      return {
+        emoji: '🎟️',
+        title: 'Nothing opening this week',
+        body: "When a movie on your list is about to hit theaters, it'll land here.",
+      };
+    if (filters.length > 0)
+      return {
+        emoji: '🌙',
+        title: 'Nothing fits those filters',
+        body: 'Try fewer filters to see more of your list.',
+      };
     if (rows.every((row) => row.isSeen))
-      return <p>Everything you've watched is under Seen.</p>;
-    return <p>Nothing here right now.</p>;
+      return {
+        emoji: '🎉',
+        title: "You've seen everything on your list",
+        body: "Add more movies you're excited about, or find your past watches under Seen.",
+      };
+    return {
+      emoji: '🎬',
+      title: 'Nothing here right now',
+      body: 'Check back once something new lands on your list.',
+    };
   };
+
+  const emptyState = getEmptyState();
 
   return (
     <section className='space-y-4'>
@@ -246,7 +272,26 @@ function WatchlistScreen() {
         onReset={resetAll}
       />
       {visibleRows.length === 0 ? (
-        <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>
+        <div className='flex flex-col items-center gap-2 px-4 py-10 text-center'>
+          <span className='text-4xl' aria-hidden='true'>
+            {emptyState.emoji}
+          </span>
+          <p className='text-lg font-medium'>{emptyState.title}</p>
+          <p className='text-muted-foreground max-w-xs text-sm'>
+            {emptyState.body}
+          </p>
+          {canReset && (
+            <Button
+              type='button'
+              variant='outline'
+              rounded='full'
+              className='mt-2'
+              onClick={resetAll}
+            >
+              <RotateCcw className='h-4 w-4' /> Reset search, filters and sort
+            </Button>
+          )}
+        </div>
       ) : (
         sections.map(({ label, rows: sectionRows }) => (
           <div key={label ?? 'all'} className='space-y-3'>
