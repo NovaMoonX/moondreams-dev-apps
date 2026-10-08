@@ -36,11 +36,14 @@ function LocationSync() {
     }
 
     function handleSetCurrentLocation(locationPathname: string) {
-      // remove any leading slashes and replace with 'home' if the path is just '/'
+      // remove any leading slashes and replace with 'home' if the path is just '/'.
+      // A link's secret token must never reach presence: that tree is world-readable.
       const nextLocation =
         locationPathname === '/'
           ? 'home'
-          : locationPathname.replace(/^\/+/, '');
+          : locationPathname
+              .replace(/^\/+/, '')
+              .replace(/^(a-list\/shared)\/.*$/, '$1');
 
       setCurrentLocation(nextLocation);
     }
@@ -74,7 +77,9 @@ function LocationSync() {
 
 
     // Update the document title based on the current app
-    document.title = appName;
+    document.title = location.pathname.startsWith('/a-list/shared/')
+      ? 'Movie calendar - A-List Tracker'
+      : appName;
   }, [location.pathname]);
 
   return null;

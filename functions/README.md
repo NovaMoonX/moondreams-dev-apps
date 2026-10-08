@@ -12,6 +12,7 @@ Server-side code for the mini-apps. Every function:
 | --- | --- | --- | --- |
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
+| `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
@@ -19,7 +20,7 @@ Server-side code for the mini-apps. Every function:
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
 | `sendScheduledReminders` | schedule, every 5 minutes | shared | Sends due push reminders from `reminders` through FCM |
 
-Every callable requires a signed-in caller.
+Every callable requires a signed-in caller, except `getCalendarShare`, which exists to serve people who have no account.
 
 ## Secrets and config
 
@@ -60,6 +61,13 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 ```
 
 ## Per-function notes
+
+### A-List Tracker: `getCalendarShare`
+
+- **Public by design, so it is strict about what it returns.** It reads `apps/a-list/calendarShares/{shareId}` with the admin SDK (clients can't read that collection unless they own the document), and copies only allowlisted fields into the response (`calendarShareView.ts`). The owner's uid, the PIN and any extra field on the document never leave it.
+- **PIN:** an open share (`pin: null`) is returned as is. A locked one answers `pin_required` until a PIN arrives, then `wrong_pin` or the calendar. The PIN is trimmed, uppercased and compared in constant time. There is **no attempt limit**.
+- **Ids:** anything that isn't 26 characters of the share alphabet, any unknown id and a deleted share all return `not_found`, so a caller can't tell which ids exist.
+- **No secrets, no cache, no logging of ids or PINs.** Deploying a new callable may need the one-time invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
 
 ### A-List Tracker: `searchMovies` and `getMovie`
 

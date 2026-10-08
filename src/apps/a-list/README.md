@@ -16,7 +16,8 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 4. **Put movies on the calendar** — Add a movie you saw or plan to see, from your watchlist or a fresh search (new ones join your watchlist automatically), and tag it with the theater (your favorite is picked for you). Each day shows the posters of what you watched; tap a day to see its movies in a drawer (on a computer, hover a day for a peek). Seeing a movie twice is just two entries.
 5. **Record what it would have cost** — Mark a movie paid with its format and the three amounts AMC itemizes on every ticket: the ticket price, the convenience fee and the tax, all in dollars. For a premium format, add what a standard ticket would have cost so the upcharge you skipped is counted. Members pay no convenience fee, so the fee you enter is one you skipped; it varies by showing, and the fees you've entered before show up as chips so repeating one is a single tap. The tax field hints at an estimate from your usual rate.
 6. **Mark it seen** — When a planned movie's showtime ends, a prompt asks if you saw it. One tap updates your watchlist, and you can leave a star rating, in half stars: tap either half of a star or slide across the row.
-7. **Watch the numbers** — The top of the calendar tracks movies watched, movies since Friday (AMC's week turns over on Friday, so that's when the weekly count starts over), and whether your goals are met. The dashboard shows your savings, the convenience fees you've skipped, and whether you've broken even, with breakdowns by format, activity over time, and ratings to follow.
+7. **Share your plans** — The Calendar's Share button makes a link to a frozen copy of a week, a month or any dates you pick, up to ten links at a time. A friend opens it with no account (optionally behind a random 4-character PIN you can switch on or off, hidden until you tap Show and copied in one tap), enters the PIN (masked, with a show/hide eye) and sees each movie with its poster and time, and never your name, prices or star ratings. A link never updates; delete it and access ends at once.
+8. **Watch the numbers** — The top of the calendar tracks movies watched, movies since Friday (AMC's week turns over on Friday, so that's when the weekly count starts over), and whether your goals are met. The dashboard shows your savings, the convenience fees you've skipped, and whether you've broken even, with breakdowns by format, activity over time, and ratings to follow.
 
 ### Savings & Break-Even, In Detail
 
@@ -57,6 +58,8 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Theaters: Type the name of the theaters you go to (searching AMC's list comes later), save up to ten, pick a favorite, and tag each showing with one. Entry points: the last Setup step, the Dashboard's theaters row and a quiet nudge on the Calendar.
 - [x] Savings Summary: Monthly cost with tax, total ticket savings, net savings, break-even status, premium format savings, and convenience fees avoided.
 
+- [x] Share Calendar: From the Calendar's Share button, make a link to a frozen copy of a week, a month or any dates up to a year (this or next week (Friday to Thursday, like AMC's), this or next month, or a range you tap out on a calendar). It lists each movie's poster, title, time, runtime, content rating (like PG-13), theater, whether you've seen it and, once a ticket is recorded, its format, with titles and theater names shown as typed, and never your name, prices or star ratings. Anyone with the link can open it without signing in; optionally lock it behind a random 4-character PIN you can switch on or off later. Up to ten links at once; deleting one ends access right away. A link never updates, and its preview in chat apps says only that a movie calendar was shared.
+
 **Next Steps**
 - [ ] Dashboard — Formats: Movies watched by format, as a count and a percent.
 - [ ] Dashboard — Activity: Movies watched over time.
@@ -74,6 +77,6 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 
 - **Frontend:** React + TypeScript + Tailwind CSS, built on Dreamer UI — the calendar is Dreamer UI's `Calendar` with a custom `renderCell` for the poster split.
 - **Movie Data:** TMDB (including upcoming films) for search, posters, US release dates and content ratings, with OMDb as the alternative when no TMDB key is set. OMDb's free tier allows about 1,000 lookups a day for everyone combined, so lookups go through a thin server-side proxy that remembers results, search waits for a pause in typing, and a manual "add by title" path covers an empty quota or a film neither source has. Formats, prices and tax are never looked up; you pick or enter them.
-- **Backend & Realtime:** Firebase (Firestore, Auth, Cloud Functions), private to each member — no sharing or invites.
+- **Backend & Realtime:** Firebase (Firestore, Auth, Cloud Functions), private to each member unless they share a calendar snapshot on purpose (no invites).
 - **State Management:** Redux Toolkit, consistent with the platform's other mini apps.
 - **Deployment:** Ships as a mini-app within the existing platform, under `src/apps/a-list`.

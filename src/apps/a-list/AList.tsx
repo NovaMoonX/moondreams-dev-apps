@@ -14,6 +14,7 @@ import CalendarScreen from '@apps/a-list/components/calendar/CalendarScreen';
 import DayDrawer from '@apps/a-list/components/calendar/DayDrawer';
 import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
 import TicketsList from '@apps/a-list/components/dashboard/TicketsList';
+import ShareSubview from '@apps/a-list/components/share/ShareSubview';
 import TheatersSubview from '@apps/a-list/components/theaters/TheatersSubview';
 import MembershipSettingsSubview from '@apps/a-list/components/dashboard/MembershipSettingsSubview';
 import PastMoviesOfferModal from '@apps/a-list/components/setup/PastMoviesOfferModal';
@@ -144,6 +145,7 @@ function AList() {
   const isSubviewOpen =
     overlay?.kind === 'add' ||
     overlay?.kind === 'membership' ||
+    overlay?.kind === 'share' ||
     overlay?.kind === 'theaters' ||
     overlay?.kind === 'tickets';
 
@@ -157,6 +159,9 @@ function AList() {
           initialView={overlay.view}
           onClose={() => setOverlay(null)}
         />
+      )}
+      {overlay?.kind === 'share' && (
+        <ShareSubview onClose={() => setOverlay(null)} />
       )}
       {overlay?.kind === 'theaters' && (
         <TheatersSubview onClose={() => setOverlay(null)} />

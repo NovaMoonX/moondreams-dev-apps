@@ -45,6 +45,26 @@ export const selectTheatres = createSelector(
   },
 );
 
+const selectCalendarShareItems = (state: RootState) =>
+  state.aList.calendarShares.items;
+
+/** Newest first. */
+export const selectCalendarShares = createSelector(
+  [selectCalendarShareItems],
+  (shares) => {
+    const result = [...shares].sort(
+      (left, right) => right.createdAt - left.createdAt,
+    );
+    return result;
+  },
+);
+
+export const selectAreCalendarSharesLoaded = (state: RootState) =>
+  state.aList.calendarShares.isLoaded;
+
+export const selectCalendarSharesLoadError = (state: RootState) =>
+  state.aList.calendarShares.loadError;
+
 const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 
 /** By priority, then release date (undated last), then title. */

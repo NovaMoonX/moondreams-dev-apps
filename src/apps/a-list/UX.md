@@ -67,6 +67,8 @@ flowchart TD
     H --> J["Edit · swaps in place"]
     H --> K[Remove confirm]
     D -->|+ Add| G["Add drawer · pick, then details"]
+    D -->|Share| SH["Shared calendars subview · up to 10 links; + New picks the dates and an optional PIN"]
+    SH -.->|a friend opens the link, no sign-in| SV["Shared calendar page · PIN gate if locked"]
     D -.->|showtime ended| L[Seen prompt drawer]
     E -->|+ Add| M["Add drawer · pick, then details"]
     E -->|tap an item| N[Watchlist drawer]
@@ -568,6 +570,14 @@ block-beta
   style N4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
 *Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
+
+### Shared calendars (owner) and the shared page (visitor)
+
+- **Entry:** a "Share" button beside "+ Add" in the Calendar header (an icon alone below 360px), shown when there is a movie on the calendar or an existing link. It opens the full-page "Shared calendars" subview.
+- **List:** "N of 10 links", "+ New", and a flat row per link: date range, movie count and when it was made, "Copy link", "Preview", a trash icon, and a panel with the PIN toggle ("🔒 PIN on · Send them ••••. Turning it off and on again makes a new one.", with "Show PIN"/"Hide PIN" and "Copy PIN" under it; the PIN is hidden until shown). At 10 links "+ New" gives way to "Delete one to make another". Empty: one muted line.
+- **New link:** pills (This month, Next month, This week, Next week, Pick dates; a week pill adds "Weeks run Friday to Thursday, like AMC's." under the pills; "Pick dates" opens a range calendar where you tap the first and last day, with the range tinted in between), a live line ("🎬 22 movies from October 1 – October 31", or why Create is off), "Lock it with a PIN?" pills, a note on what a friend sees, Cancel and Create link. A link is a snapshot and has no name.
+- **Delete:** a destructive confirm naming the dates, PIN and time it was made, and saying everyone with the link loses access at once.
+- **Visitor, no sign-in:** `/a-list/shared/<id>` shows "🎬 Movie calendar", the range and count, days with a divider each, and rows with poster, time, runtime, rating, theater and badges (format, Seen). States: loading, PIN gate (4 characters, masked until the eye button beside the box is tapped, which never submits; pasting a PIN, even inside a message, works; "That PIN didn't match" until they type again), "This calendar isn't available" (deleted or mistyped), and "We couldn't open this calendar" with Try again.
 
 ## Reusable Components
 
