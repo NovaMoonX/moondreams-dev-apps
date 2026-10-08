@@ -168,3 +168,8 @@ input[type="file"]:disabled::-webkit-file-upload-button {
 button[class*='underline-offset-4'] {
   white-space: nowrap;
 }
+
+/* Dreamer UI buttons fade every property (`transition-all`), which shows as a flash on a row or card when focus or hover leaves it. Buttons snap instead. */
+button[class*='transition-all'] {
+  transition: none;
+}
