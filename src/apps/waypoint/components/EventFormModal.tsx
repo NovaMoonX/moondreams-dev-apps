@@ -234,7 +234,7 @@ function getMealForTime(time: string): MealType {
 }
 
 function getDefaultSubtype(eventType: EventType, time: string): string {
-  if (eventType === 'TRAVEL') return 'FLIGHT';
+  if (eventType === 'TRAVEL') return 'DRIVE';
   if (eventType === 'DINING') return getMealForTime(time);
   return '';
 }

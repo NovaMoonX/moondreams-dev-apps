@@ -52,7 +52,7 @@ export function PillOptions<T extends string>({
   const contentRef = useRef<HTMLDivElement>(null);
   const hasSearch = options.length > SEARCH_THRESHOLD;
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
-  const visible =
+  const filtered =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
   const isClamped = trimmedQuery === '' && !isExpanded;
 
@@ -67,6 +67,11 @@ export function PillOptions<T extends string>({
     return () => observer.disconnect();
   }, []);
 
+  // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
+  const visible =
+    trimmedQuery === '' && !isExpanded && isOverflowing
+      ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
+      : filtered;
   const showToggle = trimmedQuery === '' && (isOverflowing || isExpanded);
 
   return (
@@ -86,7 +91,11 @@ export function PillOptions<T extends string>({
                 emoji={option.emoji}
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
-                onClick={() => onToggle(option.value)}
+                onClick={() => {
+                  onToggle(option.value);
+                  setIsExpanded(false);
+                  setQuery('');
+                }}
               >
                 {option.label}
               </Pill>
