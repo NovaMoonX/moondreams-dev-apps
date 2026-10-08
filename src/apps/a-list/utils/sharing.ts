@@ -1,6 +1,6 @@
 import { formatDateUTC } from '@/utils/formatUtils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
-import { CALENDAR_GRID_WEEK_STARTS_ON } from '@apps/a-list/constants';
+import { WEEK_STARTS_ON } from '@apps/a-list/constants';
 import type {
   ShareRangeKind,
   SharedViewing,
@@ -29,11 +29,11 @@ export function getQuickShareRange(
   });
 
   if (kind === 'THIS_WEEK') {
-    return getWeekBounds(now, CALENDAR_GRID_WEEK_STARTS_ON);
+    return getWeekBounds(now, WEEK_STARTS_ON);
   }
   if (kind === 'NEXT_WEEK') {
     const nextWeek = new Date(year, month, today.getDate() + 7, 12).getTime();
-    return getWeekBounds(nextWeek, CALENDAR_GRID_WEEK_STARTS_ON);
+    return getWeekBounds(nextWeek, WEEK_STARTS_ON);
   }
   if (kind === 'THIS_MONTH') return monthRange(0);
   if (kind === 'NEXT_MONTH') return monthRange(1);

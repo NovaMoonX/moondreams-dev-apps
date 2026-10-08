@@ -103,6 +103,12 @@ function ShareCreateForm({
           value={kind}
           onChange={setKind}
         />
+        {(kind === 'THIS_WEEK' || kind === 'NEXT_WEEK') && (
+          <p className='text-muted-foreground text-sm'>
+            Weeks run <strong className='text-foreground'>Friday to Thursday</strong>,
+            like AMC&apos;s.
+          </p>
+        )}
         {kind === 'CUSTOM' && (
           <Calendar
             mode='range'

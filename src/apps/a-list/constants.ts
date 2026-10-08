@@ -112,8 +112,6 @@ export const MAX_SHARE_RANGE_DAYS = 366;
 export const MAX_SHARED_VIEWINGS = 400;
 export const SHARE_PIN_LENGTH = 4;
 export const SHARE_ID_LENGTH = 26;
-/** The calendar grid starts on Sunday, unlike AMC's Friday week. */
-export const CALENDAR_GRID_WEEK_STARTS_ON = 0;
 
 export const SHARE_RANGE_OPTIONS: {
   value: ShareRangeKind;
