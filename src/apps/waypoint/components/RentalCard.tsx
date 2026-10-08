@@ -147,7 +147,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
       <article
         {...drawerTriggerProps}
         className={join(
-          'border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row',
+          'border-border bg-card relative flex flex-col overflow-hidden rounded-lg border sm:flex-row',
           isSmallScreen && 'cursor-pointer',
         )}
       >
@@ -195,7 +195,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
           )}
         </div>
         {!isSmallScreen && (
-          <div className='flex justify-end px-4 pb-3'>
+          <div className='absolute right-4 bottom-4'>
             <NotPaidForBadge getSubject={() => getRentalSubject(rental)} />
           </div>
         )}

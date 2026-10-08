@@ -350,7 +350,7 @@ export function EventCard({
       <article
         {...drawerTriggerProps}
         className={join(
-          'border-border bg-card overflow-hidden rounded-lg border',
+          'border-border bg-card relative overflow-hidden rounded-lg border',
           isSmallScreen && 'cursor-pointer',
           event.isArchived && 'opacity-60',
         )}
@@ -428,7 +428,7 @@ export function EventCard({
           </div>
         )}
         {!isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-          <div className='flex justify-end px-4 pb-3'>
+          <div className='absolute right-4 bottom-4'>
             <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} />
           </div>
         )}
