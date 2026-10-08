@@ -609,8 +609,13 @@ export function TimelineSection({
   };
 
   const weatherDays = dayIndexes
-    .map((dayIndex) => ({ dayIndex, forecast: weather.getDay(dayIndex), extra: weather.getAlso(dayIndex).length }))
-    .flatMap(({ dayIndex, forecast, extra }) => (forecast ? [{ dayIndex, forecast, extra }] : []));
+    .map((dayIndex) => ({
+      dayIndex,
+      forecast: weather.getDay(dayIndex),
+      extra: weather.getAlso(dayIndex).length,
+      placeName: weather.getPlaceName(dayIndex),
+    }))
+    .flatMap(({ dayIndex, forecast, extra, placeName }) => (forecast ? [{ dayIndex, forecast, extra, placeName }] : []));
   const selectedDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? null : Number(selectedTab);
 
   const viewOptionGroups = [

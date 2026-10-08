@@ -92,7 +92,8 @@ function getDistanceKm(first: Located, second: Located) {
 
 /** A day's places, from its plans in time order: plans within `CLUSTER_KM` of a place's first plan belong to it.
  * Travel legs start from wherever each person is, so they don't say where the day is. The main place has
- * the most plans (the earliest wins a tie); `others` keep the order their first plan happens. */
+ * the most plans (the latest wins a tie: where the day ends is where people are); `others` keep the order
+ * their first plan happens. */
 function getDayPlaces(trip: TripSpace, dayIndex: number, events: TimelineEvent[], city: Located | null) {
   const located = events
     .filter(
@@ -121,7 +122,7 @@ function getDayPlaces(trip: TripSpace, dayIndex: number, events: TimelineEvent[]
     city && getDistanceKm(city, cluster) <= CLUSTER_KM ? { ...cluster, placeName: city.placeName } : cluster,
   );
   const main = labelled.reduce<Located | null>(
-    (best, cluster) => (best === null || cluster.count > best.count ? cluster : best),
+    (best, cluster) => (best === null || cluster.count >= best.count ? cluster : best),
     null,
   );
   const result = { main, others: labelled.filter((cluster) => cluster !== main) };
