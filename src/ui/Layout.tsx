@@ -70,10 +70,15 @@ function LocationSync() {
       }
     }
 
-    document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]').forEach((icon) => {
-      icon.dataset.defaultHref ??= icon.getAttribute('href') ?? '';
-      icon.setAttribute('href', app ? `/logos/by-app/logo-${app.id}.svg` : icon.dataset.defaultHref);
-    });
+    document
+      .querySelectorAll<HTMLLinkElement>('link[rel="icon"]')
+      .forEach((icon) => {
+        icon.dataset.defaultHref ??= icon.getAttribute('href') ?? '';
+        icon.setAttribute(
+          'href',
+          app ? `/logos/by-app/logo-${app.id}.svg` : icon.dataset.defaultHref,
+        );
+      });
 
     document.title = location.pathname.startsWith('/a-list/shared/')
       ? 'Movie calendar - A-List Tracker'
