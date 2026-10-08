@@ -11,14 +11,13 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowLeftRight, CalendarDays, Link2, Pencil, Route, StickyNote } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, ChevronUp, Link2, Pencil, Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatClockTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { selectExpenseLinkKeys, selectSortedRentals, selectSortedStays, selectSortedTimelineEvents } from '@apps/waypoint/store/selectors';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { getDayCount, getDayDateLabel, getDayLabel, getDayOptions } from '@/utils/dateRangeUtils';
+import { getDayDateLabel, getDayOptions } from '@/utils/dateRangeUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -76,8 +75,6 @@ const describePrice = ({
   return 'We work out each person’s share for you.';
 };
 
-const NO_LINK = 'none';
-
 type PlanGroup = 'TRAVEL' | 'ACTIVITY' | 'DINING' | 'STAY' | 'RENTAL' | 'OTHER';
 
 const PLAN_GROUP_FILTERS: { value: 'ALL' | PlanGroup; label: string; emoji?: string }[] = [
@@ -96,12 +93,6 @@ const getPlanGroup = (link: ExpenseLink, events: TimelineEvent[]): PlanGroup => 
   }
   const type = events.find((event) => event.id === link.id)?.eventType;
   return type === 'TRAVEL' || type === 'ACTIVITY' || type === 'DINING' ? type : 'OTHER';
-};
-
-const LINK_KIND_LABELS: Record<ExpenseLink['kind'], string> = {
-  EVENT: 'Event',
-  STAY: 'Stay',
-  RENTAL: 'Rental',
 };
 
 interface ChoiceValue {
@@ -274,6 +265,7 @@ function ExpenseFormModal({
   );
   const [showTitleFields, setShowTitleFields] = useState(false);
   const [isPlanAnswered, setIsPlanAnswered] = useState(false);
+  const [isLinkPickerOpen, setIsLinkPickerOpen] = useState(false);
   const [planGroup, setPlanGroup] = useState<'ALL' | PlanGroup>('ALL');
   const memberInfo = useUserInfo(memberIds);
   const { audience, memberIds: pickedIds } = audienceValue;
@@ -301,27 +293,11 @@ function ExpenseFormModal({
     .filter(({ group }) => planGroup === 'ALL' || group === planGroup)
     .map(({ key, label }) => ({ value: key, label }));
   const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
-  const dayCount = getDayCount(trip.startDate, trip.endDate);
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
   const asksAboutPlan =
     !isEditing && !prefill && canShare && !isPrivate && planPills.length > 0 && !isPlanAnswered;
   const isLinked = !isEditing && !isPrivate && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
-  const linkOptions = useMemo(
-    () => [
-      { value: NO_LINK, text: 'Not for a plan', description: 'Just a cost on its own' },
-      ...linkables.map((subject) => ({
-        value: getExpenseLinkKey(subject.link),
-        text: subject.title,
-        description: [
-          LINK_KIND_LABELS[subject.link.kind],
-          subject.dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, subject.dayIndex, dayCount),
-          ...(subject.time ? [formatClockTime(subject.time)] : []),
-        ].join(' · '),
-      })),
-    ],
-    [linkables, trip.startDate, dayCount],
-  );
   const showLinkPicker = isEditing && linkables.length > 0;
   const dayOptions = useMemo(
     () => [
@@ -709,10 +685,8 @@ function ExpenseFormModal({
   };
   const summaryDay = formData.dayIndex === '' ? null : getDayDateLabel(trip.startDate, Number(formData.dayIndex));
   const summaryCategory = resolveChoice(formData.category);
-  const planQuestion = (
-    <div className='space-y-4'>
-      <div className='space-y-2'>
-        <Label className='mb-1'>What&apos;s this expense for?</Label>
+  const planPicker = (
+    <>
         <PillRow label='Kind of plan'>
           {PLAN_GROUP_FILTERS.filter(({ value }) => value === 'ALL' || planPills.some(({ group }) => group === value)).map(({ value, label, emoji }) => (
             <Pill
@@ -730,8 +704,18 @@ function ExpenseFormModal({
           label='Plans without an expense yet'
           options={shownPlanPills}
           value={linkKey || null}
-          onChange={pickLink}
+          onChange={(key) => {
+            pickLink(key);
+            setIsLinkPickerOpen(false);
+          }}
         />
+    </>
+  );
+  const planQuestion = (
+    <div className='space-y-4'>
+      <div className='space-y-2'>
+        <Label className='mb-1'>What&apos;s this expense for?</Label>
+        {planPicker}
       </div>
       <Button
         type='button'
@@ -812,7 +796,7 @@ function ExpenseFormModal({
               onClick={() => setIsPlanAnswered(false)}
             >
               <Link2 className='h-3.5 w-3.5' aria-hidden='true' />
-              Link it to a plan
+              Choose from your itinerary
             </Button>
           )}
           {!isEditing && canShare && (
@@ -852,16 +836,36 @@ function ExpenseFormModal({
           )}
           {!isEditing && !canShare && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
           {showLinkPicker && (
-            <div className='mb-4 space-y-1.5'>
-              <Label>What&apos;s this expense for?</Label>
-              <Select
-                searchable
-                options={linkOptions}
-                value={linkKey || NO_LINK}
-                placeholder='Pick an event, stay or rental to fill in its details'
-                searchPlaceholder='Search your plans'
-                onChange={(value) => (value === NO_LINK ? setLink(null) : pickLink(value))}
-              />
+            <div className='mb-4 space-y-2'>
+              {isLinkPickerOpen ? (
+                <>
+                  <Label>What&apos;s this expense for?</Label>
+                  {planPicker}
+                  <Button type='button' variant='secondary' size='sm' className='w-full gap-1.5' onClick={() => setIsLinkPickerOpen(false)}>
+                    <ChevronUp className='h-4 w-4' aria-hidden='true' />
+                    Hide itinerary
+                  </Button>
+                </>
+              ) : pickedSubject ? (
+                <div className='bg-muted/50 space-y-1 rounded-xl p-3'>
+                  <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Paying for</p>
+                  <p className='font-semibold'>{pickedSubject.title}</p>
+                  <div className='flex flex-wrap gap-x-4 gap-y-1'>
+                    <Button type='button' variant='link' size='sm' className='min-h-10 gap-1.5 px-0!' onClick={() => setIsLinkPickerOpen(true)}>
+                      <ArrowLeftRight className='h-3.5 w-3.5' aria-hidden='true' />
+                      Change
+                    </Button>
+                    <Button type='button' variant='link' size='sm' className='min-h-10 px-0!' onClick={() => setLink(null)}>
+                      Remove link
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button type='button' variant='link' size='sm' className='min-h-10 gap-1.5 px-0!' onClick={() => setIsLinkPickerOpen(true)}>
+                  <Link2 className='h-3.5 w-3.5' aria-hidden='true' />
+                  Choose from your itinerary
+                </Button>
+              )}
             </div>
           )}
           <Form
