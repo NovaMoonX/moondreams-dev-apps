@@ -162,15 +162,15 @@ export function EventDetailLines({
         </span>
       </div>
       {(event.isArchived ||
-        (EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived)) && (
+        (!showTitle && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived)) && (
         <div className='flex flex-wrap items-center gap-2'>
           {event.isArchived && (
             <Badge variant='muted' outline className='items-center gap-1'>
               <Archive className='h-3 w-3' /> Archived
             </Badge>
           )}
-          {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-            <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
+          {!showTitle && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
+            <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic />
           )}
         </div>
       )}
@@ -346,7 +346,8 @@ export function EventCard({
           onOpen={() => setIsDrawerOpen(true)}
         />
       )}
-      {!isTravel && <article
+      {!isTravel && <div>
+      <article
         {...drawerTriggerProps}
         className={join(
           'border-border bg-card overflow-hidden rounded-lg border',
@@ -426,7 +427,13 @@ export function EventCard({
             />
           </div>
         )}
-      </article>}
+      </article>
+      {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
+        <div className='flex justify-end pr-4'>
+          <NotPaidForBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
+        </div>
+      )}
+      </div>}
       {isTravel && !isSmallScreen && (
         <Modal isOpen={isDrawerOpen} onClose={closeDrawer} title={event.title}>
           <div className='space-y-3'>

@@ -82,7 +82,7 @@ export function RentalDetailLines({
         <Badge variant='muted' outline>
           {RENTAL_TYPE_LABELS[rental.rentalType ?? 'CAR']}
         </Badge>
-        <NotPaidForBadge getSubject={() => getRentalSubject(rental)} isStatic={!showTitle} />
+        {!showTitle && <NotPaidForBadge getSubject={() => getRentalSubject(rental)} isStatic />}
       </div>
       {rental.vehicle && <p className='text-sm'>{rental.vehicle}</p>}
       <div className='flex flex-col items-start gap-1'>
@@ -143,6 +143,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
 
   return (
     <>
+      <div>
       <article
         {...drawerTriggerProps}
         className={join(
@@ -194,6 +195,10 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
           )}
         </div>
       </article>
+      <div className='flex justify-end pr-4'>
+        <NotPaidForBadge variant='tab' getSubject={() => getRentalSubject(rental)} />
+      </div>
+      </div>
       {isSmallScreen && (
         <PlaceDetailsDrawer
           isOpen={isDrawerOpen}

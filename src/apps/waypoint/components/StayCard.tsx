@@ -74,7 +74,7 @@ export function StayDetailLines({
         <Badge variant='muted' outline>
           {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
         </Badge>
-        <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} isStatic={!showTitle} />
+        {!showTitle && <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} isStatic />}
         {showNotesIndicator && stay.notes && (
           <span
             className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
@@ -136,6 +136,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
 
   return (
     <>
+      <div>
       <article
         {...drawerTriggerProps}
         className={join(
@@ -188,6 +189,10 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
           )}
         </div>
       </article>
+      <div className='flex justify-end pr-4'>
+        <NotPaidForBadge variant='tab' getSubject={() => getStaySubject(trip, stay)} />
+      </div>
+      </div>
       {isSmallScreen && (
         <PlaceDetailsDrawer
           isOpen={isDrawerOpen}
