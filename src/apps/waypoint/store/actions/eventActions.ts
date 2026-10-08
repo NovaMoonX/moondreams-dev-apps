@@ -74,17 +74,21 @@ function isEndAfterStartAcrossZones(trip: TripSpace, event: EventFields) {
 }
 
 /** Arriving at the start time says nothing, so an arrival has to come strictly before it, on the same day. */
-function validateArriveBy(event: Pick<EventFields, 'eventType' | 'startTime' | 'arriveByTime' | 'arriveByNote'>) {
-  if (event.arriveByTime === null) {
-    return event.arriveByNote === null ? null : 'Add an arrival time for that note, or remove the note.';
+function validateArriveBy(event: Pick<EventFields, 'eventType' | 'dayIndex' | 'startTime' | 'arriveByTime' | 'arriveByNote'>) {
+  const arriveByTime = event.arriveByTime ?? null;
+  if (arriveByTime === null) {
+    return (event.arriveByNote ?? null) === null ? null : 'Add an arrival time for that note, or remove the note.';
   }
   if (!ARRIVE_BY_EVENT_TYPES.includes(event.eventType)) {
     return 'Only dining and activities can have an arrival time.';
   }
-  if (!TIME_PATTERN.test(event.arriveByTime) || event.startTime === null) {
+  if (event.dayIndex === null) {
+    return 'Pick a day before adding an arrival time.';
+  }
+  if (!TIME_PATTERN.test(arriveByTime) || event.startTime === null) {
     return 'Choose a valid arrival time.';
   }
-  return event.arriveByTime < event.startTime ? null : 'The arrival needs to be before the start time.';
+  return arriveByTime < event.startTime ? null : 'The arrival needs to be before the start time.';
 }
 
 export function validateEventTime(trip: TripSpace, event: EventFields) {
@@ -149,7 +153,7 @@ async function resolveEventReminderId(
   previousEvent: TimelineEvent,
   nextEvent: EventReminderSource,
 ): Promise<string | null> {
-  const startChanged = (['startAt', 'dayIndex', 'startTime', 'timezone'] as const).some(
+  const startChanged = (['startAt', 'dayIndex', 'startTime', 'timezone', 'arriveByTime'] as const).some(
     (field) => (previousEvent[field] ?? null) !== (nextEvent[field] ?? null),
   );
   const minutesChanged = previousEvent.reminderMinutesBefore !== nextEvent.reminderMinutesBefore;
@@ -203,6 +207,7 @@ export const createEvent = createAsyncThunk<
       endAt: event.endAt,
       startTime: event.startTime,
       endTime: event.endTime,
+      arriveByTime: event.arriveByTime,
       timezone: event.timezone,
       reminderMinutesBefore: event.reminderMinutesBefore,
       reminderEnabled: event.reminderEnabled,
@@ -267,6 +272,7 @@ export const updateEvent = createAsyncThunk<
       endAt: event.endAt,
       startTime: event.startTime,
       endTime: event.endTime,
+      arriveByTime: event.arriveByTime,
       timezone: event.timezone,
       reminderMinutesBefore: event.reminderMinutesBefore,
       reminderEnabled: event.reminderEnabled,

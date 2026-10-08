@@ -300,6 +300,7 @@ export const approveEventSuggestion = createAsyncThunk<
         id: newEventRef.id,
         title: suggestion.suggestedTitle,
         ...timeFields,
+        arriveByTime: getKeptArriveBy(sourceEvent, timeFields.startTime).arriveByTime,
         timezone: sourceEvent.timezone ?? null,
         reminderMinutesBefore: sourceEvent.reminderMinutesBefore,
         reminderEnabled: sourceEvent.reminderEnabled,

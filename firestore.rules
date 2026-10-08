@@ -2039,6 +2039,7 @@ service cloud.firestore {
             time is string
             && time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
             && data.eventType in ['DINING', 'ACTIVITY']
+            && data.get('dayIndex', null) is int
             && data.get('startTime', null) is string
             && time < data.startTime
           ))

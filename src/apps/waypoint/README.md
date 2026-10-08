@@ -39,7 +39,7 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 
 **Next Steps**
 - [ ] Comment & Proposal Approval Workflow: Commenters submit event changes/proposals; Editors accept or decline.
-- [x] Arrive By: A dining or activity event can say when to be there, before it starts, with an optional note on why ("the lot fills up by 9"). The card reads "Starts 10:00 AM" with "Arrive by 9:00 AM" under it.
+- [x] Arrive By: A dining or activity event can say when to be there, before it starts, with an optional note on why ("the lot fills up by 9"). The card reads "Arrive by 9:00 AM · starts 10:00 AM" under the title, and the Now pill and today's agenda lead with the arrival.
 - [x] Active Trip HUD: Automatic detection of the current trip day, with a floating "Now / Up next" pill over the main screens (Overview, Timeline, Expenses).
 - [x] Transit Detail Cards: Specialized fields for flights (airline, flight number, confirmation code), driving routes, and train schedules — plus an estimated travel time for the leg — visible to the group so anyone can check a flight's status. Group the legs of one trip into a collapsible card, and stack several travelers' trips into one named itinerary.
 - [ ] Live Travel Status: Members can post a quick status update — checking bags, landed, passing through a city — visible to the group during active trip mode.

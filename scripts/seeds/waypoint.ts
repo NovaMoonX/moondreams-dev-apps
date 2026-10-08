@@ -242,6 +242,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const lunchStartMinutes = Math.max(0, nowOnTripClock.minutes - 30);
   const lunchEndMinutes = Math.min(1439, nowOnTripClock.minutes + 30);
   const kalalochCheckInMinutes = Math.min(nowOnTripClock.minutes + 180, 1410);
+  const sunsetStartMinutes = Math.min(nowOnTripClock.minutes + 120, 1380);
+  const sunsetArriveMinutes = Math.max(0, sunsetStartMinutes - 45);
 
   await activeTripRef.set({
     id: ACTIVE_TRIP_ID,
@@ -1109,8 +1111,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid, taylor.uid],
     venueOpenTime: null,
     venueCloseTime: null,
-    arriveByTime: null,
-    arriveByNote: null,
+    arriveByTime: '09:30',
+    arriveByNote: 'Low tide is brief, so we want to be on the rocks early.',
     changeHistory: [
       {
         changes: [
@@ -1140,6 +1142,41 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now - 3_600_000,
   });
 
+  // Starts two hours from "now" with an arrival 45 minutes earlier, so the Now pill's "Up next" and Overview always show one.
+  await activeEventsCollection.doc('active-trip-sunset').set({
+    id: 'active-trip-sunset',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'ACTIVITY',
+    ...relativeEventTime({ day: 1, start: toClock(sunsetStartMinutes), end: toClock(Math.min(sunsetStartMinutes + 60, 1439)) }),
+    title: 'Sunset at Rialto Beach',
+    locationName: 'Rialto Beach',
+    address: null,
+    latitude: 47.9214,
+    longitude: -124.6386,
+    eventDetails: { settings: ['OUTDOOR'] },
+    notes: null,
+    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+    assignedMemberIds: [],
+    venueOpenTime: null,
+    venueCloseTime: null,
+    arriveByTime: toClock(sunsetArriveMinutes),
+    arriveByNote: 'The beach lot fills up before sunset.',
+    changeHistory: [],
+    place: null,
+    linkUrl: null,
+    linkPreview: null,
+    reminderMinutesBefore: 20,
+    reminderEnabled: true,
+    reminderId: null,
+    isArchived: false,
+    archivedBy: null,
+    archivedAt: null,
+    seenBy: {},
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   await activeEventsCollection.doc('active-trip-dinner').set({
     id: 'active-trip-dinner',
     tripId: ACTIVE_TRIP_ID,
@@ -1156,8 +1193,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
-    arriveByTime: null,
-    arriveByNote: null,
+    arriveByTime: '17:30',
+    arriveByNote: 'The walk-in list opens at 5:30.',
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -1923,6 +1960,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 81 + personalExpenses.length + scaleDocuments,
+    firestoreDocuments: 82 + personalExpenses.length + scaleDocuments,
   };
 }

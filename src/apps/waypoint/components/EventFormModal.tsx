@@ -88,6 +88,7 @@ import {
   getEventTime,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 export type EventFormValues = Omit<
   TimelineEvent,
@@ -237,11 +238,32 @@ function getMealForTime(time: string): MealType {
   return 'DINNER';
 }
 
-/** Half an hour before the start, kept on the same day. */
+function getClockMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function fromClockMinutes(total: number) {
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Moving the start moves a chosen arrival with it, keeping its lead; it is dropped when nothing earlier fits. */
+function getShiftedArriveBy(draft: EventDraft, nextTime: string): Partial<EventDraft> {
+  if (!draft.hasArriveBy || !draft.arriveByTime || !draft.time || !nextTime) {
+    return {};
+  }
+  const latest = getClockMinutes(nextTime) - 1;
+  if (latest < 0) {
+    return { hasArriveBy: false, arriveByTime: '', arriveByNote: '' };
+  }
+  const shifted = getClockMinutes(draft.arriveByTime) + getClockMinutes(nextTime) - getClockMinutes(draft.time);
+  return { arriveByTime: fromClockMinutes(Math.min(Math.max(shifted, 0), latest)) };
+}
+
+/** Half an hour before the start, kept on the same day; empty when the start is too early to fit one. */
 function getSuggestedArriveBy(startTime: string) {
-  const [hours, minutes] = startTime.split(':').map(Number);
-  const total = hours * 60 + minutes - 30;
-  return total <= 0 ? '' : `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  const total = getClockMinutes(startTime) - 30;
+  return Number.isNaN(total) || total < 0 ? '' : fromClockMinutes(total);
 }
 
 function getDefaultSubtype(eventType: EventType, time: string): string {
@@ -520,7 +542,8 @@ function EventFormModal({
     [events, draft.eventType],
   );
   const isTravel = draft.eventType === 'TRAVEL';
-  const canArriveEarly = isRelative && ARRIVE_BY_EVENT_TYPES.includes(draft.eventType) && draft.dayIndex !== null;
+  const canArriveEarly =
+    isRelative && ARRIVE_BY_EVENT_TYPES.includes(draft.eventType) && draft.dayIndex !== null && draft.time !== '';
   const arrival = isTravel ? TRANSIT_ARRIVAL[draft.quickField as TransitType] : undefined;
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
@@ -539,6 +562,7 @@ function EventFormModal({
         ...(draft.eventType === 'DINING' && !draft.isMealTouched
           ? { quickField: getMealForTime(nextTime) }
           : {}),
+        ...getShiftedArriveBy(draft, nextTime),
         ...changes,
       });
     if (nextDayIndex === null) {
@@ -829,7 +853,8 @@ function EventFormModal({
     }
     if (isRelative) {
       const { time } = fromDayMinutes(
-        toDayMinutes(timeFields.dayIndex, draft.time) - draft.reminderMinutesBefore,
+        toDayMinutes(timeFields.dayIndex, canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByTime : draft.time) -
+          draft.reminderMinutesBefore,
       );
       return formatClockTime(time);
     }
@@ -1203,12 +1228,19 @@ function EventFormModal({
                 value={draft.arriveByTime}
                 onChange={(changeEvent) => updateDraft({ arriveByTime: changeEvent.target.value })}
               />
-              <p className='text-muted-foreground text-xs'>
-                Starts at {draft.time ? formatClockTime(draft.time) : 'the start time'}. Arrive before that.
+              <p
+                className={join(
+                  'text-xs',
+                  draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time
+                  ? `The arrival needs to be before the start time, ${formatClockTime(draft.time)}.`
+                  : `Starts at ${draft.time ? formatClockTime(draft.time) : 'the start time'}. Arrive before that.`}
               </p>
               <Input
                 aria-label='Why arrive early'
-                placeholder='Why? Parking fills up early (optional)'
+                placeholder='Why? Parking fills up early'
                 maxLength={500}
                 value={draft.arriveByNote}
                 onChange={(changeEvent) => updateDraft({ arriveByNote: changeEvent.target.value })}
