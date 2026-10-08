@@ -90,7 +90,7 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       className={join(
-        'relative flex touch-none items-start gap-3 rounded-lg border p-4 shadow-lg select-none',
+        'relative flex touch-none items-start gap-3 rounded-lg border p-4 shadow-lg select-none max-sm:gap-2.5 max-sm:p-3',
         !isDragging && 'transition-transform duration-200 ease-out',
         isReminder && 'cursor-pointer',
         !isSmallScreen && 'pr-8',
@@ -98,15 +98,17 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
       )}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
     >
-      {style.icon && <div className='mt-0.5 shrink-0'>{style.icon}</div>}
+      {style.icon && <div className='mt-0.5 shrink-0 max-sm:mt-px max-sm:scale-90'>{style.icon}</div>}
       <div className='min-w-0 flex-1'>
         {appLabel && (
-          <div className='text-xs leading-4 font-bold tracking-wide uppercase opacity-60'>
+          <div className='text-xs leading-4 font-bold tracking-wide uppercase opacity-60 max-sm:text-[10px] max-sm:leading-3'>
             {appLabel}
           </div>
         )}
-        <div className='text-sm leading-5 font-medium'>{title}</div>
-        {description && <div className='mt-1 text-sm leading-5 opacity-90'>{description}</div>}
+        <div className='text-sm leading-5 font-medium max-sm:text-[13px] max-sm:leading-[18px]'>{title}</div>
+        {description && <div className='mt-1 text-sm leading-5 opacity-90 max-sm:mt-0.5 max-sm:text-xs max-sm:leading-4'>
+            {description}
+          </div>}
       </div>
       {!isSmallScreen && (
         <Button
