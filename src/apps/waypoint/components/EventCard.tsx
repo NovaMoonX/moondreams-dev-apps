@@ -141,33 +141,41 @@ export function EventDetailLines({
 
   return (
     <>
-      <div className='flex flex-wrap items-center gap-2'>
-        <Badge variant='base' className={badge.className}>
+      <div className='flex min-w-0 items-center gap-2'>
+        <Badge variant='base' className={join(badge.className, 'shrink-0')}>
           {badge.emoji} {badge.label}
         </Badge>
-        {event.isArchived && (
-          <Badge variant='muted' outline className='items-center gap-1'>
-            <Archive className='h-3 w-3' /> Archived
-          </Badge>
-        )}
-        <span className='text-muted-foreground text-sm'>
+        <span className='text-muted-foreground min-w-0 truncate text-sm' title={formatEventTimeRange(trip, event, zoneStyle)}>
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
-        {isSettingField && quickField && <span className='text-muted-foreground text-sm whitespace-nowrap'>· {quickField}</span>}
-        {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-          <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
-        )}
-        {weather && <EventWeatherChip weather={weather} placeName={weatherPlace} />}
-        {showNotesIndicator && event.notes && (
-          <span
-            className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
-            role='img'
-            aria-label='Has notes'
-            title='Has notes'
-          />
-        )}
+        <span className='ml-auto flex shrink-0 items-center gap-2'>
+          {weather && <EventWeatherChip weather={weather} placeName={weatherPlace} />}
+          {showNotesIndicator && event.notes && (
+            <span
+              className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
+              role='img'
+              aria-label='Has notes'
+              title='Has notes'
+            />
+          )}
+        </span>
       </div>
-      {showTitle && <h3 className='pt-1 font-semibold'>{event.title}</h3>}
+      {(event.isArchived ||
+        (isSettingField && quickField) ||
+        (EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived)) && (
+        <div className='flex flex-wrap items-center gap-2'>
+          {event.isArchived && (
+            <Badge variant='muted' outline className='items-center gap-1'>
+              <Archive className='h-3 w-3' /> Archived
+            </Badge>
+          )}
+          {isSettingField && quickField && <span className='text-muted-foreground text-sm whitespace-nowrap'>{quickField}</span>}
+          {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
+            <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
+          )}
+        </div>
+      )}
+      {showTitle && <h3 className='font-semibold'>{event.title}</h3>}
       {quickField && !isSettingField && !event.title.toLowerCase().includes(quickField.toLowerCase()) && (
         <p className='text-muted-foreground text-sm'>{quickField}</p>
       )}
