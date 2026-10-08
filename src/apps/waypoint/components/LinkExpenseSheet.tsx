@@ -67,7 +67,7 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
     <DetailSheet
       isOpen
       onClose={onClose}
-      title={subject.title}
+      title='Link an expense'
       footer={
         <div className='flex flex-col gap-2'>
           <Button type='button' size='lg' onClick={onAddNew}>
@@ -78,8 +78,8 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
     >
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
-          Already on the list? Pick the expense that goes with this. Nothing it already has changes, and a missing day is
-          filled in.
+          For <span className='text-foreground font-medium'>{subject.title}</span>. Pick one that&apos;s already on your
+          list; we&apos;ll only fill in a missing day.
         </p>
         {unlinked.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />

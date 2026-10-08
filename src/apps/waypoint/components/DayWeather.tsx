@@ -30,7 +30,12 @@ function DayWeather({ forecast, hours = [], placeName = null, also = [], isMinim
       <>
         <WeatherEmoji condition={condition} className='shrink-0 text-sm leading-none' />
         {label} · {formatTemp(forecast.tempMax)} / {formatTemp(forecast.tempMin)}
-        {also.length > 0 && <span className='font-medium'> · +{also.length}</span>}
+        {also.length > 0 && (
+          <span className='font-medium' title={`${also.length} more ${also.length === 1 ? 'place' : 'places'} on this day`}>
+            {' '}
+            · +{also.length}
+          </span>
+        )}
       </>
     );
     return onOpen ? (

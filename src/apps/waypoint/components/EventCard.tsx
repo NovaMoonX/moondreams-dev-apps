@@ -146,10 +146,10 @@ export function EventDetailLines({
         <Badge variant='base' className={join(badge.className, 'shrink-0')}>
           {badge.emoji} {badge.label}
         </Badge>
-        <span className='text-muted-foreground min-w-0 truncate text-sm' title={formatEventTimeRange(trip, event, zoneStyle)}>
+        <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap' title={formatEventTimeRange(trip, event, zoneStyle)}>
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
-        <span className='ml-auto flex shrink-0 items-center gap-2'>
+        <span className='ml-auto flex min-w-0 shrink items-center gap-2'>
           {weather && <EventWeatherChip weather={weather} placeName={weatherPlace} />}
           {showNotesIndicator && event.notes && (
             <span

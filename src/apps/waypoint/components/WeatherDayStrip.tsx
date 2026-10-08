@@ -84,11 +84,11 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
                 <span className='text-muted-foreground font-normal'> / {formatTemp(forecast.tempMin)}</span>
               </span>
               {placeName && (
-                <span className='text-muted-foreground max-w-full truncate px-1 text-[10px] leading-3' title={placeName}>
+                <span className='text-muted-foreground line-clamp-2 max-w-full px-1 text-center text-[10px] leading-3 break-words' title={placeName}>
                   {placeName}
                 </span>
               )}
-              {extra > 0 && <span className='text-muted-foreground/60 text-[10px] leading-3'>+{extra} more</span>}
+              {extra > 0 && <span className='text-muted-foreground/80 text-[10px] leading-3' title={`${extra} more ${extra === 1 ? 'place' : 'places'} on this day`}>+{extra} more</span>}
             </Button>
           );
         })}

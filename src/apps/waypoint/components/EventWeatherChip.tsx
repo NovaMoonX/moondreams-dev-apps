@@ -26,12 +26,12 @@ function EventWeatherChip({ weather, placeName = null }: EventWeatherChipProps) 
       role='img'
       aria-label={accessibleLabel}
       title={placeName ? `${label} in ${placeName}` : label}
-      className='text-muted-foreground inline-flex items-center gap-1 text-xs'
+      className='text-muted-foreground inline-flex min-w-0 items-center gap-1 text-xs'
     >
       <WeatherEmoji condition={condition} className='text-sm leading-none' />
       {weather.temp === null ? label : `${Math.round(weather.temp)}°`}
       {hasRain && ` · ${weather.precipChance}%`}
-      {placeName && <span className='max-w-28 truncate'> · {placeName}</span>}
+      {placeName && <span className='min-w-0 max-w-28 truncate'> · {placeName}</span>}
     </span>
   );
 }

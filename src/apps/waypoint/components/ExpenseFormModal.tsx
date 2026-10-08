@@ -243,10 +243,11 @@ function ExpenseFormModal({
   const isEditing = Boolean(initialExpense);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
-  const linkables = useMemo(
-    () => (isOpen && !prefill ? getLinkableSubjects(trip, events, stays, rentals) : []),
-    [isOpen, prefill, trip, events, stays, rentals],
+  const allSubjects = useMemo(
+    () => (isOpen ? getLinkableSubjects(trip, events, stays, rentals) : []),
+    [isOpen, trip, events, stays, rentals],
   );
+  const linkables = useMemo(() => (prefill ? [] : allSubjects), [prefill, allSubjects]);
   const [formData, setFormData] = useState<ExpenseFormData>(() => getInitialFormData(initialExpense, prefill));
   // The form reads its data once, so picking a plan remounts it with the filled-in values.
   const [formKey, setFormKey] = useState(0);
@@ -292,7 +293,7 @@ function ExpenseFormModal({
   const shownPlanPills = planPills
     .filter(({ group }) => planGroup === 'ALL' || group === planGroup)
     .map(({ key, label }) => ({ value: key, label }));
-  const pickedSubject = linkables.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
+  const pickedSubject = allSubjects.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
   const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
   const asksAboutPlan =
     !isEditing && !prefill && canShare && !isPrivate && planPills.length > 0 && !isPlanAnswered;
@@ -756,7 +757,7 @@ function ExpenseFormModal({
   );
   const planQuestion = (
     <div className='space-y-4'>
-      <div className='space-y-2'>
+      <div className='min-h-60 space-y-2'>
         <Label className='mb-1'>What&apos;s this expense for?</Label>
         {planPicker}
       </div>
@@ -805,6 +806,7 @@ function ExpenseFormModal({
                   .join(' · ') || 'No category or day yet'}
               </p>
               <div className='flex flex-wrap gap-x-4 gap-y-1 pt-1'>
+                {!prefill && (
                 <Button
                   type='button'
                   variant='link'
@@ -815,6 +817,7 @@ function ExpenseFormModal({
                   <ArrowLeftRight className='h-3.5 w-3.5' aria-hidden='true' />
                   Change
                 </Button>
+                )}
                 {!showTitleFields && (
                   <Button
                     type='button'
