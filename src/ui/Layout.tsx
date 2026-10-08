@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -85,7 +85,8 @@ function Layout() {
   const isBannerVisible = networkStatus !== null;
   const isHeaderHidden = useHideOnScroll();
 
-  useEffect(() => {
+  // Layout effect, so the app bars' offsets change in the same frame the site header starts to slide.
+  useLayoutEffect(() => {
     document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
     document.documentElement.dataset.siteBanner = String(isBannerVisible);
   }, [isHeaderHidden, isBannerVisible]);
