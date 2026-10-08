@@ -44,10 +44,23 @@ interface PinGateProps {
   onSubmit: (pin: string) => void;
 }
 
+function toPinText(value: string) {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, SHARE_PIN_LENGTH);
+}
+
+/** A pasted message like "Movie plans … PIN: k7-m2" yields just the PIN. */
+function toPastedPin(text: string) {
+  const labeled = text.match(/\bpin\W*([a-z0-9]{4})\b/i);
+  return toPinText(labeled ? labeled[1] : text);
+}
+
 function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
   const [pin, setPin] = useState('');
   const [hasEdited, setHasEdited] = useState(false);
-  const canSubmit = pin.trim().length === SHARE_PIN_LENGTH && !isChecking;
+  const canSubmit = pin.length === SHARE_PIN_LENGTH && !isChecking;
 
   return (
     <form
@@ -56,7 +69,7 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
         event.preventDefault();
         if (canSubmit) {
           setHasEdited(false);
-          onSubmit(pin.trim());
+          onSubmit(pin);
         }
       }}
     >
@@ -73,12 +86,16 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
         autoCapitalize='characters'
         autoCorrect='off'
         spellCheck={false}
-        maxLength={SHARE_PIN_LENGTH}
         placeholder='••••'
         className='text-center text-lg font-semibold tracking-[0.4em] uppercase'
         value={pin}
+        onPaste={(event) => {
+          event.preventDefault();
+          setPin(toPastedPin(event.clipboardData.getData('text')));
+          setHasEdited(true);
+        }}
         onChange={(event) => {
-          setPin(event.target.value.toUpperCase());
+          setPin(toPinText(event.target.value));
           setHasEdited(true);
         }}
       />

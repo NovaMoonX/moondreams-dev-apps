@@ -7,6 +7,7 @@ import SectionHeader from '@/components/SectionHeader';
 import Subview, { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
 import ShareCreateForm from '@apps/a-list/components/share/ShareCreateForm';
@@ -82,6 +83,19 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
     return didCreate;
   };
 
+  const handleCopy = async (text: string, what: string) => {
+    const didCopy = await copyToClipboard(text);
+    addToast(
+      didCopy
+        ? { title: `${what} copied`, type: 'success' }
+        : {
+            title: `Couldn't copy the ${what.toLowerCase()}`,
+            description: 'Your browser blocked copying on this page.',
+            type: 'error',
+          },
+    );
+  };
+
   const handleTogglePin = (share: CalendarShare, isLocked: boolean) =>
     run(
       () =>
@@ -94,7 +108,7 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
   const handleDelete = async (share: CalendarShare) => {
     const confirmed = await confirm({
       title: 'Delete link',
-      message: `Delete the link for ${formatShareRange(share.startDate, share.endDate)}${share.pin ? ` (PIN ${share.pin})` : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away, and this can't be undone.`,
+      message: `Delete the link for ${formatShareRange(share.startDate, share.endDate)}${share.pin ? ' (with a PIN)' : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away, and this can't be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });
@@ -157,7 +171,7 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
               key={share.id}
               share={share}
               isDisabled={isSaving}
-              onCopied={() => addToast({ title: 'Link copied', type: 'success' })}
+              onCopy={(text, what) => void handleCopy(text, what)}
               onTogglePin={(item, isLocked) =>
                 void handleTogglePin(item, isLocked)
               }
