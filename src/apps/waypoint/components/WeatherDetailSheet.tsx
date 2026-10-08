@@ -40,9 +40,11 @@ function WeatherDetailSheet({ isOpen, onClose, title, details }: WeatherDetailSh
       onClose={onClose}
       title={title}
       footer={
-        <Button type='button' size='lg' className='w-full' onClick={onClose}>
-          Sounds good
-        </Button>
+        <div className='flex items-center gap-2'>
+          <Button type='button' size='lg' className='flex-1' onClick={onClose}>
+            Sounds good
+          </Button>
+        </div>
       }
     >
       <div className='space-y-3'>

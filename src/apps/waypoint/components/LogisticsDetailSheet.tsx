@@ -1,9 +1,11 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import DetailSheet from '@/components/DetailSheet';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { getDayDateLabel } from '@/utils/dateRangeUtils';
 import { formatClockTime } from '@/utils/formatUtils';
 import LocationLink from '@apps/waypoint/components/LocationLink';
-import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import { openMapNavigation } from '@/utils/mapUrlUtils';
 import { RENTAL_TYPE_LABELS, STAY_TYPE_EMOJIS, STAY_TYPE_LABELS } from '@apps/waypoint/constants';
 import type { Rental, Stay, TripSpace } from '@apps/waypoint/types';
 import { getRentalTimezoneLabel, getStayTime, getStayTimezoneLabel } from '@apps/waypoint/utils/tripTime';
@@ -81,11 +83,42 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
             : []),
         ]
       : [];
+  const navigablePlaces = places.filter(
+    ({ name, address, latitude, longitude }) => Boolean(name || address) || (latitude !== null && longitude !== null),
+  );
   const linkUrl = stay?.linkUrl ?? rental?.linkUrl ?? null;
   const notes = stay?.notes ?? rental?.notes ?? null;
 
   return (
-    <DetailSheet isOpen={subject !== null} onClose={onClose} title={title}>
+    <DetailSheet
+      isOpen={subject !== null}
+      onClose={onClose}
+      title={title}
+      footer={
+        navigablePlaces.length > 0 ? (
+          <div className='flex flex-col gap-2'>
+            {navigablePlaces.map((place) => (
+              <Button
+                key={place.label ?? 'place'}
+                type='button'
+                size='lg'
+                className='w-full'
+                onClick={() =>
+                  openMapNavigation({
+                    locationName: place.name,
+                    address: place.address,
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                  })
+                }
+              >
+                {navigablePlaces.length > 1 ? `Navigate to ${place.label?.replace(/ (at|to)$/, '').toLowerCase()}` : 'Navigate'}
+              </Button>
+            ))}
+          </div>
+        ) : undefined
+      }
+    >
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>{kindLabel}</p>
         {lines.length > 0 && (
@@ -105,7 +138,6 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
               {address ? (
                 <LocationLink locationName={name} address={address} latitude={latitude} longitude={longitude} label={address} />
               ) : null}
-              <MapNavigationButton locationName={name} address={address} latitude={latitude} longitude={longitude} />
             </div>
           </div>
         ))}
