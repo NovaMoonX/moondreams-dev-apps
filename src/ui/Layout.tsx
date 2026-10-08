@@ -51,7 +51,7 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
-  // Only mini-apps have a manifest; the hub and other pages carry none, so they can't be installed.
+  // Only mini-apps have a manifest and their own tab icon; the hub and other pages carry neither, so they can't be installed.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
     const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -69,6 +69,11 @@ function LocationSync() {
         document.head.appendChild(manifestLink);
       }
     }
+
+    document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]').forEach((icon) => {
+      icon.dataset.defaultHref ??= icon.getAttribute('href') ?? '';
+      icon.setAttribute('href', app ? `/logos/by-app/logo-${app.id}.svg` : icon.dataset.defaultHref);
+    });
 
     document.title = location.pathname.startsWith('/a-list/shared/')
       ? 'Movie calendar - A-List Tracker'
