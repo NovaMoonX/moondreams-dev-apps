@@ -215,6 +215,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
           location={getPickupLocation(rental)}
           linkUrl={rental.linkUrl}
           onEdit={canEdit ? () => { closeDrawer(); onEdit(rental); } : null}
+          expenseTarget={{ link: { kind: 'RENTAL', id: rental.id }, getSubject: () => getRentalSubject(rental) }}
         >
           <RentalDetailLines
             trip={trip}

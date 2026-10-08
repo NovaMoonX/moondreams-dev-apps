@@ -98,6 +98,8 @@ function getEventRow({ trip, memberNames }: TimelineMarkdownSource, event: Timel
     event.venueOpenTime &&
       event.venueCloseTime &&
       `Open ${formatClockTime(event.venueOpenTime)} – ${formatClockTime(event.venueCloseTime)}`,
+    event.arriveByTime &&
+      `Arrive by ${formatClockTime(event.arriveByTime)}${event.arriveByNote?.trim() ? ` (${esc(event.arriveByNote.trim())})` : ''}`,
     attendeeIds.length < memberIds.length &&
       `For: ${attendeeIds.length > 0 ? nameList(memberNames, attendeeIds) : 'nobody yet'}`,
     event.linkUrl,

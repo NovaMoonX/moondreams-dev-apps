@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@/lib/firebase/config';
@@ -272,6 +272,23 @@ export const setTripCity = createAsyncThunk<
   const updatedTrip: TripSpace = { ...trip, city, lastEditedAt };
   dispatch(upsertTrip(updatedTrip));
   return updatedTrip;
+});
+
+export const setPlanNeedsNoExpense = createAsyncThunk<
+  TripSpace,
+  { uid: string; trip: TripSpace; linkKey: string; needsNone: boolean },
+  { rejectValue: string }
+>('waypoint/trips/setPlanNeedsNoExpense', async ({ uid, trip, linkKey, needsNone }, { rejectWithValue }) => {
+  if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
+    return rejectWithValue('You do not have permission to edit this trip.');
+  }
+
+  const lastEditedAt = Date.now();
+  await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), {
+    noExpenseKeys: needsNone ? arrayUnion(linkKey) : arrayRemove(linkKey),
+    lastEditedAt,
+  });
+  return { ...trip, lastEditedAt };
 });
 
 export const setTripArchived = createAsyncThunk<

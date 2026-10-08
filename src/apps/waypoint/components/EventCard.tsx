@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 
 import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Archive, ArchiveRestore, Layers } from 'lucide-react';
+import { Archive, ArchiveRestore, DoorOpen, Layers } from 'lucide-react';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
@@ -21,7 +21,13 @@ import type { HourForecast } from '@/lib/weather/types';
 import { formatClockTime } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { formatEventStartTime, formatEventTimeRange, getEventTime, type ZoneStyle } from '@apps/waypoint/utils/tripTime';
+import {
+  formatEventArriveBy,
+  formatEventStartTime,
+  formatEventTimeRange,
+  getEventTime,
+  type ZoneStyle,
+} from '@apps/waypoint/utils/tripTime';
 import {
   ACTIVITY_SETTING_LABELS,
   EVENT_LINK_KIND_LABELS,
@@ -123,6 +129,7 @@ export function EventDetailLines({
   // On a phone the card leaves an activity's setting for its details drawer.
   const isSettingHidden = isCompact && showTitle && event.eventType === 'ACTIVITY';
   const badge = getEventBadge(event);
+  const arriveByLabel = formatEventArriveBy(trip, event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
   const { startMs, endMs } = getEventTime(trip, event);
   const impliedDurationMs = startMs !== null && endMs !== null && endMs > startMs ? endMs - startMs : null;
@@ -195,6 +202,18 @@ export function EventDetailLines({
       )}
       {showAttendees && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE' && (
         <EventAttendeeAvatars trip={trip} events={[event]} />
+      )}
+      {arriveByLabel && (
+        <div className='space-y-0.5 text-sm'>
+          <p className='flex items-center gap-2 font-medium'>
+            <DoorOpen className='text-muted-foreground h-4 w-5 shrink-0' aria-hidden='true' />
+            <span>
+              Arrive by {arriveByLabel}
+              <span className='text-muted-foreground font-normal'> · starts {formatEventStartTime(trip, event)}</span>
+            </span>
+          </p>
+          {event.arriveByNote && <p className='text-muted-foreground pl-7 italic'>{event.arriveByNote}</p>}
+        </div>
       )}
       {locationLabel && <LocationLink {...event} label={locationLabel} />}
       {(event.venueOpenTime || event.venueCloseTime) && (
@@ -469,6 +488,11 @@ export function EventCard({
           stackLabel={stackActionLabel}
           onStack={canModify ? () => { closeDrawer(); onStack(event); } : null}
           onSuggest={onSuggest ? () => { closeDrawer(); onSuggest(event); } : null}
+          expenseTarget={
+            EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived
+              ? { link: { kind: 'EVENT', id: event.id }, getSubject: () => getEventSubject(trip, event) }
+              : null
+          }
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >

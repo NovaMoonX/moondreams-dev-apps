@@ -1,11 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
+import { useAppDispatch } from '@/store';
+import { getErrorMessage } from '@/utils/errorUtils';
+import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
+
 import AddRelatedFlow, { type Step } from '@apps/waypoint/components/AddRelatedFlow';
 import LinkExpenseSheet from '@apps/waypoint/components/LinkExpenseSheet';
 import { RelatedFlowContext } from '@apps/waypoint/hooks/useRelatedFlow';
 import type { TripSpace } from '@apps/waypoint/types';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
-import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
+import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface RelatedFlowProviderProps {
   trip: TripSpace;
@@ -19,6 +25,8 @@ type OpenFlow =
 
 // Mounted above the trip's screens: an idea leaves its list the moment it is converted, taking its own children with it.
 function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProviderProps) {
+  const dispatch = useAppDispatch();
+  const { addToast } = useToast();
   const [flow, setFlow] = useState<OpenFlow | null>(null);
   const canAddExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const value = useMemo(
@@ -27,9 +35,26 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
         setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'follow-up', subject, initialStep: 'menu' })),
       startLinkExpense: (subject: RelatedSubject) =>
         setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'link', subject })),
+      undoNoExpense: (subject: RelatedSubject) =>
+        void dispatch(
+          setPlanNeedsNoExpense({
+            uid: currentUserId,
+            trip,
+            linkKey: getExpenseLinkKey(subject.link),
+            needsNone: false,
+          }),
+        )
+          .unwrap()
+          .catch((undoError) =>
+            addToast({
+              title: 'Unable to undo that',
+              description: getErrorMessage(undoError, 'Please try again.'),
+              type: 'error',
+            }),
+          ),
       canAddExpenses,
     }),
-    [canAddExpenses],
+    [canAddExpenses, dispatch, addToast, currentUserId, trip],
   );
 
   return (
@@ -50,6 +75,7 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
           key={flow.id}
           trip={trip}
           subject={flow.subject}
+          currentUserId={currentUserId}
           onAddNew={() =>
             setFlow({ id: flow.id + 1, kind: 'follow-up', subject: flow.subject, initialStep: 'expense' })
           }

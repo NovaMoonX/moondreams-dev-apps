@@ -22,7 +22,7 @@
   z-index: 20;
   @media (max-width: 767.98px) {
     top: calc(4rem - 1px);
-    transition: top 300ms;
+    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
     html[data-site-banner='true'] & {
       top: calc(6.25rem - 1px);
     }
@@ -41,7 +41,7 @@
   z-index: 10;
   @media (max-width: 767.98px) {
     top: calc(4rem + 3.75rem - 2px);
-    transition: top 300ms;
+    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
     html[data-site-banner='true'] & {
       top: calc(6.25rem + 3.75rem - 2px);
     }
@@ -51,6 +51,16 @@
     html[data-site-header='hidden'][data-site-banner='true'] & {
       top: calc(2.25rem + 3.75rem - 1px);
     }
+  }
+}
+
+/* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
+@media (max-width: 639.98px) {
+  [role='region'][aria-label='Notifications'] {
+    left: max(1rem, env(safe-area-inset-left));
+    right: max(1rem, env(safe-area-inset-right));
+    width: auto;
+    max-width: none;
   }
 }
 

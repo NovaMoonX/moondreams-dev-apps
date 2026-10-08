@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
-import { Archive, Layers, MessageSquarePlus } from 'lucide-react';
+import { Archive, Layers, MessageSquarePlus, Receipt } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
-import type { TimelineEvent } from '@apps/waypoint/types';
+import { useHasExpense, useIsNoExpense } from '@apps/waypoint/hooks/useHasExpense';
+import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
+import type { ExpenseLink, TimelineEvent } from '@apps/waypoint/types';
+import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface PlaceDetailsDrawerProps {
   isOpen: boolean;
@@ -20,6 +23,8 @@ interface PlaceDetailsDrawerProps {
   stackLabel?: string | null;
   onStack?: (() => void) | null;
   onSuggest?: (() => void) | null;
+  /** Offers to link or add an expense while this item has none and nobody marked it as needing none. */
+  expenseTarget?: { link: ExpenseLink; getSubject: () => RelatedSubject } | null;
   children: ReactNode;
 }
 
@@ -36,10 +41,15 @@ export function PlaceDetailsDrawer({
   stackLabel,
   onStack,
   onSuggest,
+  expenseTarget = null,
   children,
 }: PlaceDetailsDrawerProps) {
+  const { startLinkExpense, canAddExpenses } = useRelatedFlow();
+  const hasExpense = useHasExpense(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
+  const isNoExpense = useIsNoExpense(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
+  const canLinkExpense = expenseTarget !== null && canAddExpenses && !hasExpense && !isNoExpense;
   const canNavigate = getMapNavigationUrl(location) !== null;
-  const hasMoreActions = Boolean(onStack || onArchive || onSuggest);
+  const hasMoreActions = Boolean(onStack || onArchive || onSuggest || canLinkExpense);
   const primaryLabel = canNavigate ? 'Navigate' : linkUrl ? 'Visit site' : onEdit ? 'Modify' : null;
 
   const getFooter = () => {
@@ -81,6 +91,20 @@ export function PlaceDetailsDrawer({
         <div className='space-y-2'>{children}</div>
         {hasMoreActions && (
           <div className='border-border divide-border divide-y rounded-xl border'>
+            {canLinkExpense && (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
+                onClick={() => {
+                  onClose();
+                  startLinkExpense(expenseTarget.getSubject());
+                }}
+              >
+                <Receipt className='text-muted-foreground h-4 w-4' />
+                Link or add an expense
+              </Button>
+            )}
             {onSuggest && (
               <Button
                 type='button'

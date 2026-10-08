@@ -41,7 +41,7 @@ function ChecklistOverview({ trip, currentUserId, onOpen }: ChecklistOverviewPro
 
   const handleToggle = async (item: ChecklistItem, isCompleted: boolean) => {
     try {
-      await dispatch(toggleChecklistItem({ tripId: trip.id, itemId: item.id, uid: currentUserId, isCompleted })).unwrap();
+      await dispatch(toggleChecklistItem({ tripId: trip.id, itemId: item.id, uid: currentUserId, isCompleted, isPrivate: false })).unwrap();
     } catch (error) {
       addToast({ title: 'Unable to update this item', description: getErrorMessage(error, 'Please try again.'), type: 'error' });
     }

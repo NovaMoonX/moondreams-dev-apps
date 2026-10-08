@@ -731,7 +731,7 @@ function ExpenseFormModal({
   const summaryCategory = resolveChoice(formData.category);
   const planPicker = (
     <>
-        <PillRow label='Kind of plan'>
+        <PillRow label='Kind'>
           {PLAN_GROUP_FILTERS.filter(({ value }) => value === 'ALL' || planPills.some(({ group }) => group === value)).map(({ value, label, emoji }) => (
             <Pill
               key={value}
@@ -745,7 +745,7 @@ function ExpenseFormModal({
           ))}
         </PillRow>
         <PillGroup
-          label='Plans without an expense yet'
+          label='Without an expense yet'
           options={shownPlanPills}
           value={linkKey || null}
           onChange={(key) => {

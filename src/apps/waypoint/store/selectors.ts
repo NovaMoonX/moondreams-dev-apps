@@ -83,6 +83,14 @@ export const selectExpenseLinkKeys = createSelector(
     new Set(expenses.flatMap((expense) => (expense.linkedTo ? [getExpenseLinkKey(expense.linkedTo)] : []))),
 );
 
+/** Keys of plans marked "no expense needed", across the trips in the store. */
+export const selectNoExpenseKeys = createSelector(
+  [selectTrips],
+  (trips): ReadonlySet<string> => new Set(trips.flatMap((trip) => trip.noExpenseKeys ?? [])),
+);
+
+export const selectPersonalChecklistItems = (state: RootState) => state.waypoint.personalChecklist.items;
+
 export const selectPersonalExpenses = (state: RootState) =>
   state.waypoint.personalExpenses.items;
 

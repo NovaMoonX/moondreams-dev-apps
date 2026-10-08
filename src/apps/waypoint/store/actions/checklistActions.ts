@@ -12,6 +12,11 @@ import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 const CHECKLIST_COLLECTION = (tripId: string) =>
   collection(db, 'apps', 'waypoint', 'trips', tripId, 'checklist');
 
+const getItemRef = (tripId: string, uid: string, itemId: string, isPrivate: boolean) =>
+  isPrivate
+    ? doc(db, 'apps', 'waypoint', 'personalChecklist', uid, 'items', itemId)
+    : doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId);
+
 interface CreateChecklistItemInput {
   tripId: string;
   uid: string;
@@ -21,6 +26,8 @@ interface CreateChecklistItemInput {
   note: string | null;
   completeByDayIndex: number | null;
   assignedToUids: string[];
+  /** Kept under the member's own uid: no one else sees it, and Overview never lists it. */
+  isPrivate: boolean;
 }
 
 export const createChecklistItem = createAsyncThunk<
@@ -39,6 +46,7 @@ export const createChecklistItem = createAsyncThunk<
       note,
       completeByDayIndex,
       assignedToUids,
+      isPrivate,
     },
     { rejectWithValue },
   ) => {
@@ -53,7 +61,9 @@ export const createChecklistItem = createAsyncThunk<
     }
 
     const now = Date.now();
-    const itemRef = doc(CHECKLIST_COLLECTION(tripId));
+    const itemRef = isPrivate
+      ? doc(collection(db, 'apps', 'waypoint', 'personalChecklist', uid, 'items'))
+      : doc(CHECKLIST_COLLECTION(tripId));
     const item: ChecklistItem = {
       id: itemRef.id,
       tripId,
@@ -62,7 +72,7 @@ export const createChecklistItem = createAsyncThunk<
       customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
       note: note?.trim() || null,
       completeByDayIndex,
-      assignedToUids: [...new Set(assignedToUids)],
+      assignedToUids: isPrivate ? [] : [...new Set(assignedToUids)],
       isCompleted: false,
       markedCompletedByUid: null,
       markedCompletedAt: null,
@@ -81,6 +91,7 @@ interface ToggleChecklistItemInput {
   itemId: string;
   uid: string;
   isCompleted: boolean;
+  isPrivate: boolean;
 }
 
 interface UpdateChecklistItemInput {
@@ -93,6 +104,7 @@ interface UpdateChecklistItemInput {
   note: string | null;
   completeByDayIndex: number | null;
   assignedToUids: string[];
+  isPrivate: boolean;
 }
 
 export const updateChecklistItem = createAsyncThunk<
@@ -112,10 +124,11 @@ export const updateChecklistItem = createAsyncThunk<
       note,
       completeByDayIndex,
       assignedToUids,
+      isPrivate,
     },
     { rejectWithValue },
   ) => {
-    if (!canEditExistingItem(trip, uid)) {
+    if (!isPrivate && !canEditExistingItem(trip, uid)) {
       return rejectWithValue('You do not have permission to edit checklist items.');
     }
     const trimmedTitle = title.trim();
@@ -129,14 +142,14 @@ export const updateChecklistItem = createAsyncThunk<
     }
 
     await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'checklist', itemId),
+      getItemRef(trip.id, uid, itemId, isPrivate),
       {
         title: trimmedTitle,
         category,
         customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
         note: note?.trim() || null,
         completeByDayIndex,
-        assignedToUids: [...new Set(assignedToUids)],
+        assignedToUids: isPrivate ? [] : [...new Set(assignedToUids)],
         lastEditedAt: Date.now(),
       },
     );
@@ -147,6 +160,7 @@ interface DeleteChecklistItemInput {
   trip: TripSpace;
   uid: string;
   itemId: string;
+  isPrivate: boolean;
 }
 
 export const deleteChecklistItem = createAsyncThunk<
@@ -155,13 +169,11 @@ export const deleteChecklistItem = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/checklist/delete',
-  async ({ trip, uid, itemId }, { rejectWithValue }) => {
-    if (!canEditExistingItem(trip, uid)) {
+  async ({ trip, uid, itemId, isPrivate }, { rejectWithValue }) => {
+    if (!isPrivate && !canEditExistingItem(trip, uid)) {
       return rejectWithValue('You do not have permission to delete checklist items.');
     }
-    await deleteDoc(
-      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'checklist', itemId),
-    );
+    await deleteDoc(getItemRef(trip.id, uid, itemId, isPrivate));
   },
 );
 
@@ -171,9 +183,9 @@ export const toggleChecklistItem = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/checklist/toggle',
-  async ({ tripId, itemId, uid, isCompleted }) => {
+  async ({ tripId, itemId, uid, isCompleted, isPrivate }) => {
     await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId),
+      getItemRef(tripId, uid, itemId, isPrivate),
       {
         isCompleted,
         markedCompletedByUid: isCompleted ? uid : null,
