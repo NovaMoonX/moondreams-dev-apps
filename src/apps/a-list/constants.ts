@@ -111,16 +111,16 @@ export const WATCHLIST_SORT_ORDERS: Partial<
   Record<WatchlistSort, [PillOption<SortOrder>, PillOption<SortOrder>]>
 > = {
   releaseDate: [
-    { value: 'natural', label: 'Newest first', emoji: '⬇️' },
-    { value: 'reversed', label: 'Oldest first', emoji: '⬆️' },
+    { value: 'natural', label: 'Newest first' },
+    { value: 'reversed', label: 'Oldest first' },
   ],
   title: [
-    { value: 'natural', label: 'A to Z', emoji: '⬇️' },
-    { value: 'reversed', label: 'Z to A', emoji: '⬆️' },
+    { value: 'natural', label: 'A to Z' },
+    { value: 'reversed', label: 'Z to A' },
   ],
   addedAt: [
-    { value: 'natural', label: 'Newest first', emoji: '⬇️' },
-    { value: 'reversed', label: 'Oldest first', emoji: '⬆️' },
+    { value: 'natural', label: 'Newest first' },
+    { value: 'reversed', label: 'Oldest first' },
   ],
 };
 

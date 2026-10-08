@@ -10,7 +10,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUpDown, Check } from 'lucide-react';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { PillGroup, type PillOption } from '@/components/PillGroup';
+import type { PillOption } from '@/components/PillGroup';
 
 export type SortOrder = 'natural' | 'reversed';
 
@@ -145,12 +145,26 @@ function SortControl<T extends string>({
         {orderOptions && (
           <div className='space-y-2 pb-4'>
             <p className='text-muted-foreground text-sm'>Order</p>
-            <PillGroup
-              label='Order'
-              options={orderOptions}
-              value={order}
-              onChange={(next) => onOrderChange?.(next)}
-            />
+            <div className='grid grid-cols-2 gap-2'>
+              {orderOptions.map((choice) => (
+                <Button
+                  key={choice.value}
+                  type='button'
+                  variant='tertiary'
+                  size='stripped'
+                  aria-pressed={order === choice.value}
+                  className={join(
+                    'text-foreground! h-12 rounded-2xl border px-3 text-base font-normal',
+                    order === choice.value
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border',
+                  )}
+                  onClick={() => onOrderChange?.(choice.value)}
+                >
+                  {choice.label}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
       </Drawer>
