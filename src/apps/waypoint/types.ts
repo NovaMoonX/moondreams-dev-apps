@@ -202,7 +202,7 @@ export interface EarlyPayment {
 
 export type ExpenseLinkKind = 'EVENT' | 'STAY' | 'RENTAL';
 
-/** The event, stay or rental an expense pays for. A target that was deleted since reads as no link. */
+/** The event, stay or rental an expense is linked to. A target that was deleted since reads as no link. */
 export interface ExpenseLink {
   kind: ExpenseLinkKind;
   id: string;

@@ -794,7 +794,7 @@ function ExpenseFormModal({
         <>
           {isLinked && pickedSubject && (
             <div className='bg-muted/50 mb-4 space-y-1 rounded-xl p-3'>
-              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Paying for</p>
+              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Linked to</p>
               <p className='font-semibold'>{pickedSubject.title}</p>
               <p className='text-muted-foreground text-sm'>
                 {[
@@ -891,7 +891,7 @@ function ExpenseFormModal({
                 </>
               ) : pickedSubject ? (
                 <div className='bg-muted/50 space-y-1 rounded-xl p-3'>
-                  <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Paying for</p>
+                  <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Linked to</p>
                   <p className='font-semibold'>{pickedSubject.title}</p>
                   <div className='flex flex-wrap gap-x-4 gap-y-1'>
                     <Button type='button' variant='link' size='sm' className='min-h-10 gap-1.5 px-0!' onClick={() => setIsLinkPickerOpen(true)}>

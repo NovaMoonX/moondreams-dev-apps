@@ -51,7 +51,7 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
     setLinkingId(expense.id);
     try {
       await dispatch(linkExpenseToPlan({ expense, link: subject.link, dayIndex: subject.dayIndex })).unwrap();
-      addToast({ title: `${expense.title} is now paying for ${subject.title}`, type: 'success' });
+      addToast({ title: `Linked ${expense.title} to ${subject.title}`, type: 'success' });
       onClose();
     } catch (linkError) {
       addToast({
@@ -78,7 +78,7 @@ function LinkExpenseSheet({ trip, subject, onAddNew, onClose }: LinkExpenseSheet
     >
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
-          Already on the list? Pick the expense that pays for this. Nothing it already has changes, and a missing day is
+          Already on the list? Pick the expense that goes with this. Nothing it already has changes, and a missing day is
           filled in.
         </p>
         {unlinked.length >= LIST_SEARCH_THRESHOLD && (
