@@ -3,7 +3,6 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
 import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 import LazyMount from '@/components/LazyMount';
@@ -23,6 +22,9 @@ import {
 } from '@apps/a-list/utils/sharing';
 
 const EAGER_DAYS = 4;
+
+// U+2217 is an asterisk drawn on the text's vertical center; a plain `*` sits high and shifts the line when revealed.
+const MASK_CHAR = '\u2217';
 
 const dayFormatter = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -93,11 +95,8 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
           autoCorrect='off'
           spellCheck={false}
           placeholder='••••'
-          className={join(
-            'h-12 px-12 py-0 text-center text-lg font-semibold tracking-[0.4em] uppercase',
-            !isShown && pin.length > 0 && 'pt-3.5',
-          )}
-          value={isShown ? pin : '*'.repeat(pin.length)}
+          className='h-12 px-12 py-0 text-center text-lg font-semibold tracking-[0.4em] uppercase'
+          value={isShown ? pin : MASK_CHAR.repeat(pin.length)}
           onPaste={(event) => {
             event.preventDefault();
             setPin(toPastedPin(event.clipboardData.getData('text')));
@@ -107,7 +106,7 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
             const typed = event.target.value;
             setPin(
               isShown || typed.length >= pin.length
-                ? toPinText(isShown ? typed : pin + typed.replace(/\*/g, ''))
+                ? toPinText(isShown ? typed : pin + typed.replaceAll(MASK_CHAR, ''))
                 : pin.slice(0, typed.length),
             );
             setHasEdited(true);
