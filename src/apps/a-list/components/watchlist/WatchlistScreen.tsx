@@ -200,7 +200,7 @@ function WatchlistScreen() {
         <div className='flex items-center gap-2'>
           <div className='min-w-0 flex-1'>
             <SearchInput
-              placeholder='Search your watchlist'
+              placeholder='Search watchlist'
               value={query}
               onChange={setQuery}
             />

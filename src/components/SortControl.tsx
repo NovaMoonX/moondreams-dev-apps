@@ -39,7 +39,7 @@ function SortControl<T extends string>({
       type='button'
       variant={isActive ? 'secondary' : 'outline'}
       rounded='full'
-      aria-label={label}
+      aria-label={`${label}, by ${options.find((choice) => choice.value === value)?.label ?? ''}`}
       className='h-12 w-12 shrink-0 p-0'
       onClick={isPhone ? () => setIsOpen(true) : undefined}
     >
@@ -54,7 +54,12 @@ function SortControl<T extends string>({
           option({
             label: choice.label,
             value: choice.value,
-            icon: value === choice.value ? <Check /> : undefined,
+            icon:
+              value === choice.value ? (
+                <Check className='text-primary h-4 w-4' />
+              ) : (
+                <span className='h-4 w-4' />
+              ),
           }),
         )}
         onItemSelect={(next) => onChange(next as T)}
