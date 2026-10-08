@@ -400,7 +400,7 @@ function DuesSummary({
               <span className='text-muted-foreground shrink-0 text-sm tabular-nums'>{notices.length}</span>
               <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
             </Button>
-            <DetailSheet isOpen={isNoticesOpen} onClose={() => setIsNoticesOpen(false)} title='Dues summary'>
+            <DetailSheet isOpen={isNoticesOpen && notices.length > 0} onClose={() => setIsNoticesOpen(false)} title='Dues summary'>
               {renderNoticeList(notices, true)}
             </DetailSheet>
           </>

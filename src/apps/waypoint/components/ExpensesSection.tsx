@@ -1319,7 +1319,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           onClose={() => setPersonalFormExpense(null)}
         />
       )}
-      <DetailSheet isOpen={isPersonalListOpen} onClose={() => setIsPersonalListOpen(false)} title='Just for me'>
+      <DetailSheet isOpen={isPersonalListOpen && isSmallScreen} onClose={() => setIsPersonalListOpen(false)} title='Just for me'>
         <div className='space-y-2'>
           {showPersonalSearch && (
             <SearchInput value={personalQuery} onChange={setPersonalQuery} placeholder='Search your personal expenses' />
