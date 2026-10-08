@@ -1,10 +1,10 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
   collection,
-  deleteDoc,
   doc,
   runTransaction,
   updateDoc,
+  type DocumentData,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
@@ -18,6 +18,12 @@ import type {
   Viewing,
   WatchlistItem,
 } from '@apps/a-list/types';
+import {
+  cancelTrailerReminder,
+  isTrailerReminderAhead,
+  newTrailerReminderId,
+  scheduleTrailerReminder,
+} from '@apps/a-list/utils/reminders';
 import {
   computeEndsAt,
   getInitialStatus,
@@ -58,6 +64,7 @@ export const addViewing = createAsyncThunk<
     const itemRef = doc(db, ...membershipPath, 'watchlist', movieKey);
     const viewingRef = doc(collection(db, ...membershipPath, 'viewings'));
     const snapshot = toSnapshot(movie);
+    const trailerReminderId = newTrailerReminderId(showtimeAt);
 
     try {
       const viewing = await runTransaction(db, async (transaction) => {
@@ -88,12 +95,23 @@ export const addViewing = createAsyncThunk<
           theatre: theatre ?? null,
           purchase: purchase ?? null,
           rating: null,
+          trailerReminderId,
           createdAt: now,
           lastEditedAt: now,
         };
         transaction.set(viewingRef, nextViewing);
         return nextViewing;
       });
+
+      if (trailerReminderId) {
+        void scheduleTrailerReminder({
+          uid,
+          reminderId: trailerReminderId,
+          viewingId: viewing.id,
+          movieTitle: movie.title,
+          showtimeAt,
+        });
+      }
 
       return viewing;
     } catch (error) {
@@ -109,14 +127,20 @@ const LATER_KEYS = {
   ticket: null,
   rating: null,
   theatre: null,
+  trailerReminderId: null,
   purchase: null,
 } as const;
 
 /**
  * A field-scoped edit in a transaction: any later-added key the freshly read document still lacks
  * is backfilled with its empty value in the same write, and nothing the edit doesn't own is touched.
+ * `fields` may be a function of the freshly read document.
  */
-async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
+async function editViewing(
+  uid: string,
+  id: string,
+  fields: Partial<Viewing> | ((stored: DocumentData) => Partial<Viewing>),
+) {
   const viewingRef = doc(
     db,
     'apps',
@@ -127,7 +151,7 @@ async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
     id,
   );
 
-  await runTransaction(db, async (transaction) => {
+  const previous = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(viewingRef);
     if (!snapshot.exists()) {
       throw new Error('This showing was removed.');
@@ -135,17 +159,21 @@ async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
 
     const stored = snapshot.data();
     // Recording a ticket answers the "did you buy?" question for good.
-    const resolvesPurchase = fields.ticket != null && stored.purchase != null;
+    const edit = typeof fields === 'function' ? fields(stored) : fields;
+    const resolvesPurchase = edit.ticket != null && stored.purchase != null;
     const backfill = Object.fromEntries(
       Object.entries(LATER_KEYS).filter(([key]) => !(key in stored)),
     );
     transaction.update(viewingRef, {
       ...backfill,
-      ...fields,
+      ...edit,
       ...(resolvesPurchase ? { 'purchase.startedAt': null } : {}),
       lastEditedAt: Date.now(),
     });
+    return stored;
   });
+
+  return previous;
 }
 
 interface UpdateViewingInput {
@@ -172,14 +200,35 @@ export const updateViewing = createAsyncThunk<
     { uid, id, showtimeAt, runtimeMinutes, rating, theatre, purchase },
     { rejectWithValue },
   ) => {
+    const newReminderId = newTrailerReminderId(showtimeAt);
+
     try {
-      await editViewing(uid, id, {
+      const previous = await editViewing(uid, id, (stored) => ({
         showtimeAt,
         endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
+        // Only a moved showing gets a new push; any other edit leaves the pending one alone.
+        ...(stored.showtimeAt === showtimeAt
+          ? {}
+          : { trailerReminderId: newReminderId }),
         ...(rating === undefined ? {} : { rating }),
         ...(theatre === undefined ? {} : { theatre }),
         ...(purchase === undefined ? {} : { purchase }),
-      });
+      }));
+
+      if (previous.showtimeAt !== showtimeAt) {
+        if (isTrailerReminderAhead(previous.showtimeAt)) {
+          void cancelTrailerReminder(previous.trailerReminderId);
+        }
+        if (newReminderId) {
+          void scheduleTrailerReminder({
+            uid,
+            reminderId: newReminderId,
+            viewingId: id,
+            movieTitle: previous.movie.title,
+            showtimeAt,
+          });
+        }
+      }
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to save this showing.'),
@@ -199,10 +248,26 @@ export const removeViewing = createAsyncThunk<
   RemoveViewingInput,
   { rejectValue: string }
 >('aList/viewings/remove', async ({ uid, id }, { rejectWithValue }) => {
+  const viewingRef = doc(
+    db,
+    'apps',
+    'a-list',
+    'memberships',
+    uid,
+    'viewings',
+    id,
+  );
+
   try {
-    await deleteDoc(
-      doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
-    );
+    const stored = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(viewingRef);
+      transaction.delete(viewingRef);
+      return snapshot.data();
+    });
+
+    if (stored && isTrailerReminderAhead(stored.showtimeAt)) {
+      void cancelTrailerReminder(stored.trailerReminderId);
+    }
   } catch (error) {
     return rejectWithValue(
       getErrorMessage(error, 'Unable to remove this showing.'),

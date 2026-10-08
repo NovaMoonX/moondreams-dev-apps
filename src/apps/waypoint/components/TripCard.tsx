@@ -1,5 +1,9 @@
+import FallbackImage from '@/components/FallbackImage';
 import { Badge, Button, CopyButton } from '@moondreamsdev/dreamer-ui/components';
 
+import { MapPin } from 'lucide-react';
+
+import { getCityLabel } from '@/lib/cities/cityApi';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getTripStatus } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
@@ -22,7 +26,7 @@ function TripCard({
   return (
     <div className='border-border bg-card rounded-lg border p-4'>
       {trip.coverImageUrl && (
-        <img
+        <FallbackImage
           src={trip.coverImageUrl}
           alt={`${trip.title} cover`}
           className='mb-4 h-40 w-full rounded-md object-cover'
@@ -38,9 +42,17 @@ function TripCard({
           )}
           {trip.isArchived && <Badge variant='muted'>Archived</Badge>}
         </div>
-        <p className='text-muted-foreground mt-2 text-sm'>
-          {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
-        </p>
+        <div className='text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm'>
+          <p>
+            {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
+          </p>
+          {trip.city && (
+            <p className='flex min-w-0 items-center gap-1'>
+              <MapPin className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+              <span className='truncate'>{getCityLabel(trip.city)}</span>
+            </p>
+          )}
+        </div>
       </div>
 
       {trip.inviteCode && (

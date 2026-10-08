@@ -45,6 +45,26 @@ export const selectTheatres = createSelector(
   },
 );
 
+const selectCalendarShareItems = (state: RootState) =>
+  state.aList.calendarShares.items;
+
+/** Newest first. */
+export const selectCalendarShares = createSelector(
+  [selectCalendarShareItems],
+  (shares) => {
+    const result = [...shares].sort(
+      (left, right) => right.createdAt - left.createdAt,
+    );
+    return result;
+  },
+);
+
+export const selectAreCalendarSharesLoaded = (state: RootState) =>
+  state.aList.calendarShares.isLoaded;
+
+export const selectCalendarSharesLoadError = (state: RootState) =>
+  state.aList.calendarShares.loadError;
+
 const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 
 /** By priority, then release date (undated last), then title. */
@@ -66,6 +86,17 @@ export const selectWatchlistItems = createSelector(
 );
 
 const selectViewingItems = (state: RootState) => state.aList.viewings.items;
+
+export const selectShowingCountByTheatreId = createSelector(
+  [selectViewingItems],
+  (viewings) =>
+    viewings.reduce<Record<string, number>>((counts, viewing) => {
+      const theatreId = viewing.theatre?.theatreId;
+      return theatreId
+        ? { ...counts, [theatreId]: (counts[theatreId] ?? 0) + 1 }
+        : counts;
+    }, {}),
+);
 
 /** Showings the member left for AMC to buy and hasn't recorded a ticket for yet, most recent first. */
 export const selectPendingPurchaseReturns = createSelector(

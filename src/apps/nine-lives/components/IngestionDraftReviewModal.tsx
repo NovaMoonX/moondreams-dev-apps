@@ -407,7 +407,7 @@ function ReviewProgressPills({
         size='sm'
         onClick={() => onSelect('all')}
         className={join(
-          'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+          'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs !transition-none',
           expanded === 'all' ? 'border-primary text-primary' : 'border-border text-muted-foreground',
         )}
       >
@@ -425,7 +425,7 @@ function ReviewProgressPills({
             size='sm'
             onClick={() => onSelect(section)}
             className={join(
-              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs !transition-none',
               isActive
                 ? 'border-primary text-primary'
                 : isReviewed

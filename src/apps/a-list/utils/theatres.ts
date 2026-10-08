@@ -19,6 +19,7 @@ export function toTheatreSnapshot(theatre: TheatreSnapshot): TheatreSnapshot {
     name: theatre.name,
     city: theatre.city ?? null,
     state: theatre.state ?? null,
+    timeZone: theatre.timeZone ?? null,
   };
 }
 
@@ -39,5 +40,7 @@ export function createTypedTheatre(name: string): TheatreDraft {
     postalCode: null,
     latitude: null,
     longitude: null,
+    timeZone: null,
   };
 }
+

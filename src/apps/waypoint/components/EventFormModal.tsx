@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import {
   Button,
-  Checkbox,
   Input,
   Label,
   Select,
@@ -15,7 +14,8 @@ import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-r
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import Pill from '@/components/Pill';
-import { PillGroup, PillRow } from '@/components/PillGroup';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -30,6 +30,7 @@ import type {
   PlaceSelectionBias,
   PlaceSelectionResult,
 } from '@/lib/places/types';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
@@ -38,15 +39,17 @@ import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ItineraryPlacePicks from '@apps/waypoint/components/ItineraryPlacePicks';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
 import {
   ACTIVITY_SETTING_LABELS,
-  ADD_NEW_OPTION,
   DEFAULT_REMINDER_MINUTES_BEFORE,
   MAX_DAYS_OUTSIDE_TRIP,
   EVENT_LINK_KIND_LABELS,
+  TRANSIT_ARRIVAL,
+  TRANSIT_PLACE_PLACEHOLDERS,
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
@@ -58,6 +61,7 @@ import {
   TRANSIT_LOCATION_MIRROR_KEYS,
   TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
+  ARRIVE_BY_EVENT_TYPES,
 } from '@apps/waypoint/constants';
 import type {
   ActivitySetting,
@@ -84,6 +88,7 @@ import {
   getEventTime,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 export type EventFormValues = Omit<
   TimelineEvent,
@@ -122,6 +127,7 @@ export interface EventPrefill {
   timezone?: string | null;
   endTimezone?: string | null;
   locationName?: string;
+  place?: PlaceSelectionResult;
   groupLabel?: string;
 }
 
@@ -205,6 +211,9 @@ interface EventDraft {
   cuisines: string;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
+  hasArriveBy: boolean;
+  arriveByTime: string;
+  arriveByNote: string;
   hasVenueHours: boolean;
   venueOpenTime: string;
   venueCloseTime: string;
@@ -229,8 +238,36 @@ function getMealForTime(time: string): MealType {
   return 'DINNER';
 }
 
+function getClockMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function fromClockMinutes(total: number) {
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Moving the start moves a chosen arrival with it, keeping its lead; it is dropped when nothing earlier fits. */
+function getShiftedArriveBy(draft: EventDraft, nextTime: string): Partial<EventDraft> {
+  if (!draft.hasArriveBy || !draft.arriveByTime || !draft.time || !nextTime) {
+    return {};
+  }
+  const latest = getClockMinutes(nextTime) - 1;
+  if (latest < 0) {
+    return { hasArriveBy: false, arriveByTime: '', arriveByNote: '' };
+  }
+  const shifted = getClockMinutes(draft.arriveByTime) + getClockMinutes(nextTime) - getClockMinutes(draft.time);
+  return { arriveByTime: fromClockMinutes(Math.min(Math.max(shifted, 0), latest)) };
+}
+
+/** Half an hour before the start, kept on the same day; empty when the start is too early to fit one. */
+function getSuggestedArriveBy(startTime: string) {
+  const total = getClockMinutes(startTime) - 30;
+  return Number.isNaN(total) || total < 0 ? '' : fromClockMinutes(total);
+}
+
 function getDefaultSubtype(eventType: EventType, time: string): string {
-  if (eventType === 'TRAVEL') return 'FLIGHT';
+  if (eventType === 'TRAVEL') return 'DRIVE';
   if (eventType === 'DINING') return getMealForTime(time);
   return '';
 }
@@ -320,8 +357,13 @@ function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
     hasCuisines: prefill.cuisines.length > 0,
     linkUrl: prefill.linkUrl ?? '',
     hasLink: Boolean(prefill.linkUrl),
-    locationName: prefill.locationName ?? '',
-    hasLocation: Boolean(prefill.locationName),
+    locationName: prefill.place?.name ?? prefill.locationName ?? '',
+    hasLocation: Boolean(prefill.place ?? prefill.locationName),
+    address: prefill.place?.address ?? '',
+    hasAddress: Boolean(prefill.place?.address),
+    latitude: prefill.place?.latitude ?? null,
+    longitude: prefill.place?.longitude ?? null,
+    place: prefill.place?.place ?? null,
     isGrouped: Boolean(prefill.groupLabel),
     groupLabel: prefill.groupLabel ?? '',
     attendeeTargetType: isSpecific ? 'SPECIFIC_MEMBERS' : base.attendeeTargetType,
@@ -424,6 +466,9 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
         : '',
     attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
+    hasArriveBy: Boolean(event?.arriveByTime),
+    arriveByTime: event?.arriveByTime ?? '',
+    arriveByNote: event?.arriveByNote ?? '',
     hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
     venueOpenTime: event?.venueOpenTime ?? '',
     venueCloseTime: event?.venueCloseTime ?? '',
@@ -481,6 +526,7 @@ function EventFormModal({
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
   const queryClient = useQueryClient();
+  const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
   const isRelative = isRelativeTrip(trip);
@@ -496,6 +542,9 @@ function EventFormModal({
     [events, draft.eventType],
   );
   const isTravel = draft.eventType === 'TRAVEL';
+  const canArriveEarly =
+    isRelative && ARRIVE_BY_EVENT_TYPES.includes(draft.eventType) && draft.dayIndex !== null && draft.time !== '';
+  const arrival = isTravel ? TRANSIT_ARRIVAL[draft.quickField as TransitType] : undefined;
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
   const startZone = draft.timezone ?? trip.timezone;
@@ -513,6 +562,7 @@ function EventFormModal({
         ...(draft.eventType === 'DINING' && !draft.isMealTouched
           ? { quickField: getMealForTime(nextTime) }
           : {}),
+        ...getShiftedArriveBy(draft, nextTime),
         ...changes,
       });
     if (nextDayIndex === null) {
@@ -633,6 +683,14 @@ function EventFormModal({
     if (!draft.time || (draft.dayIndex === null && !isRelative)) {
       return 'Pick a day and a start time.';
     }
+    if (canArriveEarly && draft.hasArriveBy) {
+      if (!draft.arriveByTime) {
+        return 'Pick an arrival time, or remove it.';
+      }
+      if (draft.arriveByTime >= draft.time) {
+        return 'The arrival needs to be before the start time.';
+      }
+    }
     if (!draft.hasEndTime) {
       return null;
     }
@@ -742,6 +800,8 @@ function EventFormModal({
         notes: event?.notes ?? prefill?.notes ?? null,
         attendeeTargetType: draft.attendeeTargetType,
         assignedMemberIds,
+        arriveByTime: canArriveEarly && draft.hasArriveBy ? draft.arriveByTime || null : null,
+        arriveByNote: canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByNote.trim() || null : null,
         venueOpenTime: draft.hasVenueHours ? draft.venueOpenTime || null : null,
         venueCloseTime: draft.hasVenueHours ? draft.venueCloseTime || null : null,
         changeHistory: event?.changeHistory ?? [],
@@ -793,7 +853,8 @@ function EventFormModal({
     }
     if (isRelative) {
       const { time } = fromDayMinutes(
-        toDayMinutes(timeFields.dayIndex, draft.time) - draft.reminderMinutesBefore,
+        toDayMinutes(timeFields.dayIndex, canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByTime : draft.time) -
+          draft.reminderMinutesBefore,
       );
       return formatClockTime(time);
     }
@@ -851,7 +912,7 @@ function EventFormModal({
       key: 'reminder',
       label: 'Reminder',
       icon: <Bell className='h-4 w-4' />,
-      isShown: draft.dayIndex === null || draft.hasReminderOverride,
+      isShown: draft.dayIndex === null || (draft.hasReminderOverride && draft.reminderEnabled),
     },
   ].filter((chip) => !chip.isShown);
 
@@ -865,7 +926,7 @@ function EventFormModal({
         location: { hasLocation: true },
         address: { hasAddress: true },
         group: { isGrouped: true },
-        reminder: { hasReminderOverride: true },
+        reminder: { hasReminderOverride: true, reminderEnabled: true },
         venueHours: { hasVenueHours: true },
       }[key] ?? {},
     );
@@ -875,7 +936,7 @@ function EventFormModal({
       <PlaceAutocompleteInput
         label={label}
         quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
-        placeholder='Ichiran Shibuya'
+        placeholder={isTravel ? (TRANSIT_PLACE_PLACEHOLDERS[draft.quickField as TransitType] ?? 'Pike Place Market') : 'Ichiran Shibuya'}
         value={draft.locationName}
         onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
         bias={placeBias}
@@ -891,6 +952,22 @@ function EventFormModal({
         }
         className='mb-0' // overwrite space-y-4
       />
+      {isTravel && TRANSIT_LOCATION_LABELS[transitType] !== null && (
+        <ItineraryPlacePicks
+          current={{ name: draft.locationName, address: draft.address }}
+          excludeEventId={event?.id}
+          onPick={(pick) =>
+            updateDraft({
+              locationName: pick.name,
+              address: pick.address,
+              hasAddress: true,
+              latitude: pick.latitude,
+              longitude: pick.longitude,
+              place: pick.place,
+            })
+          }
+        />
+      )}
       {isAddressShown && (
         <RemovableField
           label='Address'
@@ -955,7 +1032,7 @@ function EventFormModal({
       </div>
       {isRelative && endZone && (
         <ZoneField
-          label={isTravel ? 'Lands in' : 'Ends in'}
+          label={arrival ? arrival.zoneLabel : 'Ends in'}
           zone={endZone}
           at={endDayAt}
           isTripDefault={false}
@@ -969,6 +1046,18 @@ function EventFormModal({
         </p>
       )}
     </div>
+  );
+
+  const addAnotherFlightButton = isTravel && transitType === 'FLIGHT' && (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='max-sm:w-full'
+      disabled={isSubmitting || timeError !== null}
+      onClick={() => void handleSubmit(true)}
+    >
+      Add another flight
+    </Button>
   );
 
   return (
@@ -1079,10 +1168,12 @@ function EventFormModal({
             />
           )}
         </div>
-        {draft.dayIndex === null ? null : isTravel ? (
+        {draft.dayIndex === null ? null : arrival ? (
           <div className='space-y-3'>
             <div className='space-y-2'>
-              <Label>🛬 Know when you arrive?</Label>
+              <Label>
+                {arrival.emoji} {arrival.question}
+              </Label>
               <PillGroup
                 label='Arrival time'
                 options={[
@@ -1122,6 +1213,52 @@ function EventFormModal({
           >
             + Add end time
           </Button>
+        )}
+
+        {canArriveEarly && draft.hasArriveBy ? (
+          <RemovableField
+            label='Arrive by'
+            removeLabel='Remove arrival time'
+            onRemove={() => updateDraft({ hasArriveBy: false, arriveByTime: '', arriveByNote: '' })}
+          >
+            <div className='space-y-3'>
+              <Input
+                type='time'
+                aria-label='Arrival time'
+                value={draft.arriveByTime}
+                onChange={(changeEvent) => updateDraft({ arriveByTime: changeEvent.target.value })}
+              />
+              <p
+                className={join(
+                  'text-xs',
+                  draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time
+                  ? `The arrival needs to be before the start time, ${formatClockTime(draft.time)}.`
+                  : `Starts at ${draft.time ? formatClockTime(draft.time) : 'the start time'}. Arrive before that.`}
+              </p>
+              <Input
+                aria-label='Why arrive early'
+                placeholder='Why? Parking fills up early'
+                maxLength={500}
+                value={draft.arriveByNote}
+                onChange={(changeEvent) => updateDraft({ arriveByNote: changeEvent.target.value })}
+              />
+            </div>
+          </RemovableField>
+        ) : (
+          canArriveEarly && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto px-0! py-0!'
+              onClick={() => updateDraft({ hasArriveBy: true, arriveByTime: draft.arriveByTime || getSuggestedArriveBy(draft.time) })}
+            >
+              + Add arrival time
+            </Button>
+          )
         )}
 
         {isTravel && (
@@ -1183,23 +1320,12 @@ function EventFormModal({
             ))}
           </PillRow>
           {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && attendeeChoice !== 'ME' && (
-            <PillRow label='People'>
-              {memberOptions.map((member) => (
-                <Pill
-                  key={member.value}
-                  isSelected={draft.assignedMemberIds.includes(member.value)}
-                  onClick={() =>
-                    updateDraft({
-                      assignedMemberIds: draft.assignedMemberIds.includes(member.value)
-                        ? draft.assignedMemberIds.filter((uid) => uid !== member.value)
-                        : [...draft.assignedMemberIds, member.value],
-                    })
-                  }
-                >
-                  {member.label}
-                </Pill>
-              ))}
-            </PillRow>
+            <MultiPillGroup
+              label='People'
+              options={memberOptions.map((member) => ({ value: member.value, label: member.label }))}
+              values={draft.assignedMemberIds}
+              onChange={(assignedMemberIds) => updateDraft({ assignedMemberIds })}
+            />
           )}
           <p className='text-muted-foreground text-xs'>
             Your Overview shows only the events you&apos;re part of.
@@ -1271,41 +1397,28 @@ function EventFormModal({
             removeLabel='Remove from group'
             onRemove={() => updateDraft({ isGrouped: false, groupLabel: '' })}
           >
-            <div className='space-y-2'>
-              {sameTypeGroupLabels.length > 0 && (
-                <Select
-                  options={[
-                    ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
-                    { value: ADD_NEW_OPTION, text: 'New group…' },
-                  ]}
-                  value={
-                    sameTypeGroupLabels.find(
-                      (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-                    ) ?? ADD_NEW_OPTION
-                  }
-                  onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
-                />
-              )}
-              {!sameTypeGroupLabels.some(
-                (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-              ) && (
-                <Input
-                  placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
-                  value={draft.groupLabel}
-                  onChange={(changeEvent) => updateDraft({ groupLabel: changeEvent.target.value })}
-                />
-              )}
-            </div>
+            <PickOrCreate
+              label='Group'
+              options={sameTypeGroupLabels.map((groupLabel) => ({ value: groupLabel, label: groupLabel }))}
+              choice={
+                sameTypeGroupLabels.find((groupLabel) => normalizeLabel(groupLabel) === normalizeLabel(draft.groupLabel)) ??
+                (draft.groupLabel === '' ? '' : NEW_CHOICE)
+              }
+              newText={draft.groupLabel}
+              newPillLabel='New group'
+              newPlaceholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
+              onChange={(choice, newText) => updateDraft({ groupLabel: choice === NEW_CHOICE ? newText : choice })}
+            />
           </RemovableField>
         )}
-        {draft.dayIndex !== null && draft.hasReminderOverride && (
+        {draft.dayIndex !== null && draft.hasReminderOverride && draft.reminderEnabled && (
           <RemovableField
             label='Reminder'
-            removeLabel='Reset reminder'
+            removeLabel="Don't remind me"
             onRemove={() =>
               updateDraft({
                 hasReminderOverride: false,
-                reminderEnabled: true,
+                reminderEnabled: false,
                 reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
               })
             }
@@ -1313,7 +1426,6 @@ function EventFormModal({
             <div className='flex items-center gap-2'>
               <Select
                 className='flex-1'
-                disabled={!draft.reminderEnabled}
                 options={reminderHourOptions}
                 value={String(Math.floor(draft.reminderMinutesBefore / 60))}
                 onChange={(value) =>
@@ -1327,7 +1439,6 @@ function EventFormModal({
               />
               <Select
                 className='flex-1'
-                disabled={!draft.reminderEnabled}
                 options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
                 value={String(draft.reminderMinutesBefore % 60)}
                 onChange={(value) =>
@@ -1341,13 +1452,6 @@ function EventFormModal({
               />
               <span className='text-muted-foreground shrink-0 text-sm'>before</span>
             </div>
-            <label className='flex items-center gap-2 text-sm'>
-              <Checkbox
-                checked={!draft.reminderEnabled}
-                onCheckedChange={(checked) => updateDraft({ reminderEnabled: checked !== true })}
-              />
-              Don&apos;t remind me
-            </label>
             {reminderText !== null && (
               <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
             )}
@@ -1408,6 +1512,7 @@ function EventFormModal({
         {(error ?? timeError) && (
           <p className='text-destructive text-sm'>{error ?? timeError}</p>
         )}
+        {isPhone && addAnotherFlightButton}
         <ModalFooterActions
           leftActions={
             event &&
@@ -1422,16 +1527,7 @@ function EventFormModal({
           }
           rightActions={
             <>
-              {isTravel && transitType === 'FLIGHT' && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isSubmitting || timeError !== null}
-                  onClick={() => void handleSubmit(true)}
-                >
-                  Add another flight
-                </Button>
-              )}
+              {!isPhone && addAnotherFlightButton}
               <Button
                 type='button'
                 loading={isSubmitting}

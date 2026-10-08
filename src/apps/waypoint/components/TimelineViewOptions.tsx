@@ -11,6 +11,7 @@ interface ViewOption {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  defaultChecked: boolean;
   /** Counts toward the badge on the trigger when the option differs from its default. */
   isCustomized: boolean;
 }
@@ -30,11 +31,14 @@ function TimelineViewOptions({ groups }: TimelineViewOptionsProps) {
   const customizedCount = groups.flatMap((group) => group.options).filter((option) => option.isCustomized).length;
 
   const trigger = (
-    <Button type='button' variant='tertiary' size='sm' className='gap-2' onClick={() => setIsOpen((open) => !open)}>
+    <Button type='button' variant='tertiary' size='sm' className="relative gap-2 whitespace-nowrap before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']" onClick={() => setIsOpen((open) => !open)}>
       <IconBadge icon={<SlidersHorizontal className='h-4 w-4' />} count={customizedCount} />
       View options
     </Button>
   );
+
+  const resetToDefaults = () =>
+    groups.flatMap((group) => group.options).forEach((option) => option.checked !== option.defaultChecked && option.onChange(option.defaultChecked));
 
   const content = (
     <div className='space-y-4'>
@@ -51,6 +55,11 @@ function TimelineViewOptions({ groups }: TimelineViewOptionsProps) {
           </div>
         </div>
       ))}
+      {customizedCount > 0 && (
+        <Button type='button' variant='secondary' size='sm' className='w-full' onClick={resetToDefaults}>
+          Reset to defaults
+        </Button>
+      )}
     </div>
   );
 

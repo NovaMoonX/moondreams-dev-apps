@@ -148,9 +148,15 @@ service cloud.firestore {
         return value == null || (value is string && value.size() > 0 && value.size() <= maxSize);
       }
 
+      function isNullOrTimeZone(value) {
+        return value == null || (value is string && value.size() <= 64 && value.matches('^[A-Za-z]+(/[A-Za-z0-9_+-]+)+$'));
+      }
+
       function isTheatreSnapshotValid(theatre) {
         let keys = ['theatreId', 'name', 'city', 'state'];
-        return theatre is map && theatre.keys().hasOnly(keys) && theatre.keys().hasAll(keys)
+        // `timeZone` arrived later: older snapshots lack it, so it is allowed but not required.
+        return theatre is map && theatre.keys().hasOnly(keys.concat(['timeZone'])) && theatre.keys().hasAll(keys)
+          && isNullOrTimeZone(theatre.get('timeZone', null))
           && isTheatreId(theatre.theatreId)
           && theatre.name is string && theatre.name.size() > 0 && theatre.name.size() <= 120
           && isOptionalText(theatre.city, 80)
@@ -161,7 +167,9 @@ service cloud.firestore {
         function isTheatreValid(data) {
           let keys = ['theatreId', 'name', 'addressLine', 'city', 'state', 'postalCode',
                       'latitude', 'longitude', 'createdAt', 'lastEditedAt'];
-          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          // `timeZone` arrived later: older documents lack it, so it is allowed but not required.
+          return data.keys().hasOnly(keys.concat(['timeZone'])) && data.keys().hasAll(keys)
+            && isNullOrTimeZone(data.get('timeZone', null))
             && data.theatreId == theatreId
             && isTheatreId(theatreId)
             && data.name is string && data.name.size() > 0 && data.name.size() <= 120
@@ -246,8 +254,8 @@ service cloud.firestore {
       match /viewings/{viewingId} {
         function isViewingValid(data) {
           let required = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
-          // `ticket`, `rating`, `theatre` and `purchase` arrived later: legacy documents lack them, so they're allowed but not required.
-          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre', 'purchase'])) && data.keys().hasAll(required)
+          // `ticket`, `rating`, `theatre`, `trailerReminderId` and `purchase` arrived later: legacy documents lack them, so they're allowed but not required.
+          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre', 'trailerReminderId', 'purchase'])) && data.keys().hasAll(required)
             && data.id == viewingId
             && data.movieKey is string
             && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
@@ -259,6 +267,7 @@ service cloud.firestore {
             && (data.status == 'PLANNED' || data.showtimeAt <= request.time.toMillis())
             && (data.get('ticket', null) == null || isTicketValid(data.ticket))
             && (data.get('theatre', null) == null || isTheatreSnapshotValid(data.theatre))
+            && (data.get('trailerReminderId', null) == null || data.trailerReminderId is string)
             && (data.get('purchase', null) == null || isPurchaseValid(data.purchase))
             && isNullOrHalfStars(data.get('rating', null))
             && (data.status == 'SEEN' || data.get('rating', null) == null)
@@ -300,6 +309,46 @@ service cloud.firestore {
 
     match /apps/a-list/lookupUsage/{key} {
       allow read, write: if false;
+    }
+
+    // A calendar share is addressed by an unguessable id, so it can't nest under the owner's uid;
+    // `ownerUid` stands in. Visitors never read it: a server function checks the PIN with the
+    // admin SDK and returns only the allowlisted fields.
+    match /apps/a-list/calendarShares/{shareId} {
+      function isShareOwner() {
+        return request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
+
+      function isSharePin(value) {
+        return value == null || (value is string && value.matches('^[2-9A-HJ-NP-Z]{4}$'));
+      }
+
+      function isShareCreateValid(data) {
+        let keys = ['id', 'ownerUid', 'startDate', 'endDate', 'pin', 'viewings', 'createdAt', 'lastEditedAt'];
+        return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          && data.id == shareId
+          && shareId.matches('^[2-9a-hj-np-z]{26}$')
+          && data.ownerUid == request.auth.uid
+          && data.startDate is int && data.endDate is int
+          && data.endDate >= data.startDate
+          && data.endDate - data.startDate <= 365 * 86400000
+          && isSharePin(data.pin)
+          && data.viewings is list && data.viewings.size() > 0 && data.viewings.size() <= 400
+          && data.createdAt is int
+          && data.lastEditedAt is int;
+      }
+
+      // A share is a snapshot: the only thing the owner can change afterwards is its PIN.
+      function isShareUpdateValid() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin', 'lastEditedAt'])
+          && isSharePin(request.resource.data.pin)
+          && request.resource.data.lastEditedAt is int;
+      }
+
+      allow read, delete: if isShareOwner();
+      allow create: if request.auth != null && isShareCreateValid(request.resource.data)
+        && exists(/databases/$(database)/documents/apps/a-list/memberships/$(request.auth.uid));
+      allow update: if isShareOwner() && isShareUpdateValid();
     }
 
     // --- App: nine-lives ---
@@ -1607,6 +1656,27 @@ service cloud.firestore {
           && resource.data.members[request.auth.uid].role == 'ADMIN';
       }
 
+      function isTripCityValid(city) {
+        return city == null || (
+          city is map
+          && city.keys().hasOnly(['name', 'region', 'country', 'latitude', 'longitude'])
+          && isNonEmptyString(city.name)
+          && city.name.size() <= 120
+          && (city.region == null || (city.region is string && city.region.size() <= 120))
+          && (city.country == null || (city.country is string && city.country.size() <= 120))
+          && city.latitude is number
+          && city.latitude >= -90
+          && city.latitude <= 90
+          && city.longitude is number
+          && city.longitude >= -180
+          && city.longitude <= 180
+        );
+      }
+
+      function isNoExpenseKeysValid(keys) {
+        return keys is list && keys.size() <= 500;
+      }
+
       function isTripFieldSetValid(data) {
         return data.keys().hasOnly([
             'id',
@@ -1623,6 +1693,8 @@ service cloud.firestore {
             'sharedAlbumSetAt',
             'timeModel',
             'timezone',
+            'city',
+            'noExpenseKeys',
             'dateShiftStatus',
             'createdBy',
             'createdAt',
@@ -1649,6 +1721,8 @@ service cloud.firestore {
             || isTimestampNumber(data.sharedAlbumSetAt))
           && (!('timeModel' in data) || data.timeModel in ['RELATIVE', 'ABSOLUTE'])
           && (!('timezone' in data) || data.timezone == null || isNonEmptyString(data.timezone))
+          && isTripCityValid(data.get('city', null))
+          && isNoExpenseKeysValid(data.get('noExpenseKeys', []))
           && (!('dateShiftStatus' in data)
             || data.dateShiftStatus == null
             || data.dateShiftStatus in ['IDLE', 'PENDING'])
@@ -1715,6 +1789,7 @@ service cloud.firestore {
             'startDate',
             'endDate',
             'timezone',
+            'city',
             'defaultCurrency',
             'lastEditedAt'
           ])
@@ -1727,6 +1802,14 @@ service cloud.firestore {
               && request.resource.data.get('timezone', null) == resource.data.get('timezone', null)
             )
           );
+      }
+
+      function isTripNoExpenseUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'noExpenseKeys',
+            'lastEditedAt'
+          ])
+          && isTripUpdateValid();
       }
 
       function isTripAlbumUpdate() {
@@ -1827,6 +1910,7 @@ service cloud.firestore {
       allow create: if isTripCreateValid();
       allow update: if (isTripMember() && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
+         || (isTripEditorOrAdmin() && isTripNoExpenseUpdate())
          || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
         || isTripMembershipApprovalValid()
@@ -2013,6 +2097,20 @@ service cloud.firestore {
         return isRelativeTrip(trip) ? isRelativeEventTimeValid(data) : isAbsoluteEventTimeValid(data);
       }
 
+      function isArriveByValid(data) {
+        let time = data.get('arriveByTime', null);
+        let note = data.get('arriveByNote', null);
+        return (time == null || (
+            time is string
+            && time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && data.eventType in ['DINING', 'ACTIVITY']
+            && data.get('dayIndex', null) is int
+            && data.get('startTime', null) is string
+            && time < data.startTime
+          ))
+          && (note == null || (note is string && note.size() <= 500 && time != null));
+      }
+
       function isEventShapeValid() {
         return request.resource.data.keys().hasOnly([
             'id',
@@ -2037,6 +2135,8 @@ service cloud.firestore {
             'assignedMemberIds',
             'venueOpenTime',
             'venueCloseTime',
+            'arriveByTime',
+            'arriveByNote',
             'changeHistory',
             'place',
             'linkUrl',
@@ -2073,6 +2173,7 @@ service cloud.firestore {
           && request.resource.data.assignedMemberIds is list
           && (request.resource.data.venueOpenTime == null || isNonEmptyString(request.resource.data.venueOpenTime))
           && (request.resource.data.venueCloseTime == null || isNonEmptyString(request.resource.data.venueCloseTime))
+          && isArriveByValid(request.resource.data)
           && (request.resource.data.place == null || (
             request.resource.data.place is map
             && request.resource.data.place.placeId is string
@@ -2792,13 +2893,24 @@ service cloud.firestore {
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
+      // Shape only: a target deleted later leaves a link that reads as none, and must never block editing the expense.
+      function isExpenseLinkValid(link) {
+        return link == null || (
+          link is map
+          && link.keys().hasOnly(['kind', 'id'])
+          && link.kind in ['EVENT', 'STAY', 'RENTAL']
+          && isNonEmptyString(link.id)
+          && link.id.size() <= 128
+        );
+      }
+
       function isTripExpenseValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
             'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'category',
             'customCategoryLabel', 'targetType', 'targetMemberIds', 'splitAmounts',
-            'paidMemberStatus', 'note', 'groupLabel', 'isPerPerson',
-            'createdBy', 'createdAt', 'lastEditedAt'
+            'paidMemberStatus', 'earlyPayments', 'note', 'groupLabel', 'isPerPerson',
+            'linkedTo', 'createdBy', 'createdAt', 'lastEditedAt'
           ])
           && data.id == expenseId
           && data.tripId == tripId
@@ -2825,25 +2937,90 @@ service cloud.firestore {
           && data.targetMemberIds is list
           && (data.splitAmounts == null || data.splitAmounts is map)
           && data.paidMemberStatus is map
+          && data.get('earlyPayments', {}) is map
           && (data.note == null || data.note is string)
           && (data.groupLabel == null || isNonEmptyString(data.groupLabel))
           && data.get('isPerPerson', false) is bool
+          && isExpenseLinkValid(data.get('linkedTo', null))
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);
       }
 
+      function isNewExpenseTargetValid(data) {
+        return data.targetType == 'EVERYONE_CURRENT'
+          || (data.targetType == 'SPECIFIC_MEMBERS'
+            && data.targetMemberIds.size() > 0
+            && data.targetMemberIds.hasOnly(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members.keys()));
+      }
+
+      function earlyPaymentsOf(data) {
+        return data.get('earlyPayments', {});
+      }
+
+      function isEarlyPaymentEntryValid(entry) {
+        return entry.keys().hasOnly(['toUid', 'amount', 'paidAt', 'isReturned', 'returnedAt'])
+          && entry.toUid is string
+          && entry.toUid != request.auth.uid
+          && entry.toUid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members
+          && entry.amount is number
+          && entry.amount > 0
+          && entry.amount * 100 == math.floor(entry.amount * 100)
+          && isTimestampNumber(entry.paidAt)
+          && entry.isReturned is bool
+          && (entry.returnedAt == null || isTimestampNumber(entry.returnedAt))
+          && entry.isReturned == (entry.returnedAt != null);
+      }
+
+      // Everyone-expenses cover whoever is on the trip now; the other targets list their people.
+      function isEarlyPaymentPartOfSplit() {
+        let targetType = resource.data.targetType;
+        return targetType in ['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE']
+          || (targetType == 'SPECIFIC_MEMBERS' && request.auth.uid in resource.data.targetMemberIds)
+          || (targetType == 'JUST_ME' && request.auth.uid == resource.data.payerUid);
+      }
+
+      // Nobody sends more than the whole expense (at its highest estimate, times the headcount when per person).
+      function isEarlyPaymentAmountBounded(entry) {
+        let data = resource.data;
+        let top = data.amount != null ? data.amount : data.amountMax;
+        let headcount = data.get('isPerPerson', false)
+          ? get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members.size()
+          : 1;
+        return entry.amount <= top * headcount;
+      }
+
+      function isEarlyPaymentWriteValid(before, entry) {
+        return isEarlyPaymentEntryValid(entry)
+          && isEarlyPaymentPartOfSplit()
+          && (resource.data.status != 'EXPECTED' || isEarlyPaymentAmountBounded(entry))
+          && (resource.data.status == 'EXPECTED'
+            || (request.auth.uid in before
+              && entry.diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt'])));
+      }
+
+      // A member writes only their own early-payment entry. It can be made, changed or removed while
+      // the expense is still expected; once paid, only its returned flag can change (or it be removed).
+      function isOwnEarlyPaymentChangeValid() {
+        let before = earlyPaymentsOf(resource.data);
+        let after = earlyPaymentsOf(request.resource.data);
+        return after.diff(before).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in after) || isEarlyPaymentWriteValid(before, after[request.auth.uid]));
+      }
+
       allow read: if isTripExpenseMember();
       allow create: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
-        && request.resource.data.targetType == 'EVERYONE_CURRENT'
+        && isNewExpenseTargetValid(request.resource.data)
+        && earlyPaymentsOf(request.resource.data).size() == 0
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
         && request.resource.data.id == resource.data.id
         && request.resource.data.tripId == resource.data.tripId
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && earlyPaymentsOf(request.resource.data) == earlyPaymentsOf(resource.data);
       allow update: if isTripExpenseMember()
         && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
           || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
@@ -2853,7 +3030,92 @@ service cloud.firestore {
         && request.resource.data.paidMemberStatus[request.auth.uid].isPaid is bool
         && (request.resource.data.paidMemberStatus[request.auth.uid].paidAt == null
           || isTimestampNumber(request.resource.data.paidMemberStatus[request.auth.uid].paidAt));
-      allow delete: if isTripExpenseEditor();
+      allow update: if isTripExpenseMember()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
+        && isOwnEarlyPaymentChangeValid();
+      // An editor can take an early payment off an expense (a wrong claim, or its author has left),
+      // never add or change one.
+      allow update: if isTripExpenseEditor()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
+        && earlyPaymentsOf(request.resource.data).diff(earlyPaymentsOf(resource.data)).affectedKeys()
+          .intersection(earlyPaymentsOf(request.resource.data).keys().toSet()).size() == 0;
+      allow delete: if isTripExpenseEditor()
+        && earlyPaymentsOf(resource.data).size() == 0;
+    }
+
+    // Private to its owner: no one else on the trip can read or change it.
+    match /apps/waypoint/personalExpenses/{uid}/items/{expenseId} {
+      function isPersonalExpenseValid(data) {
+        return data.keys().hasOnly([
+            'id', 'tripId', 'dayIndex', 'title', 'amount', 'currency', 'status',
+            'category', 'customCategoryLabel', 'note', 'createdAt', 'lastEditedAt'
+          ])
+          && data.id == expenseId
+          && isNonEmptyString(data.tripId)
+          && (data.dayIndex == null || data.dayIndex is int)
+          && isNonEmptyString(data.title)
+          && data.title.size() <= 200
+          && data.amount is number
+          && data.amount >= 0
+          && data.amount <= 1000000000
+          && isNonEmptyString(data.currency)
+          && data.currency.size() <= 3
+          && data.status in ['PAID', 'EXPECTED']
+          && data.category in ['FOOD', 'TRANSPORT', 'LODGING', 'ACTIVITIES', 'SHOPPING', 'OTHER']
+          && (data.customCategoryLabel == null || (isNonEmptyString(data.customCategoryLabel) && data.customCategoryLabel.size() <= 60))
+          && (data.note == null || (data.note is string && data.note.size() <= 2000))
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.members
+        && isPersonalExpenseValid(request.resource.data);
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && isPersonalExpenseValid(request.resource.data)
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // Private to its owner, like personalExpenses: never on Overview, never read by another member.
+    match /apps/waypoint/personalChecklist/{uid}/items/{itemId} {
+      function isPersonalChecklistValid(data) {
+        return data.keys().hasOnly([
+            'id', 'tripId', 'title', 'category', 'customCategoryLabel', 'note', 'completeByDayIndex',
+            'assignedToUids', 'isCompleted', 'markedCompletedByUid', 'markedCompletedAt',
+            'createdBy', 'createdAt', 'lastEditedAt'
+          ])
+          && data.id == itemId
+          && isNonEmptyString(data.tripId)
+          && isNonEmptyString(data.title)
+          && data.title.size() <= 200
+          && data.category in ['DOCUMENTS', 'PACKING', 'BOOKINGS', 'LOGISTICS', 'OTHER']
+          && (data.customCategoryLabel == null || (isNonEmptyString(data.customCategoryLabel) && data.customCategoryLabel.size() <= 60))
+          && (data.category != 'OTHER' || isNonEmptyString(data.customCategoryLabel))
+          && (data.note == null || (data.note is string && data.note.size() <= 2000))
+          && (data.completeByDayIndex == null || data.completeByDayIndex is int)
+          && data.assignedToUids == []
+          && data.isCompleted is bool
+          && (data.markedCompletedByUid == null || data.markedCompletedByUid == uid)
+          && (data.markedCompletedAt == null || isTimestampNumber(data.markedCompletedAt))
+          && data.createdBy == uid
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.members
+        && isPersonalChecklistValid(request.resource.data);
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && isPersonalChecklistValid(request.resource.data)
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.createdAt == resource.data.createdAt;
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {

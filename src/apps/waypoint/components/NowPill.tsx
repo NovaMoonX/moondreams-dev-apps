@@ -13,7 +13,7 @@ import {
   formatDuration,
 } from '@/utils/formatUtils';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -23,7 +23,7 @@ import {
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { getEventTime } from '@apps/waypoint/utils/tripTime';
+import { formatEventArriveBy, getEventArriveByMs, getEventTime } from '@apps/waypoint/utils/tripTime';
 
 interface NowPillProps {
   trip: TripSpace;
@@ -43,6 +43,11 @@ function getStatusLine(
     return endMs !== null ? `Now · ${formatDuration(endMs - now)} left` : 'Now';
   }
   const when = startTime ? formatClockTime(startTime) : '';
+  const arriveBy = formatEventArriveBy(trip, event);
+  const arriveByMs = getEventArriveByMs(trip, event);
+  if (arriveBy && arriveByMs !== null && arriveByMs - now >= 60_000) {
+    return `Up next · Arrive ${arriveBy} · ${formatCountdown(arriveByMs, now)}`;
+  }
   return startMs !== null
     ? `Up next · ${when} · ${formatCountdown(startMs, now)}`
     : `Up next · ${when}`;
@@ -193,7 +198,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
     );
     const shownIndex = rows.findIndex((row) => row.rowView === view);
     return (
-      <div className='bg-background/95 border-border fixed inset-x-0 bottom-9 z-20 border-t backdrop-blur'>
+      <div className='bg-background/95 border-border fixed inset-x-0 bottom-10 z-20 border-t backdrop-blur'>
         <div className='mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-1'>
           <div role='status' className='h-12 min-w-0 flex-1 overflow-hidden'>
             <div
@@ -265,7 +270,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
           >
             <div className='space-y-4'>
               {getDisplayImage(openEvent) && (
-                <EnrichedImage
+                <FallbackImage
                   src={getDisplayImage(openEvent) as string}
                   alt=''
                   className='aspect-video w-full rounded-lg object-cover'

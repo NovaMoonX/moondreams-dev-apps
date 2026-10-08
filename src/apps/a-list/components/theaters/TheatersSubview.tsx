@@ -8,16 +8,26 @@ import Subview, { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import TheaterFinder from '@apps/a-list/components/theaters/TheaterFinder';
 import TheaterList from '@apps/a-list/components/theaters/TheaterList';
 import TheaterPicker from '@apps/a-list/components/theaters/TheaterPicker';
 import { MAX_THEATRES } from '@apps/a-list/constants';
 import {
   addTheatre,
+  linkTheatre,
   removeTheatre,
   setFavoriteTheatre,
 } from '@apps/a-list/store/actions/theatreActions';
-import { selectMembership, selectTheatres } from '@apps/a-list/store/selectors';
-import type { TheatreDraft, TheatreSnapshot } from '@apps/a-list/types';
+import {
+  selectMembership,
+  selectShowingCountByTheatreId,
+  selectTheatres,
+} from '@apps/a-list/store/selectors';
+import type {
+  TheatreSearchResult,
+  TheatreSnapshot,
+  TheatreDraft,
+} from '@apps/a-list/types';
 
 interface TheatersSubviewProps {
   onClose: () => void;
@@ -30,7 +40,9 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
   const { confirm } = useActionModal();
   const theatres = useAppSelector(selectTheatres);
   const membership = useAppSelector(selectMembership);
+  const showingCounts = useAppSelector(selectShowingCountByTheatreId);
   const [isAdding, setIsAdding] = useState(false);
+  const [linking, setLinking] = useState<TheatreSnapshot | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const favoriteId = membership?.favoriteTheatreId ?? null;
 
@@ -73,6 +85,32 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
     return didSave;
   };
 
+  const handleLink = async (target: TheatreSearchResult) => {
+    if (!linking) {
+      return;
+    }
+
+    const didLink = await run(
+      () =>
+        dispatch(
+          linkTheatre({
+            uid: user.uid,
+            fromTheatreId: linking.theatreId,
+            to: target,
+          }),
+        ).unwrap(),
+      'Unable to link this theater.',
+    );
+    if (didLink) {
+      addToast({
+        title: 'Linked',
+        description: `${linking.name} is now ${target.name}.`,
+        type: 'success',
+      });
+      setLinking(null);
+    }
+  };
+
   const handleToggleFavorite = (theatreId: string) =>
     run(
       () =>
@@ -110,6 +148,34 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
       'Unable to remove this theater.',
     );
   };
+
+  if (linking) {
+    const taggedCount = showingCounts[linking.theatreId] ?? 0;
+    return (
+      <Subview onClose={onClose}>
+        <SubviewHeader
+          title='Back to theaters'
+          onBack={() => setLinking(null)}
+        />
+        <div className='space-y-3'>
+          <div className='space-y-1'>
+            <h3 className='font-medium'>Link {linking.name} to AMC</h3>
+            <p className='text-muted-foreground text-sm'>
+              {taggedCount === 0
+                ? 'Find it in AMC’s list and it becomes the real theater.'
+                : `Find it in AMC’s list and ${taggedCount === 1 ? 'the 1 showing' : `the ${taggedCount} showings`} tagged with it switch over, so nothing needs re-tagging.`}
+            </p>
+          </div>
+          <TheaterFinder
+            savedIds={[]}
+            isDisabled={isSaving}
+            actionLabel='Link'
+            onAdd={(target) => void handleLink(target)}
+          />
+        </div>
+      </Subview>
+    );
+  }
 
   if (isAdding) {
     return (
@@ -168,6 +234,7 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
                 void handleToggleFavorite(theatreId)
               }
               onRemove={(theatre) => void handleRemove(theatre)}
+              onLink={setLinking}
             />
             <p className='text-muted-foreground text-sm'>
               Your favorite is the one we pick first when you add a movie.

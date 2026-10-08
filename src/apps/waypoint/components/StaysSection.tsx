@@ -3,7 +3,9 @@ import { useRef, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { getStaySubject } from '@apps/waypoint/utils/relatedSubjects';
 import StayCard from '@apps/waypoint/components/StayCard';
+import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import SectionHeader from '@/components/SectionHeader';
 import StayFormModal from '@apps/waypoint/components/StayFormModal';
 import {
@@ -40,6 +42,7 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
   const canEditExisting = canEditExistingItem(trip, currentUserId);
   const { confirm } = useActionModal();
   const { addToast } = useToast();
+  const { startFollowUp } = useRelatedFlow();
   const events = useAppSelector(selectTimelineEvents);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
 
@@ -52,7 +55,8 @@ export function StaysSection({ trip, currentUserId }: StaysSectionProps) {
           updateStay({ uid: currentUserId, trip, stayId: editingStay.id, stay, previousStay: editingStay }),
         ).unwrap();
       } else {
-        await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();
+        const created = await dispatch(createStay({ uid: currentUserId, trip, stay })).unwrap();
+        startFollowUp(getStaySubject(trip, created));
       }
       setIsModalOpen(false);
       setEditingStay(undefined);

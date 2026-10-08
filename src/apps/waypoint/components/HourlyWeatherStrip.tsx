@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { HourForecast } from '@/lib/weather/types';
@@ -6,7 +8,12 @@ import WeatherEmoji from '@apps/waypoint/components/WeatherEmoji';
 
 interface HourlyWeatherStripProps {
   hours: HourForecast[];
+  /** Labels the first hour "Now"; off for a whole day, whose first hour is midnight. */
+  showNow?: boolean;
 }
+
+const FIRST_VISIBLE_HOUR = 7;
+const HOUR_CELL_WIDTH = 60;
 
 const formatHourLabel = (time: string) => {
   const hour = Number(time.slice(11, 13));
@@ -14,15 +21,29 @@ const formatHourLabel = (time: string) => {
   return result;
 };
 
-function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
+function HourlyWeatherStrip({ hours, showNow = true }: HourlyWeatherStripProps) {
   const showPrecip = hours.some((hour) => hour.precipChance !== null && hour.precipChance >= 20);
+  const listRef = useRef<HTMLUListElement>(null);
+  const firstDaytimeIndex = Math.max(0, hours.findIndex((hour) => Number(hour.time.slice(11, 13)) >= FIRST_VISIBLE_HOUR));
+
+  useLayoutEffect(() => {
+    if (showNow || !listRef.current) {
+      return;
+    }
+    listRef.current.scrollLeft = firstDaytimeIndex * HOUR_CELL_WIDTH;
+  }, [showNow, firstDaytimeIndex]);
 
   return (
-    <ul className='-mx-1 flex gap-1 overflow-x-auto px-1' aria-label='Hour by hour weather'>
+    <ul
+      ref={listRef}
+      className='-mx-1 flex gap-1 overflow-x-auto px-1'
+      aria-label='Hour by hour weather'
+    >
       {hours.map((hour, index) => {
         const condition = getWeatherCondition(hour.weatherCode);
         const { label } = condition;
-        const timeLabel = index === 0 ? 'Now' : formatHourLabel(hour.time);
+        const isNow = showNow && index === 0;
+        const timeLabel = isNow ? 'Now' : formatHourLabel(hour.time);
         const tempLabel = hour.temp === null ? 'temperature unavailable' : `${Math.round(hour.temp)} degrees`;
         return (
           <li
@@ -31,13 +52,13 @@ function HourlyWeatherStrip({ hours }: HourlyWeatherStripProps) {
             aria-label={`${timeLabel}: ${label}, ${tempLabel}`}
             className={join(
               'flex w-14 shrink-0 flex-col items-center gap-1 rounded-md px-1 py-1.5 text-xs',
-              index === 0 && 'bg-primary/10',
+              isNow && 'bg-primary/10',
             )}
           >
             <span
               className={join(
                 'text-muted-foreground leading-4 whitespace-nowrap',
-                index === 0 && 'text-foreground font-medium',
+                isNow && 'text-foreground font-medium',
               )}
             >
               {timeLabel}

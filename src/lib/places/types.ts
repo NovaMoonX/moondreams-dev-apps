@@ -1,7 +1,7 @@
 /** A Google Places (New) pick, resolved once at selection time and stored on
  * whatever doc references it. Only `placeId` is safe to keep indefinitely per
  * Google's terms — the rest is refreshed on a cooldown rather than treated as
- * permanent (see `EnrichedImage`'s refresh policy). */
+ * permanent (see `FallbackImage`; photo URLs are not refreshed, so one that goes stale just stops showing). */
 export interface PlaceRef {
   placeId: string;
   mapsUrl: string;

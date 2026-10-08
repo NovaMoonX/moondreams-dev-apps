@@ -9,7 +9,7 @@ export type ExpenseTargetType =
   | 'SPECIFIC_MEMBERS';
 export type ExpenseStatus = 'PAID' | 'EXPECTED';
 export type ExpenseSortBy = 'day' | 'amount-desc' | 'amount-asc';
-export type ExpenseTotalsView = 'per-person' | 'group';
+export type ExpenseTotalsView = 'per-person' | 'group' | 'me';
 export type ExpenseCategory =
   | 'FOOD'
   | 'TRANSPORT'
@@ -39,6 +39,15 @@ export type TripDateShiftStatus = 'IDLE' | 'PENDING';
  * changing the trip's dates moves everything with it. A trip document with no `timeModel` is `ABSOLUTE`. */
 export type TripTimeModel = 'RELATIVE' | 'ABSOLUTE';
 
+/** Where the trip is based, for the weather. Chosen from a city search; `null` until someone sets one. */
+export interface TripCity {
+  name: string;
+  region: string | null;
+  country: string | null;
+  latitude: number;
+  longitude: number;
+}
+
 export interface TripSpace {
   id: string;
   title: string;
@@ -57,6 +66,10 @@ export interface TripSpace {
   /** IANA zone the trip's wall-clock times default to; an event or stay can override it.
    * `null` on `ABSOLUTE` trips, which never had one. */
   timezone: string | null;
+  /** Older documents lack it. */
+  city: TripCity | null;
+  /** Link keys (`getExpenseLinkKey`) of plans whose owner said no expense is needed. Older documents lack it. */
+  noExpenseKeys: string[];
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
    * field keep their history. New trips write `null`.
@@ -178,6 +191,25 @@ export interface Rental {
   lastEditedAt: number;
 }
 
+/** Money one member sent another ahead of an expected expense, so the Dues summary can offset it
+ * once the expense is paid, or show it owed back if the plan falls through. */
+export interface EarlyPayment {
+  toUid: string;
+  amount: number;
+  paidAt: number;
+  /** The recipient sent it back (or it was settled outside the app), so it no longer offsets anything. */
+  isReturned: boolean;
+  returnedAt: number | null;
+}
+
+export type ExpenseLinkKind = 'EVENT' | 'STAY' | 'RENTAL';
+
+/** The event, stay or rental an expense is linked to. A target that was deleted since reads as no link. */
+export interface ExpenseLink {
+  kind: ExpenseLinkKind;
+  id: string;
+}
+
 export interface TripExpense {
   id: string;
   tripId: string;
@@ -200,9 +232,29 @@ export interface TripExpense {
   targetMemberIds: string[];
   splitAmounts: Record<string, number> | null;
   paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
+  /** Keyed by the member who paid early; older documents lack it. */
+  earlyPayments: Record<string, EarlyPayment>;
   note: string | null;
   groupLabel: string | null;
+  /** Older documents lack it. */
+  linkedTo: ExpenseLink | null;
   createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** Private to the person who wrote it: stored under their own uid, never shared with the trip's totals or dues. */
+export interface PersonalExpense {
+  id: string;
+  tripId: string;
+  dayIndex: number | null;
+  title: string;
+  amount: number;
+  currency: string;
+  status: ExpenseStatus;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
@@ -324,6 +376,7 @@ export interface EventFieldChange {
     | 'endAt'
     | 'startTime'
     | 'endTime'
+    | 'arriveByTime'
     | 'locationName'
     | 'dayIndex'
     | 'endDayIndex';
@@ -372,6 +425,11 @@ export interface TimelineEvent {
   /** Venue open/close time for the event's day, as "HH:mm" — e.g. a museum's hours. */
   venueOpenTime: string | null;
   venueCloseTime: string | null;
+  /** "HH:mm" when the group wants to be there, on `dayIndex` and in the start's zone, strictly before `startTime`.
+   * Dining and activities on `RELATIVE` trips only. Absent on events saved before it existed. */
+  arriveByTime: string | null;
+  /** Why they want to be early; only set alongside `arriveByTime`. */
+  arriveByNote: string | null;
   changeHistory: EventChangeSnapshot[];
   place: PlaceRef | null;
   /** Not meaningful for FREE_TIME events, which leave this null. */

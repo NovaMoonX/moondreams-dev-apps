@@ -1,7 +1,11 @@
+import type { PillOption } from '@/components/PillGroup';
+import type { SortOrder } from '@/components/SortControl';
 import type {
   AListTab,
   AmcFormat,
+  ShareRangeKind,
   WatchlistFilter,
+  WatchlistSort,
   WatchPriority,
 } from '@apps/a-list/types';
 
@@ -79,8 +83,11 @@ export const DEFAULT_RUNTIME_MINUTES = 120;
 export const PREVIEWS_BUFFER_MINUTES = 20;
 export const DEFAULT_SHOWTIME = '19:00';
 /** The "add from trailers" strip shows from this long before a planned showing until this long after it starts. */
-export const PREVIEWS_WINDOW_BEFORE_MINUTES = 30;
-export const PREVIEWS_WINDOW_AFTER_MINUTES = 10;
+export const PREVIEWS_WINDOW_BEFORE_MINUTES = 10;
+/** Trailers run about 20 minutes past the listed start, plus a 10-minute buffer. */
+export const PREVIEWS_WINDOW_AFTER_MINUTES = 30;
+/** Push sent this long after a planned showing starts, once the trailers are rolling. */
+export const TRAILER_REMINDER_DELAY_MINUTES = 5;
 /** AMC's week turns over on Friday (5), when new releases open; the calendar grid itself still starts on Sunday. */
 export const WEEK_STARTS_ON = 5;
 
@@ -97,11 +104,55 @@ export const MAX_TAX_CHIPS = 4;
 /** The Opening tab lists unseen movies releasing from today through this many days out. */
 export const OPENING_WINDOW_DAYS = 7;
 
-/** Pills that narrow the watchlist; none on means everything. Priorities combine with "or", the rest with "and". */
+export const WATCHLIST_SORT_OPTIONS: PillOption<WatchlistSort>[] = [
+  { value: 'default', label: 'Default', emoji: '🎟️' },
+  { value: 'releaseDate', label: 'Release date', emoji: '📅' },
+  { value: 'title', label: 'Title', emoji: '🔤' },
+  { value: 'addedAt', label: 'Date added', emoji: '🕒' },
+];
+
+/** The first option is each sort's natural direction, the second its flip. */
+export const WATCHLIST_SORT_ORDERS: Partial<
+  Record<WatchlistSort, [PillOption<SortOrder>, PillOption<SortOrder>]>
+> = {
+  releaseDate: [
+    { value: 'natural', label: 'Newest first' },
+    { value: 'reversed', label: 'Oldest first' },
+  ],
+  title: [
+    { value: 'natural', label: 'A to Z' },
+    { value: 'reversed', label: 'Z to A' },
+  ],
+  addedAt: [
+    { value: 'natural', label: 'Newest first' },
+    { value: 'reversed', label: 'Oldest first' },
+  ],
+};
+
+/** Pills that narrow the watchlist; none on means everything unseen. Priorities combine with "or", the rest with "and"; Seen swaps the list to movies already watched. */
 export const WATCHLIST_FILTERS: WatchlistFilter[] = [
   'opening',
   'MUST_SEE',
   'WANT_TO_SEE',
   'IF_I_HAVE_TIME',
   'seen',
+];
+
+export const MAX_CALENDAR_SHARES = 10;
+export const MAX_SHARE_RANGE_DAYS = 366;
+/** Matches the rules' cap on the viewings one share can hold. */
+export const MAX_SHARED_VIEWINGS = 400;
+export const SHARE_PIN_LENGTH = 4;
+export const SHARE_ID_LENGTH = 26;
+
+export const SHARE_RANGE_OPTIONS: {
+  value: ShareRangeKind;
+  label: string;
+  emoji: string;
+}[] = [
+  { value: 'THIS_MONTH', label: 'This month', emoji: '🗓️' },
+  { value: 'NEXT_MONTH', label: 'Next month', emoji: '➡️' },
+  { value: 'THIS_WEEK', label: 'This week', emoji: '⭐' },
+  { value: 'NEXT_WEEK', label: 'Next week', emoji: '⏭️' },
+  { value: 'CUSTOM', label: 'Pick dates', emoji: '✏️' },
 ];

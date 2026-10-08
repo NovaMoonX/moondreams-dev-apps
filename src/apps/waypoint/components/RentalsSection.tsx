@@ -3,7 +3,9 @@ import { useRef, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { getRentalSubject } from '@apps/waypoint/utils/relatedSubjects';
 import RentalCard from '@apps/waypoint/components/RentalCard';
+import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import RentalFormModal from '@apps/waypoint/components/RentalFormModal';
 import SectionHeader from '@/components/SectionHeader';
 import {
@@ -44,6 +46,7 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
   const canEditExisting = canEditExistingItem(trip, currentUserId);
   const { confirm } = useActionModal();
   const { addToast } = useToast();
+  const { startFollowUp } = useRelatedFlow();
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
 
   const closeModal = () => {
@@ -61,7 +64,8 @@ export function RentalsSection({ trip, currentUserId }: RentalsSectionProps) {
           updateRental({ uid: currentUserId, trip, rentalId: editingRental.id, rental }),
         ).unwrap();
       } else {
-        await dispatch(createRental({ uid: currentUserId, trip, rental })).unwrap();
+        const created = await dispatch(createRental({ uid: currentUserId, trip, rental })).unwrap();
+        startFollowUp(getRentalSubject(created));
       }
       closeModal();
     } finally {

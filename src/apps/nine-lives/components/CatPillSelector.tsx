@@ -40,7 +40,7 @@ function CatPillSelector({ catOptions, value, onValueChange, disabled, singleSel
 
   const pillClassName = (isSelected: boolean) =>
     join(
-      'flex items-center rounded-full border transition-colors',
+      'flex items-center rounded-full border !transition-none',
       isCompact ? 'gap-1 py-0.5 pr-2 pl-0.5 text-xs' : 'gap-1.5 py-1 pr-3 pl-1 text-sm',
       isSelected ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/40',
     );

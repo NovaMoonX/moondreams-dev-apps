@@ -26,6 +26,8 @@ export type AmcFormat =
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
 export type WatchlistFilter = 'opening' | WatchPriority | 'seen';
+
+export type WatchlistSort = 'default' | 'releaseDate' | 'title' | 'addedAt';
 export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
 
 export interface MovieSnapshot {
@@ -63,7 +65,8 @@ export type AListOverlay =
   | { kind: 'watchlistItem'; movieKey: string }
   | { kind: 'tickets'; view: 'paid' | 'unpriced' }
   | { kind: 'theaters' }
-  | { kind: 'membership' };
+  | { kind: 'membership' }
+  | { kind: 'share' };
 
 export interface WatchlistItem {
   /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */
@@ -96,6 +99,8 @@ export interface Viewing {
   purchase: PurchasePlan | null;
   /** 0.5–5 stars in half steps, only once seen. Older documents hold whole stars, and those written before ratings existed lack the key. */
   rating: number | null;
+  /** The pending push that nudges them to add trailers once the showing starts. Documents written before it existed lack the key. */
+  trailerReminderId: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
@@ -124,6 +129,8 @@ export interface TheatreSnapshot {
   name: string;
   city: string | null;
   state: string | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
 }
 
 /** A theater the member goes to; the document id is `theatreId`. */
@@ -137,12 +144,60 @@ export interface AListTheatre {
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
 
 /** A theater before it is saved. */
 export type TheatreDraft = Omit<AListTheatre, 'createdAt' | 'lastEditedAt'>;
+
+export type ShareRangeKind =
+  'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH' | 'CUSTOM';
+
+/** One showing as a visitor sees it: no ids, prices, ratings or anything that says whose calendar it is. */
+export interface SharedViewing {
+  title: string;
+  posterUrl: string | null;
+  runtimeMinutes: number | null;
+  contentRating: string | null;
+  /** Instant: when the showing starts. */
+  showtimeAt: number;
+  status: ViewingStatus;
+  /** Only known once a ticket is on record; null otherwise. */
+  format: AmcFormat | null;
+  theatreName: string | null;
+}
+
+/** A frozen copy of part of the calendar behind an unguessable link; later changes to the calendar never reach it. */
+export interface CalendarShare {
+  /** Equals the document id and the token in the link; immutable. */
+  id: string;
+  /** Immutable; only the owner can read, change or delete the share. */
+  ownerUid: string;
+  /** Date-only (UTC midnight): the first day included. */
+  startDate: number;
+  /** Date-only (UTC midnight): the last day included. */
+  endDate: number;
+  /** Four characters a visitor must enter; null when the link is open to anyone who has it. */
+  pin: string | null;
+  viewings: SharedViewing[];
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** What the share function returns to a visitor: the calendar without the owner or the PIN. */
+export interface SharedCalendar {
+  startDate: number;
+  endDate: number;
+  createdAt: number;
+  viewings: SharedViewing[];
+}
+
+export type SharedCalendarResult =
+  | { status: 'ok'; calendar: SharedCalendar }
+  | { status: 'pin_required' | 'wrong_pin' | 'not_found' };
 
 /** A theater found through AMC, before it is saved. */
 export interface TheatreSearchResult extends TheatreDraft {

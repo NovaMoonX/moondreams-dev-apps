@@ -20,7 +20,7 @@ function TripProgressBar({ trip, now }: TripProgressBarProps) {
   const isComplete = dayIndex >= dayCount;
 
   return (
-    <div className='mx-auto flex max-w-4xl items-center gap-2.5 px-4 py-1.5'>
+    <div className='mx-auto flex w-full max-w-4xl items-center gap-2.5 px-4 py-1.5'>
       <span className='text-muted-foreground text-[11px] font-medium whitespace-nowrap tabular-nums'>
         {isComplete ? 'Trip complete' : `Day ${currentDay} of ${dayCount}`}
       </span>

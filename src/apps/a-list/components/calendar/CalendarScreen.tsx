@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
+import { Share2 } from 'lucide-react';
 
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
@@ -9,6 +10,7 @@ import CounterRow from '@apps/a-list/components/calendar/CounterRow';
 import PosterCell from '@apps/a-list/components/calendar/PosterCell';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
+  selectCalendarShares,
   selectTheatres,
   selectViewingsByDay,
 } from '@apps/a-list/store/selectors';
@@ -54,15 +56,32 @@ function CalendarScreen() {
   };
 
   const hasViewings = Object.keys(viewingsByDay).length > 0;
+  const hasShares = useAppSelector(selectCalendarShares).length > 0;
 
   return (
     <section className='space-y-4'>
       <SectionHeader
         title='Calendar'
         action={
-          <Button type='button' size='sm' rounded='full' onClick={openAdd}>
-            + Add
-          </Button>
+          <div className='flex items-center gap-2'>
+            {(hasViewings || hasShares) && (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                rounded='full'
+                aria-label='Share calendar'
+                className="relative min-h-7 gap-1.5 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                onClick={() => openOverlay({ kind: 'share' })}
+              >
+                <Share2 className='h-4 w-4' aria-hidden='true' />
+                <span className='max-[360px]:hidden'>Share</span>
+              </Button>
+            )}
+            <Button type='button' size='sm' rounded='full' onClick={openAdd}>
+              + Add
+            </Button>
+          </div>
         }
       />
       <CounterRow now={now} />
