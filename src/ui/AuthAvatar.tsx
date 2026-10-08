@@ -17,6 +17,7 @@ import { VersionLabel } from '@components/VersionLabel';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { useMediaQuery } from '@hooks/useMediaQuery';
+import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 type AuthAvatarProps = {
@@ -42,7 +43,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { isBelow } = useMediaQuery();
-  const isAwayFromHome = pathname !== '/';
+  const canGoHome = pathname !== '/' && !IS_INSTALLED_APP;
 
   if (loading) {
     return (
@@ -59,7 +60,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   if (!user) {
     return (
       <div className='flex items-center gap-2'>
-        {isAwayFromHome && (
+        {canGoHome && (
           <Button
             variant='base'
             size='sm'
@@ -103,7 +104,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   };
 
   const navItems = [
-    ...(isAwayFromHome && isBelow('sm')
+    ...(canGoHome && isBelow('sm')
       ? [option({ label: 'Home', value: 'home', icon: <House className='size-4' /> })]
       : []),
     ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
@@ -176,7 +177,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   return (
     <>
       <div className='flex items-center gap-2'>
-        {isAwayFromHome && (
+        {canGoHome && (
           <Button
             variant='base'
             size='sm'
