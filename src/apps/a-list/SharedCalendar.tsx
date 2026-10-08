@@ -81,7 +81,7 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
       <p className='text-muted-foreground text-sm'>
         Enter the {SHARE_PIN_LENGTH}-character PIN the person who shared it sent you.
       </p>
-      <div className='flex items-center gap-2'>
+      <div className='relative'>
         <Input
           variant='outline'
           rounded='full'
@@ -94,7 +94,7 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
           spellCheck={false}
           placeholder='••••'
           className={join(
-            'text-center text-lg font-semibold tracking-[0.4em] uppercase',
+            'px-12 text-center text-lg font-semibold tracking-[0.4em] uppercase',
             !isShown && '[-webkit-text-security:disc]',
           )}
           value={pin}
@@ -115,7 +115,7 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
           rounded='full'
           aria-label={isShown ? 'Hide PIN' : 'Show PIN'}
           aria-pressed={isShown}
-          className='size-10 min-w-10 shrink-0'
+          className='absolute top-1/2 right-1 size-10 min-w-10 -translate-y-1/2'
           onClick={() => setIsShown((current) => !current)}
         >
           {isShown ? <EyeOff className='h-5 w-5' /> : <Eye className='h-5 w-5' />}
