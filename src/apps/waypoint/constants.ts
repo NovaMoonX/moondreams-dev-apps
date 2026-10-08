@@ -314,7 +314,7 @@ export const CHECKLIST_CATEGORY_EMOJIS: Record<ChecklistCategory, string> = {
   PACKING: '🧳',
   BOOKINGS: '🎟️',
   LOGISTICS: '🗺️',
-  OTHER: '✨',
+  OTHER: '📌',
 };
 
 export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
