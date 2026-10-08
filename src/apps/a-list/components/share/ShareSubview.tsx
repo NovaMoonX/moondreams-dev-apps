@@ -8,6 +8,7 @@ import Subview, { SubviewHeader } from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateTime } from '@/utils/formatUtils';
 import ShareCreateForm from '@apps/a-list/components/share/ShareCreateForm';
 import ShareRow from '@apps/a-list/components/share/ShareRow';
 import { MAX_CALENDAR_SHARES } from '@apps/a-list/constants';
@@ -93,7 +94,7 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
   const handleDelete = async (share: CalendarShare) => {
     const confirmed = await confirm({
       title: 'Delete link',
-      message: `Delete the link for ${formatShareRange(share.startDate, share.endDate)}? Anyone who has it will lose access right away, and this can't be undone.`,
+      message: `Delete the link for ${formatShareRange(share.startDate, share.endDate)}${share.pin ? ` (PIN ${share.pin})` : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away, and this can't be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });
@@ -111,7 +112,7 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
     return (
       <Subview onClose={onClose}>
         <SubviewHeader
-          title='Back to shared calendars'
+          title='Back to links'
           onBack={() => setIsCreating(false)}
         />
         <ShareCreateForm
@@ -185,7 +186,7 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
               : `${shares.length} of ${MAX_CALENDAR_SHARES} links`
           }
           action={
-            !isFull && !loadError ? (
+            !isFull && !loadError && viewings.length > 0 ? (
               <Button
                 type='button'
                 size='sm'

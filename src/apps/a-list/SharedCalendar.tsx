@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 
+import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import { formatDate, formatDuration, formatTime } from '@/utils/formatUtils';
 import { fromLocalDateAndTimeInputValues } from '@/utils/dateInputUtils';
@@ -18,6 +19,8 @@ import {
   formatShareRange,
   groupSharedViewingsByDay,
 } from '@apps/a-list/utils/sharing';
+
+const EAGER_DAYS = 4;
 
 const dayFormatter = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -43,6 +46,7 @@ interface PinGateProps {
 
 function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
   const [pin, setPin] = useState('');
+  const [hasEdited, setHasEdited] = useState(false);
   const canSubmit = pin.trim().length === SHARE_PIN_LENGTH && !isChecking;
 
   return (
@@ -50,7 +54,10 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
       className='mx-auto max-w-sm space-y-4 py-16 text-center'
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSubmit) onSubmit(pin.trim());
+        if (canSubmit) {
+          setHasEdited(false);
+          onSubmit(pin.trim());
+        }
       }}
     >
       <p className='text-5xl' aria-hidden='true'>🔒</p>
@@ -67,11 +74,15 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
         autoCorrect='off'
         spellCheck={false}
         maxLength={SHARE_PIN_LENGTH}
+        placeholder='••••'
         className='text-center text-lg font-semibold tracking-[0.4em] uppercase'
         value={pin}
-        onChange={(event) => setPin(event.target.value.toUpperCase())}
+        onChange={(event) => {
+          setPin(event.target.value.toUpperCase());
+          setHasEdited(true);
+        }}
       />
-      {isWrong && !isChecking && (
+      {isWrong && !isChecking && !hasEdited && (
         <p className='text-destructive text-sm' role='alert'>
           That PIN didn&apos;t match. Check it and try again.
         </p>
@@ -118,7 +129,10 @@ function SharedViewingRow({ viewing }: { viewing: SharedViewing }) {
 }
 
 function CalendarView({ calendar }: { calendar: SharedCalendarData }) {
-  const days = groupSharedViewingsByDay(calendar.viewings);
+  const days = useMemo(
+    () => groupSharedViewingsByDay(calendar.viewings),
+    [calendar.viewings],
+  );
   const movieCount = calendar.viewings.length;
 
   return (
@@ -133,23 +147,33 @@ function CalendarView({ calendar }: { calendar: SharedCalendarData }) {
       {days.length === 0 && (
         <p className='text-muted-foreground py-6 text-center text-sm'>🍿 Nothing on this calendar.</p>
       )}
-      {days.map(({ dayKey, viewings }) => (
-        <section key={dayKey} className='space-y-1'>
-          <SectionDivider
-            label={dayFormatter.format(fromLocalDateAndTimeInputValues(dayKey, '12:00') ?? 0)}
-          />
-          <ul className='divide-border divide-y'>
-            {viewings.map((viewing) => (
-              <SharedViewingRow key={`${viewing.showtimeAt}-${viewing.title}`} viewing={viewing} />
-            ))}
-          </ul>
-        </section>
-      ))}
+      {days.map(({ dayKey, viewings }, dayPosition) => {
+        const estimatedHeight = 28 + viewings.length * 101;
+        return (
+          <section
+            key={dayKey}
+            className='defer-offscreen space-y-1'
+            style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
+          >
+            <SectionDivider
+              label={dayFormatter.format(fromLocalDateAndTimeInputValues(dayKey, '12:00') ?? 0)}
+            />
+            <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={estimatedHeight - 28}>
+              <ul className='divide-border divide-y'>
+                {viewings.map((viewing, index) => (
+                  <SharedViewingRow key={`${viewing.showtimeAt}-${index}`} viewing={viewing} />
+                ))}
+              </ul>
+            </LazyMount>
+          </section>
+        );
+      })}
       <p className='text-muted-foreground text-center text-xs'>
-        A snapshot from {formatDate(calendar.createdAt)}. It won&apos;t change if the plans do.
+        A snapshot from {formatDate(calendar.createdAt)}, so it won&apos;t change if the plans do. Times are shown in your time zone.
       </p>
       <div className='text-center'>
-        <Button href='/a-list' variant='link' size='sm' className='h-10'>
+        <p className='text-muted-foreground text-xs'>No account needed to look.</p>
+        <Button href='/a-list' variant='link' size='sm' className='h-10 underline'>
           Made with A-List Tracker
         </Button>
       </div>

@@ -287,8 +287,8 @@ service cloud.firestore {
     }
 
     // A calendar share is addressed by an unguessable id, so it can't nest under the owner's uid;
-    // `ownerUid` stands in. Visitors never read it: the getCalendarShare function (admin SDK)
-    // checks the PIN and returns only the allowlisted fields.
+    // `ownerUid` stands in. Visitors never read it: a server function checks the PIN with the
+    // admin SDK and returns only the allowlisted fields.
     match /apps/a-list/calendarShares/{shareId} {
       function isShareOwner() {
         return request.auth != null && resource.data.ownerUid == request.auth.uid;

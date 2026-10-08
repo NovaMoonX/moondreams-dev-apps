@@ -10,6 +10,7 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import {
   MAX_SHARE_RANGE_DAYS,
+  MAX_SHARED_VIEWINGS,
   SHARE_RANGE_OPTIONS,
 } from '@apps/a-list/constants';
 import type { ShareRangeKind } from '@apps/a-list/types';
@@ -22,7 +23,7 @@ import {
 } from '@apps/a-list/utils/sharing';
 
 const PIN_OPTIONS = [
-  { value: 'OPEN', label: 'No, anyone with the link', emoji: '🔓' },
+  { value: 'OPEN', label: 'No, keep it open', emoji: '🔓' },
   { value: 'PIN', label: 'Yes, add a PIN', emoji: '🔒' },
 ] as const;
 
@@ -59,19 +60,29 @@ function ShareCreateForm({
   );
 
   const getSummary = () => {
+    if (startKey === '' || endKey === '') {
+      return { isReady: false, text: 'Pick the first and last day.' };
+    }
     if (dayCount < 1) {
-      return {
-        isReady: false,
-        text: 'Pick a start day that comes before the end day.',
-      };
+      return { isReady: false, text: 'The last day needs to come after the first.' };
     }
     if (dayCount > MAX_SHARE_RANGE_DAYS) {
-      return { isReady: false, text: 'A link can cover up to a year.' };
+      return {
+        isReady: false,
+        text: 'Shorten the dates: a link can cover up to a year.',
+      };
     }
     if (movieCount === 0) {
       return {
         isReady: false,
         text: '🍿 Nothing is planned in these dates yet. Add a movie to the calendar, then come back.',
+      };
+    }
+
+    if (movieCount > MAX_SHARED_VIEWINGS) {
+      return {
+        isReady: false,
+        text: `That's ${movieCount} movies, more than one link can hold. Try a shorter range.`,
       };
     }
 
@@ -126,9 +137,11 @@ function ShareCreateForm({
 
       <p className='bg-muted/50 text-muted-foreground rounded-2xl p-3 text-sm'>
         <strong className='text-foreground'>A snapshot, not a live view.</strong>{' '}
-        It shows each movie, poster, time, format and theater, and never your
-        name, prices or ratings. Movies you add or change later won&apos;t show
-        up.
+        Friends see each movie&apos;s poster, title, time, rating (like PG-13),
+        theater, whether you&apos;ve seen it, and its format once a ticket is
+        recorded. Never your name, what you paid, or your star ratings. Titles
+        and theater names show as you typed them. Changes you make later
+        won&apos;t show up.
       </p>
 
       <ModalFooterActions

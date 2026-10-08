@@ -1,5 +1,6 @@
 const FORMATS = ['STANDARD', 'DOLBY_CINEMA', 'IMAX', 'PRIME', 'REALD_3D', 'LASER'];
 const STATUSES = ['PLANNED', 'SEEN'];
+const POSTER_HOSTS = ['image.tmdb.org', 'm.media-amazon.com'];
 
 export interface SharedViewing {
   title: string;
@@ -27,6 +28,20 @@ function toInt(value: unknown) {
   return Number.isSafeInteger(value) ? (value as number) : null;
 }
 
+function toPosterUrl(value: unknown) {
+  const text = toText(value, 500);
+  if (text === null) {
+    return null;
+  }
+
+  try {
+    const url = new URL(text);
+    return url.protocol === 'https:' && POSTER_HOSTS.includes(url.hostname) ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 function toViewing(raw: unknown): SharedViewing | null {
   const item = (raw ?? {}) as Record<string, unknown>;
   const title = toText(item.title, 200);
@@ -35,10 +50,10 @@ function toViewing(raw: unknown): SharedViewing | null {
     return null;
   }
 
-  const posterUrl = toText(item.posterUrl, 500);
+  const posterUrl = toPosterUrl(item.posterUrl);
   const result: SharedViewing = {
     title,
-    posterUrl: posterUrl?.startsWith('https://') ? posterUrl : null,
+    posterUrl,
     runtimeMinutes: toInt(item.runtimeMinutes),
     contentRating: toText(item.contentRating, 20),
     showtimeAt,

@@ -10,6 +10,7 @@ import CounterRow from '@apps/a-list/components/calendar/CounterRow';
 import PosterCell from '@apps/a-list/components/calendar/PosterCell';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
+  selectCalendarShares,
   selectTheatres,
   selectViewingsByDay,
 } from '@apps/a-list/store/selectors';
@@ -55,6 +56,7 @@ function CalendarScreen() {
   };
 
   const hasViewings = Object.keys(viewingsByDay).length > 0;
+  const hasShares = useAppSelector(selectCalendarShares).length > 0;
 
   return (
     <section className='space-y-4'>
@@ -62,7 +64,7 @@ function CalendarScreen() {
         title='Calendar'
         action={
           <div className='flex items-center gap-2'>
-            {hasViewings && (
+            {(hasViewings || hasShares) && (
               <Button
                 type='button'
                 variant='secondary'

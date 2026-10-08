@@ -81,6 +81,12 @@ const APP_REGISTRY = [
   },
 ];
 
+function withNoIndex(response) {
+  const result = new Response(response.body, response);
+  result.headers.set('X-Robots-Tag', 'noindex');
+  return result;
+}
+
 function getAppMeta(url) {
   const app = APP_REGISTRY.find((entry) => url.pathname.startsWith(entry.path));
   if (!app) {
@@ -117,7 +123,11 @@ export default {
       );
 
     // Fetch the standard index.html response from Firebase Hosting
-    const response = await fetch(request);
+    const fetched = await fetch(request);
+    const isUnlisted = APP_REGISTRY.some((app) =>
+      (app.pages ?? []).some(({ prefix }) => url.pathname.startsWith(prefix)),
+    );
+    const response = isUnlisted ? withNoIndex(fetched) : fetched;
 
     const appMeta = getAppMeta(url);
 

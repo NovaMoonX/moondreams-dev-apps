@@ -39,8 +39,12 @@ export const getCalendarShare = onCall(
     }
 
     const data = snapshot.data() ?? {};
-    const pin = typeof data.pin === 'string' ? data.pin : null;
-    if (pin !== null) {
+    if (data.pin !== null && data.pin !== undefined) {
+      const pin = typeof data.pin === 'string' ? data.pin : '';
+      if (pin === '') {
+        return { status: 'not_found' };
+      }
+
       const entered = typeof request.data?.pin === 'string' ? request.data.pin.trim().toUpperCase() : '';
       if (entered === '') {
         return { status: 'pin_required' };

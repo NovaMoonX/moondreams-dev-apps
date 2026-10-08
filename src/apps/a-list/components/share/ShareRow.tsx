@@ -2,7 +2,7 @@ import { Button, CopyButton } from '@moondreamsdev/dreamer-ui/components';
 
 import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import { formatDateShort } from '@/utils/formatUtils';
+import { formatDateTime } from '@/utils/formatUtils';
 import type { CalendarShare } from '@apps/a-list/types';
 import { formatShareRange, getShareUrl } from '@apps/a-list/utils/sharing';
 
@@ -33,7 +33,7 @@ function ShareRow({
           </p>
           <p className='text-muted-foreground text-xs'>
             {movieCount === 1 ? '1 movie' : `${movieCount} movies`} · made{' '}
-            {formatDateShort(share.createdAt)}
+            {formatDateTime(share.createdAt)}
           </p>
         </div>
         <DeleteIconButton
@@ -45,7 +45,7 @@ function ShareRow({
       <div className='flex flex-wrap items-center gap-2'>
         <CopyButton
           textToCopy={url}
-          variant='primary'
+          variant='secondary'
           size='sm'
           rounded='full'
           onClick={onCopied}
@@ -56,7 +56,7 @@ function ShareRow({
           href={url}
           target='_blank'
           rel='noopener noreferrer'
-          variant='secondary'
+          variant='tertiary'
           size='sm'
           rounded='full'
         >
@@ -74,6 +74,7 @@ function ShareRow({
               <code className='text-foreground font-semibold tracking-[0.2em]'>
                 {share.pin}
               </code>
+              . Turning it off and on again makes a new one.
             </p>
           ) : (
             <p className='text-muted-foreground text-xs'>

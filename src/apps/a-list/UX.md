@@ -573,6 +573,14 @@ block-beta
 ```
 *Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
 
+### Shared calendars (owner) and the shared page (visitor)
+
+- **Entry:** a "Share" button beside "+ Add" in the Calendar header (an icon alone below 360px), shown when there is a movie on the calendar or an existing link. It opens the full-page "Shared calendars" subview.
+- **List:** "N of 10 links", "+ New", and a flat row per link: date range, movie count and when it was made, "Copy link", "Preview", a trash icon, and a panel with the PIN toggle ("🔒 PIN on · Send them K7M2. Turning it off and on again makes a new one."). At 10 links "+ New" gives way to "Delete one to make another". Empty: one muted line.
+- **New link:** pills (This month, Next month, This week, Next week, Pick dates), a live line ("🎬 22 movies from October 1 – October 31", or why Create is off), "Lock it with a PIN?" pills, a note on what a friend sees, Cancel and Create link. A link is a snapshot and has no name.
+- **Delete:** a destructive confirm naming the dates, PIN and time it was made, and saying everyone with the link loses access at once.
+- **Visitor, no sign-in:** `/a-list/shared/<id>` shows "🎬 Movie calendar", the range and count, days with a divider each, and rows with poster, time, runtime, rating, theater and badges (format, Seen). States: loading, PIN gate (4 characters, "That PIN didn't match" until they type again), "This calendar isn't available" (deleted or mistyped), and "We couldn't open this calendar" with Try again.
+
 ## Reusable Components
 
 | Component | Used in | Purpose |

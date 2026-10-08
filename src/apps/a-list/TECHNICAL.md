@@ -1,6 +1,6 @@
 # A-List Tracker — Technical Design Document
 
-Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. Waypoint's `TECHNICAL.md` is the format reference. A-List is much smaller than Waypoint in one respect: **every byte of data is private to one signed-in member**. There is no sharing, no invite flow, no roles, no pending requests, and so no cross-user concurrency. That removes most of the atomic-write and rule complexity and puts the design weight on three things instead: the money/date math, the calendar read model, and a server-side movie lookup.
+Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. Waypoint's `TECHNICAL.md` is the format reference. A-List is much smaller than Waypoint in one respect: **every byte of data is private to one signed-in member**, apart from the calendar snapshots a member chooses to share by link (Data Schema #5). There is no invite flow, no roles, no pending requests, and so no cross-user concurrency. That removes most of the atomic-write and rule complexity and puts the design weight on three things instead: the money/date math, the calendar read model, and a server-side movie lookup.
 
 ## Decisions made in this document
 
@@ -216,8 +216,10 @@ interface SharedViewing {
 - **The PIN** is `generateToken(4)` uppercased, stored in plain text because the owner has to read it back to send it; only the owner can read the document and the function never returns it. Turning the lock off writes `null`; turning it on writes a fresh PIN, so off-then-on retires the old one. Entry is case-insensitive and trimmed, and compared in constant time. **There is no attempt limit** (an accepted trade-off: 32^4 is about a million PINs, and a link is already unlisted); add one in the function if a share ever holds something more sensitive.
 - **At most 10 shares per member** (`MAX_CALENDAR_SHARES`) is enforced in the client only: the create thunk counts the member's shares on the server (`getCountFromServer`, so a stale tab can't slip past it, and offline fails instead of making a link that doesn't exist yet), and the UI hides "+ New" at 10. A modified client could exceed it; accepted, since it only costs the owner storage.
 - **Deleting is the only way to stop sharing** and is immediate (the next open is `not_found`). There is no rename and no re-snapshot: the only edit is the PIN. Create a new link for new plans.
-- **Times** are instants shown in the *viewer's* local time, like everywhere in the app, so a friend in another time zone sees the showtime shifted. Storing the sharer's zone to fix that is a follow-up.
-- **Link previews** (Cloudflare worker) say only that a movie calendar was shared, whether or not it has a PIN. `<meta name="robots" content="noindex">` is added on the page.
+- **Times** are instants shown in the *viewer's* local time, like everywhere in the app, and the page says so ("Times are shown in your time zone"). A friend in another zone sees a shifted showtime and may see a late showing on the next day; storing the sharer's zone to show theirs is a follow-up.
+- **Free text is shown as typed.** A title added by hand or a theater name can hold anything the member wrote, and the form's note says so. Poster URLs are kept only when `https` and on the movie providers' image hosts (`image.tmdb.org`, `m.media-amazon.com`), so a modified client can't make the page load an arbitrary image.
+- **Link previews** (Cloudflare worker) say only that a movie calendar was shared, whether or not it has a PIN. `noindex` is sent as an `X-Robots-Tag` header by the worker and as a meta tag by the page.
+- **The token never reaches presence.** The site shell writes the signed-in person's current path to the world-readable Realtime Database, so `Layout` shortens `/a-list/shared/<id>` to `a-list/shared` first.
 - **Indexes:** none (`where('ownerUid', '==', uid)` is a single-field equality query).
 
 #### Derived values (never stored)
@@ -604,7 +606,7 @@ match /apps/a-list/lookupUsage/{key}   { allow read, write: if false; }
 // Owner-only; visitors go through the getCalendarShare function.
 match /apps/a-list/calendarShares/{shareId} {
   allow read, delete: if isShareOwner();
-  allow create: if isMember() /* && isShareCreateValid(request.resource.data) */;
+  allow create: if isMember() /* && isShareCreateValid(request.resource.data) */;  // exists(membership) in the real rule
   allow update: if isShareOwner() /* && only pin and lastEditedAt change, pin valid */;
 }
 ```
@@ -693,8 +695,8 @@ No cached document is ever written back whole. A transaction is used only where 
 ## Security & Privacy Requirements
 
 - **Private by construction.** One member's membership, watchlist and viewings are readable and writable only by them. There is no admin read; the rules in Security Rules Design Criteria #1–2 are the whole access model. The one thing that leaves is a calendar share the member makes on purpose (Data Schema #5): a frozen, allowlisted copy behind an unguessable link, optionally PIN-locked, served by a function and deletable at any time.
-- **What leaves the app, and where it goes.** Movie search text and a chosen `movieKey` go to the app's own Cloud Functions, which forward them to the movie provider; the provider sees the function's address and the text, never the member's identity, and the functions don't log the text. The functions do keep a shared cache of results and per-member lookup counts (server-only, no text, no identity beyond a `uid` in a counter's document id). Nothing else leaves the app: there is no location, and tax is never looked up. Posters load straight from the host OMDb names in its response, which sees the viewer's address when they load, as with any image; the app sets `referrerPolicy='no-referrer'` as `FallbackImage` does.
-- **The provider credential never reaches the browser, a response, or a log** (Functions secret). Inputs to the callables are validated and length-capped; every callable requires an authenticated caller.
+- **What leaves the app, and where it goes.** Movie search text and a chosen `movieKey` go to the app's own Cloud Functions, which forward them to the movie provider; the provider sees the function's address and the text, never the member's identity, and the functions don't log the text. The functions do keep a shared cache of results and per-member lookup counts (server-only, no text, no identity beyond a `uid` in a counter's document id). Besides a share the member makes on purpose, nothing else leaves the app: there is no location, and tax is never looked up. Posters load straight from the host OMDb names in its response, which sees the viewer's address when they load, as with any image; the app sets `referrerPolicy='no-referrer'` as `FallbackImage` does.
+- **The provider credential never reaches the browser, a response, or a log** (Functions secret). Inputs to the callables are validated and length-capped; every callable requires an authenticated caller except `getCalendarShare`, which serves visitors who have no account and so answers only from a link's id and optional PIN.
 - **Stored data minimization.** No location of any kind is collected or stored. No ticket confirmation numbers or card data are ever collected. The only venue detail is the theater's name (and AMC's id once theaters come from AMC), stored on the member's own theater list and copied onto a showing; address and coordinates stay `null`.
 - **Persistence on the device.** Only the movie search/details queries are persisted to IndexedDB (public third-party data). Nothing from the member's own documents is persisted by the app beyond Firestore's own cache. The query cache is cleared on user switch in `AuthContext`, as everywhere.
 - **Attribution and terms** for the movie provider are an About row in Membership settings and a verification gate before the movie-data PR merges (see Movie Data Service).
