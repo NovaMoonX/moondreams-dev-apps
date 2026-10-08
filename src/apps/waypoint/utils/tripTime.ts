@@ -484,6 +484,24 @@ export function formatSuggestedTime(
   });
 }
 
+type ArriveBySource = EventTimeSource & Partial<Pick<TimelineEvent, 'arriveByTime'>>;
+
+/** The arrival as a clock time, with the zone when it isn't the trip's; `null` when the event has none. */
+export function formatEventArriveBy(trip: TripSpace, event: ArriveBySource) {
+  if (!event.arriveByTime) {
+    return null;
+  }
+  const { timezone, startMs } = getEventTime(trip, event);
+  const zone = timezone && timezone !== trip.timezone ? ` ${formatTimezoneAbbreviation(timezone, startMs ?? undefined)}` : '';
+  return `${formatClockTime(event.arriveByTime)}${zone}`;
+}
+
+/** For "now" comparisons only, like `toTripMoment`. */
+export function getEventArriveByMs(trip: TripSpace, event: ArriveBySource) {
+  const { dayIndex, timezone } = getEventTime(trip, event);
+  return event.arriveByTime && dayIndex !== null ? toTripMoment(trip, dayIndex, event.arriveByTime, timezone) : null;
+}
+
 export function formatEventStartTime(trip: TripSpace, event: EventTimeSource) {
   const { startTime } = getEventTime(trip, event);
   return startTime ? formatClockTime(startTime) : '';

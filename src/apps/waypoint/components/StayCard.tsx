@@ -209,6 +209,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
           location={getStayLocation(stay)}
           linkUrl={stay.linkUrl}
           onEdit={canEdit ? () => { closeDrawer(); onEdit(stay); } : null}
+          expenseTarget={{ link: { kind: 'STAY', id: stay.id }, getSubject: () => getStaySubject(trip, stay) }}
         >
           <StayDetailLines
             trip={trip}

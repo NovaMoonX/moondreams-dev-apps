@@ -54,7 +54,7 @@ function EditTripCityModal({ isOpen, trip, isSubmitting = false, onSubmit, onClo
           ) : (
             <>
               <strong className='text-foreground'>Pick the city you&apos;ll be in</strong> to see its weather on days with
-              no located plans. Any day with a plan that has a place shows that place&apos;s weather.
+              no located plans. Any day with an event that has a place shows that place&apos;s weather.
             </>
           )}
         </p>

@@ -194,6 +194,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: { name: 'Seattle', region: 'Washington', country: 'United States', latitude: 47.60621, longitude: -122.33207 },
+    noExpenseKeys: [],
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -222,6 +223,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: null,
+    noExpenseKeys: [],
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -240,6 +242,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
   const lunchStartMinutes = Math.max(0, nowOnTripClock.minutes - 30);
   const lunchEndMinutes = Math.min(1439, nowOnTripClock.minutes + 30);
   const kalalochCheckInMinutes = Math.min(nowOnTripClock.minutes + 180, 1410);
+  const sunsetStartMinutes = Math.min(nowOnTripClock.minutes + 120, 1380);
+  const sunsetArriveMinutes = Math.max(0, sunsetStartMinutes - 45);
 
   await activeTripRef.set({
     id: ACTIVE_TRIP_ID,
@@ -268,6 +272,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: null,
+    noExpenseKeys: [],
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -558,6 +563,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -612,6 +619,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -647,6 +656,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid, taylor.uid],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: '18:30',
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: 'https://www.pikeplacemarket.org/',
@@ -693,6 +704,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       assignedMemberIds: [alex.uid, taylor.uid],
       venueOpenTime: null,
       venueCloseTime: null,
+      arriveByTime: null,
+      arriveByNote: null,
       changeHistory: [],
       place: null,
       linkUrl: null,
@@ -730,6 +743,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     // Showcases the optional venue hours field — the park's posted open/close times.
     venueOpenTime: '06:00',
     venueCloseTime: '22:00',
+    arriveByTime: '09:00',
+    arriveByNote: 'The lot fills up by 9, so we want a spot before the crowd.',
     changeHistory: [],
     place: {
       placeId: 'ChIJVVVVVVVVVVVVVVVVVVVVVVU',
@@ -768,6 +783,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -878,6 +895,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -1011,6 +1030,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid, taylor.uid],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -1050,6 +1071,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid, taylor.uid],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: {
       placeId: 'ChIJWWWWWWWWWWWWWWWWWWWWWWW',
@@ -1088,6 +1111,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [alex.uid, taylor.uid],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: '09:30',
+    arriveByNote: 'Low tide is brief, so we want to be on the rocks early.',
     changeHistory: [
       {
         changes: [
@@ -1117,6 +1142,41 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now - 3_600_000,
   });
 
+  // Starts two hours from "now" with an arrival 45 minutes earlier, so the Now pill's "Up next" and Overview always show one.
+  await activeEventsCollection.doc('active-trip-sunset').set({
+    id: 'active-trip-sunset',
+    tripId: ACTIVE_TRIP_ID,
+    eventType: 'ACTIVITY',
+    ...relativeEventTime({ day: 1, start: toClock(sunsetStartMinutes), end: toClock(Math.min(sunsetStartMinutes + 60, 1439)) }),
+    title: 'Sunset at Rialto Beach',
+    locationName: 'Rialto Beach',
+    address: null,
+    latitude: 47.9214,
+    longitude: -124.6386,
+    eventDetails: { settings: ['OUTDOOR'] },
+    notes: null,
+    attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+    assignedMemberIds: [],
+    venueOpenTime: null,
+    venueCloseTime: null,
+    arriveByTime: toClock(sunsetArriveMinutes),
+    arriveByNote: 'The beach lot fills up before sunset.',
+    changeHistory: [],
+    place: null,
+    linkUrl: null,
+    linkPreview: null,
+    reminderMinutesBefore: 20,
+    reminderEnabled: true,
+    reminderId: null,
+    isArchived: false,
+    archivedBy: null,
+    archivedAt: null,
+    seenBy: {},
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   await activeEventsCollection.doc('active-trip-dinner').set({
     id: 'active-trip-dinner',
     tripId: ACTIVE_TRIP_ID,
@@ -1133,6 +1193,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: '17:30',
+    arriveByNote: 'The walk-in list opens at 5:30.',
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -1165,6 +1227,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -1199,6 +1263,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,
@@ -1531,6 +1597,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
     city: null,
+    noExpenseKeys: [],
     dateShiftStatus: 'IDLE',
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -1574,6 +1641,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       sharedAlbumSetByUid: null,
       sharedAlbumSetAt: null,
       city: null,
+      noExpenseKeys: [],
       dateShiftStatus: null,
       createdBy: alex.uid,
       createdAt: joinedAt,
@@ -1618,6 +1686,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
         assignedMemberIds: [],
         venueOpenTime: null,
         venueCloseTime: null,
+        arriveByTime: null,
+        arriveByNote: null,
         changeHistory: [],
         place: null,
         linkUrl: null,
@@ -1820,6 +1890,8 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
         assignedMemberIds: 'attendees' in travel ? travel.attendees : [],
         venueOpenTime: null,
         venueCloseTime: null,
+        arriveByTime: null,
+        arriveByNote: null,
         changeHistory: [],
         place: null,
         linkUrl: null,
@@ -1860,6 +1932,23 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       });
   }
 
+  await context.firestore.doc(`apps/waypoint/personalChecklist/${alex.uid}/items/seed-personal-checklist-gift`).set({
+    id: 'seed-personal-checklist-gift',
+    tripId: TRIP_ID,
+    title: 'Wrap the anniversary gift',
+    category: 'PACKING',
+    customCategoryLabel: null,
+    note: null,
+    completeByDayIndex: null,
+    assignedToUids: [],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    createdBy: alex.uid,
+    createdAt: context.now,
+    lastEditedAt: context.now,
+  });
+
   const scaleDocuments = await seedWaypointScaleTrip({
     context,
     tripStart: activeTripStart,
@@ -1871,6 +1960,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 80 + personalExpenses.length + scaleDocuments,
+    firestoreDocuments: 82 + personalExpenses.length + scaleDocuments,
   };
 }

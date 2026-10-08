@@ -87,6 +87,7 @@ import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import {
   selectActiveStaysForDay,
   selectExpenseLinkKeys,
+  selectNoExpenseKeys,
   selectRentals,
   selectStays,
 } from '@apps/waypoint/store/selectors';
@@ -192,7 +193,9 @@ export function TimelineSection({
   const [weatherDay, setWeatherDay] = useState<number | null>(null);
   const [isWeatherOpen, setIsWeatherOpen] = useState(false);
   const expenseLinkKeys = useAppSelector(selectExpenseLinkKeys);
-  const [minimizeWeather, setMinimizeWeather] = useLocalStoragePreference('waypoint:minimizeWeather', false);
+  const noExpenseKeys = useAppSelector(selectNoExpenseKeys);
+  const [compactAllDaysWeather, setCompactAllDaysWeather] = useLocalStoragePreference('waypoint:compactAllDaysWeather', true);
+  const [compactSingleDayWeather, setCompactSingleDayWeather] = useLocalStoragePreference('waypoint:compactSingleDayWeather', false);
   const now = useNow(60_000);
   const weather = useTripWeather(trip, events, now);
   const placeBias = getPlaceBiasFromItems([...stays, ...events]);
@@ -210,7 +213,8 @@ export function TimelineSection({
       (event) =>
         !unpaidOnly ||
         (EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) &&
-          !expenseLinkKeys.has(getExpenseLinkKey({ kind: 'EVENT', id: event.id }))),
+          !expenseLinkKeys.has(getExpenseLinkKey({ kind: 'EVENT', id: event.id })) &&
+          !noExpenseKeys.has(getExpenseLinkKey({ kind: 'EVENT', id: event.id }))),
     );
 
   const [stackingEvent, setStackingEvent] = useState<TimelineEvent | undefined>();
@@ -445,7 +449,7 @@ export function TimelineSection({
     <SectionDivider label={label} trailing={trailing} />
   );
 
-  const renderDayWeather = (dayIndex: number) => {
+  const renderDayWeather = (dayIndex: number, isMinimized: boolean) => {
     const forecast = weather.getDay(dayIndex);
     const also = weather.getAlso(dayIndex);
     const placeName = weather.getPlaceName(dayIndex);
@@ -454,7 +458,7 @@ export function TimelineSection({
         forecast={forecast}
         also={also}
         placeName={also.length > 0 || placeName !== (trip.city?.name ?? null) ? placeName : null}
-        isMinimized={minimizeWeather}
+        isMinimized={isMinimized}
         onOpen={() => {
           setWeatherDay(dayIndex);
           setIsWeatherOpen(true);
@@ -490,9 +494,9 @@ export function TimelineSection({
               <div key={day} className='space-y-3'>
                 {renderDivider(
                   getDayDateLabel(trip.startDate, day),
-                  minimizeWeather ? renderDayWeather(day) : undefined,
+                  compactAllDaysWeather ? renderDayWeather(day, true) : undefined,
                 )}
-                {!minimizeWeather && renderDayWeather(day)}
+                {!compactAllDaysWeather && renderDayWeather(day, false)}
                 {renderEventItems(
                   visibleEvents.filter((event) => event.dayIndex === day),
                   day,
@@ -534,9 +538,9 @@ export function TimelineSection({
               <DayHeader
                 isSticky={isPhone}
                 label={getBucketLabel(bucket, trip.startDate, dayCount)}
-                trailing={typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined}
+                trailing={typeof bucket === 'number' && compactAllDaysWeather ? renderDayWeather(bucket, true) : undefined}
               />
-              {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
+              {typeof bucket === 'number' && !compactAllDaysWeather && renderDayWeather(bucket, false)}
               <div className='space-y-3 pb-3'>
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
                   {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
@@ -638,11 +642,18 @@ export function TimelineSection({
             heading: 'Weather',
             options: [
               {
-                label: 'Compact weather',
-                checked: minimizeWeather,
-                onChange: setMinimizeWeather,
+                label: 'Compact weather on the full timeline',
+                checked: compactAllDaysWeather,
+                onChange: setCompactAllDaysWeather,
+                defaultChecked: true,
+                isCustomized: !compactAllDaysWeather,
+              },
+              {
+                label: 'Compact weather on a single day',
+                checked: compactSingleDayWeather,
+                onChange: setCompactSingleDayWeather,
                 defaultChecked: false,
-                isCustomized: minimizeWeather,
+                isCustomized: compactSingleDayWeather,
               },
             ],
           },
@@ -768,7 +779,7 @@ export function TimelineSection({
           </TabsContent>
           {dayIndexes.map((index) => (
             <TabsContent key={index} value={String(index)} className='pt-4 space-y-2'>
-              {renderDayWeather(index)}
+              {renderDayWeather(index, compactSingleDayWeather)}
               {renderStayBanners(index)}
               {renderEvents(index)}
             </TabsContent>

@@ -128,6 +128,8 @@ interface TimelineEvent {
   title: string; // always stored non-empty, but the form never requires one — a blank title is derived on save ("Flight DL 482", the location name, or the event type)
   startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
   endTime: string | null;
+  arriveByTime: string | null; // "HH:mm" when the group wants to be there: same day and zone as the start, strictly before startTime; dining and activities on RELATIVE trips only. Absent on older events
+  arriveByNote: string | null; // why they want to be early; only set alongside arriveByTime
   timezone: string | null; // zone override for this event's start (and end, unless endTimezone says otherwise); null follows the trip's timezone
   endTimezone: string | null; // zone the end is in when it differs from the start's (a flight landing elsewhere); null = same zone. Absent on older events — read it with `?? null`
   startAt: number | null; // @deprecated — ABSOLUTE trips only (null on RELATIVE ones); superseded by dayIndex + startTime
@@ -151,6 +153,8 @@ interface TimelineEvent {
   lastEditedAt: number;
 }
 ```
+
+**Arrive by.** An optional second time on dining and activity events: when to be there, as opposed to when it starts. It is a floating "HH:mm" on the event's own day (never a timestamp, so moving the trip's dates needs no rewrite) and must be strictly before `startTime`; arriving at the start says nothing. The form (`+ Add arrival time` under "When"), `validateEventTime` and `isArriveByValid` in `firestore.rules` all enforce it, the last also capping the note at 500 characters and requiring a time for a note. Older events lack both fields, so rules read them with `get(..., null)` and `getMissingEventFields` backfills `null`. Approving a suggestion keeps the arrival only if it is still before the new start. `arriveByTime` is tracked in `changeHistory` like the start time. Reminders still count back from the start.
 
 **Event details — predefined per `eventType`:**
 
@@ -342,7 +346,7 @@ Forecasts come from Open-Meteo (`src/lib/weather/`, keyless, CC BY 4.0 — `Weat
 - **When:** `getWeatherDayIndexes` shows every trip day inside the provider's window: the next 14 days and the last 90, whatever the trip's state (a finished or archived trip within that window still shows how it went), plus any buffer day that has an event.
 - **Where:** a day's places come from its non-archived, non-travel events with coordinates, in time order (each person's travel legs start from somewhere different, so they say nothing about where the day is): plans within `CLUSTER_KM` (35 km) of a place's first plan belong to it, the place with the most plans is the main one (the latest wins a tie: where the day ends) and the rest are `also`, in the order their first plan happens. A place within `CLUSTER_KM` of `trip.city` is labelled with the city's name; otherwise the town from a US-style address, else the venue's name. A day with no located plan uses the trip city; with neither it shows no day weather, never a guess from a stay or a neighbouring day. Each distinct place is one forecast request (`getLocationKey`), so a mixed day costs one extra request. An event outside its day's main place also names its place on the chip (`plan.events[id].placeName`). An event gets its own hourly chip only on a `RELATIVE` trip with coordinates and a start time; its floating `"HH:mm"` matches the provider's zone-local hours directly.
 - **Requests:** places are keyed by coordinates rounded to ~10 km and zone, and each key is one request spanning the dates that need it. A loading or failed request reads as "no weather" and never blocks the Timeline.
-- **UI:** `WeatherDayStrip` heads the Timeline with every day that has a forecast (past days dimmed, today highlighted and centred); tapping a day jumps the Timeline to it. `DayWeather` tops each Timeline day (its header fades in a sky photo from `public/by-app/waypoint/weather/`, picked per condition by `WEATHER_BANNER_IMAGES`) (compact in the day header when "Compact weather" is on in the Timeline's View options, remembered in `localStorage`); the hour-by-hour `HourlyWeatherStrip` for today appears only in Overview's "Today's weather".
+- **UI:** `WeatherDayStrip` heads the Timeline with every day that has a forecast (past days dimmed, today highlighted and centred); tapping a day jumps the Timeline to it. `DayWeather` tops each Timeline day (its header fades in a sky photo from `public/by-app/waypoint/weather/`, picked per condition by `WEATHER_BANNER_IMAGES`) (compact in the day header on the full timeline by default and full-size on a single day, each switchable in the Timeline's View options as "Compact weather on the full timeline" and "Compact weather on a single day", remembered in `localStorage`); the hour-by-hour `HourlyWeatherStrip` for today appears only in Overview's "Today's weather".
 
 #### Enrichment: place search and link previews
 
@@ -380,6 +384,10 @@ image component at `src/lib/linkMetadata/fetchLinkMetadata.ts` and
 **On keeping these as timestamps, not strings:** the skill's Data Schema rule is explicit and repeated three times — "no excuse for a TDD to introduce a `string` date field." I kept `checkInAt`/`checkOutAt` as `number` rather than following the string suggestion, but added `checkInTimezone` to solve the actual underlying concern: a hotel's "3pm check-in" means 3pm *local to the property*, and a raw millisecond timestamp alone doesn't carry that — the timezone field is what lets it render correctly as local time without abandoning the convention. This is the "date + timezone" option floated as an alternative, applied without the string-typing part. Flagging this as a real judgment call rather than silently picking a side — happy to revisit if the intent was specifically to break from the timestamp convention here.
 
 No `linkedEventIds` — the relationship to events and days is derived, not stored (see State Machines).
+
+**Private checklist items (per member).** Path: `apps/waypoint/personalChecklist/{uid}/items/{itemId}`, the same shape as a shared item with `assignedToUids: []` and `createdBy == uid`, under a one-line `request.auth.uid == uid` rule (create also requires trip membership, so a Commenter can keep them). They load through their own slice and listener (`useWaypointSync`), appear only in the owner's "Before the Road" list with a "Just me" mark, and are never read by Overview, the Markdown copy or anyone else. "Just me" only assigns a shared task to its author (`assignedToUids: [uid]`); a separate "Keep it private" switch, shown when adding, is what stores it under `personalChecklist`. Privacy is chosen when adding and can't be changed afterwards. Deleting a trip removes them for its members (`deleteTrip`).
+
+**Items that need no expense.** `TripSpace.noExpenseKeys` holds the link keys (`getExpenseLinkKey`) of events, stays and rentals someone marked "No expense needed" from the link sheet; Admins and Editors write it with `arrayUnion`/`arrayRemove` (rule `isTripNoExpenseUpdate`, which allows only `noExpenseKeys` and `lastEditedAt`); the item's details drawer offers "No expense needed · Undo" to reverse it, and the store is updated only by the trip listener. It hides "Not paid for yet" and takes the plan out of "Only activities not paid for yet"; attaching an expense later still works. Older trips lack the field and read it as `[]`.
 
 #### 4. Checklist Item Document
 
@@ -758,8 +766,8 @@ Every `*Section.tsx` below owns its create/edit forms via DreamerUI's `Form`/`Fo
 
 - **Read Access**: full trip content (events, stays, checklist, expenses, comments) readable only by `members`. A join request is readable only by the person who sent it or an `ADMIN` of that trip.
 - **Admin Write Boundaries**: everything an `EDITOR` can do, plus updating/deleting an existing event once the trip has started, approving/declining pending requests (assigning the role at approval), changing an existing member's role, and removing a member.
-- **Editor Write Boundaries**: create, update, and delete stays, checklist items, stay criteria, and expenses; create new events and stays before the trip starts (Admin-only once it has — `canCreateItem`). Once the trip has started, updating/deleting an *existing* event is Admin-only.
-- **Commenter Write Boundaries**: view all trip data, toggle checklist items assigned to them, update their own expense-paid status and early payment, post comments, submit edit proposals.
+- **Editor Write Boundaries**: mark events, stays and rentals "no expense needed" (`noExpenseKeys` on the trip); create, update, and delete stays, checklist items, stay criteria, and expenses; create new events and stays before the trip starts (Admin-only once it has — `canCreateItem`). Once the trip has started, updating/deleting an *existing* event is Admin-only.
+- **Commenter Write Boundaries**: view all trip data, toggle checklist items assigned to them, create/edit/delete/toggle their own private checklist items (`personalChecklist/{uid}`), update their own expense-paid status and early payment, post comments, submit edit proposals.
 - **Viewer Write Boundaries**: read trip data and toggle their own expense-paid status only.
 - **Social vs. planning actions**: live travel-status updates, and adding a Trip Idea (until the trip starts) and voting on one (any time), are open to every trip member regardless of role.
 - **Shared Album Link**: any member can set it if unset; changing an existing link requires `EDITOR`/`ADMIN`.

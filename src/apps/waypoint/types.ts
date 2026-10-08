@@ -68,6 +68,8 @@ export interface TripSpace {
   timezone: string | null;
   /** Older documents lack it. */
   city: TripCity | null;
+  /** Link keys (`getExpenseLinkKey`) of plans whose owner said no expense is needed. Older documents lack it. */
+  noExpenseKeys: string[];
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
    * field keep their history. New trips write `null`.
@@ -374,6 +376,7 @@ export interface EventFieldChange {
     | 'endAt'
     | 'startTime'
     | 'endTime'
+    | 'arriveByTime'
     | 'locationName'
     | 'dayIndex'
     | 'endDayIndex';
@@ -422,6 +425,11 @@ export interface TimelineEvent {
   /** Venue open/close time for the event's day, as "HH:mm" — e.g. a museum's hours. */
   venueOpenTime: string | null;
   venueCloseTime: string | null;
+  /** "HH:mm" when the group wants to be there, on `dayIndex` and in the start's zone, strictly before `startTime`.
+   * Dining and activities on `RELATIVE` trips only. Absent on events saved before it existed. */
+  arriveByTime: string | null;
+  /** Why they want to be early; only set alongside `arriveByTime`. */
+  arriveByNote: string | null;
   changeHistory: EventChangeSnapshot[];
   place: PlaceRef | null;
   /** Not meaningful for FREE_TIME events, which leave this null. */

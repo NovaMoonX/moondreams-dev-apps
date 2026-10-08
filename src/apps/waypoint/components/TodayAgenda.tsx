@@ -11,7 +11,7 @@ import { formatClockTime } from '@/utils/formatUtils';
 import { getEventStatus, selectEventsByDay } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { buildTimelineItems, type EventGroup } from '@apps/waypoint/utils/eventGroups';
-import { getEventTime } from '@apps/waypoint/utils/tripTime';
+import { formatEventArriveBy, getEventArriveByMs, getEventTime } from '@apps/waypoint/utils/tripTime';
 import { getEventBadge, getGroupBadge } from '@apps/waypoint/utils/eventBadge';
 
 interface TodayAgendaProps {
@@ -40,6 +40,8 @@ function TodayAgenda({ trip, currentUserId, title, dayIndex, now, limit, onViewA
   const renderRow = (event: TimelineEvent, isNested = false) => {
     const status = getEventStatus(trip, event, now);
     const isDone = status === 'COMPLETED';
+    const arriveByMs = getEventArriveByMs(trip, event);
+    const arriveBy = arriveByMs !== null && arriveByMs > now ? formatEventArriveBy(trip, event) : null;
 
     return (
       <li key={event.id}>
@@ -80,11 +82,23 @@ function TodayAgenda({ trip, currentUserId, title, dayIndex, now, limit, onViewA
           </span>
           <span
             className={join(
-              'shrink-0 text-xs',
+              'shrink-0 text-right text-xs',
               status === 'ACTIVE' ? 'font-medium text-emerald-600' : 'text-muted-foreground',
             )}
           >
-            {status === 'ACTIVE' ? 'Now' : formatClockTime(getEventTime(trip, event).startTime ?? '00:00')}
+            {status === 'ACTIVE' ? (
+              'Now'
+            ) : (
+              <>
+                {arriveBy && (
+                  <span className='text-foreground block font-medium whitespace-nowrap'>Arrive {arriveBy}</span>
+                )}
+                <span className='block whitespace-nowrap'>
+                  {arriveBy && 'Starts '}
+                  {formatClockTime(getEventTime(trip, event).startTime ?? '00:00')}
+                </span>
+              </>
+            )}
           </span>
         </Button>
       </li>

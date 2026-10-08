@@ -195,8 +195,8 @@ function EditTripDatesModal({
                       />
                       <p className='text-muted-foreground text-xs'>
                         {props.value
-                          ? `A plan on ${oldStartLabel} stays on that date, which is ${describeOldStart(deltaDays)} of the new dates.`
-                          : `Every plan slides ${describeShift(deltaDays)} with the trip and keeps its day number.`}
+                          ? `Anything on ${oldStartLabel} stays on that date, which is ${describeOldStart(deltaDays)} of the new dates.`
+                          : `Everything slides ${describeShift(deltaDays)} with the trip and keeps its day number.`}
                       </p>
                     </div>
                   )}
