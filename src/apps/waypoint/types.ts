@@ -39,6 +39,15 @@ export type TripDateShiftStatus = 'IDLE' | 'PENDING';
  * changing the trip's dates moves everything with it. A trip document with no `timeModel` is `ABSOLUTE`. */
 export type TripTimeModel = 'RELATIVE' | 'ABSOLUTE';
 
+/** Where the trip is based, for the weather. Chosen from a city search; `null` until someone sets one. */
+export interface TripCity {
+  name: string;
+  region: string | null;
+  country: string | null;
+  latitude: number;
+  longitude: number;
+}
+
 export interface TripSpace {
   id: string;
   title: string;
@@ -57,6 +66,8 @@ export interface TripSpace {
   /** IANA zone the trip's wall-clock times default to; an event or stay can override it.
    * `null` on `ABSOLUTE` trips, which never had one. */
   timezone: string | null;
+  /** Older documents lack it. */
+  city: TripCity | null;
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
    * field keep their history. New trips write `null`.
@@ -189,6 +200,14 @@ export interface EarlyPayment {
   returnedAt: number | null;
 }
 
+export type ExpenseLinkKind = 'EVENT' | 'STAY' | 'RENTAL';
+
+/** The event, stay or rental an expense is linked to. A target that was deleted since reads as no link. */
+export interface ExpenseLink {
+  kind: ExpenseLinkKind;
+  id: string;
+}
+
 export interface TripExpense {
   id: string;
   tripId: string;
@@ -215,7 +234,25 @@ export interface TripExpense {
   earlyPayments: Record<string, EarlyPayment>;
   note: string | null;
   groupLabel: string | null;
+  /** Older documents lack it. */
+  linkedTo: ExpenseLink | null;
   createdBy: string;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** Private to the person who wrote it: stored under their own uid, never shared with the trip's totals or dues. */
+export interface PersonalExpense {
+  id: string;
+  tripId: string;
+  dayIndex: number | null;
+  title: string;
+  amount: number;
+  currency: string;
+  status: ExpenseStatus;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
   createdAt: number;
   lastEditedAt: number;
 }

@@ -4,8 +4,8 @@ import {
   Button,
   Form,
   FormFactories,
+  Label,
   Modal,
-  RadioGroup,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import DateRangeField, {
@@ -14,10 +14,13 @@ import DateRangeField, {
 import TimezoneSelect from '@/components/forms/TimezoneSelect';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
+import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { PillGroup } from '@/components/PillGroup';
 import type { EditTripValues } from '@apps/waypoint/store/actions/tripActions';
 import {
   selectRentals,
@@ -45,7 +48,26 @@ interface EditTripDatesModalProps {
 
 const DAY_MS = 86_400_000;
 
+function describeOldStart(deltaDays: number) {
+  const dayIndex = -deltaDays;
+  const days = Math.abs(dayIndex);
+  return dayIndex < 0 ? `${days} ${days === 1 ? 'day' : 'days'} before the first day` : `Day ${dayIndex + 1}`;
+}
+
+function describeShift(deltaDays: number) {
+  const days = Math.abs(deltaDays);
+  return `${days} ${days === 1 ? 'day' : 'days'} ${deltaDays > 0 ? 'later' : 'earlier'}`;
+}
+
 const { custom } = FormFactories;
+
+function ChecklistHelp() {
+  return (
+    <HelpTip title='Checklist due dates' placement='top' noModal>
+      <p>Due dates on your checklist always move with the trip, however far ahead they are.</p>
+    </HelpTip>
+  );
+}
 
 function EditTripDatesModal({
   isOpen,
@@ -134,6 +156,7 @@ function EditTripDatesModal({
     return result;
   };
   const outOfRangeCount = countItemsOutOfRange();
+  const oldStartLabel = trip ? formatDateUTC(trip.startDate) : '';
 
   const fields = useMemo(
     () => [
@@ -156,19 +179,32 @@ function EditTripDatesModal({
               renderComponent: (props) => (
                 <div className='space-y-2'>
                   {showKeepOriginalOption && (
-                    <RadioGroup
-                      value={props.value ? 'keep' : 'move'}
-                      onChange={(value) =>
-                        props.onValueChange(value === 'keep')
-                      }
-                      options={[
-                        { label: 'Move my plans with the trip', value: 'move' },
-                        {
-                          label: 'Keep my plans on their original dates',
-                          value: 'keep',
-                        },
-                      ]}
-                    />
+                    <div className='space-y-1.5'>
+                      <div className='flex items-center gap-1.5'>
+                        <Label>What happens to your plans?</Label>
+                        {hasDatedChecklistItems && <ChecklistHelp />}
+                      </div>
+                      <PillGroup
+                        label='What happens to your plans'
+                        options={[
+                          { value: 'move', label: 'They move with the trip', emoji: '➡️' },
+                          { value: 'keep', label: 'They stay on their dates', emoji: '📌' },
+                        ]}
+                        value={props.value ? 'keep' : 'move'}
+                        onChange={(value) => props.onValueChange(value === 'keep')}
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        {props.value
+                          ? `A plan on ${oldStartLabel} stays on that date, which is ${describeOldStart(deltaDays)} of the new dates.`
+                          : `Every plan slides ${describeShift(deltaDays)} with the trip and keeps its day number.`}
+                      </p>
+                    </div>
+                  )}
+                  {!showKeepOriginalOption && hasDatedChecklistItems && deltaDays !== 0 && (
+                    <div className='flex items-center gap-1.5'>
+                      <Label>Checklist due dates</Label>
+                      <ChecklistHelp />
+                    </div>
                   )}
                   {outOfRangeCount > 0 && (
                     <p className='text-warning text-sm'>
@@ -177,11 +213,6 @@ function EditTripDatesModal({
                         : `${outOfRangeCount} items fall`}{' '}
                       more than {MAX_DAYS_OUTSIDE_TRIP} days outside the new dates and will show under Outside trip
                       dates.
-                    </p>
-                  )}
-                  {hasDatedChecklistItems && deltaDays !== 0 && (
-                    <p className='text-muted-foreground text-xs'>
-                      🧳 Due dates on your checklist always move with the trip, however far ahead they are.
                     </p>
                   )}
                 </div>
@@ -202,7 +233,7 @@ function EditTripDatesModal({
         ),
       }),
     ],
-    [showKeepOriginalOption, outOfRangeCount, hasDatedChecklistItems, deltaDays, isSubmitting],
+    [showKeepOriginalOption, outOfRangeCount, hasDatedChecklistItems, deltaDays, isSubmitting, oldStartLabel],
   );
 
   if (!trip) {

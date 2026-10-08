@@ -5,7 +5,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
@@ -34,6 +33,9 @@ interface PillOptionsProps<T extends string> {
   /** A pill that always comes first and is never filtered out, like "New group". */
   leading?: ReactNode;
   selectedCount?: number;
+  isThin?: boolean;
+  /** One answer: picking collapses the list, clears its search and floats the chosen option to the front. */
+  isSingle?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
@@ -44,17 +46,18 @@ export function PillOptions<T extends string>({
   onToggle,
   leading,
   selectedCount = 0,
+  isThin = false,
+  isSingle = false,
 }: PillOptionsProps<T>) {
-  const isPhone = useMediaQuery().isBelow('sm');
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const hasSearch = options.length > SEARCH_THRESHOLD;
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
-  const visible =
+  const filtered =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
-  const isClamped = isPhone && trimmedQuery === '' && !isExpanded;
+  const isClamped = trimmedQuery === '' && !isExpanded;
 
   useEffect(() => {
     const content = contentRef.current;
@@ -67,7 +70,12 @@ export function PillOptions<T extends string>({
     return () => observer.disconnect();
   }, []);
 
-  const showToggle = isPhone && trimmedQuery === '' && (isOverflowing || isExpanded);
+  // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
+  const visible =
+    isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
+      ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
+      : filtered;
+  const showToggle = trimmedQuery === '' && (isOverflowing || isExpanded);
 
   return (
     <div className='space-y-2'>
@@ -76,7 +84,7 @@ export function PillOptions<T extends string>({
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
         </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={() => isClamped && isOverflowing && setIsExpanded(true)}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isOverflowing && event.target.matches(':focus-visible') && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}
@@ -84,8 +92,15 @@ export function PillOptions<T extends string>({
               <Pill
                 key={option.value}
                 emoji={option.emoji}
+                isThin={isThin}
                 isSelected={isSelected(option.value)}
-                onClick={() => onToggle(option.value)}
+                onClick={() => {
+                  onToggle(option.value);
+                  if (isSingle) {
+                    setIsExpanded(false);
+                    setQuery('');
+                  }
+                }}
               >
                 {option.label}
               </Pill>
@@ -123,15 +138,18 @@ interface PillGroupProps<T extends string> {
   value: T | null;
   onChange: (value: T) => void;
   leading?: ReactNode;
+  isThin?: boolean;
 }
 
 /** Pick exactly one of a few options. */
-export function PillGroup<T extends string>({ label, options, value, onChange, leading }: PillGroupProps<T>) {
+export function PillGroup<T extends string>({ label, options, value, onChange, leading, isThin }: PillGroupProps<T>) {
   return (
     <PillOptions
       label={label}
       options={options}
       leading={leading}
+      isThin={isThin}
+      isSingle
       selectedCount={value === null ? 0 : 1}
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}

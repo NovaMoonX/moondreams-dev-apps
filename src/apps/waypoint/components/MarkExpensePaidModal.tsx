@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Button, Form, FormFactories, Modal } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 
+import { PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import {
@@ -28,17 +29,23 @@ interface MarkExpensePaidModalProps {
   isOpen: boolean;
   trip: TripSpace;
   expense: TripExpense | null;
+  /** Who is preselected as having paid. */
+  currentUserId: string;
+  /** A failure of the last attempt, shown in the sheet so it never lands behind it. */
+  error?: string | null;
   isSubmitting?: boolean;
   onSubmit: (values: MarkExpensePaidValues) => Promise<void> | void;
   onClose: () => void;
 }
 
-const { input, select } = FormFactories;
+const { input, custom } = FormFactories;
 
 function MarkExpensePaidModal({
   isOpen,
   trip,
   expense,
+  currentUserId,
+  error: submitError = null,
   isSubmitting = false,
   onSubmit,
   onClose,
@@ -46,7 +53,7 @@ function MarkExpensePaidModal({
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
   const initialData: MarkExpensePaidFormData = {
-    payerUid: expense?.payerUid ?? PAID_BY_EACH_PERSON,
+    payerUid: expense?.payerUid ?? currentUserId,
     paidAmount: '',
   };
   const isRange = expense?.amount === null;
@@ -69,16 +76,23 @@ function MarkExpensePaidModal({
 
   const fields = useMemo(() => {
     const nextFields: FormField[] = [
-      select({
+      custom({
         name: 'payerUid',
         label: 'Paid by',
-        options: [
-          { value: PAID_BY_EACH_PERSON, label: 'Paid by each person' },
-          ...memberIds.map((uid) => ({
-            value: uid,
-            label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
-          })),
-        ],
+        renderComponent: (props) => (
+          <PillGroup
+            label='Paid by'
+            options={[
+              { value: PAID_BY_EACH_PERSON, label: 'Each person' },
+              ...memberIds.map((uid) => ({
+                value: uid,
+                label: memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid,
+              })),
+            ]}
+            value={props.value as string}
+            onChange={(next) => props.onValueChange(next)}
+          />
+        ),
       }),
     ];
 
@@ -86,7 +100,7 @@ function MarkExpensePaidModal({
       nextFields.push(
         input({
           name: 'paidAmount',
-          label: isPerPerson ? 'Amount paid per person' : 'Amount paid',
+          label: isPerPerson ? 'What each person paid' : 'What the group paid',
           type: 'number',
           placeholder: keepAsRange ? 'Leave blank to keep the estimated range' : '0.00',
           variant: 'outline',
@@ -152,7 +166,7 @@ function MarkExpensePaidModal({
                 {keepAsRange ? 'Enter a known amount instead' : 'Keep as an estimated range instead'}
               </Button>
             )}
-            {error && <p className='text-destructive text-sm'>{error}</p>}
+            {(error ?? submitError) && <p className='text-destructive text-sm'>{error ?? submitError}</p>}
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>
                 Cancel

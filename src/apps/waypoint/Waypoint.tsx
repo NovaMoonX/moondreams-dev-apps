@@ -29,7 +29,7 @@ import {
   selectTrips,
   selectSortedTimelineEvents,
 } from '@apps/waypoint/store/selectors';
-import type { TripSpace } from '@apps/waypoint/types';
+import type { TripCity, TripSpace } from '@apps/waypoint/types';
 
 function Waypoint() {
   useWaypointTheme();
@@ -83,6 +83,7 @@ function Waypoint() {
     startDate: number;
     endDate: number;
     timezone: string;
+    city: TripCity | null;
   }) => {
     if (!user?.uid) {
       return;
@@ -314,6 +315,7 @@ function Waypoint() {
       </div>
 
       <CreateTripModal
+        key={isCreateModalOpen ? 'open' : 'closed'}
         isOpen={isCreateModalOpen}
         isSubmitting={isSubmitting}
         onSubmit={handleCreateTrip}

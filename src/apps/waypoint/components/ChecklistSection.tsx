@@ -9,7 +9,6 @@ import {
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { Badge } from '@moondreamsdev/dreamer-ui/components';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -22,7 +21,8 @@ import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormM
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SearchInput from '@/components/SearchInput';
-import { CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
+import { Users } from 'lucide-react';
+import { CHECKLIST_CATEGORY_EMOJIS, CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
   ChecklistItem,
@@ -283,12 +283,13 @@ export default function ChecklistSection({
                             >
                               {item.title}
                             </span>
-                            <Badge variant='muted' outline>
-                              {getChecklistCategoryLabel(item)}
-                            </Badge>
                           </div>
+                          <p className='text-muted-foreground mt-0.5 text-sm'>
+                            <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[item.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
+                            {getChecklistCategoryLabel(item)}
+                          </p>
                           {item.note && (
-                            <p className='text-muted-foreground mt-1 line-clamp-2 text-sm italic sm:line-clamp-none'>{item.note}</p>
+                            <p className='text-muted-foreground mt-1 truncate text-sm italic'>{item.note}</p>
                           )}
                         </div>
                       </div>
@@ -298,8 +299,13 @@ export default function ChecklistSection({
                             <UserAvatar key={user.uid} user={user} size='sm' />
                           ))
                         ) : (
-                          <span className='text-muted-foreground text-xs'>
-                            Everyone
+                          <span
+                            className='bg-secondary text-muted-foreground flex h-7 w-7 items-center justify-center rounded-full'
+                            title='Everyone'
+                            role='img'
+                            aria-label='Everyone'
+                          >
+                            <Users className='h-3.5 w-3.5' aria-hidden='true' />
                           </span>
                         )}
                         {canEditExisting && !isPhone && (
@@ -349,9 +355,10 @@ export default function ChecklistSection({
       >
         {detailItem && (
           <div className='space-y-2 pb-2'>
-            <Badge variant='muted' outline>
+            <p className='text-muted-foreground text-sm'>
+              <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[detailItem.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
               {getChecklistCategoryLabel(detailItem)}
-            </Badge>
+            </p>
             {detailItem.note && <p className='text-muted-foreground text-sm italic'>{detailItem.note}</p>}
           </div>
         )}

@@ -1591,6 +1591,23 @@ service cloud.firestore {
           && resource.data.members[request.auth.uid].role == 'ADMIN';
       }
 
+      function isTripCityValid(city) {
+        return city == null || (
+          city is map
+          && city.keys().hasOnly(['name', 'region', 'country', 'latitude', 'longitude'])
+          && isNonEmptyString(city.name)
+          && city.name.size() <= 120
+          && (city.region == null || (city.region is string && city.region.size() <= 120))
+          && (city.country == null || (city.country is string && city.country.size() <= 120))
+          && city.latitude is number
+          && city.latitude >= -90
+          && city.latitude <= 90
+          && city.longitude is number
+          && city.longitude >= -180
+          && city.longitude <= 180
+        );
+      }
+
       function isTripFieldSetValid(data) {
         return data.keys().hasOnly([
             'id',
@@ -1607,6 +1624,7 @@ service cloud.firestore {
             'sharedAlbumSetAt',
             'timeModel',
             'timezone',
+            'city',
             'dateShiftStatus',
             'createdBy',
             'createdAt',
@@ -1633,6 +1651,7 @@ service cloud.firestore {
             || isTimestampNumber(data.sharedAlbumSetAt))
           && (!('timeModel' in data) || data.timeModel in ['RELATIVE', 'ABSOLUTE'])
           && (!('timezone' in data) || data.timezone == null || isNonEmptyString(data.timezone))
+          && isTripCityValid(data.get('city', null))
           && (!('dateShiftStatus' in data)
             || data.dateShiftStatus == null
             || data.dateShiftStatus in ['IDLE', 'PENDING'])
@@ -1699,6 +1718,7 @@ service cloud.firestore {
             'startDate',
             'endDate',
             'timezone',
+            'city',
             'defaultCurrency',
             'lastEditedAt'
           ])
@@ -2776,13 +2796,24 @@ service cloud.firestore {
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
 
+      // Shape only: a target deleted later leaves a link that reads as none, and must never block editing the expense.
+      function isExpenseLinkValid(link) {
+        return link == null || (
+          link is map
+          && link.keys().hasOnly(['kind', 'id'])
+          && link.kind in ['EVENT', 'STAY', 'RENTAL']
+          && isNonEmptyString(link.id)
+          && link.id.size() <= 128
+        );
+      }
+
       function isTripExpenseValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'dayIndex', 'title', 'amount', 'amountMin',
             'amountMax', 'paidAmount', 'currency', 'payerUid', 'status', 'category',
             'customCategoryLabel', 'targetType', 'targetMemberIds', 'splitAmounts',
             'paidMemberStatus', 'earlyPayments', 'note', 'groupLabel', 'isPerPerson',
-            'createdBy', 'createdAt', 'lastEditedAt'
+            'linkedTo', 'createdBy', 'createdAt', 'lastEditedAt'
           ])
           && data.id == expenseId
           && data.tripId == tripId
@@ -2813,9 +2844,17 @@ service cloud.firestore {
           && (data.note == null || data.note is string)
           && (data.groupLabel == null || isNonEmptyString(data.groupLabel))
           && data.get('isPerPerson', false) is bool
+          && isExpenseLinkValid(data.get('linkedTo', null))
           && data.createdBy is string
           && isTimestampNumber(data.createdAt)
           && isTimestampNumber(data.lastEditedAt);
+      }
+
+      function isNewExpenseTargetValid(data) {
+        return data.targetType == 'EVERYONE_CURRENT'
+          || (data.targetType == 'SPECIFIC_MEMBERS'
+            && data.targetMemberIds.size() > 0
+            && data.targetMemberIds.hasOnly(get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members.keys()));
       }
 
       function earlyPaymentsOf(data) {
@@ -2875,7 +2914,7 @@ service cloud.firestore {
       allow read: if isTripExpenseMember();
       allow create: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
-        && request.resource.data.targetType == 'EVERYONE_CURRENT'
+        && isNewExpenseTargetValid(request.resource.data)
         && earlyPaymentsOf(request.resource.data).size() == 0
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isTripExpenseEditor()
@@ -2905,6 +2944,43 @@ service cloud.firestore {
           .intersection(earlyPaymentsOf(request.resource.data).keys().toSet()).size() == 0;
       allow delete: if isTripExpenseEditor()
         && earlyPaymentsOf(resource.data).size() == 0;
+    }
+
+    // Private to its owner: no one else on the trip can read or change it.
+    match /apps/waypoint/personalExpenses/{uid}/items/{expenseId} {
+      function isPersonalExpenseValid(data) {
+        return data.keys().hasOnly([
+            'id', 'tripId', 'dayIndex', 'title', 'amount', 'currency', 'status',
+            'category', 'customCategoryLabel', 'note', 'createdAt', 'lastEditedAt'
+          ])
+          && data.id == expenseId
+          && isNonEmptyString(data.tripId)
+          && (data.dayIndex == null || data.dayIndex is int)
+          && isNonEmptyString(data.title)
+          && data.title.size() <= 200
+          && data.amount is number
+          && data.amount >= 0
+          && data.amount <= 1000000000
+          && isNonEmptyString(data.currency)
+          && data.currency.size() <= 3
+          && data.status in ['PAID', 'EXPECTED']
+          && data.category in ['FOOD', 'TRANSPORT', 'LODGING', 'ACTIVITIES', 'SHOPPING', 'OTHER']
+          && (data.customCategoryLabel == null || (isNonEmptyString(data.customCategoryLabel) && data.customCategoryLabel.size() <= 60))
+          && (data.note == null || (data.note is string && data.note.size() <= 2000))
+          && isTimestampNumber(data.createdAt)
+          && isTimestampNumber(data.lastEditedAt);
+      }
+
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.members
+        && isPersonalExpenseValid(request.resource.data);
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && isPersonalExpenseValid(request.resource.data)
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.createdAt == resource.data.createdAt;
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {

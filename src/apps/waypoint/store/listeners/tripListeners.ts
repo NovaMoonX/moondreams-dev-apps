@@ -36,6 +36,7 @@ export function startTripListener(
           sharedAlbumSetByUid: data.sharedAlbumSetByUid ?? null,
           sharedAlbumSetAt: data.sharedAlbumSetAt ?? null,
           isArchived: data.isArchived ?? false,
+          city: data.city ?? null,
         };
       });
 

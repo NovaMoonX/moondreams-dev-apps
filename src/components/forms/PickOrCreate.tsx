@@ -46,6 +46,7 @@ function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel,
       <PillOptions
         label={label}
         options={options}
+        isSingle
         selectedCount={choice === '' && !isCreating ? 0 : 1}
         leading={
           <Pill

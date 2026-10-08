@@ -4,6 +4,8 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import LocationLink from '@apps/waypoint/components/LocationLink';
+import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
+import { getStaySubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
@@ -72,6 +74,7 @@ export function StayDetailLines({
         <Badge variant='muted' outline>
           {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
         </Badge>
+        {!showTitle && <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} isStatic />}
         {showNotesIndicator && stay.notes && (
           <span
             className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
@@ -133,10 +136,11 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
 
   return (
     <>
+      <div>
       <article
         {...drawerTriggerProps}
         className={join(
-          'border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row',
+          'border-border bg-card relative flex flex-col overflow-hidden rounded-lg border sm:flex-row',
           isSmallScreen && 'cursor-pointer',
         )}
       >
@@ -184,7 +188,18 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
             </div>
           )}
         </div>
+        {!isSmallScreen && (
+          <div className='absolute right-4 bottom-4'>
+            <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} />
+          </div>
+        )}
       </article>
+      {isSmallScreen && (
+        <div className='flex justify-end pr-4'>
+          <NotPaidForBadge variant='tab' getSubject={() => getStaySubject(trip, stay)} />
+        </div>
+      )}
+      </div>
       {isSmallScreen && (
         <PlaceDetailsDrawer
           isOpen={isDrawerOpen}

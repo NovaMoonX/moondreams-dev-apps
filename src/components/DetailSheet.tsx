@@ -9,18 +9,19 @@ interface DetailSheetProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  footer?: ReactNode;
 }
 
 /**
  * Read-only detail of unpredictable length (notes, a breakdown): a drawer on phones, which scrolls
  * and closes with a swipe, and a modal from `sm` up. Short, fixed-size content is a plain `Modal`.
  */
-function DetailSheet({ isOpen, onClose, title, children }: DetailSheetProps) {
+function DetailSheet({ isOpen, onClose, title, children, footer }: DetailSheetProps) {
   const isPhone = useMediaQuery().isBelow('sm');
 
   if (isPhone) {
     return (
-      <Drawer isOpen={isOpen} onClose={onClose} title={title} showCloseButton>
+      <Drawer isOpen={isOpen} onClose={onClose} title={title} showCloseButton footer={footer}>
         <div className='pb-4'>{children}</div>
       </Drawer>
     );
@@ -29,6 +30,7 @@ function DetailSheet({ isOpen, onClose, title, children }: DetailSheetProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       {children}
+      {footer && <div className='mt-4'>{footer}</div>}
     </Modal>
   );
 }

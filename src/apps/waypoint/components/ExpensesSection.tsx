@@ -2,17 +2,19 @@ import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import {
   Button,
-  Disclosure,
+  Clickable,
   Drawer,
   Input,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, ListFilter } from 'lucide-react';
+import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
+import SearchInput from '@/components/SearchInput';
 import DetailSheet from '@/components/DetailSheet';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -22,6 +24,7 @@ import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   EXPENSE_SORT_OPTIONS,
+  LIST_SEARCH_THRESHOLD,
   EXPENSE_TOTALS_VIEW_HINTS,
   EXPENSE_TOTALS_VIEW_OPTIONS,
 } from '@apps/waypoint/constants';
@@ -31,6 +34,9 @@ import SectionHeader from '@/components/SectionHeader';
 import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
+import PersonalExpenseFormModal, {
+  type PersonalExpenseSubmitValues,
+} from '@apps/waypoint/components/PersonalExpenseFormModal';
 import ExpenseSplitModal, {
   type ExpenseSplitSubmitValues,
 } from '@apps/waypoint/components/ExpenseSplitModal';
@@ -39,17 +45,24 @@ import MarkExpensePaidModal, {
 } from '@apps/waypoint/components/MarkExpensePaidModal';
 import {
   createExpense,
+  createPersonalExpense,
   deleteExpense,
+  deletePersonalExpense,
   markExpensePaid,
+  markExpenseUnpaid,
+  setPersonalExpenseStatus,
   removeEarlyPayment,
   setEarlyPayment,
   setEarlyPaymentReturned,
   toggleExpenseRepaid,
   updateExpense,
   updateExpenseSplit,
+  updatePersonalExpense,
 } from '@apps/waypoint/store/actions/expenseActions';
 import {
   computeExpenseTotals,
+  computePersonalTotals,
+  selectPersonalExpenses,
   selectTripExpenses,
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
@@ -57,11 +70,13 @@ import type {
   ExpenseSortBy,
   ExpenseStatus,
   ExpenseTotalsView,
+  PersonalExpense,
   TripExpense,
   TripSpace,
 } from '@apps/waypoint/types';
 import {
   getExpenseCategoryKey,
+  getExpenseCategoryKeyEmoji,
   getExpenseCategoryKeyLabel,
   getExpenseCategoryKeys,
 } from '@apps/waypoint/utils/expenseCategories';
@@ -145,6 +160,7 @@ function describeSplit(
     : `Split · ${targetLabel} (even)`;
 }
 
+const PERSONAL_PREVIEW_COUNT = 3;
 const EAGER_DAYS = 3;
 const ESTIMATED_ROW_HEIGHT = 72;
 
@@ -235,6 +251,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const expenses = useAppSelector(selectTripExpenses);
+  const personalExpenses = useAppSelector(selectPersonalExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
@@ -248,10 +265,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
-  const [payingExpense, setPayingExpense] = useState<TripExpense | null>(null);
+  const [paying, setPaying] = useState<{ id: string } | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const payingExpense = paying ? (expenses.find((expense) => expense.id === paying.id) ?? null) : null;
   const [editingExpense, setEditingExpense] = useState<TripExpense | null>(null);
   const [splittingExpense, setSplittingExpense] = useState<TripExpense | null>(null);
   const [earlyExpense, setEarlyExpense] = useState<TripExpense | null>(null);
+  const [personalFormExpense, setPersonalFormExpense] = useState<PersonalExpense | null>(null);
+  const [newExpenseAudience, setNewExpenseAudience] = useState<'EVERYONE' | 'ME'>('EVERYONE');
+  const [isPersonalSubmitting, setIsPersonalSubmitting] = useState(false);
+  const [showAllPersonal, setShowAllPersonal] = useState(false);
+  const [isPersonalListOpen, setIsPersonalListOpen] = useState(false);
+  const [personalQuery, setPersonalQuery] = useState('');
   const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
@@ -276,6 +301,26 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     [expenses],
   );
   const categoryKeys = useMemo(() => getExpenseCategoryKeys(expenses), [expenses]);
+  const personalCategoryKeys = useMemo(
+    () => getExpenseCategoryKeys([...expenses, ...personalExpenses]),
+    [expenses, personalExpenses],
+  );
+  const sortedPersonalExpenses = useMemo(
+    () =>
+      [...personalExpenses].sort(
+        (a, b) => (a.dayIndex ?? Infinity) - (b.dayIndex ?? Infinity) || a.createdAt - b.createdAt,
+      ),
+    [personalExpenses],
+  );
+  const showPersonalSearch = personalExpenses.length >= LIST_SEARCH_THRESHOLD;
+  const personalMatches = showPersonalSearch && personalQuery.trim() !== ''
+    ? sortedPersonalExpenses.filter((expense) =>
+        expense.title.toLowerCase().includes(personalQuery.trim().toLowerCase()),
+      )
+    : null;
+  const visiblePersonalExpenses =
+    personalMatches ?? (showAllPersonal ? sortedPersonalExpenses : sortedPersonalExpenses.slice(0, PERSONAL_PREVIEW_COUNT));
+  const personalTotals = useMemo(() => computePersonalTotals(personalExpenses), [personalExpenses]);
   const filteredExpenses = expenses.filter((expense) => {
     const matchesDay =
       dayFilter.length === 0 ||
@@ -339,17 +384,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     totalsView === 'me'
       ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
       : toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
-  const totalCards: { label: string; total: TripExpenseTotals['total'] }[] =
+  const totalCards: { label: string; total: TripExpenseTotals['total']; personal: number }[] =
     totalsView === 'me'
       ? [
-          { label: 'Paid by me', total: myTotals.paidByMe },
-          { label: 'Expected for me', total: myTotals.expectedForMe },
-          { label: 'My total', total: myTotals.myTotal },
+          { label: 'Paid by me', total: myTotals.paidByMe, personal: personalTotals.paid },
+          { label: 'Expected for me', total: myTotals.expectedForMe, personal: personalTotals.expected },
+          { label: 'My total', total: myTotals.myTotal, personal: personalTotals.total },
         ]
       : [
-          { label: 'Paid', total: toTotalsView(totals.paid) },
-          { label: 'Expected', total: toTotalsView(totals.expected) },
-          { label: 'Total', total: toTotalsView(totals.total) },
+          { label: 'Paid', total: toTotalsView(totals.paid), personal: personalTotals.paid },
+          { label: 'Expected', total: toTotalsView(totals.expected), personal: personalTotals.expected },
+          { label: 'Total', total: toTotalsView(totals.total), personal: personalTotals.total },
         ];
   const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
   const myOpenPairs = pairSettlements.filter(
@@ -380,15 +425,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             amount: values.amount,
             amountMin: values.amountMin,
             amountMax: values.amountMax,
-            payerUid: values.payerUid,
-            status: values.status,
             dayIndex: values.dayIndex,
-            paidAmount: values.paidAmount,
             category: values.category,
             customCategoryLabel: values.customCategoryLabel,
             note: values.note,
             groupLabel: values.groupLabel,
             isPerPerson: values.isPerPerson,
+            linkedTo: values.linkedTo,
           }),
         ).unwrap();
       } else {
@@ -398,6 +441,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             tripId: trip.id,
             memberIds: Object.keys(trip.members),
             ...values,
+            split: values.split ?? { targetType: 'EVERYONE_CURRENT', targetMemberIds: [] },
           }),
         ).unwrap();
       }
@@ -417,6 +461,53 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
   };
 
+  const handlePersonalSubmit = async (values: PersonalExpenseSubmitValues) => {
+    if (!personalFormExpense) {
+      return;
+    }
+    setIsPersonalSubmitting(true);
+    try {
+      await dispatch(updatePersonalExpense({ uid: currentUserId, expenseId: personalFormExpense.id, ...values })).unwrap();
+      setPersonalFormExpense(null);
+    } finally {
+      setIsPersonalSubmitting(false);
+    }
+  };
+
+  const handleTogglePersonalStatus = async () => {
+    if (!personalFormExpense) {
+      return;
+    }
+    await dispatch(
+      setPersonalExpenseStatus({
+        uid: currentUserId,
+        expenseId: personalFormExpense.id,
+        status: personalFormExpense.status === 'PAID' ? 'EXPECTED' : 'PAID',
+      }),
+    ).unwrap();
+    setPersonalFormExpense(null);
+  };
+
+  const handlePersonalCreate = async (values: PersonalExpenseSubmitValues) => {
+    setIsSubmitting(true);
+    try {
+      await dispatch(createPersonalExpense({ uid: currentUserId, tripId: trip.id, ...values })).unwrap();
+      setIsModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePersonalDelete = async (expense: PersonalExpense) => {
+    setIsPersonalSubmitting(true);
+    try {
+      await dispatch(deletePersonalExpense({ uid: currentUserId, expenseId: expense.id })).unwrap();
+      setPersonalFormExpense(null);
+    } finally {
+      setIsPersonalSubmitting(false);
+    }
+  };
+
   const handleDelete = async (expense: TripExpense) => {
     setIsSubmitting(true);
     setError(null);
@@ -433,16 +524,60 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   const handleMarkPaid = async (expense: TripExpense, values: MarkExpensePaidValues) => {
     setMarkingPaidId(expense.id);
-    setError(null);
+    setPayError(null);
     try {
       await dispatch(markExpensePaid({ expense, ...values })).unwrap();
-      setPayingExpense(null);
+      setPaying(null);
     } catch (markError) {
-      setError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
+      setPayError(getErrorMessage(markError, 'Unable to mark this expense as paid.'));
     } finally {
       setMarkingPaidId(null);
     }
   };
+
+  const handleMarkUnpaid = async (expense: TripExpense) => {
+    const confirmed = await confirm({
+      title: 'Mark as unpaid',
+      message: `Mark "${expense.title}" as not paid yet? It goes back to expected and leaves the dues until it is paid again. Repayments marked on it are cleared, and the amount stays as entered.`,
+    });
+    if (!confirmed) {
+      return;
+    }
+    setError(null);
+    try {
+      await dispatch(markExpenseUnpaid({ expense })).unwrap();
+    } catch (markError) {
+      setError(getErrorMessage(markError, 'Unable to mark this expense as unpaid.'));
+    }
+  };
+
+  const renderPersonalList = (items: PersonalExpense[], onOpen: (expense: PersonalExpense) => void) => (
+    <ul className='divide-border divide-y'>
+      {items.map((expense) => (
+        <li key={expense.id}>
+          <Clickable className='w-full' onButtonClick={() => onOpen(expense)} buttonProps={{ 'aria-label': `Open ${expense.title}` }}>
+            <div className='flex w-full items-center gap-3 py-3 text-left'>
+              <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
+                {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
+              </span>
+              <span className='min-w-0 flex-1'>
+                <span className='block truncate font-medium'>{expense.title}</span>
+                <span className='text-muted-foreground line-clamp-2 block text-sm'>
+                  {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} ·{' '}
+                  {expense.status === 'PAID' ? 'Paid' : 'Still to pay'}
+                  {expense.dayIndex !== null && ` · ${getDayLabel(trip.startDate, expense.dayIndex, dayCount)}`}
+                </span>
+              </span>
+              <span className='shrink-0 font-semibold whitespace-nowrap'>
+                {formatTotal(expense.amount, expense.amount, currency)}
+              </span>
+              <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+            </div>
+          </Clickable>
+        </li>
+      ))}
+    </ul>
+  );
 
   const handleSplitSubmit = async (values: ExpenseSplitSubmitValues) => {
     if (!splittingExpense) {
@@ -511,7 +646,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             key: 'mark-paid',
             label: 'Mark paid',
             description: 'Record who covered it and what it cost.',
-            run: () => setPayingExpense(expense),
+            run: () => {
+              setPayError(null);
+              setPaying({ id: expense.id });
+            },
           },
         ]
       : []),
@@ -520,7 +658,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {
             key: 'early-payment',
             label: getEarlyPayments(expense)[currentUserId] ? 'Edit my early payment' : 'Record an early payment',
-            description: 'Money you already sent a teammate for this.',
+            description: 'Money you already sent someone for this.',
             run: () => setEarlyExpense(expense),
           },
         ]
@@ -545,6 +683,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               setEditingExpense(expense);
               setIsModalOpen(true);
             },
+          },
+        ]
+      : []),
+    ...(canAddExpenses && expense.status === 'PAID'
+      ? [
+          {
+            key: 'mark-unpaid',
+            label: 'Mark as unpaid',
+            description: 'Put it back to expected if it was marked paid by mistake.',
+            run: () => void handleMarkUnpaid(expense),
           },
         ]
       : []),
@@ -608,14 +756,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
     return (
       <>
-        <div className='min-w-0'>
+        <div className='flex min-w-0 gap-3'>
+          <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
+            {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
+          </span>
+          <div className='min-w-0'>
           <p className='font-medium'>{expense.title}</p>
           <p className='text-muted-foreground text-sm'>
             {getExpenseCategoryKeyLabel(getExpenseCategoryKey(expense))} · {getPayerLine(expense)}
           </p>
-          {expense.status === 'PAID' && <p className='text-muted-foreground text-xs'>{splitDescription}</p>}
+          {expense.status === 'PAID' && (
+            <p className='text-muted-foreground flex items-center gap-1 text-xs'>
+              <Users className='h-3 w-3 shrink-0' aria-hidden='true' />
+              {splitDescription}
+            </p>
+          )}
           {renderEarlyPayments(expense)}
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
+          </div>
         </div>
         <div className='col-span-2'>
           <p className='whitespace-nowrap font-medium'>
@@ -686,8 +844,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             variant='tertiary'
             aria-label={`Open details for ${expense.title}`}
             onClick={() => setDetailExpenseId(expense.id)}
-            className='h-auto w-full justify-between gap-3 rounded-none px-0 py-3 text-left font-normal'
+            className='h-auto w-full justify-between gap-3 rounded-none px-0! py-3 text-left font-normal'
           >
+            <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
+              {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
+            </span>
             <span className='min-w-0 flex-1'>
               <span className='block truncate font-medium'>{expense.title}</span>
               <span className='text-muted-foreground line-clamp-2 block text-sm'>
@@ -788,28 +949,56 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       <SectionHeader
         title='Expenses'
         action={
-          canAddExpenses && (
-            <Button
-              onClick={() => {
-                setEditingExpense(null);
-                setIsModalOpen(true);
-              }}
-            >
-              Add
-            </Button>
-          )
+          <Button
+            onClick={() => {
+              setEditingExpense(null);
+              setNewExpenseAudience(canAddExpenses ? 'EVERYONE' : 'ME');
+              setIsModalOpen(true);
+            }}
+          >
+            Add
+          </Button>
         }
       />
       <div className='space-y-3'>
         <PillGroup
           label='Totals view'
+          isThin
           options={EXPENSE_TOTALS_VIEW_OPTIONS}
           value={totalsView}
           onChange={setTotalsView}
         />
-        <p className='text-muted-foreground text-xs'>{EXPENSE_TOTALS_VIEW_HINTS[totalsView]}</p>
+        <p className='text-muted-foreground text-xs'>
+          {EXPENSE_TOTALS_VIEW_HINTS[totalsView]}
+          {totalsView === 'me' && (
+            <>
+              {' '}
+              <HelpTip
+                title='Your share'
+                linkLabel='What do these mean?'
+                className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
+              >
+                <p>
+                  <strong>Paid by me</strong> is what you covered up front.
+                </p>
+                <p>
+                  <strong>Expected for me</strong> is your share of what is still to pay.
+                </p>
+                <p>
+                  <strong>My total</strong> is your share of everything, including what others covered.
+                </p>
+              </HelpTip>
+            </>
+          )}
+        </p>
+        {personalTotals.total > 0 && (
+          <p className='text-muted-foreground flex items-start gap-1.5 text-xs'>
+            <Lock className='mt-0.5 h-3 w-3 shrink-0' aria-hidden='true' />
+            <span>The orange amount is what you&apos;re covering yourself. Only you see it, and it isn&apos;t in anyone else&apos;s totals.</span>
+          </p>
+        )}
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
-          {totalCards.map(({ label, total }) => (
+          {totalCards.map(({ label, total, personal }) => (
             <div
               key={label}
               className={join(
@@ -821,6 +1010,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               <p className='mt-1 text-base font-semibold text-balance sm:text-lg'>
                 {formatTotal(total.min, total.max, currency)}
               </p>
+              {personal > 0 && (
+                <>
+                  <p className='bg-accent text-accent-foreground mt-1.5 inline-block max-w-full rounded-2xl px-2 py-0.5 text-xs font-medium text-balance'>
+                    + {formatTotal(personal, personal, currency)} personal
+                  </p>
+                  <p className='mt-1 text-sm font-semibold text-balance'>
+                    = {formatTotal(total.min + personal, total.max + personal, currency)}
+                  </p>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -830,30 +1029,93 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           You&apos;ve sent {formatTotal(myTotals.sentEarly, myTotals.sentEarly, currency)} early toward expected expenses.
         </p>
       )}
-      <div className='border-border rounded-lg border'>
-        <Disclosure
-          label={
-            <span className='text-sm font-medium'>
-              Dues summary
-              {myOpenPairs > 0 && (
-                <span className='text-muted-foreground font-normal'>
-                  {' '}
-                  · {myOpenPairs} to settle
-                </span>
-              )}
-            </span>
-          }
-          isOpen={isDuesOpen}
-          onToggle={setIsDuesOpen}
-          buttonClassName='px-3 py-2.5 hover:bg-muted/40'
-          className='overflow-visible'
-        >
-          <div className='border-border border-t px-3 pb-3'>
-          {pairSettlements.length === 0 ? (
-            <p className='text-muted-foreground mt-1 text-sm'>
-              Everyone&apos;s settled up.
+      <div className='space-y-1'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
+              <Lock className='h-4 w-4 shrink-0' aria-hidden='true' />
+              Just for me
+            </h3>
+            <p className='text-muted-foreground -mt-1 text-sm'>
+              Only you can see these
+              {personalExpenses.length > 0 && ` · ${formatTotal(personalTotals.total, personalTotals.total, currency)}`}
             </p>
-          ) : (
+          </div>
+          <div className='flex h-10 shrink-0 items-center'>
+            <Button
+              size='sm'
+              variant='secondary'
+              className="relative after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
+              onClick={() => {
+                setEditingExpense(null);
+                setNewExpenseAudience('ME');
+                setIsModalOpen(true);
+              }}
+            >
+              Add
+            </Button>
+          </div>
+        </div>
+        {personalExpenses.length === 0 ? (
+          <p className='text-muted-foreground py-2 text-sm'>
+            Something you&apos;re covering yourself? Add it here and see your full total.
+          </p>
+        ) : (
+          <>
+            {showPersonalSearch && (
+              <SearchInput value={personalQuery} onChange={setPersonalQuery} placeholder='Search your personal expenses' />
+            )}
+            {personalMatches?.length === 0 && (
+              <p className='text-muted-foreground py-2 text-sm'>Nothing matches that.</p>
+            )}
+            {renderPersonalList(visiblePersonalExpenses, (expense) => setPersonalFormExpense(expense))}
+            {personalMatches === null && personalExpenses.length > PERSONAL_PREVIEW_COUNT && (
+              <Button
+                type='button'
+                variant='link'
+                size='sm'
+                className='min-h-10 px-0!'
+                onClick={() =>
+                  isSmallScreen ? setIsPersonalListOpen(true) : setShowAllPersonal((current) => !current)
+                }
+              >
+                {!isSmallScreen && showAllPersonal ? 'Show fewer' : `View all ${personalExpenses.length}`}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+      <div className='space-y-1'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
+              <HandCoins className='h-4 w-4 shrink-0' aria-hidden='true' />
+              Dues summary
+            </h3>
+            <p className='text-muted-foreground -mt-1 text-sm'>
+              {pairSettlements.length === 0
+                ? 'Nothing to settle yet.'
+                : myOpenPairs > 0
+                  ? `${myOpenPairs} for you to settle`
+                  : 'You’re all square.'}
+            </p>
+          </div>
+          <div className='flex h-10 shrink-0 items-center'>
+            {pairSettlements.length > 0 && (
+            <Button
+              size='sm'
+              variant='secondary'
+              aria-expanded={isDuesOpen}
+              className="relative after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
+              onClick={() => setIsDuesOpen((open) => !open)}
+            >
+              {isDuesOpen ? 'Hide' : 'Show'}
+            </Button>
+            )}
+          </div>
+        </div>
+        {isDuesOpen && pairSettlements.length > 0 && (
+          <div>
             <DuesSummary
               settlements={pairSettlements}
               currentUserId={currentUserId}
@@ -871,9 +1133,26 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               canRemoveEarly={(fromUid) => fromUid === currentUserId || canAddExpenses}
               onRemoveEarly={(expenseId, fromUid) => void handleRemoveEarlyFromDues(expenseId, fromUid)}
             />
-          )}
           </div>
-        </Disclosure>
+        )}
+      </div>
+      <div className='space-y-1'>
+        <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
+          <Receipt className='h-4 w-4 shrink-0' aria-hidden='true' />
+          All expenses
+        </h3>
+        <p className='text-muted-foreground -mt-2 text-sm'>
+          {filteredExpenses.length === expenses.length
+            ? `${expenses.length} ${expenses.length === 1 ? 'expense' : 'expenses'}`
+            : `${filteredExpenses.length} of ${expenses.length}`}
+          {filteredExpenses.length > 0 && (
+            <>
+              {' · '}
+              {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
+              {totalsView !== 'group' && (totalsView === 'me' ? ' your share' : ' per person')}
+            </>
+          )}
+        </p>
       </div>
       <div className='flex flex-wrap items-center gap-2'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
@@ -985,20 +1264,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </p>
       ) : (
         <div className='space-y-3'>
-          <div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
-            <p className='text-sm font-medium whitespace-nowrap'>
-              {filteredExpenses.length === expenses.length ? 'All expenses' : 'Filtered expenses'}{' '}
-              <span className='text-muted-foreground font-normal'>({filteredExpenses.length})</span>
-            </p>
-            <p className='text-sm font-semibold whitespace-nowrap'>
-              {formatTotal(filteredTotal.min, filteredTotal.max, currency)}
-              {totalsView !== 'group' && (
-                <span className='text-muted-foreground font-normal'>
-                  {totalsView === 'me' ? ' your share' : ' per person'}
-                </span>
-              )}
-            </p>
-          </div>
           {dayGroups ? (
             dayGroups.map(({ bucket, items }, dayPosition) => (
               <div
@@ -1019,11 +1284,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <ExpenseFormModal
-        key={`${editingExpense?.id ?? 'new'}-${isModalOpen ? 'open' : 'closed'}`}
+        key={`${editingExpense?.id ?? 'new'}-${newExpenseAudience}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
         trip={trip}
         initialExpense={editingExpense ?? undefined}
+        currentUserId={currentUserId}
+        initialAudience={newExpenseAudience}
+        canShare={canAddExpenses}
+        onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
         categoryKeys={categoryKeys}
+        personalCategoryKeys={personalCategoryKeys}
         existingGroupLabels={existingGroupLabels}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
@@ -1033,18 +1303,46 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           setIsModalOpen(false);
         }}
       />
+      {personalFormExpense && (
+        <PersonalExpenseFormModal
+          key={personalFormExpense.id}
+          isOpen
+          trip={trip}
+          initialExpense={personalFormExpense}
+          categoryKeys={personalCategoryKeys}
+          isSubmitting={isPersonalSubmitting}
+          onSubmit={handlePersonalSubmit}
+          onDelete={() => handlePersonalDelete(personalFormExpense)}
+          onToggleStatus={handleTogglePersonalStatus}
+          onClose={() => setPersonalFormExpense(null)}
+        />
+      )}
+      <DetailSheet isOpen={isPersonalListOpen && isSmallScreen} onClose={() => setIsPersonalListOpen(false)} title='Just for me'>
+        <div className='space-y-2'>
+          {showPersonalSearch && (
+            <SearchInput value={personalQuery} onChange={setPersonalQuery} placeholder='Search your personal expenses' />
+          )}
+          {personalMatches?.length === 0 && <p className='text-muted-foreground py-2 text-sm'>Nothing matches that.</p>}
+          {renderPersonalList(personalMatches ?? sortedPersonalExpenses, (expense) => {
+            setIsPersonalListOpen(false);
+            setPersonalFormExpense(expense);
+          })}
+        </div>
+      </DetailSheet>
       <MarkExpensePaidModal
         key={`paying-${payingExpense?.id ?? 'none'}`}
-        isOpen={payingExpense !== null}
+        isOpen={payingExpense !== null && payingExpense.status !== 'PAID'}
         trip={trip}
         expense={payingExpense}
+        currentUserId={currentUserId}
+        error={payError}
         isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
         onSubmit={(values) => {
           if (payingExpense) {
             void handleMarkPaid(payingExpense, values);
           }
         }}
-        onClose={() => setPayingExpense(null)}
+        onClose={() => setPaying(null)}
       />
       {isSmallScreen && (
         <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>

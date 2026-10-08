@@ -9,6 +9,7 @@ import {
   scaleAmount,
 } from '@apps/waypoint/utils/splitCalculators';
 import { isEventForMember } from '@apps/waypoint/utils/attendeeCalculators';
+import { getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
 import { getEventTime, getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import type {
   Announcement,
@@ -18,6 +19,7 @@ import type {
   Rental,
   Stay,
   TimelineEvent,
+  PersonalExpense,
   TripExpense,
   TripIdea,
   TripSpace,
@@ -74,6 +76,16 @@ export function selectShouldShowAlbumReminder(
 export const selectTripExpenses = (state: RootState) =>
   state.waypoint.expenses.items;
 
+/** Keys (`getExpenseLinkKey`) of every event, stay and rental that has an expense attached. */
+export const selectExpenseLinkKeys = createSelector(
+  [selectTripExpenses],
+  (expenses): ReadonlySet<string> =>
+    new Set(expenses.flatMap((expense) => (expense.linkedTo ? [getExpenseLinkKey(expense.linkedTo)] : []))),
+);
+
+export const selectPersonalExpenses = (state: RootState) =>
+  state.waypoint.personalExpenses.items;
+
 interface ExpenseTotal {
   min: number;
   max: number;
@@ -127,6 +139,18 @@ export function computeExpenseTotals(
   }
 
   return totals;
+}
+
+const roundCents = (value: number) => Math.round(value * 100) / 100;
+
+/** The viewer's own private expenses, summed by status. */
+export function computePersonalTotals(expenses: PersonalExpense[]) {
+  const sum = (items: PersonalExpense[]) => roundCents(items.reduce((total, item) => total + item.amount, 0));
+  return {
+    paid: sum(expenses.filter((expense) => expense.status === 'PAID')),
+    expected: sum(expenses.filter((expense) => expense.status !== 'PAID')),
+    total: sum(expenses),
+  };
 }
 
 export const selectTripExpenseTotals = (state: RootState): TripExpenseTotals => {

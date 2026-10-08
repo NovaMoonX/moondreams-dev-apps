@@ -16,6 +16,7 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import { formatTimezoneAbbreviation, formatTimezoneLabel } from '@/utils/timezoneUtils';
 
 import DayWeather from '@apps/waypoint/components/DayWeather';
+import WeatherDetailSheet from '@apps/waypoint/components/WeatherDetailSheet';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import { RentalDetailLines } from '@apps/waypoint/components/RentalCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
@@ -113,9 +114,10 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const upNextEvent = useAppSelector(selectUpNextEvent(trip, now, currentUserId));
   const stays = useAppSelector(selectStays);
   const events = useAppSelector(selectSortedTimelineEvents);
-  const weather = useTripWeather(trip, events, stays, now);
+  const weather = useTripWeather(trip, events, now);
   const rentals = useAppSelector(selectRentals);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
+  const [isWeatherOpen, setIsWeatherOpen] = useState(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
 
   if (!isLive) {
@@ -166,6 +168,12 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
 
   return (
     <div className='space-y-5 sm:space-y-3'>
+      <WeatherDetailSheet
+        isOpen={isWeatherOpen}
+        onClose={() => setIsWeatherOpen(false)}
+        title="Today's weather"
+        details={weather.getDayDetails(todayIndex)}
+      />
       <div className='space-y-3'>
         {checkInStays.map((stay) => (
           <CheckInStayCard
@@ -202,8 +210,15 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             </div>
             <DayWeather
               forecast={todayWeather}
+              also={weather.getAlso(todayIndex)}
+              placeName={
+                weather.getAlso(todayIndex).length > 0 || weather.getPlaceName(todayIndex) !== (trip.city?.name ?? null)
+                  ? weather.getPlaceName(todayIndex)
+                  : null
+              }
               hours={weather.getRemainingHoursToday(todayIndex)}
               isMinimized={false}
+              onOpen={() => setIsWeatherOpen(true)}
             />
             <WeatherAttribution />
           </section>
@@ -275,6 +290,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             event={detail.event}
             zoneStyle='long'
             weather={weather.getEvent(detail.event.id)}
+            weatherPlace={weather.getEventPlace(detail.event.id)}
             showTitle={false}
             showNotes
             canEdit={false}
@@ -403,7 +419,7 @@ function CheckInStayCard({
             </p>
           )}
           {(stay.linkUrl || stay.notes) && (
-            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+            <div className='flex min-w-0 items-center gap-x-3'>
               <NotesViewButton title={stay.name} notes={stay.notes} />
               {stay.linkUrl && <ExternalLinkText href={stay.linkUrl} />}
             </div>
@@ -482,7 +498,7 @@ function RentalTodayCard({
             </p>
           )}
           {(rental.linkUrl || rental.notes) && (
-            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+            <div className='flex min-w-0 items-center gap-x-3'>
               <NotesViewButton title={rental.name} notes={rental.notes} />
               {rental.linkUrl && <ExternalLinkText href={rental.linkUrl} />}
             </div>

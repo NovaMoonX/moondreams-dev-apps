@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import { collection, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@/lib/firebase/config';
@@ -8,7 +8,7 @@ import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
-import type { TripSpace } from '@apps/waypoint/types';
+import type { TripCity, TripSpace } from '@apps/waypoint/types';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import {
   createTripSpace,
@@ -33,6 +33,7 @@ interface CreateTripInput {
   startDate: number;
   endDate: number;
   timezone: string;
+  city: TripCity | null;
 }
 
 export interface EditTripValues {
@@ -75,7 +76,7 @@ export const createTrip = createAsyncThunk<
 >(
   'waypoint/trips/create',
   async (
-    { uid, title, startDate, endDate, timezone },
+    { uid, title, startDate, endDate, timezone, city },
     { dispatch, rejectWithValue },
   ) => {
     const trimmedTitle = title.trim();
@@ -99,6 +100,7 @@ export const createTrip = createAsyncThunk<
       startDate,
       endDate,
       timezone,
+      city,
       createdBy: uid,
       createdAt: Date.now(),
       inviteCode,
@@ -255,6 +257,22 @@ export const editTrip = createAsyncThunk<
     return updatedTrip;
   },
 );
+
+export const setTripCity = createAsyncThunk<
+  TripSpace,
+  { uid: string; trip: TripSpace; city: TripCity | null },
+  { rejectValue: string }
+>('waypoint/trips/setCity', async ({ uid, trip, city }, { dispatch, rejectWithValue }) => {
+  if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
+    return rejectWithValue('You do not have permission to edit this trip.');
+  }
+
+  const lastEditedAt = Date.now();
+  await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), { city, lastEditedAt });
+  const updatedTrip: TripSpace = { ...trip, city, lastEditedAt };
+  dispatch(upsertTrip(updatedTrip));
+  return updatedTrip;
+});
 
 export const setTripArchived = createAsyncThunk<
   TripSpace,

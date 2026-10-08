@@ -5,10 +5,15 @@ import { db } from '@/lib/firebase/config';
 import type {
   EarlyPayment,
   ExpenseCategory,
+  ExpenseLink,
   ExpenseStatus,
   ExpenseTargetType,
+  PersonalExpense,
   TripExpense,
 } from '@apps/waypoint/types';
+
+const getExpenseRef = (tripId: string, expenseId: string) =>
+  doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
 
 interface CreateExpenseInput {
   uid: string;
@@ -27,6 +32,8 @@ interface CreateExpenseInput {
   note: string | null;
   groupLabel: string | null;
   isPerPerson: boolean;
+  linkedTo: ExpenseLink | null;
+  split: { targetType: 'EVERYONE_CURRENT' | 'SPECIFIC_MEMBERS'; targetMemberIds: string[] };
 }
 
 export const createExpense = createAsyncThunk<
@@ -39,6 +46,10 @@ export const createExpense = createAsyncThunk<
 
   if (!title) {
     return rejectWithValue('Expense title is required.');
+  }
+  const sharedWith = Array.from(new Set(input.split.targetMemberIds.filter((uid) => input.memberIds.includes(uid))));
+  if (input.split.targetType === 'SPECIFIC_MEMBERS' && sharedWith.length === 0) {
+    return rejectWithValue('Pick at least one person on the trip to share it.');
   }
   if (!currency) {
     return rejectWithValue('Currency is required.');
@@ -82,13 +93,14 @@ export const createExpense = createAsyncThunk<
     category: input.category,
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
-    targetType: 'EVERYONE_CURRENT',
-    targetMemberIds: input.memberIds,
+    targetType: input.split.targetType,
+    targetMemberIds: input.split.targetType === 'EVERYONE_CURRENT' ? input.memberIds : sharedWith,
     splitAmounts: null,
     paidMemberStatus,
     earlyPayments: {},
     note: input.note?.trim() || null,
     groupLabel: input.groupLabel?.trim() || null,
+    linkedTo: input.linkedTo,
     createdBy: input.uid,
     createdAt: now,
     lastEditedAt: now,
@@ -104,15 +116,13 @@ interface UpdateExpenseInput {
   amount: number | null;
   amountMin: number | null;
   amountMax: number | null;
-  payerUid: string | null;
-  status: ExpenseStatus;
   dayIndex: number | null;
-  paidAmount: number | null;
   category: ExpenseCategory;
   customCategoryLabel: string | null;
   note: string | null;
   groupLabel: string | null;
   isPerPerson: boolean;
+  linkedTo: ExpenseLink | null;
 }
 
 export const updateExpense = createAsyncThunk<
@@ -139,28 +149,21 @@ export const updateExpense = createAsyncThunk<
   ) {
     return rejectWithValue('Enter a valid amount.');
   }
-  if (
-    input.paidAmount !== null &&
-    (!Number.isFinite(input.paidAmount) || input.paidAmount < 0)
-  ) {
-    return rejectWithValue('Enter a valid paid amount.');
-  }
-
   const changes = {
     title,
     amount: input.amount,
     amountMin: input.amountMin,
     amountMax: input.amountMax,
-    payerUid: input.status === 'PAID' ? input.payerUid : null,
-    status: input.status,
     dayIndex: input.dayIndex,
-    paidAmount: input.expense.amount === null ? input.paidAmount : null,
+    // A paid-amount override only exists beside an estimated range, so an exact amount clears it.
+    ...(input.amount !== null ? { paidAmount: null } : {}),
     category: input.category,
     customCategoryLabel:
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
     note: input.note?.trim() || null,
     groupLabel: input.groupLabel?.trim() || null,
     isPerPerson: input.isPerPerson,
+    linkedTo: input.linkedTo,
     lastEditedAt: Date.now(),
   };
 
@@ -170,6 +173,35 @@ export const updateExpense = createAsyncThunk<
   );
   return { ...input.expense, ...changes };
 });
+
+interface LinkExpenseInput {
+  expense: TripExpense;
+  link: ExpenseLink;
+  /** The plan's day, used only when the expense has none of its own. */
+  dayIndex: number | null;
+}
+
+/** Attaches an expense to a plan without changing anything it already has; a day it lacks is filled in from the plan. */
+export const linkExpenseToPlan = createAsyncThunk<TripExpense, LinkExpenseInput>(
+  'waypoint/expenses/link',
+  async ({ expense, link, dayIndex }) => {
+    const expenseRef = doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id);
+    const linked = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        throw new Error('This expense was removed.');
+      }
+      const current = snapshot.data() as Partial<TripExpense>;
+      if (current.linkedTo) {
+        throw new Error('This expense is already linked to a plan.');
+      }
+      const changes = { linkedTo: link, dayIndex: current.dayIndex ?? dayIndex, lastEditedAt: Date.now() };
+      transaction.update(expenseRef, changes);
+      return { ...expense, ...changes };
+    });
+    return linked;
+  },
+);
 
 interface UpdateExpenseSplitInput {
   expense: TripExpense;
@@ -196,6 +228,7 @@ export const updateExpenseSplit = createAsyncThunk<
     note: input.expense.note,
     groupLabel: input.expense.groupLabel,
     isPerPerson: input.expense.isPerPerson,
+    linkedTo: input.expense.linkedTo,
     lastEditedAt: Date.now(),
   };
 
@@ -231,23 +264,63 @@ interface MarkExpensePaidInput {
 export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInput>(
   'waypoint/expenses/markPaid',
   async ({ expense, payerUid, paidAmount, knownAmount }) => {
-    // Only the fields this action owns are written — a whole-document write would clobber
-    // a debtor's concurrent repaid toggle held in `paidMemberStatus`.
-    const changes = {
-      status: 'PAID' as const,
-      payerUid,
-      amount: knownAmount ?? expense.amount,
-      amountMin: knownAmount !== null ? null : expense.amountMin,
-      amountMax: knownAmount !== null ? null : expense.amountMax,
-      paidAmount: knownAmount === null && expense.amount === null ? paidAmount : null,
-      lastEditedAt: Date.now(),
-    };
+    const expenseRef = getExpenseRef(expense.tripId, expense.id);
+    // Re-read inside the transaction so a second person tapping Mark paid, or an edit that
+    // changed the amount, is never overwritten from a stale copy.
+    const updatedExpense = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        throw new Error('This expense no longer exists.');
+      }
+      const current = snapshot.data() as TripExpense;
+      if (current.status === 'PAID') {
+        throw new Error('Someone already marked this as paid.');
+      }
+      if ((current.amount === null) !== (expense.amount === null)) {
+        throw new Error('The amount was changed while you were paying. Close this and try again.');
+      }
+      const changes = {
+        status: 'PAID' as const,
+        payerUid,
+        amount: knownAmount ?? current.amount,
+        amountMin: knownAmount !== null ? null : current.amountMin,
+        amountMax: knownAmount !== null ? null : current.amountMax,
+        paidAmount: knownAmount === null && current.amount === null ? paidAmount : null,
+        lastEditedAt: Date.now(),
+      };
+      transaction.update(expenseRef, changes);
+      return { ...current, ...changes } as TripExpense;
+    });
+    return updatedExpense;
+  },
+);
 
-    await updateDoc(
-      doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
-      changes,
-    );
-    const updatedExpense: TripExpense = { ...expense, ...changes };
+/** Puts a paid expense back to expected, clearing everyone's "repaid" marks so paying it again starts clean. */
+export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripExpense }>(
+  'waypoint/expenses/markUnpaid',
+  async ({ expense }) => {
+    const expenseRef = getExpenseRef(expense.tripId, expense.id);
+    const updatedExpense = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(expenseRef);
+      if (!snapshot.exists()) {
+        throw new Error('This expense no longer exists.');
+      }
+      const current = snapshot.data() as TripExpense;
+      if (current.status !== 'PAID') {
+        throw new Error('This was already marked as unpaid.');
+      }
+      const changes = {
+        status: 'EXPECTED' as const,
+        payerUid: null,
+        paidAmount: null,
+        paidMemberStatus: Object.fromEntries(
+          Object.keys(current.paidMemberStatus ?? {}).map((uid) => [uid, { isPaid: false, paidAt: null }]),
+        ),
+        lastEditedAt: Date.now(),
+      };
+      transaction.update(expenseRef, changes);
+      return { ...current, ...changes } as TripExpense;
+    });
     return updatedExpense;
   },
 );
@@ -280,9 +353,6 @@ export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInp
     });
   },
 );
-
-const getExpenseRef = (tripId: string, expenseId: string) =>
-  doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
 
 interface EarlyPaymentTarget {
   uid: string;
@@ -327,5 +397,83 @@ export const setEarlyPaymentReturned = createAsyncThunk<void, SetEarlyPaymentRet
       [`earlyPayments.${uid}.isReturned`]: isReturned,
       [`earlyPayments.${uid}.returnedAt`]: isReturned ? Date.now() : null,
     });
+  },
+);
+
+interface SavePersonalExpenseInput {
+  uid: string;
+  tripId: string;
+  title: string;
+  amount: number;
+  status: ExpenseStatus;
+  dayIndex: number | null;
+  category: ExpenseCategory;
+  customCategoryLabel: string | null;
+  note: string | null;
+}
+
+type PersonalExpenseFields = Omit<SavePersonalExpenseInput, 'uid' | 'tripId'>;
+
+const personalExpensesRef = (uid: string) => collection(db, 'apps', 'waypoint', 'personalExpenses', uid, 'items');
+
+function getPersonalExpenseFields(input: PersonalExpenseFields): PersonalExpenseFields | string {
+  const title = input.title.trim();
+  if (!title) {
+    return 'A title is required.';
+  }
+  if (!Number.isFinite(input.amount) || input.amount < 0) {
+    return 'Enter a valid amount.';
+  }
+  return { ...input, title, amount: Math.round(input.amount * 100) / 100, note: input.note?.trim() || null };
+}
+
+export const createPersonalExpense = createAsyncThunk<
+  PersonalExpense,
+  SavePersonalExpenseInput,
+  { rejectValue: string }
+>('waypoint/personalExpenses/create', async ({ uid, tripId, ...input }, { rejectWithValue }) => {
+  const fields = getPersonalExpenseFields(input);
+  if (typeof fields === 'string') {
+    return rejectWithValue(fields);
+  }
+
+  const expenseRef = doc(personalExpensesRef(uid));
+  const now = Date.now();
+  const expense: PersonalExpense = {
+    ...fields,
+    id: expenseRef.id,
+    tripId,
+    currency: 'USD',
+    createdAt: now,
+    lastEditedAt: now,
+  };
+  await setDoc(expenseRef, expense);
+  return expense;
+});
+
+export const setPersonalExpenseStatus = createAsyncThunk<void, { uid: string; expenseId: string; status: ExpenseStatus }>(
+  'waypoint/personalExpenses/setStatus',
+  async ({ uid, expenseId, status }) => {
+    await updateDoc(doc(personalExpensesRef(uid), expenseId), { status, lastEditedAt: Date.now() });
+  },
+);
+
+export const updatePersonalExpense = createAsyncThunk<
+  void,
+  { uid: string; expenseId: string } & PersonalExpenseFields,
+  { rejectValue: string }
+>('waypoint/personalExpenses/update', async ({ uid, expenseId, ...input }, { rejectWithValue }) => {
+  const fields = getPersonalExpenseFields(input);
+  if (typeof fields === 'string') {
+    return rejectWithValue(fields);
+  }
+
+  await updateDoc(doc(personalExpensesRef(uid), expenseId), { ...fields, lastEditedAt: Date.now() });
+});
+
+export const deletePersonalExpense = createAsyncThunk<void, { uid: string; expenseId: string }>(
+  'waypoint/personalExpenses/delete',
+  async ({ uid, expenseId }) => {
+    await deleteDoc(doc(personalExpensesRef(uid), expenseId));
   },
 );

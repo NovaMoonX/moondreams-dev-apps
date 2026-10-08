@@ -81,6 +81,7 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    city: null,
     dateShiftStatus: null,
     createdBy: alexUid,
     createdAt: joinedAt,
@@ -285,12 +286,31 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
       earlyPayments: !isPaid && index % 6 === 0 ? { [taylorUid]: { toUid: alexUid, amount: 2, paidAt: context.now - 3_600_000, isReturned: false, returnedAt: null } } : {},
       note: null,
       groupLabel: index % 10 === 0 ? `Day ${(index % TRIP_DAYS) + 1} meals` : null,
+      linkedTo: index % 4 === 0 ? { kind: 'EVENT', id: `scale-event-${index}` } : null,
       createdBy: alexUid,
       createdAt: joinedAt,
       lastEditedAt: context.now,
     });
   });
 
+  Array.from({ length: 12 }).forEach((_, index) => {
+    add(`apps/waypoint/personalExpenses/${alexUid}/items/scale-personal-${index}`, {
+      id: `scale-personal-${index}`,
+      tripId: TRIP_ID,
+      dayIndex: index % TRIP_DAYS,
+      title: `${['Souvenirs', 'Coffee run', 'Sunscreen', 'Taxi home'][index % 4]} #${index + 1}`,
+      amount: 8 + (index % 5) * 9,
+      currency: 'USD',
+      status: index % 2 === 0 ? 'PAID' : 'EXPECTED',
+      category: EXPENSE_CATEGORIES[index % EXPENSE_CATEGORIES.length],
+      customCategoryLabel: null,
+      note: null,
+      createdAt: joinedAt,
+      lastEditedAt: joinedAt,
+    });
+  });
+
   await writeAll(firestore, writes);
+
   return writes.length;
 }

@@ -22,7 +22,7 @@ export function NotesViewButton({ title, notes }: NotesViewButtonProps) {
         type='button'
         variant='tertiary'
         size='sm'
-        className='h-auto min-h-0 p-0! text-sm'
+        className='h-auto min-h-0 shrink-0 p-0! text-sm whitespace-nowrap'
         onClick={() => setIsOpen(true)}
       >
         View notes

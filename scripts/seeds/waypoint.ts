@@ -193,6 +193,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    city: { name: 'Seattle', region: 'Washington', country: 'United States', latitude: 47.60621, longitude: -122.33207 },
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -220,6 +221,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    city: null,
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -265,6 +267,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    city: null,
     dateShiftStatus: null,
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -310,6 +313,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     note?: string | null;
     groupLabel?: string | null;
     isPerPerson?: boolean;
+    linkedTo?: { kind: 'EVENT' | 'STAY' | 'RENTAL'; id: string } | null;
     targetType?: 'EVERYONE_CURRENT' | 'EVERYONE_INCLUDING_FUTURE' | 'JUST_ME' | 'SPECIFIC_MEMBERS';
     targetMemberIds?: string[];
     splitAmounts?: Record<string, number> | null;
@@ -344,6 +348,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       earlyPayments: {
         [taylor.uid]: { toUid: alex.uid, amount: 25, paidAt: context.now - 7_200_000, isReturned: false, returnedAt: null },
       },
+      linkedTo: { kind: 'EVENT', id: 'seed-waypoint-dinner' },
     },
     {
       id: 'seed-expense-parking',
@@ -370,6 +375,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       status: 'PAID',
       category: 'ACTIVITIES',
       repaidBy: [jamie.uid],
+      linkedTo: { kind: 'EVENT', id: 'seed-waypoint-hike' },
     },
     {
       id: 'seed-expense-ferry',
@@ -409,6 +415,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       payerUid: taylor.uid,
       status: 'PAID',
       category: 'TRANSPORT',
+      linkedTo: { kind: 'RENTAL', id: 'seed-waypoint-rental-sea' },
     },
     {
       id: 'seed-expense-museum-tickets',
@@ -509,6 +516,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       note: seedExpense.note ?? null,
       groupLabel: seedExpense.groupLabel ?? null,
       isPerPerson: seedExpense.isPerPerson ?? false,
+      linkedTo: seedExpense.linkedTo ?? null,
       createdBy: alex.uid,
       createdAt: context.now,
       lastEditedAt: context.now,
@@ -662,6 +670,48 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     createdAt: joinedAt,
     lastEditedAt: context.now,
   });
+
+  // A day split between two places, and a day entirely somewhere else, to show the weather following the plans.
+  const portlandEvents = [
+    { id: 'seed-waypoint-powells', day: 1, start: '15:00', title: "Powell's Books", locationName: "Powell's City of Books", address: 'Portland, OR', latitude: 45.5230, longitude: -122.6814 },
+    { id: 'seed-waypoint-rose-garden', day: 3, start: '10:00', title: 'International Rose Test Garden', locationName: 'International Rose Test Garden', address: 'Portland, OR', latitude: 45.5188, longitude: -122.7094 },
+  ];
+  for (const portland of portlandEvents) {
+    await eventsCollection.doc(portland.id).set({
+      id: portland.id,
+      tripId: TRIP_ID,
+      eventType: 'ACTIVITY',
+      ...relativeEventTime({ day: portland.day, start: portland.start, end: null }),
+      title: portland.title,
+      locationName: portland.locationName,
+      address: portland.address,
+      latitude: portland.latitude,
+      longitude: portland.longitude,
+      eventDetails: { settings: ['OUTDOOR'] },
+      notes: null,
+      attendeeTargetType: 'EVERYONE_CURRENT',
+      assignedMemberIds: [alex.uid, taylor.uid],
+      venueOpenTime: null,
+      venueCloseTime: null,
+      changeHistory: [],
+      place: null,
+      linkUrl: null,
+      linkPreview: null,
+      linkKind: null,
+      groupLabel: null,
+      stackLabel: null,
+      reminderMinutesBefore: 20,
+      reminderEnabled: true,
+      reminderId: null,
+      isArchived: false,
+      archivedBy: null,
+      archivedAt: null,
+      seenBy: {},
+      createdBy: alex.uid,
+      createdAt: joinedAt,
+      lastEditedAt: context.now,
+    });
+  }
 
   await eventsCollection.doc('seed-waypoint-hike').set({
     id: 'seed-waypoint-hike',
@@ -1109,7 +1159,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     address: null,
     latitude: null,
     longitude: null,
-    eventDetails: { settings: ['INDOOR'] },
+    eventDetails: { settings: ['INDOOR', 'OUTDOOR'] },
     notes: null,
     attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: [],
@@ -1480,6 +1530,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     sharedAlbumUrl: null,
     sharedAlbumSetByUid: null,
     sharedAlbumSetAt: null,
+    city: null,
     dateShiftStatus: 'IDLE',
     createdBy: alex.uid,
     createdAt: joinedAt,
@@ -1522,6 +1573,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       sharedAlbumUrl: null,
       sharedAlbumSetByUid: null,
       sharedAlbumSetAt: null,
+      city: null,
       dateShiftStatus: null,
       createdBy: alex.uid,
       createdAt: joinedAt,
@@ -1789,6 +1841,25 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const personalExpenses = [
+    { id: 'seed-personal-souvenirs', title: 'Souvenirs for the kids', amount: 64.5, status: 'EXPECTED', category: 'SHOPPING', dayIndex: 2 },
+    { id: 'seed-personal-coffee', title: 'Airport coffee', amount: 12, status: 'PAID', category: 'FOOD', dayIndex: 0 },
+    { id: 'seed-personal-spa', title: 'Spa treatment', amount: 140, status: 'EXPECTED', category: 'ACTIVITIES', dayIndex: null },
+  ];
+  for (const personalExpense of personalExpenses) {
+    await context.firestore
+      .doc(`apps/waypoint/personalExpenses/${alex.uid}/items/${personalExpense.id}`)
+      .set({
+        ...personalExpense,
+        tripId: TRIP_ID,
+        currency: 'USD',
+        customCategoryLabel: null,
+        note: null,
+        createdAt: context.now,
+        lastEditedAt: context.now,
+      });
+  }
+
   const scaleDocuments = await seedWaypointScaleTrip({
     context,
     tripStart: activeTripStart,
@@ -1800,6 +1871,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 78 + scaleDocuments,
+    firestoreDocuments: 80 + personalExpenses.length + scaleDocuments,
   };
 }
