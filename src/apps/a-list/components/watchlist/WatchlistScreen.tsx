@@ -276,7 +276,9 @@ function WatchlistScreen() {
           <span className='text-4xl' aria-hidden='true'>
             {emptyState.emoji}
           </span>
-          <p className='text-lg font-medium'>{emptyState.title}</p>
+          <p className='max-w-full text-lg font-medium break-words'>
+            {emptyState.title}
+          </p>
           <p className='text-muted-foreground max-w-xs text-sm'>
             {emptyState.body}
           </p>
