@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
@@ -14,13 +15,16 @@ import { normalizeString } from '@/utils/stringUtils';
 import SectionDivider from '@/components/SectionDivider';
 import WatchlistFilters from '@apps/a-list/components/watchlist/WatchlistFilters';
 import WatchlistRow from '@apps/a-list/components/watchlist/WatchlistRow';
-import { WATCH_PRIORITIES } from '@apps/a-list/constants';
+import {
+  WATCH_PRIORITIES,
+  WATCHLIST_SORT_OPTIONS,
+} from '@apps/a-list/constants';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectOpeningRows,
   selectWatchlistRows,
 } from '@apps/a-list/store/selectors';
-import type { WatchlistFilter } from '@apps/a-list/types';
+import type { WatchlistFilter, WatchlistSort } from '@apps/a-list/types';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 function WatchlistScreen() {
@@ -30,6 +34,7 @@ function WatchlistScreen() {
   const openingRows = useAppSelector((state) => selectOpeningRows(state, now));
   const [filters, setFilters] = useState<WatchlistFilter[]>([]);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<WatchlistSort>('default');
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
   const toggleFilter = (filter: WatchlistFilter) =>
@@ -43,7 +48,21 @@ function WatchlistScreen() {
     openingRows.map((row) => [row.item.movieKey, row.daysUntil]),
   );
 
-  // Rows arrive in priority order. No pills means everything, unseen first; each pill narrows it.
+  const compareRows = (
+    left: WatchlistRowData,
+    right: WatchlistRowData,
+  ): number => {
+    if (sort === 'title')
+      return left.item.movie.title.localeCompare(right.item.movie.title);
+    if (sort === 'addedAt') return right.item.createdAt - left.item.createdAt;
+    const leftRelease = left.item.movie.releaseDate;
+    const rightRelease = right.item.movie.releaseDate;
+    if (leftRelease === null || rightRelease === null)
+      return Number(leftRelease === null) - Number(rightRelease === null);
+    return rightRelease - leftRelease;
+  };
+
+  // Rows arrive in priority order. Seen movies only show under the Seen pill; each other pill narrows the unseen ones.
   const getVisibleRows = (): WatchlistRowData[] => {
     const priorities = filters.filter((filter) =>
       WATCH_PRIORITIES.includes(filter as (typeof WATCH_PRIORITIES)[number]),
@@ -55,13 +74,14 @@ function WatchlistScreen() {
       (row) =>
         normalizeString(row.item.movie.title).includes(normalizedQuery) &&
         (!isOpeningOn || row.item.movieKey in daysByMovie) &&
-        (!isSeenOn || row.isSeen) &&
-        (priorities.length === 0 ||
-          (row.isSeen
-            ? isSeenOn
-            : (priorities as string[]).includes(row.item.priority))),
+        (isSeenOn
+          ? row.isSeen
+          : !row.isSeen &&
+            (priorities.length === 0 ||
+              (priorities as string[]).includes(row.item.priority))),
     );
 
+    if (sort !== 'default') return [...matches].sort(compareRows);
     if (isOpeningOn) {
       return [...matches].sort(
         (left, right) =>
@@ -73,10 +93,7 @@ function WatchlistScreen() {
         (left, right) => (right.lastWatchedAt ?? 0) - (left.lastWatchedAt ?? 0),
       );
     }
-    return [
-      ...matches.filter((row) => !row.isSeen),
-      ...matches.filter((row) => row.isSeen),
-    ];
+    return matches;
   };
 
   const visibleRows = getVisibleRows();
@@ -86,7 +103,7 @@ function WatchlistScreen() {
     const opening = visibleRows.filter(
       (row) => row.item.movieKey in daysByMovie,
     );
-    if (filters.length > 0 || opening.length === 0)
+    if (filters.length > 0 || sort !== 'default' || opening.length === 0)
       return [{ label: null, rows: visibleRows }];
     return [
       {
@@ -189,6 +206,15 @@ function WatchlistScreen() {
         onToggle={toggleFilter}
         onClear={() => setFilters([])}
       />
+      {rows.length > 1 && (
+        <PillGroup
+          label='Sort your watchlist'
+          options={WATCHLIST_SORT_OPTIONS}
+          value={sort}
+          onChange={setSort}
+          isThin
+        />
+      )}
       {visibleRows.length === 0 ? (
         <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>
       ) : (

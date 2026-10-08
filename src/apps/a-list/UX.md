@@ -477,7 +477,7 @@ block-beta
   style O1 fill:transparent,stroke:#888888,stroke-width:1px;
   style O2 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows everything, unseen first; each pill narrows the list (priorities combine with "or", Opening and Seen with "and"). A seen movie wears a "👀 Seen" badge instead of its priority and never appears under a priority pill; it shows only under Seen or with no pills on. Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
+*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows every unseen movie; each pill narrows the list (priorities combine with "or", Opening with "and"). Seen movies show only under the Seen pill, so rows carry no "Seen" badge, just the "🍿 Seen Sep 28" date. A sort row of pills (Default, Release date, Title, Date added) sits under the filters once the list has two movies; Default keeps the priority order, and Release date and Date added put the newest first. Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
 
 **Watchlist — All**
 ```mermaid
@@ -495,7 +495,6 @@ block-beta
   R1["🖼️ Title A · Oct 16 · Dolby Cinema<br/>Must See · 📅 Planned Oct 17"]:12
   R2["🖼️ Title B · Released Sep 19 · no preference<br/>Want to See"]:12
   R3["🖼️ Title C · Released Aug 8 · Laser<br/>If I Have Time"]:12
-  R4["✓ Title D · Seen Sep 28 · IMAX · ×2"]:12
   style Title fill:transparent,stroke:#888888,stroke-width:1px;
   style Add fill:transparent,stroke:#888888,stroke-width:1px;
   style TabOpen fill:transparent,stroke:#888888,stroke-width:1px;
@@ -507,9 +506,8 @@ block-beta
   style R1 fill:transparent,stroke:#888888,stroke-width:1px;
   style R2 fill:transparent,stroke:#888888,stroke-width:1px;
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
-  style R4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and the latest watched date for seen movies, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
+*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and, under Seen, the latest watched date with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
 
 **Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above)
 ```mermaid
