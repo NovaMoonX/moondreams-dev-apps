@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
 import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 import LazyMount from '@/components/LazyMount';
@@ -92,7 +93,10 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
           autoCorrect='off'
           spellCheck={false}
           placeholder='••••'
-          className='px-12 text-center text-lg font-semibold tracking-[0.4em] uppercase'
+          className={join(
+            'px-12 text-center text-lg font-semibold tracking-[0.4em] uppercase',
+            !isShown && pin.length > 0 && 'pt-3',
+          )}
           value={isShown ? pin : '*'.repeat(pin.length)}
           onPaste={(event) => {
             event.preventDefault();
