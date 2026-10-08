@@ -23,7 +23,7 @@ interface WatchlistRowProps {
 function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
   const { item, isSeen, seenCount, nextPlannedAt, lastWatchedAt } = row;
   const { movie } = item;
-  const hasTopBadge = isSeen || item.priority !== 'IF_I_HAVE_TIME';
+  const hasTopBadge = !isSeen && item.priority !== 'IF_I_HAVE_TIME';
 
   const getReleaseText = () => {
     if (movie.releaseDate === null || daysUntil === undefined)
@@ -73,16 +73,7 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
       </div>
       {(hasTopBadge || nextPlannedAt !== null) && (
         <div className='flex shrink-0 flex-col items-end justify-between gap-2'>
-          {isSeen ? (
-            <Badge
-              variant='secondary'
-              size='xs'
-              className='gap-1 rounded-full! whitespace-nowrap'
-            >
-              <span aria-hidden='true'>👀</span>
-              Seen
-            </Badge>
-          ) : hasTopBadge ? (
+          {hasTopBadge ? (
             <PriorityBadge priority={item.priority} />
           ) : (
             <span />
