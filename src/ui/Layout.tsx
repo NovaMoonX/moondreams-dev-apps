@@ -10,6 +10,7 @@ import { useAuth } from '@hooks/useAuth';
 import { useHideOnScroll } from '@hooks/useHideOnScroll';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
+import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
@@ -90,7 +91,8 @@ function LocationSync() {
 
 function Layout() {
   const networkStatus = useNetworkStatus();
-  const isBannerVisible = networkStatus !== null;
+  const isUpdateReady = useUpdateReady();
+  const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
 
   useLayoutEffect(() => {

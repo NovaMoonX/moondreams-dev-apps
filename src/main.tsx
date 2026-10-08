@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
+import { watchForAppUpdates } from './lib/app/appUpdate';
 import { installVersionPeek } from './lib/app/versionPeek';
 import './index.css';
 
@@ -10,6 +11,7 @@ import './index.css';
 // to match the user's active sub-route (/app-a, /app-b) when triggering 
 // the "Add to Home Screen" prompt
 registerSW({ immediate: true });
+watchForAppUpdates();
 
 // A tab opened before a deploy can't fetch the new build's lazy chunks; reload once to pick them up.
 window.addEventListener('vite:preloadError', () => {
