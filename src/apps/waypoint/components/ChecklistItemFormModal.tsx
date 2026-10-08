@@ -4,13 +4,16 @@ import {
   Button,
   Form,
   FormFactories,
+  Label,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import { CalendarDays, StickyNote } from 'lucide-react';
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { PillGroup } from '@/components/PillGroup';
+import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount, getDayInputValue } from '@/utils/dateRangeUtils';
 import {
@@ -59,7 +62,7 @@ interface ChecklistItemFormModalProps {
   onClose: () => void;
 }
 
-const { custom, input, checkboxGroup } = FormFactories;
+const { custom, input } = FormFactories;
 
 const DAY_MS = 86_400_000;
 
@@ -116,6 +119,13 @@ export default function ChecklistItemFormModal({
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));
+  const [isPicking, setIsPicking] = useState((item?.assignedToUids.length ?? 0) > 0);
+  // The form reads its data once, so a change made from outside it remounts it.
+  const [formKey, setFormKey] = useState(0);
+  const resetField = (patch: Partial<ChecklistFormData>) => {
+    setFormData((current) => ({ ...current, ...patch }));
+    setFormKey((key) => key + 1);
+  };
 
   const isFormComplete =
     formData.title.trim() !== '' &&
@@ -161,82 +171,93 @@ export default function ChecklistItemFormModal({
 
     nextFields.push(
       custom({
-        name: 'dueDate',
-        label: 'Complete by',
-        renderComponent: (props) => {
-          const due = props.value as ChecklistFormData['dueDate'];
-          const dayIndex = due.enabled ? getDayIndexFromDate(trip, due.date) : null;
-          return (
-            <div className='space-y-2'>
-              <PillGroup
-                label='Complete by'
-                options={[
-                  { value: 'none', label: 'No date', emoji: '🗓️' },
-                  { value: 'date', label: 'Pick a date', emoji: '⏰' },
-                ]}
-                value={due.enabled ? 'date' : 'none'}
-                onChange={(value) => props.onValueChange({ ...due, enabled: value === 'date' })}
-              />
-              {due.enabled && (
-                <>
-                  <Input
-                    type='date'
-                    variant='outline'
-                    aria-label='Due date'
-                    value={due.date}
-                    onChange={(event) => props.onValueChange({ ...due, date: event.target.value })}
-                  />
-                  {dayIndex !== null && (
-                    <p className='text-muted-foreground text-xs'>
-                      {describeDueDay(trip, dayIndex)}. It stays that far from the trip if the trip&apos;s dates move.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        },
-      }),
-    );
-
-    nextFields.push(
-      checkboxGroup({
         name: 'assignedToUids',
-        label: 'Assign to',
-        description: 'Leave empty if everyone should own this task.',
-        options: memberOptions,
+        label: '',
+        renderComponent: (props) => (
+          <div className='space-y-2'>
+            <Label>Who&apos;s on it?</Label>
+            <PillGroup
+              label="Who's on it"
+              options={[
+                { value: 'everyone', label: 'Everyone', emoji: '👥' },
+                { value: 'pick', label: 'Pick people', emoji: '🎯' },
+              ]}
+              value={isPicking ? 'pick' : 'everyone'}
+              onChange={(value) => {
+                setIsPicking(value === 'pick');
+                if (value === 'everyone') {
+                  props.onValueChange([]);
+                }
+              }}
+            />
+            {isPicking && (
+              <MultiPillGroup
+                label='People'
+                options={memberOptions}
+                values={props.value as string[]}
+                onChange={(next) => props.onValueChange(next)}
+              />
+            )}
+          </div>
+        ),
       }),
     );
 
-    nextFields.push(
-      custom({
-        name: 'note',
-        label: 'Note',
-        renderComponent: (props) =>
-          showNoteField ? (
-            <Textarea
-              rows={2}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-              variant='outline'
-              placeholder='Anything worth remembering about this task'
-            />
-          ) : (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-auto p-0'
-              onClick={() => setShowNoteField(true)}
-            >
-              + Add note
-            </Button>
+    if (formData.dueDate.enabled) {
+      nextFields.push(
+        custom({
+          name: 'dueDate',
+          label: '',
+          renderComponent: (props) => {
+            const due = props.value as ChecklistFormData['dueDate'];
+            const dayIndex = getDayIndexFromDate(trip, due.date);
+            return (
+              <RemovableField
+                label='Complete by'
+                removeLabel='Remove date'
+                onRemove={() => resetField({ dueDate: { ...due, enabled: false } })}
+              >
+                <Input
+                  type='date'
+                  variant='outline'
+                  aria-label='Due date'
+                  value={due.date}
+                  onChange={(event) => props.onValueChange({ ...due, date: event.target.value })}
+                />
+                {dayIndex !== null && (
+                  <p className='text-muted-foreground mt-1 text-xs'>
+                    {describeDueDay(trip, dayIndex)}. It stays that far from the trip if the trip&apos;s dates move.
+                  </p>
+                )}
+              </RemovableField>
+            );
+          },
+        }),
+      );
+    }
+
+    if (showNoteField) {
+      nextFields.push(
+        custom({
+          name: 'note',
+          label: '',
+          renderComponent: (props) => (
+            <RemovableField label='Note' removeLabel='Remove note' onRemove={() => setShowNoteField(false)}>
+              <Textarea
+                rows={2}
+                value={props.value as string}
+                onChange={(event) => props.onValueChange(event.target.value)}
+                variant='outline'
+                placeholder='Anything worth remembering about this task'
+              />
+            </RemovableField>
           ),
-      }),
-    );
+        }),
+      );
+    }
 
     return nextFields;
-  }, [trip, formData.category, memberOptions, showNoteField]);
+  }, [trip, formData.category, formData.dueDate.enabled, isPicking, memberOptions, showNoteField]);
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();
@@ -293,15 +314,35 @@ export default function ChecklistItemFormModal({
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Checklist item'>
       <Form
+        key={formKey}
         id='waypoint-checklist-item'
         form={fields}
         initialData={initialData}
         columns={1}
-        onDataChange={(data) => setFormData(data as ChecklistFormData)}
+        onDataChange={(data) => setFormData((current) => ({ ...current, ...(data as ChecklistFormData) }))}
         onSubmit={(data) => {
           void handleSubmit(data as ChecklistFormData);
         }}
         submitButton={
+          <div className='contents'>
+            {(!formData.dueDate.enabled || !showNoteField) && (
+              <div className='col-span-full mb-4'>
+                <AddFieldChips
+                  heading='Add to this task'
+                  chips={[
+                    ...(formData.dueDate.enabled
+                      ? []
+                      : [{ key: 'due', label: 'Complete by', icon: <CalendarDays className='h-4 w-4' /> }]),
+                    ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
+                  ]}
+                  onAdd={(key) =>
+                    key === 'due'
+                      ? resetField({ dueDate: { ...formData.dueDate, enabled: true } })
+                      : setShowNoteField(true)
+                  }
+                />
+              </div>
+            )}
           <ModalFooterActions
             leftActions={
               item &&
@@ -322,6 +363,7 @@ export default function ChecklistItemFormModal({
                 </Button>
             }
           />
+          </div>
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
