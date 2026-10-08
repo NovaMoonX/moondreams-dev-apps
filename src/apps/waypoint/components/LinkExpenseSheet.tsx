@@ -36,6 +36,8 @@ function formatAmount(expense: TripExpense) {
     : `${formatter.format(expense.amountMin ?? 0)}–${formatter.format(expense.amountMax ?? 0)}`;
 }
 
+const KIND_NOUNS = { EVENT: 'event', STAY: 'stay', RENTAL: 'rental' } as const;
+
 function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: LinkExpenseSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -73,7 +75,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
       ).unwrap();
       addToast({
         title: `No expense needed for ${subject.title}`,
-        description: "You can undo it from the plan's details.",
+        description: `You can undo it from this ${KIND_NOUNS[subject.link.kind]}'s details.`,
         type: 'success',
       });
       onClose();
@@ -101,7 +103,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
             No expense needed
           </Button>
           <p className='text-muted-foreground text-center text-xs'>
-            <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from the plan&apos;s details.
+            <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from this {KIND_NOUNS[subject.link.kind]}&apos;s details.
           </p>
         </div>
       }
@@ -115,7 +117,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
           <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
         )}
         {unlinked.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>Every expense is already linked to a plan.</p>
+          <p className='text-muted-foreground text-sm'>Every expense is already linked to an event, stay or rental.</p>
         ) : visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No expense matches.</p>
         ) : (

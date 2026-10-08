@@ -469,6 +469,11 @@ export function EventCard({
           stackLabel={stackActionLabel}
           onStack={canModify ? () => { closeDrawer(); onStack(event); } : null}
           onSuggest={onSuggest ? () => { closeDrawer(); onSuggest(event); } : null}
+          expenseTarget={
+            EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived
+              ? { link: { kind: 'EVENT', id: event.id }, getSubject: () => getEventSubject(trip, event) }
+              : null
+          }
           archiveLabel={event.isArchived ? 'Unarchive event' : 'Archive event'}
           onArchive={canToggleArchive && showArchiveToggle ? () => onToggleArchived(event, closeDrawer) : null}
         >
