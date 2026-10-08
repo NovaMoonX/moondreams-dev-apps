@@ -439,7 +439,7 @@ where `todayDay` is the viewer's local day as a UTC-midnight value (as in §4). 
 | Must See / Want to See / If I Have Time | unseen, that priority, ordered by release date |
 | Seen | seen only, latest watched first; priority pills narrow it too |
 
-A sort control (Default, Release date, Title, Date added) re-orders whichever rows are showing; Default keeps the orders above. It is client-side state only and resets to Default when the list has fewer than two movies.
+A sort control (Default, Release date, Title, Date added) re-orders whichever rows are showing; Default keeps the orders above. Release date, Title and Date added have a natural direction (newest first, A to Z, newest first) that an Order pill flips; entries with no release date stay last either way. It is client-side state only and resets to Default when the list has fewer than two movies.
 
 #### 9. Fee chips and tax-rate chips
 

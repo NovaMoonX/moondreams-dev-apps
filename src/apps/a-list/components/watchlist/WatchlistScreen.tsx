@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import SearchInput from '@/components/SearchInput';
-import SortControl from '@/components/SortControl';
+import SortControl, { type SortOrder } from '@/components/SortControl';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -18,6 +18,7 @@ import WatchlistRow from '@apps/a-list/components/watchlist/WatchlistRow';
 import {
   WATCH_PRIORITIES,
   WATCHLIST_SORT_OPTIONS,
+  WATCHLIST_SORT_ORDERS,
 } from '@apps/a-list/constants';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
@@ -37,6 +38,7 @@ function WatchlistScreen() {
   const [filters, setFilters] = useState<WatchlistFilter[]>([]);
   const [query, setQuery] = useState('');
   const [chosenSort, setSort] = useState<WatchlistSort>('default');
+  const [order, setOrder] = useState<SortOrder>('natural');
   const sort = rows.length > 1 ? chosenSort : 'default';
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
@@ -55,14 +57,19 @@ function WatchlistScreen() {
     left: WatchlistRowData,
     right: WatchlistRowData,
   ): number => {
+    const direction = order === 'reversed' ? -1 : 1;
     if (sort === 'title')
-      return titleCollator.compare(left.item.movie.title, right.item.movie.title);
-    if (sort === 'addedAt') return right.item.createdAt - left.item.createdAt;
+      return (
+        direction *
+        titleCollator.compare(left.item.movie.title, right.item.movie.title)
+      );
+    if (sort === 'addedAt')
+      return direction * (right.item.createdAt - left.item.createdAt);
     const leftRelease = left.item.movie.releaseDate;
     const rightRelease = right.item.movie.releaseDate;
     if (leftRelease === null || rightRelease === null)
       return Number(leftRelease === null) - Number(rightRelease === null);
-    return rightRelease - leftRelease;
+    return direction * (rightRelease - leftRelease);
   };
 
   // Rows arrive in priority order. Seen movies only show under the Seen pill; every other pill narrows whichever side is showing.
@@ -211,7 +218,13 @@ function WatchlistScreen() {
               options={WATCHLIST_SORT_OPTIONS}
               value={sort}
               defaultValue='default'
-              onChange={setSort}
+              onChange={(next) => {
+                setSort(next);
+                setOrder('natural');
+              }}
+              getOrderOptions={(value) => WATCHLIST_SORT_ORDERS[value] ?? null}
+              order={order}
+              onOrderChange={setOrder}
             />
           )}
         </div>

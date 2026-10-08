@@ -1,4 +1,5 @@
 import type { PillOption } from '@/components/PillGroup';
+import type { SortOrder } from '@/components/SortControl';
 import type {
   AListTab,
   AmcFormat,
@@ -104,6 +105,24 @@ export const WATCHLIST_SORT_OPTIONS: PillOption<WatchlistSort>[] = [
   { value: 'title', label: 'Title', emoji: '🔤' },
   { value: 'addedAt', label: 'Date added', emoji: '🕒' },
 ];
+
+/** The first option is each sort's natural direction, the second its flip. */
+export const WATCHLIST_SORT_ORDERS: Partial<
+  Record<WatchlistSort, [PillOption<SortOrder>, PillOption<SortOrder>]>
+> = {
+  releaseDate: [
+    { value: 'natural', label: 'Newest first', emoji: '⬇️' },
+    { value: 'reversed', label: 'Oldest first', emoji: '⬆️' },
+  ],
+  title: [
+    { value: 'natural', label: 'A to Z', emoji: '⬇️' },
+    { value: 'reversed', label: 'Z to A', emoji: '⬆️' },
+  ],
+  addedAt: [
+    { value: 'natural', label: 'Newest first', emoji: '⬇️' },
+    { value: 'reversed', label: 'Oldest first', emoji: '⬆️' },
+  ],
+};
 
 /** Pills that narrow the watchlist; none on means everything unseen. Priorities combine with "or", the rest with "and"; Seen swaps the list to movies already watched. */
 export const WATCHLIST_FILTERS: WatchlistFilter[] = [

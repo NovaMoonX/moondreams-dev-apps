@@ -10,7 +10,11 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUpDown, Check } from 'lucide-react';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import type { PillOption } from '@/components/PillGroup';
+import { PillGroup, type PillOption } from '@/components/PillGroup';
+
+export type SortOrder = 'natural' | 'reversed';
+
+const ORDER_PREFIX = 'order:';
 
 interface SortControlProps<T extends string> {
   label: string;
@@ -19,6 +23,10 @@ interface SortControlProps<T extends string> {
   /** The option that means "no sort chosen"; any other value tints the icon. */
   defaultValue: T;
   onChange: (value: T) => void;
+  /** Labels for flipping the chosen option's direction ("Newest first" / "Oldest first"); null when it has none. */
+  getOrderOptions?: (value: T) => readonly [PillOption<SortOrder>, PillOption<SortOrder>] | null;
+  order?: SortOrder;
+  onOrderChange?: (order: SortOrder) => void;
 }
 
 /** A sort icon button beside a search field: a drawer of large options on phones, a dropdown from `sm` up. */
@@ -28,11 +36,15 @@ function SortControl<T extends string>({
   value,
   defaultValue,
   onChange,
+  getOrderOptions,
+  order = 'natural',
+  onOrderChange,
 }: SortControlProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
-  const { option } = DropdownMenuFactories;
+  const { option, separator } = DropdownMenuFactories;
   const isActive = value !== defaultValue;
+  const orderOptions = getOrderOptions?.(value) ?? null;
 
   const trigger = (
     <Button
@@ -50,19 +62,42 @@ function SortControl<T extends string>({
   if (!isPhone) {
     return (
       <DropdownMenu
-        items={options.map((choice) =>
-          option({
-            label: choice.label,
-            value: choice.value,
-            icon:
-              value === choice.value ? (
-                <Check className='text-primary h-4 w-4' />
-              ) : (
-                <span className='h-4 w-4' />
-              ),
-          }),
-        )}
-        onItemSelect={(next) => onChange(next as T)}
+        items={[
+          ...options.map((choice) =>
+            option({
+              label: choice.label,
+              value: choice.value,
+              icon:
+                value === choice.value ? (
+                  <Check className='text-primary h-4 w-4' />
+                ) : (
+                  <span className='h-4 w-4' />
+                ),
+            }),
+          ),
+          ...(orderOptions
+            ? [
+                separator(),
+                ...orderOptions.map((choice) =>
+                  option({
+                    label: choice.label,
+                    value: `${ORDER_PREFIX}${choice.value}`,
+                    icon:
+                      order === choice.value ? (
+                        <Check className='text-primary h-4 w-4' />
+                      ) : (
+                        <span className='h-4 w-4' />
+                      ),
+                  }),
+                ),
+              ]
+            : []),
+        ]}
+        onItemSelect={(next) =>
+          next.startsWith(ORDER_PREFIX)
+            ? onOrderChange?.(next.slice(ORDER_PREFIX.length) as SortOrder)
+            : onChange(next as T)
+        }
         placement='bottom'
         alignment='end'
         trigger={trigger}
@@ -95,7 +130,7 @@ function SortControl<T extends string>({
                 )}
                 onClick={() => {
                   onChange(choice.value);
-                  setIsOpen(false);
+                  if (!getOrderOptions?.(choice.value)) setIsOpen(false);
                 }}
               >
                 <span className='w-6 shrink-0 text-center' aria-hidden='true'>
@@ -107,6 +142,17 @@ function SortControl<T extends string>({
             </li>
           ))}
         </ul>
+        {orderOptions && (
+          <div className='space-y-2 pb-4'>
+            <p className='text-muted-foreground text-sm'>Order</p>
+            <PillGroup
+              label='Order'
+              options={orderOptions}
+              value={order}
+              onChange={(next) => onOrderChange?.(next)}
+            />
+          </div>
+        )}
       </Drawer>
     </>
   );
