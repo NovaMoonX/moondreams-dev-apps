@@ -20,6 +20,7 @@ function ErrorBoundary() {
   const { pathname } = useLocation()
   const { message, stack } = getErrorDetails(error);
   const showDetails = import.meta.env.DEV || isAdmin;
+  const installedApp = IS_INSTALLED_APP ? getRegistryAppForPath(pathname) : null;
 
   return (
     <div className='page flex items-center justify-center px-4 py-12'>
@@ -46,9 +47,21 @@ function ErrorBoundary() {
             )}
           </div>
         )}
-        <div className='mt-6 flex justify-center'>
+        <div className='mt-6 flex flex-wrap justify-center gap-3'>
           {IS_INSTALLED_APP ? (
-            <Button onClick={() => window.location.reload()}>Reload</Button>
+            <>
+              {installedApp && (
+                <Link to={installedApp.path}>
+                  <Button>Back to {installedApp.name}</Button>
+                </Link>
+              )}
+              <Button
+                variant={installedApp ? 'secondary' : 'primary'}
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            </>
           ) : (
             <Link to='/'>
               <Button>Back home</Button>
