@@ -57,8 +57,7 @@ function OfflineBanner() {
     <div
       aria-live='polite'
       className={join(
-        'fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-center gap-2 text-sm font-medium transition-transform duration-300 ease-out',
-        shownVariant === 'update' && status ? 'pointer-events-auto' : 'pointer-events-none',
+        'pointer-events-none fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-center gap-2 text-sm font-medium transition-transform duration-300 ease-out',
         status ? 'translate-y-0' : '-translate-y-full',
         variant.className,
       )}
@@ -69,8 +68,7 @@ function OfflineBanner() {
         <Button
           size='sm'
           variant='secondary'
-          className='relative h-7 px-3 after:absolute after:-inset-1.5'
-          tabIndex={status ? 0 : -1}
+          className='pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5'
           onClick={() => window.location.reload()}
         >
           Restart
