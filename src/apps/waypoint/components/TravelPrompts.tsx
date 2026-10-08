@@ -221,7 +221,7 @@ function TravelPrompts({ trip, currentUserId }: TravelPromptsProps) {
           size='sm'
           rounded='full'
           variant='tertiary'
-          className='text-muted-foreground!'
+          className='text-muted-foreground! px-0!'
           onClick={() => setIsNeverAsk(true)}
         >
           Don&apos;t ask again

@@ -252,7 +252,7 @@ function DuesSummary({
           type='button'
           variant='tertiary'
           onClick={() => setSelectedPairKey(getPairKey(settlement))}
-          className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left focus:outline-transparent!'
+          className='h-auto w-full justify-start gap-3 rounded-none px-0! py-3 text-left focus:outline-transparent!'
         >
           <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
             {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
@@ -272,7 +272,7 @@ function DuesSummary({
     items.length === 0 ? null : (
       <div key={heading} className='mt-3 first:mt-1'>
         <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>{heading}</p>
-        <ul className='divide-border -mx-3 divide-y'>{items.map(renderPair)}</ul>
+        <ul className='divide-border divide-y'>{items.map(renderPair)}</ul>
       </div>
     );
 

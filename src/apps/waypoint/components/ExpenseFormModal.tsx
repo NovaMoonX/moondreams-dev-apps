@@ -425,7 +425,7 @@ function ExpenseFormModal({
                 />
               )}
               {valueMode === 'amount' ? (
-                <div className='-mt-1'>
+                <div className={sharesPrice ? '-mt-1' : 'mt-1'}>
                   {getAmountHeader(isEach ? 'Amount per person' : sharesPrice ? 'Total amount' : 'Amount')}
                   <Input
                     type='number'
@@ -437,7 +437,7 @@ function ExpenseFormModal({
                   />
                 </div>
               ) : (
-                <div className='-mt-1'>
+                <div className={sharesPrice ? '-mt-1' : 'mt-1'}>
                   {getAmountHeader(isEach ? 'Estimate per person' : sharesPrice ? 'Estimated total' : 'Estimate')}
                   <div className='grid grid-cols-2 gap-3'>
                     <div className='space-y-1.5'>
@@ -712,7 +712,7 @@ function ExpenseFormModal({
   const planQuestion = (
     <div className='space-y-4'>
       <div className='space-y-2'>
-        <Label>What&apos;s this expense for?</Label>
+        <Label className='mb-1'>What&apos;s this expense for?</Label>
         <PillRow label='Kind of plan'>
           {PLAN_GROUP_FILTERS.filter(({ value }) => value === 'ALL' || planPills.some(({ group }) => group === value)).map(({ value, label, emoji }) => (
             <Pill

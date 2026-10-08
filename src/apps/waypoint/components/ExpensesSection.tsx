@@ -555,7 +555,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     <ul className='divide-border divide-y'>
       {items.map((expense) => (
         <li key={expense.id}>
-          <Clickable onButtonClick={() => onOpen(expense)} buttonProps={{ 'aria-label': `Open ${expense.title}` }}>
+          <Clickable className='w-full' onButtonClick={() => onOpen(expense)} buttonProps={{ 'aria-label': `Open ${expense.title}` }}>
             <div className='flex w-full items-center gap-3 py-3 text-left'>
               <span className='bg-secondary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base' aria-hidden='true'>
                 {getExpenseCategoryKeyEmoji(getExpenseCategoryKey(expense))}
@@ -1035,13 +1035,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             <h3 className='flex h-10 items-center gap-1.5 text-base font-semibold'>
               <Lock className='h-4 w-4 shrink-0' aria-hidden='true' />
               Just for me
-              {personalExpenses.length > 0 && (
-                <span className='text-muted-foreground font-normal'>
-                  · {formatTotal(personalTotals.total, personalTotals.total, currency)}
-                </span>
-              )}
             </h3>
-            <p className='text-muted-foreground -mt-1 text-sm'>Only you can see these.</p>
+            <p className='text-muted-foreground -mt-1 text-sm'>
+              Only you can see these
+              {personalExpenses.length > 0 && ` · ${formatTotal(personalTotals.total, personalTotals.total, currency)}`}
+            </p>
           </div>
           <div className='flex h-10 shrink-0 items-center'>
             <Button

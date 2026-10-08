@@ -885,7 +885,7 @@ function EventFormModal({
       <PlaceAutocompleteInput
         label={label}
         quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
-        placeholder='Ichiran Shibuya'
+        placeholder={isTravel ? 'Seattle ferry terminal' : 'Ichiran Shibuya'}
         value={draft.locationName}
         onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
         bias={placeBias}
