@@ -20,7 +20,7 @@ function getPresenceStatus({
 }: {
   isPending: boolean;
   partnerUid: string | null;
-  presence: { isHere?: boolean; isOnline?: boolean } | null;
+  presence: { isHere?: boolean } | null;
 }) {
   if (isPending) {
     return { text: 'Pending approval', variant: 'warning' as const };
@@ -31,11 +31,7 @@ function getPresenceStatus({
   }
 
   if (presence?.isHere) {
-    return { text: 'Online in WTW', variant: 'success' as const };
-  }
-
-  if (presence?.isOnline) {
-    return { text: 'Online elsewhere', variant: 'warning' as const };
+    return { text: 'In the Space', variant: 'success' as const };
   }
 
   return { text: 'Offline', variant: 'muted' as const };

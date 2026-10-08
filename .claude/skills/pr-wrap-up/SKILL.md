@@ -5,7 +5,7 @@ description: The standard way every PR in this repo ends, run automatically with
 
 # PR wrap-up
 
-Every PR in this repo ends the same way, and nobody has to ask for it. It runs after `finish-feature-pr` (which makes the branch mergeable) and again whenever a push changes behaviour.
+Every piece of work in this repo ends with a **draft PR**, opened automatically as soon as the work is pushed (if the branch has none; never ready for review, and without asking), and every PR ends the same way below, and nobody has to ask for it. It runs after `finish-feature-pr` (which makes the branch mergeable) and again whenever a push changes behaviour.
 
 **Skip it** only for a PR that changes no app behaviour or UI (docs, CI config, skills): say so in the PR body in one line.
 
@@ -33,6 +33,8 @@ A `## Regression check` section in the PR body shows that what the PR adds does 
 4. **Shared surfaces, visually.** For every changed shared component or token, take **before and after** of each screen that uses it (from the base branch in a second worktree, as in step 1), phone first, light and dark, and look at them. Include other mini-apps' screens when the change is global. Anything that moved without being meant to is a regression to fix, not to explain.
 5. **Behaviour that existing users already rely on.** Gestures, shortcuts, defaults, copy and keyboard paths the PR replaces or removes: list each as "was / now", and why.
 6. **Write it as a table:** `Area | What could regress | How it was checked | Result`, one row per risk, with the security-rules row first. Then one line each for anything found and fixed, and anything not checked and why.
+
+**Performance section.** When the PR changes rendering, selectors, listeners, shared hooks or per-row computation, the body also has a `## Performance` section: the app's scale fixture, the throttle used (dev build, 4× CPU), before/after timings for each screen switched, what changed (formatter caches, one-pass math, shared stores, memoization, caps) and anything still slow. A PR that adds a list to an app says how it behaves on that app's fixture.
 
 **Keep it current.** Whenever a push touches an area a row covers, re-run that row and update the result. A stale row, or a rules change with no matching row, is an unfinished PR. The Stop hook asks for this on every new HEAD, like the screenshots.
 
@@ -70,4 +72,4 @@ Don't ask first. When a finding reflects a **lasting** design or product rule ra
 
 ## 7. Finish
 
-The PR body ends with: Screenshots, Regression check, Review (who reviewed, what was found and fixed, what is a follow-up), Rules added (or "none"), and what is unverified. Then the final report to the user: the same, short, with links.
+The PR body ends with: Screenshots, Regression check, Performance (when it applies), Review (who reviewed, what was found and fixed, what is a follow-up), Rules added (or "none"), and what is unverified. Then the final report to the user: the same, short, with links.

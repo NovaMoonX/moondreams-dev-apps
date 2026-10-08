@@ -54,11 +54,7 @@ export function groupByIndexBucket<T>(
 /** `rangeStart` is always a UTC-midnight-anchored value (from `fromDateInputValue`), so the
  * label is read from UTC fields — local fields would shift it a day off for viewers behind UTC. */
 export function getDayLabel(rangeStart: number, dayIndex: number, count?: number) {
-  const date = new Date(rangeStart + dayIndex * 86_400_000).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+  const date = getDayDateLabel(rangeStart, dayIndex);
   if (dayIndex < 0) {
     const days = -dayIndex;
     return `${days} ${days === 1 ? 'day' : 'days'} before · ${date}`;
@@ -70,13 +66,16 @@ export function getDayLabel(rangeStart: number, dayIndex: number, count?: number
   return `Day ${dayIndex + 1} · ${date}`;
 }
 
-/** Just the calendar date ("Oct 3") of a day offset — for days outside a range, where "Day N" reads badly. */
-export function getDayDateLabel(rangeStart: number, dayIndex: number) {
-  const result = new Date(rangeStart + dayIndex * 86_400_000).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+const dayFormatters = {
+  withWeekday: new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+  plain: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+};
+
+/** Just the calendar date ("Fri, Oct 3") of a day offset — for days outside a range, where "Day N" reads badly.
+ * Pass `withWeekday: false` where the weekday is already drawn beside it. */
+export function getDayDateLabel(rangeStart: number, dayIndex: number, withWeekday = true) {
+  const formatter = withWeekday ? dayFormatters.withWeekday : dayFormatters.plain;
+  const result = formatter.format(new Date(rangeStart + dayIndex * 86_400_000));
   return result;
 }
 

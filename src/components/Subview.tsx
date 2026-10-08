@@ -11,12 +11,13 @@ import { useSubviewHistory } from '@/hooks/useSubviewHistory';
 interface SubviewHeaderProps {
   title: string;
   onBack: () => void;
+  className?: string;
 }
 
 /** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
-export function SubviewHeader({ title, onBack }: SubviewHeaderProps) {
+export function SubviewHeader({ title, onBack, className = 'mb-3' }: SubviewHeaderProps) {
   return (
-    <div className='mb-3 flex items-center gap-2'>
+    <div className={join('flex items-center gap-2', className)}>
       <Button
         type='button'
         variant='secondary'
@@ -112,7 +113,11 @@ function Subview({
           )}
         >
           {title !== undefined && (
-            <SubviewHeader title={title} onBack={onClose} />
+            <SubviewHeader
+              title={title}
+              onBack={onClose}
+              className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
+            />
           )}
           <SubviewTitleContext.Provider value={title ?? null}>
             {children}
@@ -127,7 +132,11 @@ function Subview({
     <div className='page'>
       <div className={join('mx-auto max-w-2xl py-6', className)}>
         {title !== undefined && (
-          <SubviewHeader title={title} onBack={onClose} />
+          <SubviewHeader
+            title={title}
+            onBack={onClose}
+            className='sticky-app-bar bg-background/80 -mx-4 backdrop-blur mb-3 min-h-14 px-4 py-2.5'
+          />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>
           {children}

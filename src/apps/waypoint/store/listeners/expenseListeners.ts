@@ -14,6 +14,7 @@ function normalizeExpense(id: string, data: Partial<TripExpense>): TripExpense {
     note: data.note ?? null,
     groupLabel: data.groupLabel ?? null,
     isPerPerson: data.isPerPerson ?? false,
+    linkedTo: data.linkedTo ?? null,
   } as TripExpense;
   return expense;
 }

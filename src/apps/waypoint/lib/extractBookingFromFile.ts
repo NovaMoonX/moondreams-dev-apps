@@ -2,6 +2,7 @@ import { SchemaType } from 'firebase/ai';
 
 import { generativeModel } from '@/lib/firebase/ai';
 import { compressIngestionImage } from '@/utils/imageCompression';
+import { getUploadMimeType } from '@/utils/uploadMimeType';
 
 /** A flight, a lodging reservation or a car rental: the logistics a confirmation spells out in a fixed shape. */
 export type BookingKind = 'flight' | 'stay' | 'rental';
@@ -175,7 +176,7 @@ export async function extractBookingFromFile(
         role: 'user',
         parts: [
           { text: buildPrompt(kind, trip, file.name) },
-          { inlineData: { data, mimeType: inputFile.type || file.type } },
+          { inlineData: { data, mimeType: getUploadMimeType(inputFile) } },
         ],
       },
     ],

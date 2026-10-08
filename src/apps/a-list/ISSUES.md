@@ -757,7 +757,7 @@ Suggest a likely fee for a new ticket beside the fee chips, based on the fees en
 **Context:** Read the repo's central reminders pipeline first (`src/lib/notifications/`, `functions/src/notifications/sendScheduledReminders.ts`, `src/hooks/useReminderSync.ts`) and how Waypoint's `rescheduleTripReminders` uses it; read `UX.md`'s Seen prompt caption and the README's "Showtime Reminders".
 
 ### Description
-An optional nudge before a planned showing (time to head out) and after it ends (mark it seen, log what you saw), delivered through the existing reminders system.
+An optional nudge before a planned showing (time to head out) and after it ends (mark it seen, log what you saw), delivered through the existing reminders system. A trailers push five minutes after a showing starts already exists (`utils/reminders.ts`, `trailerReminderId` on the viewing); reuse it and its opt-in rather than adding a second one.
 
 ### Possible Approach
 1. An opt-in in Membership settings; scheduling on `addViewing`/`updateViewing` and cancelling on `removeViewing`, using the stored `showtimeAt` and `endsAt` instants.

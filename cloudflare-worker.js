@@ -3,7 +3,8 @@ const SITE_NAME = 'Moondreams Dev Apps';
 const hasInviteCode = (value) => value?.trim().length === 6;
 const isPresent = (value) => Boolean(value?.trim());
 
-// `params` is checked in order and the first valid match wins, so list the most specific link first.
+// `pages` (matched by path prefix) are checked before `params`; in each list the first match wins, so list the most specific link first.
+// Preview text for a page whose content is private never names it: a link preview is public even when the page is locked.
 const APP_REGISTRY = [
   {
     id: 'worth-the-wait',
@@ -69,8 +70,24 @@ const APP_REGISTRY = [
       'A personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.',
     image:
       'https://moondreams-dev-apps.web.app/banners/by-app/banner-a-list.png',
+    pages: [
+      {
+        prefix: '/a-list/shared/',
+        title: 'A movie calendar shared on A-List Tracker',
+        description:
+          "Someone shared their movie plans with you. Open the link to see what's showing and when.",
+      },
+    ],
   },
 ];
+
+// Tells search engines not to list the page in their results, even those that never run its JS (where the noindex meta tag is added).
+// The copy is needed because a fetched response's headers are read-only.
+function withNoIndex(response) {
+  const result = new Response(response.body, response);
+  result.headers.set('X-Robots-Tag', 'noindex');
+  return result;
+}
 
 function getAppMeta(url) {
   const app = APP_REGISTRY.find((entry) => url.pathname.startsWith(entry.path));
@@ -78,9 +95,11 @@ function getAppMeta(url) {
     return null;
   }
 
-  const match = (app.params ?? []).find(({ name, isValid }) =>
-    isValid(url.searchParams.get(name)),
-  );
+  const match =
+    (app.pages ?? []).find(({ prefix }) => url.pathname.startsWith(prefix)) ??
+    (app.params ?? []).find(({ name, isValid }) =>
+      isValid(url.searchParams.get(name)),
+    );
   if (!match) {
     return app;
   }
@@ -106,7 +125,11 @@ export default {
       );
 
     // Fetch the standard index.html response from Firebase Hosting
-    const response = await fetch(request);
+    const fetched = await fetch(request);
+    const isUnlisted = APP_REGISTRY.some((app) =>
+      (app.pages ?? []).some(({ prefix }) => url.pathname.startsWith(prefix)),
+    );
+    const response = isUnlisted ? withNoIndex(fetched) : fetched;
 
     const appMeta = getAppMeta(url);
 

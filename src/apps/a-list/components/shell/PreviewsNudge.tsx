@@ -6,18 +6,24 @@ import { X } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatCountdown, formatDuration } from '@/utils/formatUtils';
+import { formatCountdown } from '@/utils/formatUtils';
+import { PREVIEWS_BUFFER_MINUTES } from '@apps/a-list/constants';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import { selectPreviewsWindowViewing } from '@apps/a-list/store/selectors';
 
-function getTimingLabel(showtimeAt: number, now: number) {
+function getSubtitle(showtimeAt: number, now: number) {
   if (now < showtimeAt) {
     const countdown = formatCountdown(showtimeAt, now);
-    return countdown === 'starting now' ? 'Starting now' : `Starts ${countdown}`;
+    const label =
+      countdown === 'starting now' ? 'Starting now' : `Starts ${countdown}`;
+    return `${label}. Trailers roll first, so save any you love.`;
   }
 
-  const elapsed = now - showtimeAt;
-  return elapsed < 60_000 ? 'Starting now' : `Started ${formatDuration(elapsed)} ago`;
+  if (now - showtimeAt <= PREVIEWS_BUFFER_MINUTES * 60_000) {
+    return 'Trailers are rolling. Spot one you like?';
+  }
+
+  return 'Caught a trailer you liked? Save it before you forget.';
 }
 
 /** Sits above the Calendar icon, never as an overlay: while a showing's previews are near, a bubble offers a one-tap way to save the trailers' movies, and it folds into a chip that brings it back. */
@@ -66,8 +72,8 @@ function PreviewsNudge() {
             <p className='truncate text-sm font-medium'>
               {viewing.movie.title}
             </p>
-            <p className='text-muted-foreground text-xs'>
-              {getTimingLabel(viewing.showtimeAt, now)}. Spot a trailer you like?
+            <p className='text-muted-foreground text-xs text-pretty'>
+              {getSubtitle(viewing.showtimeAt, now)}
             </p>
           </div>
           <Button
@@ -76,7 +82,7 @@ function PreviewsNudge() {
             size='icon'
             rounded='full'
             aria-label='Fold this away'
-            className='-mt-1 -mr-1 h-7 w-7'
+            className="relative -mt-1 -mr-1 h-7 w-7 before:absolute before:-inset-2 before:content-['']"
             onClick={() => setFoldedIds((current) => [...current, viewing.id])}
           >
             <X className='h-4 w-4' />

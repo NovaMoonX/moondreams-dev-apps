@@ -63,6 +63,15 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'a-list/shared/:shareId',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: SharedCalendar } =
+            await import('@apps/a-list/SharedCalendar');
+          return { Component: SharedCalendar };
+        },
+      },
+      {
         path: 'admin',
         HydrateFallback: Loading,
         lazy: async () => {

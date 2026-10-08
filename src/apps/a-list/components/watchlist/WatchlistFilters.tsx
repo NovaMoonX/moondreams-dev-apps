@@ -1,5 +1,7 @@
+import type { MouseEvent } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { X } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 import Pill from '@/components/Pill';
 import {
@@ -12,8 +14,10 @@ import type { WatchlistFilter } from '@apps/a-list/types';
 interface WatchlistFiltersProps {
   value: WatchlistFilter[];
   openingCount: number;
+  /** True while the search, a filter or the sort differs from the default. */
+  canReset: boolean;
   onToggle: (filter: WatchlistFilter) => void;
-  onClear: () => void;
+  onReset: () => void;
 }
 
 function getFilterView(filter: WatchlistFilter) {
@@ -22,29 +26,44 @@ function getFilterView(filter: WatchlistFilter) {
   return { emoji: WATCH_PRIORITY_EMOJIS[filter], label: WATCH_PRIORITY_LABELS[filter] };
 }
 
+/** The Clear button appearing shifts the row, so the clicked pill is centered after the re-render. */
+function centerClickedPill(event: MouseEvent<HTMLDivElement>) {
+  const pill = (event.target as HTMLElement).closest('[data-pill]');
+  if (!pill) return;
+  requestAnimationFrame(() =>
+    pill.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    }),
+  );
+}
+
 /** Pills that narrow the list. They scroll sideways on a phone, so every label stays whole. */
 function WatchlistFilters({
   value,
   openingCount,
+  canReset,
   onToggle,
-  onClear,
+  onReset,
 }: WatchlistFiltersProps) {
   return (
     <div
+      onClick={centerClickedPill}
       className='-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0'
       role='group'
       aria-label='Filter your watchlist'
     >
-      {value.length > 0 && (
+      {canReset && (
         <Button
           type='button'
           size='sm'
           rounded='full'
           variant='outline'
           className='shrink-0 gap-1 whitespace-nowrap'
-          onClick={onClear}
+          onClick={onReset}
         >
-          <X className='h-3.5 w-3.5' /> Clear
+          <RotateCcw className='h-3.5 w-3.5' /> Reset
         </Button>
       )}
       {WATCHLIST_FILTERS.map((filter) => {

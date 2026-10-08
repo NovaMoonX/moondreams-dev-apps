@@ -10,7 +10,8 @@ import { getGroupBadge } from '@apps/waypoint/utils/eventBadge';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import type { EventStack } from '@apps/waypoint/utils/eventGroups';
-import { formatEventTimeRange, getEventTime } from '@apps/waypoint/utils/tripTime';
+import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
+import { formatEventTimeRange, getEventTime, isRelativeTrip, toTripDayTime } from '@apps/waypoint/utils/tripTime';
 
 const MINUTE_MS = 60_000;
 
@@ -40,8 +41,37 @@ function formatLayover(trip: TripSpace, previous: TimelineEvent, next: TimelineE
   return label;
 }
 
-/** Where the whole stack starts and ends: the earliest start through the latest end. */
+/** Where the whole stack starts and ends, in the trip's own time zone so it reads as one span on the
+ * trip's calendar; each card below keeps its event's zone. */
 function formatStackSpan(trip: TripSpace, events: TimelineEvent[]) {
+  const times = events.map((event) => getEventTime(trip, event));
+  const starts = times.flatMap((time) => (time.startMs === null ? [] : [time.startMs]));
+  const ends = times.flatMap((time) => {
+    const end = time.endMs ?? time.startMs;
+    return end === null ? [] : [end];
+  });
+  if (!isRelativeTrip(trip) || starts.length === 0) {
+    return formatLegacyStackSpan(trip, events);
+  }
+
+  const start = toTripDayTime(trip, Math.min(...starts));
+  const end = toTripDayTime(trip, Math.max(...ends));
+  const span = {
+    ...events[0],
+    dayIndex: start.dayIndex,
+    startTime: start.time,
+    endDayIndex: end.dayIndex,
+    endTime: end.time,
+    timezone: null,
+    endTimezone: null,
+  };
+  const zone = trip.timezone ? ` · ${formatTimezoneAbbreviation(trip.timezone, Math.min(...starts))}` : '';
+  const result = `${getDayDateLabel(trip.startDate, start.dayIndex)} · ${formatEventTimeRange(trip, span)}${zone}`;
+  return result;
+}
+
+/** Trips from before trip-relative times keep the earliest-start-through-latest-end span in the viewer's zone. */
+function formatLegacyStackSpan(trip: TripSpace, events: TimelineEvent[]) {
   const timed = events.map((event) => ({ event, time: getEventTime(trip, event) }));
   const first = timed.reduce((best, item) => ((item.time.startMs ?? Infinity) < (best.time.startMs ?? Infinity) ? item : best), timed[0]);
   const last = timed.reduce(

@@ -38,6 +38,17 @@ const targetTypeOptions: { value: ExpenseTargetType; label: string; emoji: strin
   { value: 'SPECIFIC_MEMBERS', label: 'Pick people', emoji: '🎯' },
 ];
 
+const BASE_PERCENTS = [25, 50, 75, 100];
+
+/** The usual quarter steps, plus an even share of the group when it isn't one of them (20% of five, 33.3% of three). */
+function getPercentPresets(memberCount: number): number[] {
+  const evenShare = memberCount > 0 ? 100 / memberCount : null;
+  const isCovered = evenShare === null || BASE_PERCENTS.some((percent) => Math.abs(percent - evenShare) < 0.0001);
+  return isCovered ? BASE_PERCENTS : [...BASE_PERCENTS, evenShare].sort((first, second) => first - second);
+}
+
+const formatPercent = (percent: number) => `${Number(percent.toFixed(1))}%`;
+
 function ExpenseSplitModal({
   isOpen,
   trip,
@@ -119,6 +130,7 @@ function ExpenseSplitModal({
     setCustomSplitAmounts({ ...displayAmounts, [uid]: value });
   };
 
+  const percentPresets = getPercentPresets(splitMemberIds.length);
   const setAmountToPercent = (uid: string, percent: number) => {
     updateAmount(uid, ((percent / 100) * amount).toFixed(2));
   };
@@ -231,7 +243,7 @@ function ExpenseSplitModal({
                     />
                   </div>
                   <div className='flex justify-end gap-1'>
-                    {[25, 50, 75, 100].map((percent) => (
+                    {percentPresets.map((percent) => (
                       <Button
                         key={percent}
                         type='button'
@@ -240,7 +252,7 @@ function ExpenseSplitModal({
                         className='h-6 px-1.5 text-xs'
                         onClick={() => setAmountToPercent(uid, percent)}
                       >
-                        {percent}%
+                        {formatPercent(percent)}
                       </Button>
                     ))}
                   </div>

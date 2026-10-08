@@ -7,6 +7,63 @@
   @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
 }
 
+/* A long list's day or section: the browser skips style, layout and paint until it nears the screen.
+ * `--defer-size` is the section's estimated height; `auto` remembers the real one once seen, so the scrollbar stays steady. */
+@utility defer-offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--defer-size, 600px);
+}
+
+/* A mini-app's own header on a phone: it sticks under the site header while that is showing and takes
+ * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
+@utility sticky-app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  @media (max-width: 767.98px) {
+    top: calc(4rem - 1px);
+    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    html[data-site-banner='true'] & {
+      top: calc(6.25rem - 1px);
+    }
+    html[data-site-header='hidden'] & {
+      top: 0;
+    }
+    html[data-site-header='hidden'][data-site-banner='true'] & {
+      top: 2.25rem;
+    }
+  }
+}
+
+/* A section label that rides under `sticky-app-bar` on a phone (Waypoint's day headers), following it as the site header hides and returns. The 3.75rem is the app bar's height. */
+@utility sticky-day-bar {
+  position: sticky;
+  z-index: 10;
+  @media (max-width: 767.98px) {
+    top: calc(4rem + 3.75rem - 2px);
+    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    html[data-site-banner='true'] & {
+      top: calc(6.25rem + 3.75rem - 2px);
+    }
+    html[data-site-header='hidden'] & {
+      top: calc(3.75rem - 1px);
+    }
+    html[data-site-header='hidden'][data-site-banner='true'] & {
+      top: calc(2.25rem + 3.75rem - 1px);
+    }
+  }
+}
+
+/* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
+@media (max-width: 639.98px) {
+  [role='region'][aria-label='Notifications'] {
+    left: max(1rem, env(safe-area-inset-left));
+    right: max(1rem, env(safe-area-inset-right));
+    width: auto;
+    max-width: none;
+  }
+}
+
 @theme app {
 	--color-background: var(--color-white);
 	--color-foreground: var(--color-zinc-950);
@@ -26,7 +83,10 @@
 
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  /* The body must never become a scroll container (it breaks `position: sticky`), and Dreamer UI's
+     modals leave `overflow: auto` on it inline after closing, so this wins over that. */
+  overflow-x: clip !important;
+  overflow-y: visible !important;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -63,15 +123,22 @@ html:has(
   }
 }
 
-/* A tapped control keeps its focus outline/ring and the browser's tap flash after the
-   touch ends. Keyboard focus (:focus-visible) keeps its cue; text fields keep only their
-   border change. Component focus styles are utilities, so only !important beats them. */
+/* A control that took focus from a mouse or touch keeps its focus outline/ring after the click,
+   then fades it out when focus moves on, which reads as a border flashing on the one just left
+   (a pill, or a card the drawer handed focus back to). Keyboard focus (:focus-visible) keeps its
+   cue. Component focus styles are utilities, so only !important beats them. */
+:focus:not(:focus-visible) {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/* On phones text fields keep only their border change, and a pressed control shows no ring. */
 @media (max-width: 639px) {
   * {
     -webkit-tap-highlight-color: transparent;
   }
 
-  :focus:not(:focus-visible),
   input:focus,
   textarea:focus,
   select:focus,
@@ -80,6 +147,12 @@ html:has(
     --tw-ring-shadow: 0 0 #0000 !important;
     --tw-ring-offset-shadow: 0 0 #0000 !important;
   }
+}
+
+/* A drawer never reaches the top of the screen: a strip of the page behind stays visible, so it reads as a
+   sheet over the app rather than a second page. */
+[role='dialog'][data-drawer-open] > .fixed.bottom-0 {
+  max-height: 92dvh;
 }
 
 /* Smooth height transitions for when keyboard appears on mobile */
@@ -119,3 +192,13 @@ input[type="file"]:disabled::-webkit-file-upload-button {
 
 /* for TailwindCSS styles in library to be processed */
 @source "../node_modules/@moondreamsdev/dreamer-ui/dist/**/*.{js,jsx,ts,tsx}";
+
+/* A link-variant button is a short label: it never wraps inside a row, card or drawer. */
+button[class*='underline-offset-4'] {
+  white-space: nowrap;
+}
+
+/* Dreamer UI buttons fade every property (`transition-all`), which shows as a flash on a row or card when focus or hover leaves it. Buttons snap instead. */
+button[class*='transition-all'] {
+  transition: none;
+}

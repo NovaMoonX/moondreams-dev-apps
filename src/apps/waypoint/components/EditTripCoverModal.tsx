@@ -1,3 +1,4 @@
+import FallbackImage from '@/components/FallbackImage';
 import { useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
@@ -58,7 +59,7 @@ function EditTripCoverModal({
     <Modal isOpen={isOpen} onClose={onClose} title='Cover photo'>
       <div className='space-y-2'>
         {coverUpload.previewUrl && (
-          <img
+          <FallbackImage
             src={coverUpload.previewUrl}
             alt='Cover preview'
             className='h-40 w-full rounded-md object-cover'

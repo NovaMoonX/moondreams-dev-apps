@@ -9,13 +9,10 @@ import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { getErrorMessage } from '@/utils/errorUtils';
-import EventSuggestionFormModal from '@apps/waypoint/components/EventSuggestionFormModal';
 import {
   approveEventSuggestion,
-  createEventSuggestion,
   declineEventSuggestion,
   toggleSuggestionUpvote,
-  updateEventSuggestion,
 } from '@apps/waypoint/store/actions/eventSuggestionActions';
 import { selectEventSuggestionsForEvent } from '@apps/waypoint/store/selectors';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
@@ -26,6 +23,9 @@ interface EventSuggestionsListProps {
   trip: TripSpace;
   event: TimelineEvent;
   currentUserId: string;
+  /** Pending suggestions always show; the "+ Suggest a change" action only where the details are already open. */
+  showSuggestAction: boolean;
+  onSuggest: (event: TimelineEvent, suggestion?: EventSuggestion) => void;
 }
 
 function SuggestionRow({
@@ -151,51 +151,28 @@ function SuggestionRow({
   );
 }
 
-type SuggestionFields = Omit<
-  Parameters<typeof createEventSuggestion>[0],
-  'uid' | 'trip' | 'eventId'
->;
-
-function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsListProps) {
-  const dispatch = useAppDispatch();
-  const { addToast } = useToast();
+function EventSuggestionsList({
+  trip,
+  event,
+  currentUserId,
+  showSuggestAction,
+  onSuggest,
+}: EventSuggestionsListProps) {
   const suggestions = useAppSelector(selectEventSuggestionsForEvent(event.id), shallowEqual);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingSuggestion, setEditingSuggestion] = useState<EventSuggestion | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const isAdmin = isTripAdmin(trip, currentUserId);
 
-  if (!isTripMember(trip, currentUserId) || event.isArchived) {
+  if (!isTripMember(trip, currentUserId) || event.isArchived || (suggestions.length === 0 && !showSuggestAction)) {
     return null;
   }
 
-  const handleSuggest = async (fields: SuggestionFields) => {
-    setIsSubmitting(true);
-    try {
-      if (editingSuggestion) {
-        await dispatch(
-          updateEventSuggestion({ uid: currentUserId, trip, suggestion: editingSuggestion, ...fields }),
-        ).unwrap();
-      } else {
-        await dispatch(
-          createEventSuggestion({ uid: currentUserId, trip, eventId: event.id, ...fields }),
-        ).unwrap();
-      }
-      setIsFormOpen(false);
-      setEditingSuggestion(undefined);
-    } catch (suggestError) {
-      addToast({
-        title: 'Unable to send this suggestion',
-        description: getErrorMessage(suggestError, 'Please try again.'),
-        type: 'error',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
-    <div className='ml-4 space-y-2 border-l-2 border-dashed pl-4'>
+    <div
+      className={join(
+        'relative ml-4 space-y-2 border-l-2 border-dashed pl-4',
+        "before:absolute before:-top-2 before:-left-0.5 before:h-2 before:border-l-2 before:border-dashed before:content-['']",
+        '[div:has([data-paid-tab])+&]:before:-top-8 [div:has([data-paid-tab])+&]:before:h-8',
+      )}
+    >
       {suggestions.map((suggestion) => (
         <SuggestionRow
           key={suggestion.id}
@@ -204,37 +181,20 @@ function EventSuggestionsList({ trip, event, currentUserId }: EventSuggestionsLi
           suggestion={suggestion}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
-          onEdit={(selectedSuggestion) => {
-            setEditingSuggestion(selectedSuggestion);
-            setIsFormOpen(true);
-          }}
+          onEdit={(selectedSuggestion) => onSuggest(event, selectedSuggestion)}
         />
       ))}
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        className='h-auto p-0 text-xs'
-        onClick={() => {
-          setEditingSuggestion(undefined);
-          setIsFormOpen(true);
-        }}
-      >
-        + Suggest a change
-      </Button>
-      <EventSuggestionFormModal
-        key={`${editingSuggestion?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}`}
-        isOpen={isFormOpen}
-        trip={trip}
-        event={event}
-        suggestion={editingSuggestion}
-        isSubmitting={isSubmitting}
-        onSubmit={handleSuggest}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingSuggestion(undefined);
-        }}
-      />
+      {showSuggestAction && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='h-auto p-0 text-xs'
+          onClick={() => onSuggest(event)}
+        >
+          + Suggest a change
+        </Button>
+      )}
     </div>
   );
 }

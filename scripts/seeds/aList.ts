@@ -89,6 +89,9 @@ function getWatchlistFixtures(now: number) {
 }
 
 const PREVIEWS_MINUTES = 20;
+const TRAILER_REMINDER_DELAY_MINUTES = 5;
+const PREVIEWS_VIEWING_ID = 'seed-viewing-previews';
+const PREVIEWS_REMINDER_ID = 'seed-a-list-trailer-reminder';
 const DEFAULT_RUNTIME = 120;
 
 const SEED_TIMEZONE = 'America/Los_Angeles';
@@ -254,12 +257,12 @@ function getViewingFixtures(now: number) {
       hour: 14,
       awaiting: true,
     },
-    // Starts 20 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 40 minutes).
+    // Starts 5 minutes after the seed runs, so the "add from trailers" strip shows (it lasts about 35 minutes).
     {
-      id: 'seed-viewing-previews',
+      id: PREVIEWS_VIEWING_ID,
       movieKey: 'imdb-tt99000004',
       daysFromNow: 0,
-      minutesFromNow: 20,
+      minutesFromNow: 5,
     },
     {
       id: 'seed-viewing-starlight',
@@ -331,6 +334,8 @@ function getViewingFixtures(now: number) {
         endsAt,
         status,
         ticket: SEED_TICKETS[id] ?? null,
+        trailerReminderId:
+          id === PREVIEWS_VIEWING_ID ? PREVIEWS_REMINDER_ID : null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
         ...(SEED_VIEWING_THEATRES[id] === undefined
           ? {}
@@ -344,6 +349,24 @@ function getViewingFixtures(now: number) {
       };
     },
   );
+}
+
+// Ids use the share alphabet (no 0, 1, i or o) and are 26 characters, like a generated one.
+const SEED_SHARE_OPEN_ID = `seedshare${'2'.repeat(17)}`;
+const SEED_SHARE_PIN_ID = `seedsharepass${'3'.repeat(13)}`;
+const SEED_SHARE_PIN = 'K7M2';
+
+function toSharedViewing(viewing: ReturnType<typeof getViewingFixtures>[number]) {
+  return {
+    title: viewing.movie.title,
+    posterUrl: viewing.movie.posterUrl,
+    runtimeMinutes: viewing.movie.runtimeMinutes,
+    contentRating: viewing.movie.contentRating,
+    showtimeAt: viewing.showtimeAt,
+    status: viewing.status,
+    format: viewing.ticket?.format ?? null,
+    theatreName: viewing.theatre?.name ?? null,
+  };
 }
 
 // Alex has a finished membership; every other fixture account lands on Setup.
@@ -400,9 +423,62 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const upcoming = viewings.filter((viewing) => viewing.status === 'PLANNED');
+  const seedShares = [
+    { id: SEED_SHARE_OPEN_ID, pin: null, items: viewings },
+    { id: SEED_SHARE_PIN_ID, pin: SEED_SHARE_PIN, items: upcoming },
+  ];
+  await Promise.all(
+    seedShares.map(({ id, pin, items }) =>
+      context.firestore
+        .collection('apps')
+        .doc('a-list')
+        .collection('calendarShares')
+        .doc(id)
+        .set({
+          id,
+          ownerUid: alex.uid,
+          startDate: getDayUtc(context.now, 75),
+          endDate: getDayUtcAhead(context.now, 45),
+          pin,
+          viewings: items.map(toSharedViewing),
+          createdAt: context.now - DAY_MS,
+          lastEditedAt: context.now - DAY_MS,
+        }),
+    ),
+  );
+
+  const previewsViewing = viewings.find(
+    (viewing) => viewing.id === PREVIEWS_VIEWING_ID,
+  );
+  if (previewsViewing) {
+    await context.firestore
+      .collection('reminders')
+      .doc(PREVIEWS_REMINDER_ID)
+      .set({
+        id: PREVIEWS_REMINDER_ID,
+        appId: 'a-list',
+        targetUids: [alex.uid],
+        title: 'Previews time 📽️',
+        body: `Spot a movie you like at ${previewsViewing.movie.title}? Add it to your watchlist while it’s fresh.`,
+        scheduledFor:
+          previewsViewing.showtimeAt + TRAILER_REMINDER_DELAY_MINUTES * 60_000,
+        status: 'pending',
+        channels: ['push'],
+        relatedEntityPath: `apps/a-list/memberships/${alex.uid}/viewings/${PREVIEWS_VIEWING_ID}`,
+        recurrence: 'none',
+        createdBy: alex.uid,
+        createdAt: context.now,
+      });
+  }
+
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      1 + SEED_THEATRES.length + watchlist.length + viewings.length,
+      2 +
+      SEED_THEATRES.length +
+      watchlist.length +
+      viewings.length +
+      seedShares.length,
   };
 }
