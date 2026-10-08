@@ -499,7 +499,7 @@ export function TimelineSection({
     );
 
     return (
-      <div className='space-y-3'>
+      <div>
         {days.map(
           ({ bucket, items }, dayPosition) => (
             <div
@@ -513,9 +513,11 @@ export function TimelineSection({
                 trailing={typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined}
               />
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
-              <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
-                {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
-              </LazyMount>
+              <div className='pb-3'>
+                <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
+                  {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
+                </LazyMount>
+              </div>
             </div>
           ),
         )}
