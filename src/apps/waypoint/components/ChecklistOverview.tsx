@@ -62,8 +62,8 @@ function ChecklistOverview({ trip, currentUserId, onOpen }: ChecklistOverviewPro
       </div>
       <ul className='divide-border divide-y'>
         {open.slice(0, PREVIEW_COUNT).map((item) => (
-          <li key={item.id} className='flex items-start gap-3 py-2 first:pt-0 last:pb-0'>
-            <span className='mt-0.5 inline-flex'>
+          <li key={item.id} className='flex items-center gap-3 px-3 py-2'>
+            <span className='inline-flex'>
               <Checkbox
                 checked={false}
                 aria-label={`Mark done: ${item.title}`}
@@ -81,9 +81,11 @@ function ChecklistOverview({ trip, currentUserId, onOpen }: ChecklistOverviewPro
           </li>
         ))}
       </ul>
-      <Button type='button' variant='link' size='sm' className='ml-auto flex h-10 p-0 text-sm' onClick={onOpen}>
-        See all {items?.length ?? open.length} <ChevronRight className='h-4 w-4' />
-      </Button>
+      <div className='flex items-center'>
+        <Button type='button' variant='link' size='sm' className='ml-auto h-auto p-0 text-sm' onClick={onOpen}>
+          See all {items?.length ?? open.length} <ChevronRight className='h-4 w-4' />
+        </Button>
+      </div>
     </section>
   );
 }
