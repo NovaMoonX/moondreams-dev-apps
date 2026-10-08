@@ -2,8 +2,8 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
+import SortControl from '@/components/SortControl';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -194,11 +194,24 @@ function WatchlistScreen() {
         }
       />
       {rows.length > 0 && (
-        <SearchInput
-          placeholder='Search your watchlist'
-          value={query}
-          onChange={setQuery}
-        />
+        <div className='flex items-center gap-2'>
+          <div className='min-w-0 flex-1'>
+            <SearchInput
+              placeholder='Search your watchlist'
+              value={query}
+              onChange={setQuery}
+            />
+          </div>
+          {rows.length > 1 && (
+            <SortControl
+              label='Sort your watchlist'
+              options={WATCHLIST_SORT_OPTIONS}
+              value={sort}
+              defaultValue='default'
+              onChange={setSort}
+            />
+          )}
+        </div>
       )}
       <WatchlistFilters
         value={filters}
@@ -206,15 +219,6 @@ function WatchlistScreen() {
         onToggle={toggleFilter}
         onClear={() => setFilters([])}
       />
-      {rows.length > 1 && (
-        <PillGroup
-          label='Sort your watchlist'
-          options={WATCHLIST_SORT_OPTIONS}
-          value={sort}
-          onChange={setSort}
-          isThin
-        />
-      )}
       {visibleRows.length === 0 ? (
         <div className='text-muted-foreground text-sm'>{getEmptyState()}</div>
       ) : (
