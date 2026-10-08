@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 
 import { Badge, Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Archive, ArchiveRestore, Layers } from 'lucide-react';
+import { Archive, ArchiveRestore, DoorOpen, Layers } from 'lucide-react';
 
 import ChangeBadge from '@apps/waypoint/components/ChangeBadge';
 import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars';
@@ -69,6 +69,15 @@ function getTravelRowTime(trip: TripSpace, event: TimelineEvent) {
   return start ? `${start}${timezone && timezone !== trip.timezone ? ` ${formatTimezoneAbbreviation(timezone, startMs ?? undefined)}` : ''}` : undefined;
 }
 
+function getArriveByLabel(trip: TripSpace, event: TimelineEvent) {
+  if (!event.arriveByTime) {
+    return null;
+  }
+  const { timezone, startMs } = getEventTime(trip, event);
+  const zone = timezone && timezone !== trip.timezone ? ` ${formatTimezoneAbbreviation(timezone, startMs ?? undefined)}` : '';
+  return `${formatClockTime(event.arriveByTime)}${zone}`;
+}
+
 function getQuickField(event: TimelineEvent, isCompact: boolean): string | null {
   const details = event.eventDetails;
   if (event.eventType === 'TRAVEL' && details && 'transitType' in details) {
@@ -123,6 +132,7 @@ export function EventDetailLines({
   // On a phone the card leaves an activity's setting for its details drawer.
   const isSettingHidden = isCompact && showTitle && event.eventType === 'ACTIVITY';
   const badge = getEventBadge(event);
+  const arriveByLabel = getArriveByLabel(trip, event);
   const locationLabel = [event.locationName, event.address].filter(Boolean).join(' · ');
   const { startMs, endMs } = getEventTime(trip, event);
   const impliedDurationMs = startMs !== null && endMs !== null && endMs > startMs ? endMs - startMs : null;
@@ -147,6 +157,7 @@ export function EventDetailLines({
           {badge.emoji} {badge.label}
         </Badge>
         <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap' title={formatEventTimeRange(trip, event, zoneStyle)}>
+          {arriveByLabel && 'Starts '}
           {formatEventTimeRange(trip, event, zoneStyle)}
         </span>
         <span className='ml-auto flex min-w-0 shrink items-center gap-2'>
@@ -195,6 +206,15 @@ export function EventDetailLines({
       )}
       {showAttendees && event.attendeeTargetType !== 'EVERYONE_INCLUDING_FUTURE' && (
         <EventAttendeeAvatars trip={trip} events={[event]} />
+      )}
+      {arriveByLabel && (
+        <div className='space-y-0.5 text-sm'>
+          <p className='flex items-center gap-2 font-medium'>
+            <DoorOpen className='text-muted-foreground h-4 w-5 shrink-0' aria-hidden='true' />
+            Arrive by {arriveByLabel}
+          </p>
+          {event.arriveByNote && <p className='text-muted-foreground pl-7 italic'>{event.arriveByNote}</p>}
+        </div>
       )}
       {locationLabel && <LocationLink {...event} label={locationLabel} />}
       {(event.venueOpenTime || event.venueCloseTime) && (

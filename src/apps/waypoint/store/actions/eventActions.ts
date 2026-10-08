@@ -20,7 +20,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
-import { DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
+import { ARRIVE_BY_EVENT_TYPES, DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
 import {
   cancelEventReminder,
   type EventReminderSource,
@@ -63,7 +63,7 @@ const CONCURRENTLY_WRITTEN_EVENT_FIELDS = [
 ];
 
 const ABSOLUTE_TRACKED_FIELDS = ['startAt', 'endAt', 'locationName', 'dayIndex', 'endDayIndex'] as const;
-const RELATIVE_TRACKED_FIELDS = ['startTime', 'endTime', 'locationName', 'dayIndex', 'endDayIndex'] as const;
+const RELATIVE_TRACKED_FIELDS = ['startTime', 'endTime', 'arriveByTime', 'locationName', 'dayIndex', 'endDayIndex'] as const;
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -71,6 +71,20 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 function isEndAfterStartAcrossZones(trip: TripSpace, event: EventFields) {
   const { startMs, endMs } = getEventTime(trip, event);
   return startMs === null || endMs === null || endMs > startMs;
+}
+
+/** Arriving at the start time says nothing, so an arrival has to come strictly before it, on the same day. */
+function validateArriveBy(event: Pick<EventFields, 'eventType' | 'startTime' | 'arriveByTime' | 'arriveByNote'>) {
+  if (event.arriveByTime === null) {
+    return event.arriveByNote === null ? null : 'Add an arrival time for that note, or remove the note.';
+  }
+  if (!ARRIVE_BY_EVENT_TYPES.includes(event.eventType)) {
+    return 'Only dining and activities can have an arrival time.';
+  }
+  if (!TIME_PATTERN.test(event.arriveByTime) || event.startTime === null) {
+    return 'Choose a valid arrival time.';
+  }
+  return event.arriveByTime < event.startTime ? null : 'The arrival needs to be before the start time.';
 }
 
 export function validateEventTime(trip: TripSpace, event: EventFields) {
@@ -95,6 +109,10 @@ export function validateEventTime(trip: TripSpace, event: EventFields) {
       event.endTime > event.startTime;
   if (!endsAfterStart) {
     return 'The end time needs to be after the start time.';
+  }
+  const arriveByError = validateArriveBy(event);
+  if (arriveByError) {
+    return arriveByError;
   }
   return hasValidStart && hasValidEnd && isRangeOrdered ? null : message;
 }
@@ -308,6 +326,8 @@ function getMissingEventFields(event: TimelineEvent): Partial<TimelineEvent> {
     assignedMemberIds: [],
     venueOpenTime: null,
     venueCloseTime: null,
+    arriveByTime: null,
+    arriveByNote: null,
     changeHistory: [],
     place: null,
     linkUrl: null,

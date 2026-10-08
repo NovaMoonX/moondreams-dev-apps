@@ -259,6 +259,15 @@ interface ApproveEventSuggestionInput {
   suggestion: EventSuggestion;
 }
 
+// A moved start can land at or before the old arrival, which then no longer means anything.
+function getKeptArriveBy(source: TimelineEvent, newStartTime: string | null) {
+  const arriveByTime = source.arriveByTime ?? null;
+  const isStillEarlier = arriveByTime !== null && newStartTime !== null && arriveByTime < newStartTime;
+  return isStillEarlier
+    ? { arriveByTime, arriveByNote: source.arriveByNote ?? null }
+    : { arriveByTime: null, arriveByNote: null };
+}
+
 export const approveEventSuggestion = createAsyncThunk<
   void,
   ApproveEventSuggestionInput,
@@ -340,6 +349,7 @@ export const approveEventSuggestion = createAsyncThunk<
           latitude: currentSuggestion.suggestedLatitude,
           longitude: currentSuggestion.suggestedLongitude,
           place: currentSuggestion.suggestedPlace,
+          ...getKeptArriveBy(sourceSnapshot.data() as TimelineEvent, timeFields.startTime),
           reminderId,
           isArchived: false,
           archivedBy: null,

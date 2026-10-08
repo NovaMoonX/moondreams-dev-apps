@@ -132,6 +132,8 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
       assignedMemberIds: index % 3 === 0 ? memberUids.filter((_, memberIndex) => memberIndex % 4 === index % 4) : memberUids,
       venueOpenTime: null,
       venueCloseTime: null,
+      arriveByTime: null,
+      arriveByNote: null,
       changeHistory: [],
       place: null,
       linkUrl: null,

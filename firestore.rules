@@ -2032,6 +2032,19 @@ service cloud.firestore {
         return isRelativeTrip(trip) ? isRelativeEventTimeValid(data) : isAbsoluteEventTimeValid(data);
       }
 
+      function isArriveByValid(data) {
+        let time = data.get('arriveByTime', null);
+        let note = data.get('arriveByNote', null);
+        return (time == null || (
+            time is string
+            && time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && data.eventType in ['DINING', 'ACTIVITY']
+            && data.get('startTime', null) is string
+            && time < data.startTime
+          ))
+          && (note == null || (note is string && note.size() <= 500 && time != null));
+      }
+
       function isEventShapeValid() {
         return request.resource.data.keys().hasOnly([
             'id',
@@ -2056,6 +2069,8 @@ service cloud.firestore {
             'assignedMemberIds',
             'venueOpenTime',
             'venueCloseTime',
+            'arriveByTime',
+            'arriveByNote',
             'changeHistory',
             'place',
             'linkUrl',
@@ -2092,6 +2107,7 @@ service cloud.firestore {
           && request.resource.data.assignedMemberIds is list
           && (request.resource.data.venueOpenTime == null || isNonEmptyString(request.resource.data.venueOpenTime))
           && (request.resource.data.venueCloseTime == null || isNonEmptyString(request.resource.data.venueCloseTime))
+          && isArriveByValid(request.resource.data)
           && (request.resource.data.place == null || (
             request.resource.data.place is map
             && request.resource.data.place.placeId is string

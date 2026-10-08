@@ -128,6 +128,8 @@ interface TimelineEvent {
   title: string; // always stored non-empty, but the form never requires one — a blank title is derived on save ("Flight DL 482", the location name, or the event type)
   startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
   endTime: string | null;
+  arriveByTime: string | null; // "HH:mm" when the group wants to be there: same day and zone as the start, strictly before startTime; dining and activities on RELATIVE trips only. Absent on older events
+  arriveByNote: string | null; // why they want to be early; only set alongside arriveByTime
   timezone: string | null; // zone override for this event's start (and end, unless endTimezone says otherwise); null follows the trip's timezone
   endTimezone: string | null; // zone the end is in when it differs from the start's (a flight landing elsewhere); null = same zone. Absent on older events — read it with `?? null`
   startAt: number | null; // @deprecated — ABSOLUTE trips only (null on RELATIVE ones); superseded by dayIndex + startTime
@@ -151,6 +153,8 @@ interface TimelineEvent {
   lastEditedAt: number;
 }
 ```
+
+**Arrive by.** An optional second time on dining and activity events: when to be there, as opposed to when it starts. It is a floating "HH:mm" on the event's own day (never a timestamp, so moving the trip's dates needs no rewrite) and must be strictly before `startTime`; arriving at the start says nothing. The form (`+ Add arrival time` under "When"), `validateEventTime` and `isArriveByValid` in `firestore.rules` all enforce it, the last also capping the note at 500 characters and requiring a time for a note. Older events lack both fields, so rules read them with `get(..., null)` and `getMissingEventFields` backfills `null`. Approving a suggestion keeps the arrival only if it is still before the new start. `arriveByTime` is tracked in `changeHistory` like the start time. Reminders still count back from the start.
 
 **Event details — predefined per `eventType`:**
 

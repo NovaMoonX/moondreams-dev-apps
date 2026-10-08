@@ -18,7 +18,7 @@ function formatPreviousValue(field: EventFieldChange['field'], value: number | s
   if (field === 'startAt' || field === 'endAt') {
     return formatDateTime(value as number);
   }
-  if (field === 'startTime' || field === 'endTime') {
+  if (field === 'startTime' || field === 'endTime' || field === 'arriveByTime') {
     return formatClockTime(value as string);
   }
   if (field === 'dayIndex' || field === 'endDayIndex') {
