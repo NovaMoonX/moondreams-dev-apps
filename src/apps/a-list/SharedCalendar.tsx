@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
 import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 import LazyMount from '@/components/LazyMount';
@@ -60,6 +62,7 @@ function toPastedPin(text: string) {
 function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
   const [pin, setPin] = useState('');
   const [hasEdited, setHasEdited] = useState(false);
+  const [isShown, setIsShown] = useState(false);
   const canSubmit = pin.length === SHARE_PIN_LENGTH && !isChecking;
 
   return (
@@ -78,27 +81,46 @@ function PinGate({ isWrong, isChecking, onSubmit }: PinGateProps) {
       <p className='text-muted-foreground text-sm'>
         Enter the {SHARE_PIN_LENGTH}-character PIN the person who shared it sent you.
       </p>
-      <Input
-        variant='outline'
-        rounded='full'
-        aria-label='PIN'
-        autoComplete='off'
-        autoCapitalize='characters'
-        autoCorrect='off'
-        spellCheck={false}
-        placeholder='••••'
-        className='text-center text-lg font-semibold tracking-[0.4em] uppercase'
-        value={pin}
-        onPaste={(event) => {
-          event.preventDefault();
-          setPin(toPastedPin(event.clipboardData.getData('text')));
-          setHasEdited(true);
-        }}
-        onChange={(event) => {
-          setPin(toPinText(event.target.value));
-          setHasEdited(true);
-        }}
-      />
+      <div className='flex items-center gap-2'>
+        <Input
+          variant='outline'
+          rounded='full'
+          aria-label='PIN'
+          autoComplete='off'
+          data-1p-ignore=''
+          data-lpignore='true'
+          autoCapitalize='characters'
+          autoCorrect='off'
+          spellCheck={false}
+          placeholder='••••'
+          className={join(
+            'text-center text-lg font-semibold tracking-[0.4em] uppercase',
+            !isShown && '[-webkit-text-security:disc]',
+          )}
+          value={pin}
+          onPaste={(event) => {
+            event.preventDefault();
+            setPin(toPastedPin(event.clipboardData.getData('text')));
+            setHasEdited(true);
+          }}
+          onChange={(event) => {
+            setPin(toPinText(event.target.value));
+            setHasEdited(true);
+          }}
+        />
+        <Button
+          type='button'
+          variant='tertiary'
+          size='icon'
+          rounded='full'
+          aria-label={isShown ? 'Hide PIN' : 'Show PIN'}
+          aria-pressed={isShown}
+          className='size-10 min-w-10 shrink-0'
+          onClick={() => setIsShown((current) => !current)}
+        >
+          {isShown ? <EyeOff className='h-5 w-5' /> : <Eye className='h-5 w-5' />}
+        </Button>
+      </div>
       {isWrong && !isChecking && !hasEdited && (
         <p className='text-destructive text-sm' role='alert'>
           That PIN didn&apos;t match. Check it and try again.
