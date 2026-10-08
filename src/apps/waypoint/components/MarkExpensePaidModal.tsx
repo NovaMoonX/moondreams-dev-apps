@@ -29,6 +29,8 @@ interface MarkExpensePaidModalProps {
   isOpen: boolean;
   trip: TripSpace;
   expense: TripExpense | null;
+  /** Who is preselected as having paid. */
+  currentUserId: string;
   /** A failure of the last attempt, shown in the sheet so it never lands behind it. */
   error?: string | null;
   isSubmitting?: boolean;
@@ -42,6 +44,7 @@ function MarkExpensePaidModal({
   isOpen,
   trip,
   expense,
+  currentUserId,
   error: submitError = null,
   isSubmitting = false,
   onSubmit,
@@ -50,7 +53,7 @@ function MarkExpensePaidModal({
   const memberIds = Object.keys(trip.members);
   const memberInfo = useUserInfo(memberIds);
   const initialData: MarkExpensePaidFormData = {
-    payerUid: expense?.payerUid ?? PAID_BY_EACH_PERSON,
+    payerUid: expense?.payerUid ?? currentUserId,
     paidAmount: '',
   };
   const isRange = expense?.amount === null;

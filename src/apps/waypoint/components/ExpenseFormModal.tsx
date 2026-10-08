@@ -875,11 +875,6 @@ function ExpenseFormModal({
             onSubmit={(data) => void handleSubmit(data as ExpenseFormData)}
             submitButton={
               <div className='contents'>
-                {chips.length > 0 && (
-                  <div className='col-span-full mb-4'>
-                    <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
-                  </div>
-                )}
                 {!isEditing && (
                   <div className='col-span-full mb-3 space-y-1'>
                     <Button
@@ -894,6 +889,20 @@ function ExpenseFormModal({
                     <p className='text-muted-foreground text-center text-xs'>
                       {mode === 'range' ? 'Pick an exact amount to mark it paid.' : isPrivate ? null : 'Recorded as paid by you.'}
                     </p>
+                  </div>
+                )}
+                {!isFormComplete && !isSubmitting && (
+                  <p className='text-muted-foreground col-span-full mb-3 text-center text-xs'>
+                    {formData.title.trim() === ''
+                      ? 'Add a title to continue.'
+                      : resolveChoice(formData.category) === null
+                        ? 'Pick a category to add it.'
+                        : 'Enter an amount to add it.'}
+                  </p>
+                )}
+                {chips.length > 0 && (
+                  <div className='col-span-full mb-4'>
+                    <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
                   </div>
                 )}
                 <ModalFooterActions

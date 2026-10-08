@@ -49,6 +49,7 @@ import {
   MAX_DAYS_OUTSIDE_TRIP,
   EVENT_LINK_KIND_LABELS,
   TRANSIT_ARRIVAL,
+  TRANSIT_PLACE_PLACEHOLDERS,
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
@@ -885,7 +886,7 @@ function EventFormModal({
       <PlaceAutocompleteInput
         label={label}
         quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
-        placeholder={isTravel ? 'Seattle ferry terminal' : 'Ichiran Shibuya'}
+        placeholder={isTravel ? (TRANSIT_PLACE_PLACEHOLDERS[draft.quickField as TransitType] ?? 'Pike Place Market') : 'Ichiran Shibuya'}
         value={draft.locationName}
         onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
         bias={placeBias}

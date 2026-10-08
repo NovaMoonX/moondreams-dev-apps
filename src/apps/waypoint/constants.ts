@@ -138,6 +138,13 @@ export const TRANSIT_ARRIVAL: Partial<Record<TransitType, { emoji: string; quest
   FERRY: { emoji: '⚓', question: 'Know when you arrive?', zoneLabel: 'Arrives in' },
 };
 
+export const TRANSIT_PLACE_PLACEHOLDERS: Partial<Record<TransitType, string>> = {
+  FLIGHT: 'Sea-Tac Airport',
+  DRIVE: 'Pike Place Suites',
+  FERRY: 'Seattle ferry terminal',
+  TRAIN: 'King Street Station',
+};
+
 export interface TransitFieldSpec {
   key: string;
   label: string;

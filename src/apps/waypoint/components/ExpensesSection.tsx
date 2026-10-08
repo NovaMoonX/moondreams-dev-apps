@@ -1096,7 +1096,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               {pairSettlements.length === 0
                 ? 'Nothing to settle yet.'
                 : myOpenPairs > 0
-                  ? `${myOpenPairs} to settle`
+                  ? `${myOpenPairs} for you to settle`
                   : 'You’re all square.'}
             </p>
           </div>
@@ -1334,6 +1334,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         isOpen={payingExpense !== null && payingExpense.status !== 'PAID'}
         trip={trip}
         expense={payingExpense}
+        currentUserId={currentUserId}
         error={payError}
         isSubmitting={payingExpense !== null && markingPaidId === payingExpense.id}
         onSubmit={(values) => {
