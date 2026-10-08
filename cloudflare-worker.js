@@ -81,6 +81,7 @@ const APP_REGISTRY = [
   },
 ];
 
+// A fetched response's headers are read-only, so copy it to add one. The header reaches crawlers that never run the page's JS, which is where its noindex meta tag is added.
 function withNoIndex(response) {
   const result = new Response(response.body, response);
   result.headers.set('X-Robots-Tag', 'noindex');
