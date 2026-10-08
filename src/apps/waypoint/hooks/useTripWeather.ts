@@ -8,6 +8,7 @@ import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import {
   buildWeatherPlan,
   getDayForecast,
+  getDayAlso,
   getDayHours,
   getDayTimezone,
   getEventForecast,
@@ -44,6 +45,7 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], now: nu
           forecast,
           hours: getDayHours(plan, forecasts, dayIndex),
           placeName: target.placeName,
+          also: getDayAlso(plan, forecasts, dayIndex),
         }
       : null;
   };
@@ -59,6 +61,9 @@ export function useTripWeather(trip: TripSpace, events: TimelineEvent[], now: nu
     getTimezone: (dayIndex: number) => getDayTimezone(plan, forecasts, dayIndex),
     getRemainingHoursToday,
     getEvent: (eventId: string) => getEventForecast(plan, forecasts, eventId),
+    getEventPlace: (eventId: string) => plan.events[eventId]?.placeName ?? null,
+    getAlso: (dayIndex: number) => getDayAlso(plan, forecasts, dayIndex),
+    getPlaceName: (dayIndex: number) => plan.days[dayIndex]?.placeName ?? null,
   };
 }
 

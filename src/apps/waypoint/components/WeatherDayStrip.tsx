@@ -11,6 +11,8 @@ import WeatherEmoji from '@apps/waypoint/components/WeatherEmoji';
 export interface WeatherStripDay {
   dayIndex: number;
   forecast: DayForecast;
+  /** How many other places the day's plans are in. */
+  extra?: number;
 }
 
 interface WeatherDayStripProps {
@@ -41,7 +43,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
     <div className='space-y-2'>
       <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Weather by day</p>
       <div ref={containerRef} className='relative -mx-1 flex gap-1 overflow-x-auto px-1 py-1'>
-        {days.map(({ dayIndex, forecast }) => {
+        {days.map(({ dayIndex, forecast, extra = 0 }) => {
           const condition = getWeatherCondition(forecast.weatherCode);
           const isToday = dayIndex === todayIndex;
           const isSelected = dayIndex === selectedDayIndex;
@@ -59,7 +61,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
               data-today={isToday}
               aria-current={isToday ? 'date' : undefined}
               aria-pressed={isSelected}
-              aria-label={`${dateLabel}: ${condition.label}, high ${formatTemp(forecast.tempMax)}, low ${formatTemp(forecast.tempMin)}`}
+              aria-label={`${dateLabel}: ${condition.label}, high ${formatTemp(forecast.tempMax)}, low ${formatTemp(forecast.tempMin)}${extra > 0 ? `, plus ${extra} more ${extra === 1 ? 'place' : 'places'}` : ''}`}
               className={join(
                 'relative h-auto min-w-18 flex-1 flex-col gap-1 rounded-md px-1 py-2 text-xs font-normal focus:outline-transparent! focus-visible:outline-foreground!',
                 dayIndex < todayIndex && 'opacity-60',
@@ -79,6 +81,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
                 {formatTemp(forecast.tempMax)}
                 <span className='text-muted-foreground font-normal'> / {formatTemp(forecast.tempMin)}</span>
               </span>
+              {extra > 0 && <span className='text-muted-foreground text-[10px] leading-3'>+{extra} {extra === 1 ? 'place' : 'places'}</span>}
             </Button>
           );
         })}

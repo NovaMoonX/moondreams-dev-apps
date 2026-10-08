@@ -329,6 +329,7 @@ export function TimelineSection({
         showCover={showCovers}
         showAttendees={showAttendees}
         weather={weather.getEvent(event.id)}
+        weatherPlace={weather.getEventPlace(event.id)}
         onSuggest={
           isTripMember(trip, currentUserId) && !event.isArchived
             ? (selectedEvent) => suggestionRef.current?.open(selectedEvent)
@@ -435,11 +436,19 @@ export function TimelineSection({
 
   const renderDayWeather = (dayIndex: number) => {
     const forecast = weather.getDay(dayIndex);
+    const also = weather.getAlso(dayIndex);
+    const placeName = weather.getPlaceName(dayIndex);
     return forecast ? (
-      <DayWeather forecast={forecast} isMinimized={minimizeWeather} onOpen={() => {
-        setWeatherDay(dayIndex);
-        setIsWeatherOpen(true);
-      }} />
+      <DayWeather
+        forecast={forecast}
+        also={also}
+        placeName={also.length > 0 || placeName !== (trip.city?.name ?? null) ? placeName : null}
+        isMinimized={minimizeWeather}
+        onOpen={() => {
+          setWeatherDay(dayIndex);
+          setIsWeatherOpen(true);
+        }}
+      />
     ) : null;
   };
 
@@ -584,10 +593,9 @@ export function TimelineSection({
     }
   };
 
-  const weatherDays = dayIndexes.map((dayIndex) => ({
-    dayIndex,
-    forecast: weather.getDay(dayIndex),
-  })).flatMap(({ dayIndex, forecast }) => (forecast ? [{ dayIndex, forecast }] : []));
+  const weatherDays = dayIndexes
+    .map((dayIndex) => ({ dayIndex, forecast: weather.getDay(dayIndex), extra: weather.getAlso(dayIndex).length }))
+    .flatMap(({ dayIndex, forecast, extra }) => (forecast ? [{ dayIndex, forecast, extra }] : []));
   const selectedDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? null : Number(selectedTab);
 
   const viewOptionGroups = [

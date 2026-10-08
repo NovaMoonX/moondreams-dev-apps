@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, MapPin } from 'lucide-react';
 
 import type { DayForecast, HourForecast } from '@/lib/weather/types';
 import { getWeatherCondition } from '@/lib/weather/weatherCodes';
@@ -10,13 +10,17 @@ import WeatherEmoji from '@apps/waypoint/components/WeatherEmoji';
 interface DayWeatherProps {
   forecast: DayForecast;
   hours?: HourForecast[];
+  /** Set when the weather isn't simply the trip city's: which place it is for. */
+  placeName?: string | null;
+  /** The day's other places, in the order their first plan happens. */
+  also?: { placeName: string | null; forecast: DayForecast }[];
   isMinimized: boolean;
   onOpen?: () => void;
 }
 
 const formatTemp = (value: number | null) => (value === null ? '–' : `${Math.round(value)}°`);
 
-function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherProps) {
+function DayWeather({ forecast, hours = [], placeName = null, also = [], isMinimized, onOpen }: DayWeatherProps) {
   const condition = getWeatherCondition(forecast.weatherCode);
   const { label } = condition;
   const bannerImage = WEATHER_BANNER_IMAGES[condition.id];
@@ -26,6 +30,7 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
       <>
         <WeatherEmoji condition={condition} className='shrink-0 text-sm leading-none' />
         {label} · {formatTemp(forecast.tempMax)} / {formatTemp(forecast.tempMin)}
+        {also.length > 0 && <span className='font-medium'> · +{also.length}</span>}
       </>
     );
     return onOpen ? (
@@ -33,7 +38,7 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
         type='button'
         variant='tertiary'
         size='sm'
-        aria-label={`Open the day's weather: ${label}`}
+        aria-label={`Open the day's weather: ${label}${placeName ? ` in ${placeName}` : ''}${also.length > 0 ? `, plus ${also.length} more ${also.length === 1 ? 'place' : 'places'}` : ''}`}
         className="text-muted-foreground relative h-auto gap-1.5 p-0! text-xs font-normal after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
         onClick={onOpen}
       >
@@ -66,6 +71,12 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
             High {formatTemp(forecast.tempMax)} · Low {formatTemp(forecast.tempMin)}
             {forecast.precipChance !== null && forecast.precipChance > 0 && ` · ${forecast.precipChance}% chance of precipitation`}
           </p>
+          {placeName && (
+            <p className='text-muted-foreground mt-0.5 flex items-center gap-1 text-xs'>
+              <MapPin className='h-3 w-3 shrink-0' aria-hidden='true' />
+              <span className='truncate'>{placeName}</span>
+            </p>
+          )}
         </div>
         {onOpen && <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />}
       </div>
@@ -86,6 +97,26 @@ function DayWeather({ forecast, hours = [], isMinimized, onOpen }: DayWeatherPro
         </Button>
       ) : (
         summary
+      )}
+      {also.length > 0 && (
+        <div className='flex flex-wrap gap-1.5 px-3 pb-3'>
+          {also.map(({ placeName: alsoPlace, forecast: alsoForecast }) => {
+            const alsoCondition = getWeatherCondition(alsoForecast.weatherCode);
+            return (
+              <span
+                key={alsoPlace ?? alsoForecast.date}
+                className='bg-background/70 text-muted-foreground inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs'
+              >
+                <span className='shrink-0'>Also</span>
+                <span className='text-foreground truncate font-medium'>{alsoPlace ?? 'another place'}</span>
+                <WeatherEmoji condition={alsoCondition} className='shrink-0 text-sm leading-none' />
+                <span className='shrink-0'>
+                  {formatTemp(alsoForecast.tempMax)} / {formatTemp(alsoForecast.tempMin)}
+                </span>
+              </span>
+            );
+          })}
+        </div>
       )}
       {hours.length > 0 && (
         <div className='px-3 pb-3'>

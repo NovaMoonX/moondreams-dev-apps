@@ -60,6 +60,7 @@ interface EventCardProps {
   /** Offered in the opened details only; `undefined` when this person can't suggest. */
   onSuggest?: (event: TimelineEvent) => void;
   weather?: HourForecast | null;
+  weatherPlace?: string | null;
 }
 
 function getTravelRowTime(trip: TripSpace, event: TimelineEvent) {
@@ -98,6 +99,7 @@ export interface EventDetailLinesProps {
   /** Cards abbreviate the zone ("PDT"); the full details view spells it out. */
   zoneStyle?: ZoneStyle;
   weather?: HourForecast | null;
+  weatherPlace?: string | null;
   canEdit: boolean;
   onSaveNotes: (event: TimelineEvent, notes: string) => Promise<void>;
 }
@@ -112,6 +114,7 @@ export function EventDetailLines({
   showAttendees = true,
   zoneStyle = 'short',
   weather = null,
+  weatherPlace = null,
   canEdit,
   onSaveNotes,
 }: EventDetailLinesProps) {
@@ -154,7 +157,7 @@ export function EventDetailLines({
         {EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
           <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic={!showTitle} />
         )}
-        {weather && <EventWeatherChip weather={weather} />}
+        {weather && <EventWeatherChip weather={weather} placeName={weatherPlace} />}
         {showNotesIndicator && event.notes && (
           <span
             className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
@@ -238,6 +241,7 @@ export function EventCard({
   onToggleArchived,
   onSuggest,
   weather = null,
+  weatherPlace = null,
 }: EventCardProps) {
   // An archived event is read-only for everyone but an admin, who may only unarchive it.
   const canModify = canEdit && !event.isArchived;
@@ -360,6 +364,7 @@ export function EventCard({
               showNotesIndicator={isSmallScreen}
               showAttendees={showAttendees}
               weather={weather}
+              weatherPlace={weatherPlace}
               canEdit={canModify}
               onSaveNotes={onSaveNotes}
             />
@@ -423,6 +428,7 @@ export function EventCard({
               event={event}
               zoneStyle='long'
               weather={weather}
+              weatherPlace={weatherPlace}
               showTitle={false}
               showNotes
               canEdit={canModify}
@@ -452,6 +458,7 @@ export function EventCard({
             event={event}
             zoneStyle='long'
             weather={weather}
+            weatherPlace={weatherPlace}
             showTitle={false}
             showNotes
             canEdit={canModify}

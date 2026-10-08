@@ -48,13 +48,13 @@ function EditTripCityModal({ isOpen, trip, isSubmitting = false, onSubmit, onClo
         <p className='text-muted-foreground text-sm'>
           {city ? (
             <>
-              We&apos;ll show the weather for <strong className='text-foreground'>{city.name}</strong> on every day of
-              the trip.
+              We&apos;ll show the weather for <strong className='text-foreground'>{city.name}</strong> on days with no
+              plans somewhere else. A day whose plans are in another place shows that place&apos;s weather.
             </>
           ) : (
             <>
-              <strong className='text-foreground'>Pick the city you&apos;ll be in</strong> to see its weather on every
-              day. Without one, a day only shows weather if it has a plan with a place, like a dinner or an activity.
+              <strong className='text-foreground'>Pick the city you&apos;ll be in</strong> to see its weather on days with
+              no located plans. Any day with a plan that has a place shows that place&apos;s weather.
             </>
           )}
         </p>

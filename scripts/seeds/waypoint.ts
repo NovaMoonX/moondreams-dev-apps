@@ -671,6 +671,48 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  // A day split between two places, and a day entirely somewhere else, to show the weather following the plans.
+  const portlandEvents = [
+    { id: 'seed-waypoint-powells', day: 1, start: '15:00', title: "Powell's Books", locationName: "Powell's City of Books", address: 'Portland, OR', latitude: 45.5230, longitude: -122.6814 },
+    { id: 'seed-waypoint-rose-garden', day: 3, start: '10:00', title: 'International Rose Test Garden', locationName: 'International Rose Test Garden', address: 'Portland, OR', latitude: 45.5188, longitude: -122.7094 },
+  ];
+  for (const portland of portlandEvents) {
+    await eventsCollection.doc(portland.id).set({
+      id: portland.id,
+      tripId: TRIP_ID,
+      eventType: 'ACTIVITY',
+      ...relativeEventTime({ day: portland.day, start: portland.start, end: null }),
+      title: portland.title,
+      locationName: portland.locationName,
+      address: portland.address,
+      latitude: portland.latitude,
+      longitude: portland.longitude,
+      eventDetails: { settings: ['OUTDOOR'] },
+      notes: null,
+      attendeeTargetType: 'EVERYONE_CURRENT',
+      assignedMemberIds: [alex.uid, taylor.uid],
+      venueOpenTime: null,
+      venueCloseTime: null,
+      changeHistory: [],
+      place: null,
+      linkUrl: null,
+      linkPreview: null,
+      linkKind: null,
+      groupLabel: null,
+      stackLabel: null,
+      reminderMinutesBefore: 20,
+      reminderEnabled: true,
+      reminderId: null,
+      isArchived: false,
+      archivedBy: null,
+      archivedAt: null,
+      seenBy: {},
+      createdBy: alex.uid,
+      createdAt: joinedAt,
+      lastEditedAt: context.now,
+    });
+  }
+
   await eventsCollection.doc('seed-waypoint-hike').set({
     id: 'seed-waypoint-hike',
     tripId: TRIP_ID,
@@ -1829,6 +1871,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 78 + personalExpenses.length + scaleDocuments,
+    firestoreDocuments: 80 + personalExpenses.length + scaleDocuments,
   };
 }

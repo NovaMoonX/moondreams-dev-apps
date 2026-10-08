@@ -13,6 +13,7 @@ export interface WeatherDayDetails {
   forecast: DayForecast;
   hours: HourForecast[];
   placeName: string | null;
+  also?: { placeName: string | null; forecast: DayForecast }[];
 }
 
 interface WeatherDetailSheetProps {
@@ -29,7 +30,7 @@ function WeatherDetailSheet({ isOpen, onClose, title, details }: WeatherDetailSh
     return null;
   }
 
-  const { forecast, hours, placeName } = details;
+  const { forecast, hours, placeName, also = [] } = details;
   const condition = getWeatherCondition(forecast.weatherCode);
   const backdrop = WEATHER_BANNER_IMAGES[condition.id];
   const hasPrecip = forecast.precipChance !== null && forecast.precipChance > 0;
@@ -84,6 +85,28 @@ function WeatherDetailSheet({ isOpen, onClose, title, details }: WeatherDetailSh
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Hour by hour</p>
             <HourlyWeatherStrip hours={hours} showNow={false} />
+          </div>
+        )}
+        {also.length > 0 && (
+          <div className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Also on this day</p>
+            <ul className='divide-border divide-y'>
+              {also.map(({ placeName: alsoPlace, forecast: alsoForecast }) => {
+                const alsoCondition = getWeatherCondition(alsoForecast.weatherCode);
+                return (
+                  <li key={alsoPlace ?? alsoForecast.date} className='flex items-center gap-3 py-2'>
+                    <WeatherEmoji condition={alsoCondition} className='text-2xl leading-none' />
+                    <span className='min-w-0 flex-1'>
+                      <span className='block truncate text-sm font-medium'>{alsoPlace ?? 'Another place'}</span>
+                      <span className='text-muted-foreground block text-xs'>{alsoCondition.label}</span>
+                    </span>
+                    <span className='shrink-0 text-sm tabular-nums'>
+                      {formatTemp(alsoForecast.tempMax)} / {formatTemp(alsoForecast.tempMin)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
         <WeatherAttribution />

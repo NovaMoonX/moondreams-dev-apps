@@ -210,6 +210,12 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             </div>
             <DayWeather
               forecast={todayWeather}
+              also={weather.getAlso(todayIndex)}
+              placeName={
+                weather.getAlso(todayIndex).length > 0 || weather.getPlaceName(todayIndex) !== (trip.city?.name ?? null)
+                  ? weather.getPlaceName(todayIndex)
+                  : null
+              }
               hours={weather.getRemainingHoursToday(todayIndex)}
               isMinimized={false}
               onOpen={() => setIsWeatherOpen(true)}
@@ -284,6 +290,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             event={detail.event}
             zoneStyle='long'
             weather={weather.getEvent(detail.event.id)}
+            weatherPlace={weather.getEventPlace(detail.event.id)}
             showTitle={false}
             showNotes
             canEdit={false}

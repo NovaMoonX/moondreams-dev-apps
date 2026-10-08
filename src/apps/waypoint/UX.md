@@ -408,7 +408,7 @@ An expected expense row offers "I paid early" to anyone in its split: pick who y
 
 **Copy as Markdown.** The trip menu's "Copy trip as Markdown" (every member sees it) copies the whole itinerary; the Timeline's "Copy" button beside View options copies only the timeline. Both toast once the text is on the clipboard and ignore the view options and filters.
 
-**Trip city and weather.** Creating a trip has an optional "Where is it based?" city search (it sets the time zone too); "Set city" / "Change city" in the trip menu edits it, and the city shows under the title on the trip card and in the header. Tapping any weather card opens its details sheet, whose one button ("Sounds good") just closes it.
+**Trip city and weather.** Creating a trip has an optional "Where is it based?" city search (it sets the time zone too); "Set city" / "Change city" in the trip menu edits it, and the city shows under the title on the trip card and in the header. A day's weather follows where its plans are: the trip city only fills days with no located plan, a day entirely elsewhere shows that place (the card names it), and a day spanning places shows the main place with "Also <place> ☁ 61°" chips, a "+1 place" marker on the weather strip and a "+1" on the compact line; an event in a different place than its day names that place on its chip. Tapping any weather card opens its details sheet (with an "Also on this day" list), whose one button ("Sounds good") just closes it.
 
 **Slim timeline rows.** A day's check-ins, check-outs, rental pick-ups and returns, and its travel legs, are one-line tappable rows (a stay or rental opens read-only details, a travel leg its details with Modify), so the cards on the timeline are the plans people actually choose between.
 

@@ -3,11 +3,14 @@ import { roundCoordinate } from '@/lib/weather/weatherQueries';
 import { getDayCount, getDayInputValue } from '@/utils/dateRangeUtils';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { toMinutes } from '@apps/waypoint/utils/timelineLogistics';
 import { getEventTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const FORECAST_WINDOW_DAYS = 14;
 // The provider serves 92 days of past data; stay clear of the edge.
 const MAX_PAST_DAYS = 90;
+/** Plans closer than this share a forecast: one place, not two. */
+const CLUSTER_KM = 35;
 
 interface Located {
   latitude: number;
@@ -15,6 +18,8 @@ interface Located {
   timezone: string | null;
   /** The plan the forecast is for, so the details can say where the weather is from. */
   placeName: string | null;
+  /** How many of the day's plans are in this place. */
+  count: number;
 }
 
 export interface WeatherGroup {
@@ -24,8 +29,10 @@ export interface WeatherGroup {
 
 export interface WeatherPlan {
   groups: WeatherGroup[];
-  days: Record<number, { key: string; date: string; placeName: string | null }>;
-  events: Record<string, { key: string; time: string }>;
+  /** `also` is every other place the day's plans are in, in the order its first plan happens. */
+  days: Record<number, { key: string; date: string; placeName: string | null; also: { key: string; placeName: string | null }[] }>;
+  /** `placeName` is set only for an event outside the day's main place. */
+  events: Record<string, { key: string; time: string; placeName: string | null }>;
 }
 
 export type WeatherForecasts = Record<string, WeatherForecast>;
@@ -51,37 +58,74 @@ function toLocated(
   longitude: number | null | undefined,
   timezone: string | null,
   placeName: string | null = null,
+  count = 1,
 ): Located | null {
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
     return null;
   }
-  return { latitude, longitude, timezone, placeName };
+  return { latitude, longitude, timezone, placeName, count };
 }
-
-const isLocated = (value: Located | null): value is Located => value !== null;
 
 function getTripCityLocation(trip: TripSpace): Located | null {
   const { city } = trip;
   return city ? toLocated(city.latitude, city.longitude, null, city.name) : null;
 }
 
-// Travel legs start from wherever each person is, so the first plan that isn't travel says where the day is.
-function getDayLocation(trip: TripSpace, dayIndex: number, events: TimelineEvent[]): Located | null {
-  const fromEvent = events
+/** The town from a US-style address ("3801 Discovery Park Blvd, Seattle, WA" is Seattle); otherwise the venue's own name. */
+function getPlaceLabel(event: TimelineEvent) {
+  const parts = (event.address ?? '').split(',').map((part) => part.trim());
+  const isStateLast = /^[A-Z]{2}(\s+\d{5})?$/.test(parts.at(-1) ?? '');
+  const town = isStateLast && parts.length >= 2 ? parts.at(-2) : null;
+  return town || event.locationName?.trim() || event.title.trim() || null;
+}
+
+const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+
+function getDistanceKm(first: Located, second: Located) {
+  const dLat = toRadians(second.latitude - first.latitude);
+  const dLon = toRadians(second.longitude - first.longitude);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(first.latitude)) * Math.cos(toRadians(second.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** A day's places, from its plans in time order: plans within `CLUSTER_KM` of a place's first plan belong to it.
+ * Travel legs start from wherever each person is, so they don't say where the day is. The main place has
+ * the most plans (the earliest wins a tie); `others` keep the order their first plan happens. */
+function getDayPlaces(trip: TripSpace, dayIndex: number, events: TimelineEvent[], city: Located | null) {
+  const located = events
     .filter(
       (event) =>
         !event.isArchived && event.eventType !== 'TRAVEL' && getEventTime(trip, event).dayIndex === dayIndex,
     )
-    .map((event) =>
-      toLocated(
+    .map((event) => ({
+      minutes: toMinutes(getEventTime(trip, event).startTime) ?? -1,
+      location: toLocated(
         event.latitude,
         event.longitude,
         getEventTime(trip, event).timezone,
-        event.locationName?.trim() || event.title.trim() || null,
+        getPlaceLabel(event),
       ),
-    )
-    .find(isLocated);
-  return fromEvent ?? null;
+    }))
+    .filter((entry): entry is { minutes: number; location: Located } => entry.location !== null)
+    .sort((first, second) => first.minutes - second.minutes);
+
+  const clusters = located.reduce<Located[]>((acc, { location }) => {
+    const index = acc.findIndex((cluster) => getDistanceKm(cluster, location) <= CLUSTER_KM);
+    return index === -1
+      ? [...acc, location]
+      : acc.map((cluster, position) => (position === index ? { ...cluster, count: cluster.count + 1 } : cluster));
+  }, []);
+  const labelled = clusters.map((cluster) =>
+    city && getDistanceKm(city, cluster) <= CLUSTER_KM ? { ...cluster, placeName: city.placeName } : cluster,
+  );
+  const main = labelled.reduce<Located | null>(
+    (best, cluster) => (best === null || cluster.count > best.count ? cluster : best),
+    null,
+  );
+  const result = { main, others: labelled.filter((cluster) => cluster !== main) };
+  return result;
 }
 
 function getLocationKey({ latitude, longitude, timezone }: Located) {
@@ -103,9 +147,11 @@ export function buildWeatherPlan(
 
   const cityLocation = getTripCityLocation(trip);
   const dayNeeds = dayIndexes.flatMap((dayIndex) => {
-    const location = cityLocation ?? getDayLocation(trip, dayIndex, events);
-    return location ? [{ dayIndex, location, date: getDayInputValue(trip.startDate, dayIndex) }] : [];
+    const { main, others } = getDayPlaces(trip, dayIndex, events, cityLocation);
+    const location = main ?? cityLocation;
+    return location ? [{ dayIndex, location, others, date: getDayInputValue(trip.startDate, dayIndex) }] : [];
   });
+  const dayPlaces = new Map(dayNeeds.map(({ dayIndex, location, others }) => [dayIndex, { main: location, others }]));
 
   // Legacy absolute trips store instants without a zone, so an event's hour can't be placed reliably.
   const eventNeeds = isRelativeTrip(trip)
@@ -116,7 +162,14 @@ export function buildWeatherPlan(
           return [];
         }
         const date = getDayInputValue(trip.startDate, dayIndex);
-        return [{ eventId: event.id, location, date, time: `${date}T${startTime.slice(0, 2)}:00` }];
+        const places = dayPlaces.get(dayIndex);
+        const isOutsideMain = places !== undefined && getDistanceKm(places.main, location) > CLUSTER_KM;
+        const placeName = isOutsideMain
+          ? (places.others.find((other) => getDistanceKm(other, location) <= CLUSTER_KM)?.placeName ??
+            event.locationName?.trim() ??
+            null)
+          : null;
+        return [{ eventId: event.id, location, date, placeName, time: `${date}T${startTime.slice(0, 2)}:00` }];
       })
     : [];
 
@@ -129,7 +182,8 @@ export function buildWeatherPlan(
         date: getDayInputValue(trip.startDate, dayIndex),
       })),
     );
-  const needs: WeatherNeed[] = [...dayNeeds, ...eventNeeds, ...todayNeeds];
+  const alsoNeeds = dayNeeds.flatMap(({ others, date }) => others.map((location) => ({ location, date })));
+  const needs: WeatherNeed[] = [...dayNeeds, ...alsoNeeds, ...eventNeeds, ...todayNeeds];
   const groupsByKey = needs.reduce<Record<string, WeatherGroup>>((groups, { location, date }) => {
     const key = getLocationKey(location);
     const existing = groups[key];
@@ -152,13 +206,21 @@ export function buildWeatherPlan(
   const result: WeatherPlan = {
     groups: Object.values(groupsByKey),
     days: Object.fromEntries(
-      dayNeeds.map(({ dayIndex, location, date }) => [
+      dayNeeds.map(({ dayIndex, location, others, date }) => [
         dayIndex,
-        { key: getLocationKey(location), date, placeName: location.placeName },
+        {
+          key: getLocationKey(location),
+          date,
+          placeName: location.placeName,
+          also: others.map((other) => ({ key: getLocationKey(other), placeName: other.placeName })),
+        },
       ]),
     ),
     events: Object.fromEntries(
-      eventNeeds.map(({ eventId, location, time }) => [eventId, { key: getLocationKey(location), time }]),
+      eventNeeds.map(({ eventId, location, time, placeName }) => [
+        eventId,
+        { key: getLocationKey(location), time, placeName },
+      ]),
     ),
   };
   return result;
@@ -196,6 +258,16 @@ export function getRemainingHours(
   }
 
   const result = forecast.hours.filter((hour) => hour.time >= nowKey).slice(0, 24);
+  return result;
+}
+
+/** The other places a day's plans are in, each with that place's forecast for the day. */
+export function getDayAlso(plan: WeatherPlan, forecasts: WeatherForecasts, dayIndex: number) {
+  const target = plan.days[dayIndex];
+  const result = (target?.also ?? []).flatMap(({ key, placeName }) => {
+    const forecast = forecasts[key]?.days.find((day) => day.date === target?.date) ?? null;
+    return forecast ? [{ placeName, forecast }] : [];
+  });
   return result;
 }
 
