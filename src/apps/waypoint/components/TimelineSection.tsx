@@ -513,7 +513,7 @@ export function TimelineSection({
                 trailing={typeof bucket === 'number' && minimizeWeather ? renderDayWeather(bucket) : undefined}
               />
               {typeof bucket === 'number' && !minimizeWeather && renderDayWeather(bucket)}
-              <div className='pb-3'>
+              <div className='space-y-3 pb-3'>
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
                   {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
                 </LazyMount>
