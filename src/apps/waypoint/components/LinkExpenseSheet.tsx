@@ -93,7 +93,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
           <Button type='button' size='lg' disabled={linkingId !== null} onClick={onAddNew}>
             Add a new expense
           </Button>
-          <Button type='button' variant='tertiary' size='lg' disabled={linkingId !== null} onClick={() => void markNoExpense()}>
+          <Button type='button' variant='secondary' size='lg' disabled={linkingId !== null} onClick={() => void markNoExpense()}>
             No expense needed
           </Button>
         </div>
