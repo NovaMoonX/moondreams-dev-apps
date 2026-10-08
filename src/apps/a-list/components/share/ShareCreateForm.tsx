@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
 
-import DateRangeField, { type DateRangeValue } from '@/components/forms/DateRangeField';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { fromDateInputValue } from '@/utils/dateInputUtils';
+import { fromDateInputValue, toLocalDateInputValue } from '@/utils/dateInputUtils';
 import {
   MAX_SHARE_RANGE_DAYS,
   MAX_SHARED_VIEWINGS,
@@ -43,14 +42,10 @@ function ShareCreateForm({
   const viewings = useAppSelector((state) => state.aList.viewings.items);
   const [kind, setKind] = useState<ShareRangeKind>('THIS_MONTH');
   const [hasPin, setHasPin] = useState(false);
-  const [custom, setCustom] = useState<DateRangeValue>(() => {
-    const month = getQuickShareRange('THIS_MONTH', now);
-    return { startDate: month?.startKey ?? '', endDate: month?.endKey ?? '' };
-  });
+  const [custom, setCustom] = useState<DayKeyRange>({ startKey: '', endKey: '' });
 
   const range: DayKeyRange =
-    getQuickShareRange(kind, now) ??
-    { startKey: custom.startDate, endKey: custom.endDate };
+    getQuickShareRange(kind, now) ?? custom;
   const { startKey, endKey } = range;
   const dayCount = getRangeDayCount(range);
   const movieCount = useMemo(
@@ -60,11 +55,14 @@ function ShareCreateForm({
   );
 
   const getSummary = () => {
-    if (startKey === '' || endKey === '') {
-      return { isReady: false, text: 'Pick the first and last day.' };
+    if (startKey === '') {
+      return { isReady: false, text: 'Tap the first and last day on the calendar.' };
     }
-    if (dayCount < 1) {
-      return { isReady: false, text: 'The last day needs to come after the first.' };
+    if (endKey === '') {
+      return {
+        isReady: false,
+        text: 'Now tap the last day, or tap this day again for just one.',
+      };
     }
     if (dayCount > MAX_SHARE_RANGE_DAYS) {
       return {
@@ -106,10 +104,17 @@ function ShareCreateForm({
           onChange={setKind}
         />
         {kind === 'CUSTOM' && (
-          <DateRangeField
-            value={custom}
-            onChange={setCustom}
-            disabled={isDisabled}
+          <Calendar
+            mode='range'
+            size='auto'
+            className='mx-auto max-w-sm'
+            initialDate={new Date(now)}
+            onRangeSelect={({ start, end }) =>
+              setCustom({
+                startKey: toLocalDateInputValue(start?.getTime()),
+                endKey: toLocalDateInputValue(end?.getTime()),
+              })
+            }
           />
         )}
         <p
