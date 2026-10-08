@@ -5,12 +5,6 @@
   "id": "/a-list/",
   "start_url": "/a-list/",
   "scope": "/a-list/",
-  "scope_extensions": [
-    {
-      "type": "origin",
-      "origin": "https://apps.moondreams.dev"
-    }
-  ],
   "display": "standalone",
   "background_color": "#fafafa",
   "theme_color": "#000000",

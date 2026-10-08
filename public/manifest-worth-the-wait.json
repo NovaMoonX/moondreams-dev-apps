@@ -5,12 +5,6 @@
   "id": "/worth-the-wait/",
   "start_url": "/worth-the-wait/",
   "scope": "/worth-the-wait/",
-  "scope_extensions": [
-    {
-      "type": "origin",
-      "origin": "https://apps.moondreams.dev"
-    }
-  ],
   "display": "standalone",
   "theme_color": "#e4e4e7",
   "user_preferences": {
