@@ -601,6 +601,14 @@ export function TimelineSection({
     }
   };
 
+  const describeRemoved = ({ checklistItemIds, expenseIds }: DeleteLinked) => {
+    const parts = [
+      checklistItemIds.length > 0 ? `${checklistItemIds.length} ${checklistItemIds.length === 1 ? 'to-do' : 'to-dos'}` : null,
+      expenseIds.length > 0 ? `${expenseIds.length} ${expenseIds.length === 1 ? 'expense' : 'expenses'}` : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0 ? ` and its ${parts.join(' and ')}` : '';
+  };
+
   /** Deletes what the person ticked in the confirm, after the event itself; returns what could not be deleted. */
   const deleteLinked = async ({ checklistItemIds, expenseIds }: DeleteLinked) => {
     const { expenses } = store.getState().waypoint;
@@ -633,7 +641,10 @@ export function TimelineSection({
                 description: `${failedCount === 1 ? '1 linked item' : `${failedCount} linked items`} could not be deleted. You can remove ${failedCount === 1 ? 'it' : 'them'} from the checklist or Expenses.`,
                 type: 'error',
               }
-            : { title: `Deleted ${event.title} and what was linked to it`, type: 'success' },
+            : {
+                title: `Deleted ${event.title}${describeRemoved(linked)}`,
+                type: 'success',
+              },
         );
       }
     } catch (error) {

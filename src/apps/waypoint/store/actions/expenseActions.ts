@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { collection, deleteDoc, deleteField, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { PLAN_COLLECTIONS } from '@apps/waypoint/constants';
 import type {
   EarlyPayment,
   ExpenseCategory,
@@ -193,7 +194,12 @@ export const linkExpenseToPlan = createAsyncThunk<TripExpense, LinkExpenseInput>
         throw new Error('This expense was removed.');
       }
       const current = snapshot.data() as Partial<TripExpense>;
-      if (current.linkedTo) {
+      const existing = current.linkedTo ?? null;
+      const existingTarget =
+        existing && (existing.kind !== link.kind || existing.id !== link.id)
+          ? await transaction.get(doc(db, 'apps', 'waypoint', 'trips', expense.tripId, PLAN_COLLECTIONS[existing.kind], existing.id))
+          : null;
+      if (existingTarget?.exists()) {
         throw new Error('This expense is already linked to something else.');
       }
       const changes = { linkedTo: link, dayIndex: current.dayIndex ?? dayIndex, lastEditedAt: Date.now() };

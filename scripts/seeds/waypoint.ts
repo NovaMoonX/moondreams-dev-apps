@@ -989,7 +989,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
-  // A to-do linked to an activity, so the hike's card shows "1 to book"; the other items above stay legacy-shaped (no `linkedTo`).
+  // A to-do linked to an activity, so the hike's card shows "1 to do"; the other items above stay legacy-shaped (no `linkedTo`).
   await checklistCollection.doc('book-hike-parking').set({
     id: 'book-hike-parking',
     tripId: TRIP_ID,

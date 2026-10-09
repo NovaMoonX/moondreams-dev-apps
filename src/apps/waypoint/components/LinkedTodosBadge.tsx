@@ -16,17 +16,18 @@ interface LinkedTodosBadgeProps {
 function getBadgeContent(open: number, total: number, promptsBooking: boolean) {
   if (total === 0) {
     return promptsBooking
-      ? { phone: '🎟️ To book', desktop: '🎟️ No booking yet', aria: 'No booking yet: link or add a to-do' }
+      ? { phone: '🎟️ To book', desktop: '🎟️ No booking yet', aria: 'No booking yet. Link or add a to-do' }
       : null;
   }
   const done = total - open;
   if (open === 0) {
-    return { phone: '✅ Done', desktop: '✅ All done', aria: `All ${total} to-dos done: see them` };
+    return { phone: '✅ Done', desktop: '✅ All done', aria: total === 1 ? 'All done. The 1 to-do is done' : `All done. All ${total} to-dos are done` };
   }
+  const toDo = `${open} to do`;
   return {
-    phone: `📝 ${open} to do`,
-    desktop: done > 0 ? `📝 ${open} to do · ${done} of ${total} done` : `📝 ${open} to do`,
-    aria: `${open} of ${total} to-dos still to do: see or add to-dos`,
+    phone: `📝 ${toDo}`,
+    desktop: done > 0 ? `📝 ${toDo} · ${done} of ${total} done` : `📝 ${toDo}`,
+    aria: done > 0 ? `${toDo}, ${done} of ${total} done. See or add to-dos` : `${toDo}. See or add to-dos`,
   };
 }
 
@@ -41,7 +42,7 @@ function LinkedTodosBadge({ getSubject, isStatic = false, variant = 'inline' }: 
     return null;
   }
 
-  if (isNoBooking && total === 0) {
+  if (isNoBooking && total === 0 && subject.tracksBooking) {
     return isStatic && canManageChecklist ? (
       <Button
         type='button'
@@ -74,7 +75,6 @@ function LinkedTodosBadge({ getSubject, isStatic = false, variant = 'inline' }: 
       <Badge
         variant='muted'
         outline
-        aria-label={content.aria}
         data-paid-tab={variant === 'tab' ? '' : undefined}
         className={join('whitespace-nowrap', tintClassName, variant === 'tab' && tabClassName)}
       >

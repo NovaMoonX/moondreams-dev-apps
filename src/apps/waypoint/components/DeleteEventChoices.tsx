@@ -69,7 +69,8 @@ function DeleteEventChoices({ eventTitle, todos, expenses, blockedExpenseCount, 
       {blockedExpenseCount > 0 && (
         <p className='text-muted-foreground'>
           {blockedExpenseCount === 1 ? 'An expense has' : `${blockedExpenseCount} expenses have`} early payments, so{' '}
-          {blockedExpenseCount === 1 ? 'it stays' : 'they stay'} on the Expenses list. Whatever you leave unchecked stays too.
+          {blockedExpenseCount === 1 ? 'it stays' : 'they stay'} on the Expenses list.
+          {todos.length + expenses.length > 0 && ' Whatever you leave unchecked stays too.'}
         </p>
       )}
       {todos.length + expenses.length > 0 && blockedExpenseCount === 0 && (

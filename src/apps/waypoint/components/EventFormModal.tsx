@@ -900,7 +900,7 @@ function EventFormModal({
       : [];
     return {
       todos: canDeleteTodos
-        ? checklist.items.filter((item) => isLinkedTo(item, link, bookingEventIds)).map(({ id, title }) => ({ id, title }))
+        ? checklist.items.filter((item) => checklist.tripId === trip.id && isLinkedTo(item, link, bookingEventIds)).map(({ id, title }) => ({ id, title }))
         : [],
       expenses: removableExpenses.map(({ id, title }) => ({ id, title })),
       blockedExpenseCount: canDeleteExpenses ? linkedExpenses.length - removableExpenses.length : 0,

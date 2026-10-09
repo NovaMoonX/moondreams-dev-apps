@@ -11,7 +11,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import { linkExpenseToPlan } from '@apps/waypoint/store/actions/expenseActions';
 import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
-import { selectTripExpenses } from '@apps/waypoint/store/selectors';
+import { selectTimelineEvents, selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import { getExpenseCategoryKey, getExpenseCategoryKeyLabel } from '@apps/waypoint/utils/expenseCategories';
 import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
@@ -42,11 +42,12 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const expenses = useAppSelector(selectTripExpenses);
+  const events = useAppSelector(selectTimelineEvents);
   const [query, setQuery] = useState('');
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const unlinked = expenses
-    .filter((expense) => !expense.linkedTo)
+    .filter((expense) => !expense.linkedTo || (expense.linkedTo.kind === 'EVENT' && !events.some((event) => event.id === expense.linkedTo?.id)))
     .sort((first, second) => Number(second.dayIndex === subject.dayIndex) - Number(first.dayIndex === subject.dayIndex));
   const term = query.trim().toLowerCase();
   const visible = term ? unlinked.filter((expense) => expense.title.toLowerCase().includes(term)) : unlinked;
