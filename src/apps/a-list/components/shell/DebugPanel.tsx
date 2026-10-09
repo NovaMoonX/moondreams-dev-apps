@@ -1,11 +1,11 @@
 // TEMPORARY: on-screen diagnostics for one account. Remove with aListDebug.ts.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { db } from '@/lib/firebase/config';
 import { useAppSelector } from '@/store';
-import { useAListDebugEntries } from '@apps/a-list/debug/aListDebug';
+import { runServerCheck, useAListDebugEntries } from '@apps/a-list/debug/aListDebug';
 
 interface DebugPanelProps {
   uid: string;
@@ -15,11 +15,16 @@ interface DebugPanelProps {
 function DebugPanel({ uid, email }: DebugPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const entries = useAListDebugEntries();
+
+  useEffect(() => {
+    runServerCheck(uid);
+  }, [uid]);
+
   const flags = useAppSelector((state) =>
     [
       `membership loaded=${state.aList.membership.isLoaded} has=${state.aList.membership.membership !== null} err=${state.aList.membership.loadError}`,
       `watchlist loaded=${state.aList.watchlist.isLoaded} err=${state.aList.watchlist.loadError}`,
-      `viewings loaded=${state.aList.viewings.isLoaded} err=${state.aList.viewings.loadError}`,
+      `viewings n=${state.aList.viewings.items.length} loaded=${state.aList.viewings.isLoaded} err=${state.aList.viewings.loadError}`,
       `theatres loaded=${state.aList.theatres.isLoaded} err=${state.aList.theatres.loadError}`,
     ].join('\n'),
   );
@@ -42,6 +47,15 @@ function DebugPanel({ uid, email }: DebugPanelProps) {
         onClick={() => setIsOpen(!isOpen)}
       >
         {isOpen ? 'Hide debug' : 'Show debug'}
+      </Button>
+      <Button
+        type='button'
+        size='sm'
+        variant='secondary'
+        className='ml-2'
+        onClick={() => runServerCheck(uid)}
+      >
+        Re-check server
       </Button>
       {isOpen && (
         <div className='bg-background text-foreground border-border mt-1 max-h-[45vh] overflow-y-auto rounded-lg border p-2 font-mono text-[10px] leading-tight break-all whitespace-pre-wrap'>
