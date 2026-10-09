@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -89,8 +89,8 @@ export function PillOptions<T extends string>({
     isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
       ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
       : filtered;
-  useEffect(() => {
-    isFloatedRef.current = visible !== filtered;
+  useLayoutEffect(() => {
+    isFloatedRef.current = visible.some((option, index) => option !== filtered[index]);
   });
   const showToggle = trimmedQuery === '' && (isHidingRows || isExpanded);
 
