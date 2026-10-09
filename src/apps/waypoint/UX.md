@@ -427,7 +427,7 @@ flowchart LR
     W --> C[How much is it? amount with Total / Per person, then optional chips: Trip day, Group, Note]
     C --> Y[Add, or Add and mark paid — Everyone means current members, split evenly]
     Y --> D[Later: Mark paid, with a pill row for who paid]
-    D --> E[Optional: tap Split] --> F[Everyone-current / Everyone-future / Just Me / Specific]
+    D --> E[Optional: tap Split] --> F[Everyone / Pick people]
     F --> G[Auto-suggested even split] --> H[Adjust per person, or clear and redo]
     D --> I[List + Dues Summary update]
     H --> I

@@ -265,6 +265,7 @@ function PersonalExpenseFormModal({
                 />
               </div>
             )}
+            {error && <p className='text-destructive col-span-full mb-3 text-sm'>{error}</p>}
             <ModalFooterActions
               leftActions={
                 <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
@@ -283,7 +284,6 @@ function PersonalExpenseFormModal({
           </div>
         }
       />
-      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </FormSheet>
   );
 }

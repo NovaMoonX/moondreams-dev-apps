@@ -584,14 +584,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       return;
     }
     setIsSplitSubmitting(true);
-    setError(null);
     try {
       await dispatch(
         updateExpenseSplit({ expense: splittingExpense, ...values }),
       ).unwrap();
       setSplittingExpense(null);
-    } catch (splitError) {
-      setError(getErrorMessage(splitError, 'Unable to update this split.'));
     } finally {
       setIsSplitSubmitting(false);
     }
