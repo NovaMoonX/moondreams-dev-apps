@@ -177,7 +177,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       const confirmed = await confirm({
         title: 'Reset saved data',
         message:
-          "Clears the copy of your data this device keeps for speed and offline use, then reloads. Try it if screens look empty or out of date. Your account isn't touched, but anything you changed offline that hasn't synced yet is lost.",
+          "Clears the copy of your data this device keeps for speed and offline use, then reloads, and any other open windows of the app reload too. Try it if screens look empty or out of date. Your account isn't touched, but anything you changed offline that hasn't synced yet is lost.",
         confirmText: 'Reset and reload',
         destructive: true,
       });
