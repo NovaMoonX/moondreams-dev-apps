@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+import { Clock } from 'lucide-react';
+
 import {
   Button,
   Form,
@@ -8,6 +10,7 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
 import { UNLINKED_PLACE } from '@/lib/places/placesApi';
 import type { PlaceSelectionBias, PlaceSelectionResult } from '@/lib/places/types';
@@ -232,44 +235,36 @@ function EventSuggestionFormModal({
       createTimeInputField({ name: 'time', label: 'Start time', variant: 'outline' }),
       custom({
         name: 'endTime',
-        label: 'End time',
+        label: '',
         renderComponent: (props) => {
           const endTime = props.value as OptionalValue;
 
           if (!endTime.enabled) {
             return (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0 text-xs'
-                onClick={() => props.onValueChange({ enabled: true, value: '' })}
-              >
-                + Add end time
-              </Button>
+              <AddFieldChips
+                heading='Add a time'
+                chips={[{ key: 'end', label: 'End time', icon: <Clock className='h-4 w-4' /> }]}
+                onAdd={() => props.onValueChange({ enabled: true, value: '' })}
+              />
             );
           }
 
           return (
-            <div className='space-y-2'>
+            <RemovableField
+              label='Ends'
+              removeLabel='Remove end time'
+              onRemove={() => props.onValueChange({ enabled: false, value: '' })}
+            >
               <Input
                 type='time'
+                aria-label='End time'
                 variant='outline'
                 value={endTime.value}
                 onChange={(changeEvent) =>
                   props.onValueChange({ enabled: true, value: changeEvent.target.value })
                 }
               />
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-auto p-0 text-xs'
-                onClick={() => props.onValueChange({ enabled: false, value: '' })}
-              >
-                Remove end time
-              </Button>
-            </div>
+            </RemovableField>
           );
         },
       }),

@@ -54,6 +54,11 @@
   }
 }
 
+/* The top strip (offline or update banner) is `fixed` above every page layer, so a full-screen overlay starts below it instead of being covered. */
+html[data-site-banner='true'] [data-subview-overlay] {
+  top: 2.25rem;
+}
+
 /* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
 @media (max-width: 639.98px) {
   [role='region'][aria-label='Notifications'] {
@@ -121,6 +126,20 @@ html:has(
   *::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* An installed app (`data-installed-app`, set from `IS_INSTALLED_APP` in main.tsx) shows no scrollbar anywhere at any width; !important so no component or library style can bring one back. Scrolling itself is untouched. */
+html[data-installed-app],
+html[data-installed-app] * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html[data-installed-app]::-webkit-scrollbar,
+html[data-installed-app] *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* A control that took focus from a mouse or touch keeps its focus outline/ring after the click,

@@ -164,13 +164,14 @@ export const updateExpense = createAsyncThunk<
     groupLabel: input.groupLabel?.trim() || null,
     isPerPerson: input.isPerPerson,
     linkedTo: input.linkedTo,
+    // Custom shares add up to the old price, so a new price starts over from an even split.
+    ...(input.amount !== input.expense.amount || input.isPerPerson !== input.expense.isPerPerson
+      ? { splitAmounts: null }
+      : {}),
     lastEditedAt: Date.now(),
   };
 
-  await updateDoc(
-    doc(db, 'apps', 'waypoint', 'trips', input.expense.tripId, 'expenses', input.expense.id),
-    changes,
-  );
+  await updateDoc(getExpenseRef(input.expense.tripId, input.expense.id), changes);
   return { ...input.expense, ...changes };
 });
 
@@ -219,24 +220,31 @@ export const updateExpenseSplit = createAsyncThunk<
     return rejectWithValue('Select at least one member.');
   }
 
-  const changes = {
-    targetType: input.targetType,
-    targetMemberIds: input.targetMemberIds,
-    splitAmounts: input.splitAmounts,
-    category: input.expense.category,
-    customCategoryLabel: input.expense.customCategoryLabel,
-    note: input.expense.note,
-    groupLabel: input.expense.groupLabel,
-    isPerPerson: input.expense.isPerPerson,
-    linkedTo: input.expense.linkedTo,
-    lastEditedAt: Date.now(),
-  };
-
-  await updateDoc(
-    doc(db, 'apps', 'waypoint', 'trips', input.expense.tripId, 'expenses', input.expense.id),
-    changes,
-  );
-  return { ...input.expense, ...changes };
+  const expenseRef = getExpenseRef(input.expense.tripId, input.expense.id);
+  const result = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(expenseRef);
+    if (!snapshot.exists()) {
+      return 'This expense was removed.';
+    }
+    const current = snapshot.data() as TripExpense;
+    const { expense } = input;
+    const hasPriceChanged =
+      current.amount !== expense.amount ||
+      (current.paidAmount ?? null) !== expense.paidAmount ||
+      (current.isPerPerson ?? false) !== expense.isPerPerson;
+    if (input.splitAmounts !== null && hasPriceChanged) {
+      return 'The price of this expense changed while you were editing the split. Close this and open it again.';
+    }
+    const changes = {
+      targetType: input.targetType,
+      targetMemberIds: input.targetMemberIds,
+      splitAmounts: input.splitAmounts,
+      lastEditedAt: Date.now(),
+    };
+    transaction.update(expenseRef, changes);
+    return { ...current, ...changes };
+  });
+  return typeof result === 'string' ? rejectWithValue(result) : result;
 });
 
 export const deleteExpense = createAsyncThunk<
