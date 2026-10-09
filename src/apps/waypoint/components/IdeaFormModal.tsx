@@ -147,8 +147,9 @@ interface IdeaExtrasFieldsProps {
 }
 
 function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFieldsProps) {
-  const detailsLabel = isRestaurant ? 'Cuisine' : 'Indoor / outdoor';
-  const whenLabel = useMediaQuery().isBelow('sm') ? 'Window' : 'Best day or time';
+  const isPhone = useMediaQuery().isBelow('sm');
+  const detailsLabel = isRestaurant ? 'Cuisine' : isPhone ? 'Setting' : 'Indoor / outdoor';
+  const whenLabel = isPhone ? 'Window' : 'Best day or time';
   const chips = [
     { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
     {

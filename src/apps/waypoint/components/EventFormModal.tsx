@@ -885,7 +885,7 @@ function EventFormModal({
     },
     {
       key: 'settings',
-      label: 'Indoor / outdoor',
+      label: isPhone ? 'Setting' : 'Indoor / outdoor',
       icon: <Sun className='h-4 w-4' />,
       isShown: draft.eventType !== 'ACTIVITY' || draft.hasSettings,
     },
