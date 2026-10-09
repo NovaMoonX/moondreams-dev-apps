@@ -17,7 +17,7 @@
 - **Performance is judged at scale: build `Intl` formatters once, compute totals in one pass and memoize them, share one Firestore listener per key and batch snapshot bursts, cap long lists, and check new lists on the app's oversized seed fixture with the dev build throttled. See CLAUDE.md "Performance is a design check".**
 - **Check colors where they land (filled button, selected pill with emoji, badge, highlighted card, banner, in light and dark), keep a rounded field's text inset from its curve, and keep one control's icon, label and border one color. See CLAUDE.md "Design & UX".**
 - **A detail the user's path depends on is asked as a visible question with `Pill` answers ("Already booked?"), not tucked behind a "+ Add X" link or chip; those are for truly optional extras. See CLAUDE.md "A journey detail is asked, not tucked away".**
-- **No "Back home" link inside a mini-app's page; Home is in the header (icon on sm+, avatar menu on phones). Only `AppEntryFallback` says "Back home".**
+- **No "Back home" link inside a mini-app's page; Home is in the header (icon on sm+, avatar menu on phones). Only `AppEntryFallback` says "Back home", and the in-app ways home (header icon, avatar menu, entry and error screens) are hidden while `IS_INSTALLED_APP` (`@utils/pwaUtils`) is true.**
 - **Never write raw `<button>`, `<input>`, `<select>`, or `<textarea>` elements — use Dreamer UI's `Button`, `Input`, `Select`, `Textarea` (or the `Form`/`FormFactories` system for anything with more than one field) instead.**
 - **Never call `setState` synchronously inside a `useEffect` body or during render to mirror props/derive values — see "React and state patterns" below.**
 - Always use the project import aliases instead of relative paths when available.
