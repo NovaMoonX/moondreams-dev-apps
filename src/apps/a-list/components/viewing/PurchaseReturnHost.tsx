@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import PurchaseReturnPrompt from '@apps/a-list/components/viewing/PurchaseReturnPrompt';
@@ -15,8 +16,6 @@ import {
 import { selectPendingPurchaseReturns } from '@apps/a-list/store/selectors';
 import type { Ticket } from '@apps/a-list/types';
 import { shouldAskAboutPurchase } from '@apps/a-list/utils/purchase';
-
-const LATER_RETURN_MS = 30_000;
 
 interface PurchaseReturnHostProps {
   /** True while a seen prompt is up, so the two questions never show together. */
@@ -37,23 +36,10 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
   const [openedAt] = useState(() => Date.now());
   const [returnedAt, setReturnedAt] = useState(0);
 
-  useEffect(() => {
-    let hiddenAt = 0;
-    const handleVisible = () => {
-      if (document.visibilityState === 'hidden') {
-        hiddenAt = Date.now();
-        return;
-      }
-      // A quick glance at another tab isn't "coming back": the question waits for a real absence.
-      if (hiddenAt !== 0 && Date.now() - hiddenAt >= LATER_RETURN_MS) {
-        setLaterIds([]);
-      }
-      setReturnedAt(Date.now());
-    };
-    document.addEventListener('visibilitychange', handleVisible);
-    return () =>
-      document.removeEventListener('visibilitychange', handleVisible);
-  }, []);
+  useOnTabReturn(() => {
+    setLaterIds([]);
+    setReturnedAt(Date.now());
+  });
 
   // Leaving starts the clock: a purchase started before this tab opened, or before the member last came back to it, is ready to ask about.
   const current =
