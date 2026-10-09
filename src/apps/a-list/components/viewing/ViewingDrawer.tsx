@@ -150,6 +150,26 @@ export function ViewingPanel({
     }
   };
 
+  const handleChooseTheater = async (chosen: TheatreSnapshot) => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      await dispatch(
+        updateViewing({
+          uid: user.uid,
+          id: viewing.id,
+          showtimeAt: viewing.showtimeAt,
+          runtimeMinutes: viewing.movie.runtimeMinutes,
+          theatre: chosen,
+        }),
+      ).unwrap();
+    } catch (chooseError) {
+      setError(getErrorMessage(chooseError, 'Unable to save this theater.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleGoBuy = () => {
     if (!viewing.purchase) {
       return;
@@ -356,7 +376,7 @@ export function ViewingPanel({
             isSaving={isSaving}
             onPick={(option) => void handlePickShowtime(option)}
             onGoBuy={handleGoBuy}
-            onChooseTheater={() => setView('edit')}
+            onChooseTheater={(chosen) => void handleChooseTheater(chosen)}
           />
         </div>
       );

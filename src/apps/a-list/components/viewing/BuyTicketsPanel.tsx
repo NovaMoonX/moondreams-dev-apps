@@ -3,7 +3,12 @@ import { ExternalLink } from 'lucide-react';
 
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import ShowtimePicker from '@apps/a-list/components/viewing/ShowtimePicker';
-import type { ShowtimeOption, Viewing } from '@apps/a-list/types';
+import TheaterPills from '@apps/a-list/components/viewing/TheaterPills';
+import type {
+  ShowtimeOption,
+  TheatreSnapshot,
+  Viewing,
+} from '@apps/a-list/types';
 import { describePurchase } from '@apps/a-list/utils/purchase';
 import { formatShowtimeForTheatre } from '@apps/a-list/utils/theatreTime';
 
@@ -13,7 +18,7 @@ interface BuyTicketsPanelProps {
   isSaving: boolean;
   onPick: (option: ShowtimeOption) => void;
   onGoBuy: () => void;
-  onChooseTheater: () => void;
+  onChooseTheater: (theatre: TheatreSnapshot) => void;
 }
 
 /** Pick an AMC showing, then head to amctheatres.com to buy it, knowing which two numbers to look for. */
@@ -29,19 +34,11 @@ function BuyTicketsPanel({
 
   if (!theatre) {
     return (
-      <div className='space-y-3'>
-        <p className='text-muted-foreground text-sm'>
-          Pick a theater for this showing first, and we'll find its showtimes.
-        </p>
-        <Button
-          type='button'
-          rounded='full'
-          variant='secondary'
-          onClick={onChooseTheater}
-        >
-          Choose a theater
-        </Button>
-      </div>
+      <TheaterPills
+        label='📍 Which theater?'
+        value={null}
+        onChange={(chosen) => chosen && onChooseTheater(chosen)}
+      />
     );
   }
 
