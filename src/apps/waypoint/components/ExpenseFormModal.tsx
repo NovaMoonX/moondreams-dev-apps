@@ -636,7 +636,9 @@ function ExpenseFormModal({
     const isPriceUntouched = price.amount === '' && price.min === '' && price.max === '';
     const canFollowItem = isPriceUntouched && !isPrivate && (price.mode === 'amount' || isModeAutoSet.current);
     const nextMode = canFollowItem ? (picked.prefersEstimate ? 'range' : 'amount') : price.mode;
-    isModeAutoSet.current = canFollowItem && picked.prefersEstimate;
+    if (canFollowItem) {
+      isModeAutoSet.current = picked.prefersEstimate;
+    }
     setFormData((current) => ({
       ...current,
       price: { ...current.price, mode: nextMode },
@@ -895,6 +897,9 @@ function ExpenseFormModal({
                   hasChosenAudience.current = true;
                   setIsPlanAnswered(true);
                   setAudienceValue((current) => ({ ...current, audience: next }));
+                  if (next !== 'ME' && expenseLinkKeys.has(linkKey)) {
+                    setLink(null);
+                  }
                   if (next === 'ME' && price.mode === 'range' && price.amount.trim() === '') {
                     resetField({ price: { ...price, mode: 'amount', amount: price.max || price.min } });
                   }

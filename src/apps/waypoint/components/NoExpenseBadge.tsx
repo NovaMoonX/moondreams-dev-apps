@@ -5,7 +5,7 @@ import { useHasExpense, useIsNoExpense } from '@apps/waypoint/hooks/useHasExpens
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
-interface NotPaidForBadgeProps {
+interface NoExpenseBadgeProps {
   getSubject: () => RelatedSubject;
   /** A plain badge, for inside a details drawer, which can't have another sheet opened over it. */
   isStatic?: boolean;
@@ -14,7 +14,7 @@ interface NotPaidForBadgeProps {
 }
 
 /** For an editor the badge is also the way in: pick an expense already on the list, or add one. */
-function NotPaidForBadge({ getSubject, isStatic = false, variant = 'inline' }: NotPaidForBadgeProps) {
+function NoExpenseBadge({ getSubject, isStatic = false, variant = 'inline' }: NoExpenseBadgeProps) {
   const tabClassName = 'bg-card border-border -mt-px rounded-t-none rounded-b-lg border border-t-0 px-3 py-1';
   const { link } = getSubject();
   const hasExpense = useHasExpense(link.kind, link.id);
@@ -69,4 +69,4 @@ function NotPaidForBadge({ getSubject, isStatic = false, variant = 'inline' }: N
   );
 }
 
-export default NotPaidForBadge;
+export default NoExpenseBadge;
