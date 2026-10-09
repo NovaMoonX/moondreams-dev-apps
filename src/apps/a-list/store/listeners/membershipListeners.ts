@@ -13,6 +13,9 @@ export function startMembershipListener(
   return onSnapshot(
     membershipRef,
     (snapshot) => {
+      // A cached "missing" answer can precede the server's; trusting it shows setup to an existing member.
+      if (!snapshot.exists() && snapshot.metadata.fromCache) return;
+
       const membership = snapshot.exists()
         ? (snapshot.data() as MembershipProfile)
         : null;
