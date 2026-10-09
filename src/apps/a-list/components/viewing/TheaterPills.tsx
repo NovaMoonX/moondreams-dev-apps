@@ -1,5 +1,9 @@
+import { useState } from 'react';
+
 import Pill from '@/components/Pill';
 import { useAppSelector } from '@/store';
+import TheaterSheetModal from '@apps/a-list/components/theaters/TheaterSheetModal';
+import { MAX_THEATRES } from '@apps/a-list/constants';
 import { selectTheatres } from '@apps/a-list/store/selectors';
 import type { TheatreSnapshot } from '@apps/a-list/types';
 import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
@@ -12,20 +16,26 @@ interface TheaterPillsProps {
 
 function TheaterPills({ label, value, onChange }: TheaterPillsProps) {
   const theatres = useAppSelector(selectTheatres);
+  const [isAdding, setIsAdding] = useState(false);
   const options = theatres.map((theatre) => toTheatreSnapshot(theatre));
   const choices =
     value && !options.some((option) => option.theatreId === value.theatreId)
       ? [value, ...options]
       : options;
 
-  if (choices.length === 0) {
-    return null;
-  }
-
   return (
     <div className='space-y-2'>
       <p className='font-medium'>{label}</p>
       <div className='flex flex-wrap gap-2'>
+        {theatres.length < MAX_THEATRES && (
+          <Pill
+            isSelected={false}
+            className='border-primary/60 border border-dashed'
+            onClick={() => setIsAdding(true)}
+          >
+            + Add theater
+          </Pill>
+        )}
         {choices.map((theatre) => {
           const isSelected = value?.theatreId === theatre.theatreId;
           return (
@@ -39,6 +49,13 @@ function TheaterPills({ label, value, onChange }: TheaterPillsProps) {
           );
         })}
       </div>
+      {isAdding && (
+        <TheaterSheetModal
+          linking={null}
+          onClose={() => setIsAdding(false)}
+          onDone={onChange}
+        />
+      )}
     </div>
   );
 }

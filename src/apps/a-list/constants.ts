@@ -48,6 +48,16 @@ export const AMC_FORMATS: AmcFormat[] = [
   'LASER',
 ];
 
+/** Showtimes list the premium formats first, Standard last. */
+export const AMC_FORMAT_DISPLAY_ORDER: AmcFormat[] = [
+  'DOLBY_CINEMA',
+  'IMAX',
+  'PRIME',
+  'REALD_3D',
+  'LASER',
+  'STANDARD',
+];
+
 export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
   STANDARD: 'Standard',
   DOLBY_CINEMA: 'Dolby Cinema',

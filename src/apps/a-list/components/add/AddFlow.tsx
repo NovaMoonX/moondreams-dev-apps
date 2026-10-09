@@ -601,6 +601,7 @@ export function AddFlow({
             now={now}
             selectedShowtimeId={activePick?.showtimeId ?? null}
             onPick={handlePickShowtime}
+            onLinked={setTheatreChoice}
           />
         )}
         {isCalendar && (
@@ -639,11 +640,19 @@ export function AddFlow({
               </Pill>
             </div>
             {ticketDraft && (
-              <TicketFields
-                key={`pick-${pickCount}`}
-                draft={ticketDraft}
-                onChange={setTicketDraft}
-              />
+              <div className='bg-muted/50 space-y-3 rounded-2xl p-4'>
+                <p className='flex gap-1.5 font-medium'>
+                  <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+                    🎟️
+                  </span>
+                  Ticket details
+                </p>
+                <TicketFields
+                  key={`pick-${pickCount}`}
+                  draft={ticketDraft}
+                  onChange={setTicketDraft}
+                />
+              </div>
             )}
           </div>
         )}
