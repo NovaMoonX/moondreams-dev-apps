@@ -175,7 +175,7 @@ interface AListTheatre {
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
-  timeZone: string | null;           // IANA zone from AMC ("America/Chicago"); null for a typed theater. Documents written before it lack the key
+  timeZone: string | null;           // IANA zone mapped from AMC's zone name ("CENTRAL TIME" → "America/Chicago"); null for a typed theater. Documents written before it lack the key
   createdAt: number;
   lastEditedAt: number;
 }
@@ -337,13 +337,15 @@ export const movieQueryKeys = {
 
 Theaters come from the AMC Theatres API through one callable, `findTheatres`, so the vendor key never reaches the browser.
 
-- **Two ways in.** `{ query }` (a zip code or city) goes to AMC's location suggestions to find coordinates, and `{ latitude, longitude }` (the member tapped "Use my current location", which is the only thing that asks the browser for a position) skips that step. Both then ask AMC's locations lookup for the nearest theaters (up to 10, nearest first).
-- **Server cache** in `apps/a-list/theatreCache`: text to coordinates for 30 days, a neighborhood's theaters for 7 days, keyed on coordinates rounded to two decimals (about a kilometre). The point is rounded on the server before AMC is asked, so every member in a cell shares one answer and an exact position is never sent upstream or stored. An empty result is never cached, and neither is anything in the emulator's fixture mode.
+- **Three ways in, and typed text is confirmed first.** `{ latitude, longitude }` (the member tapped "Use my current location", the only thing that asks the browser for a position) and `{ state }` go straight to AMC's locations lookup (`/v2/locations`, `/v2/locations/states/{state}`; up to 10 nearest, or up to 25 for a state). `{ query }` is typed text: a **5-digit zip code** (or ZIP+4) resolves in one step to the nearest theaters; anything else returns the places AMC suggests (`/v2/location-suggestions` types `city`, `state`, `zipcode`, up to 5) **plus theaters whose name matches** (every typed word starts a word in the name; up to 6, from AMC's full theater list). The finder shows "Did you mean…" places and "Theaters with that name"; tapping a city looks up its theaters through the coordinates path, tapping a state through the state path. A digits-only query that isn't 5 digits is refused with `invalid-argument` ("Zip codes are 5 digits.") and the finder says so before asking.
+- **AMC answers "nothing matches" with HTTP 400** (code 5004, "No results were found"), which is an empty result and not an outage; any other non-2xx still reads as unavailable. A suggestion of type `theatre` is ignored, because its link carries only a position; theaters by name come from the full list instead.
+- **Server cache** in `apps/a-list/theatreCache` (versioned): suggestions for 30 days, a neighborhood's or a state's theaters and the full theater list (`/v2/theatres`, about 520 open theaters) for 7 days. A neighborhood is keyed on coordinates rounded to two decimals (about a kilometre), rounded on the server before AMC is asked, so every member in a cell shares one answer and an exact position is never sent upstream or stored. An empty result is never cached, and neither is anything in the emulator's fixture mode.
+- **AMC's data is tidied on the way in.** Cities arrive in capitals ("SAINT LOUIS") and are title-cased on the server (and for display when a saved theater predates it); closed theaters are dropped; the `timezone` is AMC's name ("CENTRAL TIME"), not an IANA id, so it maps to `America/Chicago` and so on, with Mountain Time in Arizona being `America/Phoenix`. Verified against the live API on 2026-10-09 (all 521 theaters resolved to a zone).
 - **The app never waits on theaters.** The theaters listener feeds the loading gate but not the fatal load-error screen, so a failure there leaves the Calendar, Dashboard and Watchlist working.
 - **Budget** (`lookupBudget.ts`, its own counters): 500 upstream calls a day for the app and 40 per member, only on cache misses; past that the callable answers `resource-exhausted` and the finder says search is resting.
-- **Client:** `findTheatresQueryOptions` in `queries/theatreQueries.ts` (TanStack Query, one hour stale time, not persisted because the key can hold the member's position). The finder waits for a pause in typing, and shows results or exactly one empty state.
+- **Client:** `findTheatresQueryOptions` in `queries/theatreQueries.ts` (TanStack Query, one hour stale time, not persisted because the key can hold the member's position). The finder waits for a pause in typing, and shows results or exactly one empty state. When a picked city has no AMC theater within 25 miles it says so above the closest ones; a state with more than 25 says it shows the first 25 and suggests a city.
 - **Without a key**, the emulator answers from three built-in Kansas City theaters, like the movie lookups, so the whole flow can be driven offline. In production a missing key answers `failed-precondition`.
-- **Response shapes** follow AMC's public API (`/v2/location-suggestions`, `/v2/locations`) and are parsed defensively: an entry with no usable id or name is dropped.
+- **Response shapes** were checked against the live API (suggestions, locations, state locations, the theater list) and are parsed defensively: an entry with no usable id or name is dropped.
 - **Typed theaters skip the service.** "Can't find it? Add it by name" saves the name locally with a `manual-` id and nothing is sent to AMC.
 
 ## State Machines & Logic

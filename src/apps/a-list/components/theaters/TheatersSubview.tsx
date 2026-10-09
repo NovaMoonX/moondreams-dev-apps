@@ -90,6 +90,16 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
       return;
     }
 
+    const taggedCount = showingCounts[linking.theatreId] ?? 0;
+    const confirmed = await confirm({
+      title: 'Link to AMC',
+      message: `${target.name} replaces “${linking.name}”, so the name and city come from AMC${taggedCount === 0 ? '' : ` and show on the ${taggedCount === 1 ? '1 showing' : `${taggedCount} showings`} tagged with it`}. Your own spelling is not kept.`,
+      confirmText: 'Link',
+    });
+    if (!confirmed) {
+      return;
+    }
+
     const didLink = await run(
       () =>
         dispatch(
@@ -161,9 +171,13 @@ function TheatersSubview({ onClose }: TheatersSubviewProps) {
           <div className='space-y-1'>
             <h3 className='font-medium'>Link {linking.name} to AMC</h3>
             <p className='text-muted-foreground text-sm'>
+              Find it in AMC’s list.{' '}
+              <strong className='text-foreground'>
+                AMC’s name and city replace “{linking.name}”
+              </strong>
               {taggedCount === 0
-                ? 'Find it in AMC’s list and it becomes the real theater.'
-                : `Find it in AMC’s list and ${taggedCount === 1 ? 'the 1 showing' : `the ${taggedCount} showings`} tagged with it switch over, so nothing needs re-tagging.`}
+                ? '.'
+                : `, and the ${taggedCount === 1 ? '1 showing' : `${taggedCount} showings`} tagged with it switch over, so nothing needs re-tagging.`}
             </p>
           </div>
           <TheaterFinder

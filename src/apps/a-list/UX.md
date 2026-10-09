@@ -674,7 +674,9 @@ flowchart LR
     A["Dashboard · Your theaters, or the Calendar nudge, or Setup's last step"] --> B[Theaters subview]
     B --> C["+ Add"] --> D{How?}
     D -->|"Use my current location (asks the browser on tap)"| E[Nearest AMC theaters]
-    D -->|Zip code or city| E
+    D -->|"Zip code (5 digits)"| E
+    D -->|"City or state"| P["Did you mean… (confirm the place)"] --> E
+    D -->|"Part of a theater's name"| E
     D -->|"Can't find it? Add it by name"| F
     B --> L["A typed theater says so · Link to AMC"] --> E2["Pick it in AMC's list"] --> M["Its showings and star switch over; nothing is re-tagged"]
     E --> F["Add"] --> G["Saved; the first one becomes the favorite"]

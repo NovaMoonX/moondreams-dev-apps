@@ -95,6 +95,10 @@ export const MAX_THEATRES = 10;
 export const THEATRE_NAME_MAX_CHARS = 60;
 export const THEATRE_SEARCH_MIN_CHARS = 3;
 export const THEATRE_SEARCH_MAX_CHARS = 60;
+/** A searched place with no theater closer than this gets a note that AMC isn't there. */
+export const THEATRE_FAR_AWAY_MILES = 25;
+/** The most theaters the finder lists for a whole state. */
+export const THEATRE_STATE_RESULT_CAP = 25;
 export const THEATRE_STALE_MS = 60 * 60 * 1000;
 
 export const MAX_FEE_CHIPS = 4;
