@@ -1,13 +1,8 @@
-import { getRegistryAppForPath, SITE_VERSION } from '@/lib/app';
+import { SITE_VERSION } from '@/lib/app/app.constants';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Link, useLocation } from 'react-router-dom';
-
-import { IS_INSTALLED_APP } from '@utils/pwaUtils';
+import { Link } from 'react-router-dom';
 
 function NotFound() {
-  const { pathname } = useLocation();
-  const installedApp = IS_INSTALLED_APP ? getRegistryAppForPath(pathname) : null;
-
   return (
     <div className='page flex items-center justify-center px-4 py-12'>
       <div className='border-border bg-card w-full max-w-lg rounded-2xl border p-8 text-center shadow-sm'>
@@ -22,8 +17,8 @@ function NotFound() {
         </p>
 
         <div className='mt-6 flex flex-col justify-center'>
-          <Link to={installedApp?.path ?? '/'}>
-            <Button>{installedApp ? `Back to ${installedApp.name}` : 'Back home'}</Button>
+          <Link to='/'>
+            <Button>Back home</Button>
           </Link>
           <p className='text-foreground/50 mt-6 text-xs'>
             Version {SITE_VERSION}

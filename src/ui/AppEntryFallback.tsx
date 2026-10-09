@@ -1,8 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import type { ReactNode } from 'react';
 
-import { IS_INSTALLED_APP } from '@utils/pwaUtils';
-
 interface AppEntryFallbackProps {
   appName: string;
   onEnterApp: () => void;
@@ -27,11 +25,9 @@ function AppEntryFallback({
             {appName}
           </h1>
           <div className='flex items-center gap-3'>
-            {!IS_INSTALLED_APP && (
-              <Button variant='link' onClick={onBackHome}>
-                Back home
-              </Button>
-            )}
+            <Button variant='link' onClick={onBackHome}>
+              Back home
+            </Button>
             <Button onClick={onEnterApp}>Enter app</Button>
           </div>
         </div>

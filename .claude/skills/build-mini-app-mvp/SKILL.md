@@ -92,7 +92,7 @@ For each MVP issue, in order:
    - Readers and actions handle legacy documents.
    - Update the seed (`scripts/seeds/<id>.ts`, its document count, `SEEDING.md`) when there's new state worth seeding.
 3. **Issue 1 only:**
-   - **Register the app:** `APP_REGISTRY`, route, manifest, logo and banner placeholders, the home-page tile, and the root README's "Current apps" line.
+   - **Register the app:** `APP_REGISTRY`, route, logo and banner placeholders, the home-page tile, and the root README's "Current apps" line.
    - **Design the logo icon as SVG**, in two versions, saved as temporary files (scratchpad, not committed):
      - `<id>-icon.svg`: light ticket/glyph on a transparent background, for dark backgrounds.
      - `<id>-icon-dark.svg`: the same, filled `#111111`, for light backgrounds.

@@ -9,7 +9,7 @@ export type AppRegistryEntry = {
 };
 
 /* IMPORTANT: Keep the following in sync with this registry:
-   - in /public folder: manifests, logos, and banners
+   - in /public folder: logos and banners
    - cloudflare-worker.js
    - repo root README.md (its "Current apps" list: one line per app)
 */
