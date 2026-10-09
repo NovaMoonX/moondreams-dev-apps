@@ -221,6 +221,9 @@ export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'
 // Event types whose cost belongs on an expense: one without an attached expense reads "No expense yet".
 export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
 
+// Event types that can need something booked ahead: one with no to-do for it reads "No booking yet".
+export const BOOKING_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {
   TRAIN: 'departureStation',

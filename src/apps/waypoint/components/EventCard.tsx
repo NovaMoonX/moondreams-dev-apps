@@ -9,6 +9,7 @@ import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars
 import EventWeatherChip from '@apps/waypoint/components/EventWeatherChip';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import SlimTimelineRow from '@apps/waypoint/components/SlimTimelineRow';
+import NotBookedBadge from '@apps/waypoint/components/NotBookedBadge';
 import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
 import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
@@ -177,7 +178,10 @@ export function EventDetailLines({
             </Badge>
           )}
           {!showTitle && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-            <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic />
+            <>
+              <NotBookedBadge getSubject={() => getEventSubject(trip, event)} isStatic />
+              <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} isStatic />
+            </>
           )}
         </div>
       )}
@@ -447,13 +451,15 @@ export function EventCard({
           </div>
         )}
         {!isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-          <div className='absolute right-4 bottom-4'>
+          <div className='absolute right-4 bottom-4 flex items-center gap-2'>
+            <NotBookedBadge getSubject={() => getEventSubject(trip, event)} />
             <NotPaidForBadge getSubject={() => getEventSubject(trip, event)} />
           </div>
         )}
       </article>
       {isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-        <div className='flex justify-end pr-4'>
+        <div className='flex justify-end gap-2 pr-4'>
+          <NotBookedBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
           <NotPaidForBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
         </div>
       )}

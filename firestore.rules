@@ -1670,6 +1670,7 @@ service cloud.firestore {
             'timezone',
             'city',
             'noExpenseKeys',
+            'noBookingKeys',
             'dateShiftStatus',
             'createdBy',
             'createdAt',
@@ -1698,6 +1699,7 @@ service cloud.firestore {
           && (!('timezone' in data) || data.timezone == null || isNonEmptyString(data.timezone))
           && isTripCityValid(data.get('city', null))
           && isNoExpenseKeysValid(data.get('noExpenseKeys', []))
+          && isNoExpenseKeysValid(data.get('noBookingKeys', []))
           && (!('dateShiftStatus' in data)
             || data.dateShiftStatus == null
             || data.dateShiftStatus in ['IDLE', 'PENDING'])
@@ -1782,6 +1784,14 @@ service cloud.firestore {
       function isTripNoExpenseUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'noExpenseKeys',
+            'lastEditedAt'
+          ])
+          && isTripUpdateValid();
+      }
+
+      function isTripNoBookingUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'noBookingKeys',
             'lastEditedAt'
           ])
           && isTripUpdateValid();
@@ -1886,6 +1896,7 @@ service cloud.firestore {
       allow update: if (isTripMember() && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
          || (isTripEditorOrAdmin() && isTripNoExpenseUpdate())
+         || (isTripEditorOrAdmin() && isTripNoBookingUpdate())
          || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
         || isTripMembershipApprovalValid()
@@ -1936,6 +1947,7 @@ service cloud.firestore {
               'isCompleted',
               'markedCompletedByUid',
               'markedCompletedAt',
+              'linkedTo',
               'createdBy',
               'createdAt',
               'lastEditedAt'
@@ -1952,9 +1964,29 @@ service cloud.firestore {
             && data.isCompleted is bool
             && (data.markedCompletedByUid == null || data.markedCompletedByUid is string)
             && (data.markedCompletedAt == null || isTimestampNumber(data.markedCompletedAt))
+            && isChecklistLinkValid(data.get('linkedTo', null))
             && data.createdBy is string
             && isTimestampNumber(data.createdAt)
             && isTimestampNumber(data.lastEditedAt);
+        }
+
+        // Shape only: a plan deleted later leaves a link that reads as none, and must never block editing the item.
+        function isChecklistLinkValid(link) {
+          return link == null || (
+            link is map
+            && link.keys().hasOnly(['kind', 'id'])
+            && link.kind in ['EVENT', 'STAY', 'RENTAL']
+            && isNonEmptyString(link.id)
+            && link.id.size() <= 128
+          );
+        }
+
+        // Linking or unlinking an item stays open to Editors on a live trip, when the rest of an item is Admin-only.
+        function isChecklistLinkUpdateValid() {
+          return isChecklistEditor()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'lastEditedAt'])
+            && isChecklistLinkValid(request.resource.data.get('linkedTo', null))
+            && isTimestampNumber(request.resource.data.lastEditedAt);
         }
 
         function isChecklistImmutableFieldsValid() {
@@ -1993,7 +2025,8 @@ service cloud.firestore {
           isChecklistAdminOnlyWhileActive()
           && isChecklistShapeValid(request.resource.data)
           && isChecklistImmutableFieldsValid()
-        ) || isChecklistAssignedToggleValid();
+        ) || isChecklistAssignedToggleValid()
+          || isChecklistLinkUpdateValid();
         allow delete: if isChecklistAdminOnlyWhileActive();
       }
     }

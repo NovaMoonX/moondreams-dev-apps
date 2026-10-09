@@ -8,7 +8,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
-import { EVENT_TYPE_EMOJIS, STAY_TYPE_EMOJIS, TRANSIT_TYPE_EMOJIS } from '@apps/waypoint/constants';
+import { BOOKING_TRACKED_EVENT_TYPES, EVENT_TYPE_EMOJIS, STAY_TYPE_EMOJIS, TRANSIT_TYPE_EMOJIS } from '@apps/waypoint/constants';
 import { getEventTime, getStayTime } from '@apps/waypoint/utils/tripTime';
 
 export interface RelatedSubject {
@@ -23,6 +23,8 @@ export interface RelatedSubject {
   /** Who the plan is for, so its expense starts split between them; `null` means everyone. */
   attendeeIds: string[] | null;
   checklistCategory: ChecklistCategory;
+  /** Whether a missing booking to-do is worth a reminder (activities); stays and rentals are booked when added. */
+  tracksBooking: boolean;
 }
 
 const EVENT_EXPENSE_CATEGORIES: Record<EventType, ExpenseCategory | null> = {
@@ -51,6 +53,7 @@ export function getEventSubject(trip: TripSpace, event: TimelineEvent): RelatedS
     prefersEstimate: event.eventType === 'DINING',
     attendeeIds: event.attendeeTargetType === 'SPECIFIC_MEMBERS' ? event.assignedMemberIds : null,
     checklistCategory: event.eventType === 'TRAVEL' ? 'DOCUMENTS' : 'BOOKINGS',
+    tracksBooking: BOOKING_TRACKED_EVENT_TYPES.includes(event.eventType),
   };
 }
 
@@ -65,6 +68,7 @@ export function getStaySubject(trip: TripSpace, stay: Stay): RelatedSubject {
     prefersEstimate: false,
     attendeeIds: null,
     checklistCategory: 'BOOKINGS',
+    tracksBooking: false,
   };
 }
 
@@ -79,6 +83,7 @@ export function getRentalSubject(rental: Rental): RelatedSubject {
     prefersEstimate: false,
     attendeeIds: null,
     checklistCategory: 'BOOKINGS',
+    tracksBooking: false,
   };
 }
 

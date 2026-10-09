@@ -89,6 +89,31 @@ export const selectNoExpenseKeys = createSelector(
   (trips): ReadonlySet<string> => new Set(trips.flatMap((trip) => trip.noExpenseKeys ?? [])),
 );
 
+/** Keys of plans marked "nothing to book", across the trips in the store. */
+export const selectNoBookingKeys = createSelector(
+  [selectTrips],
+  (trips): ReadonlySet<string> => new Set(trips.flatMap((trip) => trip.noBookingKeys ?? [])),
+);
+
+export interface BookingStatus {
+  total: number;
+  open: number;
+}
+
+/** Shared to-dos linked to each event, stay or rental (`getExpenseLinkKey`), and how many of them are still open. */
+export const selectBookingStatusByKey = createSelector(
+  [(state: RootState) => state.waypoint.checklist.items],
+  (items): ReadonlyMap<string, BookingStatus> =>
+    items.reduce((byKey, item) => {
+      if (!item.linkedTo) {
+        return byKey;
+      }
+      const key = getExpenseLinkKey(item.linkedTo);
+      const current = byKey.get(key) ?? { total: 0, open: 0 };
+      return byKey.set(key, { total: current.total + 1, open: current.open + (item.isCompleted ? 0 : 1) });
+    }, new Map<string, BookingStatus>()),
+);
+
 export const selectPersonalChecklistItems = (state: RootState) => state.waypoint.personalChecklist.items;
 
 export const selectPersonalExpenses = (state: RootState) =>

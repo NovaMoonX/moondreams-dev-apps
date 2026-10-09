@@ -21,7 +21,7 @@ import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormM
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SearchInput from '@/components/SearchInput';
-import { Lock, Users } from 'lucide-react';
+import { Link2, Lock, Users } from 'lucide-react';
 import { CHECKLIST_CATEGORY_EMOJIS, CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
@@ -34,7 +34,7 @@ import {
   toggleChecklistItem,
   updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
-import { selectPersonalChecklistItems } from '@apps/waypoint/store/selectors';
+import { selectPersonalChecklistItems, selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import {
   canEditExistingItem,
   hasTripRole,
@@ -71,6 +71,10 @@ export default function ChecklistSection({
     [allPersonalItems, trip.id],
   );
   const items = useMemo(() => [...sharedItems, ...personalItems], [sharedItems, personalItems]);
+  const events = useAppSelector(selectTimelineEvents);
+  const eventTitles = useMemo(() => new Map(events.map((event) => [event.id, event.title])), [events]);
+  const getLinkedTitle = (item: ChecklistItem) =>
+    item.linkedTo?.kind === 'EVENT' ? (eventTitles.get(item.linkedTo.id) ?? null) : null;
   const privateIds = useMemo(() => new Set(personalItems.map((item) => item.id)), [personalItems]);
   const isPrivateItem = (item: ChecklistItem) => privateIds.has(item.id);
   const memberIds = Object.keys(trip.members);
@@ -308,6 +312,12 @@ export default function ChecklistSection({
                             <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[item.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
                             {getChecklistCategoryLabel(item)}
                           </p>
+                          {getLinkedTitle(item) && (
+                            <p className='text-muted-foreground mt-0.5 truncate text-sm'>
+                              <Link2 className='mr-1 inline h-3.5 w-3.5 align-[-2px]' aria-hidden='true' />
+                              For {getLinkedTitle(item)}
+                            </p>
+                          )}
                           {item.note && (
                             <p className='text-muted-foreground mt-1 truncate text-sm italic'>{item.note}</p>
                           )}
@@ -379,6 +389,12 @@ export default function ChecklistSection({
               <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[detailItem.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
               {getChecklistCategoryLabel(detailItem)}
             </p>
+            {getLinkedTitle(detailItem) && (
+              <p className='text-muted-foreground text-sm'>
+                <Link2 className='mr-1 inline h-3.5 w-3.5 align-[-2px]' aria-hidden='true' />
+                For {getLinkedTitle(detailItem)}
+              </p>
+            )}
             {isPrivateItem(detailItem) && (
               <p className='text-muted-foreground inline-flex items-center gap-1 text-xs'>
                 <Lock className='h-3 w-3' aria-hidden='true' />

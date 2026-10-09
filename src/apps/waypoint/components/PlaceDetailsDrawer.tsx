@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
-import { Archive, Layers, MessageSquarePlus, Receipt } from 'lucide-react';
+import { Archive, Layers, MessageSquarePlus, Receipt, Ticket } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
+import { useBookingStatus } from '@apps/waypoint/hooks/useBookingStatus';
 import { useHasExpense, useIsNoExpense } from '@apps/waypoint/hooks/useHasExpense';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import type { ExpenseLink, TimelineEvent } from '@apps/waypoint/types';
@@ -44,12 +45,19 @@ export function PlaceDetailsDrawer({
   expenseTarget = null,
   children,
 }: PlaceDetailsDrawerProps) {
-  const { startLinkExpense, canAddExpenses } = useRelatedFlow();
+  const { startLinkExpense, startLinkChecklist, canAddExpenses, canManageChecklist } = useRelatedFlow();
+  const booking = useBookingStatus(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
   const hasExpense = useHasExpense(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
   const isNoExpense = useIsNoExpense(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
   const canLinkExpense = expenseTarget !== null && canAddExpenses && !hasExpense && !isNoExpense;
+  const canLinkBooking =
+    expenseTarget !== null &&
+    canManageChecklist &&
+    expenseTarget.getSubject().tracksBooking &&
+    !booking.isNoBooking &&
+    !(booking.total > 0 && booking.open === 0);
   const canNavigate = getMapNavigationUrl(location) !== null;
-  const hasMoreActions = Boolean(onStack || onArchive || onSuggest || canLinkExpense);
+  const hasMoreActions = Boolean(onStack || onArchive || onSuggest || canLinkExpense || canLinkBooking);
   const primaryLabel = canNavigate ? 'Navigate' : linkUrl ? 'Visit site' : onEdit ? 'Modify' : null;
 
   const getFooter = () => {
@@ -103,6 +111,20 @@ export function PlaceDetailsDrawer({
               >
                 <Receipt className='text-muted-foreground h-4 w-4' />
                 Link or add an expense
+              </Button>
+            )}
+            {canLinkBooking && (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
+                onClick={() => {
+                  onClose();
+                  startLinkChecklist(expenseTarget.getSubject());
+                }}
+              >
+                <Ticket className='text-muted-foreground h-4 w-4' />
+                Link or add a to-do to book
               </Button>
             )}
             {onSuggest && (

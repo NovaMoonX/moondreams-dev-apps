@@ -71,6 +71,8 @@ export interface TripSpace {
   city: TripCity | null;
   /** Link keys (`getExpenseLinkKey`) of plans whose owner said no expense is needed. Older documents lack it. */
   noExpenseKeys: string[];
+  /** Link keys (`getExpenseLinkKey`) of plans whose owner said nothing needs booking ahead. Older documents lack it. */
+  noBookingKeys: string[];
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
    * field keep their history. New trips write `null`.
@@ -554,6 +556,8 @@ export interface ChecklistItem {
   isCompleted: boolean;
   markedCompletedByUid: string | null;
   markedCompletedAt: number | null;
+  /** The event, stay or rental this item is a to-do for ("book tickets"). Older documents lack it. */
+  linkedTo: ExpenseLink | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

@@ -1,10 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
   ChecklistCategory,
   ChecklistItem,
+  ExpenseLink,
+  ExpenseLinkKind,
   TripSpace,
 } from '@apps/waypoint/types';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
@@ -28,6 +30,8 @@ interface CreateChecklistItemInput {
   assignedToUids: string[];
   /** Kept under the member's own uid: no one else sees it, and Overview never lists it. */
   isPrivate: boolean;
+  /** The event, stay or rental this is a to-do for; ignored for a private item, which can't be linked. */
+  linkedTo?: ExpenseLink | null;
 }
 
 export const createChecklistItem = createAsyncThunk<
@@ -47,6 +51,7 @@ export const createChecklistItem = createAsyncThunk<
       completeByDayIndex,
       assignedToUids,
       isPrivate,
+      linkedTo = null,
     },
     { rejectWithValue },
   ) => {
@@ -76,6 +81,7 @@ export const createChecklistItem = createAsyncThunk<
       isCompleted: false,
       markedCompletedByUid: null,
       markedCompletedAt: null,
+      linkedTo: isPrivate ? null : linkedTo,
       createdBy: uid,
       createdAt: now,
       lastEditedAt: now,
@@ -192,6 +198,53 @@ export const toggleChecklistItem = createAsyncThunk<
         markedCompletedAt: isCompleted ? Date.now() : null,
         lastEditedAt: Date.now(),
       },
+    );
+  },
+);
+
+const PLAN_COLLECTIONS: Record<ExpenseLinkKind, string> = { EVENT: 'events', STAY: 'stays', RENTAL: 'rentals' };
+
+interface LinkChecklistItemsInput {
+  tripId: string;
+  itemIds: string[];
+  link: ExpenseLink;
+}
+
+/** Links shared items to a plan, aborting if someone linked one elsewhere meanwhile; a link to a deleted plan counts as free. */
+export const linkChecklistItems = createAsyncThunk<void, LinkChecklistItemsInput>(
+  'waypoint/checklist/link',
+  async ({ tripId, itemIds, link }) => {
+    await runTransaction(db, async (transaction) => {
+      const itemRefs = itemIds.map((itemId) => doc(CHECKLIST_COLLECTION(tripId), itemId));
+      const snapshots = await Promise.all(itemRefs.map((itemRef) => transaction.get(itemRef)));
+      const currentLinks = snapshots.map((snapshot) => {
+        if (!snapshot.exists()) {
+          throw new Error('One of those to-dos was removed.');
+        }
+        return (snapshot.data() as Partial<ChecklistItem>).linkedTo ?? null;
+      });
+      const targets = await Promise.all(
+        currentLinks.map((current) =>
+          current && (current.kind !== link.kind || current.id !== link.id)
+            ? transaction.get(doc(db, 'apps', 'waypoint', 'trips', tripId, PLAN_COLLECTIONS[current.kind], current.id))
+            : null,
+        ),
+      );
+      if (targets.some((target) => target?.exists())) {
+        throw new Error('One of those to-dos was just linked to something else.');
+      }
+      const lastEditedAt = Date.now();
+      itemRefs.forEach((itemRef) => transaction.update(itemRef, { linkedTo: link, lastEditedAt }));
+    });
+  },
+);
+
+export const unlinkChecklistItems = createAsyncThunk<void, { tripId: string; itemIds: string[] }>(
+  'waypoint/checklist/unlink',
+  async ({ tripId, itemIds }) => {
+    const lastEditedAt = Date.now();
+    await Promise.all(
+      itemIds.map((itemId) => updateDoc(doc(CHECKLIST_COLLECTION(tripId), itemId), { linkedTo: null, lastEditedAt })),
     );
   },
 );

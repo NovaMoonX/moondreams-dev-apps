@@ -9,7 +9,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
+import { Bell, Clock, Link2, MapPin, Route, Sun, Ticket, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -31,6 +31,7 @@ import type {
   PlaceSelectionResult,
 } from '@/lib/places/types';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useAppSelector } from '@/store';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
@@ -43,6 +44,8 @@ import ItineraryPlacePicks from '@apps/waypoint/components/ItineraryPlacePicks';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
+import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
+import { BOOKING_TRACKED_EVENT_TYPES } from '@apps/waypoint/constants';
 import {
   ACTIVITY_SETTING_LABELS,
   DEFAULT_REMINDER_MINUTES_BEFORE,
@@ -104,6 +107,8 @@ export interface NextLegSeed {
 export interface SubmitOptions {
   addLeg: boolean;
   arrivalPlace?: PlaceSelectionResult | null;
+  /** Every shared to-do that should be linked to this event once it is saved; left out when the form never offered them. */
+  bookingItemIds?: string[];
 }
 
 /** Known fields to open a new event already filled in (from an idea, a travel prompt or an imported
@@ -529,6 +534,27 @@ function EventFormModal({
   const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
+  const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
+  const bookingEventIds = useMemo(() => new Set(events.map((other) => other.id)), [events]);
+  const bookingChoices = useMemo(
+    () =>
+      checklistItems
+        .filter(
+          (item) =>
+            (event && isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds)) ||
+            (!item.isCompleted && getLiveLink(item, bookingEventIds) === null),
+        )
+        .sort((first, second) => Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS')),
+    [checklistItems, event, bookingEventIds],
+  );
+  const [bookingItemIds, setBookingItemIds] = useState<string[] | null>(() => {
+    const linked = event
+      ? checklistItems
+          .filter((item) => isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds))
+          .map((item) => item.id)
+      : [];
+    return linked.length > 0 ? linked : null;
+  });
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
@@ -706,6 +732,8 @@ function EventFormModal({
   };
   const timeError = getTimeError();
 
+  const canLinkBookings = BOOKING_TRACKED_EVENT_TYPES.includes(draft.eventType) && bookingChoices.length > 0;
+
   const handleSubmit = async (addLeg = false) => {
     if (!timeFields || timeError) {
       setError(timeError ?? 'Choose a valid day and start time.');
@@ -823,7 +851,7 @@ function EventFormModal({
         archivedBy: event?.archivedBy ?? null,
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
-      }, { addLeg, arrivalPlace });
+      }, { addLeg, arrivalPlace, bookingItemIds: canLinkBookings ? (bookingItemIds ?? undefined) : undefined });
       setError(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));
@@ -908,6 +936,7 @@ function EventFormModal({
       isShown: !isPlaceEvent || draft.hasVenueHours,
     },
     { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: draft.isGrouped },
+    { key: 'bookings', label: 'Bookings', icon: <Ticket className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
     {
       key: 'reminder',
       label: 'Reminder',
@@ -917,7 +946,7 @@ function EventFormModal({
   ].filter((chip) => !chip.isShown);
 
   const revealDetail = (key: string) =>
-    updateDraft(
+    key === 'bookings' ? setBookingItemIds([]) : updateDraft(
       {
         title: { hasTitle: true },
         link: { hasLink: true },
@@ -1504,6 +1533,24 @@ function EventFormModal({
                 value={draft.venueCloseTime}
                 onChange={(changeEvent) => updateDraft({ venueCloseTime: changeEvent.target.value })}
               />
+            </div>
+          </RemovableField>
+        )}
+        {canLinkBookings && bookingItemIds !== null && (
+          <RemovableField label='Bookings' removeLabel='Remove bookings' onRemove={() => setBookingItemIds(null)}>
+            <div className='space-y-2'>
+              <MultiPillGroup
+                label='To-dos for this event'
+                options={bookingChoices.map((item) => ({
+                  value: item.id,
+                  label: item.isCompleted ? `✓ ${item.title}` : item.title,
+                }))}
+                values={bookingItemIds}
+                onChange={setBookingItemIds}
+              />
+              <p className='text-muted-foreground text-xs'>
+                Pick what needs doing before this event. Unpicking one only unlinks it; it stays on your checklist.
+              </p>
             </div>
           </RemovableField>
         )}

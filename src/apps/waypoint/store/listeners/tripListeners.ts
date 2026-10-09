@@ -38,6 +38,7 @@ export function startTripListener(
           isArchived: data.isArchived ?? false,
           city: data.city ?? null,
           noExpenseKeys: data.noExpenseKeys ?? [],
+          noBookingKeys: data.noBookingKeys ?? [],
         };
       });
 
