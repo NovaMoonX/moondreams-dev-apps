@@ -49,8 +49,13 @@ export function isFixtureMode(apiKey: string) {
   return !apiKey && process.env.FUNCTIONS_EMULATOR === 'true';
 }
 
-// AMC answers "nothing matches" with a 400 (a zip code that isn't one, a place it doesn't know), which is an empty result, not an outage.
-async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>): Promise<T | null> {
+// Only the suggestions lookup answers "nothing matches" with a 400; on any other call a 4xx means our request is wrong, which must not read as an empty result.
+async function callAmc<T>(
+  apiKey: string,
+  path: string,
+  params: Record<string, string>,
+  isNoMatchAnswer = false,
+): Promise<T | null> {
   if (!apiKey) {
     throw new HttpsError('failed-precondition', NOT_SET_UP);
   }
@@ -66,7 +71,7 @@ async function callAmc<T>(apiKey: string, path: string, params: Record<string, s
     if (response.status === 401 || response.status === 403) {
       throw new HttpsError('failed-precondition', NOT_SET_UP);
     }
-    if (response.status === 400 || response.status === 404) {
+    if (isNoMatchAnswer && (response.status === 400 || response.status === 404)) {
       return null;
     }
     if (response.status === 429) {
@@ -131,7 +136,7 @@ export async function suggestPlaces(apiKey: string, query: string): Promise<AmcP
     return /^[0-9]/.test(query) ? FIXTURE_PLACES.slice(0, 1) : FIXTURE_PLACES;
   }
 
-  const data = await callAmc<AmcSuggestionsResponse>(apiKey, '/v2/location-suggestions', { query });
+  const data = await callAmc<AmcSuggestionsResponse>(apiKey, '/v2/location-suggestions', { query }, true);
   const places = (data?._embedded?.suggestions ?? []).flatMap((suggestion) => {
     const place = toPlace(suggestion);
     return place ? [place] : [];
@@ -171,7 +176,8 @@ function toTimeZone(theatre: AmcTheatre | undefined) {
 export function toTitleCase(text: string) {
   const result = text
     .toLowerCase()
-    .replace(/(^|[\s\-'.(])([a-z])/g, (_match, edge: string, letter: string) => edge + letter.toUpperCase())
+    .replace(/(^|[\s\-.(])([a-z])/g, (_match, edge: string, letter: string) => edge + letter.toUpperCase())
+    .replace(/^([a-z])'([a-z])/i, (_match, first: string, second: string) => `${first.toUpperCase()}'${second.toUpperCase()}`)
     .replace(/\bMc([a-z])/g, (_match, letter: string) => `Mc${letter.toUpperCase()}`);
   return result;
 }

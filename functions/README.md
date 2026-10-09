@@ -98,7 +98,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Budget:** `lookupBudget.ts` counts every upstream call in `apps/a-list/lookupUsage` (own `theatres_` counters) and refuses with `resource-exhausted` at 500 a day app-wide or 40 per member.
 - **Access:** clients can't read or write `theatreCache`.
 - **Offline fixtures:** in the emulator with no key readable, it answers from three built-in theaters.
-- **Verified live (2026-10-09):** the suggestion, locations, state and theater-list shapes, and that AMC answers a no-match search with HTTP 400. Its `timezone` is a name like "CENTRAL TIME", mapped to an IANA zone here.
+- **Verified live (2026-10-09):** the suggestion, locations, state and theater-list shapes, that `/v2/theatres?page-size=1000` returns all 521 theaters in one page, and that AMC answers a no-match *suggestions* search with HTTP 400 (only that call treats a 4xx as an empty result). Its `timezone` is a name like "CENTRAL TIME", mapped to an IANA zone here.
 
 ### A-List Tracker: `findShowtimes`
 
