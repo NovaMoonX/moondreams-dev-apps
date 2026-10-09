@@ -34,6 +34,8 @@ interface ShowtimePickerProps {
   onPick: (option: ShowtimeOption) => void;
   /** On the buy screen there is no form to fall back to, so a way to buy on AMC's own site is offered instead. */
   offersAmcFallback?: boolean;
+  /** A movie added by title has no AMC id, so an empty list may be a spelling difference rather than no showings. */
+  isTypedTitle?: boolean;
   /** Called once a typed theater has been linked, with the AMC theater that replaced it. */
   onLinked?: (theatre: TheatreSnapshot) => void;
 }
@@ -50,6 +52,7 @@ function ShowtimePicker({
   selectedShowtimeId,
   onPick,
   offersAmcFallback = false,
+  isTypedTitle = false,
   onLinked,
 }: ShowtimePickerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -169,7 +172,9 @@ function ShowtimePicker({
         <p className='text-muted-foreground text-sm'>
           {soldOutCount > 0
             ? 'Everything left that day is sold out.'
-            : `AMC isn’t showing ${title} at this theater that day yet. Schedules usually post a few weeks ahead.`}
+            : isTypedTitle
+              ? `We couldn’t find “${title}” on AMC’s list for that day. It may not be showing yet, or AMC may spell the title differently.`
+              : `AMC isn’t showing ${title} at this theater that day yet. Schedules usually post a few weeks ahead.`}
         </p>
       )}
       {offersAmcFallback && !isLooking && open.length === 0 && (

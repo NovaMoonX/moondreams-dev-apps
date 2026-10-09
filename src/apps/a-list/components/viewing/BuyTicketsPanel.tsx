@@ -70,6 +70,7 @@ function BuyTicketsPanel({
         selectedShowtimeId={purchase?.showtimeId ?? null}
         onPick={onPick}
         offersAmcFallback
+        isTypedTitle={viewing.movieKey.startsWith('manual-')}
       />
       {purchase && (
         <div className='space-y-3'>

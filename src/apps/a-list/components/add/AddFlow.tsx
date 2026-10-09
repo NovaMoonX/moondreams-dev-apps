@@ -602,6 +602,7 @@ export function AddFlow({
             selectedShowtimeId={activePick?.showtimeId ?? null}
             onPick={handlePickShowtime}
             onLinked={setTheatreChoice}
+            isTypedTitle={movieKey?.startsWith('manual-') ?? false}
           />
         )}
         {isCalendar && (
