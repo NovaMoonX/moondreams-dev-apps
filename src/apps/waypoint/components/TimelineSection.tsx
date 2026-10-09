@@ -610,7 +610,7 @@ export function TimelineSection({
         const created = await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
         await syncBookings(created.id, options?.bookingItemIds);
         if (!options?.addLeg && isWorthFollowUp(created)) {
-          startFollowUp(getEventSubject(trip, created));
+          startFollowUp(getEventSubject(trip, created), { hasBookings: (options?.bookingItemIds?.length ?? 0) > 0 });
         }
       }
       setEditingEvent(undefined);

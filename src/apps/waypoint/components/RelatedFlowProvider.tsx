@@ -21,7 +21,7 @@ interface RelatedFlowProviderProps {
 }
 
 type OpenFlow =
-  | { id: number; kind: 'follow-up'; subject: RelatedSubject; initialStep: Step }
+  | { id: number; kind: 'follow-up'; subject: RelatedSubject; initialStep: Step; hasBookings?: boolean }
   | { id: number; kind: 'link'; subject: RelatedSubject }
   | { id: number; kind: 'link-checklist'; subject: RelatedSubject };
 
@@ -33,8 +33,14 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
   const canAddExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const value = useMemo(
     () => ({
-      startFollowUp: (subject: RelatedSubject) =>
-        setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'follow-up', subject, initialStep: 'menu' })),
+      startFollowUp: (subject: RelatedSubject, options?: { hasBookings?: boolean }) =>
+        setFlow((current) => ({
+          id: (current?.id ?? 0) + 1,
+          kind: 'follow-up',
+          subject,
+          initialStep: 'menu',
+          hasBookings: options?.hasBookings,
+        })),
       startLinkExpense: (subject: RelatedSubject) =>
         setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'link', subject })),
       undoNoExpense: (subject: RelatedSubject) =>
@@ -89,6 +95,7 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
           currentUserId={currentUserId}
           subject={flow.subject}
           initialStep={flow.initialStep}
+          hasBookings={flow.hasBookings}
           onClose={() => setFlow(null)}
         />
       )}

@@ -3,7 +3,8 @@ import { createContext, useContext } from 'react';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface RelatedFlowContextValue {
-  startFollowUp: (subject: RelatedSubject) => void;
+  /** `hasBookings` says to-dos were just linked in the same save, so the sheet doesn't ask about booking again. */
+  startFollowUp: (subject: RelatedSubject, options?: { hasBookings?: boolean }) => void;
   /** Opens the sheet that links an existing expense to a plan, or adds a new one for it. */
   startLinkExpense: (subject: RelatedSubject) => void;
   /** Puts a plan marked "no expense needed" back on the no-expense list. */

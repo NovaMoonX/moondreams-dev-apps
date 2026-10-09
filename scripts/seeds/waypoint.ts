@@ -997,7 +997,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     category: 'BOOKINGS',
     customCategoryLabel: null,
     note: null,
-    completeByDayIndex: 1,
+    completeByDayIndex: 0,
     assignedToUids: [alex.uid],
     isCompleted: false,
     markedCompletedByUid: null,

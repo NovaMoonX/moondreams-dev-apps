@@ -11,9 +11,9 @@ export function isLinkedTo(item: ChecklistItem, link: ExpenseLink, eventIds: Rea
   return live !== null && live.kind === link.kind && live.id === link.id;
 }
 
-/** Day a to-do for a plan is due: the day before it, so there is time to act. */
+/** Day a to-do for a plan is due: the day before it, so there is time to act, but never before the trip for a plan on its first day. */
 export function getBookingDueDay(planDayIndex: number | null): number | null {
-  return planDayIndex === null ? null : planDayIndex - 1;
+  return planDayIndex === null ? null : planDayIndex > 0 ? planDayIndex - 1 : planDayIndex;
 }
 
 export const BOOKING_VERBS = [

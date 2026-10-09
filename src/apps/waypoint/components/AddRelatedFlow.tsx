@@ -36,6 +36,8 @@ interface AddRelatedFlowProps {
   subject: RelatedSubject;
   /** Opening straight on the expense form closes the flow when that form does. */
   initialStep?: Step;
+  /** To-dos were linked in the same save, so booking isn't asked about again. */
+  hasBookings?: boolean;
   onClose: () => void;
 }
 
@@ -72,11 +74,11 @@ function FollowUpRow({ emoji, title, description, addedCount, onClick }: FollowU
   );
 }
 
-function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', onClose }: AddRelatedFlowProps) {
+function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', hasBookings, onClose }: AddRelatedFlowProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const existingBookings = useBookingStatus(subject.link.kind, subject.link.id);
-  const [alreadyHadBookings] = useState(existingBookings.total > 0);
+  const [alreadyHadBookings] = useState(hasBookings ?? existingBookings.total > 0);
   const [bookingAnswer, setBookingAnswer] = useState<'yes' | 'none' | null>(null);
   const [bookingTitle, setBookingTitle] = useState('');
   const [bookedTitles, setBookedTitles] = useState<string[]>([]);

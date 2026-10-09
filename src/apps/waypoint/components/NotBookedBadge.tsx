@@ -65,7 +65,7 @@ function NotBookedBadge({ getSubject, isStatic = false, variant = 'inline' }: No
       variant='tertiary'
       size='sm'
       data-paid-tab={variant === 'tab' ? '' : undefined}
-      aria-label={open > 0 ? `${open} to-dos left to book: see or add to-dos` : 'No booking yet: link or add a to-do'}
+      aria-label={open > 0 ? `${open} ${open === 1 ? 'to-do' : 'to-dos'} left to book: see or add to-dos` : 'No booking yet: link or add a to-do'}
       className={join(
         "text-muted-foreground relative h-auto text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']",
         accentClassName,
