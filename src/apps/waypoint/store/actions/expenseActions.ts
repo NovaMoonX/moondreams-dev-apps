@@ -165,8 +165,7 @@ export const updateExpense = createAsyncThunk<
     isPerPerson: input.isPerPerson,
     linkedTo: input.linkedTo,
     // Custom shares add up to the old price, so a new price starts over from an even split.
-    ...(input.expense.splitAmounts !== null &&
-    (input.amount !== input.expense.amount || input.isPerPerson !== input.expense.isPerPerson)
+    ...(input.amount !== input.expense.amount || input.isPerPerson !== input.expense.isPerPerson
       ? { splitAmounts: null }
       : {}),
     lastEditedAt: Date.now(),
@@ -231,8 +230,8 @@ export const updateExpenseSplit = createAsyncThunk<
     const { expense } = input;
     const hasPriceChanged =
       current.amount !== expense.amount ||
-      current.paidAmount !== expense.paidAmount ||
-      current.isPerPerson !== expense.isPerPerson;
+      (current.paidAmount ?? null) !== expense.paidAmount ||
+      (current.isPerPerson ?? false) !== expense.isPerPerson;
     if (input.splitAmounts !== null && hasPriceChanged) {
       return 'The price of this expense changed while you were editing the split. Close this and open it again.';
     }

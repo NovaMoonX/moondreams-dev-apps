@@ -58,7 +58,6 @@ const describePrice = ({
   amount: number | null;
   headcount: number;
   isPick: boolean;
-  /** A saved split with its own amounts: it is kept as is, or starts over as even when the price changes. */
   customSplit: 'kept' | 'reset' | null;
 }) => {
   if (headcount <= 1) {
@@ -707,7 +706,7 @@ function ExpenseFormModal({
             : { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: pickedIds.filter((uid) => memberIds.includes(uid)) },
       });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to save this expense.'));
+      setError(getErrorMessage(submitError, isEditing ? 'Unable to update this expense.' : 'Unable to add this expense.'));
     }
   };
 
@@ -985,7 +984,16 @@ function ExpenseFormModal({
                     <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
                   </div>
                 )}
-                {error && <p className='text-destructive col-span-full mb-3 text-sm'>{error}</p>}
+                {error && (
+                  <p
+                    key={error}
+                    role='alert'
+                    ref={(node) => node?.scrollIntoView({ block: 'center' })}
+                    className='text-destructive col-span-full mb-3 text-sm'
+                  >
+                    {error}
+                  </p>
+                )}
                 <ModalFooterActions
                   leftActions={
                     isEditing &&

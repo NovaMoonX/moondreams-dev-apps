@@ -37,7 +37,7 @@ const targetTypeOptions: { value: ExpenseTargetType; label: string; emoji: strin
   { value: 'SPECIFIC_MEMBERS', label: 'Pick people', emoji: '🎯' },
 ];
 
-/** Older expenses may still say "just the payer"; the editor shows them as that person picked. */
+// Older expenses may still say "just the payer"; the editor shows them as that person picked.
 function getInitialTargetType(expense: TripExpense | null): ExpenseTargetType {
   if (!expense || expense.targetType === 'EVERYONE_INCLUDING_FUTURE') {
     return 'EVERYONE_CURRENT';

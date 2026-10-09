@@ -265,7 +265,16 @@ function PersonalExpenseFormModal({
                 />
               </div>
             )}
-            {error && <p className='text-destructive col-span-full mb-3 text-sm'>{error}</p>}
+            {error && (
+                  <p
+                    key={error}
+                    role='alert'
+                    ref={(node) => node?.scrollIntoView({ block: 'center' })}
+                    className='text-destructive col-span-full mb-3 text-sm'
+                  >
+                    {error}
+                  </p>
+                )}
             <ModalFooterActions
               leftActions={
                 <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />
