@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import Pill from '@/components/Pill';
 import { useAppSelector } from '@/store';
 import TheaterSheetModal from '@apps/a-list/components/theaters/TheaterSheetModal';
@@ -28,13 +30,16 @@ function TheaterPills({ label, value, onChange }: TheaterPillsProps) {
       <p className='font-medium'>{label}</p>
       <div className='flex flex-wrap gap-2'>
         {theatres.length < MAX_THEATRES && (
-          <Pill
-            isSelected={false}
-            className='border-primary/60 border border-dashed'
+          <Button
+            type='button'
+            size='sm'
+            rounded='full'
+            variant='secondary'
+            className='border-primary/60 shrink-0 border border-dashed whitespace-nowrap !transition-none'
             onClick={() => setIsAdding(true)}
           >
             + Add theater
-          </Pill>
+          </Button>
         )}
         {choices.map((theatre) => {
           const isSelected = value?.theatreId === theatre.theatreId;

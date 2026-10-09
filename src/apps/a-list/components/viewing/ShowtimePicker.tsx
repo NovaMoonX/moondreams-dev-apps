@@ -204,7 +204,9 @@ function ShowtimePicker({
                 isThin
                 isDisabled={option.isSoldOut}
                 className='disabled:bg-muted! disabled:text-muted-foreground! disabled:opacity-100!'
-                isSelected={option.showtimeId === selectedShowtimeId}
+                isSelected={
+                  !option.isSoldOut && option.showtimeId === selectedShowtimeId
+                }
                 onClick={() => onPick(option)}
               >
                 {[

@@ -124,7 +124,13 @@ function TheaterSheetModal({
   };
 
   return (
-    <Modal isOpen onClose={onClose} title='Theater'>
+    <Modal
+      isOpen
+      onClose={() => {
+        if (!isSaving) onClose();
+      }}
+      title='Theater'
+    >
       <div className='space-y-4'>
         {linking ? (
           <div className='space-y-3'>
@@ -158,6 +164,7 @@ function TheaterSheetModal({
               type='button'
               variant='secondary'
               rounded='full'
+              disabled={isSaving}
               onClick={onClose}
             >
               Close
