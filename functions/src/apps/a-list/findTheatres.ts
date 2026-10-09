@@ -131,8 +131,9 @@ export const findTheatres = onCall(
     }
 
     const everyTheatre = (await cached('all', ALL_CACHE_MS, () => listAllTheatres(apiKey), (value) => value.length > 0)) ?? [];
-    const words = toWords(query);
-    const matches = everyTheatre
+    // "amc" is on every theater, so it narrows nothing; a search of only that matches no theater by name.
+    const words = toWords(query).filter((word) => word !== 'amc');
+    const matches = (words.length === 0 ? [] : everyTheatre)
       .filter((theatre) => {
         const nameWords = toWords(theatre.name);
         return words.every((word) => nameWords.some((nameWord) => nameWord.startsWith(word)));

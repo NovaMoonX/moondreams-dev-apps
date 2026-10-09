@@ -15,8 +15,13 @@ function toCityCase(city: string): string {
   const result = city
     .toLowerCase()
     .replace(
-      /(^|[\s\-'.(])([a-z])/g,
+      /(^|[\s\-.(])([a-z])/g,
       (_match, edge: string, letter: string) => edge + letter.toUpperCase(),
+    )
+    .replace(
+      /^([a-z])'([a-z])/,
+      (_match, first: string, second: string) =>
+        `${first.toUpperCase()}'${second.toUpperCase()}`,
     )
     .replace(
       /\bMc([a-z])/g,
