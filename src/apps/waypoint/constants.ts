@@ -339,10 +339,10 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
 // OTHER is the storage bucket for user-added categories (named by
 // customCategoryLabel), so it's never offered as a preset choice.
 export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
+  'ACTIVITIES',
   'FOOD',
   'TRANSPORT',
   'LODGING',
-  'ACTIVITIES',
   'SHOPPING',
 ];
 

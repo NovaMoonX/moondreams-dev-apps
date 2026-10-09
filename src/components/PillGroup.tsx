@@ -36,6 +36,8 @@ interface PillOptionsProps<T extends string> {
   isThin?: boolean;
   /** One answer: picking collapses the list, clears its search and floats the chosen option to the front. */
   isSingle?: boolean;
+  /** Every option stays visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. */
+  showAll?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
@@ -48,6 +50,7 @@ export function PillOptions<T extends string>({
   selectedCount = 0,
   isThin = false,
   isSingle = false,
+  showAll = false,
 }: PillOptionsProps<T>) {
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -60,7 +63,7 @@ export function PillOptions<T extends string>({
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const filtered =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
-  const isClamped = trimmedQuery === '' && !isExpanded;
+  const isClamped = !showAll && trimmedQuery === '' && !isExpanded;
 
   useEffect(() => {
     const content = contentRef.current;
@@ -86,13 +89,13 @@ export function PillOptions<T extends string>({
 
   // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
   const visible =
-    isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
+    !showAll && isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
       ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
       : filtered;
   useLayoutEffect(() => {
     isFloatedRef.current = visible.some((option, index) => option !== filtered[index]);
   });
-  const showToggle = trimmedQuery === '' && (isHidingRows || isExpanded);
+  const showToggle = !showAll && trimmedQuery === '' && (isHidingRows || isExpanded);
 
   return (
     <div className='space-y-2'>

@@ -131,6 +131,7 @@ function PersonalExpenseFormModal({
               newText={value.newLabel}
               newPillLabel='New category'
               newPlaceholder='Souvenirs'
+              showAll
               onChange={(choice, newLabel) => props.onValueChange({ choice, newLabel })}
             />
           );

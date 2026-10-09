@@ -274,6 +274,7 @@ function ExpenseFormModal({
   });
   const autoFill = useRef({ title: prefill?.title ?? '', category: prefill?.category ?? '', dayIndex: getDayValue(prefill?.dayIndex) });
   const hasChosenAudience = useRef(false);
+  const startsPrivate = !initialExpense && Boolean(onSubmitPersonal) && (!canShare || initialAudience === 'ME');
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
@@ -303,17 +304,17 @@ function ExpenseFormModal({
     () =>
       linkables
         .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title, group: getPlanGroup(subject.link, events) }))
-        .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key)),
-    [linkables, expenseLinkKeys, linkKey, events],
+        .filter(({ key }) => isPrivate || key === linkKey || !expenseLinkKeys.has(key)),
+    [linkables, expenseLinkKeys, linkKey, events, isPrivate],
   );
   const shownPlanPills = planPills
     .filter(({ group }) => planGroup === 'ALL' || group === planGroup)
     .map(({ key, label }) => ({ value: key, label }));
   const pickedSubject = allSubjects.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
-  const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
-  const asksAboutPlan =
-    !isEditing && !prefill && canShare && !isPrivate && planPills.length > 0 && !isPlanAnswered;
-  const isLinked = !isEditing && !isPrivate && Boolean(pickedSubject);
+  const linkedDay = !isEditing && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
+  const canChoosePlan = !isEditing && !prefill && (startsPrivate || (canShare && !isPrivate));
+  const asksAboutPlan = canChoosePlan && planPills.length > 0 && !isPlanAnswered;
+  const isLinked = !isEditing && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const showLinkPicker = isEditing && linkables.length > 0;
   const dayOptions = useMemo(
@@ -408,6 +409,7 @@ function ExpenseFormModal({
                 options={categoryOptions}
                 newPillLabel='New category'
                 newPlaceholder='Souvenirs'
+                showAll
               />
             ),
           }),
@@ -624,7 +626,7 @@ function ExpenseFormModal({
       return;
     }
     const nextAudience = getAudienceFromAttendees(picked.attendeeIds, memberIds);
-    const isAudienceUntouched = !hasChosenAudience.current;
+    const isAudienceUntouched = !hasChosenAudience.current && !isPrivate;
     const previous = autoFill.current;
     setFormData((current) => ({
       ...current,
@@ -770,7 +772,7 @@ function ExpenseFormModal({
           ))}
         </PillRow>
         <PillGroup
-          label='Without an expense yet'
+          label={isPrivate ? 'Your itinerary' : 'Without an expense yet'}
           options={shownPlanPills}
           value={linkKey || null}
           onChange={(key) => {
@@ -820,7 +822,9 @@ function ExpenseFormModal({
         <>
           {isLinked && pickedSubject && (
             <div className='bg-muted/50 mb-4 space-y-1 rounded-xl p-3'>
-              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Linked to</p>
+              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+                {isPrivate ? 'Filled in from' : 'Linked to'}
+              </p>
               <p className='font-semibold'>{pickedSubject.title}</p>
               <p className='text-muted-foreground text-sm'>
                 {[
@@ -858,7 +862,7 @@ function ExpenseFormModal({
               </div>
             </div>
           )}
-          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && planPills.length > 0 && (
+          {canChoosePlan && !isLinked && planPills.length > 0 && (
             <Button
               type='button'
               variant='link'
@@ -870,7 +874,7 @@ function ExpenseFormModal({
               Choose from your itinerary
             </Button>
           )}
-          {!isEditing && canShare && (
+          {!isEditing && canShare && !startsPrivate && (
             <div className='mb-4 space-y-2'>
               <Label>Who&apos;s this for?</Label>
               <PillGroup
@@ -905,7 +909,7 @@ function ExpenseFormModal({
               {isPrivate && <p className='text-muted-foreground text-xs'>{privateNote}</p>}
             </div>
           )}
-          {!isEditing && !canShare && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
+          {!isEditing && (!canShare || startsPrivate) && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
           {showLinkPicker && (
             <div className='mb-4 space-y-2'>
               {isLinkPickerOpen ? (
@@ -1026,6 +1030,7 @@ function ChoiceField({
   options,
   newPillLabel,
   newPlaceholder,
+  showAll = false,
 }: {
   label: string;
   value: ChoiceValue;
@@ -1033,6 +1038,7 @@ function ChoiceField({
   options: { value: string; text: string; emoji?: string }[];
   newPillLabel: string;
   newPlaceholder: string;
+  showAll?: boolean;
 }) {
   return (
     <PickOrCreate
@@ -1042,6 +1048,7 @@ function ChoiceField({
       newText={value.newLabel}
       newPillLabel={newPillLabel}
       newPlaceholder={newPlaceholder}
+      showAll={showAll}
       onChange={(choice, newLabel) => onValueChange({ choice, newLabel })}
     />
   );
