@@ -6,12 +6,13 @@
 # project number are all derived/fixed here.
 #
 # Usage:
-#   npm run issues:create -- <app-id>
-#   npm run issues:create:dry-run -- <app-id>
+#   npm run issues:create -- <app-id> [app-name]
+#   npm run issues:create:dry-run -- <app-id> [app-name]
 #
 # Whether this runs as a dry run is decided by which npm script invoked it
 # (via $npm_lifecycle_event), not by a flag you pass — the app id is the only
-# input.
+# input (plus an optional app name, for a board option that differs from the
+# registry name).
 
 set -euo pipefail
 
@@ -30,14 +31,14 @@ if [[ ! -f "$ISSUES_FILE" ]]; then
   exit 1
 fi
 
-# The app name as shown in production is the manifest's short_name (e.g.
-# "A-List"); it becomes the board's "Apps" option, created if missing.
-MANIFEST="public/manifest-$APP_ID.json"
-if [[ ! -f "$MANIFEST" ]]; then
-  echo "No manifest found at $MANIFEST" >&2
+# The app name is the registry entry's name (e.g. "A-List Tracker") unless one
+# is passed; it becomes the board's "Apps" option, created if missing.
+REGISTRY="src/lib/app/app.registry.ts"
+APP_NAME="${2:-$(node -e "const m = require('fs').readFileSync('$REGISTRY', 'utf8').match(/id: '$APP_ID',\\s*name: '([^']+)'/); if (m) console.log(m[1]);")}"
+if [[ -z "$APP_NAME" ]]; then
+  echo "No registry entry for '$APP_ID' in $REGISTRY; pass the app name as a second argument" >&2
   exit 1
 fi
-APP_NAME="$(node -p "require('./$MANIFEST').short_name")"
 
 args=("$ISSUES_FILE" --app-name "$APP_NAME" --project-number 3 --project-status-value Ready)
 if [[ "${npm_lifecycle_event:-}" == *dry-run* ]]; then

@@ -7,7 +7,7 @@ import { app } from '@/lib/firebase/config';
  * `null` if permission was denied or push isn't supported in this browser.
  *
  * Reuses the single origin-wide service worker registered in `main.tsx`
- * (shared by every mini-app's manifest) rather than registering a second
+ * (shared by the whole site) rather than registering a second
  * one — see vite.config.ts's `workbox.importScripts` for how that worker
  * gets its Firebase Messaging background handler.
  */

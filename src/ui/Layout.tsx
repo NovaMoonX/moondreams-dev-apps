@@ -52,7 +52,6 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
-  // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
 

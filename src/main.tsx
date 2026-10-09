@@ -8,8 +8,7 @@ import { installVersionPeek } from './lib/app/versionPeek';
 import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import './index.css';
 
-// Ensures a single Service Worker handles caching for the entire origin,
-// which installs as one app through manifest-main.json
+// One worker handles caching for the entire origin.
 registerSW({ immediate: true });
 document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();

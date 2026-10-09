@@ -3,6 +3,7 @@ import { Link, useLocation, useRouteError } from 'react-router-dom';
 
 import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
+import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
 
 function getErrorDetails(error: unknown) {
@@ -30,8 +31,10 @@ function ErrorBoundary() {
           Uh oh, something went wrong.
         </h1>
         <p className='text-foreground/70 mt-3 text-base'>
-          We hit a snag loading this page. Try heading back home, or refresh to try
-          again.
+          We hit a snag loading this page.{' '}
+          {IS_INSTALLED_APP
+            ? 'Try heading back home, or reload to try again.'
+            : 'Try heading back home, or refresh to try again.'}
         </p>
         {showDetails && (
           <div className='border-destructive/30 bg-destructive/5 mt-6 rounded-lg border p-4 text-left'>
@@ -43,10 +46,15 @@ function ErrorBoundary() {
             )}
           </div>
         )}
-        <div className='mt-6 flex justify-center'>
+        <div className='mt-6 flex flex-wrap justify-center gap-3'>
           <Link to='/'>
             <Button>Back home</Button>
           </Link>
+          {IS_INSTALLED_APP && (
+            <Button variant='secondary' onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          )}
         </div>
         <p className='text-foreground/50 mt-6 text-xs'><VersionLabel /></p>
       </div>
