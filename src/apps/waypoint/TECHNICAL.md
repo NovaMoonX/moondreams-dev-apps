@@ -154,7 +154,7 @@ interface TimelineEvent {
 }
 ```
 
-**Arrive by.** An optional second time on dining and activity events: when to be there, as opposed to when it starts. It is a floating "HH:mm" on the event's own day (never a timestamp, so moving the trip's dates needs no rewrite) and must be strictly before `startTime`; arriving at the start says nothing. The form (`+ Add arrival time` under "When"), `validateEventTime` and `isArriveByValid` in `firestore.rules` all enforce it, the last also capping the note at 500 characters and requiring a time for a note. Older events lack both fields, so rules read them with `get(..., null)` and `getMissingEventFields` backfills `null`. Approving a suggestion keeps the arrival only if it is still before the new start. `arriveByTime` is tracked in `changeHistory` like the start time. Reminders still count back from the start.
+**Arrive by.** An optional second time on dining and activity events: when to be there, as opposed to when it starts. It is a floating "HH:mm" on the event's own day (never a timestamp, so moving the trip's dates needs no rewrite) and must be strictly before `startTime`; arriving at the start says nothing. The form (an "Arrival time" chip under "When"), `validateEventTime` and `isArriveByValid` in `firestore.rules` all enforce it, the last also capping the note at 500 characters and requiring a time for a note. Older events lack both fields, so rules read them with `get(..., null)` and `getMissingEventFields` backfills `null`. Approving a suggestion keeps the arrival only if it is still before the new start. `arriveByTime` is tracked in `changeHistory` like the start time. Reminders still count back from the start.
 
 **Event details — predefined per `eventType`:**
 
