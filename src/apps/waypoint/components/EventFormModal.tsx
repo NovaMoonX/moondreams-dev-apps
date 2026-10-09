@@ -542,9 +542,13 @@ function EventFormModal({
         .filter(
           (item) =>
             (event && isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds)) ||
-            (!item.isCompleted && getLiveLink(item, bookingEventIds) === null),
+            getLiveLink(item, bookingEventIds) === null,
         )
-        .sort((first, second) => Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS')),
+        .sort(
+          (first, second) =>
+            Number(first.isCompleted) - Number(second.isCompleted) ||
+            Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS'),
+        ),
     [checklistItems, event, bookingEventIds],
   );
   const [initialBookingIds] = useState(() =>
@@ -736,6 +740,15 @@ function EventFormModal({
 
   const canLinkBookings = BOOKING_TRACKED_EVENT_TYPES.includes(draft.eventType) && bookingChoices.length > 0;
 
+  const getBookingPicks = () => {
+    if (!canLinkBookings) {
+      return initialBookingIds.length > 0 ? { picked: [], initial: initialBookingIds } : undefined;
+    }
+    return bookingItemIds !== null || initialBookingIds.length > 0
+      ? { picked: bookingItemIds ?? [], initial: initialBookingIds }
+      : undefined;
+  };
+
   const handleSubmit = async (addLeg = false) => {
     if (!timeFields || timeError) {
       setError(timeError ?? 'Choose a valid day and start time.');
@@ -853,7 +866,7 @@ function EventFormModal({
         archivedBy: event?.archivedBy ?? null,
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
-      }, { addLeg, arrivalPlace, bookings: canLinkBookings && (bookingItemIds !== null || initialBookingIds.length > 0) ? { picked: bookingItemIds ?? [], initial: initialBookingIds } : undefined });
+      }, { addLeg, arrivalPlace, bookings: getBookingPicks() });
       setError(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));

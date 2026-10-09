@@ -23,7 +23,7 @@ export interface RelatedSubject {
   /** Who the plan is for, so its expense starts split between them; `null` means everyone. */
   attendeeIds: string[] | null;
   checklistCategory: ChecklistCategory;
-  /** Whether a missing booking to-do is worth a reminder (activities); stays and rentals are booked when added. */
+  /** Whether a missing booking to-do is worth a reminder: an activity that hasn't started; stays and rentals are booked when added. */
   tracksBooking: boolean;
 }
 
@@ -42,7 +42,8 @@ function getEventEmoji(event: TimelineEvent): string {
 }
 
 export function getEventSubject(trip: TripSpace, event: TimelineEvent): RelatedSubject {
-  const { dayIndex, startTime } = getEventTime(trip, event);
+  const { dayIndex, startTime, startMs } = getEventTime(trip, event);
+  const hasStarted = startMs !== null && Date.now() >= startMs;
   return {
     link: { kind: 'EVENT', id: event.id },
     emoji: getEventEmoji(event),
@@ -53,7 +54,7 @@ export function getEventSubject(trip: TripSpace, event: TimelineEvent): RelatedS
     prefersEstimate: event.eventType === 'DINING',
     attendeeIds: event.attendeeTargetType === 'SPECIFIC_MEMBERS' ? event.assignedMemberIds : null,
     checklistCategory: event.eventType === 'TRAVEL' ? 'DOCUMENTS' : 'BOOKINGS',
-    tracksBooking: BOOKING_TRACKED_EVENT_TYPES.includes(event.eventType),
+    tracksBooking: BOOKING_TRACKED_EVENT_TYPES.includes(event.eventType) && !hasStarted,
   };
 }
 

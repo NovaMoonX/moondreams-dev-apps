@@ -7,6 +7,7 @@ import { ChevronRight } from 'lucide-react';
 import DetailSheet from '@/components/DetailSheet';
 import Pill from '@/components/Pill';
 import { PillRow } from '@/components/PillGroup';
+import { getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useBookingStatus } from '@apps/waypoint/hooks/useBookingStatus';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -188,7 +189,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
           category: 'BOOKINGS',
           customCategoryLabel: null,
           note: null,
-          completeByDayIndex: getBookingDueDay(subject.dayIndex),
+          completeByDayIndex: getBookingDueDay(subject.dayIndex, getLocalDayIndex(trip.startDate, Date.now())),
           assignedToUids: [currentUserId],
           isPrivate: false,
           linkedTo: subject.link,
@@ -231,7 +232,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
                 </span>
                 <div className='min-w-0'>
                   <p className='text-sm font-medium'>Does anything need booking ahead?</p>
-                  <p className='text-muted-foreground text-xs'>Tickets, a time slot, a table. We&apos;ll add it to Before the Road.</p>
+                  <p className='text-muted-foreground text-xs'>Tickets, a time slot, a pass. We&apos;ll add it to Before the Road.</p>
                 </div>
               </div>
               <PillRow label='Does anything need booking ahead?'>

@@ -10,11 +10,12 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CHECKLIST_CATEGORY_EMOJIS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
-import { linkChecklistItems, unlinkChecklistItems } from '@apps/waypoint/store/actions/checklistActions';
+import { linkChecklistItems, toggleChecklistItem, unlinkChecklistItems } from '@apps/waypoint/store/actions/checklistActions';
 import { setPlanNeedsNoBooking } from '@apps/waypoint/store/actions/tripActions';
 import { selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import type { ChecklistItem, TripSpace } from '@apps/waypoint/types';
 import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
+import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface LinkChecklistSheetProps {
@@ -42,9 +43,10 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
   const available = useMemo(
     () =>
       items
-        .filter((item) => !item.isCompleted && getLiveLink(item, eventIds) === null)
+        .filter((item) => getLiveLink(item, eventIds) === null)
         .sort(
           (first, second) =>
+            Number(first.isCompleted) - Number(second.isCompleted) ||
             Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS') ||
             (first.completeByDayIndex ?? Infinity) - (second.completeByDayIndex ?? Infinity),
         ),
@@ -79,6 +81,12 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
       onClose();
     }
   };
+
+  const toggleDone = (item: ChecklistItem, isCompleted: boolean) =>
+    run(
+      () => dispatch(toggleChecklistItem({ tripId: trip.id, itemId: item.id, uid: currentUserId, isCompleted, isPrivate: false })).unwrap(),
+      'Unable to update that to-do',
+    );
 
   const unlink = (item: ChecklistItem) =>
     run(
@@ -144,12 +152,17 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
           <ul className='divide-border divide-y'>
             {linkedHere.map((item) => (
               <li key={item.id} className='flex min-h-12 items-center gap-3 py-2'>
-                <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-                  {item.isCompleted ? '✓' : '○'}
+                <span className='inline-flex w-5 shrink-0 justify-center'>
+                  <Checkbox
+                    checked={item.isCompleted}
+                    disabled={isBusy || !(canEditExistingItem(trip, currentUserId) || item.assignedToUids.includes(currentUserId))}
+                    aria-label={`Mark ${item.title} done`}
+                    onCheckedChange={(checked) => void toggleDone(item, checked)}
+                  />
                 </span>
                 <span className='min-w-0 flex-1'>
                   <span className='block truncate text-sm font-medium'>{item.title}</span>
-                  <span className='text-muted-foreground block text-xs'>{item.isCompleted ? 'Done' : 'Still to do'}</span>
+                  <span className='text-muted-foreground block text-xs'>{item.isCompleted ? 'Done, so this counts as booked' : 'Tick it off once it is booked'}</span>
                 </span>
                 <Button
                   type='button'
@@ -193,9 +206,11 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
                         <span className='block truncate text-sm font-medium'>{item.title}</span>
                         <span className='text-muted-foreground block text-xs'>
                           {CHECKLIST_CATEGORY_EMOJIS[item.category]}{' '}
-                          {item.completeByDayIndex === null
-                            ? 'No due day'
-                            : `Due ${getDayLabel(trip.startDate, item.completeByDayIndex, dayCount)}`}
+                          {item.isCompleted
+                            ? 'Done'
+                            : item.completeByDayIndex === null
+                              ? 'No due day'
+                              : `Due ${getDayLabel(trip.startDate, item.completeByDayIndex, dayCount)}`}
                         </span>
                       </span>
                     </label>
