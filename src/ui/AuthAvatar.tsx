@@ -68,6 +68,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
+            className='relative after:absolute after:-inset-2'
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />
@@ -200,7 +201,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
-            className='max-sm:hidden'
+            className='relative after:absolute after:-inset-2 max-sm:hidden'
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />

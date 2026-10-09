@@ -6,8 +6,8 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { qrcode } from 'vite-plugin-qrcode';
 
-// The whole site installs as one PWA (public/manifest-main.json) served by one
-// Workbox service worker at scope "/" (see src/main.tsx).
+// The whole site installs as one PWA, served by one Workbox service worker at
+// scope "/" (see src/main.tsx).
 // Registering a second, separate service worker for Firebase Cloud Messaging
 // would fight that one for control of the origin, so FCM's background
 // message handler is merged into the same worker via `workbox.importScripts`
