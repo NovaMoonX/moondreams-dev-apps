@@ -742,7 +742,8 @@ function EventFormModal({
 
   const getBookingPicks = () => {
     if (!canLinkBookings) {
-      return initialBookingIds.length > 0 ? { picked: [], initial: initialBookingIds } : undefined;
+      const wasTracked = event !== undefined && BOOKING_TRACKED_EVENT_TYPES.includes(event.eventType);
+      return wasTracked && initialBookingIds.length > 0 ? { picked: [], initial: initialBookingIds } : undefined;
     }
     return bookingItemIds !== null || initialBookingIds.length > 0
       ? { picked: bookingItemIds ?? [], initial: initialBookingIds }

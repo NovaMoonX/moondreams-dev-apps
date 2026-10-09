@@ -227,7 +227,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
           </div>
         ) : (
           linkedHere.length === 0 && (
-            <p className='text-muted-foreground text-sm'>Nothing open on your checklist yet. Add a to-do and it will be linked here.</p>
+            <p className='text-muted-foreground text-sm'>Nothing on your checklist is free to link yet. Add a to-do and it will be linked here.</p>
           )
         )}
       </div>
