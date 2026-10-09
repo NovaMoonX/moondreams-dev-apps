@@ -415,7 +415,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
-    setError(null);
     try {
       if (editingExpense) {
         await dispatch(
@@ -447,15 +446,6 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       }
       setEditingExpense(null);
       setIsModalOpen(false);
-    } catch (submitError) {
-      setError(
-        getErrorMessage(
-          submitError,
-          editingExpense
-            ? 'Unable to update this expense.'
-            : 'Unable to add this expense.',
-        ),
-      );
     } finally {
       setIsSubmitting(false);
     }
@@ -584,14 +574,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       return;
     }
     setIsSplitSubmitting(true);
-    setError(null);
     try {
       await dispatch(
         updateExpenseSplit({ expense: splittingExpense, ...values }),
       ).unwrap();
       setSplittingExpense(null);
-    } catch (splitError) {
-      setError(getErrorMessage(splitError, 'Unable to update this split.'));
     } finally {
       setIsSplitSubmitting(false);
     }

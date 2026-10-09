@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -52,7 +52,10 @@ export function PillOptions<T extends string>({
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const [isHidingRows, setIsHidingRows] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isFloatedRef = useRef(false);
+  const overflowLayoutRef = useRef('');
   const hasSearch = options.length > SEARCH_THRESHOLD;
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const filtered =
@@ -65,7 +68,18 @@ export function PillOptions<T extends string>({
       return;
     }
     const limit = COLLAPSED_ROWS_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const observer = new ResizeObserver(() => setIsOverflowing(content.offsetHeight > limit + 2));
+    // Floating the chosen pill to the front can make the row fit; that must not read as "no overflow", or the pill floats back and the row flickers.
+    const observer = new ResizeObserver(() => {
+      const layout = `${Math.round(content.offsetWidth)}:${content.firstElementChild?.childElementCount}`;
+      const overflows = content.offsetHeight > limit + 2;
+      setIsHidingRows(overflows);
+      if (overflows) {
+        overflowLayoutRef.current = layout;
+      } else if (isFloatedRef.current && overflowLayoutRef.current === layout) {
+        return;
+      }
+      setIsOverflowing(overflows);
+    });
     observer.observe(content);
     return () => observer.disconnect();
   }, []);
@@ -75,7 +89,10 @@ export function PillOptions<T extends string>({
     isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
       ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
       : filtered;
-  const showToggle = trimmedQuery === '' && (isOverflowing || isExpanded);
+  useLayoutEffect(() => {
+    isFloatedRef.current = visible.some((option, index) => option !== filtered[index]);
+  });
+  const showToggle = trimmedQuery === '' && (isHidingRows || isExpanded);
 
   return (
     <div className='space-y-2'>
@@ -84,7 +101,7 @@ export function PillOptions<T extends string>({
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
         </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isOverflowing && event.target.matches(':focus-visible') && setIsExpanded(true)}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isHidingRows && event.target.matches(':focus-visible') && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}
