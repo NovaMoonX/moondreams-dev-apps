@@ -24,7 +24,7 @@ export function useAListDebugEntries() {
 }
 
 export async function runServerCheck(uid: string) {
-  const { doc, getDocFromServer } = await import('firebase/firestore');
+  const { doc, getDocFromCache, getDocFromServer } = await import('firebase/firestore');
   const { auth, db } = await import('@/lib/firebase/config');
   const current = auth.currentUser;
   const token = await current?.getIdTokenResult().catch(() => null);
@@ -47,6 +47,10 @@ export async function runServerCheck(uid: string) {
     .then((response) => logAListDebug(`REST membership status=${response.status}`))
     .catch((error) => logAListDebug(`REST membership FAILED ${(error as Error).name}`));
 
+  await getDocFromCache(doc(db, 'apps', 'a-list', 'memberships', uid))
+    .then((snapshot) => logAListDebug(`cache get exists=${snapshot.exists()}`))
+    .catch((error) => logAListDebug(`cache get none (${(error as { code?: string }).code})`));
+
   const paths = [
     ['apps', 'a-list', 'memberships', uid],
     ['users', uid],
@@ -64,4 +68,14 @@ export async function runServerCheck(uid: string) {
       }
     }),
   );
+}
+
+export async function resetFirestoreCache() {
+  const { clearIndexedDbPersistence, terminate } = await import('firebase/firestore');
+  const { db } = await import('@/lib/firebase/config');
+  await terminate(db).catch(() => undefined);
+  await clearIndexedDbPersistence(db).catch((error) =>
+    logAListDebug(`clear cache ERROR ${(error as { code?: string }).code}`),
+  );
+  window.location.reload();
 }

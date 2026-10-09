@@ -5,7 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { db } from '@/lib/firebase/config';
 import { useAppSelector } from '@/store';
-import { runServerCheck, useAListDebugEntries } from '@apps/a-list/debug/aListDebug';
+import { resetFirestoreCache, runServerCheck, useAListDebugEntries } from '@apps/a-list/debug/aListDebug';
 
 interface DebugPanelProps {
   uid: string;
@@ -56,6 +56,15 @@ function DebugPanel({ uid, email }: DebugPanelProps) {
         onClick={() => runServerCheck(uid)}
       >
         Re-check server
+      </Button>
+      <Button
+        type='button'
+        size='sm'
+        variant='secondary'
+        className='ml-2'
+        onClick={() => resetFirestoreCache()}
+      >
+        Reset cache
       </Button>
       {isOpen && (
         <div className='bg-background text-foreground border-border mt-1 max-h-[45vh] overflow-y-auto rounded-lg border p-2 font-mono text-[10px] leading-tight break-all whitespace-pre-wrap'>
