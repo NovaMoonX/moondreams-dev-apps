@@ -178,7 +178,7 @@ function PurchaseReturnPrompt({
             disabled={isSaving}
             onClick={onLater}
           >
-            Not yet
+            Ask me later
           </Button>
           <Button
             type='button'
@@ -187,9 +187,13 @@ function PurchaseReturnPrompt({
             disabled={isSaving}
             onClick={onDidNotBuy}
           >
-            I didn't buy
+            I changed my mind
           </Button>
         </div>
+        <p className='text-muted-foreground text-center text-xs'>
+          Ask me later brings this back next time you come back to the app.
+          Changing your mind clears the plan and stops the questions.
+        </p>
       </div>
     </div>
   );

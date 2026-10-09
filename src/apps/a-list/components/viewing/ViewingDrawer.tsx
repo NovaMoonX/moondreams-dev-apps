@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -46,6 +46,36 @@ import {
   toPurchasePlan,
 } from '@apps/a-list/utils/purchase';
 import { formatCents } from '@apps/a-list/utils/money';
+
+interface ActionRowProps {
+  icon: ReactNode;
+  label: string;
+  subtitle?: string;
+  onClick: () => void;
+}
+
+function ActionRow({ icon, label, subtitle, onClick }: ActionRowProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='text-foreground! h-auto min-h-12 w-full justify-start gap-3 rounded-none py-2 text-left'
+      onClick={onClick}
+    >
+      <span className='w-5 shrink-0' aria-hidden='true'>
+        {icon}
+      </span>
+      <span className='min-w-0 text-left'>
+        <span className='block'>{label}</span>
+        {subtitle && (
+          <span className='text-muted-foreground block text-xs font-normal'>
+            {subtitle}
+          </span>
+        )}
+      </span>
+    </Button>
+  );
+}
 
 type DrawerView = 'details' | 'edit' | 'ticket' | 'seen' | 'buy';
 
@@ -200,11 +230,26 @@ export function ViewingPanel({
     closeOverlay();
   };
 
-  const getTicketRowLabel = () => {
-    if (ticket) return 'Edit ticket';
-    return viewing.purchase?.startedAt != null
-      ? 'Finish your ticket'
-      : 'Mark paid';
+  const getTicketRow = () => {
+    if (ticket)
+      return {
+        label: 'Ticket details',
+        subtitle: `${formatCents(ticket.totalCents)} total`,
+      };
+    if (viewing.purchase?.startedAt != null)
+      return {
+        label: 'Add the fee and tax',
+        subtitle: 'Finish the ticket you just bought',
+      };
+    if (canBuyTickets(viewing, now))
+      return {
+        label: 'I already have a ticket',
+        subtitle: 'Add what you paid',
+      };
+    return {
+      label: 'Add what you paid',
+      subtitle: 'Counts toward your savings',
+    };
   };
 
   const handleSaveTicket = (nextTicket: Ticket | null) =>
@@ -381,6 +426,7 @@ export function ViewingPanel({
             onPick={(option) => void handlePickShowtime(option)}
             onGoBuy={handleGoBuy}
             onChooseTheater={(chosen) => void handleChooseTheater(chosen)}
+            onEnterManually={() => setView('ticket')}
           />
         </div>
       );
@@ -390,7 +436,7 @@ export function ViewingPanel({
       return (
         <div className='space-y-4'>
           {backLink}
-          <p className='font-semibold'>Ticket</p>
+          <p className='font-semibold'>Ticket details</p>
           <TicketForm
             ticket={ticket}
             purchase={viewing.purchase ?? null}
@@ -419,41 +465,35 @@ export function ViewingPanel({
         {header}
         <div className='bg-muted/50 divide-border divide-y overflow-hidden rounded-2xl'>
           {viewing.status === 'PLANNED' && viewing.endsAt <= now && (
-            <Button
-              type='button'
-              variant='tertiary'
-              className='w-full justify-start gap-2 rounded-none'
+            <ActionRow
+              icon={<CircleCheck className='h-4 w-4' />}
+              label='Mark as seen'
+              subtitle='Rate it if you like'
               onClick={() => setView('seen')}
-            >
-              <CircleCheck className='h-4 w-4' /> Mark seen
-            </Button>
+            />
           )}
           {canBuyTickets(viewing, now) && (
-            <Button
-              type='button'
-              variant='tertiary'
-              className='w-full justify-start gap-2 rounded-none'
+            <ActionRow
+              icon={<ShoppingBag className='h-4 w-4' />}
+              label='Buy tickets'
+              subtitle='See showtimes and prices on AMC'
               onClick={() => setView('buy')}
-            >
-              <ShoppingBag className='h-4 w-4' /> Buy tickets
-            </Button>
+            />
           )}
-          <Button
-            type='button'
-            variant='tertiary'
-            className='w-full justify-start gap-2 rounded-none'
+          <ActionRow
+            icon={<TicketIcon className='h-4 w-4' />}
+            {...getTicketRow()}
             onClick={() => setView('ticket')}
-          >
-            <TicketIcon className='h-4 w-4' /> {getTicketRowLabel()}
-          </Button>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='w-full justify-start gap-2 rounded-none'
+          />
+          <ActionRow
+            icon={<Pencil className='h-4 w-4' />}
+            label={
+              viewing.status === 'SEEN'
+                ? 'Change details or rating'
+                : 'Change day, time or theater'
+            }
             onClick={() => setView('edit')}
-          >
-            <Pencil className='h-4 w-4' /> Edit
-          </Button>
+          />
         </div>
         <Button
           type='button'

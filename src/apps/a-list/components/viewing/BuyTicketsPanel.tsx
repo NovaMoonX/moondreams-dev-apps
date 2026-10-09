@@ -21,6 +21,8 @@ interface BuyTicketsPanelProps {
   onPick: (option: ShowtimeOption) => void;
   onGoBuy: () => void;
   onChooseTheater: (theatre: TheatreSnapshot) => void;
+  /** For a ticket bought somewhere AMC's list doesn't cover: the member enters what they paid by hand. */
+  onEnterManually: () => void;
 }
 
 /** Pick an AMC showing, then head to amctheatres.com to buy it, knowing which two numbers to look for. */
@@ -31,6 +33,7 @@ function BuyTicketsPanel({
   onPick,
   onGoBuy,
   onChooseTheater,
+  onEnterManually,
 }: BuyTicketsPanelProps) {
   const { theatre, purchase } = viewing;
   // Until they pick another day, the lookup follows the showing's own moment at the theater.
@@ -44,8 +47,27 @@ function BuyTicketsPanel({
     />
   );
 
+  const manualLink = (
+    <div className='flex justify-center'>
+      <Button
+        type='button'
+        variant='link'
+        size='sm'
+        className='h-10'
+        onClick={onEnterManually}
+      >
+        Already bought it somewhere else? Add what you paid
+      </Button>
+    </div>
+  );
+
   if (!theatre) {
-    return theaterPills;
+    return (
+      <div className='space-y-4'>
+        {theaterPills}
+        {manualLink}
+      </div>
+    );
   }
 
   return (
@@ -127,6 +149,7 @@ function BuyTicketsPanel({
           </Button>
         </div>
       )}
+      {manualLink}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import PurchaseReturnPrompt from '@apps/a-list/components/viewing/PurchaseReturn
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   recordTicket,
-  setPurchaseStarted,
+  updateViewing,
 } from '@apps/a-list/store/actions/viewingActions';
 import { selectPendingPurchaseReturns } from '@apps/a-list/store/selectors';
 import type { Ticket } from '@apps/a-list/types';
@@ -29,7 +29,7 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
   const { overlay } = useAListOverlay();
   const pending = useAppSelector(selectPendingPurchaseReturns);
   const now = useNow();
-  // "Not yet" lasts until the next time the app is opened, so it's plain component state.
+  // "Ask me later" lasts until the member next comes back to this tab or reopens the app, so it's plain component state.
   const [laterIds, setLaterIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [openedAt] = useState(() => Date.now());
@@ -38,6 +38,7 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
   useEffect(() => {
     const handleVisible = () => {
       if (document.visibilityState === 'visible') {
+        setLaterIds([]);
         setReturnedAt(Date.now());
       }
     };
@@ -84,10 +85,12 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
     runSave(
       () =>
         dispatch(
-          setPurchaseStarted({
+          updateViewing({
             uid: user.uid,
             id: current.id,
-            startedAt: null,
+            showtimeAt: current.showtimeAt,
+            runtimeMinutes: current.movie.runtimeMinutes,
+            purchase: null,
           }),
         ).unwrap(),
       'Unable to update this showing.',
