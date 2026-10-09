@@ -86,7 +86,12 @@ function BuyTicketsPanel({
       <ShowtimePicker
         theatre={theatre}
         dateKey={pickedDay ?? toLocalDateInputValue(viewing.showtimeAt)}
-        showingAt={pickedDay === null ? viewing.showtimeAt : null}
+        showingAt={
+          pickedDay === null ||
+          pickedDay === toLocalDateInputValue(viewing.showtimeAt)
+            ? viewing.showtimeAt
+            : null
+        }
         title={viewing.movie.title}
         now={now}
         selectedShowtimeId={purchase?.showtimeId ?? null}

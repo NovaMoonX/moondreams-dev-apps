@@ -691,7 +691,7 @@ flowchart LR
     C["Showing drawer · Buy tickets"] --> D["Pick a showtime"] --> E["Heads-up: the convenience fee and the tax"] --> F["Continue to AMC (new tab)"]
     F --> G["Back in the app: Did you get your tickets?"]
     G -->|"Add fee and tax"| H["Ticket saved, savings count"]
-    G -->|Ask me later| I["Asked again when the member next returns to the app or reopens it; the drawer says Add the fee and tax"]
+    G -->|Ask me later| I["Asked again when the member returns after 30+ seconds away or reopens the app; the drawer says Add the fee and tax"]
     G -->|"I changed my mind"| J["Plan cleared, asking stops"]
 ```
 

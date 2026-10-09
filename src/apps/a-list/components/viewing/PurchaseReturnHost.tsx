@@ -16,6 +16,8 @@ import { selectPendingPurchaseReturns } from '@apps/a-list/store/selectors';
 import type { Ticket } from '@apps/a-list/types';
 import { shouldAskAboutPurchase } from '@apps/a-list/utils/purchase';
 
+const LATER_RETURN_MS = 30_000;
+
 interface PurchaseReturnHostProps {
   /** True while a seen prompt is up, so the two questions never show together. */
   isSuppressed: boolean;
@@ -36,11 +38,17 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
   const [returnedAt, setReturnedAt] = useState(0);
 
   useEffect(() => {
+    let hiddenAt = 0;
     const handleVisible = () => {
-      if (document.visibilityState === 'visible') {
-        setLaterIds([]);
-        setReturnedAt(Date.now());
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
       }
+      // A quick glance at another tab isn't "coming back": the question waits for a real absence.
+      if (hiddenAt !== 0 && Date.now() - hiddenAt >= LATER_RETURN_MS) {
+        setLaterIds([]);
+      }
+      setReturnedAt(Date.now());
     };
     document.addEventListener('visibilitychange', handleVisible);
     return () =>
