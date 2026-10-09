@@ -22,3 +22,30 @@ function subscribe(listener: () => void) {
 export function useAListDebugEntries() {
   return useSyncExternalStore(subscribe, () => entries);
 }
+
+export async function runServerCheck(uid: string) {
+  const { doc, getDocFromServer } = await import('firebase/firestore');
+  const { auth, db } = await import('@/lib/firebase/config');
+  const current = auth.currentUser;
+  const token = await current?.getIdTokenResult().catch(() => null);
+  logAListDebug(
+    `auth uid=${current?.uid} provider=${token?.signInProvider} providers=${current?.providerData.map((p) => p.providerId).join(',')}`,
+  );
+
+  const paths = [
+    ['apps', 'a-list', 'memberships', uid],
+    ['users', uid],
+  ] as const;
+  await Promise.all(
+    paths.map(async (segments) => {
+      const [first, ...rest] = segments;
+      const path = segments.join('/');
+      try {
+        const snapshot = await getDocFromServer(doc(db, first, ...rest));
+        logAListDebug(`server get ${path} exists=${snapshot.exists()}`);
+      } catch (error) {
+        logAListDebug(`server get ${path} ERROR ${(error as { code?: string }).code}`);
+      }
+    }),
+  );
+}
