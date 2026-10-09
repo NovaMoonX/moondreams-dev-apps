@@ -20,8 +20,6 @@ import MembershipSettingsSubview from '@apps/a-list/components/dashboard/Members
 import PastMoviesOfferModal from '@apps/a-list/components/setup/PastMoviesOfferModal';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
 import BottomNav from '@apps/a-list/components/shell/BottomNav';
-import DebugPanel from '@apps/a-list/components/shell/DebugPanel';
-import { A_LIST_DEBUG_EMAIL } from '@apps/a-list/debug/aListDebug';
 import LoadingSkeleton from '@apps/a-list/components/shell/LoadingSkeleton';
 import SeenPromptHost from '@apps/a-list/components/viewing/SeenPromptHost';
 import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
@@ -47,20 +45,6 @@ function getYesterdayKey() {
 }
 
 function AList() {
-  const { user } = useAuth();
-  const showDebug = user?.email?.toLowerCase() === A_LIST_DEBUG_EMAIL;
-
-  return (
-    <>
-      <AListScreen />
-      {user && showDebug && (
-        <DebugPanel uid={user.uid} email={user.email} />
-      )}
-    </>
-  );
-}
-
-function AListScreen() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
