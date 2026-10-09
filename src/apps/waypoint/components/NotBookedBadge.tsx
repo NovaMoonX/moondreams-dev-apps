@@ -43,8 +43,13 @@ function NotBookedBadge({ getSubject, isStatic = false, variant = 'inline' }: No
     return null;
   }
 
-  const label = open > 0 ? `🎟️ ${open} to book` : '🎟️ No booking yet';
-  const accentClassName = open > 0 && 'border-accent!';
+  const label = (
+    <>
+      <span className='sm:hidden'>{open > 0 ? `🎟️ ${open} to book` : '🎟️ To book'}</span>
+      <span className='max-sm:hidden'>{open > 0 ? `🎟️ ${open} to book` : '🎟️ No booking yet'}</span>
+    </>
+  );
+  const accentClassName = open > 0 && 'bg-accent/15! text-foreground!';
 
   if (!canManageChecklist || isStatic) {
     return (

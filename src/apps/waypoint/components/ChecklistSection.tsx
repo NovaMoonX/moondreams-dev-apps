@@ -313,7 +313,7 @@ export default function ChecklistSection({
                             {getChecklistCategoryLabel(item)}
                           </p>
                           {getLinkedTitle(item) && (
-                            <p className='text-muted-foreground mt-0.5 truncate text-sm'>
+                            <p className='text-muted-foreground mt-0.5 line-clamp-2 text-sm'>
                               <Link2 className='mr-1 inline h-3.5 w-3.5 align-[-2px]' aria-hidden='true' />
                               For {getLinkedTitle(item)}
                             </p>

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import SearchInput from '@/components/SearchInput';
@@ -185,10 +186,15 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
             {available.length >= LIST_SEARCH_THRESHOLD && (
               <SearchInput value={query} onChange={setQuery} placeholder='Search your checklist' />
             )}
+            {picked.length > 0 && term && (
+              <p className='text-muted-foreground text-xs'>
+                {picked.length} selected, including any the search hides.
+              </p>
+            )}
             {visible.length === 0 ? (
               <p className='text-muted-foreground text-sm'>No to-do matches.</p>
             ) : (
-              <ul className='divide-border max-h-64 divide-y overflow-y-auto'>
+              <ul className={join('divide-border max-h-64 divide-y overflow-y-auto', term && 'min-h-64')}>
                 {visible.map((item) => (
                   <li key={item.id}>
                     <label className='flex min-h-12 cursor-pointer items-center gap-3 py-2'>

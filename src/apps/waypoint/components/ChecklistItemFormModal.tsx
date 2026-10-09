@@ -64,6 +64,8 @@ interface ChecklistItemFormModalProps {
   canShare?: boolean;
   /** Hides "Keep it private", for a to-do that has to stay linked to a plan the others see. */
   allowPrivate?: boolean;
+  /** Names the plan a new to-do is being linked to. */
+  forTitle?: string;
   prefill?: ChecklistPrefill;
   isSubmitting?: boolean;
   onSubmit: (values: ChecklistSubmitValues) => Promise<void> | void;
@@ -121,6 +123,7 @@ export default function ChecklistItemFormModal({
   isItemPrivate = false,
   canShare = true,
   allowPrivate = true,
+  forTitle,
   prefill,
   isSubmitting = false,
   onSubmit,
@@ -365,6 +368,11 @@ export default function ChecklistItemFormModal({
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Checklist item'>
+      {forTitle && (
+        <p className='text-muted-foreground mb-3 text-sm'>
+          For <span className='text-foreground font-medium'>{forTitle}</span>
+        </p>
+      )}
       <Form
         key={formKey}
         id='waypoint-checklist-item'

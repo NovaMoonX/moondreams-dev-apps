@@ -150,6 +150,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
         createChecklistItem({ tripId: trip.id, uid: currentUserId, ...values, linkedTo: subject.link }),
       ).unwrap();
       setAdded((current) => ({ ...current, checklist: current.checklist + 1 }));
+      addToast({ title: `Added ${values.title.trim()}, linked to ${subject.title}`, type: 'success' });
       backToMenu();
     } finally {
       setIsSubmitting(false);
@@ -349,6 +350,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
           currentUserId={currentUserId}
           prefill={checklistPrefill}
           allowPrivate={false}
+          forTitle={subject.title}
           memberOptions={memberOptions}
           isSubmitting={isSubmitting}
           onSubmit={handleChecklist}
