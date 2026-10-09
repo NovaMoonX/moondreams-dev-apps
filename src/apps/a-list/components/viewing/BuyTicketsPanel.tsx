@@ -1,4 +1,6 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useState } from 'react';
+
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { ExternalLink } from 'lucide-react';
 
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
@@ -31,6 +33,8 @@ function BuyTicketsPanel({
   onChooseTheater,
 }: BuyTicketsPanelProps) {
   const { theatre, purchase } = viewing;
+  // Until they pick another day, the lookup follows the showing's own moment at the theater.
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
 
   const theaterPills = (
     <TheaterPills
@@ -47,10 +51,20 @@ function BuyTicketsPanel({
   return (
     <div className='space-y-4'>
       {theaterPills}
+      <div className='space-y-2'>
+        <p className='font-medium'>📅 Which day?</p>
+        <Input
+          type='date'
+          aria-label='Day to look up showtimes for'
+          value={pickedDay ?? toLocalDateInputValue(viewing.showtimeAt)}
+          min={toLocalDateInputValue(now)}
+          onChange={(event) => setPickedDay(event.target.value || null)}
+        />
+      </div>
       <ShowtimePicker
         theatre={theatre}
-        dateKey={toLocalDateInputValue(viewing.showtimeAt)}
-        showingAt={viewing.showtimeAt}
+        dateKey={pickedDay ?? toLocalDateInputValue(viewing.showtimeAt)}
+        showingAt={pickedDay === null ? viewing.showtimeAt : null}
         title={viewing.movie.title}
         now={now}
         selectedShowtimeId={purchase?.showtimeId ?? null}
