@@ -156,6 +156,7 @@ export interface ExpensePrefill {
   title: string;
   dayIndex: number | null;
   category: ExpenseCategory | null;
+  prefersEstimate: boolean;
 }
 
 interface ExpenseFormModalProps {
@@ -219,7 +220,7 @@ function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefi
       newLabel: '',
     },
     price: {
-      mode: initialExpense?.amount === null ? 'range' : 'amount',
+      mode: initialExpense ? (initialExpense.amount === null ? 'range' : 'amount') : prefill?.prefersEstimate ? 'range' : 'amount',
       isPerPerson: initialExpense?.isPerPerson ?? false,
       amount: initialExpense?.amount === null ? '' : String(initialExpense?.amount ?? ''),
       min: String(initialExpense?.amountMin ?? ''),
@@ -274,6 +275,7 @@ function ExpenseFormModal({
   });
   const autoFill = useRef({ title: prefill?.title ?? '', category: prefill?.category ?? '', dayIndex: getDayValue(prefill?.dayIndex) });
   const hasChosenAudience = useRef(false);
+  const isModeAutoSet = useRef(Boolean(prefill?.prefersEstimate));
   const startsPrivate = !initialExpense && Boolean(onSubmitPersonal) && (!canShare || initialAudience === 'ME');
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
@@ -450,7 +452,10 @@ function ExpenseFormModal({
                     { value: 'range', label: 'Estimate', emoji: '🔮' },
                   ]}
                   value={value.mode}
-                  onChange={(next) => props.onValueChange({ ...value, mode: next })}
+                  onChange={(next) => {
+                    isModeAutoSet.current = false;
+                    props.onValueChange({ ...value, mode: next });
+                  }}
                 />
               )}
               {valueMode === 'amount' ? (
@@ -628,8 +633,14 @@ function ExpenseFormModal({
     const nextAudience = getAudienceFromAttendees(picked.attendeeIds, memberIds);
     const isAudienceUntouched = !hasChosenAudience.current && !isPrivate;
     const previous = autoFill.current;
-    setFormData((current) => ({
+    setFormData((current) => {
+      const isPriceUntouched = current.price.amount === '' && current.price.min === '' && current.price.max === '';
+      const canFollowItem = isPriceUntouched && !isPrivate && (current.price.mode === 'amount' || isModeAutoSet.current);
+      const nextMode = canFollowItem ? (picked.prefersEstimate ? 'range' : 'amount') : current.price.mode;
+      isModeAutoSet.current = canFollowItem ? picked.prefersEstimate : false;
+      return {
       ...current,
+      price: { ...current.price, mode: nextMode },
       title: current.title.trim() === '' || current.title === previous.title ? picked.title : current.title,
       dayIndex:
         current.dayIndex === previous.dayIndex || current.dayIndex === '' ? getDayValue(picked.dayIndex) : current.dayIndex,
@@ -637,7 +648,8 @@ function ExpenseFormModal({
         picked.expenseCategory && (current.category.choice === '' || current.category.choice === previous.category)
           ? { choice: picked.expenseCategory, newLabel: '' }
           : current.category,
-    }));
+      };
+    });
     autoFill.current = {
       title: picked.title,
       category: picked.expenseCategory ?? previous.category,
