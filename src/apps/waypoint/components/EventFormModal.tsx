@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -31,7 +31,7 @@ import type {
   PlaceSelectionResult,
 } from '@/lib/places/types';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
@@ -40,12 +40,14 @@ import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import DeleteEventChoices, { type LinkedItem } from '@apps/waypoint/components/DeleteEventChoices';
 import ItineraryPlacePicks from '@apps/waypoint/components/ItineraryPlacePicks';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
 import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
-import { BOOKING_TRACKED_EVENT_TYPES } from '@apps/waypoint/constants';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { TODO_TRACKED_EVENT_TYPES } from '@apps/waypoint/constants';
 import {
   ACTIVITY_SETTING_LABELS,
   DEFAULT_REMINDER_MINUTES_BEFORE,
@@ -104,6 +106,11 @@ export interface NextLegSeed {
   arrivalPlace: PlaceSelectionResult | null;
 }
 
+export interface DeleteLinked {
+  checklistItemIds: string[];
+  expenseIds: string[];
+}
+
 export interface SubmitOptions {
   addLeg: boolean;
   arrivalPlace?: PlaceSelectionResult | null;
@@ -152,7 +159,8 @@ interface EventFormModalProps {
   legFrom?: NextLegSeed;
   /** `addLeg` saves this event and reopens the form for the next leg, departing from `arrivalPlace`. */
   onSubmit: (event: EventFormValues, options?: SubmitOptions) => Promise<void> | void;
-  onDelete?: () => Promise<void> | void;
+  /** `linked` is what the person ticked to take along with the event. */
+  onDelete?: (linked: DeleteLinked) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -530,6 +538,7 @@ function EventFormModal({
   onClose,
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
+  const deleteChoiceRef = useRef({ todos: false, expenses: false });
   const queryClient = useQueryClient();
   const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
@@ -738,11 +747,11 @@ function EventFormModal({
   };
   const timeError = getTimeError();
 
-  const canLinkBookings = BOOKING_TRACKED_EVENT_TYPES.includes(draft.eventType) && bookingChoices.length > 0;
+  const canLinkBookings = TODO_TRACKED_EVENT_TYPES.includes(draft.eventType) && bookingChoices.length > 0;
 
   const getBookingPicks = () => {
     if (!canLinkBookings) {
-      const wasTracked = event !== undefined && BOOKING_TRACKED_EVENT_TYPES.includes(event.eventType);
+      const wasTracked = event !== undefined && TODO_TRACKED_EVENT_TYPES.includes(event.eventType);
       return wasTracked && initialBookingIds.length > 0 ? { picked: [], initial: initialBookingIds } : undefined;
     }
     return bookingItemIds !== null || initialBookingIds.length > 0
@@ -874,21 +883,63 @@ function EventFormModal({
     }
   };
 
+  /** What hangs off this event that the person is allowed to delete with it; read at the tap so it is never stale. */
+  const getLinkedToDelete = (): { todos: LinkedItem[]; expenses: LinkedItem[]; blockedExpenseCount: number } => {
+    if (!event) {
+      return { todos: [], expenses: [], blockedExpenseCount: 0 };
+    }
+    const { checklist, expenses } = store.getState().waypoint;
+    const link = { kind: 'EVENT' as const, id: event.id };
+    const canDeleteTodos = canEditExistingItem(trip, currentUserId);
+    const canDeleteExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+    const linkedExpenses = expenses.items.filter(
+      (expense) => expense.tripId === trip.id && expense.linkedTo?.kind === link.kind && expense.linkedTo.id === link.id,
+    );
+    const removableExpenses = canDeleteExpenses
+      ? linkedExpenses.filter((expense) => Object.keys(expense.earlyPayments ?? {}).length === 0)
+      : [];
+    return {
+      todos: canDeleteTodos
+        ? checklist.items.filter((item) => isLinkedTo(item, link, bookingEventIds)).map(({ id, title }) => ({ id, title }))
+        : [],
+      expenses: removableExpenses.map(({ id, title }) => ({ id, title })),
+      blockedExpenseCount: canDeleteExpenses ? linkedExpenses.length - removableExpenses.length : 0,
+    };
+  };
+
   const handleDelete = async () => {
     if (!onDelete) {
       return;
     }
 
+    const { todos, expenses, blockedExpenseCount } = getLinkedToDelete();
+    deleteChoiceRef.current = { todos: false, expenses: false };
     const confirmed = await confirm({
       title: 'Delete timeline event',
-      message: `Delete "${event?.title}"? This action cannot be undone.`,
+      message:
+        todos.length + expenses.length + blockedExpenseCount > 0 ? (
+          <DeleteEventChoices
+            eventTitle={event?.title ?? ''}
+            todos={todos}
+            expenses={expenses}
+            blockedExpenseCount={blockedExpenseCount}
+            onChange={(choice) => (deleteChoiceRef.current = choice)}
+          />
+        ) : (
+          `Delete "${event?.title}"? This action cannot be undone.`
+        ),
+      confirmText: 'Delete',
       destructive: true,
     });
     if (!confirmed) {
       return;
     }
 
-    await onDelete();
+    const { todos: deleteTodos, expenses: deleteExpenses } = deleteChoiceRef.current;
+    await onDelete({
+      checklistItemIds: deleteTodos ? todos.map((item) => item.id) : [],
+      expenseIds: deleteExpenses ? expenses.map((item) => item.id) : [],
+    });
   };
 
   const getReminderText = () => {
@@ -952,7 +1003,7 @@ function EventFormModal({
       isShown: !isPlaceEvent || draft.hasVenueHours,
     },
     { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: draft.isGrouped },
-    { key: 'bookings', label: 'Bookings', icon: <Ticket className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
+    { key: 'bookings', label: 'To-dos', icon: <Ticket className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
     {
       key: 'reminder',
       label: 'Reminder',
@@ -1548,7 +1599,7 @@ function EventFormModal({
           </RemovableField>
         )}
         {canLinkBookings && bookingItemIds !== null && (
-          <RemovableField label='Bookings' removeLabel='Remove bookings' onRemove={() => setBookingItemIds(null)}>
+          <RemovableField label='To-dos' removeLabel='Remove to-dos' onRemove={() => setBookingItemIds(null)}>
             <div className='space-y-2'>
               <MultiPillGroup
                 label='To-dos for this event'

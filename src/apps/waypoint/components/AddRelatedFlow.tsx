@@ -316,15 +316,17 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
               addedCount={added.expense}
               onClick={() => setStep('expense')}
             />
-            {(!subject.tracksBooking || alreadyHadBookings) && (
-              <FollowUpRow
-                emoji='🧳'
-                title='Add a checklist item'
-                description='Something to book, bring or do before it.'
-                addedCount={added.checklist}
-                onClick={() => setStep('checklist')}
-              />
-            )}
+            <FollowUpRow
+              emoji='🧳'
+              title='Add a checklist item'
+              description={
+                subject.tracksBooking && !alreadyHadBookings
+                  ? 'Something to bring or do, with people and a due day.'
+                  : 'Something to book, bring or do before it.'
+              }
+              addedCount={added.checklist}
+              onClick={() => setStep('checklist')}
+            />
           </div>
         </div>
       </DetailSheet>

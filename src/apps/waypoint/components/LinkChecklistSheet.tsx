@@ -114,7 +114,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
     <DetailSheet
       isOpen
       onClose={onClose}
-      title='Bookings'
+      title='To-dos'
       footer={
         <div className='flex flex-col gap-2'>
           {picked.length > 0 ? (
@@ -131,13 +131,14 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
               Add a new to-do
             </Button>
           ) : (
-            linkedHere.length === 0 && (
+            linkedHere.length === 0 &&
+            subject.tracksBooking && (
               <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={isBusy} onClick={() => void markNothingToBook()}>
                 Nothing to book
               </Button>
             )
           )}
-          {linkedHere.length === 0 && picked.length === 0 && (
+          {linkedHere.length === 0 && picked.length === 0 && subject.tracksBooking && (
             <p className='text-muted-foreground text-center text-xs'>
               <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from this event&apos;s details.
             </p>
