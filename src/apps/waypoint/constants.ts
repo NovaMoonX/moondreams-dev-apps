@@ -219,7 +219,7 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
 export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'];
 
 // Event types whose cost belongs on an expense: one without an attached expense reads "No expense yet".
-export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
 
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {

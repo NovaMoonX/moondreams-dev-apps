@@ -670,7 +670,7 @@ export function TimelineSection({
           isCustomized: attendingOnly,
         },
         {
-          label: 'Only activities with no expense yet',
+          label: 'Only activities and dining with no expense yet',
           checked: unpaidOnly,
           onChange: setUnpaidOnly,
           defaultChecked: false,
