@@ -1,7 +1,7 @@
 // Merged into the Workbox-generated service worker via `workbox.importScripts`
 // in vite.config.ts, rather than registered as its own separate service
-// worker — every mini-app's manifest (public/manifest-*.json) shares that one
-// worker at scope "/", and a second worker would fight it for control.
+// worker — the installed site shares that one worker at scope "/", and a
+// second worker would fight it for control.
 // An unreachable host must not throw here: the worker's setup, including skipWaiting, runs after this file, so a throw would leave an update stuck waiting.
 try {
   importScripts(

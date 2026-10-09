@@ -52,24 +52,9 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
-  // Only mini-apps have a manifest and their own tab icon; the hub and other pages carry neither, so they can't be installed.
+  // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
-    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-
-    if (!app) {
-      link?.remove();
-    } else {
-      const manifestPath = `/manifest-${app.id}.json`;
-      const manifestLink = link ?? document.createElement('link');
-      manifestLink.rel = 'manifest';
-      if (manifestLink.getAttribute('href') !== manifestPath) {
-        manifestLink.setAttribute('href', manifestPath);
-      }
-      if (!manifestLink.isConnected) {
-        document.head.appendChild(manifestLink);
-      }
-    }
 
     document
       .querySelectorAll<HTMLLinkElement>('link[rel="icon"]')

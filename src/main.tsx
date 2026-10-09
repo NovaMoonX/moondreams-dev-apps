@@ -8,10 +8,8 @@ import { installVersionPeek } from './lib/app/versionPeek';
 import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import './index.css';
 
-// Ensures a single Service Worker handles caching for the entire origin
-// while the browser uses the dynamically assigned manifest in Layout.tsx
-// to match the user's active sub-route (/app-a, /app-b) when triggering 
-// the "Add to Home Screen" prompt
+// Ensures a single Service Worker handles caching for the entire origin,
+// which installs as one app through manifest-main.json
 registerSW({ immediate: true });
 document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();
