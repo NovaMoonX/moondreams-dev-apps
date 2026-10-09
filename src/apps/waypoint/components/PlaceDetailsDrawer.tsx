@@ -54,7 +54,7 @@ export function PlaceDetailsDrawer({
     expenseTarget !== null &&
     canManageChecklist &&
     expenseTarget.getSubject().tracksBooking &&
-    !booking.isNoBooking &&
+    !(booking.isNoBooking && booking.open === 0) &&
     !(booking.total > 0 && booking.open === 0);
   const canNavigate = getMapNavigationUrl(location) !== null;
   const hasMoreActions = Boolean(onStack || onArchive || onSuggest || canLinkExpense || canLinkBooking);

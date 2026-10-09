@@ -107,8 +107,8 @@ export interface NextLegSeed {
 export interface SubmitOptions {
   addLeg: boolean;
   arrivalPlace?: PlaceSelectionResult | null;
-  /** Every shared to-do that should be linked to this event once it is saved; left out when the form never offered them. */
-  bookingItemIds?: string[];
+  /** The to-dos to link once the event is saved; left out when the form never offered them. */
+  bookings?: { picked: string[]; initial: string[] };
 }
 
 /** Known fields to open a new event already filled in (from an idea, a travel prompt or an imported
@@ -547,14 +547,16 @@ function EventFormModal({
         .sort((first, second) => Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS')),
     [checklistItems, event, bookingEventIds],
   );
-  const [bookingItemIds, setBookingItemIds] = useState<string[] | null>(() => {
-    const linked = event
+  const [initialBookingIds] = useState(() =>
+    event
       ? checklistItems
           .filter((item) => isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds))
           .map((item) => item.id)
-      : [];
-    return linked.length > 0 ? linked : null;
-  });
+      : [],
+  );
+  const [bookingItemIds, setBookingItemIds] = useState<string[] | null>(() =>
+    initialBookingIds.length > 0 ? initialBookingIds : null,
+  );
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
@@ -851,7 +853,7 @@ function EventFormModal({
         archivedBy: event?.archivedBy ?? null,
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
-      }, { addLeg, arrivalPlace, bookingItemIds: canLinkBookings ? (bookingItemIds ?? undefined) : undefined });
+      }, { addLeg, arrivalPlace, bookings: canLinkBookings && (bookingItemIds !== null || initialBookingIds.length > 0) ? { picked: bookingItemIds ?? [], initial: initialBookingIds } : undefined });
       setError(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));
@@ -946,7 +948,7 @@ function EventFormModal({
   ].filter((chip) => !chip.isShown);
 
   const revealDetail = (key: string) =>
-    key === 'bookings' ? setBookingItemIds([]) : updateDraft(
+    key === 'bookings' ? setBookingItemIds(initialBookingIds) : updateDraft(
       {
         title: { hasTitle: true },
         link: { hasLink: true },

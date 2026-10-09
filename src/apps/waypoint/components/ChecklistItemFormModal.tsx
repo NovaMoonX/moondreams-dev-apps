@@ -62,6 +62,8 @@ interface ChecklistItemFormModalProps {
   isItemPrivate?: boolean;
   /** A Commenter can only keep private tasks, so the audience question is skipped. */
   canShare?: boolean;
+  /** Hides "Keep it private", for a to-do that has to stay linked to a plan the others see. */
+  allowPrivate?: boolean;
   prefill?: ChecklistPrefill;
   isSubmitting?: boolean;
   onSubmit: (values: ChecklistSubmitValues) => Promise<void> | void;
@@ -118,6 +120,7 @@ export default function ChecklistItemFormModal({
   item = null,
   isItemPrivate = false,
   canShare = true,
+  allowPrivate = true,
   prefill,
   isSubmitting = false,
   onSubmit,
@@ -213,7 +216,7 @@ export default function ChecklistItemFormModal({
                 />
               </>
             ) : null}
-            {isAudienceAsked && audience === 'me' && !item && (
+            {isAudienceAsked && allowPrivate && audience === 'me' && !item && (
               <label className='flex items-start gap-3 text-sm'>
                 <AppToggle size='sm' checked={keepPrivate} onCheckedChange={setKeepPrivate} />
                 <span>
@@ -299,7 +302,7 @@ export default function ChecklistItemFormModal({
     }
 
     return nextFields;
-  }, [trip, formData.category, formData.dueDate.enabled, audience, keepPrivate, isAudienceAsked, canShare, item, memberOptions, showNoteField]);
+  }, [trip, formData.category, formData.dueDate.enabled, audience, keepPrivate, isAudienceAsked, allowPrivate, canShare, item, memberOptions, showNoteField]);
 
   const getAssignedUids = (data: ChecklistFormData) => {
     if (isPrivate) return [];

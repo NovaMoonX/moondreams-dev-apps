@@ -100,7 +100,7 @@ export interface BookingStatus {
   open: number;
 }
 
-/** Shared to-dos linked to each event, stay or rental (`getExpenseLinkKey`), and how many of them are still open. */
+/** Per plan: how many shared to-dos are linked to it and how many are still open. */
 export const selectBookingStatusByKey = createSelector(
   [(state: RootState) => state.waypoint.checklist.items],
   (items): ReadonlyMap<string, BookingStatus> =>

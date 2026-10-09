@@ -24,7 +24,7 @@ function NotBookedBadge({ getSubject, isStatic = false, variant = 'inline' }: No
     return null;
   }
 
-  if (isNoBooking) {
+  if (isNoBooking && open === 0) {
     return isStatic && canManageChecklist ? (
       <Button
         type='button'

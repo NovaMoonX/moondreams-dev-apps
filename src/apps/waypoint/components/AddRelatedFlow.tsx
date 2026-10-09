@@ -26,7 +26,8 @@ import { selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 import { getExpenseCategoryKeys } from '@apps/waypoint/utils/expenseCategories';
-import { BOOKING_VERBS, getBookingDueDay } from '@apps/waypoint/utils/bookingItems';
+import { BOOKING_VERBS } from '@apps/waypoint/constants';
+import { getBookingDueDay } from '@apps/waypoint/utils/bookingItems';
 import { getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
@@ -154,13 +155,13 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
     }
   };
 
-  const saveBookingAnswer = async (needsNone: boolean) => {
+  const saveBookingAnswer = async (needsNone: boolean, nextAnswer: 'yes' | 'none' | null = needsNone ? 'none' : null) => {
     setIsSubmitting(true);
     try {
       await dispatch(
         setPlanNeedsNoBooking({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone }),
       ).unwrap();
-      setBookingAnswer(needsNone ? 'none' : null);
+      setBookingAnswer(nextAnswer);
     } catch (answerError) {
       addToast({
         title: 'Unable to save that',
@@ -234,12 +235,19 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
                 </div>
               </div>
               <PillRow label='Does anything need booking ahead?'>
-                <Pill isSelected={bookingAnswer === 'yes'} onClick={() => setBookingAnswer(bookingAnswer === 'yes' ? null : 'yes')}>
+                <Pill
+                  isSelected={bookingAnswer === 'yes'}
+                  onClick={() =>
+                    bookingAnswer === 'none'
+                      ? void saveBookingAnswer(false, 'yes')
+                      : setBookingAnswer(bookingAnswer === 'yes' ? null : 'yes')
+                  }
+                >
                   Yes, something
                 </Pill>
                 <Pill
                   isSelected={bookingAnswer === 'none'}
-                  className={bookedTitles.length > 0 ? 'pointer-events-none opacity-50' : undefined}
+                  isDisabled={bookedTitles.length > 0 || isSubmitting}
                   onClick={() => void saveBookingAnswer(bookingAnswer !== 'none')}
                 >
                   Nope, all set
@@ -339,6 +347,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
           trip={trip}
           currentUserId={currentUserId}
           prefill={checklistPrefill}
+          allowPrivate={false}
           memberOptions={memberOptions}
           isSubmitting={isSubmitting}
           onSubmit={handleChecklist}

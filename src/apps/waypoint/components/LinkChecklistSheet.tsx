@@ -82,7 +82,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
 
   const unlink = (item: ChecklistItem) =>
     run(
-      () => dispatch(unlinkChecklistItems({ tripId: trip.id, itemIds: [item.id] })).unwrap(),
+      () => dispatch(unlinkChecklistItems({ tripId: trip.id, itemIds: [item.id], link: subject.link })).unwrap(),
       'Unable to unlink that',
       { title: `Unlinked ${item.title} from ${subject.title}` },
     );

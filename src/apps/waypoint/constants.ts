@@ -8,6 +8,7 @@ import type {
   EventLinkKind,
   EventType,
   ExpenseCategory,
+  ExpenseLinkKind,
   ExpenseSortBy,
   ExpenseTotalsView,
   IdeaType,
@@ -223,6 +224,14 @@ export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'D
 
 // Event types that can need something booked ahead: one with no to-do for it reads "No booking yet".
 export const BOOKING_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+
+export const BOOKING_VERBS = [
+  { label: 'Book', prefix: 'Book' },
+  { label: 'Reserve', prefix: 'Reserve' },
+  { label: 'Buy tickets', prefix: 'Buy tickets for' },
+] as const;
+
+export const PLAN_COLLECTIONS: Record<ExpenseLinkKind, string> = { EVENT: 'events', STAY: 'stays', RENTAL: 'rentals' };
 
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {

@@ -23,8 +23,7 @@ import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
-import { linkChecklistItems, unlinkChecklistItems } from '@apps/waypoint/store/actions/checklistActions';
-import { isLinkedTo } from '@apps/waypoint/utils/bookingItems';
+import { useSyncBookings } from '@apps/waypoint/hooks/useSyncBookings';
 import { getEventSubject, getExpenseLinkKey, isWorthFollowUp } from '@apps/waypoint/utils/relatedSubjects';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
@@ -57,7 +56,7 @@ import {
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { store, useAppDispatch, useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
@@ -122,6 +121,7 @@ export function TimelineSection({
 }: TimelineSectionProps) {
   const dispatch = useAppDispatch();
   const { startFollowUp } = useRelatedFlow();
+  const syncBookings = useSyncBookings(trip.id);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -563,35 +563,6 @@ export function TimelineSection({
   const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
   const [legCount, setLegCount] = useState(0);
 
-  /** Makes the event's linked to-dos exactly the picked ones: links what is new and unlinks what was unpicked. */
-  const syncBookings = async (eventId: string, pickedIds: string[] | undefined) => {
-    if (pickedIds === undefined) {
-      return;
-    }
-    const link = { kind: 'EVENT' as const, id: eventId };
-    const eventIds = new Set(events.map((other) => other.id).concat(eventId));
-    const linkedIds = store
-      .getState()
-      .waypoint.checklist.items.filter((item) => isLinkedTo(item, link, eventIds))
-      .map((item) => item.id);
-    const toLink = pickedIds.filter((itemId) => !linkedIds.includes(itemId));
-    const toUnlink = linkedIds.filter((itemId) => !pickedIds.includes(itemId));
-    try {
-      if (toLink.length > 0) {
-        await dispatch(linkChecklistItems({ tripId: trip.id, itemIds: toLink, link })).unwrap();
-      }
-      if (toUnlink.length > 0) {
-        await dispatch(unlinkChecklistItems({ tripId: trip.id, itemIds: toUnlink })).unwrap();
-      }
-    } catch (linkError) {
-      addToast({
-        title: 'Saved, but the to-dos were not linked',
-        description: getErrorMessage(linkError, 'Open the event to try again.'),
-        type: 'error',
-      });
-    }
-  };
-
   const handleSubmit = async (event: EventFormValues, options?: SubmitOptions) => {
     setIsSubmitting(true);
     try {
@@ -605,12 +576,12 @@ export function TimelineSection({
             previousEvent: editingEvent,
           }),
         ).unwrap();
-        await syncBookings(editingEvent.id, options?.bookingItemIds);
+        await syncBookings(editingEvent.id, options?.bookings);
       } else {
         const created = await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
-        await syncBookings(created.id, options?.bookingItemIds);
+        const hasBookings = await syncBookings(created.id, options?.bookings);
         if (!options?.addLeg && isWorthFollowUp(created)) {
-          startFollowUp(getEventSubject(trip, created), { hasBookings: (options?.bookingItemIds?.length ?? 0) > 0 });
+          startFollowUp(getEventSubject(trip, created), { hasBookings });
         }
       }
       setEditingEvent(undefined);

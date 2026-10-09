@@ -3093,9 +3093,10 @@ service cloud.firestore {
       function isPersonalChecklistValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'title', 'category', 'customCategoryLabel', 'note', 'completeByDayIndex',
-            'assignedToUids', 'isCompleted', 'markedCompletedByUid', 'markedCompletedAt',
+            'assignedToUids', 'isCompleted', 'markedCompletedByUid', 'markedCompletedAt', 'linkedTo',
             'createdBy', 'createdAt', 'lastEditedAt'
           ])
+          && data.get('linkedTo', null) == null
           && data.id == itemId
           && isNonEmptyString(data.tripId)
           && isNonEmptyString(data.title)

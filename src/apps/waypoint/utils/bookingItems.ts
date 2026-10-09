@@ -1,6 +1,6 @@
 import type { ChecklistItem, ExpenseLink } from '@apps/waypoint/types';
 
-/** Events are the only plans that can be deleted out from under a link; one that is gone reads as no link. */
+/** A to-do linked to an event that no longer exists reads as unlinked. Only events are linked from the app today. */
 export function getLiveLink(item: ChecklistItem, eventIds: ReadonlySet<string>): ExpenseLink | null {
   const link = item.linkedTo ?? null;
   return link && (link.kind !== 'EVENT' || eventIds.has(link.id)) ? link : null;
@@ -15,9 +15,3 @@ export function isLinkedTo(item: ChecklistItem, link: ExpenseLink, eventIds: Rea
 export function getBookingDueDay(planDayIndex: number | null): number | null {
   return planDayIndex === null ? null : planDayIndex > 0 ? planDayIndex - 1 : planDayIndex;
 }
-
-export const BOOKING_VERBS = [
-  { label: 'Book', prefix: 'Book' },
-  { label: 'Reserve', prefix: 'Reserve' },
-  { label: 'Buy tickets', prefix: 'Buy tickets for' },
-] as const;

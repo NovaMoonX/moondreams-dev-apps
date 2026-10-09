@@ -6,9 +6,9 @@ import type {
   ChecklistCategory,
   ChecklistItem,
   ExpenseLink,
-  ExpenseLinkKind,
   TripSpace,
 } from '@apps/waypoint/types';
+import { PLAN_COLLECTIONS } from '@apps/waypoint/constants';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 
 const CHECKLIST_COLLECTION = (tripId: string) =>
@@ -202,8 +202,6 @@ export const toggleChecklistItem = createAsyncThunk<
   },
 );
 
-const PLAN_COLLECTIONS: Record<ExpenseLinkKind, string> = { EVENT: 'events', STAY: 'stays', RENTAL: 'rentals' };
-
 interface LinkChecklistItemsInput {
   tripId: string;
   itemIds: string[];
@@ -239,12 +237,59 @@ export const linkChecklistItems = createAsyncThunk<void, LinkChecklistItemsInput
   },
 );
 
-export const unlinkChecklistItems = createAsyncThunk<void, { tripId: string; itemIds: string[] }>(
+/** Unlinks only the to-dos still linked to this plan, so a link someone just moved elsewhere is left alone. */
+export const unlinkChecklistItems = createAsyncThunk<void, { tripId: string; itemIds: string[]; link: ExpenseLink }>(
   'waypoint/checklist/unlink',
-  async ({ tripId, itemIds }) => {
-    const lastEditedAt = Date.now();
-    await Promise.all(
-      itemIds.map((itemId) => updateDoc(doc(CHECKLIST_COLLECTION(tripId), itemId), { linkedTo: null, lastEditedAt })),
+  async ({ tripId, itemIds, link }) => {
+    await runTransaction(db, async (transaction) => {
+      const itemRefs = itemIds.map((itemId) => doc(CHECKLIST_COLLECTION(tripId), itemId));
+      const snapshots = await Promise.all(itemRefs.map((itemRef) => transaction.get(itemRef)));
+      const lastEditedAt = Date.now();
+      snapshots.forEach((snapshot, index) => {
+        const current = snapshot.exists() ? ((snapshot.data() as Partial<ChecklistItem>).linkedTo ?? null) : null;
+        if (current && current.kind === link.kind && current.id === link.id) {
+          transaction.update(itemRefs[index], { linkedTo: null, lastEditedAt });
+        }
+      });
+    });
+  },
+);
+
+interface SyncEventBookingsInput {
+  tripId: string;
+  eventId: string;
+  /** Every to-do that should end up linked to the event. */
+  picked: string[];
+  /** The ones that were linked when the form opened; only these can be unlinked, so a link added meanwhile survives. */
+  initial: string[];
+}
+
+/** Makes an event's linked to-dos the picked ones. Link and unlink are tried separately; `message` is set when either failed. */
+export const syncEventBookings = createAsyncThunk<{ linked: boolean; message: string | null }, SyncEventBookingsInput>(
+  'waypoint/checklist/syncBookings',
+  async ({ tripId, eventId, picked, initial }, { dispatch }) => {
+    const link: ExpenseLink = { kind: 'EVENT', id: eventId };
+    const toLink = picked.filter((itemId) => !initial.includes(itemId));
+    const toUnlink = initial.filter((itemId) => !picked.includes(itemId));
+    const attempt = async (action: () => Promise<unknown>, shouldRun: boolean) => {
+      if (!shouldRun) {
+        return null;
+      }
+      try {
+        await action();
+        return null;
+      } catch (error) {
+        return error instanceof Error ? error.message : 'Please try again.';
+      }
+    };
+    const linkMessage = await attempt(
+      () => dispatch(linkChecklistItems({ tripId, itemIds: toLink, link })).unwrap(),
+      toLink.length > 0,
     );
+    const unlinkMessage = await attempt(
+      () => dispatch(unlinkChecklistItems({ tripId, itemIds: toUnlink, link })).unwrap(),
+      toUnlink.length > 0,
+    );
+    return { linked: picked.length > 0 && linkMessage === null, message: linkMessage ?? unlinkMessage };
   },
 );

@@ -10,11 +10,12 @@ interface PillProps {
   emoji?: string;
   /** A filter or view switch: as tall as its text instead of a 40px tap target, with the hit area kept by a pseudo-element. */
   isThin?: boolean;
+  isDisabled?: boolean;
   className?: string;
 }
 
 /** A rounded option that is either on or off: a filter, or one choice among a few. */
-function Pill({ children, isSelected, onClick, emoji, isThin = false, className }: PillProps) {
+function Pill({ children, isSelected, onClick, emoji, isThin = false, isDisabled = false, className }: PillProps) {
   return (
     <Button
       type='button'
@@ -23,6 +24,7 @@ function Pill({ children, isSelected, onClick, emoji, isThin = false, className 
       variant={isSelected ? 'primary' : 'secondary'}
       aria-pressed={isSelected}
       data-pill=''
+      disabled={isDisabled}
       onClick={onClick}
       className={join(
         'max-w-full shrink-0 gap-1.5 whitespace-nowrap !transition-none',
