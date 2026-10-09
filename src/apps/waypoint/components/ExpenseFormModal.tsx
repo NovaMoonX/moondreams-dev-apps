@@ -633,12 +633,11 @@ function ExpenseFormModal({
     const nextAudience = getAudienceFromAttendees(picked.attendeeIds, memberIds);
     const isAudienceUntouched = !hasChosenAudience.current && !isPrivate;
     const previous = autoFill.current;
-    setFormData((current) => {
-      const isPriceUntouched = current.price.amount === '' && current.price.min === '' && current.price.max === '';
-      const canFollowItem = isPriceUntouched && !isPrivate && (current.price.mode === 'amount' || isModeAutoSet.current);
-      const nextMode = canFollowItem ? (picked.prefersEstimate ? 'range' : 'amount') : current.price.mode;
-      isModeAutoSet.current = canFollowItem ? picked.prefersEstimate : false;
-      return {
+    const isPriceUntouched = price.amount === '' && price.min === '' && price.max === '';
+    const canFollowItem = isPriceUntouched && !isPrivate && (price.mode === 'amount' || isModeAutoSet.current);
+    const nextMode = canFollowItem ? (picked.prefersEstimate ? 'range' : 'amount') : price.mode;
+    isModeAutoSet.current = canFollowItem && picked.prefersEstimate;
+    setFormData((current) => ({
       ...current,
       price: { ...current.price, mode: nextMode },
       title: current.title.trim() === '' || current.title === previous.title ? picked.title : current.title,
@@ -648,8 +647,7 @@ function ExpenseFormModal({
         picked.expenseCategory && (current.category.choice === '' || current.category.choice === previous.category)
           ? { choice: picked.expenseCategory, newLabel: '' }
           : current.category,
-      };
-    });
+    }));
     autoFill.current = {
       title: picked.title,
       category: picked.expenseCategory ?? previous.category,
