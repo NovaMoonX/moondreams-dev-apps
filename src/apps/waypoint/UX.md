@@ -423,7 +423,8 @@ flowchart LR
     Q -->|Something else| T[Title and category]
     S --> W[Who's this for? Everyone / Pick people / Just me]
     T --> W
-    W -->|Just me| P[Same form, private, saved to Just for me]
+    A --> J[Just for me: Add] --> Q2[What's this expense for? Itinerary item or Something else] --> P[Private form, no Who's this for?, filled in from the pick, saved to Just for me]
+    W -->|Just me| P
     W --> C[How much is it? amount with Total / Per person, then optional chips: Trip day, Group, Note]
     C --> Y[Add, or Add and mark paid — Everyone means current members, split evenly]
     Y --> D[Later: Mark paid, with a pill row for who paid]

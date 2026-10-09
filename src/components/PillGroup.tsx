@@ -36,7 +36,7 @@ interface PillOptionsProps<T extends string> {
   isThin?: boolean;
   /** One answer: picking collapses the list, clears its search and floats the chosen option to the front. */
   isSingle?: boolean;
-  /** Every option stays visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. */
+  /** A short list keeps every option visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. Past the search threshold it collapses like any other. */
   showAll?: boolean;
 }
 
@@ -50,8 +50,9 @@ export function PillOptions<T extends string>({
   selectedCount = 0,
   isThin = false,
   isSingle = false,
-  showAll = false,
+  showAll: wantsAll = false,
 }: PillOptionsProps<T>) {
+  const showAll = wantsAll && options.length <= SEARCH_THRESHOLD;
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
