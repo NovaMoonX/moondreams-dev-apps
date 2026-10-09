@@ -32,18 +32,21 @@ function BuyTicketsPanel({
 }: BuyTicketsPanelProps) {
   const { theatre, purchase } = viewing;
 
+  const theaterPills = (
+    <TheaterPills
+      label='📍 Which theater?'
+      value={theatre}
+      onChange={(chosen) => chosen && onChooseTheater(chosen)}
+    />
+  );
+
   if (!theatre) {
-    return (
-      <TheaterPills
-        label='📍 Which theater?'
-        value={null}
-        onChange={(chosen) => chosen && onChooseTheater(chosen)}
-      />
-    );
+    return theaterPills;
   }
 
   return (
     <div className='space-y-4'>
+      {theaterPills}
       <ShowtimePicker
         theatre={theatre}
         dateKey={toLocalDateInputValue(viewing.showtimeAt)}

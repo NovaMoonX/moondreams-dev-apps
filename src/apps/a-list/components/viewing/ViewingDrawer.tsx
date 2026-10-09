@@ -161,6 +161,10 @@ export function ViewingPanel({
           showtimeAt: viewing.showtimeAt,
           runtimeMinutes: viewing.movie.runtimeMinutes,
           theatre: chosen,
+          // A plan names a showtime at the old theater, so it goes when the theater changes.
+          ...(viewing.theatre?.theatreId === chosen.theatreId
+            ? {}
+            : { purchase: null }),
         }),
       ).unwrap();
     } catch (chooseError) {
