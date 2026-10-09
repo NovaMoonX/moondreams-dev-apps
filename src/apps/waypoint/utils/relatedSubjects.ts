@@ -18,6 +18,8 @@ export interface RelatedSubject {
   dayIndex: number | null;
   time: string | null;
   expenseCategory: ExpenseCategory | null;
+  /** A meal's bill is rarely known up front, so its expense starts as an estimate. */
+  prefersEstimate: boolean;
   /** Who the plan is for, so its expense starts split between them; `null` means everyone. */
   attendeeIds: string[] | null;
   checklistCategory: ChecklistCategory;
@@ -46,6 +48,7 @@ export function getEventSubject(trip: TripSpace, event: TimelineEvent): RelatedS
     dayIndex,
     time: startTime,
     expenseCategory: EVENT_EXPENSE_CATEGORIES[event.eventType],
+    prefersEstimate: event.eventType === 'DINING',
     attendeeIds: event.attendeeTargetType === 'SPECIFIC_MEMBERS' ? event.assignedMemberIds : null,
     checklistCategory: event.eventType === 'TRAVEL' ? 'DOCUMENTS' : 'BOOKINGS',
   };
@@ -59,6 +62,7 @@ export function getStaySubject(trip: TripSpace, stay: Stay): RelatedSubject {
     dayIndex: getStayTime(trip, stay).checkIn.dayIndex,
     time: getStayTime(trip, stay).checkIn.time,
     expenseCategory: 'LODGING',
+    prefersEstimate: false,
     attendeeIds: null,
     checklistCategory: 'BOOKINGS',
   };
@@ -72,6 +76,7 @@ export function getRentalSubject(rental: Rental): RelatedSubject {
     dayIndex: rental.pickupDayIndex,
     time: rental.pickupTime,
     expenseCategory: 'TRANSPORT',
+    prefersEstimate: false,
     attendeeIds: null,
     checklistCategory: 'BOOKINGS',
   };

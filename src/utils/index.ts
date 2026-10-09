@@ -10,6 +10,7 @@ export * from './formFactoryHelpers';
 export * from './idUtils';
 export * from './inviteCodeUtils';
 export * from './mapUrlUtils';
+export * from './pwaUtils';
 export * from './stringUtils';
 export * from './timezoneUtils';
 export * from './urlUtils';

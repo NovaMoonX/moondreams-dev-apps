@@ -3,13 +3,14 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { APP_REGISTRY_PATH_MAP, SITE_VERSION } from '@/lib/app';
+import { getRegistryAppForPath, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
 import { useHideOnScroll } from '@hooks/useHideOnScroll';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
+import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
@@ -51,35 +52,23 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
-  // Sync the manifest file based on the current location
+  // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
   useEffect(() => {
-    let manifestPath = '/manifest-main.json';
-    let appName = 'Moondreams Dev Apps';
+    const app = getRegistryAppForPath(location.pathname);
 
-    const appRegistry = APP_REGISTRY_PATH_MAP[location.pathname] || null;
-    if (appRegistry) {
-      manifestPath = `/manifest-${appRegistry.id}.json`;
-      appName = `${appRegistry.name} - Moondreams Dev Apps`;
-    }
+    document
+      .querySelectorAll<HTMLLinkElement>('link[rel="icon"]')
+      .forEach((icon) => {
+        icon.dataset.defaultHref ??= icon.getAttribute('href') ?? '';
+        icon.setAttribute(
+          'href',
+          app ? `/logos/by-app/logo-${app.id}.svg` : icon.dataset.defaultHref,
+        );
+      });
 
-    // Update the manifest link in the document head
-    let link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'manifest';
-      document.head.appendChild(link);
-    }
-
-    // Only update if changed to avoid unnecessary DOM mutations
-    if (link.getAttribute('href') !== manifestPath) {
-      link.setAttribute('href', manifestPath);
-    }
-
-
-    // Update the document title based on the current app
     document.title = location.pathname.startsWith('/a-list/shared/')
       ? 'Movie calendar - A-List Tracker'
-      : appName;
+      : app ? `${app.name} - Moondreams Dev Apps` : 'Moondreams Dev Apps';
   }, [location.pathname]);
 
   return null;
@@ -87,7 +76,8 @@ function LocationSync() {
 
 function Layout() {
   const networkStatus = useNetworkStatus();
-  const isBannerVisible = networkStatus !== null;
+  const isUpdateReady = useUpdateReady();
+  const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
 
   useLayoutEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -36,6 +36,8 @@ interface PillOptionsProps<T extends string> {
   isThin?: boolean;
   /** One answer: picking collapses the list, clears its search and floats the chosen option to the front. */
   isSingle?: boolean;
+  /** A short list keeps every option visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. Past the search threshold it collapses like any other. */
+  showAll?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
@@ -48,16 +50,21 @@ export function PillOptions<T extends string>({
   selectedCount = 0,
   isThin = false,
   isSingle = false,
+  showAll: wantsAll = false,
 }: PillOptionsProps<T>) {
+  const showAll = wantsAll && options.length <= SEARCH_THRESHOLD;
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const [isHidingRows, setIsHidingRows] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isFloatedRef = useRef(false);
+  const overflowLayoutRef = useRef('');
   const hasSearch = options.length > SEARCH_THRESHOLD;
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const filtered =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
-  const isClamped = trimmedQuery === '' && !isExpanded;
+  const isClamped = !showAll && trimmedQuery === '' && !isExpanded;
 
   useEffect(() => {
     const content = contentRef.current;
@@ -65,17 +72,31 @@ export function PillOptions<T extends string>({
       return;
     }
     const limit = COLLAPSED_ROWS_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const observer = new ResizeObserver(() => setIsOverflowing(content.offsetHeight > limit + 2));
+    // Floating the chosen pill to the front can make the row fit; that must not read as "no overflow", or the pill floats back and the row flickers.
+    const observer = new ResizeObserver(() => {
+      const layout = `${Math.round(content.offsetWidth)}:${content.firstElementChild?.childElementCount}`;
+      const overflows = content.offsetHeight > limit + 2;
+      setIsHidingRows(overflows);
+      if (overflows) {
+        overflowLayoutRef.current = layout;
+      } else if (isFloatedRef.current && overflowLayoutRef.current === layout) {
+        return;
+      }
+      setIsOverflowing(overflows);
+    });
     observer.observe(content);
     return () => observer.disconnect();
   }, []);
 
   // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
   const visible =
-    isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
+    !showAll && isSingle && trimmedQuery === '' && !isExpanded && isOverflowing
       ? [...filtered.filter((option) => isSelected(option.value)), ...filtered.filter((option) => !isSelected(option.value))]
       : filtered;
-  const showToggle = trimmedQuery === '' && (isOverflowing || isExpanded);
+  useLayoutEffect(() => {
+    isFloatedRef.current = visible.some((option, index) => option !== filtered[index]);
+  });
+  const showToggle = !showAll && trimmedQuery === '' && (isHidingRows || isExpanded);
 
   return (
     <div className='space-y-2'>
@@ -84,7 +105,7 @@ export function PillOptions<T extends string>({
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
         </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isOverflowing && event.target.matches(':focus-visible') && setIsExpanded(true)}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isHidingRows && event.target.matches(':focus-visible') && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}

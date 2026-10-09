@@ -6,9 +6,30 @@ interface TheatreLike {
   state: string | null;
 }
 
+/** AMC writes cities in capitals; this is for theaters saved before they were tidied, so "SAINT LOUIS" reads "Saint Louis". */
+function toCityCase(city: string): string {
+  if (city !== city.toUpperCase()) {
+    return city;
+  }
+
+  const result = city
+    .toLowerCase()
+    .replace(
+      /(^|[\s\-'.(])([a-z])/g,
+      (_match, edge: string, letter: string) => edge + letter.toUpperCase(),
+    )
+    .replace(
+      /\bMc([a-z])/g,
+      (_match, letter: string) => `Mc${letter.toUpperCase()}`,
+    );
+  return result;
+}
+
 /** "Overland Park, KS", or whatever part is known. */
 export function formatTheatreLocation(theatre: TheatreLike): string {
-  const result = [theatre.city, theatre.state].filter(Boolean).join(', ');
+  const result = [theatre.city ? toCityCase(theatre.city) : null, theatre.state]
+    .filter(Boolean)
+    .join(', ');
   return result;
 }
 

@@ -3,7 +3,7 @@ import { Link, useLocation, useRouteError } from 'react-router-dom';
 
 import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
-import { APP_REGISTRY_PATH_MAP } from '../lib/app/app.registry';
+import { getRegistryAppForPath } from '../lib/app/app.registry';
 
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
@@ -24,7 +24,7 @@ function ErrorBoundary() {
     <div className='page flex items-center justify-center px-4 py-12'>
       <div className='w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-center shadow-sm'>
         <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-            {pathname === '/' ? 'Home' : APP_REGISTRY_PATH_MAP[pathname]?.name ?? 'Unknown'}
+            {pathname === '/' ? 'Home' : getRegistryAppForPath(pathname)?.name ?? 'Unknown'}
         </p>
         <h1 className='text-foreground mt-4 text-3xl font-semibold tracking-tight'>
           Uh oh, something went wrong.

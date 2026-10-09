@@ -47,16 +47,16 @@ function TheaterList({
                   size='sm'
                   variant='secondary'
                   rounded='full'
-                  className='mt-1.5 min-h-10'
+                  className='relative h-8 w-full whitespace-nowrap before:absolute before:inset-x-0 before:-inset-y-1 sm:w-auto'
                   disabled={isDisabled}
                   onClick={() => onLink(theatre)}
                 >
-                  🔗 Link to AMC
+                  🔗 Link to the AMC theater
                 </Button>
               ) : undefined
             }
             trailing={
-              <div className='flex shrink-0 items-center gap-1'>
+              <div className='flex items-center gap-1'>
                 <Button
                   type='button'
                   variant='tertiary'

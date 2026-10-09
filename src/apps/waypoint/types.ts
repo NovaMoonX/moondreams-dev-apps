@@ -5,6 +5,7 @@ export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
 export type ExpenseTargetType =
   | 'EVERYONE_CURRENT'
   | 'EVERYONE_INCLUDING_FUTURE'
+  /** @deprecated Only older expenses carry it (shared with just the payer); the split editor now saves it as `SPECIFIC_MEMBERS`. */
   | 'JUST_ME'
   | 'SPECIFIC_MEMBERS';
 export type ExpenseStatus = 'PAID' | 'EXPECTED';

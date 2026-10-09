@@ -25,7 +25,7 @@ import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips'
 import Pill from '@/components/Pill';
 import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
 import type { PersonalExpenseSubmitValues } from '@apps/waypoint/components/PersonalExpenseFormModal';
-import { getEarlyPayments } from '@apps/waypoint/utils/splitCalculators';
+import { getActiveSplitAmounts, getEarlyPayments, getSplitMemberIds } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { EVENT_TYPE_EMOJIS, MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import type {
@@ -52,27 +52,33 @@ const describePrice = ({
   amount,
   headcount,
   isPick,
+  customSplit,
 }: {
   isEach: boolean;
   amount: number | null;
   headcount: number;
   isPick: boolean;
+  customSplit: 'kept' | 'reset' | null;
 }) => {
   if (headcount <= 1) {
     return 'It is just one person, so that is the whole amount.';
   }
   const people = `${headcount} people`;
+  if (customSplit === 'kept') {
+    return `Shared by ${people} with amounts you set in Edit split.`;
+  }
+  const resetNote = customSplit === 'reset' ? ' Your custom split starts over as an even one.' : '';
   if (amount !== null) {
     return isEach
-      ? `Each of the ${people} pays ${usd.format(amount)}, so ${usd.format(amount * headcount)} in total.`
-      : `${usd.format(amount)} shared by ${people} is ${usd.format(amount / headcount)} each.`;
+      ? `Each of the ${people} pays ${usd.format(amount)}, so ${usd.format(amount * headcount)} in total.${resetNote}`
+      : `${usd.format(amount)} shared by ${people} is ${usd.format(amount / headcount)} each.${resetNote}`;
   }
   if (isEach) {
     return isPick
-      ? `Each of the ${people} you picked pays this much.`
-      : 'Everyone in the split pays this much, so the total grows with every person who joins.';
+      ? `Each of the ${people} you picked pays this much.${resetNote}`
+      : `Everyone in the split pays this much, so the total grows with every person who joins.${resetNote}`;
   }
-  return 'We work out each person’s share for you.';
+  return `We work out each person’s share for you.${resetNote}`;
 };
 
 type PlanGroup = 'TRAVEL' | 'ACTIVITY' | 'DINING' | 'STAY' | 'RENTAL' | 'OTHER';
@@ -150,6 +156,7 @@ export interface ExpensePrefill {
   title: string;
   dayIndex: number | null;
   category: ExpenseCategory | null;
+  prefersEstimate: boolean;
 }
 
 interface ExpenseFormModalProps {
@@ -194,6 +201,13 @@ function getAudienceFromAttendees(attendeeIds: string[] | null | undefined, trip
   return current.length === 0 ? { audience: 'EVERYONE', memberIds: [] } : { audience: 'PICK', memberIds: current };
 }
 
+function getAudienceFromExpense(expense: TripExpense, tripMemberIds: string[]): AudienceValue {
+  const isEveryone = expense.targetType === 'EVERYONE_CURRENT' || expense.targetType === 'EVERYONE_INCLUDING_FUTURE';
+  return isEveryone
+    ? { audience: 'EVERYONE', memberIds: [] }
+    : { audience: 'PICK', memberIds: getSplitMemberIds(expense, tripMemberIds).filter((uid) => tripMemberIds.includes(uid)) };
+}
+
 function getDayValue(dayIndex: number | null | undefined): string {
   return dayIndex === null || dayIndex === undefined ? '' : String(dayIndex);
 }
@@ -206,7 +220,7 @@ function getInitialFormData(initialExpense?: TripExpense, prefill?: ExpensePrefi
       newLabel: '',
     },
     price: {
-      mode: initialExpense?.amount === null ? 'range' : 'amount',
+      mode: initialExpense ? (initialExpense.amount === null ? 'range' : 'amount') : prefill?.prefersEstimate ? 'range' : 'amount',
       isPerPerson: initialExpense?.isPerPerson ?? false,
       amount: initialExpense?.amount === null ? '' : String(initialExpense?.amount ?? ''),
       min: String(initialExpense?.amountMin ?? ''),
@@ -251,13 +265,18 @@ function ExpenseFormModal({
   const [formData, setFormData] = useState<ExpenseFormData>(() => getInitialFormData(initialExpense, prefill));
   // The form reads its data once, so picking a plan remounts it with the filled-in values.
   const [formKey, setFormKey] = useState(0);
-  const [audienceValue, setAudienceValue] = useState<AudienceValue>(() =>
-    onSubmitPersonal && (!canShare || initialAudience === 'ME')
+  const [audienceValue, setAudienceValue] = useState<AudienceValue>(() => {
+    if (initialExpense) {
+      return getAudienceFromExpense(initialExpense, memberIds);
+    }
+    return onSubmitPersonal && (!canShare || initialAudience === 'ME')
       ? { audience: 'ME', memberIds: [] }
-      : getAudienceFromAttendees(prefill?.attendeeIds, memberIds),
-  );
+      : getAudienceFromAttendees(prefill?.attendeeIds, memberIds);
+  });
   const autoFill = useRef({ title: prefill?.title ?? '', category: prefill?.category ?? '', dayIndex: getDayValue(prefill?.dayIndex) });
   const hasChosenAudience = useRef(false);
+  const isModeAutoSet = useRef(Boolean(prefill?.prefersEstimate));
+  const startsPrivate = !initialExpense && Boolean(onSubmitPersonal) && (!canShare || initialAudience === 'ME');
   const [link, setLink] = useState<ExpenseLink | null>(initialExpense?.linkedTo ?? prefill?.link ?? null);
   const [showGroupField, setShowGroupField] = useState(Boolean(initialExpense?.groupLabel));
   const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense?.note));
@@ -287,17 +306,17 @@ function ExpenseFormModal({
     () =>
       linkables
         .map((subject) => ({ key: getExpenseLinkKey(subject.link), label: subject.title, group: getPlanGroup(subject.link, events) }))
-        .filter(({ key }) => key === linkKey || !expenseLinkKeys.has(key)),
-    [linkables, expenseLinkKeys, linkKey, events],
+        .filter(({ key }) => isPrivate || key === linkKey || !expenseLinkKeys.has(key)),
+    [linkables, expenseLinkKeys, linkKey, events, isPrivate],
   );
   const shownPlanPills = planPills
     .filter(({ group }) => planGroup === 'ALL' || group === planGroup)
     .map(({ key, label }) => ({ value: key, label }));
   const pickedSubject = allSubjects.find((subject) => getExpenseLinkKey(subject.link) === linkKey);
-  const linkedDay = !isEditing && !isPrivate && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
-  const asksAboutPlan =
-    !isEditing && !prefill && canShare && !isPrivate && planPills.length > 0 && !isPlanAnswered;
-  const isLinked = !isEditing && !isPrivate && Boolean(pickedSubject);
+  const linkedDay = !isEditing && pickedSubject?.dayIndex != null ? pickedSubject.dayIndex : null;
+  const canChoosePlan = !isEditing && !prefill && (startsPrivate || (canShare && !isPrivate));
+  const asksAboutPlan = canChoosePlan && planPills.length > 0 && !isPlanAnswered;
+  const isLinked = !isEditing && Boolean(pickedSubject);
   const storedDayIndex = initialExpense?.dayIndex ?? pickedSubject?.dayIndex ?? prefill?.dayIndex ?? null;
   const showLinkPicker = isEditing && linkables.length > 0;
   const dayOptions = useMemo(
@@ -329,6 +348,12 @@ function ExpenseFormModal({
     [existingGroupLabels],
   );
   const sharesPrice = !isPrivate && !(audience === 'PICK' && pickedIds.length <= 1);
+  const hasPriceChanged =
+    initialExpense !== undefined &&
+    ((mode === 'amount' ? parseAmount(price.amount) : null) !== initialExpense.amount ||
+      (sharesPrice && price.isPerPerson !== initialExpense.isPerPerson));
+  const hasCustomSplit = initialExpense !== undefined && getActiveSplitAmounts(initialExpense, memberIds) !== null;
+  const willResetSplit = hasPriceChanged && hasCustomSplit;
 
   const areTitleFieldsVisible = isEditing || !isLinked || showTitleFields || resolveChoice(formData.category) === null;
   const hasDayField = linkedDay === null && (showDayField || formData.dayIndex !== '');
@@ -386,6 +411,7 @@ function ExpenseFormModal({
                 options={categoryOptions}
                 newPillLabel='New category'
                 newPlaceholder='Souvenirs'
+                showAll
               />
             ),
           }),
@@ -426,7 +452,10 @@ function ExpenseFormModal({
                     { value: 'range', label: 'Estimate', emoji: '🔮' },
                   ]}
                   value={value.mode}
-                  onChange={(next) => props.onValueChange({ ...value, mode: next })}
+                  onChange={(next) => {
+                    isModeAutoSet.current = false;
+                    props.onValueChange({ ...value, mode: next });
+                  }}
                 />
               )}
               {valueMode === 'amount' ? (
@@ -477,6 +506,7 @@ function ExpenseFormModal({
                     amount: valueMode === 'amount' ? parseAmount(value.amount) : null,
                     headcount: audience === 'PICK' ? pickedIds.length : memberIds.length,
                     isPick: audience === 'PICK',
+                    customSplit: !hasCustomSplit ? null : willResetSplit ? 'reset' : 'kept',
                   })}
                 </p>
               )}
@@ -579,6 +609,8 @@ function ExpenseFormModal({
     memberIds.length,
     pickedIds.length,
     sharesPrice,
+    hasCustomSplit,
+    willResetSplit,
     showGroupField,
     showNoteField,
   ]);
@@ -599,10 +631,17 @@ function ExpenseFormModal({
       return;
     }
     const nextAudience = getAudienceFromAttendees(picked.attendeeIds, memberIds);
-    const isAudienceUntouched = !hasChosenAudience.current;
+    const isAudienceUntouched = !hasChosenAudience.current && !isPrivate;
     const previous = autoFill.current;
+    const isPriceUntouched = price.amount === '' && price.min === '' && price.max === '';
+    const canFollowItem = isPriceUntouched && !isPrivate && (price.mode === 'amount' || isModeAutoSet.current);
+    const nextMode = canFollowItem ? (picked.prefersEstimate ? 'range' : 'amount') : price.mode;
+    if (canFollowItem) {
+      isModeAutoSet.current = picked.prefersEstimate;
+    }
     setFormData((current) => ({
       ...current,
+      price: { ...current.price, mode: nextMode },
       title: current.title.trim() === '' || current.title === previous.title ? picked.title : current.title,
       dayIndex:
         current.dayIndex === previous.dayIndex || current.dayIndex === '' ? getDayValue(picked.dayIndex) : current.dayIndex,
@@ -672,7 +711,7 @@ function ExpenseFormModal({
         customCategoryLabel,
         note: showNoteField ? data.note.trim() || null : null,
         groupLabel: showGroupField ? resolveChoice(data.group) : null,
-        isPerPerson: sharesPrice ? data.price.isPerPerson : false,
+        isPerPerson: sharesPrice ? data.price.isPerPerson : (initialExpense?.isPerPerson ?? false),
         linkedTo: link,
         split: isEditing
           ? null
@@ -681,7 +720,7 @@ function ExpenseFormModal({
             : { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: pickedIds.filter((uid) => memberIds.includes(uid)) },
       });
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to save this expense.'));
+      setError(getErrorMessage(submitError, isEditing ? 'Unable to update this expense.' : 'Unable to add this expense.'));
     }
   };
 
@@ -745,7 +784,7 @@ function ExpenseFormModal({
           ))}
         </PillRow>
         <PillGroup
-          label='Without an expense yet'
+          label={isPrivate ? 'Your itinerary' : 'Without an expense yet'}
           options={shownPlanPills}
           value={linkKey || null}
           onChange={(key) => {
@@ -795,7 +834,9 @@ function ExpenseFormModal({
         <>
           {isLinked && pickedSubject && (
             <div className='bg-muted/50 mb-4 space-y-1 rounded-xl p-3'>
-              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Linked to</p>
+              <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+                {isPrivate ? 'Filled in from' : 'Linked to'}
+              </p>
               <p className='font-semibold'>{pickedSubject.title}</p>
               <p className='text-muted-foreground text-sm'>
                 {[
@@ -833,7 +874,7 @@ function ExpenseFormModal({
               </div>
             </div>
           )}
-          {!isEditing && !prefill && canShare && !isPrivate && !isLinked && planPills.length > 0 && (
+          {canChoosePlan && !isLinked && planPills.length > 0 && (
             <Button
               type='button'
               variant='link'
@@ -845,7 +886,7 @@ function ExpenseFormModal({
               Choose from your itinerary
             </Button>
           )}
-          {!isEditing && canShare && (
+          {!isEditing && canShare && !startsPrivate && (
             <div className='mb-4 space-y-2'>
               <Label>Who&apos;s this for?</Label>
               <PillGroup
@@ -856,6 +897,9 @@ function ExpenseFormModal({
                   hasChosenAudience.current = true;
                   setIsPlanAnswered(true);
                   setAudienceValue((current) => ({ ...current, audience: next }));
+                  if (next !== 'ME' && expenseLinkKeys.has(linkKey)) {
+                    setLink(null);
+                  }
                   if (next === 'ME' && price.mode === 'range' && price.amount.trim() === '') {
                     resetField({ price: { ...price, mode: 'amount', amount: price.max || price.min } });
                   }
@@ -880,7 +924,7 @@ function ExpenseFormModal({
               {isPrivate && <p className='text-muted-foreground text-xs'>{privateNote}</p>}
             </div>
           )}
-          {!isEditing && !canShare && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
+          {!isEditing && (!canShare || startsPrivate) && <p className='text-muted-foreground mb-4 text-sm'>{privateNote}</p>}
           {showLinkPicker && (
             <div className='mb-4 space-y-2'>
               {isLinkPickerOpen ? (
@@ -959,6 +1003,16 @@ function ExpenseFormModal({
                     <AddFieldChips heading='Add to this expense' chips={chips} onAdd={addChip} />
                   </div>
                 )}
+                {error && (
+                  <p
+                    key={error}
+                    role='alert'
+                    ref={(node) => node?.scrollIntoView({ block: 'center' })}
+                    className='text-destructive col-span-full mb-3 text-sm'
+                  >
+                    {error}
+                  </p>
+                )}
                 <ModalFooterActions
                   leftActions={
                     isEditing &&
@@ -978,7 +1032,6 @@ function ExpenseFormModal({
               </div>
             }
           />
-          {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
         </>
       )}
     </FormSheet>
@@ -992,6 +1045,7 @@ function ChoiceField({
   options,
   newPillLabel,
   newPlaceholder,
+  showAll = false,
 }: {
   label: string;
   value: ChoiceValue;
@@ -999,6 +1053,7 @@ function ChoiceField({
   options: { value: string; text: string; emoji?: string }[];
   newPillLabel: string;
   newPlaceholder: string;
+  showAll?: boolean;
 }) {
   return (
     <PickOrCreate
@@ -1008,6 +1063,7 @@ function ChoiceField({
       newText={value.newLabel}
       newPillLabel={newPillLabel}
       newPlaceholder={newPlaceholder}
+      showAll={showAll}
       onChange={(choice, newLabel) => onValueChange({ choice, newLabel })}
     />
   );

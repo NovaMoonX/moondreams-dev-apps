@@ -14,13 +14,18 @@ interface AmcLink {
 }
 
 interface AmcSuggestionsResponse {
-  _embedded?: { suggestions?: Array<{ title?: string; _links?: Record<string, AmcLink | undefined> }> };
+  _embedded?: { suggestions?: Array<{ title?: string; type?: string; _links?: Record<string, AmcLink | undefined> }> };
+}
+
+interface AmcTheatresResponse {
+  _embedded?: { theatres?: AmcTheatre[] };
 }
 
 interface AmcTheatre {
   id?: number | string;
   name?: string;
   timezone?: string;
+  isClosed?: boolean;
   location?: {
     addressLine1?: string;
     city?: string;
@@ -44,7 +49,8 @@ export function isFixtureMode(apiKey: string) {
   return !apiKey && process.env.FUNCTIONS_EMULATOR === 'true';
 }
 
-async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>): Promise<T> {
+// AMC answers "nothing matches" with a 400 (a zip code that isn't one, a place it doesn't know), which is an empty result, not an outage.
+async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>): Promise<T | null> {
   if (!apiKey) {
     throw new HttpsError('failed-precondition', NOT_SET_UP);
   }
@@ -59,6 +65,9 @@ async function callAmc<T>(apiKey: string, path: string, params: Record<string, s
     });
     if (response.status === 401 || response.status === 403) {
       throw new HttpsError('failed-precondition', NOT_SET_UP);
+    }
+    if (response.status === 400 || response.status === 404) {
+      return null;
     }
     if (response.status === 429) {
       throw new HttpsError('resource-exhausted', 'Theater search is resting for today. Try again tomorrow.');
@@ -77,38 +86,62 @@ async function callAmc<T>(apiKey: string, path: string, params: Record<string, s
   }
 }
 
-export interface AmcPoint {
-  latitude: number;
-  longitude: number;
-  /** What AMC matched the search text to, like "Overland Park, KS". */
-  area: string | null;
+export interface AmcPlace {
+  label: string;
+  kind: 'zipcode' | 'city' | 'state';
+  latitude: number | null;
+  longitude: number | null;
+  /** AMC's name for the state, like "washington", for kind "state". */
+  state: string | null;
 }
 
-const FIXTURE_POINT: AmcPoint = { latitude: 38.98, longitude: -94.67, area: 'Overland Park, KS' };
+const FIXTURE_PLACES: AmcPlace[] = [
+  { label: 'Overland Park, KS', kind: 'city', latitude: 38.98, longitude: -94.67, state: null },
+  { label: 'Kansas', kind: 'state', latitude: null, longitude: null, state: 'kansas' },
+];
 
-/** AMC's location suggestions turn text (a zip code, a city) into the coordinates its theater lookup needs. */
-export async function suggestPoint(apiKey: string, query: string): Promise<AmcPoint | null> {
+const PLACE_KINDS = ['zipcode', 'city', 'state'];
+
+function toPlace(suggestion: { title?: string; type?: string; _links?: Record<string, AmcLink | undefined> }): AmcPlace | null {
+  const label = toText(suggestion.title);
+  const kind = PLACE_KINDS.find((candidate) => candidate === suggestion.type) as AmcPlace['kind'] | undefined;
+  if (!label || !kind) {
+    return null;
+  }
+
+  const links = Object.entries(suggestion._links ?? {}).filter(([name]) => name !== 'self');
+  const places = links.flatMap(([, link]): AmcPlace[] => {
+    const url = toUrl(link?.href);
+    const stateName = url?.pathname.match(/\/states\/([a-z0-9-]{2,40})$/)?.[1] ?? null;
+    const latitude = Number(url?.searchParams.get('latitude') || Number.NaN);
+    const longitude = Number(url?.searchParams.get('longitude') || Number.NaN);
+    if (stateName) {
+      return [{ label, kind, latitude: null, longitude: null, state: stateName }];
+    }
+    return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
+      ? [{ label, kind, latitude, longitude, state: null }]
+      : [];
+  });
+  return places[0] ?? null;
+}
+
+/** AMC's suggestions for typed text: the zip codes, cities and states it matches, each with where to look. Theaters by name come from the theater list instead. */
+export async function suggestPlaces(apiKey: string, query: string): Promise<AmcPlace[]> {
   if (isFixtureMode(apiKey)) {
-    return FIXTURE_POINT;
+    return /^[0-9]/.test(query) ? FIXTURE_PLACES.slice(0, 1) : FIXTURE_PLACES;
   }
 
   const data = await callAmc<AmcSuggestionsResponse>(apiKey, '/v2/location-suggestions', { query });
-  const points = (data._embedded?.suggestions ?? []).flatMap((suggestion) =>
-    Object.values(suggestion._links ?? {}).flatMap((link) => {
-      const params = toSearchParams(link?.href);
-      const latitude = Number(params?.get('latitude') || Number.NaN);
-      const longitude = Number(params?.get('longitude') || Number.NaN);
-      return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
-        ? [{ latitude, longitude, area: suggestion.title ?? null }]
-        : [];
-    }),
-  );
-  return points[0] ?? null;
+  const places = (data?._embedded?.suggestions ?? []).flatMap((suggestion) => {
+    const place = toPlace(suggestion);
+    return place ? [place] : [];
+  });
+  return places;
 }
 
-function toSearchParams(href: string | undefined) {
+function toUrl(href: string | undefined) {
   try {
-    return href ? new URL(href, getBaseUrl()).searchParams : null;
+    return href ? new URL(href, getBaseUrl()) : null;
   } catch {
     return null;
   }
@@ -118,17 +151,29 @@ function toText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function toTimeZone(value: unknown) {
-  const zone = toText(value);
-  if (!zone) {
-    return null;
+const ZONE_BY_NAME: Record<string, string> = {
+  'EASTERN TIME': 'America/New_York',
+  'CENTRAL TIME': 'America/Chicago',
+  'MOUNTAIN TIME': 'America/Denver',
+  'PACIFIC TIME': 'America/Los_Angeles',
+};
+
+// AMC names a zone ("CENTRAL TIME"), not an IANA id. Arizona is the one Mountain place that never changes its clock.
+function toTimeZone(theatre: AmcTheatre | undefined) {
+  const name = toText(theatre?.timezone)?.toUpperCase() ?? '';
+  if (name === 'MOUNTAIN TIME' && theatre?.location?.state === 'AZ') {
+    return 'America/Phoenix';
   }
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
-    return zone;
-  } catch {
-    return null;
-  }
+  return ZONE_BY_NAME[name] ?? null;
+}
+
+// AMC writes cities in capitals ("SAINT LOUIS"); this is for display, so "Mckinney" becomes "McKinney".
+export function toTitleCase(text: string) {
+  const result = text
+    .toLowerCase()
+    .replace(/(^|[\s\-'.(])([a-z])/g, (_match, edge: string, letter: string) => edge + letter.toUpperCase())
+    .replace(/\bMc([a-z])/g, (_match, letter: string) => `Mc${letter.toUpperCase()}`);
+  return result;
 }
 
 function toNumber(value: unknown) {
@@ -138,20 +183,21 @@ function toNumber(value: unknown) {
 function toTheatreResult(theatre: AmcTheatre | undefined, distance: unknown): TheatreResult | null {
   const theatreId = String(theatre?.id ?? '');
   const name = toText(theatre?.name);
-  if (!/^[0-9]{1,8}$/.test(theatreId) || !name) {
+  if (!/^[0-9]{1,8}$/.test(theatreId) || !name || theatre?.isClosed === true) {
     return null;
   }
 
+  const city = toText(theatre?.location?.city);
   const result: TheatreResult = {
     theatreId,
     name,
     addressLine: toText(theatre?.location?.addressLine1),
-    city: toText(theatre?.location?.city),
+    city: city ? toTitleCase(city) : null,
     state: toText(theatre?.location?.state),
     postalCode: toText(theatre?.location?.postalCode),
     latitude: toNumber(theatre?.location?.latitude),
     longitude: toNumber(theatre?.location?.longitude),
-    timeZone: toTimeZone(theatre?.timezone),
+    timeZone: toTimeZone(theatre),
     distanceMiles: toNumber(distance),
   };
   return result;
@@ -174,6 +220,20 @@ const FIXTURE_THEATRES: TheatreResult[] = [
   distanceMiles: distanceMiles as number,
 }));
 
+function toTheatreResults(data: AmcLocationsResponse | null, limit: number) {
+  const locations = Object.values(data?._embedded ?? {}).flatMap((entries) => entries ?? []);
+  const result = locations
+    .map((location) =>
+      toTheatreResult(
+        Object.values(location._embedded ?? {}).find((embedded) => embedded?.id !== undefined),
+        location.distance,
+      ),
+    )
+    .filter((theatre): theatre is TheatreResult => theatre !== null)
+    .slice(0, limit);
+  return result;
+}
+
 /** The closest theaters to a point, nearest first. */
 export async function findNearbyTheatres(apiKey: string, latitude: number, longitude: number): Promise<TheatreResult[]> {
   if (isFixtureMode(apiKey)) {
@@ -185,16 +245,36 @@ export async function findNearbyTheatres(apiKey: string, latitude: number, longi
     longitude: String(longitude),
     'page-size': String(MAX_THEATRES),
   });
-  const locations = Object.values(data._embedded ?? {}).flatMap((entries) => entries ?? []);
-  const result = locations
-    .map((location) =>
-      toTheatreResult(
-        Object.values(location._embedded ?? {}).find((embedded) => embedded?.id !== undefined),
-        location.distance,
-      ),
-    )
-    .filter((theatre): theatre is TheatreResult => theatre !== null)
-    .slice(0, MAX_THEATRES);
+  const result = toTheatreResults(data, MAX_THEATRES);
+  return result;
+}
+
+export const MAX_STATE_THEATRES = 25;
+
+/** The theaters AMC lists for a state, by AMC's own name for it ("washington"). */
+export async function findStateTheatres(apiKey: string, state: string): Promise<TheatreResult[]> {
+  if (isFixtureMode(apiKey)) {
+    return FIXTURE_THEATRES;
+  }
+
+  const data = await callAmc<AmcLocationsResponse>(apiKey, `/v2/locations/states/${encodeURIComponent(state)}`, {
+    'page-size': String(MAX_STATE_THEATRES),
+  });
+  const result = toTheatreResults(data, MAX_STATE_THEATRES);
+  return result;
+}
+
+/** Every open AMC theater, for matching a typed name. */
+export async function listAllTheatres(apiKey: string): Promise<TheatreResult[]> {
+  if (isFixtureMode(apiKey)) {
+    return FIXTURE_THEATRES.map((theatre) => ({ ...theatre, distanceMiles: null }));
+  }
+
+  const data = await callAmc<AmcTheatresResponse>(apiKey, '/v2/theatres', { 'page-size': '1000' });
+  const result = (data?._embedded?.theatres ?? []).flatMap((theatre) => {
+    const entry = toTheatreResult(theatre, null);
+    return entry ? [entry] : [];
+  });
   return result;
 }
 

@@ -13,7 +13,7 @@ Server-side code for the mini-apps. Every function:
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
-| `findTheatres` | callable | A-List Tracker | `{ query }` (zip code or city) or `{ latitude, longitude }` → `{ theatres, area }`: the closest AMC theaters (up to 10, nearest first, each with its time zone when AMC gives one) from the AMC Theatres API |
+| `findTheatres` | callable | A-List Tracker | `{ query }` (a 5-digit zip code, a city or state, or part of a theater's name), `{ state }` or `{ latitude, longitude }` → `{ theatres, places, area }`: the closest AMC theaters (up to 10 nearest first, 25 for a state, each with its time zone), or for a typed city or state the places to confirm plus theaters matching the name, from the AMC Theatres API |
 | `findShowtimes` | callable | A-List Tracker | `{ theatreId, date, title }` → `{ showtimes }`: a movie's showings at an AMC theater that day, with format, list price, a Standard price to compare and a purchase link |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
@@ -93,12 +93,12 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 
 ### A-List Tracker: `findTheatres`
 
-- **Flow:** the full outline is in `src/apps/a-list/TECHNICAL.md` under "Theater Data Service". Text (a zip code or city) goes to AMC's `/v2/location-suggestions` for coordinates; coordinates go to `/v2/locations` for the nearest theaters.
-- **Server cache:** `apps/a-list/theatreCache`: text to coordinates for 30 days, a neighborhood's theaters for 7 days, keyed on coordinates rounded to two decimals.
+- **Flow:** the full outline is in `src/apps/a-list/TECHNICAL.md` under "Theater Data Service". A zip code goes to AMC's `/v2/location-suggestions` for coordinates, then `/v2/locations` for the nearest theaters; other text returns the suggested places (city, state) for the member to confirm, plus name matches from `/v2/theatres`; a confirmed state goes to `/v2/locations/states/{state}`.
+- **Server cache:** `apps/a-list/theatreCache`: suggested places for 30 days; a neighborhood's, a state's and the full theater list for 7 days (neighborhoods keyed on coordinates rounded to two decimals).
 - **Budget:** `lookupBudget.ts` counts every upstream call in `apps/a-list/lookupUsage` (own `theatres_` counters) and refuses with `resource-exhausted` at 500 a day app-wide or 40 per member.
 - **Access:** clients can't read or write `theatreCache`.
 - **Offline fixtures:** in the emulator with no key readable, it answers from three built-in theaters.
-- **Check after the key is set:** the response parsing follows AMC's public docs but hasn't been run against the live API, so call it once with a real zip code and compare the shape.
+- **Verified live (2026-10-09):** the suggestion, locations, state and theater-list shapes, and that AMC answers a no-match search with HTTP 400. Its `timezone` is a name like "CENTRAL TIME", mapped to an IANA zone here.
 
 ### A-List Tracker: `findShowtimes`
 

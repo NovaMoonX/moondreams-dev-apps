@@ -231,3 +231,13 @@ export interface PurchasePlan {
   /** Instant: when the member last left for AMC to buy; null until they do. */
   startedAt: number | null;
 }
+
+/** A zip code, city or state AMC matched to typed text, for the member to confirm before theaters are looked up. */
+export interface TheatrePlace {
+  label: string;
+  kind: 'zipcode' | 'city' | 'state';
+  latitude: number | null;
+  longitude: number | null;
+  /** AMC's name for the state, like "washington", for kind "state". */
+  state: string | null;
+}

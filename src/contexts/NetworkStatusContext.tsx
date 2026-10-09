@@ -42,7 +42,7 @@ const RECONNECTED_DISPLAY_MS = 3_000;
 /** HEAD request to a same-origin resource — verifies the app can actually reach the network, not just that some interface is up (the browser's own 'online' event is unreliable, e.g. behind a captive portal). */
 async function probeConnectivity(signal: AbortSignal): Promise<boolean> {
   try {
-    await fetch(`/manifest-main.json?probe=${Date.now()}`, {
+    await fetch(`/favicon.svg?probe=${Date.now()}`, {
       method: 'HEAD',
       cache: 'no-store',
       signal,

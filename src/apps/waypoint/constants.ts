@@ -218,8 +218,8 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
 // Event types that can ask for an earlier arrival than their start.
 export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'];
 
-// Event types whose cost belongs on an expense: one without an attached expense reads "Not paid for yet".
-export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+// Event types whose cost belongs on an expense: one without an attached expense reads "No expense yet".
+export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
 
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {
@@ -339,10 +339,10 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
 // OTHER is the storage bucket for user-added categories (named by
 // customCategoryLabel), so it's never offered as a preset choice.
 export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
+  'ACTIVITIES',
   'FOOD',
   'TRANSPORT',
   'LODGING',
-  'ACTIVITIES',
   'SHOPPING',
 ];
 
