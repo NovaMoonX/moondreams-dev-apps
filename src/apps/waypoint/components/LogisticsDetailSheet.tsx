@@ -6,7 +6,7 @@ import { getDayDateLabel } from '@/utils/dateRangeUtils';
 import { formatClockTime } from '@/utils/formatUtils';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import { openMapNavigation } from '@/utils/mapUrlUtils';
-import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
+import NoExpenseBadge from '@apps/waypoint/components/NoExpenseBadge';
 import { getRentalSubject, getStaySubject } from '@apps/waypoint/utils/relatedSubjects';
 import { RENTAL_TYPE_LABELS, STAY_TYPE_EMOJIS, STAY_TYPE_LABELS } from '@apps/waypoint/constants';
 import type { Rental, Stay, TripSpace } from '@apps/waypoint/types';
@@ -124,8 +124,8 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
       <div className='space-y-4'>
         <div className='flex flex-wrap items-center gap-2'>
           <p className='text-muted-foreground text-sm'>{kindLabel}</p>
-          {stay && <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} isStatic />}
-          {rental && <NotPaidForBadge getSubject={() => getRentalSubject(rental)} isStatic />}
+          {stay && <NoExpenseBadge getSubject={() => getStaySubject(trip, stay)} isStatic />}
+          {rental && <NoExpenseBadge getSubject={() => getRentalSubject(rental)} isStatic />}
         </div>
         {lines.length > 0 && (
           <dl className='text-muted-foreground grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm'>

@@ -4,7 +4,7 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import LocationLink from '@apps/waypoint/components/LocationLink';
-import NotPaidForBadge from '@apps/waypoint/components/NotPaidForBadge';
+import NoExpenseBadge from '@apps/waypoint/components/NoExpenseBadge';
 import { getStaySubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
@@ -74,7 +74,7 @@ export function StayDetailLines({
         <Badge variant='muted' outline>
           {STAY_TYPE_LABELS[stay.stayType ?? 'OTHER']}
         </Badge>
-        {!showTitle && <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} isStatic />}
+        {!showTitle && <NoExpenseBadge getSubject={() => getStaySubject(trip, stay)} isStatic />}
         {showNotesIndicator && stay.notes && (
           <span
             className='bg-primary inline-block h-1.5 w-1.5 shrink-0 rounded-full'
@@ -190,13 +190,13 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
         </div>
         {!isSmallScreen && (
           <div className='absolute right-4 bottom-4'>
-            <NotPaidForBadge getSubject={() => getStaySubject(trip, stay)} />
+            <NoExpenseBadge getSubject={() => getStaySubject(trip, stay)} />
           </div>
         )}
       </article>
       {isSmallScreen && (
         <div className='flex justify-end pr-4'>
-          <NotPaidForBadge variant='tab' getSubject={() => getStaySubject(trip, stay)} />
+          <NoExpenseBadge variant='tab' getSubject={() => getStaySubject(trip, stay)} />
         </div>
       )}
       </div>

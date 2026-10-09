@@ -9,7 +9,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
+import { Bell, Clock, DoorOpen, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -885,7 +885,7 @@ function EventFormModal({
     },
     {
       key: 'settings',
-      label: 'Indoor / outdoor',
+      label: isPhone ? 'Setting' : 'Indoor / outdoor',
       icon: <Sun className='h-4 w-4' />,
       isShown: draft.eventType !== 'ACTIVITY' || draft.hasSettings,
     },
@@ -1203,17 +1203,7 @@ function EventFormModal({
           >
             {endFields}
           </RemovableField>
-        ) : (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-auto px-0! py-0!'
-            onClick={startEndTime}
-          >
-            + Add end time
-          </Button>
-        )}
+        ) : null}
 
         {canArriveEarly && draft.hasArriveBy ? (
           <RemovableField
@@ -1247,19 +1237,24 @@ function EventFormModal({
               />
             </div>
           </RemovableField>
-        ) : (
-          canArriveEarly && (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-auto px-0! py-0!'
-              onClick={() => updateDraft({ hasArriveBy: true, arriveByTime: draft.arriveByTime || getSuggestedArriveBy(draft.time) })}
-            >
-              + Add arrival time
-            </Button>
-          )
-        )}
+        ) : null}
+
+        <AddFieldChips
+          heading='Add a time'
+          chips={[
+            ...(draft.dayIndex === null || arrival || draft.hasEndTime
+              ? []
+              : [{ key: 'end', label: 'End time', icon: <Clock className='h-4 w-4' /> }]),
+            ...(canArriveEarly && !draft.hasArriveBy
+              ? [{ key: 'arrive', label: 'Arrival time', icon: <DoorOpen className='h-4 w-4' /> }]
+              : []),
+          ]}
+          onAdd={(key) =>
+            key === 'end'
+              ? startEndTime()
+              : updateDraft({ hasArriveBy: true, arriveByTime: draft.arriveByTime || getSuggestedArriveBy(draft.time) })
+          }
+        />
 
         {isTravel && (
           <TransitDetailsFields

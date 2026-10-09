@@ -131,7 +131,7 @@ export function TimelineSection({
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const [showArchived, setShowArchived] = useState(false);
   const memberIds = Object.keys(trip.members);
-  const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [noExpenseOnly, setNoExpenseOnly] = useState(false);
   const [hideCompact, setHideCompact] = useState(false);
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
@@ -142,7 +142,7 @@ export function TimelineSection({
   const rentals = useAppSelector(selectRentals);
   const logisticsByDay = useMemo(
     () =>
-      unpaidOnly || hideCompact
+      noExpenseOnly || hideCompact
         ? new Map<number, LogisticsEntry[]>()
         : getLogisticsEntries(trip, stays, rentals)
             .filter((entry) => entry.dayIndex >= -MAX_DAYS_OUTSIDE_TRIP && entry.dayIndex < dayCount + MAX_DAYS_OUTSIDE_TRIP)
@@ -151,7 +151,7 @@ export function TimelineSection({
             (byDay, entry) => byDay.set(entry.dayIndex, [...(byDay.get(entry.dayIndex) ?? []), entry]),
             new Map<number, LogisticsEntry[]>(),
           ),
-    [trip, stays, rentals, unpaidOnly, hideCompact, needle, dayCount],
+    [trip, stays, rentals, noExpenseOnly, hideCompact, needle, dayCount],
   );
   const hasOutsideEvents = events.some(
     (event) =>
@@ -211,7 +211,7 @@ export function TimelineSection({
     )
     .filter(
       (event) =>
-        !unpaidOnly ||
+        !noExpenseOnly ||
         (EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) &&
           !expenseLinkKeys.has(getExpenseLinkKey({ kind: 'EVENT', id: event.id })) &&
           !noExpenseKeys.has(getExpenseLinkKey({ kind: 'EVENT', id: event.id }))),
@@ -670,11 +670,11 @@ export function TimelineSection({
           isCustomized: attendingOnly,
         },
         {
-          label: 'Only activities not paid for yet',
-          checked: unpaidOnly,
-          onChange: setUnpaidOnly,
+          label: 'Only activities and dining with no expense yet',
+          checked: noExpenseOnly,
+          onChange: setNoExpenseOnly,
           defaultChecked: false,
-          isCustomized: unpaidOnly,
+          isCustomized: noExpenseOnly,
         },
         {
           label: 'Hide travel, stays and rentals',

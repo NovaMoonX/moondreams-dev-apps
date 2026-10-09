@@ -89,6 +89,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
       title: subject.title,
       dayIndex: subject.dayIndex,
       category: subject.expenseCategory,
+      prefersEstimate: subject.prefersEstimate,
     }),
     [subject],
   );

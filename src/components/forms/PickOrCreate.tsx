@@ -19,10 +19,12 @@ interface PickOrCreateProps {
   /** The first pill, like "New group". */
   newPillLabel: string;
   newPlaceholder: string;
+  /** Keep every option visible in the order given, for a short fixed list. */
+  showAll?: boolean;
 }
 
 /** Pick an existing name or make a new one: nothing starts selected, and the dashed "New" pill comes first. With no names yet it is just the text field. */
-function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel, newPlaceholder }: PickOrCreateProps) {
+function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel, newPlaceholder, showAll }: PickOrCreateProps) {
   const [isCreating, setIsCreating] = useState(choice === NEW_CHOICE);
   const showCreate = isCreating || choice === NEW_CHOICE || options.length === 0;
 
@@ -47,6 +49,7 @@ function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel,
         label={label}
         options={options}
         isSingle
+        showAll={showAll}
         selectedCount={choice === '' && !isCreating ? 0 : 1}
         leading={
           <Pill
