@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+
+import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { resetFirestoreLocalData } from '@/lib/firebase/localData';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import AppEntryFallback from '@/ui/AppEntryFallback';
@@ -30,6 +33,7 @@ import { AListOverlayContext } from '@apps/a-list/hooks/useAListOverlay';
 import { useAListSync } from '@apps/a-list/hooks/useAListSync';
 import { useAListTheme } from '@apps/a-list/hooks/useAListTheme';
 import { useRefreshUnreleasedMovies } from '@apps/a-list/hooks/useRefreshUnreleasedMovies';
+import { membershipOnServerQueryOptions } from '@apps/a-list/queries/membershipQueries';
 import {
   selectIsAListLoaded,
   selectMembership,
@@ -44,6 +48,25 @@ function getYesterdayKey() {
   return getDayKey(yesterday.getTime());
 }
 
+const getResetKey = (uid: string) => `a-list:local-data-reset:${uid}`;
+
+// Storage that can't be read counts as already reset, so a failure never loops reloads.
+function hasResetLocalData(uid: string) {
+  try {
+    return sessionStorage.getItem(getResetKey(uid)) !== null;
+  } catch {
+    return true;
+  }
+}
+
+function markLocalDataReset(uid: string) {
+  try {
+    sessionStorage.setItem(getResetKey(uid), '1');
+  } catch {
+    // hasResetLocalData already treats unreadable storage as done
+  }
+}
+
 function AList() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -55,6 +78,21 @@ function AList() {
   const membership = useAppSelector(selectMembership);
   const isLoaded = useAppSelector(selectIsAListLoaded);
   const loadError = useAppSelector(selectAListLoadError);
+
+  const uid = user?.uid ?? null;
+  const isAboutToShowSetup = uid !== null && isLoaded && !loadError && !membership;
+  const { data: isMembershipOnServer, isLoading: isCheckingServer } = useQuery({
+    ...membershipOnServerQueryOptions(uid ?? ''),
+    enabled: isAboutToShowSetup,
+  });
+  const needsLocalDataReset =
+    isAboutToShowSetup && isMembershipOnServer === true && !hasResetLocalData(uid);
+
+  useEffect(() => {
+    if (!needsLocalDataReset) return;
+    markLocalDataReset(uid);
+    resetFirestoreLocalData();
+  }, [needsLocalDataReset, uid]);
 
   useAListTheme();
   useAListSync(user?.uid ?? null);
@@ -108,6 +146,10 @@ function AList() {
   }
 
   if (!membership) {
+    if (isCheckingServer || needsLocalDataReset) {
+      return <LoadingSkeleton />;
+    }
+
     if (isSetupDismissed) {
       return (
         <AppEntryFallback
