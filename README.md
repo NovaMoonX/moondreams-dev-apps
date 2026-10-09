@@ -146,6 +146,14 @@ Problems we've hit before, so we don't hit them again.
 - **Cloudflare can serve a stale worker.** `apps.moondreams.dev` is proxied, and Cloudflare cached `sw.js` for hours (`cf-cache-status: HIT`, `max-age=14400`), so browsers kept the old worker after the fix deployed. `firebase.json` now sends `Cache-Control: no-cache` for `sw.js` and the `firebase-messaging-sw-*.js` helpers. If a worker change doesn't reach browsers, check `curl -sI https://apps.moondreams.dev/sw.js` and purge that URL in Cloudflare (Caching → Configuration → Custom Purge).
 - **Check after any change to the worker or `authDomain`:** open `/__/auth/handler` in a profile that has loaded the site before; it should be blank, not the app.
 
+### An app shows empty or first-run screens for an existing account on one device
+
+- **Symptom:** one phone (Chrome, Android) showed A-List's setup modal for an account whose membership doc exists, with the same account fine on desktop and fine in Waypoint and Nine Lives on that phone. Reloading, signing out and in, and clearing Chrome's site data did not help. No error, no denied read.
+- **Cause (not fully established):** the Firestore SDK on that device answered "document missing" from its own state while the backend had the doc. A raw REST read of the same path with the same ID token returned 200, and so did every other device; the SDK's listener and `getDocFromServer` both said `exists=false`, `fromCache=false`. Before it started the owner had uninstalled three mini-app PWAs, cleared Chrome's cache and site data, and reinstalled one app. All mini-apps share one origin, so they share one Firestore IndexedDB, and `persistentMultipleTabManager` (`src/lib/firebase/config.ts`) lets one tab or window lead and others follow. Our best guess is a stale leader or leftover persisted state from that uninstall and clear sequence; this is a hypothesis, not a proven cause.
+- **Fix on the device:** terminate the Firestore instance, call `clearIndexedDbPersistence(db)` and reload. That immediately returned the right answer. Server data is untouched; only the local cache and any writes still queued offline are dropped.
+- **How to tell it apart from a data or rules problem:** a rules denial shows an error screen, not an empty one. Compare the SDK against a plain `fetch` to `https://firestore.googleapis.com/v1/projects/<project>/databases/(default)/documents/<path>` with `Authorization: Bearer <ID token>`: if REST finds the doc and the SDK does not, the problem is the device's SDK state, not the account or rules. Check the same account on another device first.
+- **Don't re-run setup to "fix" it.** Setup writes the membership again; the update rule should reject it for an existing doc, but a missing-looking doc invites a second membership.
+
 ## Tech Stack
 
 - [React](https://react.dev/)
