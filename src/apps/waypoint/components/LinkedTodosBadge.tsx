@@ -21,7 +21,7 @@ function getBadgeContent(open: number, total: number, promptsBooking: boolean) {
   }
   const done = total - open;
   if (open === 0) {
-    return { phone: '✅ Done', desktop: '✅ All done', aria: total === 1 ? 'All done. The 1 to-do is done' : `All done. All ${total} to-dos are done` };
+    return { phone: '✅ All done', desktop: '✅ All done', aria: total === 1 ? 'All done. The 1 to-do is done' : `All done. All ${total} to-dos are done` };
   }
   const toDo = `${open} to do`;
   return {

@@ -9,7 +9,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, DoorOpen, Link2, MapPin, Route, Sun, Ticket, Type, Utensils } from 'lucide-react';
+import { Bell, Clock, DoorOpen, Link2, ListChecks, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -902,7 +902,7 @@ function EventFormModal({
       todos: canDeleteTodos
         ? checklist.items.filter((item) => checklist.tripId === trip.id && isLinkedTo(item, link, bookingEventIds)).map(({ id, title }) => ({ id, title }))
         : [],
-      expenses: removableExpenses.map(({ id, title }) => ({ id, title })),
+      expenses: removableExpenses.map(({ id, title, status }) => ({ id, title: status === 'PAID' ? `${title} (paid)` : title })),
       blockedExpenseCount: canDeleteExpenses ? linkedExpenses.length - removableExpenses.length : 0,
     };
   };
@@ -1003,7 +1003,7 @@ function EventFormModal({
       isShown: !isPlaceEvent || draft.hasVenueHours,
     },
     { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: draft.isGrouped },
-    { key: 'bookings', label: 'To-dos', icon: <Ticket className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
+    { key: 'bookings', label: 'To-dos', icon: <ListChecks className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
     {
       key: 'reminder',
       label: 'Reminder',

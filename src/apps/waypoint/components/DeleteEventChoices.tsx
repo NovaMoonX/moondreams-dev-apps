@@ -21,10 +21,10 @@ const MAX_TITLES = 3;
 function describe(items: LinkedItem[]) {
   const shown = items.slice(0, MAX_TITLES).map((item) => item.title);
   const rest = items.length - shown.length;
-  return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ');
+  return rest > 0 ? [...shown, `and ${rest} more`] : shown;
 }
 
-function Choice({ checked, onCheckedChange, label, detail }: { checked: boolean; onCheckedChange: (value: boolean) => void; label: string; detail: string }) {
+function Choice({ checked, onCheckedChange, label, detail }: { checked: boolean; onCheckedChange: (value: boolean) => void; label: string; detail: string[] }) {
   return (
     <label className='flex cursor-pointer items-start gap-3'>
       <span className='mt-0.5 inline-flex w-5 shrink-0 justify-center'>
@@ -32,7 +32,13 @@ function Choice({ checked, onCheckedChange, label, detail }: { checked: boolean;
       </span>
       <span className='min-w-0'>
         <span className='block font-medium'>{label}</span>
-        <span className='text-muted-foreground block break-words'>{detail}</span>
+        <span className='text-muted-foreground block'>
+          {detail.map((line, index) => (
+            <span key={`${line}-${index}`} className='block break-words'>
+              {line}
+            </span>
+          ))}
+        </span>
       </span>
     </label>
   );
@@ -74,7 +80,7 @@ function DeleteEventChoices({ eventTitle, todos, expenses, blockedExpenseCount, 
         </p>
       )}
       {todos.length + expenses.length > 0 && blockedExpenseCount === 0 && (
-        <p className='text-muted-foreground'>Whatever you leave unchecked stays on your lists, no longer linked to the event.</p>
+        <p className='text-muted-foreground'>Whatever you leave unchecked stays on your checklist or Expenses, no longer linked to the event.</p>
       )}
     </div>
   );

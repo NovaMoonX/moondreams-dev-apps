@@ -154,6 +154,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
           <ul className='divide-border divide-y'>
             {linkedHere.map((item) => (
               <li key={item.id} className='flex min-h-12 items-center gap-3 py-2'>
+                <label className='flex min-w-0 flex-1 cursor-pointer items-center gap-3'>
                 <span className='inline-flex w-5 shrink-0 justify-center'>
                   <Checkbox
                     checked={item.isCompleted}
@@ -164,8 +165,9 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
                 </span>
                 <span className='min-w-0 flex-1'>
                   <span className='block truncate text-sm font-medium'>{item.title}</span>
-                  <span className='text-muted-foreground block text-xs'>{item.isCompleted ? 'Done, so this counts as booked' : 'Tick it off once it is booked'}</span>
+                  <span className='text-muted-foreground block text-xs'>{item.isCompleted ? 'Done' : 'Tick it off when it is done'}</span>
                 </span>
+                </label>
                 <Button
                   type='button'
                   variant='tertiary'
