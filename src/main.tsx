@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { watchForAppUpdates } from './lib/app/appUpdate';
+import { reloadOnFirestoreReset } from './lib/firebase/localData';
 import { installVersionPeek } from './lib/app/versionPeek';
 import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import './index.css';
@@ -27,6 +28,7 @@ window.addEventListener('vite:preloadError', () => {
   window.location.reload();
 });
 installVersionPeek();
+reloadOnFirestoreReset();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
