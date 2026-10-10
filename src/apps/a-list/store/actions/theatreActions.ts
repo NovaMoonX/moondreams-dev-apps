@@ -1,9 +1,18 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  runTransaction,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { AListTheatre, TheatreDraft } from '@apps/a-list/types';
+import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
 
 export function toTheatre(draft: TheatreDraft, now: number): AListTheatre {
   return {
@@ -15,6 +24,7 @@ export function toTheatre(draft: TheatreDraft, now: number): AListTheatre {
     postalCode: draft.postalCode ?? null,
     latitude: draft.latitude ?? null,
     longitude: draft.longitude ?? null,
+    timeZone: draft.timeZone ?? null,
     createdAt: now,
     lastEditedAt: now,
   };
@@ -142,6 +152,86 @@ export const setFavoriteTheatre = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to change your favorite theater.'),
+      );
+    }
+  },
+);
+
+interface LinkTheatreInput {
+  uid: string;
+  /** The typed theater being replaced. */
+  fromTheatreId: string;
+  /** The AMC theater it becomes; one already saved is merged into rather than duplicated. */
+  to: TheatreDraft;
+}
+
+const VIEWINGS_PER_BATCH = 400;
+
+/** Points every showing tagged with a typed theater at the AMC one, then moves the saved theater and the favorite star over. */
+export const linkTheatre = createAsyncThunk<
+  void,
+  LinkTheatreInput,
+  { rejectValue: string }
+>(
+  'aList/theatres/link',
+  async ({ uid, fromTheatreId, to }, { rejectWithValue }) => {
+    const membershipRef = getMembershipRef(uid);
+    const snapshot = toTheatreSnapshot(to);
+
+    try {
+      const tagged = await getDocs(
+        query(
+          collection(membershipRef, 'viewings'),
+          where('theatre.theatreId', '==', fromTheatreId),
+        ),
+      );
+      const chunks = Array.from(
+        { length: Math.ceil(tagged.docs.length / VIEWINGS_PER_BATCH) },
+        (_, index) =>
+          tagged.docs.slice(
+            index * VIEWINGS_PER_BATCH,
+            (index + 1) * VIEWINGS_PER_BATCH,
+          ),
+      );
+      await chunks.reduce(async (previous, chunk) => {
+        await previous;
+        const batch = writeBatch(db);
+        chunk.forEach((viewing) =>
+          batch.update(viewing.ref, {
+            theatre: snapshot,
+            lastEditedAt: Date.now(),
+          }),
+        );
+        await batch.commit();
+      }, Promise.resolve());
+
+      await runTransaction(db, async (transaction) => {
+        const toRef = getTheatreRef(uid, to.theatreId);
+        const [membershipSnapshot, fromSnapshot, toSnapshot] =
+          await Promise.all([
+            transaction.get(membershipRef),
+            transaction.get(getTheatreRef(uid, fromTheatreId)),
+            transaction.get(toRef),
+          ]);
+        if (!fromSnapshot.exists()) {
+          return;
+        }
+
+        const now = Date.now();
+        if (!toSnapshot.exists()) {
+          transaction.set(toRef, toTheatre(to, now));
+        }
+        transaction.delete(fromSnapshot.ref);
+        if (membershipSnapshot.get('favoriteTheatreId') === fromTheatreId) {
+          transaction.update(membershipRef, {
+            favoriteTheatreId: to.theatreId,
+            lastEditedAt: now,
+          });
+        }
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to link this theater.'),
       );
     }
   },

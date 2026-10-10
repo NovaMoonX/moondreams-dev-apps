@@ -13,12 +13,15 @@ interface TheaterNameFormProps {
   /** Resolves true once the theater is saved; the field is cleared only then, so a failed save keeps what was typed. */
   onAdd: (theatre: TheatreDraft) => boolean | Promise<boolean>;
   isDisabled?: boolean;
+  /** Replaces the default line under the field; null shows none. */
+  hint?: string | null;
 }
 
 function TheaterNameForm({
   savedNames,
   onAdd,
   isDisabled = false,
+  hint,
 }: TheaterNameFormProps) {
   const [name, setName] = useState('');
   const trimmedName = name.trim().replace(/\s+/g, ' ');
@@ -48,8 +51,12 @@ function TheaterNameForm({
     if (isDuplicate) {
       return 'That one is already on your list.';
     }
+    if (hint !== undefined) {
+      return hint;
+    }
     return "For now, type your theater's name. Soon you'll be able to search AMC's theaters and just tap yours.";
   };
+  const hintText = getHint();
 
   if (isFull) {
     return <p className='text-foreground px-3 text-xs'>{getHint()}</p>;
@@ -79,14 +86,16 @@ function TheaterNameForm({
           Add
         </Button>
       </div>
-      <p
-        className={join(
-          'px-3 text-xs',
-          isDuplicate ? 'text-foreground' : 'text-muted-foreground',
-        )}
-      >
-        {getHint()}
-      </p>
+      {hintText && (
+        <p
+          className={join(
+            'px-3 text-xs',
+            isDuplicate ? 'text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {hintText}
+        </p>
+      )}
     </form>
   );
 }

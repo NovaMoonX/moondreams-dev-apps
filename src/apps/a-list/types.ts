@@ -1,5 +1,5 @@
 export interface MembershipProfile {
-  /** Equals the document id; immutable. */
+  /** AMC's theatre number as digits, or `manual-…` for one the member typed; equals the document id; immutable. */
   uid: string;
   /** Before tax: what the member typed in Setup. */
   monthlyCostCents: number;
@@ -122,10 +122,13 @@ export interface Ticket {
 }
 
 export interface TheatreSnapshot {
+  /** AMC's theatre number as digits, or `manual-…` for one the member typed. */
   theatreId: string;
   name: string;
   city: string | null;
   state: string | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
 }
 
 /** A theater the member goes to; the document id is `theatreId`. */
@@ -139,6 +142,8 @@ export interface AListTheatre {
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
@@ -191,3 +196,19 @@ export interface SharedCalendar {
 export type SharedCalendarResult =
   | { status: 'ok'; calendar: SharedCalendar }
   | { status: 'pin_required' | 'wrong_pin' | 'not_found' };
+
+/** A theater found through AMC, before it is saved. */
+export interface TheatreSearchResult extends TheatreDraft {
+  /** From the searched point; null when AMC didn't say. */
+  distanceMiles: number | null;
+}
+
+/** A zip code, city or state AMC matched to typed text, for the member to confirm before theaters are looked up. */
+export interface TheatrePlace {
+  label: string;
+  kind: 'zipcode' | 'city' | 'state';
+  latitude: number | null;
+  longitude: number | null;
+  /** AMC's name for the state, like "washington", for kind "state". */
+  state: string | null;
+}

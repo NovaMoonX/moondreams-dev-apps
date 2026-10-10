@@ -163,11 +163,11 @@ interface Ticket {
 
 #### 4. Theater
 
-Path: `apps/a-list/memberships/{uid}/theatres/{theatreId}` (the document id is `manual-` plus a random id for a theater the member typed, so two devices adding at once never collide; the UI refuses a name already on the list)
+Path: `apps/a-list/memberships/{uid}/theatres/{theatreId}` (the document id is AMC's theatre number, as digits, so saving the same theater twice is one document; a theater the member typed by name gets `manual-` plus a random id instead)
 
 ```typescript
 interface AListTheatre {
-  theatreId: string;                 // equals the document id; immutable
+  theatreId: string;                 // AMC's theatre number as digits, or manual-…; equals the document id; immutable
   name: string;
   addressLine: string | null;
   city: string | null;
@@ -175,14 +175,16 @@ interface AListTheatre {
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
+  timeZone: string | null;           // IANA zone mapped from AMC's zone name ("CENTRAL TIME" → "America/Chicago"); null for a typed theater. Documents written before it lack the key
   createdAt: number;
   lastEditedAt: number;
 }
 
-interface TheatreSnapshot { theatreId: string; name: string; city: string | null; state: string | null }
+interface TheatreSnapshot { theatreId: string; name: string; city: string | null; state: string | null; timeZone: string | null }
 ```
 
-- **Typed, not looked up (for now).** The member types a name; the address, city, state, postal code and coordinates stay `null`, so a theater found through AMC later fits the same document. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing.
+- **A typed theater is linked in place.** "Link to AMC" on a typed row (flagged "Not linked to AMC") opens the finder; picking a result runs `linkTheatre`: every viewing whose `theatre.theatreId` is the typed id gets the AMC snapshot (field-scoped, in batches of 400, so nothing is re-tagged by hand), then one transaction creates the AMC theater (or reuses it when it is already saved: a merge), deletes the typed one and moves the favorite star if it pointed there. A failure between the two steps leaves showings on the AMC id and the typed theater still listed; running the link again completes it.
+- **A copy, not a reference.** Search results are snapshotted into the member's own collection, so the list works offline and nothing depends on AMC at read time. A viewing keeps a `TheatreSnapshot`, like its movie, so removing a theater never changes a past showing. A theater AMC doesn't list can be typed by name: its address, city, state, postal code and coordinates stay `null`, and the UI refuses a name already on the list.
 - **At most 10 saved theaters** (`MAX_THEATRES`) and **no duplicate names** (compared case-insensitively with spaces collapsed) are enforced in the UI only, so two devices, or a device whose theaters listener failed, can briefly exceed the cap or save the same name twice. Accepted: a duplicate is harmless (two pills) and removable, and a real cap would need a counter on the membership.
 - **Two devices can race the favorite** (one removes the last theater while another adds, or the next-in-line theater vanishes mid-removal): the worst outcome is a saved theater with no star, which still works (pills, tagging) and is fixed by tapping a star. Accepted. **Adding the first theater makes it the favorite**, in the same transaction; removing the favorite hands the star to another saved theater in the same transaction (Setup does the same), and unstarring it is the only way to have none. Setting a favorite is a single field write on the membership.
 - **Indexes:** none (a whole-collection listener).
@@ -331,9 +333,20 @@ export const movieQueryKeys = {
 
 ---
 
-## Theater Data
+## Theater Data Service
 
-Theaters are typed by the member for now: no vendor, key, cache or lookup is involved, and nothing about a theater leaves the app. The theaters listener feeds the loading gate but not the fatal load-error screen, so a failure there leaves the Calendar, Dashboard and Watchlist working.
+Theaters come from the AMC Theatres API through one callable, `findTheatres`, so the vendor key never reaches the browser.
+
+- **Three ways in, and typed text is confirmed first.** `{ latitude, longitude }` (the member tapped "Use my current location", the only thing that asks the browser for a position) and `{ state }` go straight to AMC's locations lookup (`/v2/locations`, `/v2/locations/states/{state}`; up to 10 nearest, or up to 25 for a state). `{ query }` is typed text: a **5-digit zip code** (or ZIP+4) resolves in one step to the nearest theaters; anything else returns the places AMC suggests (`/v2/location-suggestions` types `city`, `state`, `zipcode`, up to 5) **plus theaters whose name matches** (every typed word starts a word in the name; up to 6, from AMC's full theater list). The finder shows "Did you mean…" places and "Theaters with that name"; tapping a city looks up its theaters through the coordinates path, tapping a state through the state path. A digits-only query that isn't 5 digits is refused with `invalid-argument` ("Zip codes are 5 digits.") and the finder says so before asking.
+- **AMC answers "nothing matches" with HTTP 400** (code 5004, "No results were found"), which is an empty result and not an outage; any other non-2xx still reads as unavailable. A suggestion of type `theatre` is ignored, because its link carries only a position; theaters by name come from the full list instead.
+- **Server cache** in `apps/a-list/theatreCache` (versioned): suggestions for 30 days, a neighborhood's or a state's theaters and the full theater list (`/v2/theatres`, about 520 open theaters) for 7 days. A neighborhood is keyed on coordinates rounded to two decimals (about a kilometre), rounded on the server before AMC is asked, so every member in a cell shares one answer and an exact position is never sent upstream or stored. An empty result is never cached, and neither is anything in the emulator's fixture mode.
+- **AMC's data is tidied on the way in.** Cities arrive in capitals ("SAINT LOUIS") and are title-cased on the server (and for display when a saved theater predates it); closed theaters are dropped; the `timezone` is AMC's name ("CENTRAL TIME"), not an IANA id, so it maps to `America/Chicago` and so on, with Mountain Time in Arizona being `America/Phoenix`. Verified against the live API on 2026-10-09 (all 521 theaters resolved to a zone).
+- **The app never waits on theaters.** The theaters listener feeds the loading gate but not the fatal load-error screen, so a failure there leaves the Calendar, Dashboard and Watchlist working.
+- **Budget** (`lookupBudget.ts`, its own counters): 500 upstream calls a day for the app and 40 per member, only on cache misses; past that the callable answers `resource-exhausted` and the finder says search is resting.
+- **Client:** `findTheatresQueryOptions` in `queries/theatreQueries.ts` (TanStack Query, one hour stale time, not persisted because the key can hold the member's position). The finder waits for a pause in typing, and shows results or exactly one empty state. When a picked city has no AMC theater within 25 miles it says so above the closest ones; a state with more than 25 says it shows the first 25 and suggests a city.
+- **Without a key**, the emulator answers from three built-in Kansas City theaters, like the movie lookups, so the whole flow can be driven offline. In production a missing key answers `failed-precondition`.
+- **Response shapes** were checked against the live API (suggestions, locations, state locations, the theater list) and are parsed defensively: an entry with no usable id or name is dropped.
+- **Typed theaters skip the service.** "Can't find it? Add it by name" saves the name locally with a `manual-` id and nothing is sent to AMC.
 
 ## State Machines & Logic
 
@@ -446,12 +459,12 @@ Step 1 Membership (confirm perks, read-only copy)
            < cost           → inline error, Next disabled
            implied rate > 0.25 → inline error (almost certainly a typo)
   → Step 3 Goals (weekly, monthly; both optional)
-  → Step 4 Theaters (optional: type the theaters you go to, star a favorite) → one writeBatch (membership + theaters) → "Add movies you've already seen?"
+  → Step 4 Theaters (optional: find AMC theaters by zip, city or current location or type a name, star a favorite) → one writeBatch (membership + theaters) → "Add movies you've already seen?"
         ├─ Add past movies → the add subview in past-movies mode (dates can't precede the start date)
         └─ Skip            → empty Calendar (with its "Add your first movie" / "Add past movies" nudge)
 ```
 
-The tax rate comes from the member's own bill, never a lookup. The "Add movies you've already seen?" offer is ephemeral UI state in the orchestrator. If the member reloads while it's showing, they land on the empty Calendar with the nudge, which is the same destination as "Skip" and loses nothing.
+The tax rate comes from the member's own bill, never a lookup. The only location use is the Theaters step's "Use my current location" button, which asks the browser only when tapped. The "Add movies you've already seen?" offer is ephemeral UI state in the orchestrator. If the member reloads while it's showing, they land on the empty Calendar with the nudge, which is the same destination as "Skip" and loses nothing.
 
 #### 7. Opening window
 
@@ -519,8 +532,8 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 8. **No cross-document rules.** A viewing doesn't require its watchlist item to exist: the app's "add viewing" writes both in one transaction for user-experience atomicity, but the data is the member's own, and nothing reads a viewing in a way that needs the watchlist document. This keeps the rules `get()`-free.
 9. **Rules tolerate older documents** the way every collection in this repo must: a field added later is validated on the *incoming* document with `request.resource.data.get('field', default)` (so a write that omits it still passes, and a write that sets it is checked), and `resource.data.get('field', default)` is used only to compare against the stored value (immutability, transitions). Every edit action backfills the new key with its empty value in the same write. (Older viewings lack `ticket`, `rating`, `theatre`, `trailerReminderId`; older memberships lack `favoriteTheatreId`.)
 10. **No `storage.rules` change.** The app stores no files.
-11. **The movie cache and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
-12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be `manual-…` and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range), and `createdAt` is immutable. `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
+11. **The movie and theater caches and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache`, `apps/a-list/theatreCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
+12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be AMC's digits or `manual-…` and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range, `timeZone` null or an IANA-looking zone), and `createdAt` is immutable. `timeZone` is allowed but not required, on the theater and on a viewing's snapshot (older ones lack it). `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
 13. **Calendar shares:** `apps/a-list/calendarShares/{shareId}` is readable and deletable only by `ownerUid`, creatable only by a member (their membership document must exist) whose `ownerUid` is their uid, with the id matching the 26-character share alphabet and equal to the field, exact keys, `endDate ≥ startDate` and at most 365 days later, a null-or-valid PIN, and 1–400 viewings. An update may change only `pin` and `lastEditedAt`. Visitors have no read; the function uses the admin SDK.
 
 The shape of the block (helpers are declared in the `memberships/{uid}` match so the nested matches reuse them):
@@ -648,6 +661,7 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 |---|---|
 | `completeSetup(draft)` | one `writeBatch`: the membership document (all keys, explicit `null`s; `taxRate` null when no bill total was given) and the theaters picked in the last step |
 | `addTheatre(theatre)` / `removeTheatre(theatreId)` | one `runTransaction` each: the theater document and, when needed, the membership's `favoriteTheatreId` (only the member's first theater becomes the favorite; removing the favorite hands the star to another saved theater in the same transaction, and tapping the star again clears it for good) |
+| `linkTheatre({ fromTheatreId, to })` | field-scoped batch updates of the showings tagged with the typed id, then one `runTransaction` (create or reuse the AMC theater, delete the typed one, re-point the favorite) |
 | `setFavoriteTheatre(theatreId \| null)` | one `runTransaction`: confirms the theater still exists, then writes `favoriteTheatreId`, so a stale device can't leave it dangling |
 | `updateMembership(fields)` | field-scoped `updateDoc` (+ `lastEditedAt`) |
 | `addWatchlistItem(movie, priority, preferredFormat)` (a manual movie is just a snapshot built by `ManualMovieForm` with a `manual-<uuid>` key) | `setDoc` at `watchlist/{movieKey}`; **create-if-absent** inside a `runTransaction` so a double-tap or two devices can't overwrite an existing priority |
