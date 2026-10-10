@@ -83,11 +83,16 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
     }
   };
 
-  const toggleDone = (item: ChecklistItem, isCompleted: boolean) =>
-    run(
-      () => dispatch(toggleChecklistItem({ tripId: trip.id, itemId: item.id, uid: currentUserId, isCompleted, isPrivate: false })).unwrap(),
-      'Unable to update that to-do',
-    );
+  // Not routed through `run`: marking the whole sheet busy would fade every button for a moment on each tick.
+  const toggleDone = async (item: ChecklistItem, isCompleted: boolean) => {
+    try {
+      await dispatch(
+        toggleChecklistItem({ tripId: trip.id, itemId: item.id, uid: currentUserId, isCompleted, isPrivate: false }),
+      ).unwrap();
+    } catch (error) {
+      addToast({ title: 'Unable to update that to-do', description: getErrorMessage(error, 'Please try again.'), type: 'error' });
+    }
+  };
 
   const unlink = (item: ChecklistItem) =>
     run(
@@ -166,7 +171,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
                         onCheckedChange={(checked) => void toggleDone(item, checked)}
                       />
                     </span>
-                    <span className={join('min-w-0 flex-1 text-sm leading-5 font-medium break-words', item.isCompleted && 'text-muted-foreground line-through')}>
+                    <span className={join('min-w-0 flex-1 text-sm leading-5 font-medium wrap-break-word', item.isCompleted && 'text-muted-foreground line-through')}>
                       {item.title}
                     </span>
                   </label>
