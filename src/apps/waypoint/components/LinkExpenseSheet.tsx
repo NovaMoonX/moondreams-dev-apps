@@ -109,16 +109,17 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
         </div>
       }
     >
-      <div className='space-y-3'>
-        <p className='text-muted-foreground text-sm'>
-          For <span className='text-foreground font-medium'>{subject.title}</span>.
-          {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
-        </p>
-        {unlinked.length >= LIST_SEARCH_THRESHOLD && (
-          <div className='bg-background sticky top-0 z-10 pb-1'>
+      <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
+        <div className='shrink-0 space-y-3'>
+          <p className='text-muted-foreground text-sm'>
+            For <span className='text-foreground font-medium'>{subject.title}</span>.
+            {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
+          </p>
+          {unlinked.length >= LIST_SEARCH_THRESHOLD && (
             <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
-          </div>
-        )}
+          )}
+        </div>
+        <div className='min-h-0 flex-1 overflow-y-auto'>
         {unlinked.length === 0 ? (
           <p className='text-muted-foreground text-sm'>Every expense is already linked to an event, stay or rental.</p>
         ) : visible.length === 0 ? (
@@ -147,6 +148,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
             ))}
           </ul>
         )}
+        </div>
       </div>
     </DetailSheet>
   );

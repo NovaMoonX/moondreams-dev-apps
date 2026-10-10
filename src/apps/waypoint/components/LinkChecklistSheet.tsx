@@ -126,10 +126,25 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
         </div>
       }
     >
-      <div className='space-y-4'>
-        <p className='text-muted-foreground text-sm'>
-          For <span className='text-foreground font-medium'>{subject.title}</span>. To-dos linked here show up in Before the Road too.
-        </p>
+      <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
+        <div className='shrink-0 space-y-3'>
+          <p className='text-muted-foreground text-sm'>
+            For <span className='text-foreground font-medium'>{subject.title}</span>. To-dos linked here show up in Before the Road too.
+          </p>
+          {isPicking && (
+            <>
+              <SectionDivider label='Already on your checklist' />
+              {available.length >= LIST_SEARCH_THRESHOLD && (
+                <SearchInput value={query} onChange={setQuery} placeholder='Search your checklist' />
+              )}
+              {picked.length > 0 && term && (
+                <p className='text-muted-foreground text-xs'>{picked.length} selected, including any the search hides.</p>
+              )}
+            </>
+          )}
+        </div>
+        <div className='min-h-0 flex-1 overflow-y-auto'>
+          <div className='space-y-4'>
         {!isPicking && linkedHere.length === 0 && (
           <p className='text-muted-foreground text-sm'>Nothing is linked to this event yet. Add a new to-do, or link one you already have.</p>
         )}
@@ -168,17 +183,6 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
         )}
         {isPicking && (
           <div className='space-y-3'>
-            <SectionDivider label='Already on your checklist' />
-            {available.length >= LIST_SEARCH_THRESHOLD && (
-              <div className='bg-background sticky top-0 z-10 pb-1'>
-                <SearchInput value={query} onChange={setQuery} placeholder='Search your checklist' />
-              </div>
-            )}
-            {picked.length > 0 && term && (
-              <p className='text-muted-foreground text-xs'>
-                {picked.length} selected, including any the search hides.
-              </p>
-            )}
             {visible.length === 0 ? (
               <p className='text-muted-foreground text-sm'>No to-do matches.</p>
             ) : (
@@ -214,6 +218,8 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
             )}
           </div>
         )}
+          </div>
+        </div>
       </div>
     </DetailSheet>
   );
