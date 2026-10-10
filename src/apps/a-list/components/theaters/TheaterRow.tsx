@@ -28,7 +28,7 @@ function TheaterRow({ name, detail, trailing, footer }: TheaterRowProps) {
           <div className='flex h-11 shrink-0 items-center'>{trailing}</div>
         )}
       </div>
-      {footer && <div className='mt-1'>{footer}</div>}
+      {footer && <div className='mt-1 sm:ml-12'>{footer}</div>}
     </li>
   );
 }
