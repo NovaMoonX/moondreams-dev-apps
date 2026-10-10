@@ -129,8 +129,8 @@ function Subview({
   }
 
   return (
-    <div className='page'>
-      <div className={join('mx-auto max-w-2xl py-6', className)}>
+    <div className='page max-sm:pb-4'>
+      <div className={join('mx-auto max-w-2xl py-6 max-sm:pb-0', className)}>
         {title !== undefined && (
           <SubviewHeader
             title={title}

@@ -87,7 +87,7 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
                   <PremiumSavingsHelp linkLabel='How premium savings work' />
                 </p>
                 {hasNoUpcharge && (
-                  <p className='bg-accent text-accent-foreground mt-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium'>
+                  <p className='bg-accent text-accent-foreground border-accent-foreground/25 mt-3 flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-medium'>
                     <span
                       className='bg-accent-foreground/15 grid size-7 shrink-0 place-items-center rounded-full text-sm'
                       aria-hidden='true'
