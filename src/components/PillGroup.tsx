@@ -9,6 +9,8 @@ import SearchInput from '@/components/SearchInput';
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
 const COLLAPSED_ROWS_REM = 5.5;
+/** Up to this many pills may sit below the two rows without a "Show all": a toggle that hides one to three options costs more than it saves. */
+const MAX_QUIET_HIDDEN = 3;
 
 export interface PillOption<T extends string> {
   value: T;
@@ -40,7 +42,7 @@ interface PillOptionsProps<T extends string> {
   showAll?: boolean;
 }
 
-/** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all". */
+/** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all", but only when more than three pills would be hidden. */
 export function PillOptions<T extends string>({
   label,
   options,
@@ -64,28 +66,39 @@ export function PillOptions<T extends string>({
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const filtered =
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
-  const isClamped = !showAll && trimmedQuery === '' && !isExpanded;
+  const isClamped = !showAll && trimmedQuery === '' && !isExpanded && isHidingRows;
 
-  useEffect(() => {
+  // Measured after every render, before paint, because the number of hidden pills can change while the content's box keeps its size (an option added or reordered on the last row).
+  const measure = () => {
     const content = contentRef.current;
     if (!content) {
       return;
     }
     const limit = COLLAPSED_ROWS_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const top = content.getBoundingClientRect().top;
+    const pills = [...(content.firstElementChild?.children ?? [])];
+    const hiddenCount = pills.filter((pill) => pill.getBoundingClientRect().bottom - top > limit + 1).length;
+    const overflows = hiddenCount > MAX_QUIET_HIDDEN;
     // Floating the chosen pill to the front can make the row fit; that must not read as "no overflow", or the pill floats back and the row flickers.
-    const observer = new ResizeObserver(() => {
-      const layout = `${Math.round(content.offsetWidth)}:${content.firstElementChild?.childElementCount}`;
-      const overflows = content.offsetHeight > limit + 2;
-      setIsHidingRows(overflows);
-      if (overflows) {
-        overflowLayoutRef.current = layout;
-      } else if (isFloatedRef.current && overflowLayoutRef.current === layout) {
-        return;
-      }
-      setIsOverflowing(overflows);
-    });
+    const layout = `${Math.round(content.offsetWidth)}:${content.firstElementChild?.childElementCount}`;
+    if (overflows) {
+      overflowLayoutRef.current = layout;
+    } else if (isFloatedRef.current && overflowLayoutRef.current === layout) {
+      return;
+    }
+    setIsHidingRows(overflows);
+    setIsOverflowing(overflows);
+  };
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
     observer.observe(content);
     return () => observer.disconnect();
+    // `measure` only reads refs and calls setters, so the first render's copy stays correct.
   }, []);
 
   // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
@@ -105,7 +118,7 @@ export function PillOptions<T extends string>({
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
         </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isHidingRows && event.target.matches(':focus-visible') && setIsExpanded(true)}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && event.target.matches(':focus-visible') && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}
