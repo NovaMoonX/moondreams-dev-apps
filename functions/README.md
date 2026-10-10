@@ -13,6 +13,8 @@ Server-side code for the mini-apps. Every function:
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
+| `findTheatres` | callable | A-List Tracker | `{ query }` (a 5-digit zip code, a city or state, or part of a theater's name), `{ state }` or `{ latitude, longitude }` → `{ theatres, places, area }`: the closest AMC theaters (up to 10 nearest first, 25 for a state, each with its time zone), or for a typed city or state the places to confirm plus theaters matching the name, from the AMC Theatres API |
+| `findShowtimes` | callable | A-List Tracker | `{ theatreId, date, title }` → `{ showtimes }`: a movie's showings at an AMC theater that day, with format, list price, a Standard price to compare and a purchase link |
 | `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
@@ -28,8 +30,12 @@ Every callable requires a signed-in caller, except `getCalendarShare`, which exi
 | --- | --- | --- | --- |
 | `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |
 | `OMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set OMDB_API_KEY --project moondreams-dev-apps` |
+| `AMC_API_KEY` | Functions secret, **required to deploy** | `findTheatres`, `findShowtimes` | `firebase functions:secrets:set AMC_API_KEY --project moondreams-dev-apps` (the vendor key from [developers.amctheatres.com](https://developers.amctheatres.com), sent as `X-AMC-Vendor-Key`) |
 | `MOVIE_PROVIDER` | env, optional (`tmdb` or `omdb`) | `searchMovies` | `functions/.env.local` locally. Forces a provider; unset, TMDB is used whenever its key is set. |
 | `TMDB_API_BASE` | env, optional | TMDB calls | `functions/.env.local`. Points TMDB calls at another server; a test aid, never set in production. |
+| `AMC_API_BASE` | env, optional | AMC calls | `functions/.env.local`. Points AMC calls at another server; a test aid, never set in production. |
+| `A_LIST_THEATRE_APP_DAILY_LOOKUP_CAP` / `A_LIST_THEATRE_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 500 and 40) | `findTheatres` | `functions/.env.local` locally |
+| `A_LIST_SHOWTIME_APP_DAILY_LOOKUP_CAP` / `A_LIST_SHOWTIME_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 2000 and 200) | `findShowtimes` (its own budget, counted in `lookupUsage` under `showtimes_`) | `functions/.env.local` locally |
 | `A_LIST_APP_DAILY_LOOKUP_CAP` | env, optional (default 900) | A-List lookups | `functions/.env.local` locally |
 | `A_LIST_MEMBER_DAILY_LOOKUP_CAP` | env, optional (default 100) | A-List lookups | `functions/.env.local` locally |
 
@@ -85,6 +91,23 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Offline fixtures:**
   - In the emulator with no key readable at all, both callables answer from a built-in OMDb-shaped catalog (try "galaxy", "matrix" or "starlight").
   - Unknown ids return `not-found`.
+
+### A-List Tracker: `findTheatres`
+
+- **Flow:** the full outline is in `src/apps/a-list/TECHNICAL.md` under "Theater Data Service". A zip code goes to AMC's `/v2/location-suggestions` for coordinates, then `/v2/locations` for the nearest theaters; other text returns the suggested places (city, state) for the member to confirm, plus name matches from `/v2/theatres`; a confirmed state goes to `/v2/locations/states/{state}`.
+- **Server cache:** `apps/a-list/theatreCache`: suggested places for 30 days; a neighborhood's, a state's and the full theater list for 7 days (neighborhoods keyed on coordinates rounded to two decimals).
+- **Budget:** `lookupBudget.ts` counts every upstream call in `apps/a-list/lookupUsage` (own `theatres_` counters) and refuses with `resource-exhausted` at 500 a day app-wide or 40 per member.
+- **Access:** clients can't read or write `theatreCache`.
+- **Offline fixtures:** in the emulator with no key readable, it answers from three built-in theaters.
+- **Verified live (2026-10-09):** the suggestion, locations, state and theater-list shapes, that `/v2/theatres?page-size=1000` returns all 521 theaters in one page, and that AMC answers a no-match *suggestions* search with HTTP 400 (only that call treats a 4xx as an empty result). Its `timezone` is a name like "CENTRAL TIME", mapped to an IANA zone here.
+
+### A-List Tracker: `findShowtimes`
+
+- **Secrets:** the same `AMC_API_KEY` and budget as `findTheatres`; nothing new to set up.
+- **Flow:** reads `/v2/theatres/{id}/showtimes/{M-D-YYYY}` (`page-size` 200, up to 3 pages), keeps the movie's showings by title, and reads each one's format from its attributes (IMAX, Dolby, PRIME, RealD 3D, Laser, otherwise Standard), its adult `ticketPrices` entry and its https `purchaseUrl`.
+- **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
+- **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
+- **Check after the key is set:** the response parsing was written from AMC's public docs and a third-party reference of live responses, and has not been run against the live API. Still unconfirmed: that `movieName` and `purchaseUrl` are present on every showtime, the Dolby and PRIME attribute codes, and the `/v2/locations` and `/v2/location-suggestions` shapes.
 
 ### `fetchLinkMetadata`
 

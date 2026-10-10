@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   runTransaction,
+  updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
 
@@ -11,6 +12,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { DEFAULT_WATCH_PRIORITY } from '@apps/a-list/constants';
 import type {
   MovieSnapshot,
+  PurchasePlan,
   Ticket,
   TheatreSnapshot,
   Viewing,
@@ -34,6 +36,7 @@ interface AddViewingInput {
   showtimeAt: number;
   ticket: Ticket | null;
   theatre: TheatreSnapshot | null;
+  purchase: PurchasePlan | null;
 }
 
 function toSnapshot(movie: MovieSnapshot): MovieSnapshot {
@@ -54,7 +57,7 @@ export const addViewing = createAsyncThunk<
 >(
   'aList/viewings/add',
   async (
-    { uid, movieKey, movie, showtimeAt, ticket, theatre },
+    { uid, movieKey, movie, showtimeAt, ticket, theatre, purchase },
     { rejectWithValue },
   ) => {
     const membershipPath = ['apps', 'a-list', 'memberships', uid] as const;
@@ -90,6 +93,7 @@ export const addViewing = createAsyncThunk<
           status: getInitialStatus(endsAt, now),
           ticket: ticket ?? null,
           theatre: theatre ?? null,
+          purchase: purchase ?? null,
           rating: null,
           trailerReminderId,
           createdAt: now,
@@ -124,6 +128,7 @@ const LATER_KEYS = {
   rating: null,
   theatre: null,
   trailerReminderId: null,
+  purchase: null,
 } as const;
 
 /**
@@ -153,12 +158,16 @@ async function editViewing(
     }
 
     const stored = snapshot.data();
+    // Recording a ticket answers the "did you buy?" question for good.
+    const edit = typeof fields === 'function' ? fields(stored) : fields;
+    const resolvesPurchase = edit.ticket != null && stored.purchase != null;
     const backfill = Object.fromEntries(
       Object.entries(LATER_KEYS).filter(([key]) => !(key in stored)),
     );
     transaction.update(viewingRef, {
       ...backfill,
-      ...(typeof fields === 'function' ? fields(stored) : fields),
+      ...edit,
+      ...(resolvesPurchase ? { 'purchase.startedAt': null } : {}),
       lastEditedAt: Date.now(),
     });
     return stored;
@@ -176,6 +185,8 @@ interface UpdateViewingInput {
   rating?: number | null;
   /** Omit to leave the theater alone; null clears it. */
   theatre?: TheatreSnapshot | null;
+  /** Omit to leave the purchase plan alone; null clears it. */
+  purchase?: PurchasePlan | null;
 }
 
 /** Moves a showing (the showtime and its derived end are written together) and edits its theater and, once seen, its stars. */
@@ -186,7 +197,7 @@ export const updateViewing = createAsyncThunk<
 >(
   'aList/viewings/update',
   async (
-    { uid, id, showtimeAt, runtimeMinutes, rating, theatre },
+    { uid, id, showtimeAt, runtimeMinutes, rating, theatre, purchase },
     { rejectWithValue },
   ) => {
     const newReminderId = newTrailerReminderId(showtimeAt);
@@ -201,6 +212,7 @@ export const updateViewing = createAsyncThunk<
           : { trailerReminderId: newReminderId }),
         ...(rating === undefined ? {} : { rating }),
         ...(theatre === undefined ? {} : { theatre }),
+        ...(purchase === undefined ? {} : { purchase }),
       }));
 
       if (previous.showtimeAt !== showtimeAt) {
@@ -306,6 +318,34 @@ export const markViewingSeen = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to mark this movie seen.'),
+      );
+    }
+  },
+);
+
+interface SetPurchaseStartedInput {
+  uid: string;
+  id: string;
+  /** The instant the member left for AMC; null stops asking about it. */
+  startedAt: number | null;
+}
+
+/** Writes only the `startedAt` key of the plan, so a plan changed on another device isn't overwritten. */
+export const setPurchaseStarted = createAsyncThunk<
+  void,
+  SetPurchaseStartedInput,
+  { rejectValue: string }
+>(
+  'aList/viewings/setPurchaseStarted',
+  async ({ uid, id, startedAt }, { rejectWithValue }) => {
+    try {
+      await updateDoc(
+        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
+        { 'purchase.startedAt': startedAt, lastEditedAt: Date.now() },
+      );
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save your purchase.'),
       );
     }
   },

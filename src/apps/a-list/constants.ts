@@ -48,6 +48,16 @@ export const AMC_FORMATS: AmcFormat[] = [
   'LASER',
 ];
 
+/** Showtimes list the premium formats first, Standard last. */
+export const AMC_FORMAT_DISPLAY_ORDER: AmcFormat[] = [
+  'DOLBY_CINEMA',
+  'IMAX',
+  'PRIME',
+  'REALD_3D',
+  'LASER',
+  'STANDARD',
+];
+
 export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
   STANDARD: 'Standard',
   DOLBY_CINEMA: 'Dolby Cinema',
@@ -93,6 +103,14 @@ export const WEEK_STARTS_ON = 5;
 
 export const MAX_THEATRES = 10;
 export const THEATRE_NAME_MAX_CHARS = 60;
+export const THEATRE_SEARCH_MIN_CHARS = 3;
+export const THEATRE_SEARCH_MAX_CHARS = 60;
+/** A searched place with no theater closer than this gets a note that AMC isn't there. */
+export const THEATRE_FAR_AWAY_MILES = 25;
+/** The most theaters the finder lists for a whole state. */
+export const THEATRE_STATE_RESULT_CAP = 25;
+export const THEATRE_STALE_MS = 60 * 60 * 1000;
+export const SHOWTIMES_STALE_MS = 5 * 60 * 1000;
 
 export const MAX_FEE_CHIPS = 4;
 export const MAX_TAX_CHIPS = 4;

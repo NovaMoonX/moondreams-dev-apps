@@ -31,8 +31,9 @@ function PremiumSavingsHelp({ linkLabel }: PremiumSavingsHelpProps) {
         </div>
       </dl>
       <p className='opacity-80'>
-        Tax and fees aren't part of it, and a premium ticket without a standard
-        price adds nothing yet.
+        Tax and fees aren't part of it. A premium ticket without a standard
+        price adds nothing yet, and one that costs the same as or less than
+        Standard (Laser often does) adds $0, never a negative.
       </p>
     </HelpTip>
   );

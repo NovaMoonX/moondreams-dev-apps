@@ -87,6 +87,36 @@ export const selectWatchlistItems = createSelector(
 
 const selectViewingItems = (state: RootState) => state.aList.viewings.items;
 
+export const selectShowingCountByTheatreId = createSelector(
+  [selectViewingItems],
+  (viewings) =>
+    viewings.reduce<Record<string, number>>((counts, viewing) => {
+      const theatreId = viewing.theatre?.theatreId;
+      return theatreId
+        ? { ...counts, [theatreId]: (counts[theatreId] ?? 0) + 1 }
+        : counts;
+    }, {}),
+);
+
+/** Showings the member left for AMC to buy and hasn't recorded a ticket for yet, most recent first. */
+export const selectPendingPurchaseReturns = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const result = viewings
+      .filter(
+        (viewing) =>
+          viewing.status === 'PLANNED' &&
+          viewing.purchase?.startedAt != null &&
+          (viewing.ticket ?? null) === null,
+      )
+      .sort(
+        (left, right) =>
+          (right.purchase?.startedAt ?? 0) - (left.purchase?.startedAt ?? 0),
+      );
+    return result;
+  },
+);
+
 /** Day key → that day's viewings in showtime order: what each calendar cell and the day panel read. */
 export const selectViewingsByDay = createSelector(
   [selectViewingItems],

@@ -1,5 +1,5 @@
 import TheaterList from '@apps/a-list/components/theaters/TheaterList';
-import TheaterNameForm from '@apps/a-list/components/theaters/TheaterNameForm';
+import TheaterPicker from '@apps/a-list/components/theaters/TheaterPicker';
 import type { TheatreDraft } from '@apps/a-list/types';
 
 export interface TheatersStepValues {
@@ -43,11 +43,12 @@ function TheatersStep({ values, onChange }: TheatersStepProps) {
         </p>
         <h3 className='text-xl font-semibold'>Where do you catch movies?</h3>
         <p className='text-muted-foreground text-sm'>
-          Add the theaters you go to and we'll tag your movies with them. You
-          can skip this and add them any time.
+          Add the AMC theaters you go to and we'll tag your movies with them.
+          You can skip this and add them any time.
         </p>
       </div>
-      <TheaterNameForm
+      <TheaterPicker
+        savedIds={theatres.map((theatre) => theatre.theatreId)}
         savedNames={theatres.map((theatre) => theatre.name)}
         onAdd={handleAdd}
       />

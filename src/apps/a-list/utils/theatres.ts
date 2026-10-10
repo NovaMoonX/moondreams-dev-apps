@@ -6,9 +6,35 @@ interface TheatreLike {
   state: string | null;
 }
 
+/** AMC writes cities in capitals; this is for theaters saved before they were tidied, so "SAINT LOUIS" reads "Saint Louis". */
+function toCityCase(city: string): string {
+  if (city !== city.toUpperCase()) {
+    return city;
+  }
+
+  const result = city
+    .toLowerCase()
+    .replace(
+      /(^|[\s\-.(])([a-z])/g,
+      (_match, edge: string, letter: string) => edge + letter.toUpperCase(),
+    )
+    .replace(
+      /^([a-z])'([a-z])/,
+      (_match, first: string, second: string) =>
+        `${first.toUpperCase()}'${second.toUpperCase()}`,
+    )
+    .replace(
+      /\bMc([a-z])/g,
+      (_match, letter: string) => `Mc${letter.toUpperCase()}`,
+    );
+  return result;
+}
+
 /** "Overland Park, KS", or whatever part is known. */
 export function formatTheatreLocation(theatre: TheatreLike): string {
-  const result = [theatre.city, theatre.state].filter(Boolean).join(', ');
+  const result = [theatre.city ? toCityCase(theatre.city) : null, theatre.state]
+    .filter(Boolean)
+    .join(', ');
   return result;
 }
 
@@ -19,7 +45,14 @@ export function toTheatreSnapshot(theatre: TheatreSnapshot): TheatreSnapshot {
     name: theatre.name,
     city: theatre.city ?? null,
     state: theatre.state ?? null,
+    timeZone: theatre.timeZone ?? null,
   };
+}
+
+/** True for a theater typed in by name, which AMC has no record of. */
+export function isTypedTheatre(theatre: { theatreId: string }): boolean {
+  const result = theatre.theatreId.startsWith('manual-');
+  return result;
 }
 
 /** A theater the member typed in by name. */
@@ -33,5 +66,7 @@ export function createTypedTheatre(name: string): TheatreDraft {
     postalCode: null,
     latitude: null,
     longitude: null,
+    timeZone: null,
   };
 }
+

@@ -1,9 +1,44 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 
+interface LookupBudget {
+  /** Keeps each upstream's counters apart inside `lookupUsage`. */
+  idPrefix: string;
+  appCapName: string;
+  appCap: number;
+  memberCapName: string;
+  memberCap: number;
+  exhaustedMessage: string;
+}
+
 // OMDb's free key allows about 1,000 lookups a day for the whole app; stop short of it.
-const DEFAULT_APP_DAILY_CAP = 900;
-const DEFAULT_MEMBER_DAILY_CAP = 100;
+export const MOVIE_BUDGET: LookupBudget = {
+  idPrefix: '',
+  appCapName: 'A_LIST_APP_DAILY_LOOKUP_CAP',
+  appCap: 900,
+  memberCapName: 'A_LIST_MEMBER_DAILY_LOOKUP_CAP',
+  memberCap: 100,
+  exhaustedMessage: 'Movie search is resting for today. You can still add a movie by its title.',
+};
+
+export const THEATRE_BUDGET: LookupBudget = {
+  idPrefix: 'theatres_',
+  appCapName: 'A_LIST_THEATRE_APP_DAILY_LOOKUP_CAP',
+  appCap: 500,
+  memberCapName: 'A_LIST_THEATRE_MEMBER_DAILY_LOOKUP_CAP',
+  memberCap: 40,
+  exhaustedMessage: 'Theater search is resting for today. Try again tomorrow.',
+};
+
+// A day of showtimes is one call per theater and day, shared by every movie asked about, and a member browses several days and theaters, so this is looser than search.
+export const SHOWTIME_BUDGET: LookupBudget = {
+  idPrefix: 'showtimes_',
+  appCapName: 'A_LIST_SHOWTIME_APP_DAILY_LOOKUP_CAP',
+  appCap: 2000,
+  memberCapName: 'A_LIST_SHOWTIME_MEMBER_DAILY_LOOKUP_CAP',
+  memberCap: 200,
+  exhaustedMessage: 'Showtime lookup is resting for today. Try again tomorrow.',
+};
 
 function readCap(name: string, fallback: number) {
   const value = Number(process.env[name]);
@@ -14,13 +49,13 @@ function readCap(name: string, fallback: number) {
  * Counts one upstream lookup against today's app-wide and per-member budgets, or refuses
  * with `resource-exhausted`. Call it only on a cache miss, right before the upstream call.
  */
-export async function reserveLookup(uid: string): Promise<void> {
+export async function reserveLookup(uid: string, budget: LookupBudget = MOVIE_BUDGET): Promise<void> {
   const firestore = getFirestore();
   const day = new Date().toISOString().slice(0, 10);
-  const appRef = firestore.doc(`apps/a-list/lookupUsage/${day}`);
-  const memberRef = firestore.doc(`apps/a-list/lookupUsage/${day}_${uid}`);
-  const appCap = readCap('A_LIST_APP_DAILY_LOOKUP_CAP', DEFAULT_APP_DAILY_CAP);
-  const memberCap = readCap('A_LIST_MEMBER_DAILY_LOOKUP_CAP', DEFAULT_MEMBER_DAILY_CAP);
+  const appRef = firestore.doc(`apps/a-list/lookupUsage/${budget.idPrefix}${day}`);
+  const memberRef = firestore.doc(`apps/a-list/lookupUsage/${budget.idPrefix}${day}_${uid}`);
+  const appCap = readCap(budget.appCapName, budget.appCap);
+  const memberCap = readCap(budget.memberCapName, budget.memberCap);
 
   await firestore.runTransaction(async (transaction) => {
     const [appSnapshot, memberSnapshot] = await transaction.getAll(appRef, memberRef);
@@ -28,10 +63,7 @@ export async function reserveLookup(uid: string): Promise<void> {
     const memberCount = (memberSnapshot.get('count') as number | undefined) ?? 0;
 
     if (appCount >= appCap || memberCount >= memberCap) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'Movie search is resting for today. You can still add a movie by its title.',
-      );
+      throw new HttpsError('resource-exhausted', budget.exhaustedMessage);
     }
 
     transaction.set(appRef, { count: appCount + 1, day });

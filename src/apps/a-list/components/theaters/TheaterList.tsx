@@ -4,7 +4,10 @@ import { Star, Trash2 } from 'lucide-react';
 
 import TheaterRow from '@apps/a-list/components/theaters/TheaterRow';
 import type { TheatreSnapshot } from '@apps/a-list/types';
-import { formatTheatreLocation } from '@apps/a-list/utils/theatres';
+import {
+  formatTheatreLocation,
+  isTypedTheatre,
+} from '@apps/a-list/utils/theatres';
 
 interface TheaterListProps {
   theatres: TheatreSnapshot[];
@@ -12,6 +15,8 @@ interface TheaterListProps {
   isDisabled?: boolean;
   onToggleFavorite: (theatreId: string) => void;
   onRemove: (theatre: TheatreSnapshot) => void;
+  /** Offered on a typed theater, so it can become the real AMC one without re-tagging showings. */
+  onLink?: (theatre: TheatreSnapshot) => void;
 }
 
 function TheaterList({
@@ -20,6 +25,7 @@ function TheaterList({
   isDisabled = false,
   onToggleFavorite,
   onRemove,
+  onLink,
 }: TheaterListProps) {
   return (
     <ul className='border-border bg-card divide-border divide-y overflow-hidden rounded-2xl border'>
@@ -29,9 +35,28 @@ function TheaterList({
           <TheaterRow
             key={theatre.theatreId}
             name={theatre.name}
-            detail={formatTheatreLocation(theatre)}
+            detail={
+              isTypedTheatre(theatre)
+                ? 'Not linked to AMC'
+                : formatTheatreLocation(theatre)
+            }
+            footer={
+              onLink && isTypedTheatre(theatre) ? (
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='secondary'
+                  rounded='full'
+                  className='relative h-8 w-full whitespace-nowrap before:absolute before:inset-x-0 before:-inset-y-1 sm:w-auto'
+                  disabled={isDisabled}
+                  onClick={() => onLink(theatre)}
+                >
+                  🔗 Link to the AMC theater
+                </Button>
+              ) : undefined
+            }
             trailing={
-              <div className='flex shrink-0 items-center gap-1'>
+              <div className='flex items-center gap-1'>
                 <Button
                   type='button'
                   variant='tertiary'
