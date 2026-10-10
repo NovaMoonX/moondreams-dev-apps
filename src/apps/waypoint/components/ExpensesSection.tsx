@@ -363,19 +363,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setRangedOnly(false);
     setSplitOnly(false);
   };
-  const toTotalsView = (total: TripExpenseTotals['total']): TripExpenseTotals['total'] => {
-    if (totalsView === 'group') {
-      return total;
+  const getViewTotals = (list: TripExpense[]): TripExpenseTotals => {
+    if (totalsView !== 'per-person') {
+      return computeExpenseTotals(list, memberIds);
     }
 
+    const forEveryone = list.filter((expense) => {
+      const splitIds = getSplitMemberIds(expense, memberIds);
+      return memberIds.every((uid) => splitIds.includes(uid));
+    });
     const headcount = Math.max(1, memberIds.length);
-    const perPerson = {
+    const scale = (total: TripExpenseTotals['total']) => ({
       min: scaleAmount(total.min, 1 / headcount),
       max: scaleAmount(total.max, 1 / headcount),
-    };
+    });
+    const sums = computeExpenseTotals(forEveryone, memberIds);
+    const perPerson = { paid: scale(sums.paid), expected: scale(sums.expected), total: scale(sums.total) };
     return perPerson;
   };
-  const totals = useMemo(() => computeExpenseTotals(expenses, memberIds), [expenses, memberIds]);
+  const totals = getViewTotals(expenses);
   const myTotals = useMemo(
     () => computeMemberTotals(expenses, memberIds, currentUserId),
     [expenses, memberIds, currentUserId],
@@ -383,7 +389,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const filteredTotal =
     totalsView === 'me'
       ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
-      : toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
+      : getViewTotals(filteredExpenses).total;
   const totalCards: { label: string; total: TripExpenseTotals['total']; personal: number }[] =
     totalsView === 'me'
       ? [
@@ -392,9 +398,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           { label: 'My total', total: myTotals.myTotal, personal: personalTotals.total },
         ]
       : [
-          { label: 'Paid', total: toTotalsView(totals.paid), personal: personalTotals.paid },
-          { label: 'Expected', total: toTotalsView(totals.expected), personal: personalTotals.expected },
-          { label: 'Total', total: toTotalsView(totals.total), personal: personalTotals.total },
+          { label: 'Paid', total: totals.paid, personal: personalTotals.paid },
+          { label: 'Expected', total: totals.expected, personal: personalTotals.expected },
+          { label: 'Total', total: totals.total, personal: personalTotals.total },
         ];
   const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
   const myOpenPairs = pairSettlements.filter(
@@ -973,6 +979,28 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 </p>
                 <p>
                   <strong>My total</strong> is your share of everything, including what others covered.
+                </p>
+              </HelpTip>
+            </>
+          )}
+          {totalsView === 'per-person' && (
+            <>
+              {' '}
+              <HelpTip
+                title='Per person'
+                linkLabel="What's counted?"
+                className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
+              >
+                <p>
+                  Only <strong>expenses for everyone</strong> are counted, split evenly across the group.
+                </p>
+                <p>
+                  An expense picked for <strong>certain people</strong> counts only when it includes everyone
+                  who&apos;s on the trip right now.
+                </p>
+                <p>
+                  Anything for just one person or a smaller group is left out, so the number stays a fair
+                  per-person figure. See <strong>Mine</strong> for your own share of everything.
                 </p>
               </HelpTip>
             </>
