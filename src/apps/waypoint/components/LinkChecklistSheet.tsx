@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import SearchInput from '@/components/SearchInput';
@@ -149,37 +150,39 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
           <p className='text-muted-foreground text-sm'>Nothing is linked to this event yet. Add a new to-do, or link one you already have.</p>
         )}
         {!isPicking && linkedHere.length > 0 && (
-          <ul className='divide-border divide-y'>
-            {linkedHere.map((item) => (
-              <li key={item.id} className='flex min-h-12 items-center gap-3 py-2'>
-                <label className='flex min-w-0 flex-1 cursor-pointer items-center gap-3'>
-                <span className='inline-flex w-5 shrink-0 justify-center'>
-                  <Checkbox
-                    checked={item.isCompleted}
-                    disabled={isBusy || !(canEditExistingItem(trip, currentUserId) || item.assignedToUids.includes(currentUserId))}
-                    aria-label={`Mark ${item.title} done`}
-                    onCheckedChange={(checked) => void toggleDone(item, checked)}
-                  />
-                </span>
-                <span className='min-w-0 flex-1'>
-                  <span className='block truncate text-sm font-medium'>{item.title}</span>
-                  <span className='text-muted-foreground block text-xs'>{item.isCompleted ? 'Done' : 'Tick it off when it is done'}</span>
-                </span>
-                </label>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='sm'
-                  className="text-muted-foreground relative h-auto px-0! text-xs whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
-                  disabled={isBusy}
-                  aria-label={`Unlink ${item.title}`}
-                  onClick={() => void unlink(item)}
-                >
-                  Unlink
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <div className='space-y-1'>
+            <p className='text-muted-foreground text-xs'>Tick one off when it is done.</p>
+            <ul className='divide-border divide-y'>
+              {linkedHere.map((item) => (
+                <li key={item.id} className='flex min-h-12 items-start gap-3 py-3'>
+                  <label className='flex min-w-0 flex-1 cursor-pointer items-start gap-3'>
+                    <span className='inline-flex h-5 w-5 shrink-0 items-center justify-center'>
+                      <Checkbox
+                        checked={item.isCompleted}
+                        disabled={isBusy || !(canEditExistingItem(trip, currentUserId) || item.assignedToUids.includes(currentUserId))}
+                        aria-label={`Mark ${item.title} done`}
+                        onCheckedChange={(checked) => void toggleDone(item, checked)}
+                      />
+                    </span>
+                    <span className={join('min-w-0 flex-1 text-sm leading-5 font-medium break-words', item.isCompleted && 'text-muted-foreground line-through')}>
+                      {item.title}
+                    </span>
+                  </label>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    className="text-muted-foreground relative h-5 min-h-0 shrink-0 px-0! py-0 text-xs whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
+                    disabled={isBusy}
+                    aria-label={`Unlink ${item.title}`}
+                    onClick={() => void unlink(item)}
+                  >
+                    Unlink
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {isPicking && (
           <div className='space-y-3'>
