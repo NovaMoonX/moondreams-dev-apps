@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { useAuth } from '@hooks/useAuth';
+import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -23,6 +24,7 @@ import {
 
 function WorthTheWait() {
   const { user, loading: authLoading } = useAuth();
+  useTrackAppUsage('worth-the-wait', user?.uid ?? null);
   const [searchParams] = useSearchParams();
 
   const navigate = useNavigate();

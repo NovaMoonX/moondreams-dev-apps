@@ -27,6 +27,7 @@ import WatchlistItemDrawer from '@apps/a-list/components/watchlist/WatchlistItem
 import WatchlistScreen from '@apps/a-list/components/watchlist/WatchlistScreen';
 import { A_LIST_TABS, DEFAULT_A_LIST_TAB } from '@apps/a-list/constants';
 import { AListOverlayContext } from '@apps/a-list/hooks/useAListOverlay';
+import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useAListSync } from '@apps/a-list/hooks/useAListSync';
 import { useAListTheme } from '@apps/a-list/hooks/useAListTheme';
 import { useRefreshUnreleasedMovies } from '@apps/a-list/hooks/useRefreshUnreleasedMovies';
@@ -58,6 +59,7 @@ function AList() {
 
   useAListTheme();
   useAListSync(user?.uid ?? null);
+  useTrackAppUsage('a-list', user?.uid ?? null);
   useRefreshUnreleasedMovies(
     user?.uid ?? null,
     isLoaded && !loadError && membership !== null,
