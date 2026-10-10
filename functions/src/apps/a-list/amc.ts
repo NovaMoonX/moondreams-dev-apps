@@ -50,6 +50,8 @@ export function isFixtureMode(apiKey: string) {
 }
 
 // Only the suggestions lookup answers "nothing matches" with a 400; on any other call a 4xx means our request is wrong, which must not read as an empty result.
+async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>): Promise<T>;
+async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>, isNoMatchAnswer: true): Promise<T | null>;
 async function callAmc<T>(
   apiKey: string,
   path: string,
