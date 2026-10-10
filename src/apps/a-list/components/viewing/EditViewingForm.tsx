@@ -85,7 +85,11 @@ function EditViewingForm({
         spacing='normal'
         onDataChange={(data) => setValues(data as ShowtimeValues)}
       />
-      <TheaterPills label='Theater' value={theatre} onChange={setTheatre} />
+      <TheaterPills
+        label='📍 Which theater?'
+        value={theatre}
+        onChange={setTheatre}
+      />
       {isSeen && (
         <div className='space-y-1'>
           <p className='text-sm font-medium'>Your rating</p>

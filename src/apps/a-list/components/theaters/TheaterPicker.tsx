@@ -11,6 +11,8 @@ interface TheaterPickerProps {
   savedNames: string[];
   onAdd: (theatre: TheatreDraft) => boolean | Promise<boolean>;
   isDisabled?: boolean;
+  /** Inside a modal: the results scroll instead of growing the sheet. */
+  isCompact?: boolean;
 }
 
 function TheaterPicker({
@@ -18,12 +20,14 @@ function TheaterPicker({
   savedNames,
   onAdd,
   isDisabled = false,
+  isCompact = false,
 }: TheaterPickerProps) {
   const [isTyping, setIsTyping] = useState(false);
 
   return (
     <div className='space-y-3'>
       <TheaterFinder
+        isCompact={isCompact}
         savedIds={savedIds}
         isDisabled={isDisabled}
         onAdd={onAdd}

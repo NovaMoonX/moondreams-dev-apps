@@ -49,6 +49,12 @@ export function toTheatreSnapshot(theatre: TheatreSnapshot): TheatreSnapshot {
   };
 }
 
+/** True for a theater typed in by name, which AMC has no record of. */
+export function isTypedTheatre(theatre: { theatreId: string }): boolean {
+  const result = theatre.theatreId.startsWith('manual-');
+  return result;
+}
+
 /** A theater the member typed in by name. */
 export function createTypedTheatre(name: string): TheatreDraft {
   return {
@@ -64,8 +70,3 @@ export function createTypedTheatre(name: string): TheatreDraft {
   };
 }
 
-/** True for a theater typed in by name, which AMC has no record of. */
-export function isTypedTheatre(theatre: { theatreId: string }): boolean {
-  const result = theatre.theatreId.startsWith('manual-');
-  return result;
-}

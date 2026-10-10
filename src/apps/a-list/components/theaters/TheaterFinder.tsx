@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 import { ChevronRight, LocateFixed } from 'lucide-react';
@@ -31,6 +32,8 @@ interface TheaterFinderProps {
   savedIds: string[];
   onAdd: (theatre: TheatreSearchResult) => void;
   isDisabled?: boolean;
+  /** Inside a modal: the results scroll in a capped box so the field and footer never move. */
+  isCompact?: boolean;
   /** The button on each result; "Link" when the pick replaces a typed theater. */
   actionLabel?: string;
 }
@@ -46,6 +49,7 @@ function TheaterFinder({
   savedIds,
   onAdd,
   isDisabled = false,
+  isCompact = false,
   actionLabel = 'Add',
 }: TheaterFinderProps) {
   const [query, setQuery] = useState('');
@@ -245,7 +249,9 @@ function TheaterFinder({
         placeholder='Zip code, city or theater name'
       />
       {isShowingResults ? (
-        <div className='space-y-4'>
+        <div
+          className={join('space-y-4', isCompact && 'max-h-60 overflow-y-auto')}
+        >
           {places.length > 0 && (
             <div className='space-y-2'>
               <p className='text-muted-foreground text-sm'>Did you mean…</p>

@@ -200,6 +200,18 @@ service cloud.firestore {
           && (movie.contentRating == null || (movie.contentRating is string && movie.contentRating.size() <= 20));
       }
 
+      function isPurchaseValid(purchase) {
+        let keys = ['showtimeId', 'format', 'priceCents', 'standardPriceCents', 'purchaseUrl', 'startedAt'];
+        return purchase is map && purchase.keys().hasOnly(keys) && purchase.keys().hasAll(keys)
+          && purchase.showtimeId is string && purchase.showtimeId.size() > 0 && purchase.showtimeId.size() <= 40
+          && isFormat(purchase.format)
+          && (purchase.priceCents == null || isCents(purchase.priceCents))
+          && (purchase.standardPriceCents == null || isCents(purchase.standardPriceCents))
+          && purchase.purchaseUrl is string && purchase.purchaseUrl.size() <= 500
+          && purchase.purchaseUrl.matches('^https://[^\\s]+$')
+          && (purchase.startedAt == null || purchase.startedAt is int);
+      }
+
       function isTicketValid(ticket) {
         let keys = ['entryMode', 'format', 'priceCents', 'standardPriceCents', 'feeAvoidedCents',
                     'taxRate', 'taxCents', 'totalCents'];
@@ -242,8 +254,8 @@ service cloud.firestore {
       match /viewings/{viewingId} {
         function isViewingValid(data) {
           let required = ['id', 'movieKey', 'movie', 'showtimeAt', 'endsAt', 'status', 'createdAt', 'lastEditedAt'];
-          // `ticket`, `rating`, `theatre` and `trailerReminderId` arrived later: legacy documents lack them, so they're allowed but not required.
-          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre', 'trailerReminderId'])) && data.keys().hasAll(required)
+          // `ticket`, `rating`, `theatre`, `trailerReminderId` and `purchase` arrived later: legacy documents lack them, so they're allowed but not required.
+          return data.keys().hasOnly(required.concat(['ticket', 'rating', 'theatre', 'trailerReminderId', 'purchase'])) && data.keys().hasAll(required)
             && data.id == viewingId
             && data.movieKey is string
             && data.movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
@@ -256,6 +268,7 @@ service cloud.firestore {
             && (data.get('ticket', null) == null || isTicketValid(data.ticket))
             && (data.get('theatre', null) == null || isTheatreSnapshotValid(data.theatre))
             && (data.get('trailerReminderId', null) == null || data.trailerReminderId is string)
+            && (data.get('purchase', null) == null || isPurchaseValid(data.purchase))
             && isNullOrHalfStars(data.get('rating', null))
             && (data.status == 'SEEN' || data.get('rating', null) == null)
             && data.createdAt is int

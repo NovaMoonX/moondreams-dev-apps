@@ -134,11 +134,21 @@ interface Viewing {
   endsAt: number;                    // INSTANT: showtimeAt + previews buffer + runtime (fallback runtime if null); recomputed whenever showtimeAt changes
   status: ViewingStatus;             // PLANNED → SEEN; never back
   rating: number | null;             // 0.5–5 stars in half steps (older ones are whole stars); only meaningful when SEEN
-  ticket: Ticket | null;             // null until "Mark paid" or the add form's "Yes, I paid"
+  ticket: Ticket | null;             // null until the drawer's ticket form or the add form's "Yes, I paid"
+  purchase: PurchasePlan | null;     // the AMC showing the member picked to buy, until a ticket is recorded; documents written before it existed lack the key
   theatre: TheatreSnapshot | null;   // copied when picked, so a showing outlives a removed theater; documents written before theaters existed lack the key
   trailerReminderId: string | null;  // the pending push (`reminders/{id}`, `TRAILER_REMINDER_DELAY_MINUTES` after showtimeAt); documents written before it existed lack the key
   createdAt: number;
   lastEditedAt: number;
+}
+
+interface PurchasePlan {
+  showtimeId: string;                // AMC's showtime id
+  format: AmcFormat;
+  priceCents: number | null;         // AMC's adult list price before tax and fees; null when AMC lists none
+  standardPriceCents: number | null; // the cheapest Standard showing of the same movie that day, for a premium showing
+  purchaseUrl: string;               // https link to buy this showing on amctheatres.com
+  startedAt: number | null;          // INSTANT: when the member left for AMC to buy; null until they do
 }
 
 interface Ticket {
@@ -153,10 +163,13 @@ interface Ticket {
 }
 ```
 
+- **Showtimes read in the theater's time zone.** A saved theater (and a showing's snapshot) carries its IANA `timeZone` from AMC; the picker, the buy panel and the welcome-back question format the instant with `Intl` in that zone (`utils/theatreTime.ts`) and say so ("Times are the theater's own: Central Daylight Time"), adding what a picked time is for the viewer when the clocks differ. The day sent to `findShowtimes` is that moment's day at the theater (`getDayInZone`), so a 10:30 PM show in Los Angeles that is already the next day at a Chicago theater still looks up the theater's own day; until a time is set it is the day picked. "Today" for the past-day check is the theater's today. The showing is still stored as an instant and shown on the calendar in the viewer's time. A typed theater (no zone) gets no showtimes at all.
+- **When buying shows up.** `canBuyTickets` (planned, no ticket, not started) gates the drawer's "Buy tickets" row and the plan line; `shouldAskAboutPurchase` (planned, no ticket, left for AMC, not ended) gates the welcome-back question; the picker hides itself for a past day.
+- **A plan is not a ticket.** AMC can tell us the price, never the convenience fee or the tax, so `ticket` stays `null` (and savings stay uncounted) until the member comes back and enters those two numbers. Recording a ticket (from any form) also clears `purchase.startedAt` in the same write, and only planned showings are ever asked about. The plan prefills the ticket form's format, price and standard price. Editing a showing's time or theater drops its plan, and `startedAt` is written alone with a dotted-path `updateDoc` so it never overwrites a plan changed on another device.
 - **Rewatches are just more viewings of the same `movieKey`.** Nothing else is needed.
 - **`endsAt` is stored**, not derived, so the Seen prompt and a later reminder (Stretch) work from one number that doesn't move if the provider later changes a runtime. The cost is that editing a showtime must rewrite both fields (it does, in the same `updateDoc`).
 - **`status` at creation:** `SEEN` when `endsAt ≤ now`, otherwise `PLANNED`. This refines the UX doc's "a date in the past saves as Seen": a movie that started an hour ago and is still running is still planned.
-- **Ticket fields are all required once a ticket exists**, which is why "Mark paid" writes the whole `ticket` object in one `updateDoc` (the form owns the whole object). `ticket: null` is the legitimate state of a back-filled movie with no prices entered yet.
+- **Ticket fields are all required once a ticket exists**, which is why the ticket form writes the whole `ticket` object in one `updateDoc` (the form owns the whole object). `ticket: null` is the legitimate state of a back-filled movie with no prices entered yet.
 - **Premium savings need `standardPriceCents`.** If a premium ticket has `standardPriceCents: null` the ticket still counts in total savings but contributes nothing to premium savings (and the Dashboard says how many tickets that is).
 - **`totalCents` is stored even though it's a sum.** Itemized, it is just `price + fee + tax`; all-in, it is the one exact number the member typed and the other three are derived from it. Storing it lets the rules assert `totalCents == priceCents + feeAvoidedCents + taxCents` for every ticket, so the two entry modes can never disagree.
 - **Indexes:** none. Every listener is a whole-collection read; no query filters or orders on the server. `firestore.indexes.json` is unchanged.
@@ -342,9 +355,11 @@ Theaters come from the AMC Theatres API through one callable, `findTheatres`, so
 - **Server cache** in `apps/a-list/theatreCache` (versioned): suggestions for 30 days, a neighborhood's or a state's theaters and the full theater list (`/v2/theatres`, about 520 open theaters) for 7 days. A neighborhood is keyed on coordinates rounded to two decimals (about a kilometre), rounded on the server before AMC is asked, so every member in a cell shares one answer and an exact position is never sent upstream or stored. An empty result is never cached, and neither is anything in the emulator's fixture mode.
 - **AMC's data is tidied on the way in.** Cities arrive in capitals ("SAINT LOUIS") and are title-cased on the server (and for display when a saved theater predates it); closed theaters are dropped; the `timezone` is AMC's name ("CENTRAL TIME"), not an IANA id, so it maps to `America/Chicago` and so on, with Mountain Time in Arizona being `America/Phoenix`. Verified against the live API on 2026-10-09 (all 521 theaters resolved to a zone).
 - **The app never waits on theaters.** The theaters listener feeds the loading gate but not the fatal load-error screen, so a failure there leaves the Calendar, Dashboard and Watchlist working.
-- **Budget** (`lookupBudget.ts`, its own counters): 500 upstream calls a day for the app and 40 per member, only on cache misses; past that the callable answers `resource-exhausted` and the finder says search is resting.
+- **Budgets** (`lookupBudget.ts`, each with its own counters): theater search gets 500 upstream calls a day for the app and 40 per member and showtimes get 2000 and 200 (`SHOWTIME_BUDGET`, counted under `showtimes_`), only on cache misses; past that the callable answers `resource-exhausted` and the finder says search is resting.
 - **Client:** `findTheatresQueryOptions` in `queries/theatreQueries.ts` (TanStack Query, one hour stale time, not persisted because the key can hold the member's position). The finder waits for a pause in typing, and shows results or exactly one empty state. When a picked city has no AMC theater within 25 miles it says so above the closest ones; a state with more than 25 says it shows the first 25 and suggests a city.
 - **Without a key**, the emulator answers from three built-in Kansas City theaters, like the movie lookups, so the whole flow can be driven offline. In production a missing key answers `failed-precondition`.
+- **Showtimes** (`findShowtimes`): `{ theatreId, date, title }` returns that movie's upcoming showings at a theater with each one's format (read from AMC's showtime attributes), adult list price and purchase link, and, for a premium showing, the Standard price of the nearest-in-time Standard showing that day for the same movie (the premium-savings baseline). A whole day at a theater is cached for 15 minutes and shared by every movie asked about, since prices and sold-out flags move. Canceled showings and links that aren't on amctheatres.com are dropped, a movie matches by exact normalized title (a parenthetical caption aside), and the Standard comparison price is the Standard showing nearest in time that is still on sale (so a prime-time IMAX isn't compared with a matinee). AMC's endpoint takes `M-D-YYYY` dates and `page-size`/`page-number` (so the server converts our ISO date). The client only asks for today or later, because AMC lists prices for upcoming days only; a past day says so and falls back to the manual form.
+- **The buy path:** a showtime picked in the add form or the showing drawer's "Buy tickets" is stored as the plan. "Continue to AMC" opens `purchaseUrl` straight from the tap (so phone browsers don't block it), stamps `startedAt`, and closes the drawers. When the member returns to the tab, or opens the app later, `PurchaseReturnHost` (mounted by the seen-prompt host, which suppresses it while a seen prompt is up) asks for the fee and tax with everything else filled in. "Ask me later" is component state that lasts until the member next returns to the tab or reopens the app (coming back to the tab (another tab or app was in front, or the window lost focus; the shared `useOnTabReturn` hook) clears it, so the question comes back), and "I changed my mind" clears the whole plan (`purchase: null` through `updateViewing`), which also puts the drawer back to "Buy tickets" / "I already have a ticket".
 - **Response shapes** were checked against the live API (suggestions, locations, state locations, the theater list) and are parsed defensively: an entry with no usable id or name is dropped.
 - **Typed theaters skip the service.** "Can't find it? Add it by name" saves the name locally with a `manual-` id and nothing is sent to AMC.
 
@@ -423,7 +438,7 @@ Per viewing that is `SEEN` and has a ticket (a planned movie hasn't been used ye
 
 ```
 ticketValueCents    = totalCents                       // = price + fee avoided + tax: what a non-member would have paid
-premiumSavingsCents = priceCents − standardPriceCents  // only when format ≠ STANDARD and standardPriceCents ≠ null
+premiumSavingsCents = max(0, priceCents − standardPriceCents)  // only when format ≠ STANDARD and standardPriceCents ≠ null; a premium ticket at or under Standard adds $0, never a negative (Laser often is), and the form and Dashboard say so
 ```
 
 Totals (`selectSavingsSummary`, all integers):
@@ -535,6 +550,7 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 11. **The movie and theater caches and the lookup-budget counters are server-only.** `apps/a-list/searchCache`, `apps/a-list/movieCache`, `apps/a-list/theatreCache` and `apps/a-list/lookupUsage` are read and written only by the Cloud Functions through the admin SDK, which bypasses rules, so their rules deny every client read and write. A member must not be able to read other members' usage counters or poison the shared cache.
 12. **Theaters:** `memberships/{uid}/theatres/{theatreId}` is owner-only like everything else; the document id must be AMC's digits or `manual-…` and equal `theatreId`, every field is validated (`T | null`, length caps, coordinates in range, `timeZone` null or an IANA-looking zone), and `createdAt` is immutable. `timeZone` is allowed but not required, on the theater and on a viewing's snapshot (older ones lack it). `favoriteTheatreId` on the membership and `theatre` on a viewing arrived later, so they are allowed but not required (`get(field, null)`), and a viewing's `theatre` must be a map of exactly `theatreId`, `name`, `city`, `state`.
 13. **Calendar shares:** `apps/a-list/calendarShares/{shareId}` is readable and deletable only by `ownerUid`, creatable only by a member (their membership document must exist) whose `ownerUid` is their uid, with the id matching the 26-character share alphabet and equal to the field, exact keys, `endDate ≥ startDate` and at most 365 days later, a null-or-valid PIN, and 1–400 viewings. An update may change only `pin` and `lastEditedAt`. Visitors have no read; the function uses the admin SDK.
+14. **A viewing's `purchase`** is allowed but not required. When present it is a map of exactly `showtimeId`, `format`, `priceCents`, `standardPriceCents`, `purchaseUrl` and `startedAt`, with an https link and cents in range.
 
 The shape of the block (helpers are declared in the `memberships/{uid}` match so the nested matches reuse them):
 
@@ -663,6 +679,7 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 | `addTheatre(theatre)` / `removeTheatre(theatreId)` | one `runTransaction` each: the theater document and, when needed, the membership's `favoriteTheatreId` (only the member's first theater becomes the favorite; removing the favorite hands the star to another saved theater in the same transaction, and tapping the star again clears it for good) |
 | `linkTheatre({ fromTheatreId, to })` | field-scoped batch updates of the showings tagged with the typed id, then one `runTransaction` (create or reuse the AMC theater, delete the typed one, re-point the favorite) |
 | `setFavoriteTheatre(theatreId \| null)` | one `runTransaction`: confirms the theater still exists, then writes `favoriteTheatreId`, so a stale device can't leave it dangling |
+| `setPurchaseStarted(id, startedAt \| null)` | dotted-path `updateDoc` of `purchase.startedAt` only |
 | `updateMembership(fields)` | field-scoped `updateDoc` (+ `lastEditedAt`) |
 | `addWatchlistItem(movie, priority, preferredFormat)` (a manual movie is just a snapshot built by `ManualMovieForm` with a `manual-<uuid>` key) | `setDoc` at `watchlist/{movieKey}`; **create-if-absent** inside a `runTransaction` so a double-tap or two devices can't overwrite an existing priority |
 | `updateWatchlistItem(movieKey, fields)` | field-scoped `updateDoc` |

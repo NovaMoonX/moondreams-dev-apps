@@ -30,6 +30,16 @@ export const THEATRE_BUDGET: LookupBudget = {
   exhaustedMessage: 'Theater search is resting for today. Try again tomorrow.',
 };
 
+// A day of showtimes is one call per theater and day, shared by every movie asked about, and a member browses several days and theaters, so this is looser than search.
+export const SHOWTIME_BUDGET: LookupBudget = {
+  idPrefix: 'showtimes_',
+  appCapName: 'A_LIST_SHOWTIME_APP_DAILY_LOOKUP_CAP',
+  appCap: 2000,
+  memberCapName: 'A_LIST_SHOWTIME_MEMBER_DAILY_LOOKUP_CAP',
+  memberCap: 200,
+  exhaustedMessage: 'Showtime lookup is resting for today. Try again tomorrow.',
+};
+
 function readCap(name: string, fallback: number) {
   const value = Number(process.env[name]);
   return Number.isInteger(value) && value >= 0 ? value : fallback;

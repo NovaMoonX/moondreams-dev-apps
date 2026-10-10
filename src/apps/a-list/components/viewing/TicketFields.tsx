@@ -34,6 +34,12 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
   const { ticket, errors } = evaluateTicketDraft(draft);
   const isPremium = draft.format !== 'STANDARD';
   const priceCents = parseMoneyToCents(draft.price);
+  const standardCents = parseMoneyToCents(draft.standardPrice);
+  const hasNoUpcharge =
+    isPremium &&
+    priceCents !== null &&
+    standardCents !== null &&
+    priceCents <= standardCents;
   const estimatedTax =
     priceCents !== null && defaultRate !== null
       ? centsToInputValue(getItemizedTaxCents(priceCents, defaultRate))
@@ -80,6 +86,20 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
                   skipped.{' '}
                   <PremiumSavingsHelp linkLabel='How premium savings work' />
                 </p>
+                {hasNoUpcharge && (
+                  <p className='bg-accent text-accent-foreground border-accent-foreground/25 mt-3 flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-medium'>
+                    <span
+                      className='bg-accent-foreground/15 grid size-7 shrink-0 place-items-center rounded-full text-sm'
+                      aria-hidden='true'
+                    >
+                      💡
+                    </span>
+                    <span className='min-w-0 self-center'>
+                      This premium ticket costs the same as or less than
+                      Standard, so it adds $0 to your premium savings.
+                    </span>
+                  </p>
+                )}
               </div>
             ),
           }),

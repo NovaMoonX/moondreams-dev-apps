@@ -29,3 +29,20 @@ export interface TheatreResult {
   /** From the searched point; null when AMC didn't say. */
   distanceMiles: number | null;
 }
+
+export type AmcFormat = 'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
+
+export interface ShowtimeOption {
+  /** AMC's showtime id. */
+  showtimeId: string;
+  /** Instant: when the showing starts. */
+  startsAt: number;
+  format: AmcFormat;
+  /** The adult ticket price before tax and fees; null when AMC lists none. */
+  priceCents: number | null;
+  /** The cheapest Standard showing of the same movie that day, for a premium showing; null otherwise or when there is none. */
+  standardPriceCents: number | null;
+  /** https link to buy this showing on amctheatres.com. */
+  purchaseUrl: string;
+  isSoldOut: boolean;
+}
