@@ -16,13 +16,13 @@
   },
   "icons": [
     {
-      "src": "/logos/logo-dark.svg",
+      "src": "/logos/logo-pwa.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/logos/logo-dark.svg",
+      "src": "/logos/logo-pwa.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
