@@ -177,6 +177,16 @@ useEffect(() => {
 - **A component that exists in the codebase but is never rendered from a screen a user can actually reach does not satisfy a "Create/Read/Update/Delete" or "browse/view" requirement.** Building `FooSection.tsx` is not the same as wiring it into a tab, route, or modal. If the issue names a specific entry point (e.g. "a dedicated tab on the cat details view, following the same pattern as X"), grep the target file (e.g. `CatDetailsModal.tsx`) and confirm the new tab/route is actually there before considering the work complete.
 - If an issue has a `CRUD & Entry-Point Requirements` section, treat it as equally binding as `Success Criteria` — it exists specifically because "the store/actions/types are built" and "a user can actually use the feature end-to-end" have been two different, both-required outcomes on past issues in this repo.
 
+### New mini-app checklist
+Everything a new mini-app has to touch, so nothing is found missing after merge. Registering an app is not only its registry entry: several pieces outside `src/apps/<id>/` assume every app is wired in.
+- **Register it:** an `APP_REGISTRY` entry (`src/lib/app/app.registry.ts`), the `AppId` union in `src/lib/types/appCatalog.ts`, its route in `src/routes/AppRoutes.tsx` (a `ProtectedRoute appId` for an access-gated app, or the app's own `AppEntryFallback`), logos and banners in `public/`, `cloudflare-worker.js`, and the root `README.md` "Current apps" line.
+- **Track usage:** call `useTrackAppUsage('<id>', user?.uid ?? null)` (`@/hooks/useTrackAppUsage`) once from the app's top-level page, next to its `use<App>Sync`, so a member's first visit and later activity are recorded only when they land in that app. Add `functions/src/apps/<id>/findFirstActivityAt.ts` (the oldest timestamp the app holds for a member, or `null`), register it in `FIRST_ACTIVITY_FINDERS` in `functions/src/appUsage/registerAppUsage.ts`, and add its line to the `registerAppUsage` note in `functions/README.md`. Without the finder the callable refuses the app and the tracker logs an error on every visit. Nothing else is needed for the admin dashboard: it lists every catalog app, and an app's Usage tab and the Members tab pick the records up.
+- **State:** a slice in `src/store/index.ts` that resets on `resetAllState`, its `store/listeners/` and one `use<App>Sync` hook (see "Data and app patterns").
+- **Data access:** its `firestore.rules` block under `apps/<id>/…`, `storage.rules` if it stores files, and `firestore.indexes.json` for any composite query. The shared `apps/{appId}/usage` rule already covers usage records.
+- **Seed:** `scripts/seeds/<id>.ts`, its document count, `SEEDING.md`, and the app's name in a fixture's `apps` list in `src/lib/dev/fixtureAccounts.ts` so the core seed gives it usage records.
+- **Docs and rules:** `README.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md` under `src/apps/<id>/`, and the app's rules file (`.github/instructions/<id>.instructions.md` with the identical `.claude/rules/<id>.md`), plus a theme stylesheet and `useXTheme()` if it has its own look.
+- **Release:** bump `SITE_VERSION`.
+
 ### Documentation quality
 - Keep the root `README.md` and relevant mini-app docs current and minimal whenever code or behavior changes.
 - Preserve the existing structure and tone of existing docs; do not rewrite them into a different format or voice.

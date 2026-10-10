@@ -1,13 +1,14 @@
 import { queryOptions } from '@tanstack/react-query';
 import { collection, getDocs } from 'firebase/firestore';
 
+import { ADMIN_QUERY_KEY } from '@lib/admin/adminQueries';
 import { db } from '@lib/firebase/config';
 
 import type { AppUsage, SiteVisit } from './appUsage';
 
 export const appUsageQueryKeys = {
-  all: ['appUsage'] as const,
-  siteVisits: ['siteVisits'] as const,
+  all: [...ADMIN_QUERY_KEY, 'appUsage'] as const,
+  siteVisits: [...ADMIN_QUERY_KEY, 'siteVisits'] as const,
   forApp: (appId: string) => [...appUsageQueryKeys.all, appId] as const,
 };
 
