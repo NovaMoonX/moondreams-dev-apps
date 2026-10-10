@@ -115,14 +115,16 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
           {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
         </p>
         {unlinked.length >= LIST_SEARCH_THRESHOLD && (
-          <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
+          <div className='bg-background sticky top-0 z-10 pb-1'>
+            <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
+          </div>
         )}
         {unlinked.length === 0 ? (
           <p className='text-muted-foreground text-sm'>Every expense is already linked to an event, stay or rental.</p>
         ) : visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No expense matches.</p>
         ) : (
-          <ul className='divide-border max-h-80 divide-y overflow-y-auto'>
+          <ul className='divide-border divide-y'>
             {visible.map((expense) => (
               <li key={expense.id}>
                 <Button
