@@ -183,6 +183,13 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
               false,
             )}
           </div>
+          {summary.premiumNoUpchargeCount > 0 && (
+            <p className='text-muted-foreground text-sm'>
+              {summary.premiumNoUpchargeCount === 1
+                ? '1 premium ticket cost the same as or less than Standard, so it adds $0 to premium savings.'
+                : `${summary.premiumNoUpchargeCount} premium tickets cost the same as or less than Standard, so they add $0 to premium savings.`}
+            </p>
+          )}
           {summary.premiumUnpricedCount > 0 && (
             <p className='text-muted-foreground text-sm'>
               {summary.premiumUnpricedCount === 1

@@ -2,7 +2,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { AMC_API_KEY, fetchShowtimeDay, pickMovieShowtimes, type DayShowtime } from './amc.js';
-import { reserveLookup, THEATRE_BUDGET } from './lookupBudget.js';
+import { reserveLookup, SHOWTIME_BUDGET } from './lookupBudget.js';
 import { isFresh, readCache, toCacheId, writeCache } from './movieCache.js';
 import type { ShowtimeOption } from './types.js';
 
@@ -45,7 +45,7 @@ export const findShowtimes = onCall(
       return { showtimes: pickMovieShowtimes(cached.value, title) };
     }
 
-    await reserveLookup(uid, THEATRE_BUDGET);
+    await reserveLookup(uid, SHOWTIME_BUDGET);
     const day = await fetchShowtimeDay(AMC_API_KEY.value(), theatreId, date);
     await writeCache('theatreCache', cacheId, day);
     return { showtimes: pickMovieShowtimes(day, title) };
