@@ -68,29 +68,37 @@ export function PillOptions<T extends string>({
     trimmedQuery === '' ? options : options.filter((option) => option.label.toLowerCase().includes(trimmedQuery));
   const isClamped = !showAll && trimmedQuery === '' && !isExpanded && isHidingRows;
 
-  useEffect(() => {
+  // Measured after every render, before paint, because the number of hidden pills can change while the content's box keeps its size (an option added or reordered on the last row).
+  const measure = () => {
     const content = contentRef.current;
     if (!content) {
       return;
     }
     const limit = COLLAPSED_ROWS_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const top = content.getBoundingClientRect().top;
+    const pills = [...(content.firstElementChild?.children ?? [])];
+    const hiddenCount = pills.filter((pill) => pill.getBoundingClientRect().bottom - top > limit + 1).length;
+    const overflows = hiddenCount > MAX_QUIET_HIDDEN;
     // Floating the chosen pill to the front can make the row fit; that must not read as "no overflow", or the pill floats back and the row flickers.
-    const observer = new ResizeObserver(() => {
-      const layout = `${Math.round(content.offsetWidth)}:${content.firstElementChild?.childElementCount}`;
-      const top = content.getBoundingClientRect().top;
-      const pills = [...(content.firstElementChild?.children ?? [])];
-      const hiddenCount = pills.filter((pill) => pill.getBoundingClientRect().bottom - top > limit + 1).length;
-      const overflows = hiddenCount > MAX_QUIET_HIDDEN;
-      setIsHidingRows(overflows);
-      if (overflows) {
-        overflowLayoutRef.current = layout;
-      } else if (isFloatedRef.current && overflowLayoutRef.current === layout) {
-        return;
-      }
-      setIsOverflowing(overflows);
-    });
+    const layout = `${Math.round(content.offsetWidth)}:${content.firstElementChild?.childElementCount}`;
+    if (overflows) {
+      overflowLayoutRef.current = layout;
+    } else if (isFloatedRef.current && overflowLayoutRef.current === layout) {
+      return;
+    }
+    setIsHidingRows(overflows);
+    setIsOverflowing(overflows);
+  };
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
     observer.observe(content);
     return () => observer.disconnect();
+    // `measure` only reads refs and calls setters, so the first render's copy stays correct.
   }, []);
 
   // Collapsed, a chosen option moves to the front so it is never hidden behind "Show all".
@@ -110,7 +118,7 @@ export function PillOptions<T extends string>({
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()}`} />
         </div>
       )}
-      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && isHidingRows && event.target.matches(':focus-visible') && setIsExpanded(true)}>
+      <div className={join(isClamped && 'max-h-22 overflow-hidden')} onFocusCapture={(event) => isClamped && event.target.matches(':focus-visible') && setIsExpanded(true)}>
         <div ref={contentRef}>
           <PillRow label={label}>
             {leading}
