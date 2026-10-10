@@ -10,7 +10,6 @@ interface RelatedFlowContextValue {
   /** Puts a plan marked "no expense needed" back on the no-expense list. */
   undoNoExpense: (subject: RelatedSubject) => void;
   startLinkChecklist: (subject: RelatedSubject) => void;
-  undoNoBooking: (subject: RelatedSubject) => void;
   canAddExpenses: boolean;
   /** Admins and Editors link and add to-dos; the same people who add expenses. */
   canManageChecklist: boolean;
@@ -21,7 +20,6 @@ export const RelatedFlowContext = createContext<RelatedFlowContextValue>({
   startLinkExpense: () => undefined,
   undoNoExpense: () => undefined,
   startLinkChecklist: () => undefined,
-  undoNoBooking: () => undefined,
   canAddExpenses: false,
   canManageChecklist: false,
 });

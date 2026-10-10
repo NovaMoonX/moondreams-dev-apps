@@ -13,11 +13,9 @@ interface LinkedTodosBadgeProps {
   variant?: 'inline' | 'tab';
 }
 
-function getBadgeContent(open: number, total: number, promptsBooking: boolean) {
+function getBadgeContent(open: number, total: number) {
   if (total === 0) {
-    return promptsBooking
-      ? { phone: '🎟️ To book', desktop: '🎟️ No booking yet', aria: 'No booking yet. Link or add a to-do' }
-      : null;
+    return null;
   }
   const done = total - open;
   if (open === 0) {
@@ -31,33 +29,18 @@ function getBadgeContent(open: number, total: number, promptsBooking: boolean) {
   };
 }
 
-/** What is left on the to-dos linked to an event, what is done, or the prompt to add one. Hidden once the event has started. */
+/** What is left on the to-dos linked to an event, what is done. Hidden once the event has started. */
 function LinkedTodosBadge({ getSubject, isStatic = false, variant = 'inline' }: LinkedTodosBadgeProps) {
   const tabClassName = 'bg-card border-border -mt-px rounded-t-none rounded-b-lg border border-t-0 px-3 py-1';
   const subject = getSubject();
-  const { total, open, isNoBooking } = useBookingStatus(subject.link.kind, subject.link.id);
-  const { startLinkChecklist, undoNoBooking, canManageChecklist } = useRelatedFlow();
+  const { total, open } = useBookingStatus(subject.link.kind, subject.link.id);
+  const { startLinkChecklist, canManageChecklist } = useRelatedFlow();
 
   if (!subject.tracksTodos) {
     return null;
   }
 
-  if (isNoBooking && total === 0 && subject.tracksBooking) {
-    return isStatic && canManageChecklist ? (
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        className="text-muted-foreground relative h-auto px-0! text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-2 after:content-['']"
-        aria-label='Nothing to book: undo'
-        onClick={() => undoNoBooking(getSubject())}
-      >
-        Nothing to book · Undo
-      </Button>
-    ) : null;
-  }
-
-  const content = getBadgeContent(open, total, subject.tracksBooking);
+  const content = getBadgeContent(open, total);
   if (content === null) {
     return null;
   }

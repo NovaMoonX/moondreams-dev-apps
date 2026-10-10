@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from 'lucide-react';
 
@@ -21,16 +21,14 @@ import ExpenseFormModal, {
   type ExpensePrefill,
   type ExpenseSubmitValues,
 } from '@apps/waypoint/components/ExpenseFormModal';
-import { createChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
+import { createChecklistItem, deleteChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
 import { createExpense } from '@apps/waypoint/store/actions/expenseActions';
-import { setPlanNeedsNoBooking } from '@apps/waypoint/store/actions/tripActions';
 import { selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 import { getExpenseCategoryKeys } from '@apps/waypoint/utils/expenseCategories';
 import { BOOKING_VERBS } from '@apps/waypoint/constants';
 import { getBookingDueDay } from '@apps/waypoint/utils/bookingItems';
-import { getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
 import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface AddRelatedFlowProps {
@@ -83,9 +81,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
   const existingBookings = useBookingStatus(subject.link.kind, subject.link.id);
   const [alreadyHadBookings] = useState(hasBookings ?? existingBookings.total > 0);
   const [bookingAnswer, setBookingAnswer] = useState<'yes' | 'none' | null>(null);
-  const [bookingTitle, setBookingTitle] = useState('');
-  const [pickedVerb, setPickedVerb] = useState<string | null>(null);
-  const [bookedTitles, setBookedTitles] = useState<string[]>([]);
+  const [booking, setBooking] = useState<{ id: string; title: string } | null>(null);
   const expenses = useAppSelector(selectTripExpenses);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
@@ -159,36 +155,18 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
     }
   };
 
-  const saveBookingAnswer = async (needsNone: boolean, nextAnswer: 'yes' | 'none' | null = needsNone ? 'none' : null) => {
-    setIsSubmitting(true);
-    try {
-      await dispatch(
-        setPlanNeedsNoBooking({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone }),
-      ).unwrap();
-      setBookingAnswer(nextAnswer);
-    } catch (answerError) {
-      addToast({
-        title: 'Unable to save that',
-        description: getErrorMessage(answerError, 'Please try again.'),
-        type: 'error',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const addBooking = async () => {
-    const title = bookingTitle.trim();
-    if (!title || isSubmitting) {
+  const addBooking = async (label: string) => {
+    const verb = BOOKING_VERBS.find((candidate) => candidate.label === label);
+    if (!verb || isSubmitting) {
       return;
     }
     setIsSubmitting(true);
     try {
-      await dispatch(
+      const created = await dispatch(
         createChecklistItem({
           tripId: trip.id,
           uid: currentUserId,
-          title,
+          title: `${verb.prefix} ${subject.title}`,
           category: 'BOOKINGS',
           customCategoryLabel: null,
           note: null,
@@ -198,13 +176,30 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
           linkedTo: subject.link,
         }),
       ).unwrap();
-      setBookedTitles((current) => [...current, title]);
-      setBookingTitle('');
-      setPickedVerb(null);
+      setBooking({ id: created.id, title: created.title });
     } catch (addError) {
       addToast({
         title: 'Unable to add that to-do',
         description: getErrorMessage(addError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const undoBooking = async () => {
+    if (!booking || isSubmitting) {
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await dispatch(deleteChecklistItem({ trip, uid: currentUserId, itemId: booking.id, isPrivate: false })).unwrap();
+      setBooking(null);
+    } catch (undoError) {
+      addToast({
+        title: 'Unable to undo that',
+        description: getErrorMessage(undoError, 'Please try again.'),
         type: 'error',
       });
     } finally {
@@ -240,78 +235,38 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
                 </div>
               </div>
               <PillRow label='Does anything need booking ahead?'>
-                <Pill
-                  isSelected={bookingAnswer === 'yes'}
-                  onClick={() =>
-                    bookingAnswer === 'none'
-                      ? void saveBookingAnswer(false, 'yes')
-                      : setBookingAnswer(bookingAnswer === 'yes' ? null : 'yes')
-                  }
-                >
+                <Pill isSelected={bookingAnswer === 'yes'} onClick={() => setBookingAnswer('yes')}>
                   Yes, something
                 </Pill>
                 <Pill
                   isSelected={bookingAnswer === 'none'}
-                  isDisabled={bookedTitles.length > 0 || isSubmitting}
-                  onClick={() => void saveBookingAnswer(bookingAnswer !== 'none')}
+                  isDisabled={booking !== null}
+                  onClick={() => setBookingAnswer('none')}
                 >
                   Nope, all set
                 </Pill>
               </PillRow>
-              {bookingAnswer === 'none' && (
-                <p className='text-muted-foreground text-xs'>
-                  Nothing to book for {subject.title}. Change your mind? Tap again to undo.
-                </p>
-              )}
-              {bookingAnswer === 'yes' && (
-                <div className='space-y-3'>
-                  <SuggestionChips
-                    label='Start with'
-                    suggestions={BOOKING_VERBS.map((verb) => verb.label)}
-                    picked={pickedVerb}
-                    onClear={() => {
-                      setPickedVerb(null);
-                      setBookingTitle('');
-                    }}
-                    onPick={(label) => {
-                      const verb = BOOKING_VERBS.find((candidate) => candidate.label === label);
-                      setPickedVerb(label);
-                      setBookingTitle(`${verb?.prefix ?? label} ${subject.title}`);
-                    }}
-                  />
-                  {bookedTitles.length > 0 && (
-                    <ul className='space-y-1'>
-                      {bookedTitles.map((title, index) => (
-                        <li key={`${title}-${index}`} className='flex items-start gap-3 text-sm'>
-                          <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-                            ✓
-                          </span>
-                          <span className='min-w-0'>{title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className='flex items-center gap-2'>
-                    <Input
-                      className='min-w-0 flex-1'
-                      variant='outline'
-                      value={bookingTitle}
-                      placeholder={`Book tickets for ${subject.title}`}
-                      aria-label='To-do'
-                      onChange={(event) => setBookingTitle(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void addBooking();
-                        }
-                      }}
-                    />
-                    <Button type='button' disabled={!bookingTitle.trim() || isSubmitting} onClick={() => void addBooking()}>
-                      Add
+              {bookingAnswer === 'yes' &&
+                (booking ? (
+                  <div className='flex items-center gap-3 text-sm'>
+                    <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+                      ✓
+                    </span>
+                    <span className='min-w-0 flex-1'>
+                      <span className='block font-medium'>{booking.title}</span>
+                      <span className='text-muted-foreground block text-xs'>Added to your checklist</span>
+                    </span>
+                    <Button type='button' variant='tertiary' size='sm' disabled={isSubmitting} onClick={() => void undoBooking()}>
+                      Undo
                     </Button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <SuggestionChips
+                    label='What do you need to do?'
+                    suggestions={BOOKING_VERBS.map((verb) => verb.label)}
+                    onPick={(label) => void addBooking(label)}
+                  />
+                ))}
             </div>
           )}
           <div className='bg-muted/50 divide-border divide-y overflow-hidden rounded-xl'>
@@ -324,7 +279,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
             />
             <FollowUpRow
               emoji='🧳'
-              title='Add a checklist item'
+              title={subject.tracksBooking && !alreadyHadBookings ? 'Add another to-do' : 'Add a checklist item'}
               description={
                 subject.tracksBooking && !alreadyHadBookings
                   ? 'Something to bring or do, with people and a due day.'

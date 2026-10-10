@@ -71,7 +71,7 @@ export interface TripSpace {
   city: TripCity | null;
   /** Link keys (`getExpenseLinkKey`) of plans whose owner said no expense is needed. Older documents lack it. */
   noExpenseKeys: string[];
-  /** Link keys (`getExpenseLinkKey`) of plans whose owner said nothing needs booking ahead. Older documents lack it. */
+  /** @deprecated The "nothing to book" mark is gone (the card only shows linked to-dos); written as `[]` and kept so older documents keep validating. */
   noBookingKeys: string[];
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the

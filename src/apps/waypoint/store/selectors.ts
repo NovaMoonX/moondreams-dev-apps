@@ -89,12 +89,6 @@ export const selectNoExpenseKeys = createSelector(
   (trips): ReadonlySet<string> => new Set(trips.flatMap((trip) => trip.noExpenseKeys ?? [])),
 );
 
-/** Keys of plans marked "nothing to book", across the trips in the store. */
-export const selectNoBookingKeys = createSelector(
-  [selectTrips],
-  (trips): ReadonlySet<string> => new Set(trips.flatMap((trip) => trip.noBookingKeys ?? [])),
-);
-
 export interface BookingStatus {
   total: number;
   open: number;

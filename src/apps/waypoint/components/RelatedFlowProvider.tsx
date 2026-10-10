@@ -4,7 +4,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { setPlanNeedsNoBooking, setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
+import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
 
 import AddRelatedFlow, { type Step } from '@apps/waypoint/components/AddRelatedFlow';
 import LinkChecklistSheet from '@apps/waypoint/components/LinkChecklistSheet';
@@ -62,23 +62,6 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
           ),
       startLinkChecklist: (subject: RelatedSubject) =>
         setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'link-checklist', subject })),
-      undoNoBooking: (subject: RelatedSubject) =>
-        void dispatch(
-          setPlanNeedsNoBooking({
-            uid: currentUserId,
-            trip,
-            linkKey: getExpenseLinkKey(subject.link),
-            needsNone: false,
-          }),
-        )
-          .unwrap()
-          .catch((undoError) =>
-            addToast({
-              title: 'Unable to undo that',
-              description: getErrorMessage(undoError, 'Please try again.'),
-              type: 'error',
-            }),
-          ),
       canAddExpenses,
       canManageChecklist: canAddExpenses,
     }),

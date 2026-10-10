@@ -12,12 +12,11 @@ import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CHECKLIST_CATEGORY_EMOJIS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import { linkChecklistItems, toggleChecklistItem, unlinkChecklistItems } from '@apps/waypoint/store/actions/checklistActions';
-import { setPlanNeedsNoBooking } from '@apps/waypoint/store/actions/tripActions';
 import { selectTimelineEvents } from '@apps/waypoint/store/selectors';
 import type { ChecklistItem, TripSpace } from '@apps/waypoint/types';
 import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
-import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
+import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface LinkChecklistSheetProps {
   trip: TripSpace;
@@ -96,20 +95,6 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
       { title: `Unlinked ${item.title} from ${subject.title}` },
     );
 
-  const markNothingToBook = async () => {
-    const marked = await run(
-      () =>
-        dispatch(
-          setPlanNeedsNoBooking({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone: true }),
-        ).unwrap(),
-      'Unable to save that',
-      { title: `Nothing to book for ${subject.title}` },
-    );
-    if (marked) {
-      onClose();
-    }
-  };
-
   return (
     <DetailSheet
       isOpen
@@ -130,19 +115,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
             <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={isBusy} onClick={onAddNew}>
               Add a new to-do
             </Button>
-          ) : (
-            linkedHere.length === 0 &&
-            subject.tracksBooking && (
-              <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={isBusy} onClick={() => void markNothingToBook()}>
-                Nothing to book
-              </Button>
-            )
-          )}
-          {linkedHere.length === 0 && picked.length === 0 && subject.tracksBooking && (
-            <p className='text-muted-foreground text-center text-xs'>
-              <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from this event&apos;s details.
-            </p>
-          )}
+          ) : null}
         </div>
       }
     >

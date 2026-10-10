@@ -291,23 +291,6 @@ export const setPlanNeedsNoExpense = createAsyncThunk<
   return { ...trip, lastEditedAt };
 });
 
-export const setPlanNeedsNoBooking = createAsyncThunk<
-  TripSpace,
-  { uid: string; trip: TripSpace; linkKey: string; needsNone: boolean },
-  { rejectValue: string }
->('waypoint/trips/setPlanNeedsNoBooking', async ({ uid, trip, linkKey, needsNone }, { rejectWithValue }) => {
-  if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
-    return rejectWithValue('You do not have permission to edit this trip.');
-  }
-
-  const lastEditedAt = Date.now();
-  await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), {
-    noBookingKeys: needsNone ? arrayUnion(linkKey) : arrayRemove(linkKey),
-    lastEditedAt,
-  });
-  return { ...trip, lastEditedAt };
-});
-
 export const setTripArchived = createAsyncThunk<
   TripSpace,
   SetTripArchivedInput,
