@@ -33,6 +33,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
   const events = useAppSelector(selectTimelineEvents);
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
+  const [isPicking, setIsPicking] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const eventIds = useMemo(() => new Set(events.map((event) => event.id)), [events]);
@@ -102,20 +103,27 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
       title='To-dos'
       footer={
         <div className='flex flex-col gap-2'>
-          {picked.length > 0 ? (
-            <Button type='button' size='lg' disabled={isBusy} onClick={() => void linkPicked()}>
-              Link {picked.length === 1 ? '1 to-do' : `${picked.length} to-dos`}
-            </Button>
+          {isPicking ? (
+            <>
+              <Button type='button' size='lg' disabled={isBusy || picked.length === 0} onClick={() => void linkPicked()}>
+                {picked.length === 0 ? 'Pick to-dos to link' : `Link ${picked.length === 1 ? '1 to-do' : `${picked.length} to-dos`}`}
+              </Button>
+              <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={isBusy} onClick={() => setIsPicking(false)}>
+                Back to this event&apos;s to-dos
+              </Button>
+            </>
           ) : (
-            <Button type='button' size='lg' disabled={isBusy} onClick={onAddNew}>
-              Add a new to-do
-            </Button>
+            <>
+              <Button type='button' size='lg' disabled={isBusy} onClick={onAddNew}>
+                Add a new to-do
+              </Button>
+              {available.length > 0 && (
+                <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={isBusy} onClick={() => setIsPicking(true)}>
+                  Link an existing to-do
+                </Button>
+              )}
+            </>
           )}
-          {picked.length > 0 ? (
-            <Button type='button' variant='secondary' size='lg' className='border-border border' disabled={isBusy} onClick={onAddNew}>
-              Add a new to-do
-            </Button>
-          ) : null}
         </div>
       }
     >
@@ -123,7 +131,10 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
         <p className='text-muted-foreground text-sm'>
           For <span className='text-foreground font-medium'>{subject.title}</span>. To-dos linked here show up in Before the Road too.
         </p>
-        {linkedHere.length > 0 && (
+        {!isPicking && linkedHere.length === 0 && (
+          <p className='text-muted-foreground text-sm'>Nothing is linked to this event yet. Add a new to-do, or link one you already have.</p>
+        )}
+        {!isPicking && linkedHere.length > 0 && (
           <ul className='divide-border divide-y'>
             {linkedHere.map((item) => (
               <li key={item.id} className='flex min-h-12 items-center gap-3 py-2'>
@@ -156,7 +167,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
             ))}
           </ul>
         )}
-        {available.length > 0 ? (
+        {isPicking && (
           <div className='space-y-3'>
             <SectionDivider label='Already on your checklist' />
             {available.length >= LIST_SEARCH_THRESHOLD && (
@@ -201,10 +212,6 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
               </ul>
             )}
           </div>
-        ) : (
-          linkedHere.length === 0 && (
-            <p className='text-muted-foreground text-sm'>Nothing on your checklist is free to link yet. Add a to-do and it will be linked here.</p>
-          )
         )}
       </div>
     </DetailSheet>
