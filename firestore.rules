@@ -1695,6 +1695,7 @@ service cloud.firestore {
             'timezone',
             'city',
             'noExpenseKeys',
+            // Written by development builds of an earlier design; tolerated so those documents stay editable.
             'noBookingKeys',
             'dateShiftStatus',
             'createdBy',
@@ -1724,7 +1725,6 @@ service cloud.firestore {
           && (!('timezone' in data) || data.timezone == null || isNonEmptyString(data.timezone))
           && isTripCityValid(data.get('city', null))
           && isNoExpenseKeysValid(data.get('noExpenseKeys', []))
-          && isNoExpenseKeysValid(data.get('noBookingKeys', []))
           && (!('dateShiftStatus' in data)
             || data.dateShiftStatus == null
             || data.dateShiftStatus in ['IDLE', 'PENDING'])
@@ -1809,14 +1809,6 @@ service cloud.firestore {
       function isTripNoExpenseUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'noExpenseKeys',
-            'lastEditedAt'
-          ])
-          && isTripUpdateValid();
-      }
-
-      function isTripNoBookingUpdate() {
-        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'noBookingKeys',
             'lastEditedAt'
           ])
           && isTripUpdateValid();
@@ -1921,7 +1913,6 @@ service cloud.firestore {
       allow update: if (isTripMember() && (
         (isTripEditorOrAdmin() && isTripGeneralUpdate())
          || (isTripEditorOrAdmin() && isTripNoExpenseUpdate())
-         || (isTripEditorOrAdmin() && isTripNoBookingUpdate())
          || (isTripMember() && isTripAlbumUpdate())
         || (isTripAdmin() && isTripArchiveUpdate())
         || isTripMembershipApprovalValid()

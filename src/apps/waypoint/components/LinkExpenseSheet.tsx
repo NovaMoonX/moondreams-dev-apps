@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import SearchInput from '@/components/SearchInput';
@@ -43,11 +44,12 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
   const { addToast } = useToast();
   const expenses = useAppSelector(selectTripExpenses);
   const events = useAppSelector(selectTimelineEvents);
+  const eventIds = useMemo(() => new Set(events.map((event) => event.id)), [events]);
   const [query, setQuery] = useState('');
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const unlinked = expenses
-    .filter((expense) => !expense.linkedTo || (expense.linkedTo.kind === 'EVENT' && !events.some((event) => event.id === expense.linkedTo?.id)))
+    .filter((expense) => !expense.linkedTo || (expense.linkedTo.kind === 'EVENT' && !eventIds.has(expense.linkedTo.id)))
     .sort((first, second) => Number(second.dayIndex === subject.dayIndex) - Number(first.dayIndex === subject.dayIndex));
   const term = query.trim().toLowerCase();
   const visible = term ? unlinked.filter((expense) => expense.title.toLowerCase().includes(term)) : unlinked;
@@ -109,7 +111,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
         </div>
       }
     >
-      <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
+      <div className={join('flex flex-col gap-3', unlinked.length >= LIST_SEARCH_THRESHOLD ? 'h-[max(12rem,calc(92dvh-22rem))]' : 'max-h-[max(12rem,calc(92dvh-22rem))]')}>
         <div className='shrink-0 space-y-3'>
           <p className='text-muted-foreground text-sm'>
             For <span className='text-foreground font-medium'>{subject.title}</span>.

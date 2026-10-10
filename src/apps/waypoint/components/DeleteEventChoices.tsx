@@ -32,7 +32,7 @@ function Choice({ checked, onCheckedChange, label, detail }: { checked: boolean;
       </span>
       <span className='min-w-0'>
         <span className='block font-medium'>{label}</span>
-        <span className='text-muted-foreground block'>
+        <span className='text-muted-foreground block space-y-1'>
           {detail.map((line, index) => (
             <span key={`${line}-${index}`} className='block break-words'>
               {line}

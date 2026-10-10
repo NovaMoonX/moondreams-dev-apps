@@ -4,10 +4,11 @@ interface SuggestionChipsProps {
   label: string;
   suggestions: readonly string[];
   onPick: (suggestion: string) => void;
+  isDisabled?: boolean;
 }
 
 /** Starting points for a field beneath it: dashed, hug their text and wrap, so they never read as answers. */
-function SuggestionChips({ label, suggestions, onPick }: SuggestionChipsProps) {
+function SuggestionChips({ label, suggestions, onPick, isDisabled = false }: SuggestionChipsProps) {
   return (
     <div role='group' aria-label={label} className='space-y-1.5'>
       <p className='text-muted-foreground text-xs font-medium'>{label}</p>
@@ -19,6 +20,7 @@ function SuggestionChips({ label, suggestions, onPick }: SuggestionChipsProps) {
             variant='tertiary'
             size='sm'
             className="border-border text-foreground! relative h-auto w-auto max-w-full rounded-full border border-dashed px-3 py-1 text-xs font-medium whitespace-normal after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
+            disabled={isDisabled}
             onClick={() => onPick(suggestion)}
           >
             {suggestion}

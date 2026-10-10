@@ -83,7 +83,6 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     sharedAlbumSetAt: null,
     city: null,
     noExpenseKeys: [],
-    noBookingKeys: [],
     dateShiftStatus: null,
     createdBy: alexUid,
     createdAt: joinedAt,
@@ -230,7 +229,7 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
       isCompleted,
       markedCompletedByUid: isCompleted ? alexUid : null,
       markedCompletedAt: isCompleted ? context.now - 1_800_000 : null,
-      // Every "Book …" to-do belongs to one of the day's activities (slots 1, 5 and 9), so the Timeline's booking tabs have work to do.
+      // Every "Book …" to-do belongs to one of the day's activities (slots 1, 5 and 9), so the Timeline's to-do tabs have work to do.
       linkedTo: index % 5 === 2 ? { kind: 'EVENT', id: `scale-event-${(Math.floor(index / 5) % TRIP_DAYS) * 12 + [1, 5, 9][index % 3]}` } : null,
     });
   });

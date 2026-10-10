@@ -25,7 +25,7 @@ export interface RelatedSubject {
   checklistCategory: ChecklistCategory;
   /** Whether the plan shows the progress of its linked to-dos: an activity or dining event that hasn't started. */
   tracksTodos: boolean;
-  /** Whether a missing booking to-do is worth a reminder: an activity that hasn't started; stays and rentals are booked when added. */
+  /** Whether the post-save sheet asks about booking: an activity that hasn't started; stays and rentals are booked when added. */
   tracksBooking: boolean;
 }
 

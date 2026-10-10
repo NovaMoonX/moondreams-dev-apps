@@ -127,10 +127,10 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
         </div>
       }
     >
-      <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
+      <div className={join('flex flex-col gap-3', isPicking && available.length >= LIST_SEARCH_THRESHOLD ? 'h-[max(12rem,calc(92dvh-22rem))]' : 'max-h-[max(12rem,calc(92dvh-22rem))]')}>
         <div className='shrink-0 space-y-3'>
           <p className='text-muted-foreground text-sm'>
-            For <span className='text-foreground font-medium'>{subject.title}</span>. To-dos linked here show up in Before the Road too.
+            For <span className='text-foreground font-medium'>{subject.title}</span>.
           </p>
           {isPicking && (
             <>
@@ -151,7 +151,9 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
         )}
         {!isPicking && linkedHere.length > 0 && (
           <div className='space-y-1'>
-            <p className='text-muted-foreground text-xs'>Tick one off when it is done.</p>
+            <p className='text-muted-foreground text-xs'>
+              {linkedHere.length === 1 ? '1 to-do' : `${linkedHere.length} to-dos`} · tick one off when it is done
+            </p>
             <ul className='divide-border divide-y'>
               {linkedHere.map((item) => (
                 <li key={item.id} className='flex min-h-12 items-start gap-3 py-3'>

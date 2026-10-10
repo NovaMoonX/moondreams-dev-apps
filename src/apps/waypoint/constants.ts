@@ -225,7 +225,7 @@ export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'D
 // Event types whose card shows the progress of the to-dos linked to it, and whose form can link them.
 export const TODO_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
 
-// Event types that can need something booked ahead: one with no to-do for it reads "No booking yet".
+// Event types whose post-save sheet asks "Does anything need booking ahead?".
 export const BOOKING_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
 
 export const BOOKING_VERBS = [

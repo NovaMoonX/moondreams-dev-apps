@@ -8,7 +8,7 @@ import DetailSheet from '@/components/DetailSheet';
 import Pill from '@/components/Pill';
 import SuggestionChips from '@/components/SuggestionChips';
 import { PillRow } from '@/components/PillGroup';
-import { getLocalDayIndex } from '@/utils/dateRangeUtils';
+import { getDayCount, getDayLabel, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useBookingStatus } from '@apps/waypoint/hooks/useBookingStatus';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -29,7 +29,7 @@ import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 import { getExpenseCategoryKeys } from '@apps/waypoint/utils/expenseCategories';
 import { BOOKING_VERBS } from '@apps/waypoint/constants';
 import { getBookingDueDay } from '@apps/waypoint/utils/bookingItems';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface AddRelatedFlowProps {
   trip: TripSpace;
@@ -81,7 +81,8 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
   const existingBookings = useBookingStatus(subject.link.kind, subject.link.id);
   const [alreadyHadBookings] = useState(hasBookings ?? existingBookings.total > 0);
   const [bookingAnswer, setBookingAnswer] = useState<'yes' | 'none' | null>(null);
-  const [booking, setBooking] = useState<{ id: string; title: string } | null>(null);
+  const [booking, setBooking] = useState<{ id: string; title: string; dueLabel: string | null } | null>(null);
+  const canUndoBooking = canEditExistingItem(trip, currentUserId);
   const expenses = useAppSelector(selectTripExpenses);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
@@ -162,6 +163,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
     }
     setIsSubmitting(true);
     try {
+      const dueDay = getBookingDueDay(subject.dayIndex, getLocalDayIndex(trip.startDate, Date.now()));
       const created = await dispatch(
         createChecklistItem({
           tripId: trip.id,
@@ -170,13 +172,17 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
           category: 'BOOKINGS',
           customCategoryLabel: null,
           note: null,
-          completeByDayIndex: getBookingDueDay(subject.dayIndex, getLocalDayIndex(trip.startDate, Date.now())),
+          completeByDayIndex: dueDay,
           assignedToUids: [currentUserId],
           isPrivate: false,
           linkedTo: subject.link,
         }),
       ).unwrap();
-      setBooking({ id: created.id, title: created.title });
+      setBooking({
+        id: created.id,
+        title: created.title,
+        dueLabel: dueDay === null ? null : getDayLabel(trip.startDate, dueDay, getDayCount(trip.startDate, trip.endDate)),
+      });
     } catch (addError) {
       addToast({
         title: 'Unable to add that to-do',
@@ -231,7 +237,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
                 </span>
                 <div className='min-w-0'>
                   <p className='text-sm font-medium'>Does anything need booking ahead?</p>
-                  <p className='text-muted-foreground text-xs'>Tickets, a time slot, a pass. We&apos;ll add it to Before the Road.</p>
+                  <p className='text-muted-foreground text-xs'>Tickets, a time slot, a pass. We&apos;ll add it to your checklist.</p>
                 </div>
               </div>
               <PillRow label='Does anything need booking ahead?'>
@@ -254,17 +260,29 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
                     </span>
                     <span className='min-w-0 flex-1'>
                       <span className='block font-medium'>{booking.title}</span>
-                      <span className='text-muted-foreground block text-xs'>Added to your checklist</span>
+                      <span className='text-muted-foreground block text-xs'>
+                        Added to your checklist{booking.dueLabel ? ` · due ${booking.dueLabel}` : ''}
+                      </span>
                     </span>
-                    <Button type='button' variant='tertiary' size='sm' disabled={isSubmitting} onClick={() => void undoBooking()}>
-                      Undo
-                    </Button>
+                    {canUndoBooking && (
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='sm'
+                        className="relative after:absolute after:-inset-y-2 after:-inset-x-1 after:content-['']"
+                        disabled={isSubmitting}
+                        onClick={() => void undoBooking()}
+                      >
+                        Undo
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <SuggestionChips
                     label='What do you need to do?'
                     suggestions={BOOKING_VERBS.map((verb) => verb.label)}
                     onPick={(label) => void addBooking(label)}
+                    isDisabled={isSubmitting}
                   />
                 ))}
             </div>
@@ -279,7 +297,13 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
             />
             <FollowUpRow
               emoji='🧳'
-              title={subject.tracksBooking && !alreadyHadBookings ? 'Add another to-do' : 'Add a checklist item'}
+              title={
+                subject.tracksBooking && !alreadyHadBookings
+                  ? booking !== null || added.checklist > 0
+                    ? 'Add another to-do'
+                    : 'Add a to-do'
+                  : 'Add a checklist item'
+              }
               description={
                 subject.tracksBooking && !alreadyHadBookings
                   ? 'Something to bring or do, with people and a due day.'
