@@ -26,6 +26,7 @@ import {
   EXPENSE_SORT_OPTIONS,
   LIST_SEARCH_THRESHOLD,
   EXPENSE_TOTALS_VIEW_HINTS,
+  TOTALS_HELP_TITLES,
   EXPENSE_TOTALS_VIEW_OPTIONS,
 } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
@@ -963,14 +964,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         />
         <p className='text-muted-foreground text-xs'>
           {EXPENSE_TOTALS_VIEW_HINTS[totalsView]}
-          {totalsView === 'me' && (
-            <>
-              {' '}
-              <HelpTip
-                title='Your share'
-                linkLabel='What do these mean?'
-                className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
-              >
+          {' '}
+          <HelpTip
+            title={TOTALS_HELP_TITLES[totalsView]}
+            linkLabel='What do these mean?'
+            className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
+          >
+            {totalsView === 'me' ? (
+              <>
                 <p>
                   <strong>Paid by me</strong> is what you covered up front.
                 </p>
@@ -980,31 +981,32 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 <p>
                   <strong>My total</strong> is your share of everything, including what others covered.
                 </p>
-              </HelpTip>
-            </>
-          )}
-          {totalsView === 'per-person' && (
-            <>
-              {' '}
-              <HelpTip
-                title='Per person'
-                linkLabel="What's counted?"
-                className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
-              >
+              </>
+            ) : (
+              <>
                 <p>
-                  Only <strong>expenses for everyone</strong> are counted, split evenly across the group.
+                  <strong>Paid</strong> is what has already been covered, <strong>Expected</strong> is what is
+                  still to pay, and <strong>Total</strong> is both together.
                 </p>
-                <p>
-                  An expense picked for <strong>certain people</strong> counts only when it includes everyone
-                  who&apos;s on the trip right now.
-                </p>
-                <p>
-                  Anything for just one person or a smaller group is left out, so the number stays a fair
-                  per-person figure. See <strong>Mine</strong> for your own share of everything.
-                </p>
-              </HelpTip>
-            </>
-          )}
+                {totalsView === 'per-person' ? (
+                  <>
+                    <p>
+                      Only <strong>expenses for everyone</strong> are counted, split evenly across the group. One
+                      picked for certain people counts only when it includes everyone on the trip right now.
+                    </p>
+                    <p>
+                      Anything for just one person or a smaller group is left out. See <strong>Mine</strong> for
+                      your own share of everything.
+                    </p>
+                  </>
+                ) : (
+                  <p>
+                    Every expense is added up in full, whoever it is for, so this is what the whole trip costs.
+                  </p>
+                )}
+              </>
+            )}
+          </HelpTip>
         </p>
         {personalTotals.total > 0 && (
           <p className='text-muted-foreground flex items-start gap-1.5 text-xs'>

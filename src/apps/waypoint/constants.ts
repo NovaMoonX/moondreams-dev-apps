@@ -383,6 +383,12 @@ export const EXPENSE_TOTALS_VIEW_HINTS: Record<ExpenseTotalsView, string> = {
   me: 'Your own share of every cost.',
 };
 
+export const TOTALS_HELP_TITLES: Record<ExpenseTotalsView, string> = {
+  'per-person': 'Per person',
+  group: 'Group totals',
+  me: 'Your share',
+};
+
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   FOOD: 'Food',
   TRANSPORT: 'Transport',
