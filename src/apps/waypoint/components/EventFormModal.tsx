@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -9,7 +9,7 @@ import {
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, DoorOpen, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
+import { Bell, Clock, DoorOpen, Link2, ListChecks, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -31,6 +31,7 @@ import type {
   PlaceSelectionResult,
 } from '@/lib/places/types';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { store, useAppSelector } from '@/store';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
@@ -39,10 +40,14 @@ import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import DeleteEventChoices, { type LinkedItem } from '@apps/waypoint/components/DeleteEventChoices';
 import ItineraryPlacePicks from '@apps/waypoint/components/ItineraryPlacePicks';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
+import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { TODO_TRACKED_EVENT_TYPES } from '@apps/waypoint/constants';
 import {
   ACTIVITY_SETTING_LABELS,
   DEFAULT_REMINDER_MINUTES_BEFORE,
@@ -101,9 +106,16 @@ export interface NextLegSeed {
   arrivalPlace: PlaceSelectionResult | null;
 }
 
+export interface DeleteLinked {
+  checklistItemIds: string[];
+  expenseIds: string[];
+}
+
 export interface SubmitOptions {
   addLeg: boolean;
   arrivalPlace?: PlaceSelectionResult | null;
+  /** The to-dos to link once the event is saved; left out when the form never offered them. */
+  bookings?: { picked: string[]; initial: string[] };
 }
 
 /** Known fields to open a new event already filled in (from an idea, a travel prompt or an imported
@@ -147,7 +159,8 @@ interface EventFormModalProps {
   legFrom?: NextLegSeed;
   /** `addLeg` saves this event and reopens the form for the next leg, departing from `arrivalPlace`. */
   onSubmit: (event: EventFormValues, options?: SubmitOptions) => Promise<void> | void;
-  onDelete?: () => Promise<void> | void;
+  /** `linked` is what the person ticked to take along with the event. */
+  onDelete?: (linked: DeleteLinked) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -525,10 +538,38 @@ function EventFormModal({
   onClose,
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
+  const deleteChoiceRef = useRef({ todos: false, expenses: false });
   const queryClient = useQueryClient();
   const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
+  const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
+  const bookingEventIds = useMemo(() => new Set(events.map((other) => other.id)), [events]);
+  const bookingChoices = useMemo(
+    () =>
+      checklistItems
+        .filter(
+          (item) =>
+            (event && isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds)) ||
+            getLiveLink(item, bookingEventIds) === null,
+        )
+        .sort(
+          (first, second) =>
+            Number(first.isCompleted) - Number(second.isCompleted) ||
+            Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS'),
+        ),
+    [checklistItems, event, bookingEventIds],
+  );
+  const [initialBookingIds] = useState(() =>
+    event
+      ? checklistItems
+          .filter((item) => isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds))
+          .map((item) => item.id)
+      : [],
+  );
+  const [bookingItemIds, setBookingItemIds] = useState<string[] | null>(() =>
+    initialBookingIds.length > 0 ? initialBookingIds : null,
+  );
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
@@ -706,6 +747,18 @@ function EventFormModal({
   };
   const timeError = getTimeError();
 
+  const canLinkBookings = TODO_TRACKED_EVENT_TYPES.includes(draft.eventType) && bookingChoices.length > 0;
+
+  const getBookingPicks = () => {
+    if (!canLinkBookings) {
+      const wasTracked = event !== undefined && TODO_TRACKED_EVENT_TYPES.includes(event.eventType);
+      return wasTracked && initialBookingIds.length > 0 ? { picked: [], initial: initialBookingIds } : undefined;
+    }
+    return bookingItemIds !== null || initialBookingIds.length > 0
+      ? { picked: bookingItemIds ?? [], initial: initialBookingIds }
+      : undefined;
+  };
+
   const handleSubmit = async (addLeg = false) => {
     if (!timeFields || timeError) {
       setError(timeError ?? 'Choose a valid day and start time.');
@@ -823,11 +876,35 @@ function EventFormModal({
         archivedBy: event?.archivedBy ?? null,
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
-      }, { addLeg, arrivalPlace });
+      }, { addLeg, arrivalPlace, bookings: getBookingPicks() });
       setError(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));
     }
+  };
+
+  /** What hangs off this event that the person is allowed to delete with it; read at the tap so it is never stale. */
+  const getLinkedToDelete = (): { todos: LinkedItem[]; expenses: LinkedItem[]; blockedExpenseCount: number } => {
+    if (!event) {
+      return { todos: [], expenses: [], blockedExpenseCount: 0 };
+    }
+    const { checklist, expenses } = store.getState().waypoint;
+    const link = { kind: 'EVENT' as const, id: event.id };
+    const canDeleteTodos = canEditExistingItem(trip, currentUserId);
+    const canDeleteExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+    const linkedExpenses = expenses.items.filter(
+      (expense) => expense.tripId === trip.id && expense.linkedTo?.kind === link.kind && expense.linkedTo.id === link.id,
+    );
+    const removableExpenses = canDeleteExpenses
+      ? linkedExpenses.filter((expense) => Object.keys(expense.earlyPayments ?? {}).length === 0)
+      : [];
+    return {
+      todos: canDeleteTodos
+        ? checklist.items.filter((item) => checklist.tripId === trip.id && isLinkedTo(item, link, bookingEventIds)).map(({ id, title }) => ({ id, title }))
+        : [],
+      expenses: removableExpenses.map(({ id, title, status }) => ({ id, title: status === 'PAID' ? `${title} (paid)` : title })),
+      blockedExpenseCount: canDeleteExpenses ? linkedExpenses.length - removableExpenses.length : 0,
+    };
   };
 
   const handleDelete = async () => {
@@ -835,16 +912,34 @@ function EventFormModal({
       return;
     }
 
+    const { todos, expenses, blockedExpenseCount } = getLinkedToDelete();
+    deleteChoiceRef.current = { todos: false, expenses: false };
     const confirmed = await confirm({
       title: 'Delete timeline event',
-      message: `Delete "${event?.title}"? This action cannot be undone.`,
+      message:
+        todos.length + expenses.length + blockedExpenseCount > 0 ? (
+          <DeleteEventChoices
+            eventTitle={event?.title ?? ''}
+            todos={todos}
+            expenses={expenses}
+            blockedExpenseCount={blockedExpenseCount}
+            onChange={(choice) => (deleteChoiceRef.current = choice)}
+          />
+        ) : (
+          `Delete "${event?.title}"? This action cannot be undone.`
+        ),
+      confirmText: 'Delete',
       destructive: true,
     });
     if (!confirmed) {
       return;
     }
 
-    await onDelete();
+    const { todos: deleteTodos, expenses: deleteExpenses } = deleteChoiceRef.current;
+    await onDelete({
+      checklistItemIds: deleteTodos ? todos.map((item) => item.id) : [],
+      expenseIds: deleteExpenses ? expenses.map((item) => item.id) : [],
+    });
   };
 
   const getReminderText = () => {
@@ -908,6 +1003,7 @@ function EventFormModal({
       isShown: !isPlaceEvent || draft.hasVenueHours,
     },
     { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: draft.isGrouped },
+    { key: 'bookings', label: 'To-dos', icon: <ListChecks className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
     {
       key: 'reminder',
       label: 'Reminder',
@@ -917,7 +1013,7 @@ function EventFormModal({
   ].filter((chip) => !chip.isShown);
 
   const revealDetail = (key: string) =>
-    updateDraft(
+    key === 'bookings' ? setBookingItemIds(initialBookingIds) : updateDraft(
       {
         title: { hasTitle: true },
         link: { hasLink: true },
@@ -1499,6 +1595,24 @@ function EventFormModal({
                 value={draft.venueCloseTime}
                 onChange={(changeEvent) => updateDraft({ venueCloseTime: changeEvent.target.value })}
               />
+            </div>
+          </RemovableField>
+        )}
+        {canLinkBookings && bookingItemIds !== null && (
+          <RemovableField label='To-dos' removeLabel='Remove to-dos' onRemove={() => setBookingItemIds(null)}>
+            <div className='space-y-2'>
+              <MultiPillGroup
+                label='To-dos for this event'
+                options={bookingChoices.map((item) => ({
+                  value: item.id,
+                  label: item.isCompleted ? `✓ ${item.title}` : item.title,
+                }))}
+                values={bookingItemIds}
+                onChange={setBookingItemIds}
+              />
+              <p className='text-muted-foreground text-xs'>
+                Pick what needs doing before this event. Unpicking one only unlinks it; it stays on your checklist.
+              </p>
             </div>
           </RemovableField>
         )}

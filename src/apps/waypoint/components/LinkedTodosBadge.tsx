@@ -1,0 +1,91 @@
+import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
+import { useBookingStatus } from '@apps/waypoint/hooks/useBookingStatus';
+import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
+import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
+
+interface LinkedTodosBadgeProps {
+  getSubject: () => RelatedSubject;
+  /** A plain badge, for inside a details drawer, which can't have another sheet opened over it. */
+  isStatic?: boolean;
+  /** Hangs off the bottom-right corner of a card, outside it, like a tab. */
+  variant?: 'inline' | 'tab';
+}
+
+function getBadgeContent(open: number, total: number) {
+  if (total === 0) {
+    return null;
+  }
+  const done = total - open;
+  if (open === 0) {
+    return { phone: '✅ All done', desktop: '✅ All done', aria: total === 1 ? 'All done. The 1 to-do is done' : `All done. All ${total} to-dos are done` };
+  }
+  const toDo = `${open} to do`;
+  return {
+    phone: `📝 ${toDo}`,
+    desktop: done > 0 ? `📝 ${toDo} · ${done} of ${total} done` : `📝 ${toDo}`,
+    aria: done > 0 ? `${toDo}, ${done} of ${total} done. See or add to-dos` : `${toDo}. See or add to-dos`,
+  };
+}
+
+/** What is left on the to-dos linked to an event, what is done. Hidden once the event has started. */
+function LinkedTodosBadge({ getSubject, isStatic = false, variant = 'inline' }: LinkedTodosBadgeProps) {
+  const tabClassName = 'bg-card border-border -mt-px rounded-t-none rounded-b-lg border border-t-0 px-3 py-1';
+  const subject = getSubject();
+  const { total, open } = useBookingStatus(subject.link.kind, subject.link.id);
+  const { startLinkChecklist, canManageChecklist } = useRelatedFlow();
+
+  if (!subject.tracksTodos) {
+    return null;
+  }
+
+  const content = getBadgeContent(open, total);
+  if (content === null) {
+    return null;
+  }
+
+  const label = (
+    <>
+      <span className='sm:hidden'>{content.phone}</span>
+      <span className='max-sm:hidden'>{content.desktop}</span>
+    </>
+  );
+  const tintClassName = open > 0 && 'bg-accent/15! text-foreground!';
+
+  if (!canManageChecklist || isStatic) {
+    return (
+      <Badge
+        variant='muted'
+        outline
+        data-paid-tab={variant === 'tab' ? '' : undefined}
+        className={join('whitespace-nowrap', tintClassName, variant === 'tab' && tabClassName)}
+      >
+        {label}
+      </Badge>
+    );
+  }
+
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      data-paid-tab={variant === 'tab' ? '' : undefined}
+      aria-label={content.aria}
+      className={join(
+        "text-muted-foreground relative h-auto text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']",
+        tintClassName,
+        variant === 'tab' ? tabClassName : 'border-border rounded-full border px-2.5 py-0.5',
+      )}
+      onClick={(event) => {
+        event.stopPropagation();
+        startLinkChecklist(subject);
+      }}
+    >
+      {label}
+    </Button>
+  );
+}
+
+export default LinkedTodosBadge;

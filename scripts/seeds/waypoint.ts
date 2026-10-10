@@ -986,6 +986,25 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     lastEditedAt: context.now,
   });
 
+  // A to-do linked to an activity, so the hike's card shows "1 to do"; the other items above stay legacy-shaped (no `linkedTo`).
+  await checklistCollection.doc('book-hike-parking').set({
+    id: 'book-hike-parking',
+    tripId: TRIP_ID,
+    title: 'Reserve the trailhead parking pass',
+    category: 'BOOKINGS',
+    customCategoryLabel: null,
+    note: null,
+    completeByDayIndex: 0,
+    assignedToUids: [alex.uid],
+    isCompleted: false,
+    markedCompletedByUid: null,
+    markedCompletedAt: null,
+    linkedTo: { kind: 'EVENT', id: 'seed-waypoint-hike' },
+    createdBy: alex.uid,
+    createdAt: joinedAt,
+    lastEditedAt: context.now,
+  });
+
   // A pre-approved invitation: Jamie joins the empty trip as an Editor without asking.
   await context.firestore
     .collection('apps')
@@ -1960,6 +1979,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 82 + personalExpenses.length + scaleDocuments,
+    firestoreDocuments: 83 + personalExpenses.length + scaleDocuments,
   };
 }

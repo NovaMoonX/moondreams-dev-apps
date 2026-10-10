@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import Pill from '@/components/Pill';
+import SuggestionChips from '@/components/SuggestionChips';
+import { PillRow } from '@/components/PillGroup';
+import { getDayCount, getDayLabel, getLocalDayIndex } from '@/utils/dateRangeUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
+import { useBookingStatus } from '@apps/waypoint/hooks/useBookingStatus';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import ChecklistItemFormModal, {
@@ -14,13 +21,15 @@ import ExpenseFormModal, {
   type ExpensePrefill,
   type ExpenseSubmitValues,
 } from '@apps/waypoint/components/ExpenseFormModal';
-import { createChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
+import { createChecklistItem, deleteChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
 import { createExpense } from '@apps/waypoint/store/actions/expenseActions';
 import { selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import type { RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 import { getExpenseCategoryKeys } from '@apps/waypoint/utils/expenseCategories';
-import { hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { BOOKING_VERBS } from '@apps/waypoint/constants';
+import { getBookingDueDay } from '@apps/waypoint/utils/bookingItems';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
 
 interface AddRelatedFlowProps {
   trip: TripSpace;
@@ -28,6 +37,8 @@ interface AddRelatedFlowProps {
   subject: RelatedSubject;
   /** Opening straight on the expense form closes the flow when that form does. */
   initialStep?: Step;
+  /** To-dos were linked in the same save, so booking isn't asked about again. */
+  hasBookings?: boolean;
   onClose: () => void;
 }
 
@@ -64,8 +75,14 @@ function FollowUpRow({ emoji, title, description, addedCount, onClick }: FollowU
   );
 }
 
-function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', onClose }: AddRelatedFlowProps) {
+function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', hasBookings, onClose }: AddRelatedFlowProps) {
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
+  const existingBookings = useBookingStatus(subject.link.kind, subject.link.id);
+  const [alreadyHadBookings] = useState(hasBookings ?? existingBookings.total > 0);
+  const [bookingAnswer, setBookingAnswer] = useState<'yes' | 'none' | null>(null);
+  const [booking, setBooking] = useState<{ id: string; title: string; dueLabel: string | null } | null>(null);
+  const canUndoBooking = canEditExistingItem(trip, currentUserId);
   const expenses = useAppSelector(selectTripExpenses);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const memberInfo = useUserInfo(memberIds);
@@ -128,9 +145,69 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
   const handleChecklist = async (values: ChecklistSubmitValues) => {
     setIsSubmitting(true);
     try {
-      await dispatch(createChecklistItem({ tripId: trip.id, uid: currentUserId, ...values })).unwrap();
+      await dispatch(
+        createChecklistItem({ tripId: trip.id, uid: currentUserId, ...values, linkedTo: subject.link }),
+      ).unwrap();
       setAdded((current) => ({ ...current, checklist: current.checklist + 1 }));
+      addToast({ title: `Added ${values.title.trim()}, linked to ${subject.title}`, type: 'success' });
       backToMenu();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const addBooking = async (label: string) => {
+    const verb = BOOKING_VERBS.find((candidate) => candidate.label === label);
+    if (!verb || isSubmitting) {
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const dueDay = getBookingDueDay(subject.dayIndex, getLocalDayIndex(trip.startDate, Date.now()));
+      const created = await dispatch(
+        createChecklistItem({
+          tripId: trip.id,
+          uid: currentUserId,
+          title: `${verb.prefix} ${subject.title}`,
+          category: 'BOOKINGS',
+          customCategoryLabel: null,
+          note: null,
+          completeByDayIndex: dueDay,
+          assignedToUids: [currentUserId],
+          isPrivate: false,
+          linkedTo: subject.link,
+        }),
+      ).unwrap();
+      setBooking({
+        id: created.id,
+        title: created.title,
+        dueLabel: dueDay === null ? null : getDayLabel(trip.startDate, dueDay, getDayCount(trip.startDate, trip.endDate)),
+      });
+    } catch (addError) {
+      addToast({
+        title: 'Unable to add that to-do',
+        description: getErrorMessage(addError, 'Please try again.'),
+        type: 'error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const undoBooking = async () => {
+    if (!booking || isSubmitting) {
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await dispatch(deleteChecklistItem({ trip, uid: currentUserId, itemId: booking.id, isPrivate: false })).unwrap();
+      setBooking(null);
+    } catch (undoError) {
+      addToast({
+        title: 'Unable to undo that',
+        description: getErrorMessage(undoError, 'Please try again.'),
+        type: 'error',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -152,6 +229,64 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
       >
         <div className='space-y-3'>
           <p className='text-muted-foreground text-sm'>Saved. Want to line up the rest while it&apos;s fresh?</p>
+          {subject.tracksBooking && !alreadyHadBookings && (
+            <div className='space-y-3'>
+              <div className='flex items-start gap-3'>
+                <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+                  🎟️
+                </span>
+                <div className='min-w-0'>
+                  <p className='text-sm font-medium'>Does anything need booking ahead?</p>
+                  <p className='text-muted-foreground text-xs'>Tickets, a time slot, a pass. We&apos;ll add it to your checklist.</p>
+                </div>
+              </div>
+              <PillRow label='Does anything need booking ahead?'>
+                <Pill isSelected={bookingAnswer === 'yes'} onClick={() => setBookingAnswer('yes')}>
+                  Yes, something
+                </Pill>
+                <Pill
+                  isSelected={bookingAnswer === 'none'}
+                  isDisabled={booking !== null}
+                  onClick={() => setBookingAnswer('none')}
+                >
+                  Nope, all set
+                </Pill>
+              </PillRow>
+              {bookingAnswer === 'yes' &&
+                (booking ? (
+                  <div className='flex items-center gap-3 text-sm'>
+                    <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+                      ✓
+                    </span>
+                    <span className='min-w-0 flex-1'>
+                      <span className='block font-medium'>{booking.title}</span>
+                      <span className='text-muted-foreground block text-xs'>
+                        Added to your checklist{booking.dueLabel ? ` · due ${booking.dueLabel}` : ''}
+                      </span>
+                    </span>
+                    {canUndoBooking && (
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='sm'
+                        className="relative after:absolute after:-inset-y-2 after:-inset-x-1 after:content-['']"
+                        disabled={isSubmitting}
+                        onClick={() => void undoBooking()}
+                      >
+                        Undo
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <SuggestionChips
+                    label='What do you need to do?'
+                    suggestions={BOOKING_VERBS.map((verb) => verb.label)}
+                    onPick={(label) => void addBooking(label)}
+                    isDisabled={isSubmitting}
+                  />
+                ))}
+            </div>
+          )}
           <div className='bg-muted/50 divide-border divide-y overflow-hidden rounded-xl'>
             <FollowUpRow
               emoji='💸'
@@ -162,8 +297,18 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
             />
             <FollowUpRow
               emoji='🧳'
-              title='Add a checklist item'
-              description='Something to book, bring or do before it.'
+              title={
+                subject.tracksBooking && !alreadyHadBookings
+                  ? booking !== null || added.checklist > 0
+                    ? 'Add another to-do'
+                    : 'Add a to-do'
+                  : 'Add a checklist item'
+              }
+              description={
+                subject.tracksBooking && !alreadyHadBookings
+                  ? 'Something to bring or do, with people and a due day.'
+                  : 'Something to book, bring or do before it.'
+              }
               addedCount={added.checklist}
               onClick={() => setStep('checklist')}
             />
@@ -191,6 +336,8 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', on
           trip={trip}
           currentUserId={currentUserId}
           prefill={checklistPrefill}
+          allowPrivate={false}
+          forTitle={subject.title}
           memberOptions={memberOptions}
           isSubmitting={isSubmitting}
           onSubmit={handleChecklist}

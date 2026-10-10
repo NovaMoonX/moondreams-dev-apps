@@ -1695,6 +1695,8 @@ service cloud.firestore {
             'timezone',
             'city',
             'noExpenseKeys',
+            // Written by development builds of an earlier design; tolerated so those documents stay editable.
+            'noBookingKeys',
             'dateShiftStatus',
             'createdBy',
             'createdAt',
@@ -1961,6 +1963,7 @@ service cloud.firestore {
               'isCompleted',
               'markedCompletedByUid',
               'markedCompletedAt',
+              'linkedTo',
               'createdBy',
               'createdAt',
               'lastEditedAt'
@@ -1977,9 +1980,29 @@ service cloud.firestore {
             && data.isCompleted is bool
             && (data.markedCompletedByUid == null || data.markedCompletedByUid is string)
             && (data.markedCompletedAt == null || isTimestampNumber(data.markedCompletedAt))
+            && isChecklistLinkValid(data.get('linkedTo', null))
             && data.createdBy is string
             && isTimestampNumber(data.createdAt)
             && isTimestampNumber(data.lastEditedAt);
+        }
+
+        // Shape only: a plan deleted later leaves a link that reads as none, and must never block editing the item.
+        function isChecklistLinkValid(link) {
+          return link == null || (
+            link is map
+            && link.keys().hasOnly(['kind', 'id'])
+            && link.kind in ['EVENT', 'STAY', 'RENTAL']
+            && isNonEmptyString(link.id)
+            && link.id.size() <= 128
+          );
+        }
+
+        // Linking or unlinking an item stays open to Editors on a live trip, when the rest of an item is Admin-only.
+        function isChecklistLinkUpdateValid() {
+          return isChecklistEditor()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'lastEditedAt'])
+            && isChecklistLinkValid(request.resource.data.get('linkedTo', null))
+            && isTimestampNumber(request.resource.data.lastEditedAt);
         }
 
         function isChecklistImmutableFieldsValid() {
@@ -2018,7 +2041,8 @@ service cloud.firestore {
           isChecklistAdminOnlyWhileActive()
           && isChecklistShapeValid(request.resource.data)
           && isChecklistImmutableFieldsValid()
-        ) || isChecklistAssignedToggleValid();
+        ) || isChecklistAssignedToggleValid()
+          || isChecklistLinkUpdateValid();
         allow delete: if isChecklistAdminOnlyWhileActive();
       }
     }
@@ -3085,9 +3109,10 @@ service cloud.firestore {
       function isPersonalChecklistValid(data) {
         return data.keys().hasOnly([
             'id', 'tripId', 'title', 'category', 'customCategoryLabel', 'note', 'completeByDayIndex',
-            'assignedToUids', 'isCompleted', 'markedCompletedByUid', 'markedCompletedAt',
+            'assignedToUids', 'isCompleted', 'markedCompletedByUid', 'markedCompletedAt', 'linkedTo',
             'createdBy', 'createdAt', 'lastEditedAt'
           ])
+          && data.get('linkedTo', null) == null
           && data.id == itemId
           && isNonEmptyString(data.tripId)
           && isNonEmptyString(data.title)

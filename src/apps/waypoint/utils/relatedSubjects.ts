@@ -8,7 +8,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
-import { EVENT_TYPE_EMOJIS, STAY_TYPE_EMOJIS, TRANSIT_TYPE_EMOJIS } from '@apps/waypoint/constants';
+import { BOOKING_TRACKED_EVENT_TYPES, EVENT_TYPE_EMOJIS, TODO_TRACKED_EVENT_TYPES, STAY_TYPE_EMOJIS, TRANSIT_TYPE_EMOJIS } from '@apps/waypoint/constants';
 import { getEventTime, getStayTime } from '@apps/waypoint/utils/tripTime';
 
 export interface RelatedSubject {
@@ -23,6 +23,10 @@ export interface RelatedSubject {
   /** Who the plan is for, so its expense starts split between them; `null` means everyone. */
   attendeeIds: string[] | null;
   checklistCategory: ChecklistCategory;
+  /** Whether the plan shows the progress of its linked to-dos: an activity or dining event that hasn't started. */
+  tracksTodos: boolean;
+  /** Whether the post-save sheet asks about booking: an activity that hasn't started; stays and rentals are booked when added. */
+  tracksBooking: boolean;
 }
 
 const EVENT_EXPENSE_CATEGORIES: Record<EventType, ExpenseCategory | null> = {
@@ -40,7 +44,8 @@ function getEventEmoji(event: TimelineEvent): string {
 }
 
 export function getEventSubject(trip: TripSpace, event: TimelineEvent): RelatedSubject {
-  const { dayIndex, startTime } = getEventTime(trip, event);
+  const { dayIndex, startTime, startMs } = getEventTime(trip, event);
+  const hasStarted = startMs !== null && Date.now() >= startMs;
   return {
     link: { kind: 'EVENT', id: event.id },
     emoji: getEventEmoji(event),
@@ -51,6 +56,8 @@ export function getEventSubject(trip: TripSpace, event: TimelineEvent): RelatedS
     prefersEstimate: event.eventType === 'DINING',
     attendeeIds: event.attendeeTargetType === 'SPECIFIC_MEMBERS' ? event.assignedMemberIds : null,
     checklistCategory: event.eventType === 'TRAVEL' ? 'DOCUMENTS' : 'BOOKINGS',
+    tracksTodos: TODO_TRACKED_EVENT_TYPES.includes(event.eventType) && !hasStarted,
+    tracksBooking: BOOKING_TRACKED_EVENT_TYPES.includes(event.eventType) && !hasStarted,
   };
 }
 
@@ -65,6 +72,8 @@ export function getStaySubject(trip: TripSpace, stay: Stay): RelatedSubject {
     prefersEstimate: false,
     attendeeIds: null,
     checklistCategory: 'BOOKINGS',
+    tracksTodos: false,
+    tracksBooking: false,
   };
 }
 
@@ -79,6 +88,8 @@ export function getRentalSubject(rental: Rental): RelatedSubject {
     prefersEstimate: false,
     attendeeIds: null,
     checklistCategory: 'BOOKINGS',
+    tracksTodos: false,
+    tracksBooking: false,
   };
 }
 

@@ -8,6 +8,7 @@ import type {
   EventLinkKind,
   EventType,
   ExpenseCategory,
+  ExpenseLinkKind,
   ExpenseSortBy,
   ExpenseTotalsView,
   IdeaType,
@@ -220,6 +221,20 @@ export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'
 
 // Event types whose cost belongs on an expense: one without an attached expense reads "No expense yet".
 export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
+
+// Event types whose card shows the progress of the to-dos linked to it, and whose form can link them.
+export const TODO_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
+
+// Event types whose post-save sheet asks "Does anything need booking ahead?".
+export const BOOKING_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+
+export const BOOKING_VERBS = [
+  { label: 'Book', prefix: 'Book' },
+  { label: 'Reserve', prefix: 'Reserve' },
+  { label: 'Buy tickets', prefix: 'Buy tickets for' },
+] as const;
+
+export const PLAN_COLLECTIONS: Record<ExpenseLinkKind, string> = { EVENT: 'events', STAY: 'stays', RENTAL: 'rentals' };
 
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {

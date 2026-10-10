@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
-import { Archive, Layers, MessageSquarePlus, Receipt } from 'lucide-react';
+import { Archive, Layers, ListChecks, MessageSquarePlus, Receipt } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
@@ -44,12 +44,13 @@ export function PlaceDetailsDrawer({
   expenseTarget = null,
   children,
 }: PlaceDetailsDrawerProps) {
-  const { startLinkExpense, canAddExpenses } = useRelatedFlow();
+  const { startLinkExpense, startLinkChecklist, canAddExpenses, canManageChecklist } = useRelatedFlow();
   const hasExpense = useHasExpense(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
   const isNoExpense = useIsNoExpense(expenseTarget?.link.kind ?? 'EVENT', expenseTarget?.link.id ?? '');
   const canLinkExpense = expenseTarget !== null && canAddExpenses && !hasExpense && !isNoExpense;
+  const canLinkTodo = expenseTarget !== null && canManageChecklist && expenseTarget.getSubject().tracksTodos;
   const canNavigate = getMapNavigationUrl(location) !== null;
-  const hasMoreActions = Boolean(onStack || onArchive || onSuggest || canLinkExpense);
+  const hasMoreActions = Boolean(onStack || onArchive || onSuggest || canLinkExpense || canLinkTodo);
   const primaryLabel = canNavigate ? 'Navigate' : linkUrl ? 'Visit site' : onEdit ? 'Modify' : null;
 
   const getFooter = () => {
@@ -103,6 +104,20 @@ export function PlaceDetailsDrawer({
               >
                 <Receipt className='text-muted-foreground h-4 w-4' />
                 Link or add an expense
+              </Button>
+            )}
+            {canLinkTodo && (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-10 w-full justify-start gap-3 px-3 text-sm font-normal'
+                onClick={() => {
+                  onClose();
+                  startLinkChecklist(expenseTarget.getSubject());
+                }}
+              >
+                <ListChecks className='text-muted-foreground h-4 w-4' />
+                Link or add a to-do
               </Button>
             )}
             {onSuggest && (

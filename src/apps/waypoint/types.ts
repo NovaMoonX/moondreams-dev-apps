@@ -554,6 +554,8 @@ export interface ChecklistItem {
   isCompleted: boolean;
   markedCompletedByUid: string | null;
   markedCompletedAt: number | null;
+  /** The event, stay or rental this item is a to-do for ("book tickets"). Older documents lack it. */
+  linkedTo: ExpenseLink | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

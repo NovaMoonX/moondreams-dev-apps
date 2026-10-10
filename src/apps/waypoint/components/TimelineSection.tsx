@@ -23,9 +23,13 @@ import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
+import { deleteChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
+import { deleteExpense } from '@apps/waypoint/store/actions/expenseActions';
+import { useSyncBookings } from '@apps/waypoint/hooks/useSyncBookings';
 import { getEventSubject, getExpenseLinkKey, isWorthFollowUp } from '@apps/waypoint/utils/relatedSubjects';
 import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
+  type DeleteLinked,
   type EventFormValues,
   type NextLegSeed,
   type SubmitOptions,
@@ -55,7 +59,7 @@ import {
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
@@ -120,6 +124,7 @@ export function TimelineSection({
 }: TimelineSectionProps) {
   const dispatch = useAppDispatch();
   const { startFollowUp } = useRelatedFlow();
+  const syncBookings = useSyncBookings(trip.id);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -574,10 +579,12 @@ export function TimelineSection({
             previousEvent: editingEvent,
           }),
         ).unwrap();
+        await syncBookings(editingEvent.id, options?.bookings);
       } else {
         const created = await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
+        const hasBookings = await syncBookings(created.id, options?.bookings);
         if (!options?.addLeg && isWorthFollowUp(created)) {
-          startFollowUp(getEventSubject(trip, created));
+          startFollowUp(getEventSubject(trip, created), { hasBookings });
         }
       }
       setEditingEvent(undefined);
@@ -594,13 +601,52 @@ export function TimelineSection({
     }
   };
 
-  const handleDelete = async (event: TimelineEvent) => {
+  const describeRemoved = ({ checklistItemIds, expenseIds }: DeleteLinked) => {
+    const parts = [
+      checklistItemIds.length > 0 ? `${checklistItemIds.length} ${checklistItemIds.length === 1 ? 'to-do' : 'to-dos'}` : null,
+      expenseIds.length > 0 ? `${expenseIds.length} ${expenseIds.length === 1 ? 'expense' : 'expenses'}` : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0 ? ` and its ${parts.join(' and ')}` : '';
+  };
+
+  /** Deletes what the person ticked in the confirm, after the event itself; returns what could not be deleted. */
+  const deleteLinked = async ({ checklistItemIds, expenseIds }: DeleteLinked) => {
+    const { expenses } = store.getState().waypoint;
+    const results = await Promise.allSettled([
+      ...checklistItemIds.map((itemId) =>
+        dispatch(deleteChecklistItem({ trip, uid: currentUserId, itemId, isPrivate: false })).unwrap(),
+      ),
+      ...expenseIds.flatMap((expenseId) => {
+        const expense = expenses.items.find((candidate) => candidate.id === expenseId && candidate.tripId === trip.id);
+        return expense ? [dispatch(deleteExpense(expense)).unwrap()] : [];
+      }),
+    ]);
+    return results.filter((result) => result.status === 'rejected').length;
+  };
+
+  const handleDelete = async (event: TimelineEvent, linked: DeleteLinked) => {
     setIsSubmitting(true);
     try {
       await dispatch(deleteEvent({ uid: currentUserId, trip, eventId: event.id })).unwrap();
       setIsFormOpen(false);
       setEditingEvent(undefined);
       resolveEditSuccess();
+      const removedCount = linked.checklistItemIds.length + linked.expenseIds.length;
+      if (removedCount > 0) {
+        const failedCount = await deleteLinked(linked);
+        addToast(
+          failedCount > 0
+            ? {
+                title: `Deleted ${event.title}`,
+                description: `${failedCount === 1 ? '1 linked item' : `${failedCount} linked items`} could not be deleted. You can remove ${failedCount === 1 ? 'it' : 'them'} from the checklist or Expenses.`,
+                type: 'error',
+              }
+            : {
+                title: `Deleted ${event.title}${describeRemoved(linked)}`,
+                type: 'success',
+              },
+        );
+      }
     } catch (error) {
       addToast({
         title: 'Unable to delete event',
@@ -847,7 +893,7 @@ export function TimelineSection({
         placeBias={placeBias}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
-        onDelete={editingEvent ? () => handleDelete(editingEvent) : undefined}
+        onDelete={editingEvent ? (linked) => handleDelete(editingEvent, linked) : undefined}
         onClose={() => {
           setIsFormOpen(false);
           setEditingEvent(undefined);

@@ -13,8 +13,10 @@ import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
 import EventFormModal, {
   type EventFormValues,
   type EventPrefill,
+  type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
 import { TIME_BLOCK_START_TIMES } from '@apps/waypoint/constants';
+import { useSyncBookings } from '@apps/waypoint/hooks/useSyncBookings';
 import { convertIdeaToEvent } from '@apps/waypoint/store/actions/ideaActions';
 import { selectSortedTimelineEvents, selectStays } from '@apps/waypoint/store/selectors';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
@@ -50,6 +52,7 @@ function IdeaToEventModal({ trip, idea, currentUserId, onClose }: IdeaToEventMod
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { startFollowUp } = useRelatedFlow();
+  const syncBookings = useSyncBookings(trip.id);
   const events = useAppSelector(selectSortedTimelineEvents);
   const stays = useAppSelector(selectStays);
   const memberIds = Object.keys(trip.members);
@@ -62,13 +65,14 @@ function IdeaToEventModal({ trip, idea, currentUserId, onClose }: IdeaToEventMod
   const [placeBias] = useState(() => getPlaceBiasFromItems([...stays, ...events]));
   const placeLookup = useQuery(ideaPlaceQueryOptions(idea.title, placeBias));
 
-  const handleSubmit = async (event: EventFormValues) => {
+  const handleSubmit = async (event: EventFormValues, options?: SubmitOptions) => {
     setIsSubmitting(true);
     try {
       const created = await dispatch(convertIdeaToEvent({ uid: currentUserId, trip, idea, event })).unwrap();
       addToast({ title: `${idea.title} is on the itinerary`, type: 'success' });
+      const hasBookings = await syncBookings(created.id, options?.bookings);
       if (isWorthFollowUp(created)) {
-        startFollowUp(getEventSubject(trip, created));
+        startFollowUp(getEventSubject(trip, created), { hasBookings });
       }
       onClose();
     } finally {

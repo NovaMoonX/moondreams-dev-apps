@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import SearchInput from '@/components/SearchInput';
@@ -11,7 +12,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import { linkExpenseToPlan } from '@apps/waypoint/store/actions/expenseActions';
 import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
-import { selectTripExpenses } from '@apps/waypoint/store/selectors';
+import { selectTimelineEvents, selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import { getExpenseCategoryKey, getExpenseCategoryKeyLabel } from '@apps/waypoint/utils/expenseCategories';
 import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
@@ -42,11 +43,13 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const expenses = useAppSelector(selectTripExpenses);
+  const events = useAppSelector(selectTimelineEvents);
+  const eventIds = useMemo(() => new Set(events.map((event) => event.id)), [events]);
   const [query, setQuery] = useState('');
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const unlinked = expenses
-    .filter((expense) => !expense.linkedTo)
+    .filter((expense) => !expense.linkedTo || (expense.linkedTo.kind === 'EVENT' && !eventIds.has(expense.linkedTo.id)))
     .sort((first, second) => Number(second.dayIndex === subject.dayIndex) - Number(first.dayIndex === subject.dayIndex));
   const term = query.trim().toLowerCase();
   const visible = term ? unlinked.filter((expense) => expense.title.toLowerCase().includes(term)) : unlinked;
@@ -108,20 +111,23 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
         </div>
       }
     >
-      <div className='space-y-3'>
-        <p className='text-muted-foreground text-sm'>
-          For <span className='text-foreground font-medium'>{subject.title}</span>.
-          {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
-        </p>
-        {unlinked.length >= LIST_SEARCH_THRESHOLD && (
-          <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
-        )}
+      <div className={join('flex flex-col gap-3', unlinked.length >= LIST_SEARCH_THRESHOLD ? 'h-[max(12rem,calc(92dvh-22rem))]' : 'max-h-[max(12rem,calc(92dvh-22rem))]')}>
+        <div className='shrink-0 space-y-3'>
+          <p className='text-muted-foreground text-sm'>
+            For <span className='text-foreground font-medium'>{subject.title}</span>.
+            {unlinked.length > 0 && <> Pick one that&apos;s already on your list; we&apos;ll only fill in a missing day.</>}
+          </p>
+          {unlinked.length >= LIST_SEARCH_THRESHOLD && (
+            <SearchInput value={query} onChange={setQuery} placeholder='Search expenses' />
+          )}
+        </div>
+        <div className='min-h-0 flex-1 overflow-y-auto'>
         {unlinked.length === 0 ? (
           <p className='text-muted-foreground text-sm'>Every expense is already linked to an event, stay or rental.</p>
         ) : visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No expense matches.</p>
         ) : (
-          <ul className='divide-border max-h-80 divide-y overflow-y-auto'>
+          <ul className='divide-border divide-y'>
             {visible.map((expense) => (
               <li key={expense.id}>
                 <Button
@@ -144,6 +150,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
             ))}
           </ul>
         )}
+        </div>
       </div>
     </DetailSheet>
   );

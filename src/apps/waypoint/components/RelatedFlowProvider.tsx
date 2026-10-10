@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions';
 
 import AddRelatedFlow, { type Step } from '@apps/waypoint/components/AddRelatedFlow';
+import LinkChecklistSheet from '@apps/waypoint/components/LinkChecklistSheet';
 import LinkExpenseSheet from '@apps/waypoint/components/LinkExpenseSheet';
 import { RelatedFlowContext } from '@apps/waypoint/hooks/useRelatedFlow';
 import type { TripSpace } from '@apps/waypoint/types';
@@ -20,8 +21,9 @@ interface RelatedFlowProviderProps {
 }
 
 type OpenFlow =
-  | { id: number; kind: 'follow-up'; subject: RelatedSubject; initialStep: Step }
-  | { id: number; kind: 'link'; subject: RelatedSubject };
+  | { id: number; kind: 'follow-up'; subject: RelatedSubject; initialStep: Step; hasBookings?: boolean }
+  | { id: number; kind: 'link'; subject: RelatedSubject }
+  | { id: number; kind: 'link-checklist'; subject: RelatedSubject };
 
 // Mounted above the trip's screens: an idea leaves its list the moment it is converted, taking its own children with it.
 function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProviderProps) {
@@ -31,8 +33,14 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
   const canAddExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const value = useMemo(
     () => ({
-      startFollowUp: (subject: RelatedSubject) =>
-        setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'follow-up', subject, initialStep: 'menu' })),
+      startFollowUp: (subject: RelatedSubject, options?: { hasBookings?: boolean }) =>
+        setFlow((current) => ({
+          id: (current?.id ?? 0) + 1,
+          kind: 'follow-up',
+          subject,
+          initialStep: 'menu',
+          hasBookings: options?.hasBookings,
+        })),
       startLinkExpense: (subject: RelatedSubject) =>
         setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'link', subject })),
       undoNoExpense: (subject: RelatedSubject) =>
@@ -52,7 +60,10 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
               type: 'error',
             }),
           ),
+      startLinkChecklist: (subject: RelatedSubject) =>
+        setFlow((current) => ({ id: (current?.id ?? 0) + 1, kind: 'link-checklist', subject })),
       canAddExpenses,
+      canManageChecklist: canAddExpenses,
     }),
     [canAddExpenses, dispatch, addToast, currentUserId, trip],
   );
@@ -67,6 +78,7 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
           currentUserId={currentUserId}
           subject={flow.subject}
           initialStep={flow.initialStep}
+          hasBookings={flow.hasBookings}
           onClose={() => setFlow(null)}
         />
       )}
@@ -78,6 +90,18 @@ function RelatedFlowProvider({ trip, currentUserId, children }: RelatedFlowProvi
           currentUserId={currentUserId}
           onAddNew={() =>
             setFlow({ id: flow.id + 1, kind: 'follow-up', subject: flow.subject, initialStep: 'expense' })
+          }
+          onClose={() => setFlow(null)}
+        />
+      )}
+      {flow?.kind === 'link-checklist' && (
+        <LinkChecklistSheet
+          key={flow.id}
+          trip={trip}
+          subject={flow.subject}
+          currentUserId={currentUserId}
+          onAddNew={() =>
+            setFlow({ id: flow.id + 1, kind: 'follow-up', subject: flow.subject, initialStep: 'checklist' })
           }
           onClose={() => setFlow(null)}
         />
