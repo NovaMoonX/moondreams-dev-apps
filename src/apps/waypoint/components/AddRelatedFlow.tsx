@@ -6,6 +6,7 @@ import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import Pill from '@/components/Pill';
+import SuggestionChips from '@/components/SuggestionChips';
 import { PillRow } from '@/components/PillGroup';
 import { getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -83,6 +84,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
   const [alreadyHadBookings] = useState(hasBookings ?? existingBookings.total > 0);
   const [bookingAnswer, setBookingAnswer] = useState<'yes' | 'none' | null>(null);
   const [bookingTitle, setBookingTitle] = useState('');
+  const [pickedVerb, setPickedVerb] = useState<string | null>(null);
   const [bookedTitles, setBookedTitles] = useState<string[]>([]);
   const expenses = useAppSelector(selectTripExpenses);
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
@@ -198,6 +200,7 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
       ).unwrap();
       setBookedTitles((current) => [...current, title]);
       setBookingTitle('');
+      setPickedVerb(null);
     } catch (addError) {
       addToast({
         title: 'Unable to add that to-do',
@@ -262,17 +265,20 @@ function AddRelatedFlow({ trip, currentUserId, subject, initialStep = 'menu', ha
               )}
               {bookingAnswer === 'yes' && (
                 <div className='space-y-3'>
-                  <PillRow label='What to do'>
-                    {BOOKING_VERBS.map((verb) => (
-                      <Pill
-                        key={verb.label}
-                        isSelected={bookingTitle === `${verb.prefix} ${subject.title}`}
-                        onClick={() => setBookingTitle(`${verb.prefix} ${subject.title}`)}
-                      >
-                        {verb.label}
-                      </Pill>
-                    ))}
-                  </PillRow>
+                  <SuggestionChips
+                    label='Start with'
+                    suggestions={BOOKING_VERBS.map((verb) => verb.label)}
+                    picked={pickedVerb}
+                    onClear={() => {
+                      setPickedVerb(null);
+                      setBookingTitle('');
+                    }}
+                    onPick={(label) => {
+                      const verb = BOOKING_VERBS.find((candidate) => candidate.label === label);
+                      setPickedVerb(label);
+                      setBookingTitle(`${verb?.prefix ?? label} ${subject.title}`);
+                    }}
+                  />
                   {bookedTitles.length > 0 && (
                     <ul className='space-y-1'>
                       {bookedTitles.map((title, index) => (
