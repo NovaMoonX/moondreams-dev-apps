@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import FallbackImage from '@/components/FallbackImage';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useStore } from 'react-redux';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -19,27 +21,33 @@ import {
   Archive,
   ArchiveRestore,
   Calendar,
+  ClipboardCopy,
   Globe,
   Image,
   Link,
   Megaphone,
+  MapPin,
   MoreHorizontal,
   Pencil,
   Trash2,
 } from 'lucide-react';
 
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, type RootState } from '@/store';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
+import { useUserInfo } from '@/hooks/useUserInfo';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { getCityLabel } from '@/lib/cities/cityApi';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatTimezoneLabel } from '@/utils/timezoneUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import AnnouncementFormModal from '@apps/waypoint/components/AnnouncementFormModal';
+import ChecklistOverview from '@apps/waypoint/components/ChecklistOverview';
 import ChecklistSection from '@apps/waypoint/components/ChecklistSection';
 import EditTripCoverModal from '@apps/waypoint/components/EditTripCoverModal';
 import EditTripDatesModal from '@apps/waypoint/components/EditTripDatesModal';
+import EditTripCityModal from '@apps/waypoint/components/EditTripCityModal';
 import EditTripTitleModal from '@apps/waypoint/components/EditTripTitleModal';
 import ExpensesSection from '@apps/waypoint/components/ExpensesSection';
 import IdeaFormModal, { type IdeaFormFields } from '@apps/waypoint/components/IdeaFormModal';
@@ -50,6 +58,8 @@ import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndic
 import NowPill from '@apps/waypoint/components/NowPill';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
+import StickyAppBar from '@/components/StickyAppBar';
+import RelatedFlowProvider from '@apps/waypoint/components/RelatedFlowProvider';
 import Subview from '@/components/Subview';
 import StaysSection from '@apps/waypoint/components/StaysSection';
 import TimelineSection from '@apps/waypoint/components/TimelineSection';
@@ -70,15 +80,19 @@ import { createIdea } from '@apps/waypoint/store/actions/ideaActions';
 import {
   deleteTrip,
   editTrip,
+  setTripCity,
   setTripArchived,
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
-import { getTripStatus } from '@apps/waypoint/store/selectors';
-import type { IdeaType, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { getTripStatus, selectIsTripDataLoaded, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
+import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+import { buildTimelineMarkdown, buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
 const { option, custom } = DropdownMenuFactories;
+
+let latestMemberNames: Record<string, string> = {};
 
 interface TripDetailPageProps {
   trip: TripSpace;
@@ -87,13 +101,15 @@ interface TripDetailPageProps {
   onBack: () => void;
 }
 
-type EditingField = 'title' | 'dates' | 'cover' | null;
+type EditingField = 'title' | 'dates' | 'city' | 'cover' | null;
 
 function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageProps) {
   const now = useNow();
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
+  const store = useStore<RootState>();
+  const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [searchParams, setSearchParams] = useSearchParams();
   const isActive = getTripStatus(trip, now) === 'ACTIVE';
@@ -116,8 +132,15 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const subviewTitle = hasAppNav ? TRIP_SUBVIEW_LABELS[sectionTab as TripSectionTab] : undefined;
   const showOverviewHud = hasAppNav ? sectionTab === '' && isActive : true;
 
+  // The new tab renders in a transition so the tap answers at once (the nav moves, the old tab
+  // stays up) instead of the page freezing while a big tab builds.
+  const [isTabPending, startTabTransition] = useTransition();
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const navTab = isTabPending && pendingTab !== null ? pendingTab : sectionTab;
+
   const setSectionTab = (value: string) => {
-    setSelectedTab(value);
+    setPendingTab(value);
+    startTabTransition(() => setSelectedTab(value));
     if (hasAppNav) {
       window.scrollTo({ top: 0 });
     }
@@ -206,6 +229,59 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     );
   };
 
+  const handleCopyTripMarkdown = async () => {
+    setIsMobileActionsOpen(false);
+    const state = store.getState();
+    if (!selectIsTripDataLoaded(state, trip.id)) {
+      addToast({ title: 'Still loading this trip', description: 'Give it a moment, then copy again.' });
+      return;
+    }
+    const markdown = buildTripMarkdown({
+      trip,
+      events,
+      stays: state.waypoint.stays.tripId === trip.id ? selectSortedStays(state) : [],
+      rentals: state.waypoint.rentals.tripId === trip.id ? selectSortedRentals(state) : [],
+      checklist: state.waypoint.checklist.tripId === trip.id ? state.waypoint.checklist.items : [],
+      ideas: selectSortedIdeas(state, trip.id),
+      memberNames: latestMemberNames,
+    });
+    const copied = await copyToClipboard(markdown);
+    addToast(
+      copied
+        ? {
+            title: 'Trip copied',
+            description: 'Paste it anywhere as Markdown. It includes confirmation codes and notes.',
+            type: 'success',
+          }
+        : { title: 'Unable to copy the trip', description: 'Your browser blocked copying on this page.', type: 'error' },
+    );
+  };
+
+  const handleCopyTimelineMarkdown = async () => {
+    const state = store.getState();
+    if (!selectIsTripDataLoaded(state, trip.id)) {
+      addToast({ title: 'Still loading this trip', description: 'Give it a moment, then copy again.' });
+      return;
+    }
+    const markdown = buildTimelineMarkdown({
+      trip,
+      events,
+      stays: selectSortedStays(state),
+      rentals: selectSortedRentals(state),
+      memberNames: latestMemberNames,
+    });
+    const copied = await copyToClipboard(markdown);
+    addToast(
+      copied
+        ? {
+            title: 'Timeline copied',
+            description: 'Paste it anywhere as Markdown. It includes confirmation codes and notes.',
+            type: 'success',
+          }
+        : { title: 'Unable to copy the timeline', description: 'Your browser blocked copying on this page.', type: 'error' },
+    );
+  };
+
   const handleEditTrip = async (values: EditTripValues) => {
     setIsSubmittingTripEdit(true);
     try {
@@ -217,6 +293,16 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         description: getErrorMessage(editError, 'Please try again.'),
         type: 'error',
       });
+    } finally {
+      setIsSubmittingTripEdit(false);
+    }
+  };
+
+  const handleSetCity = async (city: TripCity | null) => {
+    setIsSubmittingTripEdit(true);
+    try {
+      await dispatch(setTripCity({ uid: currentUserId, trip, city })).unwrap();
+      setEditingField(null);
     } finally {
       setIsSubmittingTripEdit(false);
     }
@@ -293,6 +379,17 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         },
       })
     : null;
+  const cityActionItem = canEdit
+    ? option({
+        label: trip.city ? 'Change city' : 'Set city',
+        value: 'city',
+        icon: <MapPin className='h-4 w-4' />,
+        onClick: () => {
+          setEditingField('city');
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
   const coverActionItem = canEdit
     ? option({
         label: 'Set cover photo',
@@ -315,6 +412,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         },
       })
     : null;
+  const copyMarkdownActionItem = option({
+    label: 'Copy trip as Markdown',
+    value: 'copy-markdown',
+    icon: <ClipboardCopy className='h-4 w-4' />,
+    onClick: () => void handleCopyTripMarkdown(),
+  });
   const archiveActionItem = isAdmin
     ? option({
         label: trip.isArchived ? 'Unarchive trip' : 'Archive trip',
@@ -352,13 +455,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       ))
     : null;
 
-  const actionItems = [announcementActionItem, archiveActionItem, coverActionItem, deleteDesktopMenuItem].filter(
+  const actionItems = [cityActionItem, coverActionItem, announcementActionItem, copyMarkdownActionItem, archiveActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
-  const groupedEditActionItems = [titleActionItem, datesActionItem, coverActionItem].filter(
+  const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, coverActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
-  const standaloneActionItems = [announcementActionItem, archiveActionItem].filter(
+  const standaloneActionItems = [announcementActionItem, copyMarkdownActionItem, archiveActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
 
@@ -371,7 +474,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       variant='tertiary'
       size='sm'
       aria-label='Trip actions'
-      className='bg-transparent! px-2'
+      className='h-10 min-w-10 bg-transparent! px-2'
       onClick={isSmallScreen ? () => setIsMobileActionsOpen(true) : undefined}
     >
       <MoreHorizontal className='h-4 w-4' />
@@ -409,8 +512,54 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     );
   };
 
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const backButton = (
+    <Button
+      type='button'
+      variant='link'
+      className={join('px-0', isSmallScreen ? '-ml-2 h-10 w-10 justify-center p-0' : isActive && 'h-auto p-0')}
+      aria-label={isNestedScreen ? 'Back to Overview' : 'Back to My Trips'}
+      onClick={isNestedScreen ? () => setSectionTab('') : onBack}
+    >
+      <ChevronLeft className={isSmallScreen ? 'h-6 w-6' : undefined} />
+      {!isSmallScreen && 'Back to My Trips'}
+    </Button>
+  );
+  const phoneActions = (
+    <div className='flex shrink-0 items-center gap-1.5 pl-2'>
+      {isActive && <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen />}
+      {isActive && <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />}
+      {sectionTab === 'overview' && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          aria-label='Copy timeline as Markdown'
+          title='Copy timeline as Markdown'
+          className='h-10 min-w-10 bg-transparent! px-2'
+          onClick={() => void handleCopyTimelineMarkdown()}
+        >
+          <ClipboardCopy className='h-4 w-4' />
+        </Button>
+      )}
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        aria-label='Copy trip link'
+        title='Copy trip link'
+        className='h-10 min-w-10 bg-transparent! px-2'
+        onClick={() => void handleCopyTripLink()}
+      >
+        <Link className='h-4 w-4' />
+      </Button>
+      {hasTripActions && moreButtonTrigger}
+    </div>
+  );
+
   return (
-    <>
+    <RelatedFlowProvider trip={trip} currentUserId={currentUserId}>
+      <MemberNamesProbe memberIds={memberIds} />
       {subviewTitle !== undefined && (
         <Subview title={subviewTitle} onClose={() => setSectionTab('')}>
           {renderSubviewSection()}
@@ -421,47 +570,18 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       <div
         className={join(
           'mx-auto max-w-4xl',
-          isActive ? 'space-y-2.5 pt-6 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 py-8',
+          isActive ? 'space-y-2.5 pb-3 sm:space-y-6 sm:py-8' : 'space-y-6 pb-8 sm:py-8',
           hasAppNav ? (isActive ? 'pb-44' : 'pb-24') : isActive && 'pb-40 sm:pb-28',
         )}
       >
-        <div className={join('flex items-center justify-between', isSmallScreen && 'mb-5')}>
-          <Button
-            type='button'
-            variant='link'
-            className={join('px-0', (isActive || isSmallScreen) && 'h-auto p-0')}
-            aria-label={isNestedScreen ? 'Back to Overview' : 'Back to My Trips'}
-            onClick={isNestedScreen ? () => setSectionTab('') : onBack}
-          >
-            <ChevronLeft className={isSmallScreen ? 'h-6 w-6' : undefined} />
-            {!isSmallScreen && 'Back to My Trips'}
-          </Button>
-          {isSmallScreen && (
-            <div className='flex shrink-0 items-center gap-1.5'>
-              {isActive && (
-                <NotificationsIndicator trip={trip} currentUserId={currentUserId} isSmallScreen />
-              )}
-              {isActive && (
-                <SharedAlbumSection trip={trip} currentUserId={currentUserId} variant='icon' />
-              )}
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                aria-label='Copy trip link'
-                title='Copy trip link'
-                className='bg-transparent! px-2'
-                onClick={() => void handleCopyTripLink()}
-              >
-                <Link className='h-4 w-4' />
-              </Button>
-              {hasTripActions && moreButtonTrigger}
-            </div>
-          )}
-        </div>
+        {isSmallScreen ? (
+          <StickyAppBar title={trip.title} titleRef={titleRef} leading={backButton} trailing={phoneActions} className='mb-3' />
+        ) : (
+          <div className='flex items-center justify-between'>{backButton}</div>
+        )}
         <div>
           {trip.coverImageUrl && showHeaderExtras && (
-            <img
+            <FallbackImage
               src={trip.coverImageUrl}
               alt={`${trip.title} cover`}
               className={join(
@@ -482,6 +602,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 onClick={canEdit && !isSmallScreen ? () => setEditingField('title') : undefined}
               >
                 <h1
+                  ref={titleRef}
                   className={join(
                     'font-semibold',
                     isActive ? 'text-2xl' : 'text-3xl',
@@ -512,6 +633,17 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 <p className='text-muted-foreground'>
                   {formatDateUTC(trip.startDate)} - {formatDateUTC(trip.endDate)}
                 </p>
+                {trip.city && (
+                  <>
+                    <span aria-hidden className='text-muted-foreground max-sm:hidden'>
+                      ·
+                    </span>
+                    <p className='text-muted-foreground flex items-center gap-1 text-sm'>
+                      <MapPin className='h-3.5 w-3.5 shrink-0' />
+                      {getCityLabel(trip.city)}
+                    </p>
+                  </>
+                )}
                 {trip.timezone && (
                   <>
                     <span aria-hidden className='text-muted-foreground max-sm:hidden'>
@@ -577,6 +709,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           </div>
         )}
         {canAddIdeas && ideasOverview}
+        {(hasAppNav ? sectionTab === '' : true) && (
+          <ChecklistOverview trip={trip} currentUserId={currentUserId} onOpen={() => setSectionTab('checklist')} />
+        )}
         {hasAppNav && sectionTab === '' && !isActive && (
           <div className='mt-5 space-y-3'>
             <StaysEntry onOpen={() => setSectionTab('stays')} />
@@ -622,6 +757,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               currentUserId={currentUserId}
               activeDayTab={dayTab}
               onActiveDayTabChange={setDayTab}
+              onCopyTimeline={() => void handleCopyTimelineMarkdown()}
             />
           </TabsContent>
           <TabsContent value='members'>
@@ -654,13 +790,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         <TripBottomNav
           trip={trip}
           now={now}
-          value={sectionTab}
+          value={navTab}
           showProgress={showProgress}
           onChange={setSectionTab}
         />
       ) : (
         showProgress && (
-          <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-10 border-t backdrop-blur'>
+          <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-10 flex h-10 items-center border-t backdrop-blur'>
             <TripProgressBar trip={trip} now={now} />
           </div>
         )
@@ -690,6 +826,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         trip={trip}
         isSubmitting={isSubmittingTripEdit}
         onSubmit={handleEditTrip}
+        onClose={() => setEditingField(null)}
+      />
+      <EditTripCityModal
+        key={`city-${editingField === 'city' ? 'open' : 'closed'}`}
+        isOpen={editingField === 'city'}
+        trip={trip}
+        isSubmitting={isSubmittingTripEdit}
+        onSubmit={handleSetCity}
         onClose={() => setEditingField(null)}
       />
       <EditTripDatesModal
@@ -742,8 +886,20 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           )}
         </div>
       </Drawer>
-    </>
+    </RelatedFlowProvider>
   );
+}
+
+/** Keeps member names where the copy action can read them without re-rendering the page on every profile update. */
+function MemberNamesProbe({ memberIds }: { memberIds: string[] }) {
+  const profiles = useUserInfo(memberIds)?.map;
+  useEffect(() => {
+    latestMemberNames = Object.fromEntries(memberIds.map((uid) => [uid, profiles?.[uid]?.displayName ?? '']));
+    return () => {
+      latestMemberNames = {};
+    };
+  }, [memberIds, profiles]);
+  return null;
 }
 
 export default TripDetailPage;

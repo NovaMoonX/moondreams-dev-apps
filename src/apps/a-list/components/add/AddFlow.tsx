@@ -16,6 +16,7 @@ import {
   fromLocalDateAndTimeInputValues,
   toDateInputValue,
   toLocalDateInputValue,
+  toLocalTimeInputValue,
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -30,6 +31,8 @@ import MoviePicker from '@apps/a-list/components/add/MoviePicker';
 import PastMoviesStrip from '@apps/a-list/components/add/PastMoviesStrip';
 import TrailerPicksList from '@apps/a-list/components/add/TrailerPicksList';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import ShowtimePicker from '@apps/a-list/components/viewing/ShowtimePicker';
+import TheaterPills from '@apps/a-list/components/viewing/TheaterPills';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import WatchlistDetailsFields, {
   type WatchlistDetailsValues,
@@ -54,6 +57,7 @@ import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 import { computeEndsAt } from '@apps/a-list/utils/viewingState';
 import {
   selectMembership,
+  selectTheatres,
   selectPreviewsWindowViewing,
   selectSeenCountByMovieKey,
   selectFeeChips,
@@ -63,8 +67,15 @@ import type {
   AListOverlay,
   MovieSearchResult,
   MovieSnapshot,
+  ShowtimeOption,
+  TheatreSnapshot,
   WatchlistItem,
 } from '@apps/a-list/types';
+import {
+  applyPurchaseToDraft,
+  toPurchasePlan,
+} from '@apps/a-list/utils/purchase';
+import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
 
 interface ShowtimeValues {
   date: string;
@@ -134,6 +145,7 @@ export function AddFlow({
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const feeChips = useAppSelector(selectFeeChips);
+  const theatres = useAppSelector(selectTheatres);
   const watchlist = useAppSelector(selectWatchlistItems);
   const previewsViewing = useAppSelector((state) =>
     selectPreviewsWindowViewing(state, now),
@@ -145,6 +157,16 @@ export function AddFlow({
       : now,
   );
   const [ticketDraft, setTicketDraft] = useState<TicketDraft | null>(null);
+  const [pickedShowtime, setPickedShowtime] = useState<{
+    theatreId: string;
+    option: ShowtimeOption;
+  } | null>(null);
+  // The date form only reads its values once, so each pick remounts it with a new key, even for the same showtime.
+  const [pickCount, setPickCount] = useState(0);
+  // Untouched, the favorite theater is picked for them; once they tap a pill (or clear it) their choice stands.
+  const [theatreChoice, setTheatreChoice] = useState<
+    TheatreSnapshot | null | undefined
+  >(undefined);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
   const [manualDraft, setManualDraft] =
@@ -202,6 +224,23 @@ export function AddFlow({
     isCalendar &&
     showtimeValues.date !== '' &&
     showtimeValues.date < startDateKey;
+  const favoriteTheatre =
+    theatres.find(
+      (theatre) => theatre.theatreId === membership?.favoriteTheatreId,
+    ) ?? (theatres.length === 1 ? theatres[0] : undefined);
+  const theatre =
+    theatreChoice === undefined
+      ? favoriteTheatre
+        ? toTheatreSnapshot(favoriteTheatre)
+        : null
+      : theatreChoice;
+  // A pick only counts while the theater and the time still match it, so editing either one drops it.
+  const activePick =
+    pickedShowtime &&
+    pickedShowtime.theatreId === theatre?.theatreId &&
+    pickedShowtime.option.startsAt === showtimeAt
+      ? pickedShowtime.option
+      : null;
   const ticketResult = ticketDraft ? evaluateTicketDraft(ticketDraft) : null;
   const canSave =
     !isBeforeStart &&
@@ -261,6 +300,8 @@ export function AddFlow({
         movie: snapshot,
         showtimeAt: at,
         ticket: ticketResult?.ticket ?? null,
+        theatre,
+        purchase: activePick ? toPurchasePlan(activePick) : null,
       }),
     ).unwrap();
     addToast({
@@ -268,6 +309,22 @@ export function AddFlow({
         viewing.status === 'SEEN' ? 'Added as seen' : 'Added to your calendar',
       description: snapshot.title,
     });
+  };
+
+  const handlePickShowtime = (option: ShowtimeOption) => {
+    if (!theatre) {
+      return;
+    }
+
+    setPickedShowtime({ theatreId: theatre.theatreId, option });
+    setPickCount((count) => count + 1);
+    setShowtimeValues({
+      date: toLocalDateInputValue(option.startsAt),
+      time: toLocalTimeInputValue(option.startsAt),
+    });
+    setTicketDraft((current) =>
+      current ? applyPurchaseToDraft(current, option) : current,
+    );
   };
 
   const resetForNextMovie = (addedTitle: string) => {
@@ -280,6 +337,9 @@ export function AddFlow({
     setIsAddingByTitle(false);
     setManualDraft(EMPTY_MANUAL_DRAFT);
     setTicketDraft(null);
+    setTheatreChoice(undefined);
+    setPickedShowtime(null);
+    setPickCount(0);
     setShowtimeValues({
       date: overlay.destination === 'calendar' ? overlay.date : '',
       time: DEFAULT_SHOWTIME,
@@ -307,15 +367,13 @@ export function AddFlow({
     // Poor signal in a theater shouldn't lose the title: save what search knows and the daily refresh fills in the rest.
     const snapshot = await queryClient
       .fetchQuery(movieDetailsQueryOptions(result.movieKey))
-      .catch(
-        (): MovieSnapshot => ({
-          title: result.title,
-          releaseDate: null,
-          posterUrl: result.posterUrl,
-          runtimeMinutes: null,
-          contentRating: null,
-        }),
-      );
+      .catch((): MovieSnapshot => ({
+        title: result.title,
+        releaseDate: null,
+        posterUrl: result.posterUrl,
+        runtimeMinutes: null,
+        contentRating: null,
+      }));
 
     try {
       const { created } = await dispatch(
@@ -508,6 +566,7 @@ export function AddFlow({
         </div>
         {isCalendar ? (
           <Form
+            key={`pick-${pickCount}`}
             id='a-list-add-viewing'
             form={SHOWTIME_FIELDS}
             initialData={showtimeValues}
@@ -519,6 +578,31 @@ export function AddFlow({
           <WatchlistDetailsFields
             values={watchlistValues}
             onChange={setWatchlistValues}
+          />
+        )}
+        {isCalendar && (
+          <TheaterPills
+            label='📍 Which theater?'
+            value={theatre}
+            onChange={setTheatreChoice}
+          />
+        )}
+        {isCalendar && !isPast && !theatre && theatres.length > 0 && (
+          <p className='text-muted-foreground text-sm'>
+            Pick a theater to see showtimes and prices.
+          </p>
+        )}
+        {isCalendar && !isPast && theatre && movie && (
+          <ShowtimePicker
+            theatre={theatre}
+            dateKey={showtimeValues.date}
+            showingAt={showtimeAt ?? null}
+            title={movie.title}
+            now={now}
+            selectedShowtimeId={activePick?.showtimeId ?? null}
+            onPick={handlePickShowtime}
+            onLinked={setTheatreChoice}
+            isTypedTitle={movieKey?.startsWith('manual-') ?? false}
           />
         )}
         {isCalendar && (
@@ -534,10 +618,16 @@ export function AddFlow({
                 emoji='💳'
                 isSelected={ticketDraft !== null}
                 onClick={() =>
-                  setTicketDraft(
-                    (current) =>
-                      current ?? getInitialTicketDraft(null, feeChips[1] ?? 0),
-                  )
+                  setTicketDraft((current) => {
+                    if (current) return current;
+                    const initial = getInitialTicketDraft(
+                      null,
+                      feeChips[1] ?? 0,
+                    );
+                    return activePick
+                      ? applyPurchaseToDraft(initial, activePick)
+                      : initial;
+                  })
                 }
               >
                 Yes, I paid
@@ -551,7 +641,19 @@ export function AddFlow({
               </Pill>
             </div>
             {ticketDraft && (
-              <TicketFields draft={ticketDraft} onChange={setTicketDraft} />
+              <div className='bg-muted/50 space-y-3 rounded-2xl p-4'>
+                <p className='flex gap-1.5 font-medium'>
+                  <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+                    🎟️
+                  </span>
+                  Ticket details
+                </p>
+                <TicketFields
+                  key={`pick-${pickCount}`}
+                  draft={ticketDraft}
+                  onChange={setTicketDraft}
+                />
+              </div>
             )}
           </div>
         )}
@@ -622,11 +724,17 @@ export function AddFlow({
   const getHeader = () => {
     if (selection !== null)
       return {
-        label: selection.kind === 'known' && selection.isManual ? 'Back' : 'Back to results',
+        label:
+          selection.kind === 'known' && selection.isManual
+            ? 'Back'
+            : 'Back to results',
         onClick: handleBack,
       };
     if (isAddingByTitle)
-      return { label: 'Back to search', onClick: () => setIsAddingByTitle(false) };
+      return {
+        label: 'Back to search',
+        onClick: () => setIsAddingByTitle(false),
+      };
     return { label: title ?? '', onClick: onClose };
   };
 

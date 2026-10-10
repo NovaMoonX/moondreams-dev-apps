@@ -26,7 +26,44 @@ export const selectAListLoadError = (state: RootState) =>
 export const selectIsAListLoaded = (state: RootState) =>
   state.aList.membership.isLoaded &&
   state.aList.watchlist.isLoaded &&
-  state.aList.viewings.isLoaded;
+  state.aList.viewings.isLoaded &&
+  state.aList.theatres.isLoaded;
+
+const selectTheatreItems = (state: RootState) => state.aList.theatres.items;
+
+/** The favorite first, then by name. */
+export const selectTheatres = createSelector(
+  [selectTheatreItems, selectMembership],
+  (theatres, membership) => {
+    const favoriteId = membership?.favoriteTheatreId ?? null;
+    const result = [...theatres].sort((left, right) => {
+      if (left.theatreId === favoriteId) return -1;
+      if (right.theatreId === favoriteId) return 1;
+      return left.name.localeCompare(right.name);
+    });
+    return result;
+  },
+);
+
+const selectCalendarShareItems = (state: RootState) =>
+  state.aList.calendarShares.items;
+
+/** Newest first. */
+export const selectCalendarShares = createSelector(
+  [selectCalendarShareItems],
+  (shares) => {
+    const result = [...shares].sort(
+      (left, right) => right.createdAt - left.createdAt,
+    );
+    return result;
+  },
+);
+
+export const selectAreCalendarSharesLoaded = (state: RootState) =>
+  state.aList.calendarShares.isLoaded;
+
+export const selectCalendarSharesLoadError = (state: RootState) =>
+  state.aList.calendarShares.loadError;
 
 const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 
@@ -49,6 +86,36 @@ export const selectWatchlistItems = createSelector(
 );
 
 const selectViewingItems = (state: RootState) => state.aList.viewings.items;
+
+export const selectShowingCountByTheatreId = createSelector(
+  [selectViewingItems],
+  (viewings) =>
+    viewings.reduce<Record<string, number>>((counts, viewing) => {
+      const theatreId = viewing.theatre?.theatreId;
+      return theatreId
+        ? { ...counts, [theatreId]: (counts[theatreId] ?? 0) + 1 }
+        : counts;
+    }, {}),
+);
+
+/** Showings the member left for AMC to buy and hasn't recorded a ticket for yet, most recent first. */
+export const selectPendingPurchaseReturns = createSelector(
+  [selectViewingItems],
+  (viewings) => {
+    const result = viewings
+      .filter(
+        (viewing) =>
+          viewing.status === 'PLANNED' &&
+          viewing.purchase?.startedAt != null &&
+          (viewing.ticket ?? null) === null,
+      )
+      .sort(
+        (left, right) =>
+          (right.purchase?.startedAt ?? 0) - (left.purchase?.startedAt ?? 0),
+      );
+    return result;
+  },
+);
 
 /** Day key → that day's viewings in showtime order: what each calendar cell and the day panel read. */
 export const selectViewingsByDay = createSelector(
@@ -193,8 +260,7 @@ export const selectPreviewsWindowViewing = createSelector(
             viewing.status === 'PLANNED' &&
             viewing.showtimeAt - PREVIEWS_WINDOW_BEFORE_MINUTES * 60_000 <=
               now &&
-            now <=
-              viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
+            now <= viewing.showtimeAt + PREVIEWS_WINDOW_AFTER_MINUTES * 60_000,
         )
         .sort((left, right) => left.showtimeAt - right.showtimeAt)[0] ?? null;
     return result;

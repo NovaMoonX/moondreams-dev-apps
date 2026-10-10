@@ -1,21 +1,21 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
   Button,
-  Checkbox,
   Input,
   Label,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Bell, Clock, Link2, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
+import { Bell, Clock, DoorOpen, Link2, ListChecks, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import Pill from '@/components/Pill';
-import { PillGroup, PillRow } from '@/components/PillGroup';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import PlaceAutocompleteInput from '@/components/forms/PlaceAutocompleteInput';
@@ -30,6 +30,8 @@ import type {
   PlaceSelectionBias,
   PlaceSelectionResult,
 } from '@/lib/places/types';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { store, useAppSelector } from '@/store';
 import { getDayCount, getDayOptions } from '@/utils/dateRangeUtils';
 import { formatTimezoneAbbreviation } from '@/utils/timezoneUtils';
 import { fromDayMinutes, shiftRangeEnd, toDayMinutes } from '@/utils/dayTimeUtils';
@@ -38,15 +40,21 @@ import { formatClockTime, formatTime } from '@/utils/formatUtils';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import DeleteEventChoices, { type LinkedItem } from '@apps/waypoint/components/DeleteEventChoices';
+import ItineraryPlacePicks from '@apps/waypoint/components/ItineraryPlacePicks';
 import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields';
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
+import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
+import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { TODO_TRACKED_EVENT_TYPES } from '@apps/waypoint/constants';
 import {
   ACTIVITY_SETTING_LABELS,
-  ADD_NEW_OPTION,
   DEFAULT_REMINDER_MINUTES_BEFORE,
   MAX_DAYS_OUTSIDE_TRIP,
   EVENT_LINK_KIND_LABELS,
+  TRANSIT_ARRIVAL,
+  TRANSIT_PLACE_PLACEHOLDERS,
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
@@ -58,6 +66,7 @@ import {
   TRANSIT_LOCATION_MIRROR_KEYS,
   TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
+  ARRIVE_BY_EVENT_TYPES,
 } from '@apps/waypoint/constants';
 import type {
   ActivitySetting,
@@ -84,6 +93,7 @@ import {
   getEventTime,
   isRelativeTrip,
 } from '@apps/waypoint/utils/tripTime';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 export type EventFormValues = Omit<
   TimelineEvent,
@@ -96,9 +106,16 @@ export interface NextLegSeed {
   arrivalPlace: PlaceSelectionResult | null;
 }
 
+export interface DeleteLinked {
+  checklistItemIds: string[];
+  expenseIds: string[];
+}
+
 export interface SubmitOptions {
   addLeg: boolean;
   arrivalPlace?: PlaceSelectionResult | null;
+  /** The to-dos to link once the event is saved; left out when the form never offered them. */
+  bookings?: { picked: string[]; initial: string[] };
 }
 
 /** Known fields to open a new event already filled in (from an idea, a travel prompt or an imported
@@ -122,6 +139,7 @@ export interface EventPrefill {
   timezone?: string | null;
   endTimezone?: string | null;
   locationName?: string;
+  place?: PlaceSelectionResult;
   groupLabel?: string;
 }
 
@@ -141,7 +159,8 @@ interface EventFormModalProps {
   legFrom?: NextLegSeed;
   /** `addLeg` saves this event and reopens the form for the next leg, departing from `arrivalPlace`. */
   onSubmit: (event: EventFormValues, options?: SubmitOptions) => Promise<void> | void;
-  onDelete?: () => Promise<void> | void;
+  /** `linked` is what the person ticked to take along with the event. */
+  onDelete?: (linked: DeleteLinked) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -205,6 +224,9 @@ interface EventDraft {
   cuisines: string;
   attendeeTargetType: EventAttendeeTargetType;
   assignedMemberIds: string[];
+  hasArriveBy: boolean;
+  arriveByTime: string;
+  arriveByNote: string;
   hasVenueHours: boolean;
   venueOpenTime: string;
   venueCloseTime: string;
@@ -229,8 +251,36 @@ function getMealForTime(time: string): MealType {
   return 'DINNER';
 }
 
+function getClockMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function fromClockMinutes(total: number) {
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Moving the start moves a chosen arrival with it, keeping its lead; it is dropped when nothing earlier fits. */
+function getShiftedArriveBy(draft: EventDraft, nextTime: string): Partial<EventDraft> {
+  if (!draft.hasArriveBy || !draft.arriveByTime || !draft.time || !nextTime) {
+    return {};
+  }
+  const latest = getClockMinutes(nextTime) - 1;
+  if (latest < 0) {
+    return { hasArriveBy: false, arriveByTime: '', arriveByNote: '' };
+  }
+  const shifted = getClockMinutes(draft.arriveByTime) + getClockMinutes(nextTime) - getClockMinutes(draft.time);
+  return { arriveByTime: fromClockMinutes(Math.min(Math.max(shifted, 0), latest)) };
+}
+
+/** Half an hour before the start, kept on the same day; empty when the start is too early to fit one. */
+function getSuggestedArriveBy(startTime: string) {
+  const total = getClockMinutes(startTime) - 30;
+  return Number.isNaN(total) || total < 0 ? '' : fromClockMinutes(total);
+}
+
 function getDefaultSubtype(eventType: EventType, time: string): string {
-  if (eventType === 'TRAVEL') return 'FLIGHT';
+  if (eventType === 'TRAVEL') return 'DRIVE';
   if (eventType === 'DINING') return getMealForTime(time);
   return '';
 }
@@ -320,8 +370,13 @@ function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
     hasCuisines: prefill.cuisines.length > 0,
     linkUrl: prefill.linkUrl ?? '',
     hasLink: Boolean(prefill.linkUrl),
-    locationName: prefill.locationName ?? '',
-    hasLocation: Boolean(prefill.locationName),
+    locationName: prefill.place?.name ?? prefill.locationName ?? '',
+    hasLocation: Boolean(prefill.place ?? prefill.locationName),
+    address: prefill.place?.address ?? '',
+    hasAddress: Boolean(prefill.place?.address),
+    latitude: prefill.place?.latitude ?? null,
+    longitude: prefill.place?.longitude ?? null,
+    place: prefill.place?.place ?? null,
     isGrouped: Boolean(prefill.groupLabel),
     groupLabel: prefill.groupLabel ?? '',
     attendeeTargetType: isSpecific ? 'SPECIFIC_MEMBERS' : base.attendeeTargetType,
@@ -424,6 +479,9 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventD
         : '',
     attendeeTargetType: event?.attendeeTargetType ?? 'EVERYONE_INCLUDING_FUTURE',
     assignedMemberIds: event?.assignedMemberIds ?? [],
+    hasArriveBy: Boolean(event?.arriveByTime),
+    arriveByTime: event?.arriveByTime ?? '',
+    arriveByNote: event?.arriveByNote ?? '',
     hasVenueHours: Boolean(event?.venueOpenTime || event?.venueCloseTime),
     venueOpenTime: event?.venueOpenTime ?? '',
     venueCloseTime: event?.venueCloseTime ?? '',
@@ -480,9 +538,38 @@ function EventFormModal({
   onClose,
 }: EventFormModalProps) {
   const { confirm } = useActionModal();
+  const deleteChoiceRef = useRef({ todos: false, expenses: false });
   const queryClient = useQueryClient();
+  const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
+  const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
+  const bookingEventIds = useMemo(() => new Set(events.map((other) => other.id)), [events]);
+  const bookingChoices = useMemo(
+    () =>
+      checklistItems
+        .filter(
+          (item) =>
+            (event && isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds)) ||
+            getLiveLink(item, bookingEventIds) === null,
+        )
+        .sort(
+          (first, second) =>
+            Number(first.isCompleted) - Number(second.isCompleted) ||
+            Number(second.category === 'BOOKINGS') - Number(first.category === 'BOOKINGS'),
+        ),
+    [checklistItems, event, bookingEventIds],
+  );
+  const [initialBookingIds] = useState(() =>
+    event
+      ? checklistItems
+          .filter((item) => isLinkedTo(item, { kind: 'EVENT', id: event.id }, bookingEventIds))
+          .map((item) => item.id)
+      : [],
+  );
+  const [bookingItemIds, setBookingItemIds] = useState<string[] | null>(() =>
+    initialBookingIds.length > 0 ? initialBookingIds : null,
+  );
   const isRelative = isRelativeTrip(trip);
   const sameTypeGroupLabels = useMemo(
     () =>
@@ -496,6 +583,9 @@ function EventFormModal({
     [events, draft.eventType],
   );
   const isTravel = draft.eventType === 'TRAVEL';
+  const canArriveEarly =
+    isRelative && ARRIVE_BY_EVENT_TYPES.includes(draft.eventType) && draft.dayIndex !== null && draft.time !== '';
+  const arrival = isTravel ? TRANSIT_ARRIVAL[draft.quickField as TransitType] : undefined;
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
   const startZone = draft.timezone ?? trip.timezone;
@@ -513,6 +603,7 @@ function EventFormModal({
         ...(draft.eventType === 'DINING' && !draft.isMealTouched
           ? { quickField: getMealForTime(nextTime) }
           : {}),
+        ...getShiftedArriveBy(draft, nextTime),
         ...changes,
       });
     if (nextDayIndex === null) {
@@ -633,6 +724,14 @@ function EventFormModal({
     if (!draft.time || (draft.dayIndex === null && !isRelative)) {
       return 'Pick a day and a start time.';
     }
+    if (canArriveEarly && draft.hasArriveBy) {
+      if (!draft.arriveByTime) {
+        return 'Pick an arrival time, or remove it.';
+      }
+      if (draft.arriveByTime >= draft.time) {
+        return 'The arrival needs to be before the start time.';
+      }
+    }
     if (!draft.hasEndTime) {
       return null;
     }
@@ -647,6 +746,18 @@ function EventFormModal({
     return isSameDay && draft.endTime <= draft.time ? 'The end needs to come after the start.' : null;
   };
   const timeError = getTimeError();
+
+  const canLinkBookings = TODO_TRACKED_EVENT_TYPES.includes(draft.eventType) && bookingChoices.length > 0;
+
+  const getBookingPicks = () => {
+    if (!canLinkBookings) {
+      const wasTracked = event !== undefined && TODO_TRACKED_EVENT_TYPES.includes(event.eventType);
+      return wasTracked && initialBookingIds.length > 0 ? { picked: [], initial: initialBookingIds } : undefined;
+    }
+    return bookingItemIds !== null || initialBookingIds.length > 0
+      ? { picked: bookingItemIds ?? [], initial: initialBookingIds }
+      : undefined;
+  };
 
   const handleSubmit = async (addLeg = false) => {
     if (!timeFields || timeError) {
@@ -742,6 +853,8 @@ function EventFormModal({
         notes: event?.notes ?? prefill?.notes ?? null,
         attendeeTargetType: draft.attendeeTargetType,
         assignedMemberIds,
+        arriveByTime: canArriveEarly && draft.hasArriveBy ? draft.arriveByTime || null : null,
+        arriveByNote: canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByNote.trim() || null : null,
         venueOpenTime: draft.hasVenueHours ? draft.venueOpenTime || null : null,
         venueCloseTime: draft.hasVenueHours ? draft.venueCloseTime || null : null,
         changeHistory: event?.changeHistory ?? [],
@@ -763,11 +876,35 @@ function EventFormModal({
         archivedBy: event?.archivedBy ?? null,
         archivedAt: event?.archivedAt ?? null,
         seenBy: event?.seenBy ?? {},
-      }, { addLeg, arrivalPlace });
+      }, { addLeg, arrivalPlace, bookings: getBookingPicks() });
       setError(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this event.'));
     }
+  };
+
+  /** What hangs off this event that the person is allowed to delete with it; read at the tap so it is never stale. */
+  const getLinkedToDelete = (): { todos: LinkedItem[]; expenses: LinkedItem[]; blockedExpenseCount: number } => {
+    if (!event) {
+      return { todos: [], expenses: [], blockedExpenseCount: 0 };
+    }
+    const { checklist, expenses } = store.getState().waypoint;
+    const link = { kind: 'EVENT' as const, id: event.id };
+    const canDeleteTodos = canEditExistingItem(trip, currentUserId);
+    const canDeleteExpenses = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
+    const linkedExpenses = expenses.items.filter(
+      (expense) => expense.tripId === trip.id && expense.linkedTo?.kind === link.kind && expense.linkedTo.id === link.id,
+    );
+    const removableExpenses = canDeleteExpenses
+      ? linkedExpenses.filter((expense) => Object.keys(expense.earlyPayments ?? {}).length === 0)
+      : [];
+    return {
+      todos: canDeleteTodos
+        ? checklist.items.filter((item) => checklist.tripId === trip.id && isLinkedTo(item, link, bookingEventIds)).map(({ id, title }) => ({ id, title }))
+        : [],
+      expenses: removableExpenses.map(({ id, title, status }) => ({ id, title: status === 'PAID' ? `${title} (paid)` : title })),
+      blockedExpenseCount: canDeleteExpenses ? linkedExpenses.length - removableExpenses.length : 0,
+    };
   };
 
   const handleDelete = async () => {
@@ -775,16 +912,34 @@ function EventFormModal({
       return;
     }
 
+    const { todos, expenses, blockedExpenseCount } = getLinkedToDelete();
+    deleteChoiceRef.current = { todos: false, expenses: false };
     const confirmed = await confirm({
       title: 'Delete timeline event',
-      message: `Delete "${event?.title}"? This action cannot be undone.`,
+      message:
+        todos.length + expenses.length + blockedExpenseCount > 0 ? (
+          <DeleteEventChoices
+            eventTitle={event?.title ?? ''}
+            todos={todos}
+            expenses={expenses}
+            blockedExpenseCount={blockedExpenseCount}
+            onChange={(choice) => (deleteChoiceRef.current = choice)}
+          />
+        ) : (
+          `Delete "${event?.title}"? This action cannot be undone.`
+        ),
+      confirmText: 'Delete',
       destructive: true,
     });
     if (!confirmed) {
       return;
     }
 
-    await onDelete();
+    const { todos: deleteTodos, expenses: deleteExpenses } = deleteChoiceRef.current;
+    await onDelete({
+      checklistItemIds: deleteTodos ? todos.map((item) => item.id) : [],
+      expenseIds: deleteExpenses ? expenses.map((item) => item.id) : [],
+    });
   };
 
   const getReminderText = () => {
@@ -793,7 +948,8 @@ function EventFormModal({
     }
     if (isRelative) {
       const { time } = fromDayMinutes(
-        toDayMinutes(timeFields.dayIndex, draft.time) - draft.reminderMinutesBefore,
+        toDayMinutes(timeFields.dayIndex, canArriveEarly && draft.hasArriveBy && draft.arriveByTime ? draft.arriveByTime : draft.time) -
+          draft.reminderMinutesBefore,
       );
       return formatClockTime(time);
     }
@@ -824,7 +980,7 @@ function EventFormModal({
     },
     {
       key: 'settings',
-      label: 'Indoor / outdoor',
+      label: isPhone ? 'Setting' : 'Indoor / outdoor',
       icon: <Sun className='h-4 w-4' />,
       isShown: draft.eventType !== 'ACTIVITY' || draft.hasSettings,
     },
@@ -847,16 +1003,17 @@ function EventFormModal({
       isShown: !isPlaceEvent || draft.hasVenueHours,
     },
     { key: 'group', label: 'Group', icon: <Route className='h-4 w-4' />, isShown: draft.isGrouped },
+    { key: 'bookings', label: 'To-dos', icon: <ListChecks className='h-4 w-4' />, isShown: !canLinkBookings || bookingItemIds !== null },
     {
       key: 'reminder',
       label: 'Reminder',
       icon: <Bell className='h-4 w-4' />,
-      isShown: draft.dayIndex === null || draft.hasReminderOverride,
+      isShown: draft.dayIndex === null || (draft.hasReminderOverride && draft.reminderEnabled),
     },
   ].filter((chip) => !chip.isShown);
 
   const revealDetail = (key: string) =>
-    updateDraft(
+    key === 'bookings' ? setBookingItemIds(initialBookingIds) : updateDraft(
       {
         title: { hasTitle: true },
         link: { hasLink: true },
@@ -865,7 +1022,7 @@ function EventFormModal({
         location: { hasLocation: true },
         address: { hasAddress: true },
         group: { isGrouped: true },
-        reminder: { hasReminderOverride: true },
+        reminder: { hasReminderOverride: true, reminderEnabled: true },
         venueHours: { hasVenueHours: true },
       }[key] ?? {},
     );
@@ -875,7 +1032,7 @@ function EventFormModal({
       <PlaceAutocompleteInput
         label={label}
         quickSearch={{ label: 'Search by title', value: draft.hasTitle ? draft.title : '' }}
-        placeholder='Ichiran Shibuya'
+        placeholder={isTravel ? (TRANSIT_PLACE_PLACEHOLDERS[draft.quickField as TransitType] ?? 'Pike Place Market') : 'Ichiran Shibuya'}
         value={draft.locationName}
         onChange={(locationName) => updateDraft({ locationName, ...UNLINKED_PLACE })}
         bias={placeBias}
@@ -891,6 +1048,22 @@ function EventFormModal({
         }
         className='mb-0' // overwrite space-y-4
       />
+      {isTravel && TRANSIT_LOCATION_LABELS[transitType] !== null && (
+        <ItineraryPlacePicks
+          current={{ name: draft.locationName, address: draft.address }}
+          excludeEventId={event?.id}
+          onPick={(pick) =>
+            updateDraft({
+              locationName: pick.name,
+              address: pick.address,
+              hasAddress: true,
+              latitude: pick.latitude,
+              longitude: pick.longitude,
+              place: pick.place,
+            })
+          }
+        />
+      )}
       {isAddressShown && (
         <RemovableField
           label='Address'
@@ -955,7 +1128,7 @@ function EventFormModal({
       </div>
       {isRelative && endZone && (
         <ZoneField
-          label={isTravel ? 'Lands in' : 'Ends in'}
+          label={arrival ? arrival.zoneLabel : 'Ends in'}
           zone={endZone}
           at={endDayAt}
           isTripDefault={false}
@@ -969,6 +1142,18 @@ function EventFormModal({
         </p>
       )}
     </div>
+  );
+
+  const addAnotherFlightButton = isTravel && transitType === 'FLIGHT' && (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='max-sm:w-full'
+      disabled={isSubmitting || timeError !== null}
+      onClick={() => void handleSubmit(true)}
+    >
+      Add another flight
+    </Button>
   );
 
   return (
@@ -1079,10 +1264,12 @@ function EventFormModal({
             />
           )}
         </div>
-        {draft.dayIndex === null ? null : isTravel ? (
+        {draft.dayIndex === null ? null : arrival ? (
           <div className='space-y-3'>
             <div className='space-y-2'>
-              <Label>🛬 Know when you arrive?</Label>
+              <Label>
+                {arrival.emoji} {arrival.question}
+              </Label>
               <PillGroup
                 label='Arrival time'
                 options={[
@@ -1112,17 +1299,58 @@ function EventFormModal({
           >
             {endFields}
           </RemovableField>
-        ) : (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-auto px-0! py-0!'
-            onClick={startEndTime}
+        ) : null}
+
+        {canArriveEarly && draft.hasArriveBy ? (
+          <RemovableField
+            label='Arrive by'
+            removeLabel='Remove arrival time'
+            onRemove={() => updateDraft({ hasArriveBy: false, arriveByTime: '', arriveByNote: '' })}
           >
-            + Add end time
-          </Button>
-        )}
+            <div className='space-y-3'>
+              <Input
+                type='time'
+                aria-label='Arrival time'
+                value={draft.arriveByTime}
+                onChange={(changeEvent) => updateDraft({ arriveByTime: changeEvent.target.value })}
+              />
+              <p
+                className={join(
+                  'text-xs',
+                  draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {draft.arriveByTime && draft.time && draft.arriveByTime >= draft.time
+                  ? `The arrival needs to be before the start time, ${formatClockTime(draft.time)}.`
+                  : `Starts at ${draft.time ? formatClockTime(draft.time) : 'the start time'}. Arrive before that.`}
+              </p>
+              <Input
+                aria-label='Why arrive early'
+                placeholder='Why? Parking fills up early'
+                maxLength={500}
+                value={draft.arriveByNote}
+                onChange={(changeEvent) => updateDraft({ arriveByNote: changeEvent.target.value })}
+              />
+            </div>
+          </RemovableField>
+        ) : null}
+
+        <AddFieldChips
+          heading='Add a time'
+          chips={[
+            ...(draft.dayIndex === null || arrival || draft.hasEndTime
+              ? []
+              : [{ key: 'end', label: 'End time', icon: <Clock className='h-4 w-4' /> }]),
+            ...(canArriveEarly && !draft.hasArriveBy
+              ? [{ key: 'arrive', label: 'Arrival time', icon: <DoorOpen className='h-4 w-4' /> }]
+              : []),
+          ]}
+          onAdd={(key) =>
+            key === 'end'
+              ? startEndTime()
+              : updateDraft({ hasArriveBy: true, arriveByTime: draft.arriveByTime || getSuggestedArriveBy(draft.time) })
+          }
+        />
 
         {isTravel && (
           <TransitDetailsFields
@@ -1183,23 +1411,12 @@ function EventFormModal({
             ))}
           </PillRow>
           {draft.attendeeTargetType === 'SPECIFIC_MEMBERS' && attendeeChoice !== 'ME' && (
-            <PillRow label='People'>
-              {memberOptions.map((member) => (
-                <Pill
-                  key={member.value}
-                  isSelected={draft.assignedMemberIds.includes(member.value)}
-                  onClick={() =>
-                    updateDraft({
-                      assignedMemberIds: draft.assignedMemberIds.includes(member.value)
-                        ? draft.assignedMemberIds.filter((uid) => uid !== member.value)
-                        : [...draft.assignedMemberIds, member.value],
-                    })
-                  }
-                >
-                  {member.label}
-                </Pill>
-              ))}
-            </PillRow>
+            <MultiPillGroup
+              label='People'
+              options={memberOptions.map((member) => ({ value: member.value, label: member.label }))}
+              values={draft.assignedMemberIds}
+              onChange={(assignedMemberIds) => updateDraft({ assignedMemberIds })}
+            />
           )}
           <p className='text-muted-foreground text-xs'>
             Your Overview shows only the events you&apos;re part of.
@@ -1271,41 +1488,28 @@ function EventFormModal({
             removeLabel='Remove from group'
             onRemove={() => updateDraft({ isGrouped: false, groupLabel: '' })}
           >
-            <div className='space-y-2'>
-              {sameTypeGroupLabels.length > 0 && (
-                <Select
-                  options={[
-                    ...sameTypeGroupLabels.map((label) => ({ value: label, text: label })),
-                    { value: ADD_NEW_OPTION, text: 'New group…' },
-                  ]}
-                  value={
-                    sameTypeGroupLabels.find(
-                      (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-                    ) ?? ADD_NEW_OPTION
-                  }
-                  onChange={(value) => updateDraft({ groupLabel: value === ADD_NEW_OPTION ? '' : value })}
-                />
-              )}
-              {!sameTypeGroupLabels.some(
-                (label) => normalizeLabel(label) === normalizeLabel(draft.groupLabel),
-              ) && (
-                <Input
-                  placeholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
-                  value={draft.groupLabel}
-                  onChange={(changeEvent) => updateDraft({ groupLabel: changeEvent.target.value })}
-                />
-              )}
-            </div>
+            <PickOrCreate
+              label='Group'
+              options={sameTypeGroupLabels.map((groupLabel) => ({ value: groupLabel, label: groupLabel }))}
+              choice={
+                sameTypeGroupLabels.find((groupLabel) => normalizeLabel(groupLabel) === normalizeLabel(draft.groupLabel)) ??
+                (draft.groupLabel === '' ? '' : NEW_CHOICE)
+              }
+              newText={draft.groupLabel}
+              newPillLabel='New group'
+              newPlaceholder={isTravel ? 'Flights to Lisbon' : 'Group name'}
+              onChange={(choice, newText) => updateDraft({ groupLabel: choice === NEW_CHOICE ? newText : choice })}
+            />
           </RemovableField>
         )}
-        {draft.dayIndex !== null && draft.hasReminderOverride && (
+        {draft.dayIndex !== null && draft.hasReminderOverride && draft.reminderEnabled && (
           <RemovableField
             label='Reminder'
-            removeLabel='Reset reminder'
+            removeLabel="Don't remind me"
             onRemove={() =>
               updateDraft({
                 hasReminderOverride: false,
-                reminderEnabled: true,
+                reminderEnabled: false,
                 reminderMinutesBefore: DEFAULT_REMINDER_MINUTES_BEFORE,
               })
             }
@@ -1313,7 +1517,6 @@ function EventFormModal({
             <div className='flex items-center gap-2'>
               <Select
                 className='flex-1'
-                disabled={!draft.reminderEnabled}
                 options={reminderHourOptions}
                 value={String(Math.floor(draft.reminderMinutesBefore / 60))}
                 onChange={(value) =>
@@ -1327,7 +1530,6 @@ function EventFormModal({
               />
               <Select
                 className='flex-1'
-                disabled={!draft.reminderEnabled}
                 options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
                 value={String(draft.reminderMinutesBefore % 60)}
                 onChange={(value) =>
@@ -1341,13 +1543,6 @@ function EventFormModal({
               />
               <span className='text-muted-foreground shrink-0 text-sm'>before</span>
             </div>
-            <label className='flex items-center gap-2 text-sm'>
-              <Checkbox
-                checked={!draft.reminderEnabled}
-                onCheckedChange={(checked) => updateDraft({ reminderEnabled: checked !== true })}
-              />
-              Don&apos;t remind me
-            </label>
             {reminderText !== null && (
               <p className='text-muted-foreground text-xs'>Will remind at {reminderText}</p>
             )}
@@ -1403,11 +1598,30 @@ function EventFormModal({
             </div>
           </RemovableField>
         )}
+        {canLinkBookings && bookingItemIds !== null && (
+          <RemovableField label='To-dos' removeLabel='Remove to-dos' onRemove={() => setBookingItemIds(null)}>
+            <div className='space-y-2'>
+              <MultiPillGroup
+                label='To-dos for this event'
+                options={bookingChoices.map((item) => ({
+                  value: item.id,
+                  label: item.isCompleted ? `✓ ${item.title}` : item.title,
+                }))}
+                values={bookingItemIds}
+                onChange={setBookingItemIds}
+              />
+              <p className='text-muted-foreground text-xs'>
+                Pick what needs doing before this event. Unpicking one only unlinks it; it stays on your checklist.
+              </p>
+            </div>
+          </RemovableField>
+        )}
         <AddFieldChips heading='Add to this event' chips={detailChips} onAdd={revealDetail} />
 
         {(error ?? timeError) && (
           <p className='text-destructive text-sm'>{error ?? timeError}</p>
         )}
+        {isPhone && addAnotherFlightButton}
         <ModalFooterActions
           leftActions={
             event &&
@@ -1422,16 +1636,7 @@ function EventFormModal({
           }
           rightActions={
             <>
-              {isTravel && transitType === 'FLIGHT' && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isSubmitting || timeError !== null}
-                  onClick={() => void handleSubmit(true)}
-                >
-                  Add another flight
-                </Button>
-              )}
+              {!isPhone && addAnotherFlightButton}
               <Button
                 type='button'
                 loading={isSubmitting}

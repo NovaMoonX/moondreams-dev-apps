@@ -9,6 +9,7 @@ import { TOAST_APP_LABELS, TOAST_TYPE_STYLES } from '@components/toastTypeStyles
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80;
 const CLICK_MOVEMENT_THRESHOLD_PX = 5;
+const AXIS_LOCK_PX = 8;
 
 interface AppToastProps extends Omit<ToastData, 'type'> {
   /** Loosened from `ToastData`'s `ToastType`: `addToast` accepts any string, including
@@ -27,9 +28,11 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const axisRef = useRef<'x' | 'y' | null>(null);
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     dragStartRef.current = { x: event.clientX, y: event.clientY };
+    axisRef.current = null;
     setIsDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -39,12 +42,27 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
     if (!dragStart) {
       return;
     }
-    setOffset({ x: event.clientX - dragStart.x, y: event.clientY - dragStart.y });
+    const dx = event.clientX - dragStart.x;
+    const dy = event.clientY - dragStart.y;
+    if (axisRef.current === null) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < AXIS_LOCK_PX) {
+        return;
+      }
+      if (dx > 0 && dx >= Math.abs(dy)) {
+        axisRef.current = 'x';
+      } else if (dy < 0 && -dy > Math.abs(dx)) {
+        axisRef.current = 'y';
+      } else {
+        return;
+      }
+    }
+    setOffset(axisRef.current === 'x' ? { x: Math.max(0, dx), y: 0 } : { x: 0, y: Math.min(0, dy) });
   };
 
   const handlePointerUp = () => {
     const dragStart = dragStartRef.current;
     dragStartRef.current = null;
+    axisRef.current = null;
     setIsDragging(false);
     if (!dragStart) {
       return;
@@ -72,7 +90,7 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       className={join(
-        'relative flex touch-none items-start gap-3 rounded-lg border p-4 shadow-lg select-none',
+        'relative flex touch-none items-start gap-3 rounded-lg border p-4 shadow-lg select-none max-sm:gap-2.5 max-sm:p-3',
         !isDragging && 'transition-transform duration-200 ease-out',
         isReminder && 'cursor-pointer',
         !isSmallScreen && 'pr-8',
@@ -80,15 +98,17 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
       )}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
     >
-      {style.icon && <div className='mt-0.5 shrink-0'>{style.icon}</div>}
+      {style.icon && <div className='mt-0.5 shrink-0 max-sm:mt-px max-sm:scale-90'>{style.icon}</div>}
       <div className='min-w-0 flex-1'>
         {appLabel && (
-          <div className='text-xs leading-4 font-bold tracking-wide uppercase opacity-60'>
+          <div className='text-xs leading-4 font-bold tracking-wide uppercase opacity-60 max-sm:text-[10px] max-sm:leading-3'>
             {appLabel}
           </div>
         )}
-        <div className='text-sm leading-5 font-medium'>{title}</div>
-        {description && <div className='mt-1 text-sm leading-5 opacity-90'>{description}</div>}
+        <div className='text-sm leading-5 font-medium max-sm:text-[13px] max-sm:leading-[18px]'>{title}</div>
+        {description && <div className='mt-1 text-sm leading-5 opacity-90 max-sm:mt-0.5 max-sm:text-xs max-sm:leading-4'>
+            {description}
+          </div>}
       </div>
       {!isSmallScreen && (
         <Button

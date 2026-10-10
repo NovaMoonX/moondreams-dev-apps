@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORY_LABELS, PRESET_EXPENSE_CATEGORIES } from '@apps/waypoint/constants';
+import { EXPENSE_CATEGORY_EMOJIS, EXPENSE_CATEGORY_LABELS, PRESET_EXPENSE_CATEGORIES } from '@apps/waypoint/constants';
 import type { ExpenseCategory, TripExpense } from '@apps/waypoint/types';
 
 const CUSTOM_PREFIX = 'custom:';
@@ -37,7 +37,13 @@ export function getExpenseCategoryKeyLabel(key: string): string {
   return customCategoryLabel ?? EXPENSE_CATEGORY_LABELS[category];
 }
 
-export function getExpenseCategoryKeys(expenses: TripExpense[]): string[] {
+export function getExpenseCategoryKeyEmoji(key: string): string {
+  return EXPENSE_CATEGORY_EMOJIS[parseExpenseCategoryKey(key).category];
+}
+
+export function getExpenseCategoryKeys(
+  expenses: Pick<TripExpense, 'category' | 'customCategoryLabel'>[],
+): string[] {
   const usedKeys = expenses.map(getExpenseCategoryKey);
   const customKeys = Array.from(
     new Set(usedKeys.filter((key) => !(PRESET_EXPENSE_CATEGORIES as readonly string[]).includes(key))),

@@ -48,15 +48,25 @@ html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='bo
   padding-inline: 1rem;
 }
 
+/* A compact select (a role beside a member, `py-1`) sits tight to its text; the full 1rem inset is for full-size fields. */
+html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='border'][class*='py-1']:not([class*='pl-']) {
+  padding-inline: 0.75rem;
+}
+
 /* A chosen pill keeps its own colors and says "selected" with a primary outline, so an emoji or a dark
    label is as readable as on an unchosen one (a solid fill swallows both). */
 html.waypoint-theme [data-pill] {
   min-height: 2.5rem;
-  transition: none;
 }
 
 html.waypoint-theme [data-pill][aria-pressed='true'] {
   background-color: color-mix(in oklab, var(--color-primary) 22%, var(--color-secondary));
   color: var(--color-foreground);
   box-shadow: inset 0 0 0 1.5px var(--color-primary);
+}
+
+/* A tertiary button is a row or a quiet action, not a link: its text stays the normal text color so
+   a screen of tappable rows isn't a screen of blue. Anything that sets its own color with `!` wins, and a link-variant button (underline on hover) stays blue. */
+html.waypoint-theme button.text-primary:not(:disabled):not([class*='bg-']):not([class*='border-primary']):not([class*='underline-offset']) {
+  color: var(--color-foreground);
 }

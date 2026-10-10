@@ -647,7 +647,7 @@ The distinct Split action (per-expense target reconsideration) and the "who owes
 - [ ] Delete: not applicable to this issue.
 
 ### Success Criteria
-- [ ] All four target types are selectable and produce a correct even split by default.
+- [ ] Everyone and Pick people are selectable and produce a correct even split by default (the older “just the payer” type is still read, never offered).
 - [ ] Dues Summary excludes `EXPECTED`/range expenses from its calculation, and computes `EVERYONE_INCLUDING_FUTURE` live, not from a snapshot — both confirmed against State Machine 5.
 
 ---

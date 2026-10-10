@@ -34,9 +34,34 @@ interface ExpenseSplitModalProps {
 
 const targetTypeOptions: { value: ExpenseTargetType; label: string; emoji: string }[] = [
   { value: 'EVERYONE_CURRENT', label: 'Everyone', emoji: '👥' },
-  { value: 'JUST_ME', label: 'Just me', emoji: '🙋' },
   { value: 'SPECIFIC_MEMBERS', label: 'Pick people', emoji: '🎯' },
 ];
+
+// Older expenses may still say "just the payer"; the editor shows them as that person picked.
+function getInitialTargetType(expense: TripExpense | null): ExpenseTargetType {
+  if (!expense || expense.targetType === 'EVERYONE_INCLUDING_FUTURE') {
+    return 'EVERYONE_CURRENT';
+  }
+  return expense.targetType === 'JUST_ME' ? 'SPECIFIC_MEMBERS' : expense.targetType;
+}
+
+function getInitialSpecificMemberIds(expense: TripExpense | null): string[] {
+  if (expense?.targetType === 'JUST_ME') {
+    return expense.payerUid === null ? [] : [expense.payerUid];
+  }
+  return expense?.targetType === 'SPECIFIC_MEMBERS' ? expense.targetMemberIds : [];
+}
+
+const BASE_PERCENTS = [25, 50, 75, 100];
+
+/** The usual quarter steps, plus an even share of the group when it isn't one of them (20% of five, 33.3% of three). */
+function getPercentPresets(memberCount: number): number[] {
+  const evenShare = memberCount > 0 ? 100 / memberCount : null;
+  const isCovered = evenShare === null || BASE_PERCENTS.some((percent) => Math.abs(percent - evenShare) < 0.0001);
+  return isCovered ? BASE_PERCENTS : [...BASE_PERCENTS, evenShare].sort((first, second) => first - second);
+}
+
+const formatPercent = (percent: number) => `${Number(percent.toFixed(1))}%`;
 
 function ExpenseSplitModal({
   isOpen,
@@ -53,14 +78,8 @@ function ExpenseSplitModal({
   const memberLabel = (uid: string) =>
     memberInfo?.map[uid]?.displayName || memberInfo?.map[uid]?.email || uid;
 
-  const [targetType, setTargetType] = useState<ExpenseTargetType>(
-    !expense || expense.targetType === 'EVERYONE_INCLUDING_FUTURE'
-      ? 'EVERYONE_CURRENT'
-      : expense.targetType,
-  );
-  const [specificMemberIds, setSpecificMemberIds] = useState<string[]>(
-    expense?.targetType === 'SPECIFIC_MEMBERS' ? expense.targetMemberIds : [],
-  );
+  const [targetType, setTargetType] = useState<ExpenseTargetType>(() => getInitialTargetType(expense));
+  const [specificMemberIds, setSpecificMemberIds] = useState<string[]>(() => getInitialSpecificMemberIds(expense));
   const [customSplitAmounts, setCustomSplitAmounts] = useState<Record<
     string,
     string
@@ -80,15 +99,7 @@ function ExpenseSplitModal({
       return [];
     }
 
-    switch (targetType) {
-      case 'JUST_ME':
-        return expense.payerUid === null ? [] : [expense.payerUid];
-      case 'EVERYONE_CURRENT':
-        return memberIds;
-      case 'SPECIFIC_MEMBERS':
-      default:
-        return specificMemberIds;
-    }
+    return targetType === 'EVERYONE_CURRENT' ? memberIds : specificMemberIds;
   }, [expense, targetType, specificMemberIds, memberIds]);
 
   const unitAmount = expense ? (getResolvedExpenseAmount(expense) ?? 0) : 0;
@@ -119,6 +130,7 @@ function ExpenseSplitModal({
     setCustomSplitAmounts({ ...displayAmounts, [uid]: value });
   };
 
+  const percentPresets = getPercentPresets(splitMemberIds.length);
   const setAmountToPercent = (uid: string, percent: number) => {
     updateAmount(uid, ((percent / 100) * amount).toFixed(2));
   };
@@ -147,12 +159,7 @@ function ExpenseSplitModal({
     }
 
     setError(null);
-    const targetMemberIds =
-      targetType === 'JUST_ME'
-        ? []
-        : targetType === 'EVERYONE_CURRENT'
-          ? memberIds
-          : specificMemberIds;
+    const targetMemberIds = targetType === 'EVERYONE_CURRENT' ? memberIds : specificMemberIds;
     const splitAmounts =
       isCustomSplit
         ? Object.fromEntries(
@@ -176,9 +183,13 @@ function ExpenseSplitModal({
       <div className='space-y-4'>
         {expense.isPerPerson && (
           <p className='text-muted-foreground text-sm'>
-            {formatAmount(unitAmount)} per person × {multiplier}{' '}
-            {multiplier === 1 ? 'person' : 'people'} ={' '}
-            <span className='text-foreground font-medium'>{formatAmount(amount)}</span>
+            {formatAmount(unitAmount)} per person
+            {splitMemberIds.length > 0 && (
+              <>
+                {' '}× {multiplier} {multiplier === 1 ? 'person' : 'people'} ={' '}
+                <span className='text-foreground font-medium'>{formatAmount(amount)}</span>
+              </>
+            )}
           </p>
         )}
         <div className='space-y-1.5'>
@@ -197,6 +208,9 @@ function ExpenseSplitModal({
             values={specificMemberIds}
             onChange={handleSpecificMembersChange}
           />
+        )}
+        {!isMemberSelectionValid && (
+          <p className='text-muted-foreground text-sm'>Pick at least one person to share it.</p>
         )}
         {splitMemberIds.length > 0 && (
           <div className='space-y-1.5'>
@@ -231,7 +245,7 @@ function ExpenseSplitModal({
                     />
                   </div>
                   <div className='flex justify-end gap-1'>
-                    {[25, 50, 75, 100].map((percent) => (
+                    {percentPresets.map((percent) => (
                       <Button
                         key={percent}
                         type='button'
@@ -240,7 +254,7 @@ function ExpenseSplitModal({
                         className='h-6 px-1.5 text-xs'
                         onClick={() => setAmountToPercent(uid, percent)}
                       >
-                        {percent}%
+                        {formatPercent(percent)}
                       </Button>
                     ))}
                   </div>
@@ -263,6 +277,7 @@ function ExpenseSplitModal({
             )}
           </div>
         )}
+        {error && <p className='text-destructive text-sm'>{error}</p>}
         <ModalFooterActions
           cancelAction={
               <Button type='button' variant='secondary' onClick={onClose}>
@@ -280,7 +295,6 @@ function ExpenseSplitModal({
               </Button>
           }
         />
-        {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
     </FormSheet>
   );

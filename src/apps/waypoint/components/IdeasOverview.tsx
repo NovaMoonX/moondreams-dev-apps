@@ -51,6 +51,8 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
   }
 
   const preview = undecided.filter((idea) => idea.ideaType === ideaType).slice(0, PREVIEW_COUNT);
+  const isAllScheduled = preview.length === 0 && ideas.some((idea) => idea.ideaType === ideaType);
+  const pluralLabel = IDEA_TYPE_PLURAL_LABELS[ideaType].toLowerCase();
 
   return (
     <section className='border-accent-foreground/20 bg-accent/60 space-y-3 rounded-xl border p-4 [--color-primary-foreground:var(--color-background)] [--color-primary:var(--color-foreground)]'>
@@ -83,8 +85,12 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
           <span className='text-4xl leading-none' aria-hidden='true'>
             {IDEA_TYPE_EMOJIS[ideaType]}
           </span>
-          <p className='mt-1 font-semibold'>No {IDEA_TYPE_PLURAL_LABELS[ideaType].toLowerCase()} yet</p>
-          <p className='text-muted-foreground text-sm'>Be the first to suggest one for the group.</p>
+          <p className='mt-1 font-semibold'>
+            {isAllScheduled ? `All your ${pluralLabel} are on the itinerary` : `No ${pluralLabel} yet`}
+          </p>
+          <p className='text-muted-foreground text-sm'>
+            {isAllScheduled ? 'Got another one in mind? Add it for the group.' : 'Be the first to suggest one for the group.'}
+          </p>
           <Button type='button' size='sm' className='mt-2' onClick={() => onAdd(ideaType)}>
             + Add an idea
           </Button>

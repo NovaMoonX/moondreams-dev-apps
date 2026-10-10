@@ -247,9 +247,9 @@ block-beta
 Reworked from the last pass, all flagged for the TDD reconciliation pass:
 - **Grouped by day now**, mirroring Timeline's day tabs (including the same "All" option) rather than one flat running list — easier to reason about "what did we spend on Day 3." An **"Other" tab** holds expenses that aren't tied to any specific day — paying for the whole hotel stay upfront, for instance. This means `TripExpense` needs a nullable `dayIndex` it currently doesn't have at all.
 - **Add and Dues are now separate blocks** — cramming "you owe Sam $4" and the add button into one node was genuinely confusing, not just a layout accident.
-- **Add creates an expense; Split is a distinct, later step**, not the same action. Creating one only needs title, amount (or a range), and who paid — it defaults to split evenly among everyone, and "Split" is an explicit follow-up to customize that. See the reworked journey below.
-- **Totals now show three figures**: paid-so-far, expected/upcoming, and their combined total — an expense can be a range instead of one fixed number ("$10-$30 est.") for cases like a farmer's market where the exact cost isn't known ahead of time, so "Total" is itself a range when any expected expense is.
-- **Who an expense is for needs one more distinction than just "everyone"**: Everyone (current members only, a fixed snapshot) vs. Everyone (including anyone who joins later — a live reference) are genuinely different outcomes as the trip's membership changes, so both need to be offered explicitly rather than picking one silently. Alongside Just Me and Specific Members. Whichever is chosen, the split itself is auto-suggested (even, across whoever's included) and then freely adjustable or clearable — the whole flow needs to stay simple to use even with this extra choice built in.
+- **Add creates an expense; Split is a distinct, later step**, not the same action. Creating one only needs title, amount (or a range) (and "Add and mark paid" records it as paid by the person adding) and it defaults to split evenly among everyone, and "Split" is an explicit follow-up to customize that. See the reworked journey below.
+- **Totals have three views (Per person, Group, Mine) as pills**; Mine shows what you paid, what is still expected for you and your total share, and a muted line for money you sent early. Each view shows three figures: paid-so-far, expected/upcoming, and their combined total — an expense can be a range instead of one fixed number ("$10-$30 est.") for cases like a farmer's market where the exact cost isn't known ahead of time, so "Total" is itself a range when any expected expense is.
+- **Who an expense is for needs one more distinction than just "everyone"**: Everyone (current members only, a fixed snapshot) vs. Everyone (including anyone who joins later — a live reference) are genuinely different outcomes as the trip's membership changes. The split editor offers Everyone (current members) and Pick people; the other two kinds are only read from older expenses. Whichever is chosen, the split itself is auto-suggested (even, across whoever's included) and then freely adjustable or clearable — the whole flow needs to stay simple to use even with this extra choice built in.
 
 **Ideas**
 ```mermaid
@@ -356,7 +356,7 @@ flowchart LR
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Overview: Ideas] --> B[Post a Restaurant idea] --> C[Others upvote] --> D[Add to Itinerary] --> E[Event modal, pre-filled] --> F[Pick day + time] --> G[Appears on Timeline]
+    A[Overview: Ideas] --> B[Post a Restaurant idea] --> C[Others upvote] --> D[Add to Itinerary] --> L[Look the idea up in Places] --> E[Event form, pre-filled: place and address, or the idea's title if nothing is found] --> F[Pick day + time] --> G[Appears on Timeline] --> H[Offer an expense and, for an activity, the booking question, pre-filled]
 ```
 
 **Plan itinerary from ideas** (batch, once the group's decided)
@@ -402,13 +402,33 @@ flowchart LR
 ```
 *Defaults to driving since that's the most common case, but downtime between events (no real travel happening) is just as common — converting straight to Free Time needs to be as easy as accepting the default, not just delete-or-keep. The total-travel-time rollup this would have fed is a separate, Stretch-tier idea — see Timeline above.*
 
+**Paid early**
+
+An expected expense row offers "I paid early" to anyone in its split: pick who you paid (pills, search past 12 people), the amount (capped at your share; an estimate defaults to the share of its minimum), Save. The Dues summary opens with a notice about your own early payments; the pair sheet adds a "paid early" block (Got it back, Remove) and "How the net adds up". When the recipient pays the expense it covers the sender's share and any excess stays owed back.
+
+**Copy as Markdown.** The trip menu's "Copy trip as Markdown" (every member sees it) copies the whole itinerary; the Timeline's "Copy" button beside View options copies only the timeline. Both toast once the text is on the clipboard and ignore the view options and filters.
+
+**Trip city and weather.** Creating a trip has an optional "Where is it based?" city search (it sets the time zone too); "Set city" / "Change city" in the trip menu edits it, and the city shows under the title on the trip card and in the header. A day's weather follows where its plans are: the trip city only fills days with no located plan, a day entirely elsewhere shows that place (the card names it), and a day spanning places shows the main place with "Also <place> ☁ 61°" chips, the place named under each weather strip tile with a "+1 more" marker and a "+1" on the compact line; an event in a different place than its day names that place on its chip. Tapping any weather card opens its details sheet (with an "Also on this day" list), whose one button ("Sounds good") just closes it.
+
+**Slim timeline rows.** A day's check-ins, check-outs, rental pick-ups and returns, and its travel legs, are one-line tappable rows (a stay or rental opens read-only details, a travel leg its details with Modify), so the cards on the timeline are the plans people actually choose between.
+
+**Personal expenses.** Above the Dues summary, "🔒 Just for me" lists what the signed-in person is covering themselves, with its own Add (title, amount, category, trip day, optional note, with "Add and mark paid" beside "Add"; its editor has "Mark paid" / "Mark as unpaid" at the top; the form says only they can see it) and a search from 8 rows. Nobody else sees the list or the amounts. The totals cards keep the figures everyone sees and, for the owner, add a soft `+ $X personal` chip and a `= $Y` line beneath (only where that amount is above zero), with one muted line under the view hint saying the orange amount is theirs alone. Tapping a row edits it; the trash in the form deletes it.
+
 **Add & split an expense**
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Expenses tab] --> B[+ Add Expense] --> C[Title / amount or range / payer]
-    C --> D[Saved — defaults to Everyone, current members, split evenly]
-    D --> E[Optional: tap Split] --> F[Everyone-current / Everyone-future / Just Me / Specific]
+    A[Expenses tab] --> B[+ Add] --> Q[What's this expense for?]
+    Q -->|An event, stay or rental| S[Linked to summary: title, category, day]
+    Q -->|Something else| T[Title and category]
+    S --> W[Who's this for? Everyone / Pick people / Just me]
+    T --> W
+    A --> J[Just for me: Add] --> Q2[What's this expense for? Itinerary item or Something else] --> P[Private form, no Who's this for?, filled in from the pick, saved to Just for me]
+    W -->|Just me| P
+    W --> C[How much is it? amount with Total / Per person, then optional chips: Trip day, Group, Note]
+    C --> Y[Add, or Add and mark paid — Everyone means current members, split evenly]
+    Y --> D[Later: Mark paid, with a pill row for who paid]
+    D --> E[Optional: tap Split] --> F[Everyone / Pick people]
     F --> G[Auto-suggested even split] --> H[Adjust per person, or clear and redo]
     D --> I[List + Dues Summary update]
     H --> I
@@ -446,11 +466,12 @@ flowchart LR
 
 | Entity | Initial (create) | Later (edit only) | Grouping |
 |---|---|---|---|
-| Trip Space | title, start/end dates (framed as estimates) | destination labels, tags, currency, cover image | none |
-| Timeline Event | **Step 1, what & when:** `eventType`, its sub-type (transit type; meal type, defaulted from the start time), day, departs/starts time, time zone. **Step 2, details:** a section per type — flight/train/ferry carrier + route (the departing place *is* the location), a drive/walk/bike/scooter's "going to" (the location), dining/activity location first | end/arrival time, title (derived when left out), address, travel time (only without an end time), notes, cuisines, indoor/outdoor, hours, link kind, group, reminder, attendees — as add-detail chips; a flight's **Next leg** button saves it and reopens the form with the same airline, booking, travelers and group, departing from where it landed | **Steps** |
+| Trip Space | title, start/end dates (framed as estimates) | city (a search; sets the time zone when creating), destination labels, tags, currency, cover image | none |
+| Timeline Event | **Step 1, what & when:** `eventType`, its sub-type (transit type; meal type, defaulted from the start time), day, departs/starts time, time zone, and for dining and activities an optional "Arrival time" chip (before the start, with an optional note on why). **Step 2, details:** a section per type — flight/train/ferry carrier + route (the departing place *is* the location), a drive/walk/bike/scooter's "going to" (the location), dining/activity location first | end/arrival time, title (derived when left out), address, travel time (only without an end time), notes, cuisines, indoor/outdoor, hours, link kind, group, reminder, attendees — as add-detail chips; a flight's **Next leg** button saves it and reopens the form with the same airline, booking, travelers and group, departing from where it landed | **Steps** |
 | Stay | name, address, official check-in/out | confirmation code, notes¹ | none |
-| Checklist Item | title, category (incl. a custom "Other" option with its own label), assignees | — | none |
-| Expense | title, amount (or a min-max range), currency (defaulted), payer, day (or "Other" for none) | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |
+| Checklist Item | title, category (incl. a custom "Other" option with its own label), who's on it (Everyone, Pick people, or Just me, which assigns it to the author and stays visible to all), and a "Keep it private" switch when adding for just me, so only its owner sees it | an activity it is a to-do for ("For {event}", linked from the activity's badge, the post-save question or the event form) | none |
+| Expense | an optional event, stay or rental it is linked to, who it is for first (everyone, picked people pre-selected from the event's attendees, or just me for a private personal expense) (fills the title, day and category, and marks that item as having an expense; an item can instead be marked "No expense needed" from the link sheet, which hides its reminder until undone from its details), title, amount (or a min-max range) with a "Price is" Total / Per person pick, currency (defaulted), day (or "Other" for none); saving an event, stay or rental offers this form, already filled in, along with a checklist item | target — Everyone (current), Everyone (incl. future), Just Me, or Specific — + auto-suggested even split, adjustable; status (paid vs. expected/upcoming) | none — Split is a distinct follow-up action, not a later *field* |
+| Event to-do (activity, dining) | whether anything needs booking ahead (asked after saving an activity: Yes, something / Nope, all set), then one of Book, Reserve or Buy tickets, which adds that to-do at once (with an Undo); the full checklist form stays one row below | existing checklist items linked from the event form's To-dos chip or the card's tab | none |
 | Comment/Proposal | text (+ proposal fields) | — | none |
 | Idea — Restaurant | title, link, cuisines, suggested time block(s)³, suggested day(s)³ | notes | none |
 | Idea — Activity | title, link, settings (indoor/outdoor, multi-select), suggested time block(s)³, suggested day(s)³ | notes | none |

@@ -11,7 +11,7 @@
 | Posters are the interface | movie art carries the calendar, the lists and the drawers; on the calendar a poster runs edge to edge in its cell, like a photo calendar |
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Modal`, `Drawer`, `Tabs`, `Badge` — custom only where the catalog has nothing: the poster split and the star rating |
 | Log in a tap or two | defaults, chips and pickers over typing; anything optional waits behind a "+ Add X" link |
-| Never overlay on overlay | tapping a day opens nothing (its movies show in a panel under the grid); tapping a movie opens a `Drawer`; whatever continues inside an open drawer — Mark paid, Edit, Add to calendar from the watchlist — swaps that drawer's content in place with a "‹ Back" link. Only a destructive confirm may sit on top |
+| Never overlay on overlay | tapping a day opens nothing (its movies show in a panel under the grid); tapping a movie opens a `Drawer`; whatever continues inside an open drawer — the ticket form, Change day/time/theater, Add to calendar from the watchlist — swaps that drawer's content in place with a "‹ Back" link. Only a destructive confirm may sit on top |
 | Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup is a `Modal`. Adding a movie and Membership settings are full-page subviews with their own back button. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
 | Never offer what can't be done | "Mark seen" appears only once the showtime has ended; "Standard price" appears only for a premium format |
 | Honest, kind math | negative net savings reads "Not yet" in a plain tone, never an alarm |
@@ -48,7 +48,7 @@ block-beta
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart TD
-    A[First launch] --> B["Setup modal · 3 steps"]
+    A[First launch] --> B["Setup modal · 4 steps"]
     B --> C{"Add movies you've already seen?"}
     C -->|Add past movies| P["Add drawer · past-movies mode: 'Add + another' loops back to pick"]
     P -->|Add & finish| D1["Calendar, filled in: posters, counters and savings so far"]
@@ -63,10 +63,12 @@ flowchart TD
     F ~~~ D ~~~ E
     D -->|tap a day| DP["Day panel · inline, no overlay"]
     DP -->|tap a movie| H[Viewing drawer]
-    H --> I["Mark paid · swaps in place"]
+    H --> I["Add what you paid · swaps in place"]
     H --> J["Edit · swaps in place"]
     H --> K[Remove confirm]
     D -->|+ Add| G["Add drawer · pick, then details"]
+    D -->|Share| SH["Shared calendars subview · up to 10 links; + New picks the dates and an optional PIN"]
+    SH -.->|a friend opens the link, no sign-in| SV["Shared calendar page · PIN gate if locked"]
     D -.->|showtime ended| L[Seen prompt drawer]
     E -->|+ Add| M["Add drawer · pick, then details"]
     E -->|tap an item| N[Watchlist drawer]
@@ -192,9 +194,9 @@ block-beta
 
 | Viewing state | Row in the day panel | Actions in its drawer |
 |---|---|---|
-| Planned (future date) | an ordinary row | Mark paid, Edit, Remove |
-| Ended, not yet confirmed | a "Did you catch it?" chip; the Seen prompt also surfaces on its own | Mark paid, Mark seen, Edit, Remove |
-| Seen | stars if rated | Mark paid (or Edit ticket), Edit (includes the rating), Remove |
+| Planned (future date) | an ordinary row | Buy tickets, I already have a ticket, Change day, time or theater, Remove |
+| Ended, not yet confirmed | a "Did you catch it?" chip; the Seen prompt also surfaces on its own | Mark as seen, Add what you paid, Change day, time or theater, Remove |
+| Seen | stars if rated | Add what you paid (or Ticket details), Change details or rating, Remove |
 | Backfilled (past date) | created as Seen, no prompt | same as Seen |
 
 *A ticket (format, price) shows as a badge on any row.*
@@ -254,7 +256,7 @@ block-beta
   columns 1
   Head["🖼️ Movie Title<br/>Fri, Oct 2 · 7:10 PM"]
   Info["IMAX · ★4 · $18.50 + $1.50 fee + $1.39 tax"]
-  A1["🎟️ Mark paid (or Edit ticket)"]
+  A1["🎟️ Add what you paid (or Ticket details)"]
   A2["✅ Mark seen"]
   A3["✏️ Edit"]
   Remove["🗑️ Remove — last, in red"]
@@ -265,7 +267,7 @@ block-beta
   style A3 fill:transparent,stroke:#888888,stroke-width:1px;
   style Remove fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The amounts are what a non-member would have paid; members pay no convenience fee, so the fee shown is one you skipped. Actions follow the state table above, so "Mark seen" is absent once seen. Mark paid and Edit swap this drawer's content in place (with "‹ Back to movie"), they don't open anything on top. Related actions sit in one tinted block; Remove stands apart and asks for a destructive confirm.*
+*The amounts are what a non-member would have paid; members pay no convenience fee, so the fee shown is one you skipped. Actions follow the state table above, so "Mark as seen" is absent once seen. Each row is named by its outcome with a one-line subtitle, and the ticket form and the change-details form swap this drawer's content in place (with "‹ Back to movie"), they don't open anything on top. Related actions sit in one tinted block; Remove stands apart and asks for a destructive confirm.*
 
 **Add to calendar — pick** (drawer, step 1)
 ```mermaid
@@ -477,7 +479,7 @@ block-beta
   style O1 fill:transparent,stroke:#888888,stroke-width:1px;
   style O2 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows everything, unseen first; each pill narrows the list (priorities combine with "or", Opening and Seen with "and"). Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
+*Five filter pills sit right under the header: Opening, Must See, Want to See, If I Have Time, Seen. None on shows every unseen movie; each pill narrows the list (priorities combine with "or", Opening and Seen with "and"). Seen movies show only under the Seen pill, so rows carry no "Seen" badge, just the "🍿 Seen Sep 28" date. A sort icon button sits to the right of the search field once the list has two movies (a drawer of large options on phones, a dropdown from `sm` up; the icon tints once something other than Default is picked). When nothing shows, a centered empty state says why in warm words (an empty list, no title match, nothing watched yet, nothing opening this week, everything seen) with a Reset button when something is changed. A "Reset" button joins the filter strip whenever the search, a filter or the sort is changed, and puts all of them back at once. Sort options: Default, Release date, Title, Date added; the last three can be flipped (Newest first / Oldest first, A to Z / Z to A) by an Order row of pills under the options in the drawer, or two more items in the dropdown, and choosing a different sort goes back to its natural direction. Default keeps the priority order, and Release date and Date added put the newest first. Opening carries a count whenever something opens in the next seven days and sorts soonest first with "in N days" on each row. On a phone the strip scrolls sideways with the full names.*
 
 **Watchlist — All**
 ```mermaid
@@ -495,7 +497,6 @@ block-beta
   R1["🖼️ Title A · Oct 16 · Dolby Cinema<br/>Must See · 📅 Planned Oct 17"]:12
   R2["🖼️ Title B · Released Sep 19 · no preference<br/>Want to See"]:12
   R3["🖼️ Title C · Released Aug 8 · Laser<br/>If I Have Time"]:12
-  R4["✓ Title D · Seen Sep 28 · IMAX · ×2"]:12
   style Title fill:transparent,stroke:#888888,stroke-width:1px;
   style Add fill:transparent,stroke:#888888,stroke-width:1px;
   style TabOpen fill:transparent,stroke:#888888,stroke-width:1px;
@@ -507,9 +508,8 @@ block-beta
   style R1 fill:transparent,stroke:#888888,stroke-width:1px;
   style R2 fill:transparent,stroke:#888888,stroke-width:1px;
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
-  style R4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and the latest watched date for seen movies, with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
+*Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and, under Seen, the latest watched date with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
 
 **Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above)
 ```mermaid
@@ -571,23 +571,33 @@ block-beta
 ```
 *Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
 
+### Shared calendars (owner) and the shared page (visitor)
+
+- **Entry:** a "Share" button beside "+ Add" in the Calendar header (an icon alone below 360px), shown when there is a movie on the calendar or an existing link. It opens the full-page "Shared calendars" subview.
+- **List:** "N of 10 links", "+ New", and a flat row per link: date range, movie count and when it was made, "Copy link", "Preview", a trash icon, and a panel with the PIN toggle ("🔒 PIN on · Send them ••••. Turning it off and on again makes a new one.", with "Show PIN"/"Hide PIN" and "Copy PIN" under it; the PIN is hidden until shown). At 10 links "+ New" gives way to "Delete one to make another". Empty: one muted line.
+- **New link:** pills (This month, Next month, This week, Next week, Pick dates; a week pill adds "Weeks run Friday to Thursday, like AMC's." under the pills; "Pick dates" opens a range calendar where you tap the first and last day, with the range tinted in between), a live line ("🎬 22 movies from October 1 – October 31", or why Create is off), "Lock it with a PIN?" pills, a note on what a friend sees, Cancel and Create link. A link is a snapshot and has no name.
+- **Delete:** a destructive confirm naming the dates, PIN and time it was made, and saying everyone with the link loses access at once.
+- **Visitor, no sign-in:** `/a-list/shared/<id>` shows "🎬 Movie calendar", the range and count, days with a divider each, and rows with poster, time, runtime, rating, theater and badges (format, Seen). States: loading, PIN gate (4 characters, masked until the eye button beside the box is tapped, which never submits; pasting a PIN, even inside a message, works; "That PIN didn't match" until they type again), "This calendar isn't available" (deleted or mistyped), and "We couldn't open this calendar" with Try again.
+
 ## Reusable Components
 
 | Component | Used in | Purpose |
 |---|---|---|
-| PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `EnrichedImage` hides itself on error, which would leave a hole in a full-bleed cell |
+| PosterCover | cells, rows, drawers, picker | a poster with a tinted title-initials fallback; the repo's `FallbackImage` renders nothing on error, which would leave a hole in a full-bleed cell |
 | PosterSplit | Calendar `renderCell` | fills the whole cell with one to four covers (full, corner-to-corner, pizza thirds, quadrants), "+N" past four; date number in a corner over a shade; ring for selected, accent for today |
 | StatTile | Dashboard, Calendar counters | one number and a label; the only card allowed inside a screen |
-| StatTile | Calendar, Dashboard | one number and a label; Calendar's week and month tiles carry a goal progress bar and turn green with "Goal met" once reached; with no goal set, a tile turns dashed and muted with a "Set a goal" button that opens Membership settings |
+| StatTile | Calendar, Dashboard | one number and a label (a help icon sits beside the label, or in the tile's top-right corner on a phone so a wrapping label never strands it); Calendar's week and month tiles carry a goal progress bar and turn green with "🏆 Goal met" once reached ("🏆 Met" on a phone); with no goal set, a tile turns dashed and muted with a "🎯 Set a goal" button ("🎯 Set" on a phone) that opens Membership settings |
 | MoviePicker | Add to calendar, Add to watchlist, Add past movies | one search over the watchlist and the movie database, watchlist first, with the rewatch note |
 | AddFlow / AddSubview | Calendar, Watchlist, Setup's past movies | the two-step pick-then-details flow for either destination, shown as a full-page subview that brings its own back button (inside the watchlist drawer for "Add to calendar"); past-movies mode makes "Add + another" the primary action and keeps a running count |
 | ViewingRow | day drawer | poster thumb, title, time, format badge, stars, price, state |
-| ViewingDrawer | day drawer (swaps in place from the day's list) | `Drawer` at every width; grouped actions, Remove last in red; Mark paid and Edit swap in place |
+| ViewingDrawer | day drawer (swaps in place from the day's list) | `Drawer` at every width; grouped actions, Remove last in red; the ticket form and Change details swap in place |
 | SeenPrompt | auto, after a showtime | `Drawer` with stars plus Seen it / Didn't go / Later; queues one at a time |
-| PreviewsNudge | above the Calendar icon in the bottom nav (so on every tab), from 30 min before a planned showing to 10 min after it starts | a small bubble: the showing, its countdown, an "Add from trailers" pill and a fold-away ✕. Folded, it becomes a small 📽️ chip in the same spot that brings the bubble back. It never opens anything by itself; the button opens the add screen in "Trailer picks" mode, where a tap on a result saves it as Want to See and the search stays open, with the titles added so far listed above the search, each with an Undo |
+| PreviewsNudge | above the Calendar icon in the bottom nav (so on every tab), from 10 min before a planned showing to 30 min after it starts | a small bubble: the showing and a line that follows the phase (a countdown before the start, "Trailers are rolling" for the first 20 minutes, then a gentle "caught one?" nudge), an "Add from trailers" pill and a fold-away ✕. Folded, it becomes a small 📽️ chip in the same spot that brings the bubble back. It never opens anything by itself; the button opens the add screen in "Trailer picks" mode, where a tap on a result saves it as Want to See and the search stays open, with the titles added so far listed above the search, each with an Undo |
 | FormatBadge, PriorityBadge | rows, drawers, Watchlist | pills built on Dreamer UI `Badge` |
 | FeeChips, TaxChips | Ticket | past fees (and $0) or past tax rates (and the one gauged from your bill) as chips, each plus an "Other" field; the most-used rate is preselected |
 | ManualMovieForm | MoviePicker | "Add it by title": a title and an optional release date, for when search is unavailable or a movie isn't found |
+| TheaterFinder, TheaterNameForm, TheaterList (a typed row carries "Not linked to AMC" and a "Link to AMC" button), TheaterPills | Theaters subview and Setup's last step; the add and edit forms | a "Use my current location" button (the only thing that asks for a position) and a zip/city search over AMC's nearest theaters (with a "Can't find it? Add it by name" link that reveals one input); the saved list with a favorite star and a remove button; and one `Pill` per saved theater on the forms, the favorite preselected |
+| ShowtimePicker, BuyTicketsPanel, PurchaseReturnPrompt | the add form and the showing drawer's "Buy tickets"; the welcome-back prompt | upcoming AMC showtimes as thin pills grouped by format (premium first, Standard last; sold-out times muted at the end of their group) with time and list price, in the theater's own time zone, flagged under the heading (and, when it isn't the viewer's, what the picked time is for them), collapsed to the first six with Waypoint's "Show N more" / "Show fewer" link; a theater typed by hand gets a nudge to link it to AMC (a button that opens the add/link theater modal); "Buy tickets" only on a planned showing with no ticket that hasn't started, and the welcome-back question only until the showing ends, on its own line ("Did you get your ticket to Starlight Harbor?"); the heads-up about the fee and tax with a "Continue to AMC" button; and the drawer that asks for the fee and tax once the member is back, with the price filled in |
 | StarRating | Seen prompt, edit viewing, rows (read-only) | half stars from 0.5 to 5: tap a star's left or right half, or slide a finger or the mouse across the row; hovering with a mouse previews the value in a lighter tint until it is clicked; arrow keys step by a half (and work while hovering); a visible Clear button removes the rating (tapping the current rating does nothing); custom, since Dreamer UI has none |
 | HelpTip | Calendar's "Since Friday" tile, Dashboard's Premium formats tile, Membership settings' Goals, the standard-price field | a small help icon: a hover tooltip (with its arrow) on a computer, a modal on a phone (a tooltip inside a drawer, modal or subview); or a text link that opens the same explanation in a modal at every size |
 | OpeningTab | Watchlist | the first and default tab; carries an accent and a count when something opens in the next seven days; its empty state links to All |
@@ -604,8 +614,8 @@ block-beta
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Open app] --> B[Confirm perks] --> C["Cost, bill total and start date"] --> D[Goals]
-    D --> G{Add movies you've already seen?}
+    A[Open app] --> B[Confirm perks] --> C["Cost, bill total and start date"] --> D[Goals] --> T["Theaters · skippable"]
+    T --> G{Add movies you've already seen?}
     G -->|Yes| H[Pick a movie and fill details] --> I{Which button?}
     I -->|"Add + another" · primary| H
     I -->|Add & finish| J[Calendar, filled in]
@@ -636,11 +646,11 @@ flowchart LR
     K --> L
 ```
 
-**Mark paid**
+**Add what you paid**
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Tap a day] --> B[Tap the movie] --> C[Mark paid] --> D[Pick format] --> M{Itemized or all-in total?}
+    A[Tap a day] --> B[Tap the movie] --> C[Add what you paid] --> D[Pick format] --> M{Itemized or all-in total?}
     M -->|Itemized| P[Ticket price] --> E{Premium format?}
     M -->|All-in total| T[Total with tax and fee] --> E
     E -->|Yes| F[Standard price for the showing] --> H
@@ -657,6 +667,32 @@ flowchart LR
     C -->|Seen it| D[Optional stars] --> E[Watchlist shows Seen, counters update]
     C -->|Didn't go| F[Confirm remove] --> G[Viewing removed, movie stays on watchlist]
     C -->|Later| H[Dismissed until next open]
+```
+
+**Find and save theaters**
+```mermaid
+flowchart LR
+    A["Dashboard · Your theaters, or the Calendar nudge, or Setup's last step"] --> B[Theaters subview]
+    B --> C["+ Add"] --> D{How?}
+    D -->|"Use my current location (asks the browser on tap)"| E[Nearest AMC theaters]
+    D -->|"Zip code (5 digits)"| E
+    D -->|"City or state"| P["Did you mean… (confirm the place)"] --> E
+    D -->|"Part of a theater's name"| E
+    D -->|"Can't find it? Add it by name"| F
+    B --> L["A typed theater says so · Link to AMC"] --> E2["Pick it in AMC's list"] --> M["Its showings and star switch over; nothing is re-tagged"]
+    E --> F["Add"] --> G["Saved; the first one becomes the favorite"]
+    B --> H["Star = favorite (preselected on new showings) · Trash = remove, the star moves to another theater"]
+```
+
+**Buy tickets (prototype)**
+```mermaid
+flowchart LR
+    A["Add form: pick a theater, then a showtime (upcoming days)"] --> B["Format, price and standard price prefilled"]
+    C["Showing drawer · Buy tickets"] --> D["Pick a showtime"] --> E["Heads-up: the convenience fee and the tax"] --> F["Continue to AMC (new tab)"]
+    F --> G["Back in the app: Did you get your tickets?"]
+    G -->|"Add fee and tax"| H["Ticket saved, savings count"]
+    G -->|Ask me later| I["Asked again whenever the member comes back to the tab or reopens the app; the drawer says Add the fee and tax"]
+    G -->|"I changed my mind"| J["Plan cleared, asking stops"]
 ```
 
 **Edit or remove a viewing**

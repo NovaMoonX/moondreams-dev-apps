@@ -1,5 +1,5 @@
 export interface MembershipProfile {
-  /** Equals the document id; immutable. */
+  /** AMC's theatre number as digits, or `manual-…` for one the member typed; equals the document id; immutable. */
   uid: string;
   /** Before tax: what the member typed in Setup. */
   monthlyCostCents: number;
@@ -11,6 +11,8 @@ export interface MembershipProfile {
   startDate: number;
   weeklyGoal: number | null;
   monthlyGoal: number | null;
+  /** The theater new showings default to; null for none. Documents written before theaters existed lack the key. */
+  favoriteTheatreId: string | null;
   /** Immutable; its presence is what "Setup is done" means. */
   setupCompletedAt: number;
   createdAt: number;
@@ -24,6 +26,8 @@ export type AmcFormat =
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
 export type WatchlistFilter = 'opening' | WatchPriority | 'seen';
+
+export type WatchlistSort = 'default' | 'releaseDate' | 'title' | 'addedAt';
 export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
 
 export interface MovieSnapshot {
@@ -60,7 +64,9 @@ export type AListOverlay =
   | { kind: 'viewing'; id: string }
   | { kind: 'watchlistItem'; movieKey: string }
   | { kind: 'tickets'; view: 'paid' | 'unpriced' }
-  | { kind: 'membership' };
+  | { kind: 'theaters' }
+  | { kind: 'membership' }
+  | { kind: 'share' };
 
 export interface WatchlistItem {
   /** Provider-namespaced id ("imdb-tt0133093"); equals the document id; immutable. */
@@ -87,8 +93,14 @@ export interface Viewing {
   status: ViewingStatus;
   /** null until "Mark paid" or "Yes, I paid" in the add form. Documents written before tickets existed lack the key. */
   ticket: Ticket | null;
+  /** Copied when the theater is picked, so a showing outlives a removed theater. Documents written before theaters existed lack the key. */
+  theatre: TheatreSnapshot | null;
+  /** The AMC showing the member picked to buy, until a ticket is recorded. Documents written before it existed lack the key. */
+  purchase: PurchasePlan | null;
   /** 0.5–5 stars in half steps, only once seen. Older documents hold whole stars, and those written before ratings existed lack the key. */
   rating: number | null;
+  /** The pending push that nudges them to add trailers once the showing starts. Documents written before it existed lack the key. */
+  trailerReminderId: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
@@ -109,4 +121,123 @@ export interface Ticket {
   taxCents: number;
   /** Exact as entered when all-in. */
   totalCents: number;
+}
+
+export interface TheatreSnapshot {
+  /** AMC's theatre number as digits, or `manual-…` for one the member typed. */
+  theatreId: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
+}
+
+/** A theater the member goes to; the document id is `theatreId`. */
+export interface AListTheatre {
+  /** Equals the document id; immutable. */
+  theatreId: string;
+  name: string;
+  addressLine: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** IANA zone the theater keeps time in; null for a typed theater. Documents written before it lack the key. */
+  timeZone: string | null;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** A theater before it is saved. */
+export type TheatreDraft = Omit<AListTheatre, 'createdAt' | 'lastEditedAt'>;
+
+export type ShareRangeKind =
+  'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH' | 'CUSTOM';
+
+/** One showing as a visitor sees it: no ids, prices, ratings or anything that says whose calendar it is. */
+export interface SharedViewing {
+  title: string;
+  posterUrl: string | null;
+  runtimeMinutes: number | null;
+  contentRating: string | null;
+  /** Instant: when the showing starts. */
+  showtimeAt: number;
+  status: ViewingStatus;
+  /** Only known once a ticket is on record; null otherwise. */
+  format: AmcFormat | null;
+  theatreName: string | null;
+}
+
+/** A frozen copy of part of the calendar behind an unguessable link; later changes to the calendar never reach it. */
+export interface CalendarShare {
+  /** Equals the document id and the token in the link; immutable. */
+  id: string;
+  /** Immutable; only the owner can read, change or delete the share. */
+  ownerUid: string;
+  /** Date-only (UTC midnight): the first day included. */
+  startDate: number;
+  /** Date-only (UTC midnight): the last day included. */
+  endDate: number;
+  /** Four characters a visitor must enter; null when the link is open to anyone who has it. */
+  pin: string | null;
+  viewings: SharedViewing[];
+  createdAt: number;
+  lastEditedAt: number;
+}
+
+/** What the share function returns to a visitor: the calendar without the owner or the PIN. */
+export interface SharedCalendar {
+  startDate: number;
+  endDate: number;
+  createdAt: number;
+  viewings: SharedViewing[];
+}
+
+export type SharedCalendarResult =
+  | { status: 'ok'; calendar: SharedCalendar }
+  | { status: 'pin_required' | 'wrong_pin' | 'not_found' };
+
+/** A theater found through AMC, before it is saved. */
+export interface TheatreSearchResult extends TheatreDraft {
+  /** From the searched point; null when AMC didn't say. */
+  distanceMiles: number | null;
+}
+
+/** One showing of a movie at a saved theater, as AMC lists it. */
+export interface ShowtimeOption {
+  /** AMC's showtime id. */
+  showtimeId: string;
+  /** Instant: when the showing starts. */
+  startsAt: number;
+  format: AmcFormat;
+  /** The adult price before tax and fees; null when AMC lists none. */
+  priceCents: number | null;
+  /** The cheapest Standard showing of the same movie that day, for a premium showing; null otherwise. */
+  standardPriceCents: number | null;
+  /** https link to buy this showing on amctheatres.com. */
+  purchaseUrl: string;
+  isSoldOut: boolean;
+}
+
+/** What the member picked on AMC's showtime list; the ticket itself is only recorded once they come back with the fee and tax. */
+export interface PurchasePlan {
+  showtimeId: string;
+  format: AmcFormat;
+  priceCents: number | null;
+  standardPriceCents: number | null;
+  purchaseUrl: string;
+  /** Instant: when the member last left for AMC to buy; null until they do. */
+  startedAt: number | null;
+}
+
+/** A zip code, city or state AMC matched to typed text, for the member to confirm before theaters are looked up. */
+export interface TheatrePlace {
+  label: string;
+  kind: 'zipcode' | 'city' | 'state';
+  latitude: number | null;
+  longitude: number | null;
+  /** AMC's name for the state, like "washington", for kind "state". */
+  state: string | null;
 }

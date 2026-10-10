@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { getFirestore } from 'firebase-admin/firestore';
 
-type CacheCollection = 'searchCache' | 'movieCache';
+type CacheCollection = 'searchCache' | 'movieCache' | 'theatreCache';
 
 /** A document id for any cache key (search text can contain characters ids can't). */
 export function toCacheId(key: string) {

@@ -5,11 +5,13 @@ import {
   Input,
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
-import { Camera, House, LogOut, Pencil, ShieldCheck, UserRound } from 'lucide-react';
+import { Camera, House, LogOut, Pencil, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
+import { resetFirestoreLocalData } from '@/lib/firebase/localData';
 import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
@@ -42,6 +44,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { isBelow } = useMediaQuery();
+  const { confirm } = useActionModal();
   const isAwayFromHome = pathname !== '/';
 
   if (loading) {
@@ -135,6 +138,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     option({ label: 'Profile', value: 'profile', icon: <UserRound className='size-4' /> }),
     option({ label: 'Change name', value: 'change-name', icon: <Pencil className='size-4' /> }),
     option({ label: 'Change photo', value: 'change-photo', icon: <Camera className='size-4' /> }),
+    option({ label: 'Reset saved data', value: 'reset-local-data', icon: <RefreshCw className='size-4' /> }),
     separator(),
     option({ label: 'Sign out', value: 'signout', icon: <LogOut className='size-4' /> }),
     custom(() => (
@@ -165,6 +169,20 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
     if (value === 'change-photo') {
       setIsPhotoModalOpen(true);
+      return;
+    }
+
+    if (value === 'reset-local-data') {
+      const confirmed = await confirm({
+        title: 'Reset saved data',
+        message:
+          "Clears the copy of your data this device keeps for speed and offline use, then reloads, and any other open windows of the app reload too. Try it if screens look empty or out of date. Your account isn't touched, but anything you changed offline that hasn't synced yet is lost.",
+        confirmText: 'Reset and reload',
+        destructive: true,
+      });
+      if (confirmed) {
+        await resetFirestoreLocalData();
+      }
       return;
     }
 

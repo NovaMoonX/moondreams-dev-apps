@@ -6,8 +6,8 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { qrcode } from 'vite-plugin-qrcode';
 
-// Every mini-app installs as its own PWA (see public/manifest-*.json), but
-// they all share one Workbox service worker at scope "/" (see src/main.tsx).
+// The whole site installs as one PWA (public/manifest-main.json) served by one
+// Workbox service worker at scope "/" (see src/main.tsx).
 // Registering a second, separate service worker for Firebase Cloud Messaging
 // would fight that one for control of the origin, so FCM's background
 // message handler is merged into the same worker via `workbox.importScripts`
@@ -43,11 +43,18 @@ function firebaseMessagingSwConfig(): Plugin {
   };
 }
 
+// A phone on the same Wi-Fi can only use a private LAN address; VPN and Tailscale interfaces (100.x) get no QR.
+function isPrivateLanUrl(url: string) {
+  const host = new URL(url).hostname;
+  const result = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  return result;
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    qrcode(),
+    qrcode({ filter: isPrivateLanUrl }),
     firebaseMessagingSwConfig(),
     VitePWA({
       injectRegister: null, // Handles registration manually

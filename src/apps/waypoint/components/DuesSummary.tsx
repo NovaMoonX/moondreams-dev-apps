@@ -2,15 +2,22 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+
 import DetailSheet from '@/components/DetailSheet';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, ChevronRight, Circle } from 'lucide-react';
+import { Check, ChevronRight, Circle, HandCoins } from 'lucide-react';
 
 import {
   isPairSettled,
   type DirectionalOwed,
+  type EarlyItem,
   type PairSettlement,
 } from '@apps/waypoint/utils/splitCalculators';
+
+const MAX_VISIBLE_NOTICES = 3;
+const MAX_VISIBLE_PAIRS = 6;
+const PAIRS_PER_PAGE = 20;
 
 const EPSILON = 0.005;
 
@@ -20,6 +27,10 @@ interface DuesSummaryProps {
   memberLabel: (uid: string) => string;
   formatAmount: (amount: number) => string;
   onToggleRepaid: (expenseId: string) => void;
+  onSetEarlyReturned: (expenseId: string, isReturned: boolean) => void;
+  /** Takes an early payment off its expense: its author always can, and so can an editor. */
+  canRemoveEarly: (fromUid: string) => boolean;
+  onRemoveEarly: (expenseId: string, fromUid: string) => void;
 }
 
 const getPairKey = (settlement: PairSettlement) => `${settlement.personA}-${settlement.personB}`;
@@ -30,8 +41,15 @@ function DuesSummary({
   memberLabel,
   formatAmount,
   onToggleRepaid,
+  onSetEarlyReturned,
+  canRemoveEarly,
+  onRemoveEarly,
 }: DuesSummaryProps) {
+  const isPhone = useMediaQuery().isBelow('sm');
+  const [isNoticesOpen, setIsNoticesOpen] = useState(false);
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
+  const [showAllNotices, setShowAllNotices] = useState(false);
+  const [visiblePairs, setVisiblePairs] = useState(MAX_VISIBLE_PAIRS);
   const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
 
   const getDirection = ({ personA, personB, netAmount, aOwesB, bOwesA }: PairSettlement) => {
@@ -127,6 +145,176 @@ function DuesSummary({
     );
   };
 
+  const getEarlyStateLabel = (item: EarlyItem, toUid: string) => {
+    switch (item.state) {
+      case 'PENDING':
+        return `${memberLabel(toUid)} is holding it until this is paid`;
+      case 'APPLIED': {
+        const extra = item.payment.amount - item.applied;
+        return extra > EPSILON
+          ? `${formatAmount(item.applied)} counted toward their share, ${formatAmount(extra)} owed back`
+          : 'Counted toward their share';
+      }
+      case 'HELD':
+        return `${memberLabel(toUid)} still has it`;
+      case 'RETURNED':
+        return 'Sent back';
+    }
+  };
+
+  const renderEarly = (items: EarlyItem[], fromUid: string, toUid: string) => {
+    if (items.length === 0) {
+      return null;
+    }
+
+    return (
+      <div key={`early-${fromUid}-${toUid}`} className='bg-muted/40 space-y-2 rounded-xl p-3'>
+        <p className='text-sm font-medium'>
+          {memberLabel(fromUid)} paid {memberLabel(toUid)} early
+        </p>
+        <ul className='divide-border/60 divide-y'>
+          {items.map((item) => (
+            <li key={item.expense.id} className='flex items-center justify-between gap-3 py-1.5 text-sm'>
+              <span className='min-w-0'>
+                <span className='block truncate'>{item.expense.title}</span>
+                <span className='text-muted-foreground block text-xs'>{getEarlyStateLabel(item, toUid)}</span>
+              </span>
+              <span className='flex shrink-0 items-center gap-2'>
+                <span className={join('tabular-nums', item.state === 'RETURNED' && 'text-muted-foreground')}>
+                  {formatAmount(item.payment.amount)}
+                </span>
+                {fromUid === currentUserId && item.state !== 'APPLIED' && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    className='h-10 text-xs'
+                    onClick={() => onSetEarlyReturned(item.expense.id, item.state !== 'RETURNED')}
+                  >
+                    {item.state === 'RETURNED' ? 'Undo' : 'Got it back'}
+                  </Button>
+                )}
+                {canRemoveEarly(fromUid) && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    className='h-10 text-xs'
+                    onClick={() => onRemoveEarly(item.expense.id, fromUid)}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const notices = settlements
+    .flatMap(({ aPaidEarly, bPaidEarly, personA, personB }) => [
+      ...aPaidEarly.map((item) => ({ item, fromUid: personA, toUid: personB })),
+      ...bPaidEarly.map((item) => ({ item, fromUid: personB, toUid: personA })),
+    ])
+    .filter(({ item, fromUid, toUid }) =>
+      (fromUid === currentUserId || toUid === currentUserId) && (item.state === 'PENDING' || item.state === 'HELD'),
+    )
+    .sort((first, second) => second.item.payment.paidAt - first.item.payment.paidAt)
+    .map(({ item, fromUid, toUid }) => ({
+      key: `${item.expense.id}-${fromUid}`,
+      expenseId: item.expense.id,
+      fromUid,
+      toUid,
+      amount: formatAmount(item.payment.amount),
+      title: item.expense.title,
+      isHeld: item.state === 'HELD',
+    }));
+  const visibleNotices = showAllNotices ? notices : notices.slice(0, MAX_VISIBLE_NOTICES);
+  const involvesMe = (settlement: PairSettlement) => [settlement.personA, settlement.personB].includes(currentUserId);
+  const myPairs = settlements.filter(involvesMe);
+  const isSending = (settlement: PairSettlement) => getDirection(settlement).debtorUid === currentUserId;
+  const toSend = myPairs.filter((settlement) => isSending(settlement) && !isPairSettled(settlement));
+  const toCollect = myPairs.filter((settlement) => !isSending(settlement) && !isPairSettled(settlement));
+  const settledMine = myPairs.filter(isPairSettled);
+  const others = settlements.filter((settlement) => !involvesMe(settlement));
+  const groups = [toSend, toCollect, settledMine, others];
+  const hiddenPairCount = groups.reduce((total, group) => total + Math.max(0, group.length - visiblePairs), 0);
+  const capGroup = (items: PairSettlement[]) => items.slice(0, visiblePairs);
+
+  const renderPair = (settlement: PairSettlement) => {
+    const { netAmount } = settlement;
+    const settled = isPairSettled(settlement);
+    const { debtorUid, creditorUid } = getDirection(settlement);
+
+    return (
+      <li key={getPairKey(settlement)}>
+        <Button
+          type='button'
+          variant='tertiary'
+          onClick={() => setSelectedPairKey(getPairKey(settlement))}
+          className='h-auto w-full justify-start gap-3 rounded-none px-0! py-3 text-left focus:outline-transparent!'
+        >
+          <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
+            {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
+          </span>
+          <span className='flex shrink-0 items-center gap-1'>
+            <span className={join('text-sm tabular-nums', settled ? 'text-muted-foreground' : 'font-semibold')}>
+              {formatAmount(Math.abs(netAmount))}
+            </span>
+            <ChevronRight className='text-muted-foreground h-4 w-4' />
+          </span>
+        </Button>
+      </li>
+    );
+  };
+
+  const renderGroup = (heading: string, items: PairSettlement[]) =>
+    items.length === 0 ? null : (
+      <div key={heading} className='mt-3 first:mt-1'>
+        <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>{heading}</p>
+        <ul className='divide-border divide-y'>{items.map(renderPair)}</ul>
+      </div>
+    );
+
+  const renderNetWorking = ({ personA, personB, netAmount, aOwesB, bOwesA, aPaidEarly, bPaidEarly }: PairSettlement) => {
+    const held = (items: EarlyItem[]) =>
+      items.filter((item) => item.state !== 'RETURNED').reduce((total, item) => total + item.payment.amount - item.applied, 0);
+    const rows = [
+      { label: `${memberLabel(personA)} owes ${memberLabel(personB)}`, amount: aOwesB.remaining },
+      { label: `${memberLabel(personB)} owes ${memberLabel(personA)}`, amount: -bOwesA.remaining },
+      { label: `${memberLabel(personB)} holds for ${memberLabel(personA)}`, amount: -held(aPaidEarly) },
+      { label: `${memberLabel(personA)} holds for ${memberLabel(personB)}`, amount: held(bPaidEarly) },
+    ].filter((row) => Math.abs(row.amount) > EPSILON);
+    if (held(aPaidEarly) + held(bPaidEarly) <= EPSILON) {
+      return null;
+    }
+
+    return (
+      <div className='border-border space-y-1 rounded-xl border p-3'>
+        <p className='text-sm font-medium'>How the net adds up</p>
+        {rows.map((row) => (
+          <p key={row.label} className='flex items-baseline justify-between gap-3 text-sm'>
+            <span className='text-muted-foreground min-w-0'>{row.label}</span>
+            <span className='shrink-0 whitespace-nowrap tabular-nums'>
+              {row.amount < 0 ? '−' : '+'}
+              {formatAmount(Math.abs(row.amount))}
+            </span>
+          </p>
+        ))}
+        <p className='border-border flex items-baseline justify-between gap-3 border-t pt-1 text-sm font-semibold'>
+          <span>Net</span>
+          <span className='shrink-0 whitespace-nowrap tabular-nums'>
+            {netAmount < 0 ? '−' : '+'}
+            {formatAmount(Math.abs(netAmount))}
+          </span>
+        </p>
+        <p className='text-muted-foreground text-xs'>
+          Plus means {memberLabel(personA)} owes {memberLabel(personB)}; minus means the other way around.
+        </p>
+      </div>
+    );
+  };
+
   const renderBreakdown = (settlement: PairSettlement) => {
     const { personA, personB, netAmount, aOwesB, bOwesA } = settlement;
     const showTotals =
@@ -148,45 +336,127 @@ function DuesSummary({
         </div>
         {renderDirection(personA, personB, aOwesB, showTotals)}
         {renderDirection(personB, personA, bOwesA, showTotals)}
+        {renderEarly(settlement.aPaidEarly, personA, personB)}
+        {renderEarly(settlement.bPaidEarly, personB, personA)}
+        {renderNetWorking(settlement)}
       </div>
     );
   };
 
+  type Notice = (typeof notices)[number];
+  const renderNoticeList = (items: Notice[], isInSheet: boolean) => (
+    <>
+      {isInSheet && (
+        <p className='text-muted-foreground bg-muted/50 mb-3 flex items-start gap-2 rounded-xl p-3 text-xs'>
+          <HandCoins className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+          <span>
+            <span className='text-foreground block text-sm font-medium'>Paid early</span>
+            Money sent ahead of an expense comes off what&apos;s owed until the expense is paid. Newest first.
+          </span>
+        </p>
+      )}
+      <ul className='divide-border divide-y'>
+        {items.map((notice) => (
+          <li key={notice.key} className='flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0'>
+            <span className='min-w-0'>
+              {memberLabel(notice.fromUid)} sent {memberLabel(notice.toUid)}{' '}
+              <span className='font-medium whitespace-nowrap'>{notice.amount}</span>
+              <span className='text-muted-foreground block text-xs'>
+                {notice.title}
+                {notice.isHeld ? ' · being held until it is sent back' : ''}
+              </span>
+            </span>
+            <span className='flex shrink-0 items-center'>
+              {notice.fromUid === currentUserId && canRemoveEarly(notice.fromUid) && (
+                <Button
+                  type='button'
+                  variant='link'
+                  className='h-10 text-xs'
+                  onClick={() => onRemoveEarly(notice.expenseId, notice.fromUid)}
+                >
+                  Undo
+                </Button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
   return (
     <>
-      <ul className='divide-border -mx-3 mt-1 divide-y'>
-        {settlements.map((settlement) => {
-          const { netAmount } = settlement;
-          const settled = isPairSettled(settlement);
-          const { debtorUid, creditorUid } = getDirection(settlement);
-
-          return (
-            <li key={getPairKey(settlement)}>
+      {notices.length > 0 &&
+        (isPhone ? (
+          <>
+            <Button
+              type='button'
+              variant='tertiary'
+              onClick={() => setIsNoticesOpen(true)}
+              className='bg-muted/50 mt-2 h-auto w-full justify-start gap-3 rounded-xl px-3! py-3 text-left'
+            >
+              <HandCoins className='h-4 w-4 shrink-0' aria-hidden='true' />
+              <span className='min-w-0 flex-1 text-sm font-medium'>Paid early</span>
+              <span className='text-muted-foreground shrink-0 text-sm tabular-nums'>{notices.length}</span>
+              <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+            </Button>
+            <DetailSheet isOpen={isNoticesOpen && notices.length > 0} onClose={() => setIsNoticesOpen(false)} title='Paid early'>
+              {renderNoticeList(notices, true)}
+            </DetailSheet>
+          </>
+        ) : (
+          <div className='bg-muted/50 mt-2 space-y-2 rounded-xl p-3'>
+            <p className='text-muted-foreground flex items-start gap-2 text-xs'>
+              <HandCoins className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+              <span>
+                <span className='text-foreground block text-sm font-medium'>Paid early</span>
+                Money sent ahead of an expense comes off what&apos;s owed until the expense is paid. Newest first.
+              </span>
+            </p>
+            {renderNoticeList(visibleNotices, false)}
+            {notices.length > MAX_VISIBLE_NOTICES && (
               <Button
                 type='button'
-                variant='tertiary'
-                onClick={() => setSelectedPairKey(getPairKey(settlement))}
-                className='h-auto w-full justify-start gap-3 rounded-none px-3 py-3 text-left focus:outline-transparent!'
+                variant='link'
+                size='sm'
+                className='h-10 px-0!'
+                onClick={() => setShowAllNotices((current) => !current)}
               >
-                <span className={join('min-w-0 flex-1 text-sm', settled ? 'text-muted-foreground' : 'font-medium')}>
-                  {memberLabel(debtorUid)} owes {memberLabel(creditorUid)}
-                </span>
-                <span className='flex shrink-0 items-center gap-1'>
-                  <span
-                    className={join(
-                      'text-sm tabular-nums',
-                      settled ? 'text-muted-foreground' : 'font-semibold',
-                    )}
-                  >
-                    {formatAmount(Math.abs(netAmount))}
-                  </span>
-                  <ChevronRight className='text-muted-foreground h-4 w-4' />
-                </span>
+                {showAllNotices ? 'Show fewer' : `Show ${notices.length - MAX_VISIBLE_NOTICES} more`}
               </Button>
-            </li>
-          );
-        })}
-      </ul>
+            )}
+          </div>
+        ))}
+      {renderGroup('Money to send', capGroup(toSend))}
+      {renderGroup('Money to collect', capGroup(toCollect))}
+      {renderGroup('All square', capGroup(settledMine))}
+      {renderGroup(myPairs.length === 0 ? 'Between others' : 'Everyone else', capGroup(others))}
+      {(hiddenPairCount > 0 || visiblePairs > MAX_VISIBLE_PAIRS) && (
+        <div className='flex gap-4'>
+          {hiddenPairCount > 0 && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-10 px-0!'
+              onClick={() => setVisiblePairs((current) => current + PAIRS_PER_PAGE)}
+            >
+              Show {Math.min(PAIRS_PER_PAGE, hiddenPairCount)} more
+            </Button>
+          )}
+          {visiblePairs > MAX_VISIBLE_PAIRS && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-10 px-0!'
+              onClick={() => setVisiblePairs(MAX_VISIBLE_PAIRS)}
+            >
+              Show fewer
+            </Button>
+          )}
+        </div>
+      )}
       <DetailSheet
         isOpen={selectedSettlement !== undefined}
         onClose={() => setSelectedPairKey(null)}

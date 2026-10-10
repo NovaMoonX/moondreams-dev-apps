@@ -17,6 +17,8 @@ export interface SavingsSummary {
   unpricedCount: number;
   /** Seen premium tickets with no standard price, so they add nothing to premium savings. */
   premiumUnpricedCount: number;
+  /** Seen premium tickets that cost the same as or less than Standard, which save nothing and never count as negative. */
+  premiumNoUpchargeCount: number;
 }
 
 /** Only seen movies with a ticket count: a planned one hasn't been used yet. */
@@ -54,9 +56,14 @@ export function getSavingsSummary(
       (total, ticket) =>
         ticket.standardPriceCents === null
           ? total
-          : total + ticket.priceCents - ticket.standardPriceCents,
+          : total + Math.max(0, ticket.priceCents - ticket.standardPriceCents),
       0,
     ),
+    premiumNoUpchargeCount: premiumTickets.filter(
+      (ticket) =>
+        ticket.standardPriceCents !== null &&
+        ticket.priceCents <= ticket.standardPriceCents,
+    ).length,
     unpricedCount: seen.length - tickets.length,
     premiumUnpricedCount: premiumTickets.filter(
       (ticket) => ticket.standardPriceCents === null,

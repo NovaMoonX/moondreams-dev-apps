@@ -8,6 +8,7 @@ import type {
   EventLinkKind,
   EventType,
   ExpenseCategory,
+  ExpenseLinkKind,
   ExpenseSortBy,
   ExpenseTotalsView,
   IdeaType,
@@ -91,6 +92,7 @@ export const EVENT_FIELD_LABELS: Record<EventFieldChange['field'], string> = {
   endAt: 'End time',
   startTime: 'Start time',
   endTime: 'End time',
+  arriveByTime: 'Arrive by',
   locationName: 'Location',
   dayIndex: 'Day',
   endDayIndex: 'End day',
@@ -129,6 +131,20 @@ export const TRANSIT_TYPE_EMOJIS: Record<TransitType, string> = {
   BIKE: '🚲',
   SCOOTER: '🛴',
   OTHER: '🧭',
+};
+
+/** Only trips on a schedule ask when they arrive; a drive, walk or ride just offers an optional end time. */
+export const TRANSIT_ARRIVAL: Partial<Record<TransitType, { emoji: string; question: string; zoneLabel: string }>> = {
+  FLIGHT: { emoji: '🛬', question: 'Know when you land?', zoneLabel: 'Lands in' },
+  TRAIN: { emoji: '🚉', question: 'Know when you arrive?', zoneLabel: 'Arrives in' },
+  FERRY: { emoji: '⚓', question: 'Know when you arrive?', zoneLabel: 'Arrives in' },
+};
+
+export const TRANSIT_PLACE_PLACEHOLDERS: Partial<Record<TransitType, string>> = {
+  FLIGHT: 'Sea-Tac Airport',
+  DRIVE: 'Pike Place Suites',
+  FERRY: 'Seattle ferry terminal',
+  TRAIN: 'King Street Station',
 };
 
 export interface TransitFieldSpec {
@@ -199,6 +215,26 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
   SCOOTER: 'Going to',
   OTHER: 'Where to navigate',
 };
+
+// Event types that can ask for an earlier arrival than their start.
+export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'];
+
+// Event types whose cost belongs on an expense: one without an attached expense reads "No expense yet".
+export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
+
+// Event types whose card shows the progress of the to-dos linked to it, and whose form can link them.
+export const TODO_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
+
+// Event types whose post-save sheet asks "Does anything need booking ahead?".
+export const BOOKING_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
+
+export const BOOKING_VERBS = [
+  { label: 'Book', prefix: 'Book' },
+  { label: 'Reserve', prefix: 'Reserve' },
+  { label: 'Buy tickets', prefix: 'Buy tickets for' },
+] as const;
+
+export const PLAN_COLLECTIONS: Record<ExpenseLinkKind, string> = { EVENT: 'events', STAY: 'stays', RENTAL: 'rentals' };
 
 // The stored route field that mirrors the event's location, so the place is entered once.
 export const TRANSIT_LOCATION_MIRROR_KEYS: Partial<Record<TransitType, string>> = {
@@ -304,7 +340,7 @@ export const CHECKLIST_CATEGORY_EMOJIS: Record<ChecklistCategory, string> = {
   PACKING: '🧳',
   BOOKINGS: '🎟️',
   LOGISTICS: '🗺️',
-  OTHER: '✨',
+  OTHER: '📌',
 };
 
 export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
@@ -318,18 +354,16 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
 // OTHER is the storage bucket for user-added categories (named by
 // customCategoryLabel), so it's never offered as a preset choice.
 export const PRESET_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
+  'ACTIVITIES',
   'FOOD',
   'TRANSPORT',
   'LODGING',
-  'ACTIVITIES',
   'SHOPPING',
 ];
 
 /** How many days before the first day and after the last day an event, stay or rental may be dated,
  * for the travel days around a trip. */
 export const MAX_DAYS_OUTSIDE_TRIP = 3;
-
-export const ADD_NEW_OPTION = '__add_new__';
 
 export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
   { value: 'day', text: 'Day' },
@@ -340,7 +374,14 @@ export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
 export const EXPENSE_TOTALS_VIEW_OPTIONS: { value: ExpenseTotalsView; label: string }[] = [
   { value: 'per-person', label: 'Per person' },
   { value: 'group', label: 'Group' },
+  { value: 'me', label: 'Mine' },
 ];
+
+export const EXPENSE_TOTALS_VIEW_HINTS: Record<ExpenseTotalsView, string> = {
+  'per-person': 'Every cost split evenly across everyone on the trip.',
+  group: 'What the whole trip costs, added up.',
+  me: 'Your own share of every cost.',
+};
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   FOOD: 'Food',
@@ -349,6 +390,15 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   ACTIVITIES: 'Activities',
   SHOPPING: 'Shopping',
   OTHER: 'Other',
+};
+
+export const EXPENSE_CATEGORY_EMOJIS: Record<ExpenseCategory, string> = {
+  FOOD: '🍽️',
+  TRANSPORT: '🚗',
+  LODGING: '🏨',
+  ACTIVITIES: '🎟️',
+  SHOPPING: '🛍️',
+  OTHER: '🧾',
 };
 
 export const STAY_TYPES: readonly StayType[] = [
@@ -369,7 +419,7 @@ export const STAY_TYPE_EMOJIS: Record<StayType, string> = {
   HOTEL: '🏨',
   RENTAL: '🏡',
   FRIEND_FAMILY: '🛋️',
-  OTHER: '✨',
+  OTHER: '🛏️',
 };
 
 export const STAY_TYPE_OPTION_LABELS: Record<StayType, string> = {
@@ -420,3 +470,6 @@ export const WEATHER_BANNER_IMAGES: Record<WeatherConditionId, string | null> = 
   thunderstorms: '/by-app/waypoint/weather/thunderstorms.webp',
   unknown: null,
 };
+
+/** Lists with at least this many rows (members, checklist items) get a search field. */
+export const LIST_SEARCH_THRESHOLD = 8;

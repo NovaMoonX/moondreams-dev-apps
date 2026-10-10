@@ -1,6 +1,7 @@
 import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { type EventTimeSource, getEventTime } from '@apps/waypoint/utils/tripTime';
+import { formatClockTime } from '@/utils/formatUtils';
+import { type EventTimeSource, formatEventArriveBy, getEventArriveByMs, getEventTime } from '@apps/waypoint/utils/tripTime';
 
 function formatLead(minutes: number) {
   const hours = Math.floor(minutes / 60);
@@ -14,6 +15,7 @@ function formatLead(minutes: number) {
 }
 
 export type EventReminderSource = EventTimeSource &
+  Partial<Pick<TimelineEvent, 'arriveByTime'>> &
   Pick<
     TimelineEvent,
     'id' | 'title' | 'reminderMinutesBefore' | 'reminderEnabled' | 'assignedMemberIds'
@@ -45,6 +47,16 @@ export async function scheduleEventReminder({
     return null;
   }
 
+  // With an arrival chosen the reminder counts back from it, since being on time means being there then.
+  const arriveByMs = getEventArriveByMs(trip, event);
+  const arriveBy = formatEventArriveBy(trip, event);
+  const targetMs = arriveByMs ?? startMs;
+  const startLabel = event.startTime ? formatClockTime(event.startTime) : null;
+  const body =
+    arriveByMs !== null && arriveBy
+      ? `Arrive by ${arriveBy}, in ${formatLead(event.reminderMinutesBefore)}.${startLabel ? ` Starts at ${startLabel}.` : ''}`
+      : `Starting in ${formatLead(event.reminderMinutesBefore)}.`;
+
   const targetUids = getReminderTargetUids(trip, event.assignedMemberIds);
   if (targetUids.length === 0) {
     return null;
@@ -55,8 +67,8 @@ export async function scheduleEventReminder({
       appId: 'waypoint',
       targetUids,
       title: event.title,
-      body: `Starting in ${formatLead(event.reminderMinutesBefore)}.`,
-      scheduledFor: startMs - event.reminderMinutesBefore * 60_000,
+      body,
+      scheduledFor: targetMs - event.reminderMinutesBefore * 60_000,
       createdBy: uid,
       relatedEntityPath: `apps/waypoint/trips/${trip.id}/events/${event.id}`,
     });

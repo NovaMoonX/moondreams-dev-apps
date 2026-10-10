@@ -11,3 +11,12 @@ export function generateUuid() {
   const result = [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
   return result;
 }
+
+const TOKEN_ALPHABET = '23456789abcdefghjklmnpqrstuvwxyz';
+
+/** A random string over 32 look-alike-free characters (no 0, 1, i or o), 5 bits each, drawn from the browser's CSPRNG. */
+export function generateToken(length: number) {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  const result = Array.from(bytes, (byte) => TOKEN_ALPHABET[byte & 31]).join('');
+  return result;
+}

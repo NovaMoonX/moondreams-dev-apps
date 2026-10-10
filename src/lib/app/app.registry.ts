@@ -9,7 +9,7 @@ export type AppRegistryEntry = {
 };
 
 /* IMPORTANT: Keep the following in sync with this registry:
-   - in /public folder: manifests, logos, and banners
+   - in /public folder: logos and banners
    - cloudflare-worker.js
    - repo root README.md (its "Current apps" list: one line per app)
 */
@@ -55,6 +55,13 @@ export const APP_REGISTRY_ID_MAP = Object.fromEntries(
 export const APP_REGISTRY_PATH_MAP = Object.fromEntries(
   APP_REGISTRY.map((app) => [app.path, app]),
 ) as Record<string, AppRegistryEntry>;
+
+/** The registered app that owns a pathname, matched on its first path segment (`/a-list/`, `/a-list/shared/x`), or null for the hub and other site pages. */
+export function getRegistryAppForPath(pathname: string) {
+  const firstSegment = (pathname.split('/')[1] ?? '').toLowerCase();
+  const result = APP_REGISTRY_PATH_MAP[`/${firstSegment}`] ?? null;
+  return result;
+}
 
 export function getUnconfiguredRegistryApps(
   allApps: Array<{

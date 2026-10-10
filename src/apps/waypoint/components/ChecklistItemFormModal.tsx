@@ -4,13 +4,17 @@ import {
   Button,
   Form,
   FormFactories,
+  Label,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import { CalendarDays, StickyNote } from 'lucide-react';
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { PillGroup } from '@/components/PillGroup';
+import AppToggle from '@/components/AppToggle';
+import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount, getDayInputValue } from '@/utils/dateRangeUtils';
 import {
@@ -33,25 +37,43 @@ interface ChecklistFormData {
   assignedToUids: string[];
 }
 
+export interface ChecklistPrefill {
+  category: ChecklistCategory;
+  completeByDayIndex: number | null;
+}
+
+export interface ChecklistSubmitValues {
+  title: string;
+  category: ChecklistCategory;
+  customCategoryLabel: string | null;
+  completeByDayIndex: number | null;
+  note: string | null;
+  assignedToUids: string[];
+  isPrivate: boolean;
+}
+
 interface ChecklistItemFormModalProps {
   isOpen: boolean;
   trip: TripSpace;
+  currentUserId: string;
   memberOptions: { label: string; value: string }[];
   item?: ChecklistItem | null;
+  /** The item being edited is one only its owner sees. */
+  isItemPrivate?: boolean;
+  /** A Commenter can only keep private tasks, so the audience question is skipped. */
+  canShare?: boolean;
+  /** Hides "Keep it private", for a to-do that has to stay linked to a plan the others see. */
+  allowPrivate?: boolean;
+  /** Names the plan a new to-do is being linked to. */
+  forTitle?: string;
+  prefill?: ChecklistPrefill;
   isSubmitting?: boolean;
-  onSubmit: (values: {
-    title: string;
-    category: ChecklistCategory;
-    customCategoryLabel: string | null;
-    completeByDayIndex: number | null;
-    note: string | null;
-    assignedToUids: string[];
-  }) => Promise<void> | void;
+  onSubmit: (values: ChecklistSubmitValues) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
 
-const { custom, input, checkboxGroup } = FormFactories;
+const { custom, input } = FormFactories;
 
 const DAY_MS = 86_400_000;
 
@@ -73,15 +95,20 @@ function describeDueDay(trip: TripSpace, dayIndex: number) {
   return `Day ${dayIndex + 1} of the trip`;
 }
 
-function getInitialFormData(trip: TripSpace, item?: ChecklistItem | null): ChecklistFormData {
+function getInitialFormData(
+  trip: TripSpace,
+  item?: ChecklistItem | null,
+  prefill?: ChecklistPrefill,
+): ChecklistFormData {
+  const dueDayIndex = item ? item.completeByDayIndex : (prefill?.completeByDayIndex ?? null);
   return {
     title: item?.title ?? '',
-    category: item?.category ?? 'DOCUMENTS',
+    category: item?.category ?? prefill?.category ?? 'DOCUMENTS',
     customCategoryLabel: item?.customCategoryLabel ?? '',
     dueDate:
-      item?.completeByDayIndex === null || item?.completeByDayIndex === undefined
+      dueDayIndex === null
         ? { enabled: false, date: getDayInputValue(trip.startDate, 0) }
-        : { enabled: true, date: getDayInputValue(trip.startDate, item.completeByDayIndex) },
+        : { enabled: true, date: getDayInputValue(trip.startDate, dueDayIndex) },
     note: item?.note ?? '',
     assignedToUids: item?.assignedToUids ?? [],
   };
@@ -90,18 +117,39 @@ function getInitialFormData(trip: TripSpace, item?: ChecklistItem | null): Check
 export default function ChecklistItemFormModal({
   isOpen,
   trip,
+  currentUserId,
   memberOptions,
   item = null,
+  isItemPrivate = false,
+  canShare = true,
+  allowPrivate = true,
+  forTitle,
+  prefill,
   isSubmitting = false,
   onSubmit,
   onDelete,
   onClose,
 }: ChecklistItemFormModalProps) {
   const { confirm } = useActionModal();
-  const initialData = useMemo(() => getInitialFormData(trip, item), [trip, item]);
+  const initialData = useMemo(() => getInitialFormData(trip, item, prefill), [trip, item, prefill]);
   const [formData, setFormData] = useState<ChecklistFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [showNoteField, setShowNoteField] = useState(Boolean(item?.note));
+  const [audience, setAudience] = useState<'everyone' | 'pick' | 'me'>(() => {
+    const assigned = item?.assignedToUids ?? [];
+    if (isItemPrivate || !canShare) return 'me';
+    if (assigned.length === 1 && assigned[0] === currentUserId) return 'me';
+    return assigned.length > 0 ? 'pick' : 'everyone';
+  });
+  const [keepPrivate, setKeepPrivate] = useState(false);
+  const isAudienceAsked = canShare && !isItemPrivate;
+  const isPrivate = isItemPrivate || !canShare || (!item && audience === 'me' && keepPrivate);
+  // The form reads its data once, so a change made from outside it remounts it.
+  const [formKey, setFormKey] = useState(0);
+  const resetField = (patch: Partial<ChecklistFormData>) => {
+    setFormData((current) => ({ ...current, ...patch }));
+    setFormKey((key) => key + 1);
+  };
 
   const isFormComplete =
     formData.title.trim() !== '' &&
@@ -147,82 +195,123 @@ export default function ChecklistItemFormModal({
 
     nextFields.push(
       custom({
-        name: 'dueDate',
-        label: 'Complete by',
-        renderComponent: (props) => {
-          const due = props.value as ChecklistFormData['dueDate'];
-          const dayIndex = due.enabled ? getDayIndexFromDate(trip, due.date) : null;
-          return (
-            <div className='space-y-2'>
-              <PillGroup
-                label='Complete by'
-                options={[
-                  { value: 'none', label: 'No date', emoji: '🗓️' },
-                  { value: 'date', label: 'Pick a date', emoji: '⏰' },
-                ]}
-                value={due.enabled ? 'date' : 'none'}
-                onChange={(value) => props.onValueChange({ ...due, enabled: value === 'date' })}
-              />
-              {due.enabled && (
-                <>
-                  <Input
-                    type='date'
-                    variant='outline'
-                    aria-label='Due date'
-                    value={due.date}
-                    onChange={(event) => props.onValueChange({ ...due, date: event.target.value })}
-                  />
-                  {dayIndex !== null && (
-                    <p className='text-muted-foreground text-xs'>
-                      {describeDueDay(trip, dayIndex)}. It stays that far from the trip if the trip&apos;s dates move.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        },
-      }),
-    );
-
-    nextFields.push(
-      checkboxGroup({
         name: 'assignedToUids',
-        label: 'Assign to',
-        description: 'Leave empty if everyone should own this task.',
-        options: memberOptions,
+        label: '',
+        renderComponent: (props) => (
+          <div className='space-y-2'>
+            {isAudienceAsked ? (
+              <>
+                <Label>Who&apos;s on it?</Label>
+                <PillGroup
+                  label="Who's on it"
+                  options={[
+                    { value: 'everyone', label: 'Everyone', emoji: '👥' },
+                    { value: 'pick', label: 'Pick people', emoji: '🎯' },
+                    { value: 'me', label: 'Just me', emoji: '🙋' },
+                  ]}
+                  value={audience}
+                  onChange={(value) => {
+                    setAudience(value as typeof audience);
+                    if (value !== 'pick') {
+                      props.onValueChange([]);
+                    }
+                  }}
+                />
+              </>
+            ) : null}
+            {isAudienceAsked && allowPrivate && audience === 'me' && !item && (
+              <label className='flex items-start gap-3 text-sm'>
+                <AppToggle size='sm' checked={keepPrivate} onCheckedChange={setKeepPrivate} />
+                <span>
+                  <span className='font-medium'>Keep it private</span>
+                  <span className='text-muted-foreground block'>
+                    {keepPrivate
+                      ? "Only you see it, and it stays off Overview. It can't be shared later."
+                      : "Everyone can follow along, with you as the person on it."}
+                  </span>
+                </span>
+              </label>
+            )}
+            {!isAudienceAsked && (
+              <p className='text-muted-foreground text-sm'>
+                <span className='text-foreground font-medium'>Only you see this task,</span> in your own checklist. It
+                doesn&apos;t show on Overview.{canShare && item ? ' To share it, add it again for everyone.' : ''}
+              </p>
+            )}
+            {audience === 'pick' && (
+              <MultiPillGroup
+                label='People'
+                options={memberOptions}
+                values={props.value as string[]}
+                onChange={(next) => props.onValueChange(next)}
+              />
+            )}
+          </div>
+        ),
       }),
     );
 
-    nextFields.push(
-      custom({
-        name: 'note',
-        label: 'Note',
-        renderComponent: (props) =>
-          showNoteField ? (
-            <Textarea
-              rows={2}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-              variant='outline'
-              placeholder='Anything worth remembering about this task'
-            />
-          ) : (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-auto p-0'
-              onClick={() => setShowNoteField(true)}
-            >
-              + Add note
-            </Button>
+    if (formData.dueDate.enabled) {
+      nextFields.push(
+        custom({
+          name: 'dueDate',
+          label: '',
+          renderComponent: (props) => {
+            const due = props.value as ChecklistFormData['dueDate'];
+            const dayIndex = getDayIndexFromDate(trip, due.date);
+            return (
+              <RemovableField
+                label='Complete by'
+                removeLabel='Remove date'
+                onRemove={() => resetField({ dueDate: { ...due, enabled: false } })}
+              >
+                <Input
+                  type='date'
+                  variant='outline'
+                  aria-label='Due date'
+                  value={due.date}
+                  onChange={(event) => props.onValueChange({ ...due, date: event.target.value })}
+                />
+                {dayIndex !== null && (
+                  <p className='text-muted-foreground mt-1 text-xs'>
+                    {describeDueDay(trip, dayIndex)}. It stays that far from the trip if the trip&apos;s dates move.
+                  </p>
+                )}
+              </RemovableField>
+            );
+          },
+        }),
+      );
+    }
+
+    if (showNoteField) {
+      nextFields.push(
+        custom({
+          name: 'note',
+          label: '',
+          renderComponent: (props) => (
+            <RemovableField label='Note' removeLabel='Remove note' onRemove={() => setShowNoteField(false)}>
+              <Textarea
+                rows={2}
+                value={props.value as string}
+                onChange={(event) => props.onValueChange(event.target.value)}
+                variant='outline'
+                placeholder='Anything worth remembering about this task'
+              />
+            </RemovableField>
           ),
-      }),
-    );
+        }),
+      );
+    }
 
     return nextFields;
-  }, [trip, formData.category, memberOptions, showNoteField]);
+  }, [trip, formData.category, formData.dueDate.enabled, audience, keepPrivate, isAudienceAsked, allowPrivate, canShare, item, memberOptions, showNoteField]);
+
+  const getAssignedUids = (data: ChecklistFormData) => {
+    if (isPrivate) return [];
+    if (audience === 'me') return [currentUserId];
+    return audience === 'pick' ? data.assignedToUids : [];
+  };
 
   const handleSubmit = async (data: ChecklistFormData) => {
     const title = data.title.trim();
@@ -248,7 +337,8 @@ export default function ChecklistItemFormModal({
         customCategoryLabel,
         completeByDayIndex,
         note: data.note.trim() || null,
-        assignedToUids: data.assignedToUids,
+        assignedToUids: getAssignedUids(data),
+        isPrivate,
       });
     } catch (submitError) {
       setError(
@@ -278,16 +368,41 @@ export default function ChecklistItemFormModal({
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Checklist item'>
+      {forTitle && (
+        <p className='text-muted-foreground mb-3 text-sm'>
+          For <span className='text-foreground font-medium'>{forTitle}</span>
+        </p>
+      )}
       <Form
+        key={formKey}
         id='waypoint-checklist-item'
         form={fields}
         initialData={initialData}
         columns={1}
-        onDataChange={(data) => setFormData(data as ChecklistFormData)}
+        onDataChange={(data) => setFormData((current) => ({ ...current, ...(data as ChecklistFormData) }))}
         onSubmit={(data) => {
           void handleSubmit(data as ChecklistFormData);
         }}
         submitButton={
+          <div className='contents'>
+            {(!formData.dueDate.enabled || !showNoteField) && (
+              <div className='col-span-full mb-4'>
+                <AddFieldChips
+                  heading='Add to this task'
+                  chips={[
+                    ...(formData.dueDate.enabled
+                      ? []
+                      : [{ key: 'due', label: 'Complete by', icon: <CalendarDays className='h-4 w-4' /> }]),
+                    ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
+                  ]}
+                  onAdd={(key) =>
+                    key === 'due'
+                      ? resetField({ dueDate: { ...formData.dueDate, enabled: true } })
+                      : setShowNoteField(true)
+                  }
+                />
+              </div>
+            )}
           <ModalFooterActions
             leftActions={
               item &&
@@ -308,6 +423,7 @@ export default function ChecklistItemFormModal({
                 </Button>
             }
           />
+          </div>
         }
       />
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}

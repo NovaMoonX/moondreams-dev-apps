@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   Drawer,
-  RadioGroup,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -20,6 +19,7 @@ import { getErrorMessage } from '@/utils';
 import {
   MEMBER_ROLE_DESCRIPTIONS,
   MEMBER_ROLE_LABELS,
+  LIST_SEARCH_THRESHOLD,
 } from '@apps/waypoint/constants';
 import type { TripSpace, UserRole } from '@apps/waypoint/types';
 import { removeEmailInvite } from '@apps/waypoint/store/actions/emailInviteActions';
@@ -29,6 +29,8 @@ import {
 } from '@apps/waypoint/store/actions/membershipActions';
 import MemberRoleBadge from './MemberRoleBadge';
 import SectionHeader from '@/components/SectionHeader';
+import SearchInput from '@/components/SearchInput';
+import { PillGroup } from '@/components/PillGroup';
 import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
 
 import AddMemberByEmailModal from './AddMemberByEmailModal';
@@ -46,6 +48,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [isAddingByEmail, setIsAddingByEmail] = useState(false);
+  const [query, setQuery] = useState('');
   const addedInvites = useAppSelector(
     (state) =>
       state.waypoint.emailInvites.forTrip
@@ -77,6 +80,14 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
   const roleOptions = Object.entries(MEMBER_ROLE_LABELS).map(
     ([value, text]) => ({ value, text }),
   );
+  const showSearch = memberIds.length + waitingEmails.length >= LIST_SEARCH_THRESHOLD;
+  const needle = showSearch ? query.trim().toLowerCase() : '';
+  const matchesNeedle = (...texts: (string | undefined)[]) =>
+    needle === '' || texts.some((text) => text?.toLowerCase().includes(needle));
+  const shownMemberIds = memberIds.filter((memberId) =>
+    matchesNeedle(getDisplayName(memberId), members[memberId]?.email),
+  );
+  const shownWaitingEmails = waitingEmails.filter((invite) => matchesNeedle(invite.email));
 
   const handleRoleChange = async (
     memberId: string,
@@ -202,8 +213,12 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
             ) : undefined
           }
         />
+        {showSearch && <SearchInput value={query} onChange={setQuery} placeholder='Search members' />}
+        {showSearch && needle !== '' && shownMemberIds.length + shownWaitingEmails.length === 0 && (
+          <p className='text-muted-foreground text-sm'>No one matches &ldquo;{query.trim()}&rdquo;.</p>
+        )}
         <ul className={join('divide-border', !isSmallScreen && 'divide-y')}>
-          {memberIds.map((memberId) => {
+          {shownMemberIds.map((memberId) => {
             const member = members[memberId];
             const displayName =
               member?.displayName?.trim() || member?.email || 'Trip member';
@@ -307,7 +322,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
               </li>
             );
           })}
-          {waitingEmails.map((invite) => (
+          {shownWaitingEmails.map((invite) => (
             <li key={invite.email} className='flex items-center justify-between gap-3 py-3'>
               <span className='flex min-w-0 items-center gap-3'>
                 <span
@@ -381,22 +396,17 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
             <p className='text-muted-foreground text-sm'>
               Pick what they can do on this trip.
             </p>
-            <div className='flex justify-center py-2'>
-              <RadioGroup
-                value={trip.members[activeMemberUid].role}
-                onChange={(value) =>
-                  void handleRoleChange(
-                    activeMemberUid,
-                    value as UserRole,
-                    getDisplayName(activeMemberUid),
-                  )
-                }
-                options={roleOptions.map((option) => ({
-                  label: option.text,
-                  value: option.value,
-                }))}
-              />
-            </div>
+            <PillGroup
+              label='Role'
+              options={roleOptions.map((option) => ({ value: option.value as UserRole, label: option.text }))}
+              value={trip.members[activeMemberUid].role}
+              onChange={(value) =>
+                void handleRoleChange(activeMemberUid, value, getDisplayName(activeMemberUid))
+              }
+            />
+            <p className='text-muted-foreground text-sm'>
+              {MEMBER_ROLE_DESCRIPTIONS[trip.members[activeMemberUid].role]}
+            </p>
           </div>
         )}
       </Drawer>

@@ -305,7 +305,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
 
   const content = (
     <div className='space-y-4'>
-      <div className='max-h-[60vh] space-y-4 overflow-y-auto'>
+      <div className={join('space-y-4', !isSmallScreen && 'max-h-[60vh] overflow-y-auto')}>
         {announcements.length > 0 && (
           <div className='space-y-2'>
             {sectionHeading('Announcements', dismissAllAnnouncements)}

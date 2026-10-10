@@ -1,15 +1,29 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  runTransaction,
+  updateDoc,
+  type DocumentData,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DEFAULT_WATCH_PRIORITY } from '@apps/a-list/constants';
 import type {
   MovieSnapshot,
+  PurchasePlan,
   Ticket,
+  TheatreSnapshot,
   Viewing,
   WatchlistItem,
 } from '@apps/a-list/types';
+import {
+  cancelTrailerReminder,
+  isTrailerReminderAhead,
+  newTrailerReminderId,
+  scheduleTrailerReminder,
+} from '@apps/a-list/utils/reminders';
 import {
   computeEndsAt,
   getInitialStatus,
@@ -21,6 +35,8 @@ interface AddViewingInput {
   movie: MovieSnapshot;
   showtimeAt: number;
   ticket: Ticket | null;
+  theatre: TheatreSnapshot | null;
+  purchase: PurchasePlan | null;
 }
 
 function toSnapshot(movie: MovieSnapshot): MovieSnapshot {
@@ -40,11 +56,15 @@ export const addViewing = createAsyncThunk<
   { rejectValue: string }
 >(
   'aList/viewings/add',
-  async ({ uid, movieKey, movie, showtimeAt, ticket }, { rejectWithValue }) => {
+  async (
+    { uid, movieKey, movie, showtimeAt, ticket, theatre, purchase },
+    { rejectWithValue },
+  ) => {
     const membershipPath = ['apps', 'a-list', 'memberships', uid] as const;
     const itemRef = doc(db, ...membershipPath, 'watchlist', movieKey);
     const viewingRef = doc(collection(db, ...membershipPath, 'viewings'));
     const snapshot = toSnapshot(movie);
+    const trailerReminderId = newTrailerReminderId(showtimeAt);
 
     try {
       const viewing = await runTransaction(db, async (transaction) => {
@@ -72,13 +92,26 @@ export const addViewing = createAsyncThunk<
           endsAt,
           status: getInitialStatus(endsAt, now),
           ticket: ticket ?? null,
+          theatre: theatre ?? null,
+          purchase: purchase ?? null,
           rating: null,
+          trailerReminderId,
           createdAt: now,
           lastEditedAt: now,
         };
         transaction.set(viewingRef, nextViewing);
         return nextViewing;
       });
+
+      if (trailerReminderId) {
+        void scheduleTrailerReminder({
+          uid,
+          reminderId: trailerReminderId,
+          viewingId: viewing.id,
+          movieTitle: movie.title,
+          showtimeAt,
+        });
+      }
 
       return viewing;
     } catch (error) {
@@ -90,13 +123,24 @@ export const addViewing = createAsyncThunk<
 );
 
 /** Keys added after the first viewings were written, with the empty value a legacy document gets. */
-const LATER_KEYS = { ticket: null, rating: null } as const;
+const LATER_KEYS = {
+  ticket: null,
+  rating: null,
+  theatre: null,
+  trailerReminderId: null,
+  purchase: null,
+} as const;
 
 /**
  * A field-scoped edit in a transaction: any later-added key the freshly read document still lacks
  * is backfilled with its empty value in the same write, and nothing the edit doesn't own is touched.
+ * `fields` may be a function of the freshly read document.
  */
-async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
+async function editViewing(
+  uid: string,
+  id: string,
+  fields: Partial<Viewing> | ((stored: DocumentData) => Partial<Viewing>),
+) {
   const viewingRef = doc(
     db,
     'apps',
@@ -107,22 +151,29 @@ async function editViewing(uid: string, id: string, fields: Partial<Viewing>) {
     id,
   );
 
-  await runTransaction(db, async (transaction) => {
+  const previous = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(viewingRef);
     if (!snapshot.exists()) {
       throw new Error('This showing was removed.');
     }
 
     const stored = snapshot.data();
+    // Recording a ticket answers the "did you buy?" question for good.
+    const edit = typeof fields === 'function' ? fields(stored) : fields;
+    const resolvesPurchase = edit.ticket != null && stored.purchase != null;
     const backfill = Object.fromEntries(
       Object.entries(LATER_KEYS).filter(([key]) => !(key in stored)),
     );
     transaction.update(viewingRef, {
       ...backfill,
-      ...fields,
+      ...edit,
+      ...(resolvesPurchase ? { 'purchase.startedAt': null } : {}),
       lastEditedAt: Date.now(),
     });
+    return stored;
   });
+
+  return previous;
 }
 
 interface UpdateViewingInput {
@@ -132,9 +183,13 @@ interface UpdateViewingInput {
   runtimeMinutes: number | null;
   /** Only for a seen viewing; a planned one has no rating. */
   rating?: number | null;
+  /** Omit to leave the theater alone; null clears it. */
+  theatre?: TheatreSnapshot | null;
+  /** Omit to leave the purchase plan alone; null clears it. */
+  purchase?: PurchasePlan | null;
 }
 
-/** Moves a showing (the showtime and its derived end are written together) and, once seen, its stars. */
+/** Moves a showing (the showtime and its derived end are written together) and edits its theater and, once seen, its stars. */
 export const updateViewing = createAsyncThunk<
   void,
   UpdateViewingInput,
@@ -142,15 +197,38 @@ export const updateViewing = createAsyncThunk<
 >(
   'aList/viewings/update',
   async (
-    { uid, id, showtimeAt, runtimeMinutes, rating },
+    { uid, id, showtimeAt, runtimeMinutes, rating, theatre, purchase },
     { rejectWithValue },
   ) => {
+    const newReminderId = newTrailerReminderId(showtimeAt);
+
     try {
-      await editViewing(uid, id, {
+      const previous = await editViewing(uid, id, (stored) => ({
         showtimeAt,
         endsAt: computeEndsAt(showtimeAt, runtimeMinutes),
+        // Only a moved showing gets a new push; any other edit leaves the pending one alone.
+        ...(stored.showtimeAt === showtimeAt
+          ? {}
+          : { trailerReminderId: newReminderId }),
         ...(rating === undefined ? {} : { rating }),
-      });
+        ...(theatre === undefined ? {} : { theatre }),
+        ...(purchase === undefined ? {} : { purchase }),
+      }));
+
+      if (previous.showtimeAt !== showtimeAt) {
+        if (isTrailerReminderAhead(previous.showtimeAt)) {
+          void cancelTrailerReminder(previous.trailerReminderId);
+        }
+        if (newReminderId) {
+          void scheduleTrailerReminder({
+            uid,
+            reminderId: newReminderId,
+            viewingId: id,
+            movieTitle: previous.movie.title,
+            showtimeAt,
+          });
+        }
+      }
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to save this showing.'),
@@ -170,10 +248,26 @@ export const removeViewing = createAsyncThunk<
   RemoveViewingInput,
   { rejectValue: string }
 >('aList/viewings/remove', async ({ uid, id }, { rejectWithValue }) => {
+  const viewingRef = doc(
+    db,
+    'apps',
+    'a-list',
+    'memberships',
+    uid,
+    'viewings',
+    id,
+  );
+
   try {
-    await deleteDoc(
-      doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
-    );
+    const stored = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(viewingRef);
+      transaction.delete(viewingRef);
+      return snapshot.data();
+    });
+
+    if (stored && isTrailerReminderAhead(stored.showtimeAt)) {
+      void cancelTrailerReminder(stored.trailerReminderId);
+    }
   } catch (error) {
     return rejectWithValue(
       getErrorMessage(error, 'Unable to remove this showing.'),
@@ -224,6 +318,34 @@ export const markViewingSeen = createAsyncThunk<
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to mark this movie seen.'),
+      );
+    }
+  },
+);
+
+interface SetPurchaseStartedInput {
+  uid: string;
+  id: string;
+  /** The instant the member left for AMC; null stops asking about it. */
+  startedAt: number | null;
+}
+
+/** Writes only the `startedAt` key of the plan, so a plan changed on another device isn't overwritten. */
+export const setPurchaseStarted = createAsyncThunk<
+  void,
+  SetPurchaseStartedInput,
+  { rejectValue: string }
+>(
+  'aList/viewings/setPurchaseStarted',
+  async ({ uid, id, startedAt }, { rejectWithValue }) => {
+    try {
+      await updateDoc(
+        doc(db, 'apps', 'a-list', 'memberships', uid, 'viewings', id),
+        { 'purchase.startedAt': startedAt, lastEditedAt: Date.now() },
+      );
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save your purchase.'),
       );
     }
   },

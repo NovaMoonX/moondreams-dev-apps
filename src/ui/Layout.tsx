@@ -1,14 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { APP_REGISTRY_PATH_MAP, SITE_VERSION } from '@/lib/app';
+import { getRegistryAppForPath, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
+import { useHideOnScroll } from '@hooks/useHideOnScroll';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
+import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
@@ -35,11 +37,14 @@ function LocationSync() {
     }
 
     function handleSetCurrentLocation(locationPathname: string) {
-      // remove any leading slashes and replace with 'home' if the path is just '/'
+      // remove any leading slashes and replace with 'home' if the path is just '/'.
+      // A link's secret token must never reach presence: that tree is world-readable.
       const nextLocation =
         locationPathname === '/'
           ? 'home'
-          : locationPathname.replace(/^\/+/, '');
+          : locationPathname
+              .replace(/^\/+/, '')
+              .replace(/^(a-list\/shared)\/.*$/, '$1');
 
       setCurrentLocation(nextLocation);
     }
@@ -47,33 +52,23 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
-  // Sync the manifest file based on the current location
+  // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
   useEffect(() => {
-    let manifestPath = '/manifest-main.json';
-    let appName = 'Moondreams Dev Apps';
+    const app = getRegistryAppForPath(location.pathname);
 
-    const appRegistry = APP_REGISTRY_PATH_MAP[location.pathname] || null;
-    if (appRegistry) {
-      manifestPath = `/manifest-${appRegistry.id}.json`;
-      appName = `${appRegistry.name} - Moondreams Dev Apps`;
-    }
+    document
+      .querySelectorAll<HTMLLinkElement>('link[rel="icon"]')
+      .forEach((icon) => {
+        icon.dataset.defaultHref ??= icon.getAttribute('href') ?? '';
+        icon.setAttribute(
+          'href',
+          app ? `/logos/by-app/logo-${app.id}.svg` : icon.dataset.defaultHref,
+        );
+      });
 
-    // Update the manifest link in the document head
-    let link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'manifest';
-      document.head.appendChild(link);
-    }
-
-    // Only update if changed to avoid unnecessary DOM mutations
-    if (link.getAttribute('href') !== manifestPath) {
-      link.setAttribute('href', manifestPath);
-    }
-
-
-    // Update the document title based on the current app
-    document.title = appName;
+    document.title = location.pathname.startsWith('/a-list/shared/')
+      ? 'Movie calendar - A-List Tracker'
+      : app ? `${app.name} - Moondreams Dev Apps` : 'Moondreams Dev Apps';
   }, [location.pathname]);
 
   return null;
@@ -81,7 +76,14 @@ function LocationSync() {
 
 function Layout() {
   const networkStatus = useNetworkStatus();
-  const isBannerVisible = networkStatus !== null;
+  const isUpdateReady = useUpdateReady();
+  const isBannerVisible = networkStatus !== null || isUpdateReady;
+  const isHeaderHidden = useHideOnScroll();
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
+    document.documentElement.dataset.siteBanner = String(isBannerVisible);
+  }, [isHeaderHidden, isBannerVisible]);
   useReminderToasts();
 
   useEffect(() => {
@@ -96,11 +98,12 @@ function Layout() {
       <OfflineBanner />
       <EmulatorStatus />
 
-      {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only */}
+      {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 z-10 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 max-md:h-16 max-md:py-2 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
           isBannerVisible ? 'top-9' : 'top-0',
+          isHeaderHidden && (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
         )}
       >
         <div className='pointer-events-auto flex flex-1 items-center justify-start'>

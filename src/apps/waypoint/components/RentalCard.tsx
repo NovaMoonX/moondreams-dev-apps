@@ -4,10 +4,12 @@ import { Badge, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import LocationLink from '@apps/waypoint/components/LocationLink';
+import NoExpenseBadge from '@apps/waypoint/components/NoExpenseBadge';
+import { getRentalSubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
 import NotesField from '@apps/waypoint/components/NotesField';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
-import EnrichedImage from '@/components/EnrichedImage';
+import FallbackImage from '@/components/FallbackImage';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
@@ -80,6 +82,7 @@ export function RentalDetailLines({
         <Badge variant='muted' outline>
           {RENTAL_TYPE_LABELS[rental.rentalType ?? 'CAR']}
         </Badge>
+        {!showTitle && <NoExpenseBadge getSubject={() => getRentalSubject(rental)} isStatic />}
       </div>
       {rental.vehicle && <p className='text-sm'>{rental.vehicle}</p>}
       <div className='flex flex-col items-start gap-1'>
@@ -140,15 +143,16 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
 
   return (
     <>
+      <div>
       <article
         {...drawerTriggerProps}
         className={join(
-          'border-border bg-card flex flex-col overflow-hidden rounded-lg border sm:flex-row',
+          'border-border bg-card relative flex flex-col overflow-hidden rounded-lg border sm:flex-row',
           isSmallScreen && 'cursor-pointer',
         )}
       >
         {imageUrl && (
-          <EnrichedImage
+          <FallbackImage
             src={imageUrl}
             alt=''
             className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0'
@@ -190,7 +194,18 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
             </div>
           )}
         </div>
+        {!isSmallScreen && (
+          <div className='absolute right-4 bottom-4'>
+            <NoExpenseBadge getSubject={() => getRentalSubject(rental)} />
+          </div>
+        )}
       </article>
+      {isSmallScreen && (
+        <div className='flex justify-end pr-4'>
+          <NoExpenseBadge variant='tab' getSubject={() => getRentalSubject(rental)} />
+        </div>
+      )}
+      </div>
       {isSmallScreen && (
         <PlaceDetailsDrawer
           isOpen={isDrawerOpen}
@@ -200,6 +215,7 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
           location={getPickupLocation(rental)}
           linkUrl={rental.linkUrl}
           onEdit={canEdit ? () => { closeDrawer(); onEdit(rental); } : null}
+          expenseTarget={{ link: { kind: 'RENTAL', id: rental.id }, getSubject: () => getRentalSubject(rental) }}
         >
           <RentalDetailLines
             trip={trip}

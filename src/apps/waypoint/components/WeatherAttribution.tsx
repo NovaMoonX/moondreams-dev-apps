@@ -8,7 +8,7 @@ function WeatherAttribution() {
       rel='noreferrer'
       variant='tertiary'
       size='sm'
-      className='text-muted-foreground h-auto p-0 text-[10px] font-normal'
+      className="text-muted-foreground relative h-auto justify-start p-0! text-[11px] font-normal after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
     >
       Weather data by Open-Meteo.com
     </Button>

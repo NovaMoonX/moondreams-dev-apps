@@ -1,6 +1,7 @@
 import { generativeModel } from '@/lib/firebase/ai';
 
 import { compressIngestionImage } from '@/utils/imageCompression';
+import { getUploadMimeType } from '@/utils/uploadMimeType';
 import {
   buildExtractionPrompt,
   dropFutureEvents,
@@ -39,7 +40,7 @@ export async function extractProposalFromFile(file: File): Promise<ExtractedInge
           {
             inlineData: {
               data,
-              mimeType: inputFile.type || file.type,
+              mimeType: getUploadMimeType(inputFile),
             },
           },
         ],
