@@ -30,11 +30,11 @@ Every callable requires a signed-in caller, except `getCalendarShare`, which exi
 | --- | --- | --- | --- |
 | `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |
 | `OMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set OMDB_API_KEY --project moondreams-dev-apps` |
-| `AMC_API_KEY` | Functions secret, **required to deploy** | `findTheatres` | `firebase functions:secrets:set AMC_API_KEY --project moondreams-dev-apps` (the vendor key from [developers.amctheatres.com](https://developers.amctheatres.com), sent as `X-AMC-Vendor-Key`) |
+| `AMC_API_KEY` | Functions secret, **required to deploy** | `findTheatres`, `findShowtimes` | `firebase functions:secrets:set AMC_API_KEY --project moondreams-dev-apps` (the vendor key from [developers.amctheatres.com](https://developers.amctheatres.com), sent as `X-AMC-Vendor-Key`) |
 | `MOVIE_PROVIDER` | env, optional (`tmdb` or `omdb`) | `searchMovies` | `functions/.env.local` locally. Forces a provider; unset, TMDB is used whenever its key is set. |
 | `TMDB_API_BASE` | env, optional | TMDB calls | `functions/.env.local`. Points TMDB calls at another server; a test aid, never set in production. |
 | `AMC_API_BASE` | env, optional | AMC calls | `functions/.env.local`. Points AMC calls at another server; a test aid, never set in production. |
-| `A_LIST_THEATRE_APP_DAILY_LOOKUP_CAP` / `A_LIST_THEATRE_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 500 and 40) | `findTheatres` | `functions/.env.local` locally |
+| `A_LIST_THEATRE_APP_DAILY_LOOKUP_CAP` / `A_LIST_THEATRE_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 500 and 40) | `findTheatres`, `findShowtimes` (one shared budget) | `functions/.env.local` locally |
 | `A_LIST_APP_DAILY_LOOKUP_CAP` | env, optional (default 900) | A-List lookups | `functions/.env.local` locally |
 | `A_LIST_MEMBER_DAILY_LOOKUP_CAP` | env, optional (default 100) | A-List lookups | `functions/.env.local` locally |
 
