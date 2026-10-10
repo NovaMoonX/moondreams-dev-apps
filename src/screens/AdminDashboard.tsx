@@ -4,6 +4,7 @@ import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import NavButton from '@/ui/NavButton';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
@@ -23,6 +24,7 @@ function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const { allApps, updateAppMetadata } = useAppCatalog();
   const queryClient = useQueryClient();
+  const isPhone = useMediaQuery().isBelow('sm');
   const [section, setSection] = useState<AdminSection>('apps');
   const usersQuery = useQuery({ ...adminUsersQueryOptions(), enabled: isAdmin });
   const isRefreshing = useIsFetching({ queryKey: ADMIN_QUERY_KEY }) > 0;
@@ -65,7 +67,7 @@ function AdminDashboard() {
           value={section}
           onValueChange={(value) => setSection(value as AdminSection)}
           variant='underline'
-          tabsWidth='full'
+          tabsWidth={isPhone ? 'full' : 'fit'}
           triggersClassName={ADMIN_TAB_TRIGGERS_CLASS}
         >
           <TabsList>

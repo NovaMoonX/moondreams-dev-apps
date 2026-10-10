@@ -2,6 +2,7 @@ import { Select, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/c
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { useState } from 'react';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { getUnconfiguredRegistryApps } from '@lib/app';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
@@ -19,6 +20,7 @@ interface AppsTabProps {
 
 function AppsTab({ apps, users, onSave }: AppsTabProps) {
   const { confirm } = useActionModal();
+  const isPhone = useMediaQuery().isBelow('sm');
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [section, setSection] = useState<AppSection>('usage');
   const [isDirty, setIsDirty] = useState(false);
@@ -69,7 +71,7 @@ function AppsTab({ apps, users, onSave }: AppsTabProps) {
         value={section}
         onValueChange={(value) => setSection(value as AppSection)}
         variant='underline'
-        tabsWidth='full'
+        tabsWidth={isPhone ? 'full' : 'fit'}
         triggersClassName={ADMIN_TAB_TRIGGERS_CLASS}
       >
         <TabsList>
