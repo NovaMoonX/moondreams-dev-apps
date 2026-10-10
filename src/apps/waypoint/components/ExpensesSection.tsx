@@ -26,6 +26,7 @@ import {
   EXPENSE_SORT_OPTIONS,
   LIST_SEARCH_THRESHOLD,
   EXPENSE_TOTALS_VIEW_HINTS,
+  TOTALS_HELP_TITLES,
   EXPENSE_TOTALS_VIEW_OPTIONS,
 } from '@apps/waypoint/constants';
 import type { ExpenseSubmitValues } from '@apps/waypoint/components/ExpenseFormModal';
@@ -363,19 +364,25 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     setRangedOnly(false);
     setSplitOnly(false);
   };
-  const toTotalsView = (total: TripExpenseTotals['total']): TripExpenseTotals['total'] => {
-    if (totalsView === 'group') {
-      return total;
+  const getViewTotals = (list: TripExpense[]): TripExpenseTotals => {
+    if (totalsView !== 'per-person') {
+      return computeExpenseTotals(list, memberIds);
     }
 
+    const forEveryone = list.filter((expense) => {
+      const splitIds = getSplitMemberIds(expense, memberIds);
+      return memberIds.every((uid) => splitIds.includes(uid));
+    });
     const headcount = Math.max(1, memberIds.length);
-    const perPerson = {
+    const scale = (total: TripExpenseTotals['total']) => ({
       min: scaleAmount(total.min, 1 / headcount),
       max: scaleAmount(total.max, 1 / headcount),
-    };
+    });
+    const sums = computeExpenseTotals(forEveryone, memberIds);
+    const perPerson = { paid: scale(sums.paid), expected: scale(sums.expected), total: scale(sums.total) };
     return perPerson;
   };
-  const totals = useMemo(() => computeExpenseTotals(expenses, memberIds), [expenses, memberIds]);
+  const totals = getViewTotals(expenses);
   const myTotals = useMemo(
     () => computeMemberTotals(expenses, memberIds, currentUserId),
     [expenses, memberIds, currentUserId],
@@ -383,7 +390,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const filteredTotal =
     totalsView === 'me'
       ? computeMemberTotals(filteredExpenses, memberIds, currentUserId).myTotal
-      : toTotalsView(computeExpenseTotals(filteredExpenses, memberIds).total);
+      : getViewTotals(filteredExpenses).total;
   const totalCards: { label: string; total: TripExpenseTotals['total']; personal: number }[] =
     totalsView === 'me'
       ? [
@@ -392,9 +399,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           { label: 'My total', total: myTotals.myTotal, personal: personalTotals.total },
         ]
       : [
-          { label: 'Paid', total: toTotalsView(totals.paid), personal: personalTotals.paid },
-          { label: 'Expected', total: toTotalsView(totals.expected), personal: personalTotals.expected },
-          { label: 'Total', total: toTotalsView(totals.total), personal: personalTotals.total },
+          { label: 'Paid', total: totals.paid, personal: personalTotals.paid },
+          { label: 'Expected', total: totals.expected, personal: personalTotals.expected },
+          { label: 'Total', total: totals.total, personal: personalTotals.total },
         ];
   const pairSettlements = useMemo(() => computePairSettlements(expenses, memberIds), [expenses, memberIds]);
   const myOpenPairs = pairSettlements.filter(
@@ -957,14 +964,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         />
         <p className='text-muted-foreground text-xs'>
           {EXPENSE_TOTALS_VIEW_HINTS[totalsView]}
-          {totalsView === 'me' && (
-            <>
-              {' '}
-              <HelpTip
-                title='Your share'
-                linkLabel='What do these mean?'
-                className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
-              >
+          {' '}
+          <HelpTip
+            title={TOTALS_HELP_TITLES[totalsView]}
+            linkLabel='What do these mean?'
+            className="relative after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
+          >
+            {totalsView === 'me' ? (
+              <>
                 <p>
                   <strong>Paid by me</strong> is what you covered up front.
                 </p>
@@ -974,9 +981,32 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 <p>
                   <strong>My total</strong> is your share of everything, including what others covered.
                 </p>
-              </HelpTip>
-            </>
-          )}
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>Paid</strong> is what has already been covered, <strong>Expected</strong> is what is
+                  still to pay, and <strong>Total</strong> is both together.
+                </p>
+                {totalsView === 'per-person' ? (
+                  <>
+                    <p>
+                      Only <strong>expenses for everyone</strong> are counted, split evenly across the group. One
+                      picked for certain people counts only when it includes everyone on the trip right now.
+                    </p>
+                    <p>
+                      Anything for just one person or a smaller group is left out. See <strong>Mine</strong> for
+                      your own share of everything.
+                    </p>
+                  </>
+                ) : (
+                  <p>
+                    Every expense is added up in full, whoever it is for, so this is what the whole trip costs.
+                  </p>
+                )}
+              </>
+            )}
+          </HelpTip>
         </p>
         {personalTotals.total > 0 && (
           <p className='text-muted-foreground flex items-start gap-1.5 text-xs'>
