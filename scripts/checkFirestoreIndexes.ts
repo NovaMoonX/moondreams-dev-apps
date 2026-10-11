@@ -34,7 +34,7 @@ const listSourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) {
-      return name === 'node_modules' || name === 'lib' ? [] : listSourceFiles(path);
+      return name === 'node_modules' ? [] : listSourceFiles(path);
     }
     return /\.tsx?$/.test(name) && !name.endsWith('.d.ts') ? [path] : [];
   });
@@ -139,7 +139,6 @@ const findQuerySites = (path: string): QuerySite[] => {
   return sites;
 };
 
-/** Fields an index must list, equalities first (any order), then range/order fields in query order. */
 const requiredIndexFields = (constraints: Constraint[]) => {
   const equality = [...new Set(constraints.filter((c) => c.kind === 'equality').map((c) => c.field))];
   const ordered = [...new Set(constraints.filter((c) => c.kind !== 'equality').map((c) => c.field))].filter(
