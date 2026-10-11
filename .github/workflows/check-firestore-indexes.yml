@@ -1,0 +1,19 @@
+name: Check Firestore indexes
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'functions/src/**'
+      - 'firestore.indexes.json'
+      - 'scripts/checkFirestoreIndexes.ts'
+jobs:
+  check_indexes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:indexes
