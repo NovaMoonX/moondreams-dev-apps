@@ -6,37 +6,38 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
 import {
   APP_STATUS_OPTIONS,
-  normalizeAppStatus,
   type AppMetadata,
   type AppStatus,
   type UserProfile,
 } from '@lib/types/appCatalog';
 
+import { type AppDraft } from './appDraft';
 import { AVAILABLE_USERS_PREVIEW } from './constants';
 
 interface AppSettingsTabProps {
   app: AppMetadata;
+  draft: AppDraft;
+  isDirty: boolean;
   users: UserProfile[];
-  onDirtyChange: (isDirty: boolean) => void;
+  onDraftChange: (patch: Partial<AppDraft>) => void;
   onSave: (appId: string, payload: Partial<AppMetadata>) => Promise<void>;
+  onSaved: () => void;
 }
 
-function AppSettingsTab({ app, users, onDirtyChange, onSave }: AppSettingsTabProps) {
-  const [name, setName] = useState(app.name);
-  const [description, setDescription] = useState(app.description ?? '');
-  const [status, setStatus] = useState<AppStatus>(
-    normalizeAppStatus(app.status ?? 'draft'),
-  );
-  const [isRestricted, setIsRestricted] = useState(app.isRestricted ?? false);
-  const [allowedUsers, setAllowedUsers] = useState<string[]>(
-    app.allowedUsers ?? [],
-  );
+function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onSaved }: AppSettingsTabProps) {
+  const { name, description, status, isRestricted, allowedUsers } = draft;
+  const setName = (value: string) => onDraftChange({ name: value });
+  const setDescription = (value: string) => onDraftChange({ description: value });
+  const setStatus = (value: AppStatus) => onDraftChange({ status: value });
+  const setIsRestricted = (value: boolean) => onDraftChange({ isRestricted: value });
+  const setAllowedUsers = (next: string[] | ((current: string[]) => string[])) =>
+    onDraftChange({ allowedUsers: typeof next === 'function' ? next(allowedUsers) : next });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchError, setSearchError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -97,30 +98,6 @@ function AppSettingsTab({ app, users, onDirtyChange, onSave }: AppSettingsTabPro
   const shownUsers = trimmedSearchTerm ? availableUsers : availableUsers.slice(0, AVAILABLE_USERS_PREVIEW);
   const hasNoSearchResults =
     trimmedSearchTerm.length > 0 && availableUsers.length === 0;
-
-  const hasUnsavedChanges = useMemo(() => {
-    const savedAllowedUsers = [...app.allowedUsers].sort((a, b) =>
-      a.localeCompare(b),
-    );
-    const nextAllowedUsers = [...allowedUsers].sort((a, b) =>
-      a.localeCompare(b),
-    );
-
-    return (
-      name.trim() !== app.name.trim() ||
-      description.trim() !== (app.description ?? '').trim() ||
-      status !== app.status ||
-      isRestricted !== app.isRestricted ||
-      savedAllowedUsers.length !== nextAllowedUsers.length ||
-      savedAllowedUsers.some(
-        (value, index) => value !== nextAllowedUsers[index],
-      )
-    );
-  }, [allowedUsers, app, description, isRestricted, name, status]);
-
-  useEffect(() => {
-    onDirtyChange(hasUnsavedChanges);
-  }, [hasUnsavedChanges, onDirtyChange]);
 
   const addUserToAccessList = (value: string) => {
     if (!isRestricted) {
@@ -196,14 +173,8 @@ function AppSettingsTab({ app, users, onDirtyChange, onSave }: AppSettingsTabPro
     setIsSaving(true);
 
     try {
-      await onSave(app.id, {
-        name,
-        description,
-        status,
-        isRestricted,
-        allowedUsers,
-      });
-      onDirtyChange(false);
+      await onSave(app.id, draft);
+      onSaved();
     } catch (error) {
       console.error('Failed to save app metadata:', error);
     } finally {
@@ -215,9 +186,9 @@ function AppSettingsTab({ app, users, onDirtyChange, onSave }: AppSettingsTabPro
     <div className='space-y-6'>
       <div className='flex items-center justify-between gap-3'>
         <p role='status' className='text-muted-foreground min-w-0 text-sm'>
-          {hasUnsavedChanges ? 'You have unsaved changes.' : 'Everything is saved.'}
+          {isDirty ? 'You have unsaved changes.' : 'Everything is saved.'}
         </p>
-        <Button onClick={saveChanges} disabled={isSaving || !hasUnsavedChanges}>
+        <Button onClick={saveChanges} disabled={isSaving || !isDirty}>
           {isSaving ? 'Saving...' : 'Save changes'}
         </Button>
       </div>

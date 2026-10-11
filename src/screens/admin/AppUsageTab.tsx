@@ -16,12 +16,17 @@ type UsageFilter = 'started' | 'active';
 interface AppUsageTabProps {
   app: AppMetadata;
   users: UserProfile[];
+  isUsersLoading: boolean;
+  isUsersError: boolean;
 }
 
-function AppUsageTab({ app, users }: AppUsageTabProps) {
+function AppUsageTab({ app, users, isUsersLoading, isUsersError }: AppUsageTabProps) {
   const [filter, setFilter] = useState<UsageFilter>('started');
   const now = useNow(60_000);
-  const { data: usage, isPending, isError } = useQuery(appUsageQueryOptions(app.id));
+  const usageQuery = useQuery(appUsageQueryOptions(app.id));
+  const usage = usageQuery.data;
+  const isPending = usageQuery.isPending || isUsersLoading;
+  const isError = usageQuery.isError || isUsersError;
 
   const activeSince = getActiveSince(now);
   const rows = (usage ?? []).flatMap((entry) => {

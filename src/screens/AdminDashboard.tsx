@@ -1,10 +1,10 @@
-import { Button, Tabs, TabsList, TabsTrigger } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { TabPanel, UnderlineTabs } from '@/components/UnderlineTabs';
 import NavButton from '@/ui/NavButton';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
@@ -13,7 +13,6 @@ import { ADMIN_EMAIL } from '@lib/app';
 import type { UserProfile } from '@lib/types/appCatalog';
 
 import AppsTab from './admin/AppsTab';
-import { ADMIN_TAB_TRIGGERS_CLASS } from './admin/constants';
 import MembersTab from './admin/MembersTab';
 
 type AdminSection = 'apps' | 'members';
@@ -24,7 +23,6 @@ function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const { allApps, updateAppMetadata } = useAppCatalog();
   const queryClient = useQueryClient();
-  const isPhone = useMediaQuery().isBelow('sm');
   const [section, setSection] = useState<AdminSection>('apps');
   const usersQuery = useQuery({ ...adminUsersQueryOptions(), enabled: isAdmin });
   const isRefreshing = useIsFetching({ queryKey: ADMIN_QUERY_KEY }) > 0;
@@ -53,6 +51,7 @@ function AdminDashboard() {
               size='icon'
               className='size-10'
               aria-label='Refresh members and usage'
+              disabled={isRefreshing}
               onClick={() => queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEY })}
             >
               <RefreshCw className={join('size-4', isRefreshing && 'animate-spin')} />
@@ -63,25 +62,34 @@ function AdminDashboard() {
           </div>
         </header>
 
-        <Tabs
+        <UnderlineTabs
           value={section}
-          onValueChange={(value) => setSection(value as AdminSection)}
-          variant='underline'
-          tabsWidth={isPhone ? 'full' : 'fit'}
-          triggersClassName={ADMIN_TAB_TRIGGERS_CLASS}
-        >
-          <TabsList>
-            <TabsTrigger value='apps'>Apps</TabsTrigger>
-            <TabsTrigger value='members'>Members</TabsTrigger>
-          </TabsList>
-        </Tabs>
+          onChange={setSection}
+          tabs={[
+            { value: 'apps', label: 'Apps' },
+            { value: 'members', label: 'Members' },
+          ]}
+        />
 
-        <div hidden={section !== 'apps'}>
-          <AppsTab apps={allApps} users={users} onSave={updateAppMetadata} />
-        </div>
-        {section === 'members' ? (
-          <MembersTab apps={allApps} users={users} isUsersLoading={usersQuery.isPending} />
-        ) : null}
+        <TabPanel value='apps' activeValue={section}>
+          <AppsTab
+            apps={allApps}
+            users={users}
+            isUsersLoading={usersQuery.isPending}
+            isUsersError={usersQuery.isError}
+            onSave={updateAppMetadata}
+          />
+        </TabPanel>
+        <TabPanel value='members' activeValue={section}>
+          {section === 'members' ? (
+            <MembersTab
+              apps={allApps}
+              users={users}
+              isUsersLoading={usersQuery.isPending}
+              isUsersError={usersQuery.isError}
+            />
+          ) : null}
+        </TabPanel>
       </div>
     </div>
   );

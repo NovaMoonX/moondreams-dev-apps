@@ -29,6 +29,8 @@
     "emulators:seed": "firebase emulators:exec --project moondreams-dev-apps --only auth,firestore,database,functions,storage \"npm run seed\"",
     "preemulators:seed:reset": "npm --prefix functions run build",
     "emulators:seed:reset": "firebase emulators:exec --project moondreams-dev-apps --only auth,firestore,database,functions,storage \"npm run seed:reset\"",
+    "check:apps": "tsx scripts/checkAppWiring.ts",
+    "prebuild": "npm run check:apps",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

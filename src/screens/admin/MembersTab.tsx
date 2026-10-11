@@ -18,9 +18,10 @@ interface MembersTabProps {
   apps: AppMetadata[];
   users: UserProfile[];
   isUsersLoading: boolean;
+  isUsersError: boolean;
 }
 
-function MembersTab({ apps, users, isUsersLoading }: MembersTabProps) {
+function MembersTab({ apps, users, isUsersLoading, isUsersError }: MembersTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const now = useNow(60_000);
@@ -29,7 +30,7 @@ function MembersTab({ apps, users, isUsersLoading }: MembersTabProps) {
 
   const sources = [...usageQueries, visitsQuery];
   const isLoading = isUsersLoading || sources.some((source) => source.isPending);
-  const hasError = sources.some((source) => source.isError);
+  const hasError = isUsersError || sources.some((source) => source.isError);
   const lastVisitByUid = new Map(
     (visitsQuery.data ?? []).map((visit) => [visit.uid, visit.lastVisitedAt]),
   );
@@ -71,7 +72,8 @@ function MembersTab({ apps, users, isUsersLoading }: MembersTabProps) {
   };
   const getEmptyText = () => {
     if (users.length > 0) return 'No members match that search.';
-    return isUsersLoading ? 'Loading members…' : 'No one has signed in yet.';
+    if (isUsersLoading) return 'Loading members…';
+    return isUsersError ? "We couldn't load members just now." : 'No one has signed in yet.';
   };
   const getAppsText = (count: number) => {
     if (isLoading || hasError) return '…';
