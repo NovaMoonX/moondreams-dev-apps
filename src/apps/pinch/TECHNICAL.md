@@ -50,12 +50,22 @@ Why nested under the `uid`: every rule is the same one-line path check, every li
 **Enums and constants** (fixed lists only the developer extends; option arrays are derived from `constants.ts` at render time, never redeclared):
 
 ```typescript
-export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
+export type MealType =
+  'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
 export type ItemKind = 'RECIPE' | 'INGREDIENT';
 export type Unit =
-  | 'G' | 'KG' | 'OZ' | 'LB'                        // mass
-  | 'ML' | 'L' | 'TSP' | 'TBSP' | 'CUP' | 'FL_OZ' | 'PINCH' // volume
-  | 'EACH';                                          // count
+  | 'G'
+  | 'KG'
+  | 'OZ'
+  | 'LB' // mass
+  | 'ML'
+  | 'L'
+  | 'TSP'
+  | 'TBSP'
+  | 'CUP'
+  | 'FL_OZ'
+  | 'PINCH' // volume
+  | 'EACH'; // count
 export type Dimension = 'MASS' | 'VOLUME' | 'COUNT';
 export type NutritionMetric = 'calories' | 'protein' | 'carbs' | 'fat';
 export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE';
@@ -64,47 +74,95 @@ export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 
 ```typescript
 // constants.ts (runtime values live here, never in types.ts)
-export const MEAL_TYPE_ORDER: MealType[] = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', 'DESSERT', 'DRINK'];
+export const MEAL_TYPE_ORDER: MealType[] = [
+  'BREAKFAST',
+  'LUNCH',
+  'DINNER',
+  'SNACK',
+  'DESSERT',
+  'DRINK',
+];
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  BREAKFAST: 'Breakfast', LUNCH: 'Lunch', DINNER: 'Dinner', SNACK: 'Snack', DESSERT: 'Dessert', DRINK: 'Drink',
+  BREAKFAST: 'Breakfast',
+  LUNCH: 'Lunch',
+  DINNER: 'Dinner',
+  SNACK: 'Snack',
+  DESSERT: 'Dessert',
+  DRINK: 'Drink',
 };
 export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
-  BREAKFAST: '🍳', LUNCH: '🥪', DINNER: '🍝', SNACK: '🍿', DESSERT: '🍰', DRINK: '🥤',
+  BREAKFAST: '🍳',
+  LUNCH: '🥪',
+  DINNER: '🍝',
+  SNACK: '🍿',
+  DESSERT: '🍰',
+  DRINK: '🥤',
 };
 export const UNIT_DIMENSION: Record<Unit, Dimension> = {
-  G: 'MASS', KG: 'MASS', OZ: 'MASS', LB: 'MASS',
-  ML: 'VOLUME', L: 'VOLUME', TSP: 'VOLUME', TBSP: 'VOLUME', CUP: 'VOLUME', FL_OZ: 'VOLUME', PINCH: 'VOLUME',
+  G: 'MASS',
+  KG: 'MASS',
+  OZ: 'MASS',
+  LB: 'MASS',
+  ML: 'VOLUME',
+  L: 'VOLUME',
+  TSP: 'VOLUME',
+  TBSP: 'VOLUME',
+  CUP: 'VOLUME',
+  FL_OZ: 'VOLUME',
+  PINCH: 'VOLUME',
   EACH: 'COUNT',
 };
-export const UNIT_TO_BASE: Record<Unit, number> = {   // grams for MASS, millilitres for VOLUME, 1 for COUNT
-  G: 1, KG: 1000, OZ: 28.3495, LB: 453.592,
-  ML: 1, L: 1000, TSP: 4.92892, TBSP: 14.7868, CUP: 236.588, FL_OZ: 29.5735, PINCH: 0.308,
+export const UNIT_TO_BASE: Record<Unit, number> = {
+  // grams for MASS, millilitres for VOLUME, 1 for COUNT
+  G: 1,
+  KG: 1000,
+  OZ: 28.3495,
+  LB: 453.592,
+  ML: 1,
+  L: 1000,
+  TSP: 4.92892,
+  TBSP: 14.7868,
+  CUP: 236.588,
+  FL_OZ: 29.5735,
+  PINCH: 0.308,
   EACH: 1,
 };
-export const UNIT_LABELS: Record<Unit, string> = { /* 'g', 'kg', 'oz', 'lb', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'fl oz', 'pinch', 'each' */ };
-export const NUTRITION_METRICS: NutritionMetric[] = ['calories', 'protein', 'carbs', 'fat'];
-export const WEEK_STARTS_ON = 1;                  // Monday
+export const UNIT_LABELS: Record<Unit, string> = {
+  /* 'g', 'kg', 'oz', 'lb', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'fl oz', 'pinch', 'each' */
+};
+export const NUTRITION_METRICS: NutritionMetric[] = [
+  'calories',
+  'protein',
+  'carbs',
+  'fat',
+];
+export const WEEK_STARTS_ON = 1; // Monday
 export const MAX_RECIPE_INGREDIENTS = 60;
 export const MAX_RECIPE_STEPS = 60;
 export const MAX_MEAL_ITEMS = 30;
-export const MAX_PASTE_CHARS = 20_000;            // text the AI reader accepts
+export const MAX_PASTE_CHARS = 20_000; // text the AI reader accepts
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // photo, screenshot or PDF
 export const MAX_COPIED_INGREDIENTS = 500;
-export const LIST_SEARCH_THRESHOLD = 8;           // a list gets a search from this many rows
+export const LIST_SEARCH_THRESHOLD = 8; // a list gets a search from this many rows
 export const MAX_DISMISSED_NUDGES = 500;
-export const MONTH_WINDOW_PADDING = 1;            // months loaded on each side of the one shown
+export const MONTH_WINDOW_PADDING = 1; // months loaded on each side of the one shown
 ```
 
 ### 1. `KitchenSettings` — `apps/pinch/kitchens/{uid}`
 
 ```typescript
-interface NutritionSwitches { calories: boolean; protein: boolean; carbs: boolean; fat: boolean }
+interface NutritionSwitches {
+  calories: boolean;
+  protein: boolean;
+  carbs: boolean;
+  fat: boolean;
+}
 
 interface KitchenSettings {
-  uid: string;                                  // immutable
-  showNutrition: NutritionSwitches;             // all false until switched on
-  dismissedNudges: Record<string, number>;      // "NO_PRODUCT:cat-soy-sauce" → dismissedAt (ms)
-  createdAt: number;                            // immutable
+  uid: string; // immutable
+  showNutrition: NutritionSwitches; // all false until switched on
+  dismissedNudges: Record<string, number>; // "NO_PRODUCT:cat-soy-sauce" → dismissedAt (ms)
+  createdAt: number; // immutable
   updatedAt: number;
 }
 ```
@@ -114,34 +172,45 @@ The document is created the first time the person changes a setting or dismisses
 ### 2. `IngredientRecord` — `…/ingredients/{id}`
 
 ```typescript
-interface NutritionValues { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+interface NutritionValues {
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+}
 
 interface IngredientRecord {
-  id: string;                                   // a generated id (custom) or the catalog id (an adjusted catalog ingredient)
-  catalogId: string | null;                     // immutable; null for a custom ingredient
-  name: string | null;                          // required for custom; null means "use the catalog name"
-  familyId: string | null;                      // a catalog family id (cat-fam-…) or a Family id; null = its own family
-  iconKey: string | null;                       // null = matched from the name, falling back to the jar
-  nutritionPer100g: NutritionValues | null;     // null = the catalog's values (or none, for custom)
-  servingAmount: number | null;                 // what "1 serving" of this ingredient is (null = catalog / 100 g)
+  id: string; // a generated id (custom) or the catalog id (an adjusted catalog ingredient)
+  catalogId: string | null; // immutable; null for a custom ingredient
+  name: string | null; // required for custom; null means "use the catalog name"
+  familyId: string | null; // a catalog family id (cat-fam-…) or a Family id; null = its own family
+  iconKey: string | null; // null = matched from the name, falling back to the jar
+  nutritionPer100g: NutritionValues | null; // null = the catalog's values (or none, for custom)
+  servingAmount: number | null; // what "1 serving" of this ingredient is (null = catalog / 100 g)
   servingUnit: Unit | null;
-  gramsPerMl: number | null;                    // density, bridges mass <-> volume (user-supplied; editing UI is Next Steps)
-  gramsEach: number | null;                     // weight of one, bridges mass <-> count (same)
+  gramsPerMl: number | null; // density, bridges mass <-> volume (user-supplied; editing UI is Next Steps)
+  gramsEach: number | null; // weight of one, bridges mass <-> count (same)
   defaultProductId: string | null;
   isArchived: boolean;
-  createdAt: number;                            // immutable
+  createdAt: number; // immutable
   updatedAt: number;
 }
 ```
 
-For a catalog ingredient the document id *is* the catalog id, so there is exactly one record per catalog ingredient and "upsert" is a plain `setDoc` with merge-free full shape on first write. For a custom ingredient the id is `generateUuid()`.
+For a catalog ingredient the document id _is_ the catalog id, so there is exactly one record per catalog ingredient and "upsert" is a plain `setDoc` with merge-free full shape on first write. For a custom ingredient the id is `generateUuid()`.
 
 **Resolved ingredient (client-only, never stored).** `resolveIngredient(id)` = catalog entry (if `cat-`) overlaid by the record: `name`, `familyId`, `nutritionPer100g`, serving and conversions each fall back to the catalog when the record's field is `null`. An id with neither a catalog entry nor a record resolves to a placeholder `"Removed ingredient"` so a dangling reference can never crash a screen.
 
 ### 3. `Family` — `…/families/{id}`
 
 ```typescript
-interface Family { id: string; name: string; isArchived: boolean; createdAt: number; updatedAt: number }
+interface Family {
+  id: string;
+  name: string;
+  isArchived: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
 ```
 
 Only the person's own families live here. Catalog families (`cat-fam-chicken`) are constants. A family is a grouping label with no data of its own and no parent.
@@ -152,8 +221,8 @@ Only the person's own families live here. Catalog families (`cat-fam-chicken`) a
 interface Store {
   id: string;
   name: string;
-  catalogStoreId: string | null;               // set when picked from the well-known list; immutable
-  imagePath: string | null;                    // Storage path of the person's own image
+  catalogStoreId: string | null; // set when picked from the well-known list; immutable
+  imagePath: string | null; // Storage path of the person's own image
   isArchived: boolean;
   createdAt: number;
   updatedAt: number;
@@ -167,13 +236,13 @@ A well-known store becomes a `Store` document the first time a product uses it, 
 ```typescript
 interface Product {
   id: string;
-  ingredientId: string;                        // immutable
+  ingredientId: string; // immutable
   storeId: string;
-  label: string | null;                        // "Great Value"
+  label: string | null; // "Great Value"
   priceCents: number;
-  sizeAmount: number;                          // > 0
+  sizeAmount: number; // > 0
   sizeUnit: Unit;
-  url: string | null;                          // https only
+  url: string | null; // https only
   isArchived: boolean;
   createdAt: number;
   updatedAt: number;
@@ -186,24 +255,24 @@ The default product is the ingredient's `defaultProductId`, not a flag on the pr
 
 ```typescript
 interface RecipeIngredient {
-  id: string;                                  // row id, so reorder/edit keys are stable
+  id: string; // row id, so reorder/edit keys are stable
   ingredientId: string;
-  amount: number;                              // > 0
+  amount: number; // > 0
   unit: Unit;
-  note: string | null;                         // "diced"
+  note: string | null; // "diced"
 }
 
 interface Recipe {
   id: string;
   title: string;
   description: string | null;
-  servings: number;                            // > 0, halves allowed
+  servings: number; // > 0, halves allowed
   prepMinutes: number | null;
   cookMinutes: number | null;
   coverPath: string | null;
-  ingredients: RecipeIngredient[];             // 1 … MAX_RECIPE_INGREDIENTS
-  steps: string[];                             // 0 … MAX_RECIPE_STEPS
-  nutritionOverride: NutritionValues | null;   // per serving; a null metric falls back to the derived value
+  ingredients: RecipeIngredient[]; // 1 … MAX_RECIPE_INGREDIENTS
+  steps: string[]; // 0 … MAX_RECIPE_STEPS
+  nutritionOverride: NutritionValues | null; // per serving; a null metric falls back to the derived value
   source: RecipeSource;
   isArchived: boolean;
   createdAt: number;
@@ -215,16 +284,16 @@ interface Recipe {
 
 ```typescript
 interface MealItem {
-  id: string;                                  // row id
+  id: string; // row id
   kind: ItemKind;
-  refId: string;                               // a recipe id or an ingredient id
-  servings: number;                            // > 0, halves allowed
+  refId: string; // a recipe id or an ingredient id
+  servings: number; // > 0, halves allowed
 }
 
 interface Meal {
   id: string;
   name: string;
-  items: MealItem[];                           // 1 … MAX_MEAL_ITEMS
+  items: MealItem[]; // 1 … MAX_MEAL_ITEMS
   isArchived: boolean;
   createdAt: number;
   updatedAt: number;
@@ -236,21 +305,21 @@ interface Meal {
 ```typescript
 interface PlannedSnapshot {
   frozenAt: number;
-  costCents: number | null;                    // null when nothing could be priced
-  leftOutCount: number;                        // distinct ingredients left out of the cost
-  nutrition: NutritionValues;                  // totals; a null metric = unknown
+  costCents: number | null; // null when nothing could be priced
+  leftOutCount: number; // distinct ingredients left out of the cost
+  nutrition: NutritionValues; // totals; a null metric = unknown
   lines: { itemId: string; costCents: number | null }[];
 }
 
 interface PlannedMeal {
   id: string;
-  date: number;                                // UTC midnight of the planned day (date-only)
+  date: number; // UTC midnight of the planned day (date-only)
   mealType: MealType;
-  name: string | null;                         // the saved meal's name when it came from one
-  sourceMealId: string | null;                 // set when copied from a saved meal; never read for display
-  items: MealItem[];                           // this day's own copy
-  refIds: string[];                            // every recipe and ingredient id in items, for the "in use" query
-  snapshot: PlannedSnapshot | null;            // write-once, set after the day has passed
+  name: string | null; // the saved meal's name when it came from one
+  sourceMealId: string | null; // set when copied from a saved meal; never read for display
+  items: MealItem[]; // this day's own copy
+  refIds: string[]; // every recipe and ingredient id in items, for the "in use" query
+  snapshot: PlannedSnapshot | null; // write-once, set after the day has passed
   createdAt: number;
   updatedAt: number;
 }
@@ -262,42 +331,49 @@ interface PlannedMeal {
 
 ```typescript
 interface CatalogIngredient {
-  id: string;                                  // 'cat-chicken-breast'
+  id: string; // 'cat-chicken-breast'
   name: string;
-  familyId: string | null;                     // 'cat-fam-chicken'
-  aliases: string[];                           // search + AI matching ("capsicum" for bell pepper)
+  familyId: string | null; // 'cat-fam-chicken'
+  aliases: string[]; // search + AI matching ("capsicum" for bell pepper)
   per100g: { calories: number; protein: number; carbs: number; fat: number };
-  serving: { amount: number; unit: Unit };     // a sensible "1 serving"
+  serving: { amount: number; unit: Unit }; // a sensible "1 serving"
   gramsPerMl: number | null;
   gramsEach: number | null;
   iconKey: string | null;
 }
-interface CatalogFamily { id: string; name: string }
-interface CatalogStore { id: string; name: string; domain: string }   // 'walmart.com'
+interface CatalogFamily {
+  id: string;
+  name: string;
+}
+interface CatalogStore {
+  id: string;
+  name: string;
+  domain: string;
+} // 'walmart.com'
 ```
 
 Files: `catalog/catalogIngredients.ts`, `catalog/catalogFamilies.ts`, `catalog/catalogStores.ts`, `catalog/index.ts` (lookup maps built once at module load). Values are generated by an author-time script (`scripts/catalog/buildCatalog.ts`) from USDA FoodData Central and checked in; the app never calls USDA at runtime. A search index (lowercased name + aliases) is built once per module. The catalog is a separate lazy chunk loaded with the Pinch route, so it never reaches other mini-apps.
 
 ### Derived values (never stored, except a past meal's snapshot)
 
-| Value | Computed from | Where |
-|---|---|---|
-| Resolved ingredient | catalog entry + `IngredientRecord` | `selectIngredientsById` |
-| Quantity in base units | `amount × UNIT_TO_BASE[unit]`, in the unit's dimension | `utils/quantity.ts` |
-| Bridged quantity | base units converted to another dimension via `gramsPerMl` (mass ↔ volume) or `gramsEach` (mass ↔ count); `null` when no bridge | `utils/quantity.ts` |
-| Ingredient unit cost | default (else first non-archived) product: `priceCents ÷ sizeInBase`, per base unit of the product's dimension | `utils/unitCost.ts` |
-| Line cost | recipe line amount bridged into the product's dimension × unit cost; otherwise a `NOT_COMPARABLE` gap; no product → `NO_PRODUCT` | `utils/recipeMath.ts` |
-| Recipe cost | sum of the priced lines; `{ totalCents, perServingCents, leftOut: Gap[] }` | `utils/recipeMath.ts` |
-| Recipe nutrition per serving | per metric: override if non-null, else sum of line grams × `per100g ÷ 100` ÷ servings; a line with no per-100 g value or no gram bridge adds a `NO_NUTRITION` gap for that metric | `utils/recipeMath.ts` |
-| Ingredient item per serving | serving size (record, else catalog, else 100 g) through the same bridge: cost and nutrition of one serving | `utils/mealMath.ts` |
-| Item cost | `servings ×` (recipe per-serving cost or ingredient per-serving cost) | `utils/mealMath.ts` |
-| Planned meal totals | sum of items; for a frozen meal, the snapshot instead | `utils/mealMath.ts` |
-| Day totals | planned meals for a day key | `selectDayTotals` |
-| Month stats | `{ spendCents, mealsPriced, avgPerMealCents, nutritionTotals, proteinPriceCentsPerGram, leftOut }` over the shown month | `selectMonthStats(monthKey)` |
-| Gaps | the union of left-out ingredients for a scope, minus dismissed ones | `utils/gaps.ts` |
-| Day key | `toDateInputValue(date)` for a stored date; `toLocalDateInputValue(cell.getTime())` for a Dreamer UI cell | `utils/dayKeys.ts` |
+| Value                        | Computed from                                                                                                                                                                     | Where                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Resolved ingredient          | catalog entry + `IngredientRecord`                                                                                                                                                | `selectIngredientsById`      |
+| Quantity in base units       | `amount × UNIT_TO_BASE[unit]`, in the unit's dimension                                                                                                                            | `utils/quantity.ts`          |
+| Bridged quantity             | base units converted to another dimension via `gramsPerMl` (mass ↔ volume) or `gramsEach` (mass ↔ count); `null` when no bridge                                                   | `utils/quantity.ts`          |
+| Ingredient unit cost         | default (else first non-archived) product: `priceCents ÷ sizeInBase`, per base unit of the product's dimension                                                                    | `utils/unitCost.ts`          |
+| Line cost                    | recipe line amount bridged into the product's dimension × unit cost; otherwise a `NOT_COMPARABLE` gap; no product → `NO_PRODUCT`                                                  | `utils/recipeMath.ts`        |
+| Recipe cost                  | sum of the priced lines; `{ totalCents, perServingCents, leftOut: Gap[] }`                                                                                                        | `utils/recipeMath.ts`        |
+| Recipe nutrition per serving | per metric: override if non-null, else sum of line grams × `per100g ÷ 100` ÷ servings; a line with no per-100 g value or no gram bridge adds a `NO_NUTRITION` gap for that metric | `utils/recipeMath.ts`        |
+| Ingredient item per serving  | serving size (record, else catalog, else 100 g) through the same bridge: cost and nutrition of one serving                                                                        | `utils/mealMath.ts`          |
+| Item cost                    | `servings ×` (recipe per-serving cost or ingredient per-serving cost)                                                                                                             | `utils/mealMath.ts`          |
+| Planned meal totals          | sum of items; for a frozen meal, the snapshot instead                                                                                                                             | `utils/mealMath.ts`          |
+| Day totals                   | planned meals for a day key                                                                                                                                                       | `selectDayTotals`            |
+| Month stats                  | `{ spendCents, mealsPriced, avgPerMealCents, nutritionTotals, proteinPriceCentsPerGram, leftOut }` over the shown month                                                           | `selectMonthStats(monthKey)` |
+| Gaps                         | the union of left-out ingredients for a scope, minus dismissed ones                                                                                                               | `utils/gaps.ts`              |
+| Day key                      | `toDateInputValue(date)` for a stored date; `toLocalDateInputValue(cell.getTime())` for a Dreamer UI cell                                                                         | `utils/dayKeys.ts`           |
 
-*Average per meal* divides month spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
+_Average per meal_ divides month spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. _Price per gram of protein_ divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
 
 ---
 
@@ -334,22 +410,22 @@ Per metric, independently. Ingredient values are per 100 g, so a line's grams (b
 
 ### 3. Copy-on-plan, edit semantics and the past
 
-| Action | Result |
-|---|---|
-| Plan a saved meal on a day | one `plannedMeals` document: items copied with new row ids, `sourceMealId` set, `name` set |
-| Plan a single recipe or ingredient | the same document with one item, `sourceMealId: null` |
-| Edit a saved meal | the `meals` document only; planned days unchanged |
-| Edit a planned meal | the planned document only (items, servings, date, type) |
-| "Save as a meal" on a planned meal | a new `meals` document from its items; the planned meal's `sourceMealId` is left as it was |
-| Edit a recipe | `recipes` document only; every non-frozen planned meal that points at it reads the new values |
-| Edit a price, serving size, nutrition or conversion | first `freezePastMeals`, then the write |
-| Day passes | its planned meals are frozen the next time the app loads that month (below) |
+| Action                                              | Result                                                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Plan a saved meal on a day                          | one `plannedMeals` document: items copied with new row ids, `sourceMealId` set, `name` set    |
+| Plan a single recipe or ingredient                  | the same document with one item, `sourceMealId: null`                                         |
+| Edit a saved meal                                   | the `meals` document only; planned days unchanged                                             |
+| Edit a planned meal                                 | the planned document only (items, servings, date, type)                                       |
+| "Save as a meal" on a planned meal                  | a new `meals` document from its items; the planned meal's `sourceMealId` is left as it was    |
+| Edit a recipe                                       | `recipes` document only; every non-frozen planned meal that points at it reads the new values |
+| Edit a price, serving size, nutrition or conversion | first `freezePastMeals`, then the write                                                       |
+| Day passes                                          | its planned meals are frozen the next time the app loads that month (below)                   |
 
 `freezePastMeals` runs in two places: once after the planned-meals window first loads, and as the first step of every action that changes a value the math reads (product price or size, recipe, ingredient record). It finds loaded planned meals with `snapshot === null` and `date < startOfTodayUTC`, computes each snapshot from the current data, and writes `snapshot` with a field-scoped `updateDoc` in one `writeBatch` (independent writes, no reads). The rule allows `snapshot` to change only from `null`, so a stale device can't overwrite history.
 
 A frozen meal still lists its items from the live recipes and ingredients (so a deleted-then-archived recipe still shows its title), but its totals come from the snapshot. A meal planned on a day that has already passed is frozen at once.
 
-*Honest limit:* a meal is frozen from the data on the first load after its day, not the data on the day itself. A price changed during a gap in use, in a month the window never loaded, can leak into history for meals that were never frozen. The freeze-before-edit step keeps this to meals older than the loaded window.
+_Honest limit:_ a meal is frozen from the data on the first load after its day, not the data on the day itself. A price changed during a gap in use, in a month the window never loaded, can leak into history for meals that were never frozen. The freeze-before-edit step keeps this to meals older than the loaded window.
 
 ### 3a. Archive on delete
 
@@ -381,7 +457,7 @@ The fill-in sheet takes the gap list and renders one row per ingredient with onl
 
 ```
 idle → reading(source) → draft(recipe, unread[]) → (person edits) → saved
-             │                                           
+             │
              └→ failed(message)    (always ends on idle for the next try; nothing was written)
 ```
 
@@ -396,12 +472,12 @@ idle → reading(source) → draft(recipe, unread[]) → (person edits) → save
 
 `utils/markdown/` has four builders — `recipeMarkdown`, `dayMarkdown`, `weekMarkdown`, `ingredientsMarkdown` — each a pure function of already-loaded data, built at the tap and copied through `copyToClipboard`. Rules, each decided field by field:
 
-| Copy | Included | Never included |
-|---|---|---|
-| Recipe | title, servings, times, ingredients with amounts, steps | prices, stores, products, nutrition overrides, cover |
-| Day | the date, each meal type heading, items with servings, the recipes' ingredient lists as nested bullets | prices, stores |
-| Week | seven day blocks, Monday to Sunday, in the same shape as a day | prices, stores |
-| Ingredients | names grouped by family, for "your ingredients" (custom + with a product + used in a recipe), capped at `MAX_COPIED_INGREDIENTS` ("and N more") | prices, stores, products, nutrition |
+| Copy        | Included                                                                                                                                        | Never included                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Recipe      | title, servings, times, ingredients with amounts, steps                                                                                         | prices, stores, products, nutrition overrides, cover |
+| Day         | the date, each meal type heading, items with servings, the recipes' ingredient lists as nested bullets                                          | prices, stores                                       |
+| Week        | seven day blocks, Monday to Sunday, in the same shape as a day                                                                                  | prices, stores                                       |
+| Ingredients | names grouped by family, for "your ingredients" (custom + with a product + used in a recipe), capped at `MAX_COPIED_INGREDIENTS` ("and N more") | prices, stores, products, nutrition                  |
 
 User text (titles, notes, store-less names) is escaped for Markdown, and a name that contains `@` is treated as a plain string and not linkified. The recipe format is also the one the AI reader reads back, so a copy-then-paste round trip fills the form.
 
@@ -414,7 +490,7 @@ The MVP data model leaves two things open on purpose: a future `stock` collectio
 ## Security Rules Design Criteria
 
 1. **Everything is owner-only.** Every path under `apps/pinch/kitchens/{uid}` (the kitchen document and all seven subcollections) allows read and write only when `request.auth.uid == uid`. There is no member-of, admin or role branch.
-2. **`isAdmin()` and `isDevUser()` get no access to kitchen data.** They gate only the app *catalog* document `apps/pinch`, as for every other app. A dev fixture signs in as its own `uid` like anyone else.
+2. **`isAdmin()` and `isDevUser()` get no access to kitchen data.** They gate only the app _catalog_ document `apps/pinch`, as for every other app. A dev fixture signs in as its own `uid` like anyone else.
 3. **The app document** `apps/pinch` follows the existing four-read-predicate shape (admin/dev, unrestricted-public, uid-allowed, email-allowed) with admin-only writes, in alphabetical position among the app blocks.
 4. **Shape validation covers every field on every type**, with the `T | null` convention (the key must exist; `null` is legal only where the type says so). Enums use `in [...]` against the same strings as `constants.ts`. Bounds: `priceCents` is an int `0 … 100_000_000`; `sizeAmount`, `amount` and `servings` are numbers `> 0` and `≤ 1_000_000`; nutrition values are null or numbers `0 … 100_000`; `gramsPerMl` and `gramsEach` are null or `> 0`; `date` is an int and a multiple of `86_400_000`; strings have length caps (names 120, titles 200, steps 2,000, notes 200); arrays are capped at `MAX_RECIPE_INGREDIENTS`, `MAX_RECIPE_STEPS`, `MAX_MEAL_ITEMS` and 200 `refIds` (rules can't walk a list, so the shape of each ingredient line, step and item is the client's to enforce; the rules cap the counts and everything around them); `url` is null or an `https://` string; `dismissedNudges` has at most 500 keys.
 5. **Immutable fields only:** `id`, `uid`, `createdAt`, an ingredient record's `catalogId`, a store's `catalogStoreId`, a product's `ingredientId`. Everything the UI edits stays editable, including a planned meal's `date`, `mealType` and `items`.
@@ -467,16 +543,49 @@ match /apps/pinch/kitchens/{uid} {
 Per-app store under `src/apps/pinch/store/`, exposing `PinchState` and `pinchReducer`, mounted in the central `src/store/index.ts` as `pinch` (next to `aList`, `nineLives` and `waypoint`).
 
 ```typescript
-interface SettingsState       { settings: KitchenSettings | null; isLoaded: boolean }
-interface IngredientsState    { records: IngredientRecord[];      isLoaded: boolean }
-interface FamiliesState       { items: Family[];                  isLoaded: boolean }
-interface StoresState         { items: Store[];                   isLoaded: boolean }
-interface ProductsState       { items: Product[];                 isLoaded: boolean }
-interface RecipesState        { items: Recipe[];                  isLoaded: boolean }
-interface MealsState          { items: Meal[];                    isLoaded: boolean }
-interface PlannedMealsState   { items: PlannedMeal[]; windowKey: string | null; isLoaded: boolean }
-export interface PinchState { settings: SettingsState; ingredients: IngredientsState; families: FamiliesState;
-  stores: StoresState; products: ProductsState; recipes: RecipesState; meals: MealsState; plannedMeals: PlannedMealsState }
+interface SettingsState {
+  settings: KitchenSettings | null;
+  isLoaded: boolean;
+}
+interface IngredientsState {
+  records: IngredientRecord[];
+  isLoaded: boolean;
+}
+interface FamiliesState {
+  items: Family[];
+  isLoaded: boolean;
+}
+interface StoresState {
+  items: Store[];
+  isLoaded: boolean;
+}
+interface ProductsState {
+  items: Product[];
+  isLoaded: boolean;
+}
+interface RecipesState {
+  items: Recipe[];
+  isLoaded: boolean;
+}
+interface MealsState {
+  items: Meal[];
+  isLoaded: boolean;
+}
+interface PlannedMealsState {
+  items: PlannedMeal[];
+  windowKey: string | null;
+  isLoaded: boolean;
+}
+export interface PinchState {
+  settings: SettingsState;
+  ingredients: IngredientsState;
+  families: FamiliesState;
+  stores: StoresState;
+  products: ProductsState;
+  recipes: RecipesState;
+  meals: MealsState;
+  plannedMeals: PlannedMealsState;
+}
 ```
 
 Every slice resets on the shared `resetAllState`, so a user switch never shows the previous person's data.
@@ -490,25 +599,25 @@ Every slice resets on the shared `resetAllState`, so a user switch never shows t
 
 **Actions (thunks)** in `store/actions/`, writing only to the person's own paths:
 
-| Action | Write |
-|---|---|
-| `saveSettings(fields)` / `dismissNudge(key)` | field-scoped `setDoc`/`updateDoc` with dotted paths (`showNutrition.protein`, `dismissedNudges.<key>`); creates the kitchen document on first write |
-| `saveIngredient(draft)` | `setDoc` of the record (custom: new id; catalog: id = catalog id) with the full shape; edits are field-scoped `updateDoc` |
-| `removeIngredient(id)` | the archive-or-delete check (Logic §3a) |
-| `saveFamily` / `removeFamily` | `setDoc` / archive-or-delete |
-| `saveStore(draft)` | `setDoc` to create, field-scoped `updateDoc` to edit; a catalog store is created lazily by `ensureCatalogStore(catalogStoreId)` (create-if-absent inside a `runTransaction`, so a double tap makes one); an uploaded image goes to Storage first, then `imagePath` is written |
-| `removeStore(id)` | archive when any product points at it, else delete + delete the image |
-| `saveProduct(draft)` | one `writeBatch`: the product document and, when it's the ingredient's first live product or "Make this the default" was chosen, the record's `defaultProductId` (an upsert for a catalog ingredient with no record); also clears the matching `dismissedNudges` keys; preceded by `freezePastMeals` |
-| `removeProduct(id)` | archive-or-delete; re-points `defaultProductId` to another live product or `null` in the same batch |
-| `setDefaultProduct(ingredientId, productId)` | field-scoped `updateDoc` of the record's `defaultProductId` (a transaction confirms the product still exists and isn't archived, so a stale device can't leave it dangling) |
-| `saveRecipe(draft)` | `setDoc`/field-scoped `updateDoc` of what the form owns (never the whole cached object); new custom ingredients from an AI draft are created in the same `writeBatch`; a cover goes to Storage first; preceded by `freezePastMeals` on an edit |
-| `removeRecipe(id)` | the archive-or-delete check |
-| `saveMeal(draft)` / `removeMeal(id)` | `setDoc`/`updateDoc`; meals are referenced only by `sourceMealId` (never read for display), so a meal is always deletable |
-| `planMeal({ date, mealType, items, name, sourceMealId })` | `setDoc` of a new planned meal with `refIds` derived; a past date is frozen in the same write |
-| `updatePlannedMeal(id, fields)` | field-scoped `updateDoc` of what the builder owns (`date`, `mealType`, `items`, `refIds`, `name`) |
-| `removePlannedMeal(id)` | `deleteDoc` after `useActionModal().confirm({ destructive: true })` |
-| `savePlannedAsMeal(plannedId, name)` | `setDoc` of a new meal from the planned meal's items; reads the planned meal from the store at tap time |
-| `freezePastMeals()` | one `writeBatch` of field-scoped `snapshot` writes for loaded, unfrozen past meals |
+| Action                                                    | Write                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `saveSettings(fields)` / `dismissNudge(key)`              | field-scoped `setDoc`/`updateDoc` with dotted paths (`showNutrition.protein`, `dismissedNudges.<key>`); creates the kitchen document on first write                                                                                                                                                  |
+| `saveIngredient(draft)`                                   | `setDoc` of the record (custom: new id; catalog: id = catalog id) with the full shape; edits are field-scoped `updateDoc`                                                                                                                                                                            |
+| `removeIngredient(id)`                                    | the archive-or-delete check (Logic §3a)                                                                                                                                                                                                                                                              |
+| `saveFamily` / `removeFamily`                             | `setDoc` / archive-or-delete                                                                                                                                                                                                                                                                         |
+| `saveStore(draft)`                                        | `setDoc` to create, field-scoped `updateDoc` to edit; a catalog store is created lazily by `ensureCatalogStore(catalogStoreId)` (create-if-absent inside a `runTransaction`, so a double tap makes one); an uploaded image goes to Storage first, then `imagePath` is written                        |
+| `removeStore(id)`                                         | archive when any product points at it, else delete + delete the image                                                                                                                                                                                                                                |
+| `saveProduct(draft)`                                      | one `writeBatch`: the product document and, when it's the ingredient's first live product or "Make this the default" was chosen, the record's `defaultProductId` (an upsert for a catalog ingredient with no record); also clears the matching `dismissedNudges` keys; preceded by `freezePastMeals` |
+| `removeProduct(id)`                                       | archive-or-delete; re-points `defaultProductId` to another live product or `null` in the same batch                                                                                                                                                                                                  |
+| `setDefaultProduct(ingredientId, productId)`              | field-scoped `updateDoc` of the record's `defaultProductId` (a transaction confirms the product still exists and isn't archived, so a stale device can't leave it dangling)                                                                                                                          |
+| `saveRecipe(draft)`                                       | `setDoc`/field-scoped `updateDoc` of what the form owns (never the whole cached object); new custom ingredients from an AI draft are created in the same `writeBatch`; a cover goes to Storage first; preceded by `freezePastMeals` on an edit                                                       |
+| `removeRecipe(id)`                                        | the archive-or-delete check                                                                                                                                                                                                                                                                          |
+| `saveMeal(draft)` / `removeMeal(id)`                      | `setDoc`/`updateDoc`; meals are referenced only by `sourceMealId` (never read for display), so a meal is always deletable                                                                                                                                                                            |
+| `planMeal({ date, mealType, items, name, sourceMealId })` | `setDoc` of a new planned meal with `refIds` derived; a past date is frozen in the same write                                                                                                                                                                                                        |
+| `updatePlannedMeal(id, fields)`                           | field-scoped `updateDoc` of what the builder owns (`date`, `mealType`, `items`, `refIds`, `name`)                                                                                                                                                                                                    |
+| `removePlannedMeal(id)`                                   | `deleteDoc` after `useActionModal().confirm({ destructive: true })`                                                                                                                                                                                                                                  |
+| `savePlannedAsMeal(plannedId, name)`                      | `setDoc` of a new meal from the planned meal's items; reads the planned meal from the store at tap time                                                                                                                                                                                              |
+| `freezePastMeals()`                                       | one `writeBatch` of field-scoped `snapshot` writes for loaded, unfrozen past meals                                                                                                                                                                                                                   |
 
 No cached document is ever written back whole. There is no cross-person concurrency, and the few create-if-absent cases above are the only transactions.
 

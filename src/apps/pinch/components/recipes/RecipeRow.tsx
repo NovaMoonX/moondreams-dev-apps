@@ -1,8 +1,9 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { formatCents } from '@/utils/moneyUtils';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
-import type { Recipe } from '@apps/pinch/types';
+import type { Recipe, RecipeCost } from '@apps/pinch/types';
 import {
   formatMinutes,
   formatServings,
@@ -11,14 +12,18 @@ import {
 
 interface RecipeRowProps {
   recipe: Recipe;
+  cost: RecipeCost | undefined;
   onOpen: (id: string) => void;
 }
 
-function RecipeRow({ recipe, onOpen }: RecipeRowProps) {
+function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
   const total = getTotalMinutes(recipe);
   const detail = [
     formatServings(recipe.servings),
     total === null ? null : formatMinutes(total),
+    cost?.perServingCents == null
+      ? null
+      : `${formatCents(Math.round(cost.perServingCents))} / serving`,
   ]
     .filter(Boolean)
     .join(' · ');

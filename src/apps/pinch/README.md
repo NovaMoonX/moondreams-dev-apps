@@ -52,7 +52,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ### Ingredients, Variants, and Products, In Detail
 
 - **An ingredient is anything you buy.** Chicken breast, paprika, a bag of Doritos.
-- **Three layers, kept separate.** A *family* groups related ingredients (Chicken). An *ingredient* is the specific thing recipes and meals use (Chicken breast). A *product* is what you actually buy (Chicken breast, Walmart, $9.48 for 3 lb).
+- **Three layers, kept separate.** A _family_ groups related ingredients (Chicken). An _ingredient_ is the specific thing recipes and meals use (Chicken breast). A _product_ is what you actually buy (Chicken breast, Walmart, $9.48 for 3 lb).
 - **Recipes only ever name the ingredient.** A recipe says "chicken breast", never "Walmart chicken breast", so the same recipe works wherever you shop and reads correctly if it's ever shared. Products feed your own numbers.
 - **Prices live on products.** A product's price and size give an ingredient its cost per unit, and that rolls up into recipe cost, meal cost, and the calendar totals.
 - **One level of grouping, on purpose.** Families don't nest, so the catalog can grow to hundreds of ingredients without becoming a tree to maintain.
@@ -97,6 +97,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ## The Build Plan
 
 ### Core MVP
+
 - [x] Browse and search a ready-made catalog of everyday ingredients and seasonings, grouped into families, each with an icon and built-in nutrition
 - [x] Add, edit, and delete your own ingredients, including ready-to-eat foods, as a new family or a variant of an existing one
 - [x] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
@@ -104,7 +105,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Enter or adjust nutrition on any ingredient
 - [x] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
 - [ ] See a recipe's nutrition added up from its ingredients, or type your own over it
-- [ ] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
+- [x] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
 - [ ] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
 - [ ] Copy a recipe as Markdown
 - [ ] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
@@ -116,6 +117,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [ ] Copy a day's or week's plan, and your list of ingredients, as Markdown
 
 ### Next Steps
+
 - [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"
 - [ ] Mark a meal as made: its ingredients come out of your stock, and a batch adds prepared servings you can plan meals from
 - [ ] Shopping list built from the meals you've planned, with a section for low-stock ingredients and totals from your products, grouped by store
@@ -133,6 +135,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [ ] Cook mode: one step at a time with a keep-awake screen
 
 ### Stretch Goals
+
 - [ ] Hands-free voice navigation in cook mode
 - [ ] Look up a product by barcode
 - [ ] Price history for a product over time

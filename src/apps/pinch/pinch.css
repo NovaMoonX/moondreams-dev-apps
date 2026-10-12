@@ -61,11 +61,17 @@ html.pinch-theme
     [class*='pl-'],
     [class*='ps-']
   ),
-html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='border']:not([class*='pl-']) {
+html.pinch-theme
+  button[class*='justify-between'][class*='w-full'][class*='border']:not(
+    [class*='pl-']
+  ) {
   padding-inline: 1rem;
 }
 
-html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='border'][class*='py-1']:not([class*='pl-']) {
+html.pinch-theme
+  button[class*='justify-between'][class*='w-full'][class*='border'][class*='py-1']:not(
+    [class*='pl-']
+  ) {
   padding-inline: 0.75rem;
 }
 
@@ -76,13 +82,20 @@ html.pinch-theme [data-pill] {
 }
 
 html.pinch-theme [data-pill][aria-pressed='true'] {
-  background-color: color-mix(in oklab, var(--color-primary) 18%, var(--color-secondary));
+  background-color: color-mix(
+    in oklab,
+    var(--color-primary) 18%,
+    var(--color-secondary)
+  );
   color: var(--color-foreground);
   box-shadow: inset 0 0 0 1.5px var(--color-primary);
 }
 
 /* A tertiary button is a row or a quiet action, not a link: its text stays the normal text color so
    a screen of tappable rows isn't a screen of orange. Anything that sets its own color with `!` wins, and a link-variant button (underline on hover) stays orange. */
-html.pinch-theme button.text-primary:not(:disabled):not([class*='bg-']):not([class*='border-primary']):not([class*='underline-offset']) {
+html.pinch-theme
+  button.text-primary:not(:disabled):not([class*='bg-']):not(
+    [class*='border-primary']
+  ):not([class*='underline-offset']) {
   color: var(--color-foreground);
 }

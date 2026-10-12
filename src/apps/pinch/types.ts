@@ -98,6 +98,7 @@ export interface ResolvedFamily {
 }
 
 export type KitchenView = 'yours' | 'all';
+export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE';
 export type RecipesView = 'recipes' | 'meals';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
@@ -169,4 +170,25 @@ export interface Recipe {
   source: RecipeSource;
   createdAt: number;
   updatedAt: number;
+}
+
+/** What leaves a number short: an ingredient with no product to price it, or an amount that can't be compared with its package size. */
+export interface Gap {
+  kind: GapKind;
+  ingredientId: string;
+}
+
+export interface LineCost {
+  /** Unrounded cents, or null when the line couldn't be priced. */
+  cents: number | null;
+  gap: Gap | null;
+}
+
+export interface RecipeCost {
+  /** Unrounded cents of the lines that could be priced; null when none could. */
+  totalCents: number | null;
+  perServingCents: number | null;
+  /** One entry per ingredient and kind that is missing from the total. */
+  leftOut: Gap[];
+  lines: Map<string, LineCost>;
 }

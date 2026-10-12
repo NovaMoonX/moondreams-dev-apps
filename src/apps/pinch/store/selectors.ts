@@ -3,6 +3,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import type { Product, ResolvedFamily } from '@apps/pinch/types';
+import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
@@ -141,4 +142,16 @@ export const selectRecipes = createSelector([selectRecipeItems], (recipes) =>
 export const selectRecipesById = createSelector(
   [selectRecipes],
   (recipes) => new Map(recipes.map((recipe) => [recipe.id, recipe])),
+);
+
+/** Every recipe's cost, computed once per change of recipes, ingredients or products. */
+export const selectRecipeCosts = createSelector(
+  [selectRecipes, selectIngredientsById, selectDefaultProducts],
+  (recipes, ingredientsById, defaultProducts) =>
+    new Map(
+      recipes.map((recipe) => [
+        recipe.id,
+        getRecipeCost(recipe, ingredientsById, defaultProducts),
+      ]),
+    ),
 );

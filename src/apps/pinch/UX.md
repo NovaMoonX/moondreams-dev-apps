@@ -1,21 +1,20 @@
 # Pinch — UX & Interaction Design
 
-*All names, dates and dollar amounts in the diagrams are illustrative.*
+_All names, dates and dollar amounts in the diagrams are illustrative._
 
 ## Design Principles
 
-| Principle | Means |
-|---|---|
-| One border, not nested ones | a card gets a single bordered shell with a flat interior — never border-in-a-border; groups inside a screen are separated with `SectionDivider` or spacing |
-| Phone first | one narrow column with a three-item bottom bar — Calendar · **Recipes** · Kitchen, Recipes in the middle and raised; wider screens reflow the same components, no parallel desktop layout |
-| The counter, not a form | Pinch asks for a name and little else. A price, a package size or a nutrition value is invited by a quiet line exactly where it changes a number, and always optional |
+| Principle                                                  | Means                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One border, not nested ones                                | a card gets a single bordered shell with a flat interior — never border-in-a-border; groups inside a screen are separated with `SectionDivider` or spacing                                                                                              |
+| Phone first                                                | one narrow column with a three-item bottom bar — Calendar · **Recipes** · Kitchen, Recipes in the middle and raised; wider screens reflow the same components, no parallel desktop layout                                                               |
+| The counter, not a form                                    | Pinch asks for a name and little else. A price, a package size or a nutrition value is invited by a quiet line exactly where it changes a number, and always optional                                                                                   |
 | Drawers for looking and quick edits, subviews for building | an ingredient, a day, a planned meal and a recipe's detail open in `DetailSheet` drawers; a recipe, a meal and the stores and products lists are page-sized and open as `Subview`s; short forms (ingredient, product, store, settings) are `FormSheet`s |
-| Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
-| Numbers explain themselves | a cost with gaps says what it leaves out ("$14.20 · leaves out 2 ingredients"); a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen |
-| Nothing leaves without saying what | every copy-to-Markdown opens a small sheet that previews the text and states what is and isn't included |
-| Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge`, `CopyButton` — custom only where the catalog has nothing: the meal-bar cell and the store logo tile |
-| Honest AI | an AI reads a pasted recipe, photo or PDF and fills the real form; it names what it couldn't read; nothing is saved until the person confirms |
-
+| Never overlay on overlay                                   | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top                                               |
+| Numbers explain themselves                                 | a cost with gaps says what it leaves out ("$14.20 · leaves out 2 ingredients"); a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen                                                                                    |
+| Nothing leaves without saying what                         | every copy-to-Markdown opens a small sheet that previews the text and states what is and isn't included                                                                                                                                                 |
+| Dreamer UI first                                           | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge`, `CopyButton` — custom only where the catalog has nothing: the meal-bar cell and the store logo tile                                                                       |
+| Honest AI                                                  | an AI reads a pasted recipe, photo or PDF and fills the real form; it names what it couldn't read; nothing is saved until the person confirms                                                                                                           |
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
@@ -30,7 +29,8 @@ block-beta
   style N3 fill:transparent,stroke:#888888,stroke-width:1px;
   style N4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Honest caveats: (1) Dreamer UI's `Calendar` hands `renderCell` only the date (a local-midnight `Date`) and no month-change callback, so each cell's meal bars come from a day-keyed lookup built up front, not a per-cell query. (2) A cell that holds up to three bars plus a "+N" is taller than Dreamer UI's default square; like A-List's poster cells it needs `cellClassName` and `monthGridClassName` overrides, which the TDD flags as a first spike. (3) Store logos come from a third-party logo service and can be missing, so every logo tile has a letter fallback.*
+
+_Honest caveats: (1) Dreamer UI's `Calendar` hands `renderCell` only the date (a local-midnight `Date`) and no month-change callback, so each cell's meal bars come from a day-keyed lookup built up front, not a per-cell query. (2) A cell that holds up to three bars plus a "+N" is taller than Dreamer UI's default square; like A-List's poster cells it needs `cellClassName` and `monthGridClassName` overrides, which the TDD flags as a first spike. (3) Store logos come from a third-party logo service and can be missing, so every logo tile has a letter fallback._
 
 ## Sitemap
 
@@ -79,11 +79,12 @@ flowchart TD
     D2 -.->|nudge| FI
     style Bar fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A nudge is a line, not a destination: wherever a number leaves something out, the line offers the same short fill-in sheet, and closing the line keeps it away for that ingredient. Every gap lives only in the screen where it changes a number.*
+
+_A nudge is a line, not a destination: wherever a number leaves something out, the line offers the same short fill-in sheet, and closing the line keeps it away for that ingredient. Every gap lives only in the screen where it changes a number._
 
 ## Screens
 
-*The persistent shell, shown once and left out of the screens below:*
+_The persistent shell, shown once and left out of the screens below:_
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
@@ -96,7 +97,8 @@ block-beta
   style B2 fill:transparent,stroke:#888888,stroke-width:3px;
   style B3 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Recipes sits in the middle, wider and raised so it reads as home base for everything you cook; the app opens to Calendar, the left tab. The active tab takes the orange accent. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
+
+_Recipes sits in the middle, wider and raised so it reads as home base for everything you cook; the app opens to Calendar, the left tab. The active tab takes the orange accent. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab._
 
 **First launch — Calendar, empty** (no setup steps: Pinch is usable the moment it opens)
 
@@ -117,7 +119,8 @@ block-beta
   style F5 fill:transparent,stroke:#888888,stroke-width:1px;
   style F6 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two nudges and nothing else: no setup modal, no required choices. Nutrition stays off until the person turns it on in settings; the stats row's help link ("Want calories or protein here?") opens the same settings sheet.*
+
+_Two nudges and nothing else: no setup modal, no required choices. Nutrition stays off until the person turns it on in settings; the stats row's help link ("Want calories or protein here?") opens the same settings sheet._
 
 **Calendar** (home tab)
 
@@ -176,14 +179,15 @@ block-beta
   style C24 fill:transparent,stroke:#888888,stroke-width:1px;
   style C25 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Month view, drawn Monday-first (the first Calendar issue checks whether Dreamer UI's `Calendar` can start the week on Monday; if not, the grid starts on Sunday and Monday–Sunday applies to week copies and the "Since" math only). Each planned meal is one thin bar in its meal-type colour with its emoji (🍳 breakfast, 🥪 lunch, 🍝 dinner, 🍿 snack, 🍰 dessert, 🥤 drink); a cell shows up to three and a "+N" for the rest. Today takes the accent on its number and the selected day a ring. Past days read exactly as they were that day. The stats row sits above the month and covers the month shown: spend and average cost per meal always, price per gram of protein when protein is on, and a single compact line of daily averages for each nutrition metric that is on. Tapping the row opens the breakdown, and tapping a day opens its drawer (below). On a computer, hovering a day opens a peek popover with the same content as its drawer; on a phone, tapping opens the drawer.*
 
-| Cell contents | What `renderCell` draws |
-|---|---|
-| no meals | the date number only |
-| 1–3 meals | one bar per meal in time-of-day order (meal type order), emoji at the start of each bar |
-| 4+ meals | the first three bars and a small "+N" |
-| past day with a meal that was never marked made | shown the same; marking made arrives with stock tracking |
+_Month view, drawn Monday-first (the first Calendar issue checks whether Dreamer UI's `Calendar` can start the week on Monday; if not, the grid starts on Sunday and Monday–Sunday applies to week copies and the "Since" math only). Each planned meal is one thin bar in its meal-type colour with its emoji (🍳 breakfast, 🥪 lunch, 🍝 dinner, 🍿 snack, 🍰 dessert, 🥤 drink); a cell shows up to three and a "+N" for the rest. Today takes the accent on its number and the selected day a ring. Past days read exactly as they were that day. The stats row sits above the month and covers the month shown: spend and average cost per meal always, price per gram of protein when protein is on, and a single compact line of daily averages for each nutrition metric that is on. Tapping the row opens the breakdown, and tapping a day opens its drawer (below). On a computer, hovering a day opens a peek popover with the same content as its drawer; on a phone, tapping opens the drawer._
+
+| Cell contents                                   | What `renderCell` draws                                                                 |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| no meals                                        | the date number only                                                                    |
+| 1–3 meals                                       | one bar per meal in time-of-day order (meal type order), emoji at the start of each bar |
+| 4+ meals                                        | the first three bars and a small "+N"                                                   |
+| past day with a meal that was never marked made | shown the same; marking made arrives with stock tracking                                |
 
 **Day drawer** (tap a day; swaps in place to a planned meal)
 
@@ -216,7 +220,8 @@ block-beta
   style D11 fill:transparent,stroke:#888888,stroke-width:1px;
   style D12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. A past day shows a muted "Prices as they were that day" line under the title.*
+
+_Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. A past day shows a muted "Prices as they were that day" line under the title._
 
 **Planned meal** (tap a meal in the day drawer; swaps in place with "‹ Back")
 
@@ -249,7 +254,8 @@ block-beta
   style P11 fill:transparent,stroke:#888888,stroke-width:1px;
   style P12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Totals for the meal and, when nutrition is on, per-serving values sit under the items. "Change items or servings" closes the drawer and opens the Plan a meal subview; "Remove from this day" is last, in red, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button.*
+
+_Totals for the meal and, when nutrition is on, per-serving values sit under the items. "Change items or servings" closes the drawer and opens the Plan a meal subview; "Remove from this day" is last, in red, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button._
 
 **Plan a meal** (subview; also the editor for an already planned meal)
 
@@ -294,7 +300,8 @@ block-beta
   style M17 fill:transparent,stroke:#888888,stroke-width:1px;
   style M18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a `PickOrCreate` row: a dashed "New" pill first, then saved meals, nothing preselected; picking one copies its items onto the day. The search finds recipes, saved meals and ingredients in one list with a small kind label on each result; a picked recipe or ingredient joins the plate with one serving, and a picked saved meal adds its items. Each row has its own serving stepper (halves allowed) and a remove control. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
+
+_Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a `PickOrCreate` row: a dashed "New" pill first, then saved meals, nothing preselected; picking one copies its items onto the day. The search finds recipes, saved meals and ingredients in one list with a small kind label on each result; a picked recipe or ingredient joins the plate with one serving, and a picked saved meal adds its items. Each row has its own serving stepper (halves allowed) and a remove control. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row._
 
 **Recipes tab**
 
@@ -323,7 +330,8 @@ block-beta
   style R9 fill:transparent,stroke:#888888,stroke-width:1px;
   style R10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two thin pills switch between Recipes and Meals (saved meals). A recipe row shows its cover (or a tinted emoji tile), title, cost per serving, and a muted line of servings and time, with nutrition per serving when it is on. A recipe with an unpriced ingredient shows the cost it can stand behind and a muted "leaves out 1" beside it. A meal row shows its items as a comma line and the total.*
+
+_Two thin pills switch between Recipes and Meals (saved meals). A recipe row shows its cover (or a tinted emoji tile), title, cost per serving, and a muted line of servings and time, with nutrition per serving when it is on. A recipe with an unpriced ingredient shows the cost it can stand behind and a muted "leaves out 1" beside it. A meal row shows its items as a comma line and the total._
 
 **Recipe** (subview — create and edit)
 
@@ -364,15 +372,16 @@ block-beta
   style E15 fill:transparent,stroke:#888888,stroke-width:1px;
   style E16 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A recipe needs a title and at least one ingredient. Servings is a visible question because cost and nutrition per serving depend on it. Upload and Paste sit at the top: either one fills the real fields, shows what it couldn't read ("We couldn't read: cook time. Add that below."), and leaves everything editable before Save; an unknown ingredient arrives as "Add as new ingredient" on its row. The ingredient search is the same picker the meal builder uses, with a "New ingredient" entry at the end. Everything past ingredients is a "+ Add X" chip with a remove, and "My own nutrition" appears whether or not nutrition is on, since the numbers still count when it's switched on later. This is a page-sized form, so it is a Subview, not a modal.*
 
-| Upload / Paste state | What you see |
-|---|---|
-| idle | the two quiet rows above the title |
-| reading | "Reading {file}…" with the row disabled |
-| done | "Filled in from {file}. Take a look before you save." plus a "We couldn't read: …" line when something was missed |
-| failed | one warm sentence ("We couldn't read that right now. Try a clearer photo or a PDF, or fill it in below."), details logged, never the service's message |
-| too big | "That file is too big to read. Try a photo or a PDF under 10 MB." |
+_A recipe needs a title and at least one ingredient. Servings is a visible question because cost and nutrition per serving depend on it. Upload and Paste sit at the top: either one fills the real fields, shows what it couldn't read ("We couldn't read: cook time. Add that below."), and leaves everything editable before Save; an unknown ingredient arrives as "Add as new ingredient" on its row. The ingredient search is the same picker the meal builder uses, with a "New ingredient" entry at the end. Everything past ingredients is a "+ Add X" chip with a remove, and "My own nutrition" appears whether or not nutrition is on, since the numbers still count when it's switched on later. This is a page-sized form, so it is a Subview, not a modal._
+
+| Upload / Paste state | What you see                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| idle                 | the two quiet rows above the title                                                                                                                     |
+| reading              | "Reading {file}…" with the row disabled                                                                                                                |
+| done                 | "Filled in from {file}. Take a look before you save." plus a "We couldn't read: …" line when something was missed                                      |
+| failed               | one warm sentence ("We couldn't read that right now. Try a clearer photo or a PDF, or fill it in below."), details logged, never the service's message |
+| too big              | "That file is too big to read. Try a photo or a PDF under 10 MB."                                                                                      |
 
 **Recipe details** (drawer — tap a recipe in the list)
 
@@ -409,7 +418,8 @@ block-beta
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
   style T14 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add to calendar" is the one primary button; it closes the drawer and opens Plan a meal with this recipe on the plate. Modify, Copy and Delete sit in one muted block, Delete last in red (deleting a recipe used on planned days archives it and says so in the confirm). The nudge line is where a gap meets a number; ✕ closes it for these ingredients.*
+
+_"Add to calendar" is the one primary button; it closes the drawer and opens Plan a meal with this recipe on the plate. Modify, Copy and Delete sit in one muted block, Delete last in red (deleting a recipe used on planned days archives it and says so in the confirm). The nudge line is where a gap meets a number; ✕ closes it for these ingredients._
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with the items and servings, total cost, per-serving nutrition when on, and one primary "Plan it" that closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. Copy and Delete sit in the muted block.
 
@@ -448,7 +458,8 @@ block-beta
   style K13 fill:transparent,stroke:#888888,stroke-width:1px;
   style K14 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes use; All is the full catalog. Families are `SectionDivider` groups. A row shows the icon, name and the default product's store, price and size, or a muted "No product yet". The 📋 icon opens the copy sheet for your ingredient list. Stores and Products are entry rows that open subviews; later Kitchen entries (Stock, Prepared servings, Shopping list) join them.*
+
+_Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes use; All is the full catalog. Families are `SectionDivider` groups. A row shows the icon, name and the default product's store, price and size, or a muted "No product yet". The 📋 icon opens the copy sheet for your ingredient list. Stores and Products are entry rows that open subviews; later Kitchen entries (Stock, Prepared servings, Shopping list) join them._
 
 **Ingredient details** (drawer)
 
@@ -479,7 +490,8 @@ block-beta
   style I10 fill:transparent,stroke:#888888,stroke-width:1px;
   style I11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. "Used in" lists recipe titles. Deleting an ingredient that is in use archives it and the confirm says what happens to its recipes and days.*
+
+_"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. "Used in" lists recipe titles. Deleting an ingredient that is in use archives it and the confirm says what happens to its recipes and days._
 
 **Product** (form sheet)
 
@@ -514,7 +526,8 @@ block-beta
   style PR12 fill:transparent,stroke:#888888,stroke-width:1px;
   style PR13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The store question comes first because the price and size are about that shop. The store row is a `PickOrCreate`: a dashed "New store" pill first, then your stores as logo pills, with "Show all" opening the well-known list inside the same row (capped height, a search past 12). A well-known store joins "your stores" the first time a product uses it. Price and size are two short fields side by side; the size field takes an amount and a unit. Label ("Great Value") and a link are "+ Add X" chips. The first product on an ingredient is made the default without asking, and "Make this the default" appears from the second.*
+
+_The store question comes first because the price and size are about that shop. The store row is a `PickOrCreate`: a dashed "New store" pill first, then your stores as logo pills, with "Show all" opening the well-known list inside the same row (capped height, a search past 12). A well-known store joins "your stores" the first time a product uses it. Price and size are two short fields side by side; the size field takes an amount and a unit. Label ("Great Value") and a link are "+ Add X" chips. The first product on an ingredient is made the default without asking, and "Make this the default" appears from the second._
 
 **Stores** (subview) and **Store** (form sheet)
 
@@ -541,6 +554,7 @@ block-beta
   style S8 fill:transparent,stroke:#888888,stroke-width:1px;
   style S9 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
+
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
@@ -568,7 +582,8 @@ block-beta
   style SF10 fill:transparent,stroke:#888888,stroke-width:1px;
   style SF11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The list shows each store's logo in a round tile with a letter tile as the fallback. A well-known store is picked from the list; "Can't find it? Add your own" reveals a name and an image field (`PhotoPicker`), and a store with no image gets a letter tile in a soft tint. Removing a store that has products asks first and keeps those products, with their store shown as "Removed store". The Products subview lists every product grouped by store with its ingredient, price and size, searchable from 8.*
+
+_The list shows each store's logo in a round tile with a letter tile as the fallback. A well-known store is picked from the list; "Can't find it? Add your own" reveals a name and an image field (`PhotoPicker`), and a store with no image gets a letter tile in a soft tint. Removing a store that has products asks first and keeps those products, with their store shown as "Removed store". The Products subview lists every product grouped by store with its ingredient, price and size, searchable from 8._
 
 **Nudge and fill-in** (the quiet line, and the sheet it opens)
 
@@ -597,14 +612,15 @@ block-beta
   style G9 fill:transparent,stroke:#888888,stroke-width:1px;
   style G10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Save" is always available, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe drawer, the meal builder, the calendar stats row and an ingredient's row ("No price yet").*
 
-| Where the gap shows | Nudge wording | What the fill-in sheet asks |
-|---|---|---|
-| a recipe, meal or day cost | "2 ingredients need a price · Add prices" | price and package size for each |
+_One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Save" is always available, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe drawer, the meal builder, the calendar stats row and an ingredient's row ("No price yet")._
+
+| Where the gap shows           | Nudge wording                                                     | What the fill-in sheet asks           |
+| ----------------------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| a recipe, meal or day cost    | "2 ingredients need a price · Add prices"                         | price and package size for each       |
 | a cost that can't be compared | "Rice vinegar: Pinch can't compare cups to a bottle · Add a size" | the package size in a comparable unit |
-| a nutrition metric that is on | "3 ingredients have no protein · Add values" | the missing metric for each |
-| the stats row | "leaves out 2 items · Add prices" | the same sheet, covering the month |
+| a nutrition metric that is on | "3 ingredients have no protein · Add values"                      | the missing metric for each           |
+| the stats row                 | "leaves out 2 items · Add prices"                                 | the same sheet, covering the month    |
 
 **Settings** (form sheet from the Calendar gear)
 
@@ -635,7 +651,8 @@ block-beta
   style ST10 fill:transparent,stroke:#888888,stroke-width:1px;
   style ST11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Switches take effect immediately, so they are `AppToggle`s, not checkboxes. Nutrition is always stored; the switches only choose what is shown.*
+
+_Switches take effect immediately, so they are `AppToggle`s, not checkboxes. Nutrition is always stored; the switches only choose what is shown._
 
 **Copy** (sheet used by every copy action)
 
@@ -652,7 +669,8 @@ block-beta
   style CP3 fill:transparent,stroke:#888888,stroke-width:1px;
   style CP4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A small drawer with a scrollable preview, one sentence on what is and isn't in the copy, and Dreamer UI's `CopyButton`. The same sheet serves a recipe, a saved meal, a day, a week and the ingredient list. A copy never carries money, stores or products.*
+
+_A small drawer with a scrollable preview, one sentence on what is and isn't in the copy, and Dreamer UI's `CopyButton`. The same sheet serves a recipe, a saved meal, a day, a week and the ingredient list. A copy never carries money, stores or products._
 
 **Breakdown** (drawer from the calendar stats row)
 
@@ -677,35 +695,36 @@ block-beta
   style BK7 fill:transparent,stroke:#888888,stroke-width:1px;
   style BK8 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The two thin pills switch between days and meal types; rows show spend and, for each nutrition metric that is on, its total. It is a single scrolling list under a fixed header.*
+
+_The two thin pills switch between days and meal types; rows show spend and, for each nutrition metric that is on, its total. It is a single scrolling list under a fixed header._
 
 ## Reusable Components
 
-| Component | Used in | Purpose |
-|---|---|---|
-| MealBarCell | Calendar `renderCell` | up to three thin meal-type bars with emoji and a "+N"; date number, today accent, selected ring |
-| StatsRow | Calendar | spend, average per meal, price per gram of protein when protein is on, and a compact line of nutrition averages; tap opens the breakdown; carries the nudge |
-| GapNudge | recipe drawer, meal builder, stats row, ingredient rows | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
-| FillInSheet | behind every nudge | a `FormSheet` with one row per ingredient and only the fields that gap needs |
-| DayDrawer / DayPeek | Calendar | the same content as a `DetailSheet` on phones and a hover `Popover` from `sm` up (`max-sm:hidden`) |
-| PlannedMealView | Day drawer | items with servings, totals, grouped actions, swapped in place |
-| MealBuilder | Plan a meal, Meal subview | day and type pills, `PickOrCreate` of saved meals, one item search, per-item serving steppers, cost line with nudge, Save-as-meal switch |
-| ItemSearch | MealBuilder, Recipe form | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient" |
-| ServingStepper | MealBuilder, Recipe form | half-step stepper, 40px targets |
-| RecipeForm | Recipe subview | title, servings, ingredient rows, chips; hosts `RecipeAutofill` |
-| RecipeAutofill | Recipe form | the "Have a recipe?" and "Copied one?" rows, built on the repo's `UploadAutofill` pattern for the states and the 10 MB cap |
-| RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, cost per serving, muted details |
-| IngredientRow, FamilyGroup | Kitchen | icon, name, default product line; `SectionDivider` groups |
-| IngredientIcon | rows, drawers, pickers | the vendored emoji SVG matched by ingredient, with a generic jar fallback |
-| NutritionLine | rows, drawers | the metrics that are switched on, per serving; renders nothing when all are off |
-| ProductForm, ProductRow | Ingredient drawer, Products subview | store question first, price and size side by side, chips for label and link |
-| StorePicker | Product form | `PickOrCreate` of your stores plus "Show all" for the well-known list |
-| StoreLogo | pickers, rows, subview | the logo tile with a letter fallback; app-aware, so it stays in the app |
-| StoreForm | Stores subview | search of well-known stores, or name plus `PhotoPicker` image |
-| CopySheet | every copy action | preview, what's included, `CopyButton` |
-| CoverImage | recipe rows and drawer | `FallbackImage` with a tinted emoji tile as its `fallback` |
-| `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PillGroup`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific |
-| Empty state | every list and the empty Calendar | an icon, one muted line, and the call to action in the header |
+| Component                                                                                                                                                                                             | Used in                                                 | Purpose                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MealBarCell                                                                                                                                                                                           | Calendar `renderCell`                                   | up to three thin meal-type bars with emoji and a "+N"; date number, today accent, selected ring                                                             |
+| StatsRow                                                                                                                                                                                              | Calendar                                                | spend, average per meal, price per gram of protein when protein is on, and a compact line of nutrition averages; tap opens the breakdown; carries the nudge |
+| GapNudge                                                                                                                                                                                              | recipe drawer, meal builder, stats row, ingredient rows | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap                                                  |
+| FillInSheet                                                                                                                                                                                           | behind every nudge                                      | a `FormSheet` with one row per ingredient and only the fields that gap needs                                                                                |
+| DayDrawer / DayPeek                                                                                                                                                                                   | Calendar                                                | the same content as a `DetailSheet` on phones and a hover `Popover` from `sm` up (`max-sm:hidden`)                                                          |
+| PlannedMealView                                                                                                                                                                                       | Day drawer                                              | items with servings, totals, grouped actions, swapped in place                                                                                              |
+| MealBuilder                                                                                                                                                                                           | Plan a meal, Meal subview                               | day and type pills, `PickOrCreate` of saved meals, one item search, per-item serving steppers, cost line with nudge, Save-as-meal switch                    |
+| ItemSearch                                                                                                                                                                                            | MealBuilder, Recipe form                                | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient"                                                               |
+| ServingStepper                                                                                                                                                                                        | MealBuilder, Recipe form                                | half-step stepper, 40px targets                                                                                                                             |
+| RecipeForm                                                                                                                                                                                            | Recipe subview                                          | title, servings, ingredient rows, chips; hosts `RecipeAutofill`                                                                                             |
+| RecipeAutofill                                                                                                                                                                                        | Recipe form                                             | the "Have a recipe?" and "Copied one?" rows, built on the repo's `UploadAutofill` pattern for the states and the 10 MB cap                                  |
+| RecipeRow, MealRow                                                                                                                                                                                    | Recipes tab                                             | cover or emoji tile, title, cost per serving, muted details                                                                                                 |
+| IngredientRow, FamilyGroup                                                                                                                                                                            | Kitchen                                                 | icon, name, default product line; `SectionDivider` groups                                                                                                   |
+| IngredientIcon                                                                                                                                                                                        | rows, drawers, pickers                                  | the vendored emoji SVG matched by ingredient, with a generic jar fallback                                                                                   |
+| NutritionLine                                                                                                                                                                                         | rows, drawers                                           | the metrics that are switched on, per serving; renders nothing when all are off                                                                             |
+| ProductForm, ProductRow                                                                                                                                                                               | Ingredient drawer, Products subview                     | store question first, price and size side by side, chips for label and link                                                                                 |
+| StorePicker                                                                                                                                                                                           | Product form                                            | `PickOrCreate` of your stores plus "Show all" for the well-known list                                                                                       |
+| StoreLogo                                                                                                                                                                                             | pickers, rows, subview                                  | the logo tile with a letter fallback; app-aware, so it stays in the app                                                                                     |
+| StoreForm                                                                                                                                                                                             | Stores subview                                          | search of well-known stores, or name plus `PhotoPicker` image                                                                                               |
+| CopySheet                                                                                                                                                                                             | every copy action                                       | preview, what's included, `CopyButton`                                                                                                                      |
+| CoverImage                                                                                                                                                                                            | recipe rows and drawer                                  | `FallbackImage` with a tinted emoji tile as its `fallback`                                                                                                  |
+| `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PillGroup`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile` | everywhere                                              | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific                                                                  |
+| Empty state                                                                                                                                                                                           | every list and the empty Calendar                       | an icon, one muted line, and the call to action in the header                                                                                               |
 
 ## User Journeys
 
@@ -774,19 +793,20 @@ flowchart LR
 
 ## Form Field Organization
 
-*"Grouping: none" means one flat form — still Dreamer UI's `Form`, just without a `Disclosure` or steps wrapper.*
+_"Grouping: none" means one flat form — still Dreamer UI's `Form`, just without a `Disclosure` or steps wrapper._
 
-| Entity | Initial (create) | Later (edit only) | Later-set entry point | Grouping | "Other" option? |
-|---|---|---|---|---|---|
-| Recipe | title, servings, ingredients (ingredient + amount + unit) | description, times, cover photo, steps, own nutrition | "+ Add X" chips on the form; the recipe drawer's Modify | none; chips for extras | none |
-| Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | icon, nutrition per 100 g, unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for icon and nutrition | family: "New family" is the dashed first pill |
-| Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
-| Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
-| Meal (saved) | name, items (recipe or ingredient + servings) | — | Meal subview's Modify; "Save as a meal" on a planned meal | none | none |
-| Planned meal | day and meal type (prefilled from where it started), items with servings | — | the planned meal's "Change items or servings" | none | none |
-| Settings | four nutrition switches (all off) | — | the Calendar gear; the stats row's help link | none | none |
+| Entity       | Initial (create)                                                         | Later (edit only)                                        | Later-set entry point                                                               | Grouping                           | "Other" option?                                                 |
+| ------------ | ------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| Recipe       | title, servings, ingredients (ingredient + amount + unit)                | description, times, cover photo, steps, own nutrition    | "+ Add X" chips on the form; the recipe drawer's Modify                             | none; chips for extras             | none                                                            |
+| Ingredient   | name, family (`PickOrCreate`: existing family, new family, or none)      | icon, nutrition per 100 g, unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value     | none; chips for icon and nutrition | family: "New family" is the dashed first pill                   |
+| Product      | store (`PickOrCreate`), price, package size                              | label, link, default flag                                | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none                               | store: "New store" is the dashed first pill                     |
+| Store        | pick from the well-known list, or name                                   | image                                                    | the Stores subview row                                                              | none                               | "Can't find it? Add your own" reveals the name and image fields |
+| Meal (saved) | name, items (recipe or ingredient + servings)                            | —                                                        | Meal subview's Modify; "Save as a meal" on a planned meal                           | none                               | none                                                            |
+| Planned meal | day and meal type (prefilled from where it started), items with servings | —                                                        | the planned meal's "Change items or servings"                                       | none                               | none                                                            |
+| Settings     | four nutrition switches (all off)                                        | —                                                        | the Calendar gear; the stats row's help link                                        | none                               | none                                                            |
 
 **Flagged for the TDD** (none of these change the screens above, but each shapes the data):
+
 - **Copy-on-plan** — a planned meal stores its own item list and a `sourceMealId`; editing the saved meal later leaves planned days alone, and the id leaves room for a future "update N upcoming days?" prompt.
 - **Live recipes, frozen past** — planned items point at recipes, so edits reach upcoming days; once a day has passed its cost and nutrition are snapshotted so history never moves.
 - **Archive, don't delete, what is in use** — a recipe, ingredient, product or store that planned days or recipes depend on is archived and hidden from pickers, never removed.
