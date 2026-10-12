@@ -122,11 +122,12 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:worth-the-wait`                    | Upsert core data and Worth the Wait fixtures.                                                    |
 | `npm run seed:waypoint`                          | Upsert core data and Waypoint trip fixtures.                                                     |
 | `npm run seed:a-list`                            | Upsert core data and A-List Tracker fixtures.                                                    |
+| `npm run seed:pinch`                             | Upsert core data and Pinch kitchen fixtures.                                                     |
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
 | `npm run emulators:seed`                         | Start emulators, seed all fixtures, and exit.                                                    |
 | `npm run emulators:seed:reset`                   | Start emulators, clear all fixtures, reseed, and exit.                                           |
 
-Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, or `all` to select a scope.
+Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, or `all` to select a scope.
 Normal runs are idempotent upserts and retain records created manually during local
 development. `--reset` is the explicit destructive local reset.
 
@@ -163,6 +164,8 @@ is repeatable.
 `nine-lives` writes a shared household at
 `apps/nine-lives/households/seed-nine-lives-household` plus two representative cat
 profiles with insurance, origin, and key-date data for local CRUD and detail testing.
+
+`pinch` writes Alex's private kitchen under `apps/pinch/kitchens/seed-worth-the-wait-one`: a custom family (Chips), a ready-to-eat food in it (Doritos nacho cheese), a variant joined to a catalog family (Chicken feet), an ingredient with nothing but a name (House spice blend) and a catalog ingredient Alex adjusted (Chicken breast, leaner, 5 oz serving). Every other fixture account starts with an empty kitchen.
 
 `a-list` writes Alex's private A-List membership at
 `apps/a-list/memberships/seed-worth-the-wait-one` (a $25.99 plan billed at $27.94, started

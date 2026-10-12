@@ -1,5 +1,4 @@
-import { CATALOG_FAMILIES, CATALOG_INGREDIENTS } from '@apps/pinch/catalog';
-import type { CatalogFamily, CatalogIngredient } from '@apps/pinch/types';
+import type { ResolvedFamily, ResolvedIngredient } from '@apps/pinch/types';
 
 const normalize = (text: string) =>
   text
@@ -10,55 +9,74 @@ const normalize = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-// Built once: the haystack is the name and every alias, so "capsicum" finds a bell pepper.
-const SEARCH_INDEX = CATALOG_INGREDIENTS.map((ingredient) => ({
-  ingredient,
-  name: normalize(ingredient.name),
-  haystack: normalize([ingredient.name, ...ingredient.aliases].join(' ')),
-}));
+// An ingredient object is replaced when it changes, so its normalized text is built once per object.
+const SEARCH_TEXT = new WeakMap<
+  ResolvedIngredient,
+  { name: string; haystack: string }
+>();
 
-/** Catalog ingredients whose name or an alias contains every word typed, names that start with the text first. */
-export function searchCatalog(query: string): CatalogIngredient[] {
+const getSearchText = (ingredient: ResolvedIngredient) => {
+  const cached = SEARCH_TEXT.get(ingredient);
+  if (cached) {
+    return cached;
+  }
+  const entry = {
+    name: normalize(ingredient.name),
+    haystack: normalize([ingredient.name, ...ingredient.aliases].join(' ')),
+  };
+  SEARCH_TEXT.set(ingredient, entry);
+  return entry;
+};
+
+/** Ingredients whose name or an alias contains every word typed, names that start with the text first. */
+export function searchIngredients(
+  ingredients: ResolvedIngredient[],
+  query: string,
+): ResolvedIngredient[] {
   const words = normalize(query).split(' ').filter(Boolean);
   if (words.length === 0) {
-    return CATALOG_INGREDIENTS;
+    return ingredients;
   }
 
   const typed = words.join(' ');
-  const matches = SEARCH_INDEX.filter((entry) =>
-    words.every((word) => entry.haystack.includes(word)),
-  );
-  const result = [...matches]
+  const result = ingredients
+    .filter((ingredient) =>
+      words.every((word) => getSearchText(ingredient).haystack.includes(word)),
+    )
     .sort(
       (a, b) =>
-        Number(b.name.startsWith(typed)) - Number(a.name.startsWith(typed)) ||
+        Number(getSearchText(b).name.startsWith(typed)) -
+          Number(getSearchText(a).name.startsWith(typed)) ||
         a.name.localeCompare(b.name),
-    )
-    .map((entry) => entry.ingredient);
+    );
 
   return result;
 }
 
 export interface FamilyGroupData {
-  family: CatalogFamily;
-  ingredients: CatalogIngredient[];
+  family: ResolvedFamily;
+  ingredients: ResolvedIngredient[];
 }
 
-const FAMILIES_BY_NAME = [...CATALOG_FAMILIES].sort((a, b) =>
-  a.name.localeCompare(b.name),
-);
+/** Stands in for the group of ingredients that belong to no family. */
+export const NO_FAMILY: ResolvedFamily = {
+  id: '',
+  name: 'On their own',
+  isCustom: false,
+};
 
-/** Ingredients bucketed under their family in one pass, families and ingredients alphabetical, empty families dropped. */
+/** Ingredients bucketed under their family in one pass, families and ingredients alphabetical, empty families dropped, the family-less last. */
 export function groupByFamily(
-  ingredients: CatalogIngredient[],
+  ingredients: ResolvedIngredient[],
+  families: ResolvedFamily[],
 ): FamilyGroupData[] {
   const buckets = ingredients.reduce((acc, ingredient) => {
     const key = ingredient.familyId ?? '';
     acc.set(key, [...(acc.get(key) ?? []), ingredient]);
     return acc;
-  }, new Map<string, CatalogIngredient[]>());
+  }, new Map<string, ResolvedIngredient[]>());
 
-  const result = FAMILIES_BY_NAME.flatMap((family) => {
+  const toGroup = (family: ResolvedFamily) => {
     const items = buckets.get(family.id);
     return items
       ? [
@@ -70,7 +88,24 @@ export function groupByFamily(
           },
         ]
       : [];
-  });
+  };
+  const known = new Set(families.map((family) => family.id));
+  const orphans = [...buckets.entries()]
+    .filter(([key]) => key === '' || !known.has(key))
+    .flatMap(([, items]) => items);
+  const orphanGroup =
+    orphans.length > 0
+      ? [
+          {
+            family: NO_FAMILY,
+            ingredients: [...orphans].sort((a, b) =>
+              a.name.localeCompare(b.name),
+            ),
+          },
+        ]
+      : [];
+
+  const result = [...families.flatMap(toGroup), ...orphanGroup];
 
   return result;
 }

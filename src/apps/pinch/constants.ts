@@ -1,4 +1,4 @@
-import type { PinchTab, Unit } from '@apps/pinch/types';
+import type { Dimension, KitchenView, PinchTab, Unit } from '@apps/pinch/types';
 
 export const PINCH_TABS: PinchTab[] = ['calendar', 'recipes', 'kitchen'];
 export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
@@ -26,3 +26,43 @@ export const UNIT_LABELS: Record<Unit, string> = {
 
 /** A list gets a search from this many rows. */
 export const LIST_SEARCH_THRESHOLD = 8;
+
+export const UNITS: Unit[] = [
+  'G',
+  'KG',
+  'OZ',
+  'LB',
+  'ML',
+  'L',
+  'TSP',
+  'TBSP',
+  'CUP',
+  'FL_OZ',
+  'PINCH',
+  'EACH',
+];
+
+export const UNIT_DIMENSION: Record<Unit, Dimension> = {
+  G: 'MASS',
+  KG: 'MASS',
+  OZ: 'MASS',
+  LB: 'MASS',
+  ML: 'VOLUME',
+  L: 'VOLUME',
+  TSP: 'VOLUME',
+  TBSP: 'VOLUME',
+  CUP: 'VOLUME',
+  FL_OZ: 'VOLUME',
+  PINCH: 'VOLUME',
+  EACH: 'COUNT',
+};
+
+export const KITCHEN_VIEWS: KitchenView[] = ['yours', 'all'];
+export const KITCHEN_VIEW_LABELS: Record<KitchenView, string> = {
+  yours: 'Yours',
+  all: 'All',
+};
+
+export const MAX_NAME_LENGTH = 120;
+/** What "1 serving" is for an ingredient with no serving size of its own. */
+export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;

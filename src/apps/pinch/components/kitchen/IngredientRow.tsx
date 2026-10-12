@@ -3,10 +3,10 @@ import { ChevronRight } from 'lucide-react';
 
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
-import type { CatalogIngredient } from '@apps/pinch/types';
+import type { ResolvedIngredient } from '@apps/pinch/types';
 
 interface IngredientRowProps {
-  ingredient: CatalogIngredient;
+  ingredient: ResolvedIngredient;
   onOpen: (id: string) => void;
 }
 

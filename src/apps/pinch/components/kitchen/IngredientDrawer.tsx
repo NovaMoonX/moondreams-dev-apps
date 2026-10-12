@@ -1,14 +1,18 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import DetailSheet from '@/components/DetailSheet';
+import { useAppSelector } from '@/store';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
-import {
-  CATALOG_FAMILIES_BY_ID,
-  CATALOG_INGREDIENTS_BY_ID,
-} from '@apps/pinch/catalog';
 import { UNIT_LABELS } from '@apps/pinch/constants';
+import {
+  selectIngredientFamiliesById,
+  selectIngredientsById,
+} from '@apps/pinch/store/selectors';
 
 interface IngredientDrawerProps {
   ingredientId: string;
   onClose: () => void;
+  onModify: (id: string) => void;
 }
 
 const NUTRITION_CELLS = [
@@ -18,26 +22,53 @@ const NUTRITION_CELLS = [
   { key: 'fat', label: 'Fat', unit: ' g' },
 ] as const;
 
-function IngredientDrawer({ ingredientId, onClose }: IngredientDrawerProps) {
-  const ingredient = CATALOG_INGREDIENTS_BY_ID.get(ingredientId);
+function IngredientDrawer({
+  ingredientId,
+  onClose,
+  onModify,
+}: IngredientDrawerProps) {
+  const ingredient = useAppSelector(selectIngredientsById).get(ingredientId);
+  const family = useAppSelector(selectIngredientFamiliesById).get(
+    ingredient?.familyId ?? '',
+  );
 
   if (!ingredient) {
     return null;
   }
 
-  const family = ingredient.familyId
-    ? CATALOG_FAMILIES_BY_ID.get(ingredient.familyId)
-    : null;
-  const servingText = `${ingredient.serving.amount} ${UNIT_LABELS[ingredient.serving.unit]}`;
+  const servingText = `${Math.round(ingredient.serving.amount * 100) / 100} ${UNIT_LABELS[ingredient.serving.unit]}`;
 
   return (
-    <DetailSheet isOpen onClose={onClose} title={ingredient.name}>
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title={ingredient.name}
+      footer={
+        <div className='px-4 pb-4'>
+          <Button
+            type='button'
+            className='w-full'
+            onClick={() => onModify(ingredient.id)}
+          >
+            {ingredient.isCustom ? 'Modify' : 'Adjust nutrition or serving'}
+          </Button>
+        </div>
+      }
+    >
       <div className='space-y-5'>
         <div className='flex items-center gap-3'>
           <IngredientIcon iconKey={ingredient.iconKey} size={48} />
           <div className='min-w-0'>
             {family && (
               <p className='text-muted-foreground text-sm'>{family.name}</p>
+            )}
+            {ingredient.isCustom && (
+              <p className='text-muted-foreground text-sm'>One you added</p>
+            )}
+            {ingredient.isAdjusted && (
+              <p className='text-muted-foreground text-sm'>
+                Built in, with your changes
+              </p>
             )}
             {ingredient.aliases.length > 0 && (
               <p className='text-muted-foreground truncate text-sm'>
@@ -52,15 +83,21 @@ function IngredientDrawer({ ingredientId, onClose }: IngredientDrawerProps) {
             Per 100 g
           </h3>
           <dl className='grid grid-cols-4 gap-2 text-center'>
-            {NUTRITION_CELLS.map((cell) => (
-              <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
-                <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
-                  {Math.round(ingredient.per100g[cell.key] * 10) / 10}
-                  {cell.unit}
-                </dd>
-                <dt className='text-muted-foreground text-xs'>{cell.label}</dt>
-              </div>
-            ))}
+            {NUTRITION_CELLS.map((cell) => {
+              const value = ingredient.per100g[cell.key];
+              return (
+                <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
+                  <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
+                    {value === null
+                      ? '—'
+                      : `${Math.round(value * 10) / 10}${cell.unit}`}
+                  </dd>
+                  <dt className='text-muted-foreground text-xs'>
+                    {cell.label}
+                  </dt>
+                </div>
+              );
+            })}
           </dl>
         </section>
 

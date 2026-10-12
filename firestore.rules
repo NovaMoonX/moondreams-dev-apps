@@ -1340,13 +1340,85 @@ service cloud.firestore {
 
     // --- App: pinch ---
 
-    // Only the app's catalog document is covered so far; a person's kitchen (apps/pinch/kitchens/{uid}) gets its rules with the issues that store it.
     match /apps/pinch {
       allow read: if isAdmin() || isDevUser();
       allow read: if isUnrestrictedPublicApp(resource.data);
       allow read: if isUidAllowedApp(resource.data);
       allow read: if isEmailAllowedApp(resource.data);
       allow create, update, delete: if isAdmin();
+    }
+
+    // Everything in a kitchen is private to one person and nests under their uid; there is no admin or role branch.
+    match /apps/pinch/kitchens/{uid} {
+      function isKitchenOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function isShortText(value, max) {
+        return value is string && value.size() >= 1 && value.size() <= max;
+      }
+
+      function isPositiveAmount(value) {
+        return value is number && value > 0 && value <= 1000000;
+      }
+
+      function isNullOrMetric(value) {
+        return value == null || (value is number && value >= 0 && value <= 100000);
+      }
+
+      function isUnit(value) {
+        return value in ['G', 'KG', 'OZ', 'LB', 'ML', 'L', 'TSP', 'TBSP', 'CUP', 'FL_OZ', 'PINCH', 'EACH'];
+      }
+
+      function isNutrition(value) {
+        return value == null || (value is map
+          && value.keys().hasOnly(['calories', 'protein', 'carbs', 'fat'])
+          && value.keys().hasAll(['calories', 'protein', 'carbs', 'fat'])
+          && isNullOrMetric(value.calories) && isNullOrMetric(value.protein)
+          && isNullOrMetric(value.carbs) && isNullOrMetric(value.fat));
+      }
+
+      function isIngredient(data, id) {
+        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && (data.catalogId == null
+            ? isShortText(data.name, 120)
+            : (data.catalogId == id && data.catalogId.matches('cat-.+') && (data.name == null || isShortText(data.name, 120))))
+          && (data.familyId == null || isShortText(data.familyId, 80))
+          && (data.iconKey == null || isShortText(data.iconKey, 40))
+          && isNutrition(data.nutritionPer100g)
+          && ((data.servingAmount == null && data.servingUnit == null) || (isPositiveAmount(data.servingAmount) && isUnit(data.servingUnit)))
+          && (data.gramsPerMl == null || isPositiveAmount(data.gramsPerMl))
+          && (data.gramsEach == null || isPositiveAmount(data.gramsEach))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isFamily(data, id) {
+        return data.keys().hasOnly(['id', 'name', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'name', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.name, 120)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // The kitchen document itself (settings) gets its create and update rule with the issue that writes it.
+      allow read, delete: if isKitchenOwner();
+
+      match /ingredients/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isIngredient(request.resource.data, id);
+        allow update: if isKitchenOwner() && isIngredient(request.resource.data, id)
+          && request.resource.data.catalogId == resource.data.catalogId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /families/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isFamily(request.resource.data, id);
+        allow update: if isKitchenOwner() && isFamily(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
     }
 
     // --- App: worth-the-wait ---
