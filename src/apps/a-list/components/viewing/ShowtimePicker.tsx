@@ -12,7 +12,7 @@ import {
 } from '@apps/a-list/constants';
 import { findShowtimesQueryOptions } from '@apps/a-list/queries/showtimeQueries';
 import type { ShowtimeOption, TheatreSnapshot } from '@apps/a-list/types';
-import { formatCents } from '@apps/a-list/utils/money';
+import { formatCents } from '@/utils/moneyUtils';
 import TheaterSheetModal from '@apps/a-list/components/theaters/TheaterSheetModal';
 import { isTypedTheatre } from '@apps/a-list/utils/theatres';
 import {

@@ -87,6 +87,7 @@ export const saveIngredient = createAsyncThunk<
         const missingKeys = {
           ...('gramsPerMl' in existing ? {} : { gramsPerMl: null }),
           ...('gramsEach' in existing ? {} : { gramsEach: null }),
+          ...('defaultProductId' in existing ? {} : { defaultProductId: null }),
         };
         const ownedFields = {
           ...missingKeys,
@@ -114,6 +115,7 @@ export const saveIngredient = createAsyncThunk<
           servingUnit: draft.servingUnit,
           gramsPerMl: null,
           gramsEach: null,
+          defaultProductId: null,
           createdAt: now,
           updatedAt: now,
         };

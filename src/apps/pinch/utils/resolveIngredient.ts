@@ -25,6 +25,16 @@ const mergeNutrition = (
   fat: record?.fat ?? catalog.fat,
 });
 
+/** A record that only points at a default product changes nothing the person can see about the ingredient. */
+const hasAdjustments = (record: IngredientRecord) =>
+  record.name != null ||
+  record.familyId != null ||
+  record.iconKey != null ||
+  record.nutritionPer100g != null ||
+  record.servingAmount != null ||
+  record.gramsPerMl != null ||
+  record.gramsEach != null;
+
 export function resolveCatalogIngredient(
   catalog: CatalogIngredient,
   record: IngredientRecord | null,
@@ -50,7 +60,7 @@ export function resolveCatalogIngredient(
     gramsPerMl: record?.gramsPerMl ?? catalog.gramsPerMl,
     gramsEach: record?.gramsEach ?? catalog.gramsEach,
     isCustom: false,
-    isAdjusted: record !== null,
+    isAdjusted: record !== null && hasAdjustments(record),
   };
 }
 

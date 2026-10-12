@@ -1,7 +1,7 @@
 import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { Family, IngredientRecord, Store } from '@apps/pinch/types';
+import type { Family, IngredientRecord, Product, Store } from '@apps/pinch/types';
 
 const kitchenCollection = (uid: string, name: string) =>
   collection(db, 'apps', 'pinch', 'kitchens', uid, name);
@@ -43,6 +43,18 @@ export function startStoresListener(
     kitchenCollection(uid, 'stores'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Store)),
+    onError,
+  );
+}
+
+export function startProductsListener(
+  uid: string,
+  onChange: (products: Product[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'products'),
+    (snapshot) => onChange(snapshot.docs.map((document) => document.data() as Product)),
     onError,
   );
 }

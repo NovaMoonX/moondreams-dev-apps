@@ -77,3 +77,5 @@ export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
 
 /** The longest edge of a store's own image: it only ever shows in a small round tile. */
 export const STORE_IMAGE_MAX_DIMENSION = 512;
+
+export const MAX_PRICE_CENTS = 100_000_000;

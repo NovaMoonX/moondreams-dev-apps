@@ -15,7 +15,7 @@ import {
   selectTheatres,
 } from '@apps/a-list/store/selectors';
 import type { MembershipProfile } from '@apps/a-list/types';
-import { formatCents } from '@apps/a-list/utils/money';
+import { formatCents } from '@/utils/moneyUtils';
 
 interface DashboardScreenProps {
   membership: MembershipProfile;

@@ -45,7 +45,7 @@ import {
   describePurchase,
   toPurchasePlan,
 } from '@apps/a-list/utils/purchase';
-import { formatCents } from '@apps/a-list/utils/money';
+import { formatCents } from '@/utils/moneyUtils';
 
 interface ActionRowProps {
   icon: ReactNode;

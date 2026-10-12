@@ -5,6 +5,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import {
   startFamiliesListener,
   startIngredientsListener,
+  startProductsListener,
   startStoresListener,
 } from '@apps/pinch/store/listeners/kitchenListeners';
 import {
@@ -17,6 +18,11 @@ import {
   setIngredients,
   setIngredientsLoadError,
 } from '@apps/pinch/store/slices/ingredientsSlice';
+import {
+  clearProducts,
+  setProducts,
+  setProductsLoadError,
+} from '@apps/pinch/store/slices/productsSlice';
 import {
   clearStores,
   setStores,
@@ -32,6 +38,7 @@ export function usePinchSync(uid: string | null) {
       dispatch(clearIngredients());
       dispatch(clearFamilies());
       dispatch(clearStores());
+      dispatch(clearProducts());
       return;
     }
 
@@ -67,7 +74,14 @@ export function usePinchSync(uid: string | null) {
         ),
     );
 
+    const unsubscribeProducts = startProductsListener(
+      uid,
+      (products) => dispatch(setProducts(products)),
+      (error) => dispatch(setProductsLoadError(getErrorMessage(error, 'Unable to load your products.'))),
+    );
+
     return () => {
+      unsubscribeProducts();
       unsubscribeStores();
       unsubscribeIngredients();
       unsubscribeFamilies();
