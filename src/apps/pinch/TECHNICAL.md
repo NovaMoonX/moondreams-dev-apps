@@ -403,6 +403,8 @@ idle → reading(source) → draft(recipe, unread[]) → (person edits) → save
 | Week | seven day blocks, Monday to Sunday, in the same shape as a day | prices, stores |
 | Ingredients | names grouped by family, for "your ingredients" (custom + with a product + used in a recipe), capped at `MAX_COPIED_INGREDIENTS` ("and N more") | prices, stores, products, nutrition |
 
+The preview and Copy button are the shared `src/components/CopyPanel` (a generic text-plus-note component, so central from its first use), which copies through `copyToClipboard` so plain-HTTP pages still work and says so when the browser refuses. `npm run check:pinch-markdown` checks the builders (no `$`, cover or typed nutrition; `*`, `#`, `@` escaped; Monday-to-Sunday weeks; the "and N more" cap).
+
 User text (titles, notes, store-less names) is escaped for Markdown, and a name that contains `@` is treated as a plain string and not linkified. The recipe format is also the one the AI reader reads back, so a copy-then-paste round trip fills the form.
 
 ### 7. Stock tracking (reserved for Next Steps)

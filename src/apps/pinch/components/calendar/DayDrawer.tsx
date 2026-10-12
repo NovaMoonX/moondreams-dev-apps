@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ClipboardCopy } from 'lucide-react';
 
+import CopyPanel from '@/components/CopyPanel';
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
@@ -20,6 +22,10 @@ import {
 import type { MealType, PlannedMeal } from '@apps/pinch/types';
 import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import {
+  dayMarkdown,
+  weekMarkdown,
+} from '@apps/pinch/utils/markdown/dayMarkdown';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -36,11 +42,13 @@ interface DayDrawerProps {
 
 /** One day's meals grouped by type; picking one swaps the drawer to that meal, with a way back. */
 function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
-  const meals = useAppSelector(selectPlannedByDay).get(dayKey) ?? NO_MEALS;
+  const mealsByDay = useAppSelector(selectPlannedByDay);
+  const meals = mealsByDay.get(dayKey) ?? NO_MEALS;
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [pickedMealId, setPickedMealId] = useState<string | null>(null);
+  const [copying, setCopying] = useState<'day' | 'week' | null>(null);
   const plannedMealId = meals.some((meal) => meal.id === pickedMealId)
     ? pickedMealId
     : null;
@@ -57,7 +65,8 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
       onClose={onClose}
       title={formatDayTitle(dayKey)}
       footer={
-        plannedMealId === null && (
+        plannedMealId === null &&
+        copying === null && (
           <div className='px-4 pb-4'>
             <Button
               type='button'
@@ -70,7 +79,24 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
         )
       }
     >
-      {plannedMealId !== null ? (
+      {copying !== null ? (
+        <CopyPanel
+          text={
+            copying === 'day'
+              ? dayMarkdown(dayKey, meals, { recipesById, ingredientsById })
+              : weekMarkdown(dayKey, mealsByDay, {
+                  recipesById,
+                  ingredientsById,
+                })
+          }
+          note={
+            copying === 'day'
+              ? 'Each meal with its items and the recipes’ ingredients. No prices or stores.'
+              : 'Monday to Sunday, each day in the same shape. No prices or stores.'
+          }
+          onBack={() => setCopying(null)}
+        />
+      ) : plannedMealId !== null ? (
         <PlannedMealView
           uid={uid}
           plannedMealId={plannedMealId}
@@ -169,6 +195,26 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
               })}
             </>
           )}
+          <div className='bg-muted/50 rounded-2xl p-1'>
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-11 w-full gap-2'
+              onClick={() => setCopying('day')}
+            >
+              <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
+              Copy this day
+            </Button>
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-11 w-full gap-2'
+              onClick={() => setCopying('week')}
+            >
+              <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
+              Copy this week
+            </Button>
+          </div>
         </div>
       )}
     </DetailSheet>
