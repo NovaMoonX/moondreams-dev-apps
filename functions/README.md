@@ -122,6 +122,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 
 - **Schedule:** polls every 5 minutes.
 - **Timing:** it looks ahead over the whole window and waits out each reminder's exact delay, so delivery is accurate to the second without a task queue.
+- **Index:** the `status == pending` + `scheduledFor <=` query on `reminders` needs the composite index in `firestore.indexes.json`. Without it every run fails with `FAILED_PRECONDITION` and no reminder is sent.
 
 ## Local development
 
@@ -162,6 +163,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
   - a note if it caches, budgets, or fetches on a user's behalf.
 - **New secret:** create it in production *before* the PR merges, or the CI functions deploy fails and nothing ships. If the first deploy then fails on a Secret Manager permission, see [Service accounts](#service-accounts).
 - **New callable:** if the browser reports a CORS error after its first deploy, run the invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
+- **Query with an equality plus a range or `orderBy`:** add its composite index to `firestore.indexes.json` in the same PR and run `npm run check:indexes`. The emulator doesn't enforce indexes, so a missing one only fails in production.
 - **Server-only collection:** give it a deny-all block in `firestore.rules`.
 
 ## Troubleshooting
@@ -174,4 +176,5 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | CI deploy fails with `secretmanager.secrets.getIamPolicy` or `setIamPolicy` | The deployer account can't manage that secret. Grant it per [Service accounts](#service-accounts). |
 | A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |
 | A-List search shows sample movies locally | The emulator couldn't read any movie key: `.secret.local` has no value and Secret Manager access failed (not signed in to Google, or no access to the secret). Add a key to `functions/.secret.local` and restart the emulators. |
+| A scheduled or triggered function logs `FAILED_PRECONDITION: The query requires an index` | A query needs a composite index that isn't in `firestore.indexes.json`. Add it (the error's link shows the fields), run `npm run check:indexes`, and deploy with `npm run fb:indexes`. The index takes a few minutes to build; the function recovers on its own once it is READY. |
 | A changed `.env.local` cap or `.secret.local` key has no effect | The emulators read these files only at startup. Restart them. |
