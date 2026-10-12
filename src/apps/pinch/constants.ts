@@ -71,5 +71,6 @@ export const KITCHEN_VIEW_LABELS: Record<KitchenView, string> = {
 };
 
 export const MAX_NAME_LENGTH = 120;
+export const MAX_SERVING_AMOUNT = 1_000_000;
 /** What "1 serving" is for an ingredient with no serving size of its own. */
 export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;

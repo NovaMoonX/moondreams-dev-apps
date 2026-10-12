@@ -21,7 +21,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import IconPicker from '@apps/pinch/components/kitchen/IconPicker';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
+import { MAX_NAME_LENGTH, MAX_SERVING_AMOUNT } from '@apps/pinch/constants';
 import {
   removeIngredient,
   saveIngredient,
@@ -70,8 +70,7 @@ const NUTRITION_FIELDS: { key: keyof NutritionText; label: string }[] = [
 
 const { custom, input } = FormFactories;
 
-const toText = (value: number | null) =>
-  value === null ? '' : String(Math.round(value * 10) / 10);
+const toText = (value: number | null) => (value === null ? '' : String(value));
 const parseAmount = (text: string) =>
   text.trim() === '' ? null : Number(text);
 const isNonNegative = (value: number | null) =>
@@ -297,7 +296,8 @@ function IngredientFormSheet({
     (!extras.serving.enabled ||
       (servingAmount !== null &&
         Number.isFinite(servingAmount) &&
-        servingAmount > 0));
+        servingAmount > 0 &&
+        servingAmount <= MAX_SERVING_AMOUNT));
 
   const familyOptions = useMemo(
     () => families.map((family) => ({ value: family.id, label: family.name })),
@@ -400,13 +400,14 @@ function IngredientFormSheet({
     const isUnchangedCatalog =
       isCatalog &&
       record === null &&
-      nutrition !== null &&
-      (['calories', 'protein', 'carbs', 'fat'] as const).every(
-        (metric) => nutrition[metric] === ingredient.per100g[metric],
-      ) &&
-      parseAmount(data.extras.serving.value.amount) ===
-        ingredient.serving.amount &&
-      data.extras.serving.value.unit === ingredient.serving.unit;
+      (nutrition === null ||
+        (['calories', 'protein', 'carbs', 'fat'] as const).every(
+          (metric) => nutrition[metric] === ingredient.per100g[metric],
+        )) &&
+      (!isServingOn ||
+        (parseAmount(data.extras.serving.value.amount) ===
+          ingredient.serving.amount &&
+          data.extras.serving.value.unit === ingredient.serving.unit));
     if (isUnchangedCatalog) {
       onClose();
       return;
