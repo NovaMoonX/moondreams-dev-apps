@@ -291,7 +291,7 @@ Files: `catalog/catalogIngredients.ts`, `catalog/catalogFamilies.ts`, `catalog/c
 | Ingredient item per serving | serving size (record, else catalog, else 100 g) through the same bridge: cost and nutrition of one serving | `utils/mealMath.ts` |
 | Item cost | `servings ×` (recipe per-serving cost or ingredient per-serving cost) | `utils/mealMath.ts` |
 | Planned meal totals | sum of items; for a frozen meal, the snapshot instead | `utils/mealMath.ts` |
-| Day totals | planned meals for a day key | `selectDayTotals` |
+| Day totals | planned meals for a day key, inside the month pass | `selectMonthStats(...).byDay` |
 | Month stats | `{ spendCents, mealsPriced, avgPerMealCents, nutritionTotals, proteinPriceCentsPerGram, leftOut }` over the shown month | `selectMonthStats(monthKey)` |
 | Gaps | the union of left-out ingredients for a scope, minus dismissed ones | `utils/gaps.ts` |
 | Day key | `toDateInputValue(date)` for a stored date; `toLocalDateInputValue(cell.getTime())` for a Dreamer UI cell | `utils/dayKeys.ts` |
@@ -518,7 +518,7 @@ No cached document is ever written back whole. There is no cross-person concurre
 - `selectDefaultProducts` — `Map<ingredientId, Product>`
 - `selectRecipeCosts` — `Map<recipeId, RecipeCost>` computed once per change of recipes, products or ingredients
 - `selectPlannedByDay` — `Map<dayKey, PlannedMeal[]>` read by the Calendar's `renderCell` and the day drawer, so a cell never filters the list
-- `selectDayTotals`, `selectMonthStats(monthKey)` — one pass over the window's planned meals
+- `selectMonthStats(state, monthKey)` — one pass over the planned meals of the shown month: spend, average per meal, what it leaves out, and the totals by day and by meal type that the breakdown reads (there is no separate day-totals selector)
 - `selectGaps(scope)` — scope-parameterized via a small factory; takes `showNutrition` and `dismissedNudges`
 - Time-dependent selectors take `todayKey` as an argument (`useNow()` supplies it in the component)
 
