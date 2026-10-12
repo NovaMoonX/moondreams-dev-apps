@@ -40,7 +40,10 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const [plannedMealId, setPlannedMealId] = useState<string | null>(null);
+  const [pickedMealId, setPickedMealId] = useState<string | null>(null);
+  const plannedMealId = meals.some((meal) => meal.id === pickedMealId)
+    ? pickedMealId
+    : null;
 
   const dayCost = getMealCost(
     meals.flatMap((meal) => meal.items),
@@ -71,7 +74,7 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
         <PlannedMealView
           uid={uid}
           plannedMealId={plannedMealId}
-          onBack={() => setPlannedMealId(null)}
+          onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
         />
       ) : (
@@ -116,7 +119,7 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
                               type='button'
                               variant='tertiary'
                               aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}`}
-                              onClick={() => setPlannedMealId(meal.id)}
+                              onClick={() => setPickedMealId(meal.id)}
                               className='h-auto w-full flex-col items-stretch gap-0 px-0! py-1 text-left font-normal'
                             >
                               {meal.items.map((item) => {
