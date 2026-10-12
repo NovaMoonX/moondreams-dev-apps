@@ -122,6 +122,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 
 - **Schedule:** polls every 5 minutes.
 - **Timing:** it looks ahead over the whole window and waits out each reminder's exact delay, so delivery is accurate to the second without a task queue.
+- **Overdue reminders are dropped, not sent:** one more than 30 minutes past its time is marked `expired` (a yearly one just rolls to its next date), so an outage or a missing index never flushes its backlog to phones. A reminder up to 30 minutes late still sends.
 - **Index:** the `status == pending` + `scheduledFor <=` query on `reminders` needs the composite index in `firestore.indexes.json`. Without it every run fails with `FAILED_PRECONDITION` and no reminder is sent.
 
 ## Local development

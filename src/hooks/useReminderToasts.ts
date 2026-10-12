@@ -13,9 +13,10 @@ const REMINDER_TOAST_DURATION_MS = 7000;
 const FORCE_TOAST_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_FORCE_REMINDER_TOAST === 'true';
 
-/** Bridges the global `reminders` slice into in-app toasts: a reminder that
- * transitions to `sent` while this is mounted pops a toast. Reminders already
- * `sent` at mount never toast, so reloading the page doesn't replay old ones. */
+/** Bridges the global `reminders` slice into in-app toasts: a reminder this page
+ * has seen as not yet sent that flips to `sent` pops a toast. One that first
+ * appears already `sent` (the first snapshot after a reload, another device's
+ * history) never does, so reloading doesn't replay old ones. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
   const { addToast } = useToast();
@@ -106,10 +107,10 @@ export function useReminderToasts() {
     }
 
     reminders
-      .filter(
-        (reminder) =>
-          reminder.status === 'sent' && previousStatusById.get(reminder.id) !== 'sent',
-      )
+      .filter((reminder) => {
+        const previousStatus = previousStatusById.get(reminder.id);
+        return reminder.status === 'sent' && previousStatus !== undefined && previousStatus !== 'sent';
+      })
       .forEach((reminder) => showReminderToast(reminder));
   }, [reminders, showReminderToast]);
 }
