@@ -1,3 +1,17 @@
-export type PinchState = Record<string, never>;
+import { combineReducers } from '@reduxjs/toolkit';
 
-export const pinchReducer = (state: PinchState = {}) => state;
+import { familiesReducer, type FamiliesState } from './slices/familiesSlice';
+import {
+  ingredientsReducer,
+  type IngredientsState,
+} from './slices/ingredientsSlice';
+
+export interface PinchState {
+  ingredients: IngredientsState;
+  families: FamiliesState;
+}
+
+export const pinchReducer = combineReducers({
+  ingredients: ingredientsReducer,
+  families: familiesReducer,
+});
