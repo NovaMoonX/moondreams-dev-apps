@@ -107,10 +107,11 @@ function MealBuilder({
   }
 
   const addItem = (kind: ItemKind, refId: string) =>
-    setItems((current) => [
-      ...current,
-      { id: generateUuid(), kind, refId, servings: 1 },
-    ]);
+    setItems((current) =>
+      current.length >= MAX_MEAL_ITEMS
+        ? current
+        : [...current, { id: generateUuid(), kind, refId, servings: 1 }],
+    );
 
   const handleSubmit = async () => {
     if (date === null || items.length === 0) {
