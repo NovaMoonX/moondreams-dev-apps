@@ -107,9 +107,9 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
 - [ ] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
 - [ ] Copy a recipe as Markdown
-- [ ] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
+- [x] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
 - [x] Meal calendar with a month view showing thin color bars and emojis per day
-- [ ] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
+- [x] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
 - [ ] Stats row on the calendar: total spend and average cost per meal for the month, with a breakdown by day and by meal
 - [ ] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [ ] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on

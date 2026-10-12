@@ -279,10 +279,30 @@ const item = (
 });
 
 // Days are offsets from today (UTC midnight): an empty day, one meal, a full day, five meals and a day of ten, so the cells and drawer show every size.
+const SEED_MEALS = [
+  {
+    id: 'seed-pinch-meal-adobo-rice',
+    name: 'Adobo and rice',
+    items: [
+      item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 2),
+      item('b', 'RECIPE', 'seed-pinch-recipe-rice', 2),
+    ],
+  },
+  {
+    id: 'seed-pinch-meal-snack-plate',
+    name: 'Snack plate',
+    items: [
+      item('a', 'INGREDIENT', 'seed-pinch-ingredient-doritos', 1),
+      item('b', 'INGREDIENT', 'cat-banana', 1),
+    ],
+  },
+];
+
 const PLANNED_BLUEPRINTS: {
   day: number;
   type: SeedMealType;
   items: ReturnType<typeof item>[];
+  meal?: string;
 }[] = [
   {
     day: -3,
@@ -311,6 +331,16 @@ const PLANNED_BLUEPRINTS: {
     day: 1,
     type: 'LUNCH',
     items: [item('a', 'RECIPE', 'seed-pinch-recipe-rice', 1)],
+  },
+  // Planned from "Adobo and rice", then tweaked: the saved meal still has two servings of each.
+  {
+    day: 1,
+    type: 'DINNER',
+    meal: 'seed-pinch-meal-adobo-rice',
+    items: [
+      item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 3),
+      item('b', 'RECIPE', 'seed-pinch-recipe-rice', 2),
+    ],
   },
   {
     day: 2,
@@ -410,8 +440,9 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           id,
           date: today + blueprint.day * DAY_MS,
           mealType: blueprint.type,
-          name: null,
-          sourceMealId: null,
+          name:
+            SEED_MEALS.find((meal) => meal.id === blueprint.meal)?.name ?? null,
+          sourceMealId: blueprint.meal ?? null,
           items: blueprint.items,
           refIds: Array.from(
             new Set(blueprint.items.map((entry) => entry.refId)),
@@ -421,6 +452,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: createdAt + index,
         });
     }),
+    ...SEED_MEALS.map((meal) =>
+      kitchenRef
+        .collection('meals')
+        .doc(meal.id)
+        .set({ ...meal, createdAt, updatedAt: createdAt }),
+    ),
     ...SEED_RECIPES.map((recipe) =>
       kitchenRef
         .collection('recipes')
@@ -450,6 +487,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_RECIPES.length +
       CATALOG_STORE_SEEDS.length +
       PLANNED_BLUEPRINTS.length +
+      SEED_MEALS.length +
       2,
   };
 }

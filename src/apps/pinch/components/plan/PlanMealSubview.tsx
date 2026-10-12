@@ -8,6 +8,7 @@ interface PlanMealSubviewProps {
   dayKey: string;
   mealType: MealType | null;
   plannedMealId: string | null;
+  fromMealId: string | null;
 }
 
 /** The meal builder as a full-screen layer over the calendar, so its footer stays pinned however long the plate gets. */
@@ -16,6 +17,7 @@ function PlanMealSubview({
   dayKey,
   mealType,
   plannedMealId,
+  fromMealId,
 }: PlanMealSubviewProps) {
   const { closeSubview } = usePinchOverlay();
 
@@ -23,9 +25,11 @@ function PlanMealSubview({
     <Subview overlay title='Meal' onClose={closeSubview}>
       <MealBuilder
         uid={uid}
+        mode='plan'
         dayKey={dayKey}
         mealType={mealType}
         plannedMealId={plannedMealId}
+        mealId={fromMealId}
       />
     </Subview>
   );

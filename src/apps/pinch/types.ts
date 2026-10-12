@@ -130,6 +130,15 @@ export interface MealItem {
   servings: number;
 }
 
+/** A meal worth eating again: a name and its items, copied onto a day when planned. */
+export interface Meal {
+  id: string;
+  name: string;
+  items: MealItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** What a past meal cost, written once after its day so later price changes don't rewrite history. */
 export interface PlannedSnapshot {
   frozenAt: number;
@@ -171,7 +180,10 @@ export type PinchSubview =
       mealType: MealType | null;
       /** The planned meal being changed; null plans a new one. */
       plannedMealId: string | null;
-    };
+      /** A saved meal whose items start the plate. */
+      fromMealId: string | null;
+    }
+  | { kind: 'meal'; id: string | null };
 
 export interface CatalogStore {
   /** `cat-store-` plus the slug; also the document id of the person's own copy. */

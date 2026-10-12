@@ -5,6 +5,7 @@ import {
   ingredientsReducer,
   type IngredientsState,
 } from './slices/ingredientsSlice';
+import { mealsReducer, type MealsState } from './slices/mealsSlice';
 import {
   plannedMealsReducer,
   type PlannedMealsState,
@@ -17,6 +18,7 @@ import { storesReducer, type StoresState } from './slices/storesSlice';
 export interface PinchState {
   settings: SettingsState;
   plannedMeals: PlannedMealsState;
+  meals: MealsState;
   ingredients: IngredientsState;
   families: FamiliesState;
   stores: StoresState;
@@ -27,6 +29,7 @@ export interface PinchState {
 export const pinchReducer = combineReducers({
   settings: settingsReducer,
   plannedMeals: plannedMealsReducer,
+  meals: mealsReducer,
   ingredients: ingredientsReducer,
   families: familiesReducer,
   stores: storesReducer,

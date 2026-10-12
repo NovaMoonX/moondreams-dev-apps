@@ -1521,6 +1521,22 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
+      function isMeal(data, id) {
+        return data.keys().hasOnly(['id', 'name', 'items', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'name', 'items', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.name, 120)
+          && isMealItems(data.items)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      match /meals/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isMeal(request.resource.data, id);
+        allow update: if isKitchenOwner() && isMeal(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
       match /plannedMeals/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isPlannedMeal(request.resource.data, id);
