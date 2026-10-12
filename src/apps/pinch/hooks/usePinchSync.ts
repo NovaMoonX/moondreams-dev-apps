@@ -7,6 +7,7 @@ import {
   startIngredientsListener,
   startProductsListener,
   startRecipesListener,
+  startSettingsListener,
   startStoresListener,
 } from '@apps/pinch/store/listeners/kitchenListeners';
 import {
@@ -30,6 +31,11 @@ import {
   setRecipesLoadError,
 } from '@apps/pinch/store/slices/recipesSlice';
 import {
+  clearSettings,
+  setSettings,
+  setSettingsLoadError,
+} from '@apps/pinch/store/slices/settingsSlice';
+import {
   clearStores,
   setStores,
   setStoresLoadError,
@@ -46,6 +52,7 @@ export function usePinchSync(uid: string | null) {
       dispatch(clearStores());
       dispatch(clearProducts());
       dispatch(clearRecipes());
+      dispatch(clearSettings());
       return;
     }
 
@@ -103,7 +110,19 @@ export function usePinchSync(uid: string | null) {
         ),
     );
 
+    const unsubscribeSettings = startSettingsListener(
+      uid,
+      (settings) => dispatch(setSettings(settings)),
+      (error) =>
+        dispatch(
+          setSettingsLoadError(
+            getErrorMessage(error, 'Unable to load your settings.'),
+          ),
+        ),
+    );
+
     return () => {
+      unsubscribeSettings();
       unsubscribeRecipes();
       unsubscribeProducts();
       unsubscribeStores();

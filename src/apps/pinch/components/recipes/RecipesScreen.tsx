@@ -7,6 +7,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
+import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
 import {
@@ -16,7 +17,7 @@ import {
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { selectRecipeCosts, selectRecipes } from '@apps/pinch/store/selectors';
-import type { RecipesView } from '@apps/pinch/types';
+import type { Gap, RecipesView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
 const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
@@ -24,13 +25,18 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   label: RECIPES_VIEW_LABELS[value],
 }));
 
-function RecipesScreen() {
+interface RecipesScreenProps {
+  uid: string;
+}
+
+function RecipesScreen({ uid }: RecipesScreenProps) {
   const { openSubview } = usePinchOverlay();
   const recipes = useAppSelector(selectRecipes);
   const costs = useAppSelector(selectRecipeCosts);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [fillIn, setFillIn] = useState<Gap[] | null>(null);
 
   const hasSearch = recipes.length >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
@@ -115,13 +121,21 @@ function RecipesScreen() {
       {openId && (
         <RecipeDrawer
           key={openId}
+          uid={uid}
           recipeId={openId}
           onClose={() => setOpenId(null)}
           onModify={(id) => {
             setOpenId(null);
             openSubview({ kind: 'recipe', id });
           }}
+          onFillIn={(gaps) => {
+            setOpenId(null);
+            setFillIn(gaps);
+          }}
         />
+      )}
+      {fillIn && (
+        <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
       )}
     </div>
   );

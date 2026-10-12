@@ -88,7 +88,7 @@ function Pinch() {
   }
 
   const getScreen = () => {
-    if (activeTab === 'recipes') return <RecipesScreen />;
+    if (activeTab === 'recipes') return <RecipesScreen uid={user.uid} />;
     if (activeTab === 'kitchen') return <KitchenScreen uid={user.uid} />;
     return <CalendarScreen />;
   };

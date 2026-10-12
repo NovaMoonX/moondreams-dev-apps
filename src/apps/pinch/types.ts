@@ -97,6 +97,25 @@ export interface ResolvedFamily {
   isCustom: boolean;
 }
 
+export interface NutritionSwitches {
+  calories: boolean;
+  protein: boolean;
+  carbs: boolean;
+  fat: boolean;
+}
+
+/** The kitchen document: what the person has switched on and which nudges they closed. Created by their first change. */
+export interface KitchenSettings {
+  /** Immutable. */
+  uid: string;
+  showNutrition: NutritionSwitches;
+  /** `"{GapKind}:{ingredientId}"` to when it was closed. */
+  dismissedNudges: Record<string, number>;
+  /** Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type KitchenView = 'yours' | 'all';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE';
 export type RecipesView = 'recipes' | 'meals';
