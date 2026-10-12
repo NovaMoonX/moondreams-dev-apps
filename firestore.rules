@@ -1338,6 +1338,17 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    // --- App: pinch ---
+
+    // Only the app's catalog document is covered so far; a person's kitchen (apps/pinch/kitchens/{uid}) gets its rules with the issues that store it.
+    match /apps/pinch {
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {
