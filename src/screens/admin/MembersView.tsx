@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
@@ -8,29 +8,30 @@ import useNow from '@/hooks/useNow';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDateShort } from '@/utils/formatUtils';
 import { getActiveSince } from '@lib/appUsage/appUsage';
-import { appUsageQueryOptions, siteVisitsQueryOptions } from '@lib/appUsage/appUsageQueries';
+import { siteVisitsQueryOptions } from '@lib/appUsage/appUsageQueries';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
 import { MEMBER_SEARCH_THRESHOLD } from './constants';
 import MemberDetailSheet from './MemberDetailSheet';
+import { useAllAppUsage } from './useAllAppUsage';
 
-interface MembersTabProps {
+interface MembersViewProps {
   apps: AppMetadata[];
   users: UserProfile[];
   isUsersLoading: boolean;
   isUsersError: boolean;
+  selectedUid: string | null;
+  onSelectMember: (uid: string | null) => void;
 }
 
-function MembersTab({ apps, users, isUsersLoading, isUsersError }: MembersTabProps) {
+function MembersView({ apps, users, isUsersLoading, isUsersError, selectedUid, onSelectMember }: MembersViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const now = useNow(60_000);
-  const usageQueries = useQueries({ queries: apps.map((app) => appUsageQueryOptions(app.id)) });
+  const allUsage = useAllAppUsage(apps);
   const visitsQuery = useQuery(siteVisitsQueryOptions());
 
-  const sources = [...usageQueries, visitsQuery];
-  const isLoading = isUsersLoading || sources.some((source) => source.isPending);
-  const hasError = isUsersError || sources.some((source) => source.isError);
+  const isLoading = isUsersLoading || allUsage.isLoading || visitsQuery.isPending;
+  const hasError = isUsersError || allUsage.hasError || visitsQuery.isError;
   const lastVisitByUid = new Map(
     (visitsQuery.data ?? []).map((visit) => [visit.uid, visit.lastVisitedAt]),
   );
@@ -40,8 +41,8 @@ function MembersTab({ apps, users, isUsersLoading, isUsersError }: MembersTabPro
     .map((profile) => ({
       profile,
       lastVisitedAt: lastVisitByUid.get(profile.uid) ?? null,
-      appUsage: apps.flatMap((app, index) => {
-        const entry = usageQueries[index]?.data?.find((usage) => usage.uid === profile.uid);
+      appUsage: apps.flatMap((app) => {
+        const entry = allUsage.byAppId[app.id]?.find((usage) => usage.uid === profile.uid);
         return entry
           ? [
               {
@@ -111,7 +112,7 @@ function MembersTab({ apps, users, isUsersLoading, isUsersError }: MembersTabPro
                 type='button'
                 variant='tertiary'
                 className='h-auto w-full justify-start gap-3 px-0! py-3 text-left font-normal'
-                onClick={() => setSelectedUid(member.profile.uid)}
+                onClick={() => onSelectMember(member.profile.uid)}
               >
                 <UserAvatar user={member.profile} size='sm' />
                 <span className='min-w-0 flex-1'>
@@ -136,10 +137,10 @@ function MembersTab({ apps, users, isUsersLoading, isUsersError }: MembersTabPro
       <MemberDetailSheet
         member={selectedMember}
         isLoading={isLoading}
-        onClose={() => setSelectedUid(null)}
+        onClose={() => onSelectMember(null)}
       />
     </div>
   );
 }
 
-export default MembersTab;
+export default MembersView;

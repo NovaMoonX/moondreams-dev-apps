@@ -141,6 +141,8 @@ apps/{appId}/pendingRequests/{docId}
 - Any hook that computes its listener/query key from a caller-supplied array (`useUserInfo`, `usePresence`, etc.) must key its effect on the array's *content* (e.g. `ids.join(',')`), never the array's object identity — callers frequently pass a freshly `.map()`'d/`.filter()`'d array each render, and identity-keyed effects will tear down and resubscribe every listener on every unrelated re-render.
 
 ### React and state patterns
+- **Shareable screen state (which view, which item, which tab) lives in the URL via `nuqs`** (`NuqsAdapter` from `nuqs/adapters/react-router/v7` at the router root, `useQueryStates` with parsers declared beside the feature, wrapped in one `use<Feature>UrlState` hook with named actions). `push` for a step deeper, `replace` for peer switches. Drafts stay in React state. See CLAUDE.md "State, data, and performance" and `src/screens/admin/useDashboardUrlState.ts`.
+- **Never stack two tab bars (tab bar, thin content, tab bar).** One tab bar per screen; a phone shows a list that opens its detail, a wide screen a left panel beside it. See CLAUDE.md "Design & UX".
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
 - Prefer deriving values directly during render, or move the update into an event handler or computed value.
 - Keep effects focused on async subscriptions or fetching rather than mirroring prop-driven state.

@@ -11,6 +11,8 @@ import { ACTIVE_WINDOW_MONTHS, getActiveSince } from '@lib/appUsage/appUsage';
 import { appUsageQueryOptions } from '@lib/appUsage/appUsageQueries';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
+import { getUsageRows } from './usageRows';
+
 type UsageFilter = 'started' | 'active';
 
 interface AppUsageTabProps {
@@ -29,10 +31,7 @@ function AppUsageTab({ app, users, isUsersLoading, isUsersError }: AppUsageTabPr
   const isError = usageQuery.isError || isUsersError;
 
   const activeSince = getActiveSince(now);
-  const rows = (usage ?? []).flatMap((entry) => {
-    const profile = users.find((candidate) => candidate.uid === entry.uid);
-    return profile ? [{ ...entry, profile, isActive: entry.lastActiveAt >= activeSince }] : [];
-  });
+  const rows = getUsageRows(usage, users, activeSince);
   const startedRows = [...rows].sort((a, b) => b.startedAt - a.startedAt);
   const activeRows = rows
     .filter((row) => row.isActive)
