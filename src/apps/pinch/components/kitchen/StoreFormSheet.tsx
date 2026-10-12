@@ -66,13 +66,13 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
     if (!store) {
       return;
     }
-    const usage = await dispatch(
-      getUsage({ uid, kind: 'STORE', id: store.id }),
-    )
+    const usage = await dispatch(getUsage({ uid, kind: 'STORE', id: store.id }))
       .unwrap()
       .catch(() => null);
     if (usage === null) {
-      setError("We couldn't check whether this store is in use. Try again in a moment.");
+      setError(
+        "We couldn't check whether this store is in use. Try again in a moment.",
+      );
       return;
     }
 
@@ -213,13 +213,13 @@ function CatalogStoreView({ uid, store, onClose }: CatalogStoreViewProps) {
   );
 
   const handleDelete = async () => {
-    const usage = await dispatch(
-      getUsage({ uid, kind: 'STORE', id: store.id }),
-    )
+    const usage = await dispatch(getUsage({ uid, kind: 'STORE', id: store.id }))
       .unwrap()
       .catch(() => null);
     if (usage === null) {
-      setError("We couldn't check whether this store is in use. Try again in a moment.");
+      setError(
+        "We couldn't check whether this store is in use. Try again in a moment.",
+      );
       return;
     }
 

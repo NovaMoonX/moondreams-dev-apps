@@ -49,7 +49,10 @@ export const ensureCatalogStore = createAsyncThunk<
         const current = await transaction.get(ref);
         if (current.exists()) {
           if (current.data().isArchived === true) {
-            transaction.update(ref, { isArchived: false, updatedAt: Date.now() });
+            transaction.update(ref, {
+              isArchived: false,
+              updatedAt: Date.now(),
+            });
           }
           return;
         }

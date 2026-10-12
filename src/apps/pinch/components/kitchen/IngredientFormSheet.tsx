@@ -364,9 +364,7 @@ function IngredientFormSheet({
     }
     const usage = isCatalog
       ? null
-      : await dispatch(
-          getUsage({ uid, kind: 'INGREDIENT', id: ingredient.id }),
-        )
+      : await dispatch(getUsage({ uid, kind: 'INGREDIENT', id: ingredient.id }))
           .unwrap()
           .catch(() => undefined);
     if (usage === undefined) {

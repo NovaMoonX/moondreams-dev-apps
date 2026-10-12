@@ -6,7 +6,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { freezeLoadedPastMeals } from '@apps/pinch/store/actions/freezeActions';
+import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
@@ -74,7 +74,7 @@ export const saveRecipe = createAsyncThunk<
     const path = getRecipeCoverPath(uid, recipeId);
 
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       if (draft.coverFile) {
         await uploadFile(
           path,
@@ -182,7 +182,7 @@ export const removeRecipe = createAsyncThunk<
     );
 
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       if (isInUse(await readUsage(uid, getState(), 'RECIPE', id))) {
         await updateDoc(recipeDoc(uid, id), {
           isArchived: true,

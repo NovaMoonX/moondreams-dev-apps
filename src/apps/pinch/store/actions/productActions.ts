@@ -12,7 +12,7 @@ import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { freezeLoadedPastMeals } from '@apps/pinch/store/actions/freezeActions';
+import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import type { Product, Unit } from '@apps/pinch/types';
 import { buildCatalogRecord } from '@apps/pinch/utils/ingredientRecord';
 import { getGapKeys } from '@apps/pinch/utils/gaps';
@@ -59,7 +59,7 @@ export const saveProduct = createAsyncThunk<
     const becomesDefault = draft.makeDefault || !hasOthers;
 
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       const batch = writeBatch(db);
       const productRef = kitchenDoc(uid, 'products', productId);
       if (draft.id) {
@@ -146,7 +146,7 @@ export const setDefaultProduct = createAsyncThunk<
   'pinch/products/setDefault',
   async ({ uid, ingredientId, productId }, { getState, rejectWithValue }) => {
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       await runTransaction(db, async (transaction) => {
         const productSnapshot = await transaction.get(
           kitchenDoc(uid, 'products', productId),
@@ -216,7 +216,7 @@ export const removeProduct = createAsyncThunk<
         .sort((a, b) => a.createdAt - b.createdAt)[0]?.id ?? null;
 
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       if (!target) {
         await deleteDoc(kitchenDoc(uid, 'products', id));
         return id;

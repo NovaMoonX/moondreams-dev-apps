@@ -11,6 +11,7 @@ import type {
   MealType,
   PlannedMeal,
 } from '@apps/pinch/types';
+import { hasCompleteCostData } from '@apps/pinch/store/actions/freezeActions';
 import { selectCostContext } from '@apps/pinch/store/selectors';
 import { getLocalTodayDate } from '@apps/pinch/utils/dayKeys';
 import { buildSnapshot } from '@apps/pinch/utils/mealMath';
@@ -40,6 +41,7 @@ export const planMeal = createAsyncThunk<
     { getState, rejectWithValue },
   ) => {
     const now = Date.now();
+    const state = getState();
     const id = generateUuid();
     const rows = items.map((item) => ({ id: generateUuid(), ...item }));
     const plannedMeal: PlannedMeal = {
@@ -51,8 +53,8 @@ export const planMeal = createAsyncThunk<
       items: rows,
       refIds: Array.from(new Set(rows.map((row) => row.refId))),
       snapshot:
-        date < getLocalTodayDate(now)
-          ? buildSnapshot(rows, selectCostContext(getState()), now)
+        date < getLocalTodayDate(now) && hasCompleteCostData(state)
+          ? buildSnapshot(rows, selectCostContext(state), now)
           : null,
       createdAt: now,
       updatedAt: now,

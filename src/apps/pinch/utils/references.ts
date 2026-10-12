@@ -17,7 +17,11 @@ export const NO_USAGE: Usage = {
 export const isInUse = (usage: Usage) =>
   usage.plannedMeals + usage.savedMeals + usage.recipes + usage.products > 0;
 
-const countSavedMeals = (meals: Meal[], kind: 'RECIPE' | 'INGREDIENT', id: string) =>
+const countSavedMeals = (
+  meals: Meal[],
+  kind: 'RECIPE' | 'INGREDIENT',
+  id: string,
+) =>
   meals.filter((meal) =>
     meal.items.some((item) => item.kind === kind && item.refId === id),
   ).length;
@@ -61,8 +65,10 @@ const plural = (count: number, one: string, many: string) =>
 /** "3 planned meals and a saved meal", for the line that says why something will be hidden, not erased. */
 export function describeUsage(usage: Usage): string {
   const parts = [
-    usage.plannedMeals > 0 && plural(usage.plannedMeals, 'planned meal', 'planned meals'),
-    usage.savedMeals > 0 && plural(usage.savedMeals, 'saved meal', 'saved meals'),
+    usage.plannedMeals > 0 &&
+      plural(usage.plannedMeals, 'planned meal', 'planned meals'),
+    usage.savedMeals > 0 &&
+      plural(usage.savedMeals, 'saved meal', 'saved meals'),
     usage.recipes > 0 && plural(usage.recipes, 'recipe', 'recipes'),
     usage.products > 0 && plural(usage.products, 'product', 'products'),
   ].filter((part): part is string => part !== false);
