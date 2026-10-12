@@ -538,7 +538,7 @@ No cached document is ever written back whole. There is no cross-person concurre
 
 - Forms: `FormSheet` for the ingredient, product, store and settings forms; `Subview` for the recipe and meal builders and the stores and products lists; `DetailSheet` for day, planned meal, recipe, meal and ingredient details; `ModalFooterActions` with Cancel left, a `DeleteIconButton` beside it on edit, the primary alone on the right.
 - Titles are plain nouns ("Recipe", "Product", "Store", "Meal", "Settings"); the verb is on the primary button and the destructive confirm.
-- `PickOrCreate` for family, store and saved meal; `PillGroup` for meal type and the Recipes / Meals and Yours / All switches (`isThin`); `AppToggle` for the four nutrition switches; `SuggestionChips` is not used.
+- `PickOrCreate` for family and store; `PillGroup` for meal type, "Start from a saved meal" and the Recipes / Meals and Yours / All switches (`isThin`); `AppToggle` for the four nutrition switches; `SuggestionChips` is not used.
 - Lists search from `LIST_SEARCH_THRESHOLD` rows; Kitchen groups by family with `SectionDivider` and mounts a family group only near the viewport (`LazyMount`).
 - Images from URLs (a recipe cover, a store logo) are `FallbackImage` with a themed fallback (a tinted emoji tile, a letter tile).
 - Delete confirmations go through `useActionModal().confirm` with `destructive: true` and say what archiving means when something is in use.
@@ -548,7 +548,7 @@ No cached document is ever written back whole. There is no cross-person concurre
 
 - `src/apps/pinch/pinch.css` overrides Dreamer UI's semantic tokens on `html.pinch-theme`: clean white-on-white (black-on-black in dark) surfaces with hairline borders, an ink `--color-primary` for the one filled action, see-through secondary buttons, and a single warm `--pinch-drizzle` used only as a small accent; `--radius-md` and up raised for a rounded counter feel; field text inset; hairline option pills with a drizzle outline when selected; tertiary buttons use the normal text colour. `usePinchTheme()` adds the class to `<html>` only while the app is mounted.
 - Meal-type colours are tokens, not raw palette classes (`--pinch-meal-breakfast … --pinch-meal-drink`), checked on a thin bar in light and dark.
-- The Pinch rules file is written in the same PR as the shell: `.github/instructions/pinch.instructions.md` with an identical `.claude/rules/pinch.md` (metaphor: a home cook's counter; palette roles; shape language; what the emoji mean; calendar bar anatomy; nudge wording; missing details appear only as in-context nudge lines).
+- The Pinch rules file is written in the same PR as the shell: `.github/instructions/pinch.instructions.md` with an identical `.claude/rules/pinch.md` (metaphor: a chef's apron; palette roles; shape language; what the emoji mean; calendar bar anatomy; nudge wording; missing details appear only as in-context nudge lines).
 
 ---
 
@@ -600,7 +600,7 @@ src/apps/pinch/
 │   ├── ingredientMatch.ts  catalogSearch.ts  weeks.ts
 │   └── markdown/   recipeMarkdown.ts  dayMarkdown.ts  weekMarkdown.ts  ingredientsMarkdown.ts
 └── components/
-    ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx
+    ├── shell/       PinchNav.tsx  LoadingSkeleton.tsx
     ├── calendar/    CalendarScreen.tsx  MealBarCell.tsx  StatsRow.tsx  DayDrawer.tsx  DayPeek.tsx
     │                PlannedMealView.tsx  BreakdownDrawer.tsx
     ├── plan/        PlanMealSubview.tsx  MealBuilder.tsx  ItemSearch.tsx  ServingStepper.tsx

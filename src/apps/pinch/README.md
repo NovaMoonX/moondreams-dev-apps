@@ -86,7 +86,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 ## How It Feels
 
-- **The metaphor is a home cook's counter.** Warm, hands-on, and a little playful, like measuring by the pinch. A warm orange accent on a clean slate base, with full light and dark modes.
+- **The metaphor is a home cook's counter.** Warm, hands-on, and a little playful, like measuring by the pinch. A clean chef's-apron look, white on white by day and black on black by night, with a small drizzle of warm orange as the only accent.
 - **Personal.** Built around your kitchen, your stores, and your prices.
 - **Mobile-first.** Everything works one-handed on a phone, standing at the counter.
 - **Details come later.** Pinch asks for a name and little else to get going. The rest waits behind quiet nudges until you're ready.
