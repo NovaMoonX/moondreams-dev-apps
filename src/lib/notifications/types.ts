@@ -14,6 +14,8 @@ export interface Reminder {
   status: ReminderStatus;
   channels: NotificationChannel[];
   relatedEntityPath: string | null;
+  /** Where tapping the notification goes: a same-origin path and query (`/waypoint?trip=…`). Missing on reminders saved before links existed. */
+  link: string | null;
   recurrence: ReminderRecurrence;
   createdBy: string;
   createdAt: number;

@@ -27,6 +27,47 @@ const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000;
 // otherwise flush its whole backlog to people's phones at once.
 const STALE_AFTER_MS = 30 * 60 * 1000;
 
+const APP_ORIGIN = 'https://apps.moondreams.dev';
+
+const APP_PATHS: Record<string, string> = {
+  'worth-the-wait': '/worth-the-wait',
+  'nine-lives': '/nine-lives',
+  waypoint: '/waypoint',
+  'a-list': '/a-list',
+};
+
+function toAppUrl(path: unknown): string | null {
+  if (typeof path !== 'string' || !path.startsWith('/')) {
+    return null;
+  }
+
+  try {
+    const url = new URL(path, APP_ORIGIN);
+    return url.origin === APP_ORIGIN ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The absolute URL a tapped reminder opens: its own `link`, else the trip or app it belongs
+ * to for reminders saved before links existed. Never leaves the app's origin.
+ */
+export function resolveReminderLink(reminder: DocumentData): string {
+  const own = toAppUrl(reminder.link);
+
+  if (own) {
+    return own;
+  }
+
+  const tripId = /^apps\/waypoint\/trips\/([^/]+)\//.exec(String(reminder.relatedEntityPath ?? ''))?.[1];
+  const fallback = tripId
+    ? toAppUrl(`/waypoint?trip=${encodeURIComponent(tripId)}`)
+    : toAppUrl(APP_PATHS[reminder.appId as string] ?? '/');
+
+  return fallback ?? APP_ORIGIN;
+}
+
 function normalizeUids(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -108,6 +149,7 @@ async function deliverReminder(
         title: reminder.title,
         body: reminder.body,
       },
+      webpush: { fcmOptions: { link: resolveReminderLink(reminder) } },
     });
   }
 

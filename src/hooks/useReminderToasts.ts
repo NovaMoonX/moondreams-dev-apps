@@ -46,15 +46,15 @@ export function useReminderToasts() {
         action: {
           label: 'View',
           onClick: () => {
-            const path = APP_REGISTRY_ID_MAP[reminder.appId]?.path;
-            if (path && location.pathname !== path) {
-              navigate(path);
+            const target = reminder.link ?? APP_REGISTRY_ID_MAP[reminder.appId]?.path;
+            if (target && target !== `${location.pathname}${location.search}`) {
+              navigate(target);
             }
           },
         },
       });
     },
-    [addToast, navigate, location.pathname],
+    [addToast, navigate, location.pathname, location.search],
   );
 
   useEffect(() => {
@@ -73,6 +73,7 @@ export function useReminderToasts() {
         status: 'sent',
         channels: ['push'],
         relatedEntityPath: null,
+        link: '/waypoint',
         recurrence: 'none',
         createdBy: '',
         createdAt: Date.now(),

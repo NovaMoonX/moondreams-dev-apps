@@ -123,6 +123,8 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Schedule:** polls every 5 minutes.
 - **Timing:** it looks ahead over the whole window and waits out each reminder's exact delay, so delivery is accurate to the second without a task queue.
 - **Overdue reminders are dropped, not sent:** one more than 30 minutes past its time is marked `expired` (a yearly one just rolls to its next date), so an outage or a missing index never flushes its backlog to phones. A reminder up to 30 minutes late still sends.
+- **Where a tap goes:** each reminder carries a `link`, a path and query inside the app that the scheduling app sets (`/waypoint?trip=<id>`, `/nine-lives`, `/a-list?tab=watchlist`). The function turns it into an absolute `https://apps.moondreams.dev` URL and sends it as the push's link, so tapping opens the installed app there. A link that is missing (reminders saved before links existed), or that points anywhere but the app, falls back to the trip for a Waypoint reminder (read from `relatedEntityPath`) or else the app's own page, and never leaves the app's origin. `firestore.rules` also refuses a `link` that isn't a path inside the app. A new app that schedules reminders adds its page to `APP_PATHS` in `sendScheduledReminders.ts`.
+- **One notification, not two:** the service worker doesn't show the notification itself. Firebase shows a push that carries a `notification` and opens its link on tap; showing it by hand as well made a second copy with no link.
 - **Index:** the `status == pending` + `scheduledFor <=` query on `reminders` needs the composite index in `firestore.indexes.json`. Without it every run fails with `FAILED_PRECONDITION` and no reminder is sent.
 
 ## Local development
