@@ -1,0 +1,159 @@
+# Pinch 🧂
+
+## The Short
+
+Pinch is a calm, personal kitchen planner. It comes stocked with a catalog of everyday ingredients and seasonings, keeps a library of your recipes and the meals you put together from them, and puts what you plan to eat on a calendar. Add the products you buy and what you pay for them, and every recipe, meal, and week knows what it costs. Nutrition is there too, whenever you want to see it.
+
+## The Story
+
+Planning meals with an AI chat is easy to start and hard to keep going. Every conversation begins from scratch: it can't see what's in your kitchen, doesn't remember what you cooked last week, and has no idea what any of it costs. The recipes are good, but the context is gone by tomorrow. Pinch is where that context lives. Your ingredients, the products you buy, your recipes, and your plan sit together in one place, and recipes travel to and from any chat whenever you want a second opinion.
+
+## How It Works
+
+1. **Start with a stocked kitchen.** A ready-made catalog of everyday ingredients and seasonings is waiting, each with an icon and its nutrition.
+2. **Add what's missing.** Create your own ingredients, from a variant of an existing one (Chicken → Chicken breast) to a ready-to-eat food like Doritos. A name is all it takes to start.
+3. **Add the products you buy.** Attach a store, a price, and a package size to any ingredient, like chicken breast from Walmart, whenever you have them handy. Pick the store from a list of well-known ones with their logos, or add your own.
+4. **Build recipes.** Write one by hand, or hand the AI text, a photo, or a PDF and it fills in the recipe for you to review.
+5. **Bring recipes in from an AI chat.** Paste a recipe copied from any chat.
+6. **Put meals together.** A meal is a list of items, each a recipe or an ingredient, each with its own serving count. Save the ones you eat again.
+7. **Plan your days.** Put a meal, a single recipe, or a single ingredient on the calendar under breakfast, lunch, dinner, snack, dessert, or drink.
+8. **Tweak any day.** Skip the peppers on Tuesday or double the rice on Friday without touching the saved meal.
+9. **See your week at a glance.** Each day shows thin color bars and emojis for what's being eaten, with a stats row for the month above it.
+10. **Fill in the details as you go.** A missing price, package size, or nutrition value shows up as a quiet line right where it matters ("2 ingredients need a price · Add prices"), so nothing is demanded up front and a tap fills it in.
+11. **Turn on nutrition if you want it.** Calories, protein, carbs, and fat each stay hidden until you switch them on.
+12. **Take it to a chat.** Copy a recipe, a planned day or week, or your list of ingredients as Markdown to ask an AI for ideas, then paste a recipe back in as a new one.
+
+### Finding Your Way, In Detail
+
+- **Calendar** (left): what you plan to eat, with the month's stats above it.
+- **Recipes** (center): your recipes and saved meals.
+- **Kitchen** (right): everything you buy. Ingredients, their products, and your stores live here and, as it grows, how much you have on hand, servings you've prepared, and your shopping list with a section for what's running low.
+
+### Filling In As You Go, In Detail
+
+- **Starting takes almost nothing.** A new ingredient needs a name. A new product needs a store and a price. A new recipe needs a title and its ingredients.
+- **Everything else is invited, in context.** A price for an ingredient you use, a package size, a nutrition value, a conversion Pinch needs to compare two amounts: each appears as one quiet line exactly where the gap affects a number. A recipe's cost area says "2 ingredients need a price · Add prices", and tapping it opens a short form for just those.
+- **One tap fills several.** When a recipe arrives with a dozen unknown prices, the line is still one line, and its form walks through them together.
+- **Totals say what they leave out.** A cost with gaps reads "$14.20 · leaves out 2 ingredients", so a number is never quietly low.
+- **Only what you use, only what you've switched on.** Nudges cover ingredients that are in a recipe or on the calendar, and nutrition nudges appear only for the metrics you've turned on.
+- **Always easy to wave off.** Every nudge has a small close button; closing one keeps that line away for that ingredient. Nudges live only where the gap is, in the moment you're looking at the number.
+
+### Recipes and Meals, In Detail
+
+- **A recipe is how to make one thing.** Adobo chicken, cilantro lime rice, your house sauce. Recipes live in your library and have no date.
+- **A meal is what you eat in a sitting.** It's a list of items with a serving count on each: adobo chicken, cilantro lime rice, black beans, salsa, sour cream, peppers.
+- **An item is a recipe or an ingredient.** Anything in your catalog can sit in a meal next to your recipes. Doritos is an ingredient: its nutrition and price live on it once, and follow it into every meal.
+- **A meal can be a single item.** A one-pot chicken pan is just a recipe on the calendar by itself.
+- **Save a meal to reuse it.** Saved meals sit with your recipes in the Recipes tab.
+- **Every day has its own copy of a meal.** Putting a meal on the calendar copies its items onto that day. Changing one day's items leaves the saved meal and every other day as they were, and editing the saved meal later leaves days already planned as they were. "Save as a new meal" turns a tweaked day into a meal of its own.
+- **Recipes are shared by everything that uses them.** Edit a recipe and every meal still ahead of today that includes it shows the change.
+- **Deleting something in use archives it.** A recipe, ingredient, or product that's part of planned days disappears from lists and pickers, and the days and totals that used it stay whole.
+
+### Ingredients, Variants, and Products, In Detail
+
+- **An ingredient is anything you buy.** Chicken breast, paprika, a bag of Doritos.
+- **Three layers, kept separate.** A *family* groups related ingredients (Chicken). An *ingredient* is the specific thing recipes and meals use (Chicken breast). A *product* is what you actually buy (Chicken breast, Walmart, $9.48 for 3 lb).
+- **Recipes only ever name the ingredient.** A recipe says "chicken breast", never "Walmart chicken breast", so the same recipe works wherever you shop and reads correctly if it's ever shared. Products feed your own numbers.
+- **Prices live on products.** A product's price and size give an ingredient its cost per unit, and that rolls up into recipe cost, meal cost, and the calendar totals.
+- **One level of grouping, on purpose.** Families don't nest, so the catalog can grow to hundreds of ingredients without becoming a tree to maintain.
+- **Your own ingredients sit beside the built-in ones.** A custom ingredient can join an existing family (Chicken → Chicken feet) or start its own.
+
+### Stores, In Detail
+
+- **A list of well-known stores is ready.** Pinch includes the grocery stores and warehouse clubs most people shop at, each with its logo, so adding "Walmart" is a tap, not typing.
+- **Add your own.** The corner market, a farm stand, an online shop: give it a name and, if you like, a photo or logo. Without an image it gets a tile with its first letter.
+- **Pick a store when you add a product.** The picker shows your stores first, then the well-known ones, with a search once the list grows.
+- **Stores are for you.** They group your products and, later, your shopping list. They aren't part of anything you copy out or share.
+
+### Cost and Nutrition, In Detail
+
+- **Cost is always on.** A recipe shows its total and cost per serving, a meal shows the sum of its items, and the calendar's stats row shows spend and average cost per meal. Tapping it breaks the numbers down by day and by meal.
+- **Cost appears when amounts can be compared.** A recipe's amount and a product's package size line up when they measure the same kind of thing (pounds with ounces, cups with tablespoons), or when the catalog knows the conversion (a cup of flour to grams). Anything that can't be compared is called out by name with a nudge to fix it and is left out of the totals, so every number shown is one the app can stand behind.
+- **Past days keep their numbers.** Once a day has passed, its cost and nutrition are fixed as they were that day. Updating a price or editing a recipe changes what's ahead, not last month's totals.
+- **Nutrition is yours to enter, and yours to show.** Built-in ingredients arrive with calories, protein, carbs, and fat. You can add or adjust them on any ingredient. A recipe's nutrition adds up from its ingredients, and you can type your own numbers over it, handy when a recipe comes with its own from the web.
+- **Showing nutrition is opt-in.** In settings, calories, protein, carbs, and fat are four separate switches, all off to start. Turning one on shows it per serving on recipes and meals and as a daily and period total on the calendar's stats row. With protein on, the stats row also shows your average price per gram of protein.
+- **Blanks are named.** An ingredient with no nutrition entered is called out with a nudge and left out of the totals while that metric is on.
+- **A week runs Monday to Sunday.**
+
+### Chat Hand-off, In Detail
+
+- **Copy out:** recipes, a single day's plan, and a week's plan can each be copied as clean Markdown. Prices, stores, and products are never included.
+- **Copy your ingredients:** a Markdown list of the ingredients you work with, grouped by family, so a chat knows what's in your kitchen. "Your ingredients" are the ones you've added or adjusted, the ones you've attached a product to, and the ones your recipes use; the full catalog stays in Browse all. When stock tracking arrives, the copy also carries what you have on hand and what's running low.
+- **Paste in:** a paste box accepts up to 20,000 characters of text. The AI reads it and fills in a new recipe for you to review.
+- **From a file:** a photo, screenshot, or PDF (up to 10 MB) works the same way.
+- **Always reviewed:** the AI fills in the recipe form and tells you what it couldn't read, but nothing is saved until you confirm.
+- **Unknown ingredients:** if a recipe mentions something that isn't in the catalog, it's offered as a new custom ingredient during review, so you decide what joins your catalog.
+
+## How It Feels
+
+- **The metaphor is a home cook's counter.** Warm, hands-on, and a little playful, like measuring by the pinch. A warm orange accent on a clean slate base, with full light and dark modes.
+- **Personal.** Built around your kitchen, your stores, and your prices.
+- **Mobile-first.** Everything works one-handed on a phone, standing at the counter.
+- **Details come later.** Pinch asks for a name and little else to get going. The rest waits behind quiet nudges until you're ready.
+- **Zero pressure.** Nothing nags you to plan every meal or fill in every price. An empty day is fine, and a missing price just means a number is left out.
+- **Numbers when you want them.** Cost is a quiet companion; nutrition stays out of sight until you turn it on.
+- **AI as a helper.** Every feature works fully by hand; AI just saves typing.
+
+## The Build Plan
+
+### Core MVP
+- [ ] Browse and search a ready-made catalog of everyday ingredients and seasonings, grouped into families, each with an icon and built-in nutrition
+- [ ] Add, edit, and delete your own ingredients, including ready-to-eat foods, as a new family or a variant of an existing one
+- [ ] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
+- [ ] Add products to an ingredient (store, label, price, package size), choose a default, and edit or remove them
+- [ ] Enter or adjust nutrition on any ingredient
+- [ ] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
+- [ ] See a recipe's nutrition added up from its ingredients, or type your own over it
+- [ ] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
+- [ ] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
+- [ ] Copy a recipe as Markdown
+- [ ] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
+- [ ] Meal calendar with a month view showing thin color bars and emojis per day
+- [ ] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
+- [ ] Stats row on the calendar: total spend and average cost per meal for the month, with a breakdown by day and by meal
+- [ ] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
+- [ ] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
+- [ ] Copy a day's or week's plan, and your list of ingredients, as Markdown
+
+### Next Steps
+- [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"
+- [ ] Mark a meal as made: its ingredients come out of your stock, and a batch adds prepared servings you can plan meals from
+- [ ] Shopping list built from the meals you've planned, with a section for low-stock ingredients and totals from your products, grouped by store
+- [ ] Add ingredients, stock, and products in bulk from photos of your fridge, your cabinets, or a grocery receipt, reviewed before saving
+- [ ] Update an existing recipe by pasting changes into it, reviewing what would change before applying
+- [ ] Week view and a dedicated day-detail view
+- [ ] Use one recipe inside another, like a house sauce in a dish
+- [ ] Tag and filter recipes (mains, sides, sauces, desserts)
+- [ ] Add a one-off item to a meal with just a name, a cost, and nutrition, like dinner out
+- [ ] Set your own conversions (1 can = 400 g) so any ingredient can be priced, with AI suggestions
+- [ ] AI suggestions for a custom ingredient's nutrition
+- [ ] Swap a recipe's ingredient for another in its family and see the cost change
+- [ ] Compare products for an ingredient and see the cheapest per gram of protein
+- [ ] Create a recipe from a web link
+- [ ] Cook mode: one step at a time with a keep-awake screen
+
+### Stretch Goals
+- [ ] Hands-free voice navigation in cook mode
+- [ ] Look up a product by barcode
+- [ ] Price history for a product over time
+- [ ] Daily calorie and protein goals shown against your plan
+- [ ] Share a recipe with a link (ingredient names only, never stores or prices)
+- [ ] Share a meal plan with someone you cook with
+
+## What Makes This Different From a Generic Recipe App
+
+- **A stocked starting catalog, including seasonings.** The everyday staples and the spice rack already exist, with nutrition, so a recipe can be built in seconds and ingredients stay consistent from one recipe to the next.
+- **Cuts and varieties are first-class.** Chicken breast and chicken thigh are different ingredients with different prices and protein, grouped under one family so they're easy to find and swap.
+- **Meals are compositions, not recipes.** A plate is an entree, a side, and a bag of chips. Recipes and plain ingredients sit side by side in one meal, and any day can bend it.
+- **What you pay is part of the app.** Products tie real prices at real stores to recipes and meals, so costs are calculated from your own shopping.
+- **The calendar reads like a food diary at a glance.** Days show slim color bars and emojis per meal type, with the month's numbers above.
+
+## Under the Hood
+
+- **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
+- **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
+- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, meals, calendar entries, and per-user settings; Firebase Storage for recipe and store images
+- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return structured drafts for review
+- **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (license to be confirmed before the catalog ships), stored per 100 g alongside common unit conversions; money is stored as whole cents
+- **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service and its terms are to be confirmed before launch.
+- **Ingredient icons:** open-license SVG food emoji sets (Fluent Emoji under MIT, Noto Emoji under Apache-2.0, or Twemoji under CC-BY-4.0), vendored into the app with their license notices; spices and anything without a matching emoji fall back to a generic jar glyph
