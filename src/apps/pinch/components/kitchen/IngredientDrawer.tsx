@@ -3,7 +3,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
-import { UNIT_LABELS } from '@apps/pinch/constants';
+import { NUTRITION_CELLS, UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectIngredientFamiliesById,
   selectIngredientsById,
@@ -14,13 +14,6 @@ interface IngredientDrawerProps {
   onClose: () => void;
   onModify: (id: string) => void;
 }
-
-const NUTRITION_CELLS = [
-  { key: 'calories', label: 'Calories', unit: '' },
-  { key: 'protein', label: 'Protein', unit: ' g' },
-  { key: 'carbs', label: 'Carbs', unit: ' g' },
-  { key: 'fat', label: 'Fat', unit: ' g' },
-] as const;
 
 function IngredientDrawer({
   ingredientId,
