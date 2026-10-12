@@ -152,7 +152,7 @@ interface RemoveStoreInput {
   id: string;
 }
 
-/** Deletes the store and its image; products that point at it arrive with Issue 5, which keeps them with their store shown as "Removed store". */
+/** Deletes the store and its image; products that point at it are kept, with their store shown as "Removed store". */
 export const removeStore = createAsyncThunk<
   string,
   RemoveStoreInput,

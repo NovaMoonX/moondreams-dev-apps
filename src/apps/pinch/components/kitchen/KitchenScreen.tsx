@@ -215,7 +215,8 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         />
       )}
       {overlay?.kind === 'product' &&
-        ingredientsById.has(overlay.ingredientId) && (
+        ingredientsById.has(overlay.ingredientId) &&
+        (overlay.productId === null || productsById.has(overlay.productId)) && (
           <ProductFormSheet
             key={overlay.productId ?? `new-${overlay.ingredientId}`}
             uid={uid}

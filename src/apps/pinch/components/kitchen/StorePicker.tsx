@@ -161,7 +161,7 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              if (ownName.trim() !== '') void addOwnStore();
+              if (ownName.trim() !== '' && !isWorking) void addOwnStore();
             }
           }}
         />

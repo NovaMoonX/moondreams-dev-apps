@@ -399,7 +399,7 @@ function IngredientFormSheet({
 
     const isUnchangedCatalog =
       isCatalog &&
-      record === null &&
+      !ingredient.isAdjusted &&
       (nutrition === null ||
         (['calories', 'protein', 'carbs', 'fat'] as const).every(
           (metric) => nutrition[metric] === ingredient.per100g[metric],
@@ -468,7 +468,7 @@ function IngredientFormSheet({
         submitButton={
           <ModalFooterActions
             leftActions={
-              record && (
+              (isCatalog ? ingredient.isAdjusted : record !== null) && (
                 <DeleteIconButton
                   label={isCatalog ? 'Use the built-in values' : 'Delete'}
                   onClick={() => void handleDelete()}
