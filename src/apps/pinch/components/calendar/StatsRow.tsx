@@ -5,7 +5,7 @@ import HelpTip from '@/components/HelpTip';
 import StatTile from '@/components/StatTile';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import type { Gap } from '@apps/pinch/types';
-import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import type { MonthStats } from '@apps/pinch/utils/stats';
 
@@ -29,8 +29,7 @@ function StatsRow({ uid, stats, onOpenBreakdown, onFillIn }: StatsRowProps) {
           detail={
             leftOutCount > 0 ? (
               <span className='text-muted-foreground text-xs'>
-                leaves out {leftOutCount}{' '}
-                {leftOutCount === 1 ? 'item' : 'items'}
+                {formatLeftOut(stats.leftOut)}
               </span>
             ) : undefined
           }

@@ -4,6 +4,7 @@ import DetailSheet from '@/components/DetailSheet';
 import { PillGroup } from '@/components/PillGroup';
 import { MEAL_TYPE_EMOJIS, MEAL_TYPE_LABELS } from '@apps/pinch/constants';
 import { formatDayTitle, formatMonthTitle } from '@apps/pinch/utils/dayKeys';
+import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import type { MonthStats, Totals } from '@apps/pinch/utils/stats';
 
@@ -43,7 +44,12 @@ function BreakdownDrawer({ monthKey, stats, onClose }: BreakdownDrawerProps) {
       title={`${formatMonthTitle(monthKey)} · ${formatCost(stats.spendCents)}`}
     >
       <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
-        <div className='shrink-0'>
+        <div className='shrink-0 space-y-3'>
+          {stats.leftOut.length > 0 && (
+            <p className='text-muted-foreground text-sm'>
+              The total {formatLeftOut(stats.leftOut)}.
+            </p>
+          )}
           <PillGroup
             label='Breakdown'
             options={VIEW_OPTIONS}
@@ -63,6 +69,11 @@ function BreakdownDrawer({ monthKey, stats, onClose }: BreakdownDrawerProps) {
                 <span className='text-muted-foreground block text-xs'>
                   {row.totals.count} {row.totals.count === 1 ? 'meal' : 'meals'}
                 </span>
+                {row.totals.leftOut.length > 0 && (
+                  <span className='text-muted-foreground block text-xs'>
+                    {formatLeftOut(row.totals.leftOut)}
+                  </span>
+                )}
               </span>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
                 {row.totals.totalCents === null
