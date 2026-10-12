@@ -18,12 +18,14 @@ interface IngredientRowProps {
 }
 
 function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
-  const defaultProduct = useAppSelector(selectDefaultProducts).get(
-    ingredient.id,
+  const defaultProduct = useAppSelector((state) =>
+    selectDefaultProducts(state).get(ingredient.id),
   );
   const storeName =
-    useAppSelector(selectStoresById).get(defaultProduct?.storeId ?? '')?.name ??
-    'Removed store';
+    useAppSelector(
+      (state) =>
+        selectStoresById(state).get(defaultProduct?.storeId ?? '')?.name,
+    ) ?? 'Removed store';
 
   return (
     <Button

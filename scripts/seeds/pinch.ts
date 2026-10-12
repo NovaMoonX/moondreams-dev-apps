@@ -249,6 +249,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     firestoreDocuments:
       SEED_FAMILIES.length +
       SEED_INGREDIENTS.length +
+      SEED_PRODUCTS.length +
       CATALOG_STORE_SEEDS.length +
       1,
   };

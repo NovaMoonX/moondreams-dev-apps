@@ -34,7 +34,11 @@ import {
   removeProduct,
   saveProduct,
 } from '@apps/pinch/store/actions/productActions';
-import { selectProductsByIngredient } from '@apps/pinch/store/selectors';
+import {
+  selectDefaultProducts,
+  selectProductsByIngredient,
+  selectStoresById,
+} from '@apps/pinch/store/selectors';
 import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 
 const { custom } = FormFactories;
@@ -159,6 +163,12 @@ function ProductFormSheet({
   const otherCount = (
     useAppSelector(selectProductsByIngredient).get(ingredient.id) ?? []
   ).filter((candidate) => candidate.id !== product?.id).length;
+  const isCurrentDefault = useAppSelector(
+    (state) =>
+      product !== null &&
+      selectDefaultProducts(state).get(ingredient.id)?.id === product.id,
+  );
+  const storesById = useAppSelector(selectStoresById);
   const initialData = useMemo(() => getInitialData(product), [product]);
   const [formData, setFormData] = useState<FormData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -170,6 +180,7 @@ function ProductFormSheet({
   const link = formData.extras.link;
   const isFormComplete =
     formData.storeId !== null &&
+    storesById.has(formData.storeId) &&
     priceCents !== null &&
     priceCents <= MAX_PRICE_CENTS &&
     sizeAmount !== null &&
@@ -251,7 +262,7 @@ function ProductFormSheet({
           />
         ),
       }),
-      ...(otherCount > 0
+      ...(otherCount > 0 && !isCurrentDefault
         ? [
             custom({
               name: 'makeDefault',
@@ -274,7 +285,14 @@ function ProductFormSheet({
           ]
         : []),
     ],
-    [uid, otherCount, formData.price, formData.sizeAmount, formData.sizeUnit],
+    [
+      uid,
+      otherCount,
+      isCurrentDefault,
+      formData.price,
+      formData.sizeAmount,
+      formData.sizeUnit,
+    ],
   );
 
   const handleDelete = async () => {
