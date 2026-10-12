@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MAX_NAME_LENGTH,
@@ -19,6 +20,7 @@ import {
   selectIngredientsById,
   selectPlannedMeals,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { MealType } from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
@@ -26,6 +28,10 @@ import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
+import {
+  getMealNutrition,
+  hasShownValue,
+} from '@apps/pinch/utils/nutritionMath';
 
 interface PlannedMealViewProps {
   uid: string;
@@ -48,6 +54,7 @@ function PlannedMealView({
     (candidate) => candidate.id === plannedMealId,
   );
   const costContext = useAppSelector(selectCostContext);
+  const show = useAppSelector(selectShowNutrition);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +67,11 @@ function PlannedMealView({
   }
 
   const cost = getMealCost(meal.items, costContext);
+  const nutrition = getMealNutrition(
+    meal.items,
+    costContext.recipeNutrition,
+    costContext.ingredientsById,
+  );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
 
   const handleSaveAsMeal = async () => {
@@ -202,6 +214,11 @@ function PlannedMealView({
           </span>
         )}
       </p>
+      {hasShownValue(nutrition.values, show) && (
+        <p className='text-muted-foreground text-sm'>
+          <NutritionLine values={nutrition.values} show={show} /> for the plate
+        </p>
+      )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <Button
         type='button'

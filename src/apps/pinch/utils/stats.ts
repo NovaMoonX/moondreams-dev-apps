@@ -1,13 +1,24 @@
-import { MEAL_TYPES } from '@apps/pinch/constants';
-import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
+import { MEAL_TYPES, NUTRITION_METRICS } from '@apps/pinch/constants';
+import type {
+  Gap,
+  MealType,
+  NutritionValues,
+  PlannedMeal,
+} from '@apps/pinch/types';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getMealCost, type CostContext } from '@apps/pinch/utils/mealMath';
+import {
+  getMealNutrition,
+  type IngredientMissing,
+} from '@apps/pinch/utils/nutritionMath';
 
 export interface Totals {
   /** Unrounded cents of what could be priced; null when nothing was. */
   totalCents: number | null;
   count: number;
   leftOut: Gap[];
+  /** Per metric, summed over the meals that know it; null when none does. */
+  nutrition: NutritionValues;
 }
 
 export interface MonthStats {
@@ -17,14 +28,33 @@ export interface MonthStats {
   mealsPriced: number;
   avgPerMealCents: number | null;
   leftOut: Gap[];
+  /** Per metric, the average over the days that have a planned meal; null when unknown. */
+  dailyNutrition: NutritionValues;
+  /** Spend over protein grams, for the meals where both are known. */
+  proteinCentsPerGram: number | null;
+  nutritionMissing: IngredientMissing[];
   byDay: (Totals & { dayKey: string })[];
   byType: (Totals & { mealType: MealType })[];
 }
+
+const addNutrition = (
+  a: NutritionValues | undefined,
+  b: NutritionValues,
+): NutritionValues =>
+  Object.fromEntries(
+    NUTRITION_METRICS.map((metric) => [
+      metric,
+      a?.[metric] == null && b[metric] === null
+        ? null
+        : (a?.[metric] ?? 0) + (b[metric] ?? 0),
+    ]),
+  ) as unknown as NutritionValues;
 
 const addTotals = (
   current: Totals | undefined,
   totalCents: number | null,
   leftOut: Gap[],
+  nutrition: NutritionValues,
 ): Totals => ({
   totalCents:
     current?.totalCents == null && totalCents === null
@@ -32,6 +62,7 @@ const addTotals = (
       : (current?.totalCents ?? 0) + (totalCents ?? 0),
   count: (current?.count ?? 0) + 1,
   leftOut: [...(current?.leftOut ?? []), ...leftOut],
+  nutrition: addNutrition(current?.nutrition, nutrition),
 });
 
 const dedupe = (gaps: Gap[]) => [
@@ -40,7 +71,7 @@ const dedupe = (gaps: Gap[]) => [
   ).values(),
 ];
 
-/** One walk over the planned meals of a month: the spend, the average per meal and the totals by day and by meal type. */
+/** One walk over the planned meals of a month: the spend, the average per meal, the nutrition averages and the totals by day and by meal type. */
 export function getMonthStats(
   plannedMeals: PlannedMeal[],
   monthKey: string,
@@ -54,19 +85,40 @@ export function getMonthStats(
       }
 
       const cost = getMealCost(meal.items, context);
+      const nutrition = getMealNutrition(
+        meal.items,
+        context.recipeNutrition,
+        context.ingredientsById,
+      );
       acc.byDay.set(
         dayKey,
-        addTotals(acc.byDay.get(dayKey), cost.totalCents, cost.leftOut),
+        addTotals(
+          acc.byDay.get(dayKey),
+          cost.totalCents,
+          cost.leftOut,
+          nutrition.values,
+        ),
       );
       acc.byType.set(
         meal.mealType,
-        addTotals(acc.byType.get(meal.mealType), cost.totalCents, cost.leftOut),
+        addTotals(
+          acc.byType.get(meal.mealType),
+          cost.totalCents,
+          cost.leftOut,
+          nutrition.values,
+        ),
       );
+      acc.nutrition = addNutrition(acc.nutrition, nutrition.values);
+      acc.nutritionMissing.push(...nutrition.missing);
       acc.plannedCount += 1;
       acc.leftOut.push(...cost.leftOut);
       if (cost.totalCents !== null) {
         acc.spendCents += cost.totalCents;
         acc.mealsPriced += 1;
+        if (nutrition.values.protein !== null && nutrition.values.protein > 0) {
+          acc.proteinSpendCents += cost.totalCents;
+          acc.proteinGrams += nutrition.values.protein;
+        }
       }
       return acc;
     },
@@ -77,6 +129,10 @@ export function getMonthStats(
       spendCents: 0,
       mealsPriced: 0,
       leftOut: [] as Gap[],
+      nutrition: undefined as NutritionValues | undefined,
+      nutritionMissing: [] as IngredientMissing[],
+      proteinSpendCents: 0,
+      proteinGrams: 0,
     },
   );
 
@@ -87,6 +143,19 @@ export function getMonthStats(
     avgPerMealCents:
       walked.mealsPriced === 0 ? null : walked.spendCents / walked.mealsPriced,
     leftOut: dedupe(walked.leftOut),
+    dailyNutrition: Object.fromEntries(
+      NUTRITION_METRICS.map((metric) => [
+        metric,
+        walked.nutrition?.[metric] == null || walked.byDay.size === 0
+          ? null
+          : walked.nutrition[metric] / walked.byDay.size,
+      ]),
+    ) as unknown as NutritionValues,
+    proteinCentsPerGram:
+      walked.proteinGrams === 0
+        ? null
+        : walked.proteinSpendCents / walked.proteinGrams,
+    nutritionMissing: walked.nutritionMissing,
     byDay: [...walked.byDay]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([dayKey, totals]) => ({

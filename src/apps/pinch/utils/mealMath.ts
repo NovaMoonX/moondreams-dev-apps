@@ -6,12 +6,14 @@ import type {
   ResolvedIngredient,
 } from '@apps/pinch/types';
 import { DEFAULT_SERVING } from '@apps/pinch/constants';
+import type { NutritionResult } from '@apps/pinch/utils/nutritionMath';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface CostContext {
   recipeCosts: Map<string, RecipeCost>;
   ingredientsById: Map<string, ResolvedIngredient>;
   defaultProducts: Map<string, Product>;
+  recipeNutrition: Map<string, NutritionResult>;
 }
 
 export interface ItemCost {

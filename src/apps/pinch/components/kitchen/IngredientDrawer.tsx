@@ -18,8 +18,10 @@ import {
   selectIngredientFamiliesById,
   selectIngredientsById,
   selectProductsByIngredient,
+  selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
+import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 
 interface IngredientDrawerProps {
@@ -42,6 +44,7 @@ function IngredientDrawer({
   const dispatch = useAppDispatch();
   const products =
     useAppSelector(selectProductsByIngredient).get(ingredientId) ?? [];
+  const show = useAppSelector(selectShowNutrition);
   const defaultProductId =
     useAppSelector(selectDefaultProducts).get(ingredientId)?.id ?? null;
   const storesById = useAppSelector(selectStoresById);
@@ -98,28 +101,30 @@ function IngredientDrawer({
           </div>
         </div>
 
-        <section aria-label='Nutrition per 100 g' className='space-y-2'>
-          <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-            Per 100 g
-          </h3>
-          <dl className='grid grid-cols-4 gap-2 text-center'>
-            {NUTRITION_CELLS.map((cell) => {
-              const value = ingredient.per100g[cell.key];
-              return (
-                <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
-                  <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
-                    {value === null
-                      ? '—'
-                      : `${Math.round(value * 10) / 10}${cell.unit}`}
-                  </dd>
-                  <dt className='text-muted-foreground text-xs'>
-                    {cell.label}
-                  </dt>
-                </div>
-              );
-            })}
-          </dl>
-        </section>
+        {hasAnyMetricOn(show) && (
+          <section aria-label='Nutrition per 100 g' className='space-y-2'>
+            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              Per 100 g
+            </h3>
+            <dl className='grid grid-cols-2 gap-2 text-center sm:grid-cols-4'>
+              {NUTRITION_CELLS.filter((cell) => show[cell.key]).map((cell) => {
+                const value = ingredient.per100g[cell.key];
+                return (
+                  <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
+                    <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
+                      {value === null
+                        ? '—'
+                        : `${Math.round(value * 10) / 10}${cell.unit}`}
+                    </dd>
+                    <dt className='text-muted-foreground text-xs'>
+                      {cell.label}
+                    </dt>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        )}
 
         <p className='text-muted-foreground text-sm'>
           One serving is {servingText}.

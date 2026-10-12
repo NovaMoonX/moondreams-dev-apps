@@ -11,15 +11,22 @@ import { parseMoneyToCents } from '@/utils/moneyUtils';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import { MAX_PRICE_CENTS, MAX_SERVING_AMOUNT } from '@apps/pinch/constants';
+import {
+  MAX_PRICE_CENTS,
+  MAX_SERVING_AMOUNT,
+  NUTRITION_CELLS,
+} from '@apps/pinch/constants';
+import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import { saveProduct } from '@apps/pinch/store/actions/productActions';
 import {
   selectDefaultProducts,
   selectIngredientsById,
   selectProducts,
+  selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, Product, Unit } from '@apps/pinch/types';
+import { getGapKey } from '@apps/pinch/utils/gaps';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 
 interface RowState {
@@ -52,16 +59,19 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     [products, storesById],
   );
   const rows = useMemo(
-    () => [...new Map(gaps.map((gap) => [gap.ingredientId, gap])).values()],
+    () => [...new Map(gaps.map((gap) => [getGapKey(gap), gap])).values()],
     [gaps],
   );
   const [values, setValues] = useState<Record<string, RowState>>({});
+  const [nutrition, setNutrition] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [index, setIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const getRow = (gap: Gap): RowState =>
-    values[gap.ingredientId] ?? {
+    values[getGapKey(gap)] ?? {
       storeId: lastStoreId,
       price: '',
       sizeAmount: '',
@@ -119,12 +129,32 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     };
   };
 
+  const show = useAppSelector(selectShowNutrition);
   const gap = rows[index];
   const ingredient = ingredientsById.get(gap.ingredientId);
   const row = getRow(gap);
   const product: Product | undefined = defaultProducts.get(gap.ingredientId);
   const name = ingredient?.name ?? 'Removed ingredient';
-  const draft = getDraft(gap, row);
+  const isNutrition = gap.kind === 'NO_NUTRITION';
+  const metricsAsked = NUTRITION_CELLS.filter(
+    (cell) => show[cell.key] && ingredient?.per100g[cell.key] === null,
+  );
+  const typed = nutrition[getGapKey(gap)] ?? {};
+  const typedValues = metricsAsked.map((cell) => ({
+    key: cell.key,
+    text: (typed[cell.key] ?? '').trim(),
+  }));
+  const isNutritionValid =
+    typedValues.some((entry) => entry.text !== '') &&
+    typedValues.every(
+      (entry) =>
+        entry.text === '' ||
+        (Number.isFinite(Number(entry.text)) &&
+          Number(entry.text) >= 0 &&
+          Number(entry.text) <= 100000),
+    );
+  const draft = isNutrition ? null : getDraft(gap, row);
+  const canSave = isNutrition ? isNutritionValid : draft !== null;
   const isLast = index + 1 >= rows.length;
 
   const advance = () => {
@@ -137,14 +167,43 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   };
 
   const handleSave = async () => {
-    if (draft === null) {
+    if (!canSave || !ingredient) {
       return;
     }
 
     setError(null);
     setIsSubmitting(true);
     try {
-      await dispatch(saveProduct({ uid, draft })).unwrap();
+      if (isNutrition) {
+        await dispatch(
+          saveIngredient({
+            uid,
+            draft: {
+              id:
+                ingredient.isCustom || ingredient.isAdjusted
+                  ? ingredient.id
+                  : null,
+              catalogId: ingredient.isCustom ? null : ingredient.id,
+              name: ingredient.name,
+              familyId: ingredient.familyId,
+              newFamilyName: null,
+              iconKey: ingredient.iconKey,
+              nutrition: {
+                ...ingredient.per100g,
+                ...Object.fromEntries(
+                  typedValues
+                    .filter((entry) => entry.text !== '')
+                    .map((entry) => [entry.key, Number(entry.text)]),
+                ),
+              },
+              servingAmount: ingredient.serving.amount,
+              servingUnit: ingredient.serving.unit,
+            },
+          }),
+        ).unwrap();
+      } else if (draft) {
+        await dispatch(saveProduct({ uid, draft })).unwrap();
+      }
       setIsSubmitting(false);
       advance();
     } catch (submitError) {
@@ -154,7 +213,15 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   };
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Prices and sizes'>
+    <FormSheet
+      isOpen
+      onClose={onClose}
+      title={
+        rows.every((entry) => entry.kind === 'NO_NUTRITION')
+          ? 'Nutrition values'
+          : 'Prices and sizes'
+      }
+    >
       <div className='grid gap-4'>
         <div className='flex items-center gap-3'>
           <IngredientIcon iconKey={ingredient?.iconKey ?? null} size={32} />
@@ -165,12 +232,46 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             </span>
           )}
         </div>
+        {isNutrition && (
+          <div className='space-y-3'>
+            <p className='text-muted-foreground text-sm'>
+              What's in 100 g of {name}? Fill in what you know.
+            </p>
+            <div className='grid grid-cols-2 gap-3'>
+              {metricsAsked.map((cell) => (
+                <div key={cell.key} className='space-y-1.5'>
+                  <Label>
+                    {cell.unit === '' ? cell.label : `${cell.label} (g)`}
+                  </Label>
+                  <Input
+                    type='number'
+                    inputMode='decimal'
+                    min={0}
+                    step='any'
+                    variant='outline'
+                    aria-label={`${cell.label} in 100 g of ${name}`}
+                    value={typed[cell.key] ?? ''}
+                    onChange={(event) =>
+                      setNutrition((current) => ({
+                        ...current,
+                        [getGapKey(gap)]: {
+                          ...current[getGapKey(gap)],
+                          [cell.key]: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {gap.kind === 'NO_PRODUCT' && (
           <StorePicker
             key={gap.ingredientId}
             uid={uid}
             value={row.storeId}
-            onChange={(storeId) => update(gap.ingredientId, gap, { storeId })}
+            onChange={(storeId) => update(getGapKey(gap), gap, { storeId })}
           />
         )}
         {gap.kind === 'NOT_COMPARABLE' && product && (
@@ -180,54 +281,56 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             How big is it, in something you'd measure by weight or volume?
           </p>
         )}
-        <div
-          className={
-            gap.kind === 'NO_PRODUCT'
-              ? 'grid grid-cols-[1fr_1.4fr] items-start gap-3'
-              : ''
-          }
-        >
-          {gap.kind === 'NO_PRODUCT' && (
+        {!isNutrition && (
+          <div
+            className={
+              gap.kind === 'NO_PRODUCT'
+                ? 'grid grid-cols-[1fr_1.4fr] items-start gap-3'
+                : ''
+            }
+          >
+            {gap.kind === 'NO_PRODUCT' && (
+              <div className='space-y-1.5'>
+                <Label>Price</Label>
+                <MoneyInput
+                  ariaLabel={`Price of ${name}`}
+                  placeholder='9.48'
+                  value={row.price}
+                  onChange={(price) => update(getGapKey(gap), gap, { price })}
+                />
+              </div>
+            )}
             <div className='space-y-1.5'>
-              <Label>Price</Label>
-              <MoneyInput
-                ariaLabel={`Price of ${name}`}
-                placeholder='9.48'
-                value={row.price}
-                onChange={(price) => update(gap.ingredientId, gap, { price })}
-              />
-            </div>
-          )}
-          <div className='space-y-1.5'>
-            <Label>Package size</Label>
-            <div className='flex items-center gap-2'>
-              <Input
-                type='number'
-                inputMode='decimal'
-                min={0}
-                step='any'
-                variant='outline'
-                aria-label={`Package size of ${name}`}
-                placeholder='3'
-                className='min-w-0'
-                value={row.sizeAmount}
-                onChange={(event) =>
-                  update(gap.ingredientId, gap, {
-                    sizeAmount: event.target.value,
-                  })
-                }
-              />
-              <UnitSelect
-                value={row.sizeUnit}
-                className='w-20 shrink-0'
-                onChange={(sizeUnit) =>
-                  update(gap.ingredientId, gap, { sizeUnit })
-                }
-              />
+              <Label>Package size</Label>
+              <div className='flex items-center gap-2'>
+                <Input
+                  type='number'
+                  inputMode='decimal'
+                  min={0}
+                  step='any'
+                  variant='outline'
+                  aria-label={`Package size of ${name}`}
+                  placeholder='3'
+                  className='min-w-0'
+                  value={row.sizeAmount}
+                  onChange={(event) =>
+                    update(getGapKey(gap), gap, {
+                      sizeAmount: event.target.value,
+                    })
+                  }
+                />
+                <UnitSelect
+                  value={row.sizeUnit}
+                  className='w-20 shrink-0'
+                  onChange={(sizeUnit) =>
+                    update(getGapKey(gap), gap, { sizeUnit })
+                  }
+                />
+              </div>
             </div>
           </div>
-        </div>
-        {!isBlank(row) && draft === null && (
+        )}
+        {!isNutrition && !isBlank(row) && draft === null && (
           <p className='text-muted-foreground text-sm'>
             {gap.kind === 'NO_PRODUCT'
               ? 'Add a store, a price and a size to save this one.'
@@ -250,7 +353,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             <Button
               type='button'
               loading={isSubmitting}
-              disabled={isSubmitting || draft === null}
+              disabled={isSubmitting || !canSave}
               onClick={() => void handleSave()}
             >
               {isLast ? 'Save' : 'Save and next'}

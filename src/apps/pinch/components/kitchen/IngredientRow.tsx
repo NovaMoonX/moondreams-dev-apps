@@ -6,12 +6,14 @@ import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import {
   selectDefaultProducts,
+  selectShowNutrition,
   selectStoresById,
   selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
 import type { ResolvedIngredient } from '@apps/pinch/types';
 import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
 import { hasNutrition } from '@apps/pinch/utils/nutrition';
+import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 
 interface IngredientRowProps {
   ingredient: ResolvedIngredient;
@@ -22,6 +24,7 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
   const defaultProduct = useAppSelector((state) =>
     selectDefaultProducts(state).get(ingredient.id),
   );
+  const show = useAppSelector(selectShowNutrition);
   const isUsedWithoutPrice = useAppSelector(
     (state) =>
       !selectDefaultProducts(state).has(ingredient.id) &&
@@ -54,9 +57,11 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
             No price yet
           </span>
         ) : (
-          hasNutrition(ingredient.per100g) && (
+          hasNutrition(ingredient.per100g) &&
+          hasAnyMetricOn(show) && (
             <span className='text-muted-foreground block truncate text-xs font-normal'>
-              <NutritionLine values={ingredient.per100g} isCompact /> per 100 g
+              <NutritionLine values={ingredient.per100g} show={show} /> per 100
+              g
             </span>
           )
         )}
