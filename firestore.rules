@@ -1379,7 +1379,7 @@ service cloud.firestore {
       }
 
       function isIngredient(data, id) {
-        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'defaultProductId', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'createdAt', 'updatedAt'])
           && data.id == id
           && (data.catalogId == null
@@ -1391,6 +1391,7 @@ service cloud.firestore {
           && ((data.servingAmount == null && data.servingUnit == null) || (isPositiveAmount(data.servingAmount) && isUnit(data.servingUnit)))
           && (data.get('gramsPerMl', null) == null || isPositiveAmount(data.gramsPerMl))
           && (data.get('gramsEach', null) == null || isPositiveAmount(data.gramsEach))
+          && (data.get('defaultProductId', null) == null || isShortText(data.defaultProductId, 80))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1399,6 +1400,24 @@ service cloud.firestore {
           && data.keys().hasAll(['id', 'name', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.name, 120)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isCents(value) {
+        return value is int && value >= 0 && value <= 100000000;
+      }
+
+      function isProduct(data, id) {
+        return data.keys().hasOnly(['id', 'ingredientId', 'storeId', 'label', 'priceCents', 'sizeAmount', 'sizeUnit', 'url', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'ingredientId', 'storeId', 'label', 'priceCents', 'sizeAmount', 'sizeUnit', 'url', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.ingredientId, 80)
+          && isShortText(data.storeId, 80)
+          && (data.label == null || isShortText(data.label, 120))
+          && isCents(data.priceCents)
+          && isPositiveAmount(data.sizeAmount)
+          && isUnit(data.sizeUnit)
+          && (data.url == null || (data.url is string && data.url.size() <= 2000 && data.url.matches('https://.+')))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1420,6 +1439,14 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isIngredient(request.resource.data, id);
         allow update: if isKitchenOwner() && isIngredient(request.resource.data, id)
           && request.resource.data.catalogId == resource.data.catalogId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /products/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isProduct(request.resource.data, id);
+        allow update: if isKitchenOwner() && isProduct(request.resource.data, id)
+          && request.resource.data.ingredientId == resource.data.ingredientId
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

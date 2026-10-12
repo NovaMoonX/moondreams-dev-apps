@@ -9,6 +9,7 @@ import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
+import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import BottomNav from '@apps/pinch/components/shell/BottomNav';
@@ -94,6 +95,7 @@ function Pinch() {
   return (
     <PinchOverlayContext.Provider value={overlayContext}>
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
+      {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
       <div className={join(subview !== null && 'hidden')}>
         <div className='page pb-28'>

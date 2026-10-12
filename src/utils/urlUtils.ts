@@ -14,3 +14,8 @@ export function parseHttpUrl(value: string) {
 export function isValidHttpUrl(value: string) {
   return parseHttpUrl(value) !== null;
 }
+
+/** Like `isValidHttpUrl`, but a plain `http://` link is not accepted. */
+export function isValidHttpsUrl(value: string) {
+  return parseHttpUrl(value)?.protocol === 'https:';
+}

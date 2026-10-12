@@ -5,16 +5,19 @@ import {
   ingredientsReducer,
   type IngredientsState,
 } from './slices/ingredientsSlice';
+import { productsReducer, type ProductsState } from './slices/productsSlice';
 import { storesReducer, type StoresState } from './slices/storesSlice';
 
 export interface PinchState {
   ingredients: IngredientsState;
   families: FamiliesState;
   stores: StoresState;
+  products: ProductsState;
 }
 
 export const pinchReducer = combineReducers({
   ingredients: ingredientsReducer,
   families: familiesReducer,
   stores: storesReducer,
+  products: productsReducer,
 });

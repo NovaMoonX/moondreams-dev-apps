@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, writeBatch } from 'firebase/firestore';
+import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -87,6 +87,7 @@ export const saveIngredient = createAsyncThunk<
         const missingKeys = {
           ...('gramsPerMl' in existing ? {} : { gramsPerMl: null }),
           ...('gramsEach' in existing ? {} : { gramsEach: null }),
+          ...('defaultProductId' in existing ? {} : { defaultProductId: null }),
         };
         const ownedFields = {
           ...missingKeys,
@@ -114,6 +115,7 @@ export const saveIngredient = createAsyncThunk<
           servingUnit: draft.servingUnit,
           gramsPerMl: null,
           gramsEach: null,
+          defaultProductId: null,
           createdAt: now,
           updatedAt: now,
         };
@@ -135,14 +137,38 @@ interface RemoveIngredientInput {
   id: string;
 }
 
-/** Deletes the person's record: a custom ingredient disappears, an adjusted catalog one goes back to the built-in values. */
+/** Deletes the person's record: a custom ingredient disappears, an adjusted catalog one goes back to the built-in values (and keeps its default product). */
 export const removeIngredient = createAsyncThunk<
   string,
   RemoveIngredientInput,
   { rejectValue: string }
 >('pinch/ingredients/remove', async ({ uid, id }, { rejectWithValue }) => {
   try {
-    await deleteDoc(kitchenDoc(uid, 'ingredients', id));
+    const recordRef = kitchenDoc(uid, 'ingredients', id);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(recordRef);
+      if (!snapshot.exists()) {
+        return;
+      }
+
+      const { catalogId, defaultProductId } = snapshot.data();
+      if (catalogId == null || defaultProductId == null) {
+        transaction.delete(recordRef);
+        return;
+      }
+
+      transaction.update(recordRef, {
+        name: null,
+        familyId: null,
+        iconKey: null,
+        nutritionPer100g: null,
+        servingAmount: null,
+        servingUnit: null,
+        gramsPerMl: null,
+        gramsEach: null,
+        updatedAt: Date.now(),
+      });
+    });
   } catch (error) {
     return rejectWithValue(
       getErrorMessage(error, 'Unable to remove this ingredient.'),

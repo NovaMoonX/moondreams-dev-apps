@@ -1,7 +1,7 @@
 import MoneyInput from '@/components/MoneyInput';
 import type { CostStepValues } from '@apps/a-list/utils/costStep';
 import { evaluateCostStep } from '@apps/a-list/utils/costStep';
-import { formatCents } from '@apps/a-list/utils/money';
+import { formatCents } from '@/utils/moneyUtils';
 import { formatTaxRate } from '@apps/a-list/utils/tax';
 
 interface TaxStepProps {

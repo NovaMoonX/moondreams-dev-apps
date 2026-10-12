@@ -12,7 +12,10 @@ import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { selectStores } from '@apps/pinch/store/selectors';
+import {
+  selectProductCountsByStore,
+  selectStores,
+} from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
 type FormState = { storeId: string | null };
@@ -24,6 +27,7 @@ interface StoresSubviewProps {
 function StoresSubview({ uid }: StoresSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const stores = useAppSelector(selectStores);
+  const productCounts = useAppSelector(selectProductCountsByStore);
   const [query, setQuery] = useState('');
   const [form, setForm] = useState<FormState | null>(null);
 
@@ -93,8 +97,18 @@ function StoresSubview({ uid }: StoresSubviewProps) {
                     imageVersion={store.updatedAt}
                     size={40}
                   />
-                  <span className='text-foreground min-w-0 flex-1 truncate font-medium'>
-                    {store.name}
+                  <span className='min-w-0 flex-1'>
+                    <span className='text-foreground block truncate font-medium'>
+                      {store.name}
+                    </span>
+                    {(productCounts.get(store.id) ?? 0) > 0 && (
+                      <span className='text-muted-foreground block text-xs font-normal'>
+                        {productCounts.get(store.id)}{' '}
+                        {productCounts.get(store.id) === 1
+                          ? 'product'
+                          : 'products'}
+                      </span>
+                    )}
                   </span>
                   <ChevronRight
                     className='text-muted-foreground h-5 w-5 shrink-0'

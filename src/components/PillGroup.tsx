@@ -16,6 +16,8 @@ export interface PillOption<T extends string> {
   value: T;
   label: string;
   emoji?: string;
+  /** A small image or icon in place of an emoji (a store's logo). */
+  icon?: ReactNode;
 }
 
 /** A row of wrapping pills — the container every pick-one or pick-several option row shares. */
@@ -126,6 +128,7 @@ export function PillOptions<T extends string>({
               <Pill
                 key={option.value}
                 emoji={option.emoji}
+                icon={option.icon}
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
                 onClick={() => {
