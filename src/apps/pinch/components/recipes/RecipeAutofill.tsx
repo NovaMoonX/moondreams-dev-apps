@@ -103,9 +103,14 @@ function RecipeAutofill({ onFilled }: RecipeAutofillProps) {
         <span className='w-6 shrink-0 text-center text-lg' aria-hidden='true'>
           📷
         </span>
-        <p className='min-w-0 flex-1 text-sm font-medium'>
-          Have a recipe on paper or a screenshot?
-        </p>
+        <div className='min-w-0 flex-1'>
+          <p className='text-sm font-medium'>
+            Have a recipe on paper or a screenshot?
+          </p>
+          <p className='text-muted-foreground text-xs'>
+            An AI reads it and fills in the form. It isn’t saved.
+          </p>
+        </div>
         <Button
           type='button'
           size='sm'

@@ -364,7 +364,7 @@ block-beta
   style E15 fill:transparent,stroke:#888888,stroke-width:1px;
   style E16 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A recipe needs a title and at least one ingredient. Servings is a visible question because cost and nutrition per serving depend on it. Upload and Paste sit at the top: either one fills the real fields, shows what it couldn't read ("We couldn't read: cook time. Add that below."), and leaves everything editable before Save; an unknown ingredient arrives as "Add as new ingredient" on its row. The ingredient search is the same picker the meal builder uses, with a "New ingredient" entry at the end. Everything past ingredients is a "+ Add X" chip with a remove, and "My own nutrition" appears whether or not nutrition is on, since the numbers still count when it's switched on later. This is a page-sized form, so it is a Subview, not a modal.*
+*A recipe needs a title and at least one ingredient. Servings is a visible question because cost and nutrition per serving depend on it. Upload and Paste sit at the top: either one fills the real fields, shows what it couldn't read ("We couldn't read: cook time."), and leaves everything editable before Save; an unknown ingredient arrives as "Add as new ingredient" on its row. The ingredient search is the same picker the meal builder uses, with a "New ingredient" entry at the end. Everything past ingredients is a "+ Add X" chip with a remove, and "My own nutrition" appears whether or not nutrition is on, since the numbers still count when it's switched on later. This is a page-sized form, so it is a Subview, not a modal.*
 
 | Upload / Paste state | What you see |
 |---|---|

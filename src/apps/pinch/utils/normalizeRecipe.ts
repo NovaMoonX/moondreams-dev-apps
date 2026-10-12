@@ -1,7 +1,12 @@
 import {
+  MAX_MINUTES,
   MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_STEPS,
+  MAX_RECIPE_TITLE_LENGTH,
+  MAX_SERVING_AMOUNT,
   MAX_STEP_LENGTH,
   UNITS,
 } from '@apps/pinch/constants';
@@ -30,11 +35,17 @@ export interface ExtractedRecipe {
 const asString = (value: unknown) =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 const asNumber = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0
+  typeof value === 'number' &&
+  Number.isFinite(value) &&
+  value > 0 &&
+  value <= MAX_SERVING_AMOUNT
     ? value
     : null;
 const asMinutes = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0
+  typeof value === 'number' &&
+  Number.isFinite(value) &&
+  value >= 0 &&
+  value <= MAX_MINUTES
     ? Math.round(value)
     : null;
 
@@ -47,11 +58,13 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
 
   return {
-    title: asString(parsed.title)?.slice(0, MAX_NAME_LENGTH * 2) ?? null,
+    title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
     prepMinutes: asMinutes(parsed.prepMinutes),
     cookMinutes: asMinutes(parsed.cookMinutes),
-    description: asString(parsed.description),
+    description:
+      asString(parsed.description)?.slice(0, MAX_RECIPE_DESCRIPTION_LENGTH) ??
+      null,
     ingredients: list(parsed.ingredients)
       .flatMap((entry) => {
         const item = (
@@ -64,7 +77,7 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
                 name,
                 amount: asNumber(item.amount),
                 unit: UNITS.find((unit) => unit === item.unit) ?? null,
-                note: asString(item.note),
+                note: asString(item.note)?.slice(0, MAX_NOTE_LENGTH) ?? null,
               },
             ]
           : [];

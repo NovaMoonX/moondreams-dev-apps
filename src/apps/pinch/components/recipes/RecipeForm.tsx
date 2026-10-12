@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -61,7 +61,10 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
-import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
+import {
+  matchIngredient,
+  normalizeName,
+} from '@apps/pinch/utils/ingredientMatch';
 import type {
   NutritionMetric,
   NutritionValues,
@@ -272,7 +275,13 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                       variant='secondary'
                       onClick={() =>
                         update({
-                          ingredientId: generateUuid(),
+                          ingredientId:
+                            rows.find(
+                              (other) =>
+                                other.newName !== null &&
+                                normalizeName(other.newName) ===
+                                  normalizeName(row.proposedName ?? ''),
+                            )?.ingredientId ?? generateUuid(),
                           newName: row.proposedName,
                         })
                       }
@@ -820,18 +829,20 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
     }
   };
 
-  /** Fills only what the reader found and the person hasn't already written: blank fields, new ingredients and steps, never over what they typed. */
+  const latest = useRef({ formData, seed, ingredients });
+  useEffect(() => {
+    latest.current = { formData, seed, ingredients };
+  });
+
+  /** Fills only what the reader found and the person hasn't already written: blank fields, new ingredients and steps, never over what they typed. Reads the form as it is when the reading finishes, not when it started. */
   const applyExtracted = (extracted: ExtractedRecipe, from: RecipeSource) => {
-    const current = formData;
-    const isUntouched = (value: number) => value === seed.data.servings;
+    const { formData: current, seed: currentSeed } = latest.current;
+    const isUntouched = (value: number) => value === currentSeed.data.servings;
     const known = new Set(current.ingredients.map((row) => row.ingredientId));
     const addedRows = extracted.ingredients.flatMap((line) => {
-      const match = matchIngredient(line.name, ingredients);
+      const match = matchIngredient(line.name, latest.current.ingredients);
       if (match && known.has(match.id)) {
         return [];
-      }
-      if (match) {
-        known.add(match.id);
       }
       return [
         {
@@ -892,7 +903,7 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
       },
     };
     setFormData(next);
-    setSeed((currentSeed) => ({ data: next, key: currentSeed.key + 1 }));
+    setSeed((previous) => ({ data: next, key: previous.key + 1 }));
     setSource(from);
   };
 
