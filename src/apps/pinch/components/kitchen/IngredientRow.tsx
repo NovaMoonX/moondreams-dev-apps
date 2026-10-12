@@ -2,7 +2,9 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
+import NutritionLine, {
+  hasNutrition,
+} from '@apps/pinch/components/shared/NutritionLine';
 import type { ResolvedIngredient } from '@apps/pinch/types';
 
 interface IngredientRowProps {
@@ -23,9 +25,11 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
         <span className='text-foreground block truncate font-medium'>
           {ingredient.name}
         </span>
-        <span className='text-muted-foreground block truncate text-xs font-normal'>
-          <NutritionLine values={ingredient.per100g} isCompact /> per 100 g
-        </span>
+        {hasNutrition(ingredient.per100g) && (
+          <span className='text-muted-foreground block truncate text-xs font-normal'>
+            <NutritionLine values={ingredient.per100g} isCompact /> per 100 g
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground h-5 w-5 shrink-0'

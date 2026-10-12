@@ -1380,7 +1380,7 @@ service cloud.firestore {
 
       function isIngredient(data, id) {
         return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'createdAt', 'updatedAt'])
-          && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'createdAt', 'updatedAt'])
           && data.id == id
           && (data.catalogId == null
             ? isShortText(data.name, 120)
@@ -1389,8 +1389,8 @@ service cloud.firestore {
           && (data.iconKey == null || isShortText(data.iconKey, 40))
           && isNutrition(data.nutritionPer100g)
           && ((data.servingAmount == null && data.servingUnit == null) || (isPositiveAmount(data.servingAmount) && isUnit(data.servingUnit)))
-          && (data.gramsPerMl == null || isPositiveAmount(data.gramsPerMl))
-          && (data.gramsEach == null || isPositiveAmount(data.gramsEach))
+          && (data.get('gramsPerMl', null) == null || isPositiveAmount(data.gramsPerMl))
+          && (data.get('gramsEach', null) == null || isPositiveAmount(data.gramsEach))
           && data.createdAt is int && data.updatedAt is int;
       }
 
