@@ -46,7 +46,7 @@ function MealBarCell({
       <span
         className={join(
           'flex h-5 min-w-5 items-center justify-center self-start rounded-full px-1 text-[11px] font-semibold',
-          isToday && 'bg-primary text-primary-foreground',
+          isToday && 'bg-[var(--pinch-drizzle)] text-white',
         )}
       >
         {date.getDate()}
@@ -73,7 +73,7 @@ function MealBarCell({
         </span>
       )}
       {isSelected && (
-        <span className='ring-primary pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset' />
+        <span className='pointer-events-none absolute inset-0 rounded-lg ring-2 ring-[var(--pinch-drizzle)] ring-inset' />
       )}
     </span>
   );

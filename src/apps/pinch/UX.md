@@ -7,7 +7,7 @@
 | Principle | Means |
 |---|---|
 | One border, not nested ones | a card gets a single bordered shell with a flat interior — never border-in-a-border; groups inside a screen are separated with `SectionDivider` or spacing |
-| Phone first | one narrow column with a three-item bottom bar — Calendar · **Recipes** · Kitchen, Recipes in the middle and raised; wider screens reflow the same components, no parallel desktop layout |
+| Phone first | one narrow column with a floating pill at the bottom — Calendar · **Recipes** · Kitchen, as wide as its three tabs; from `lg` up the same tabs stand in a rail on the left edge, and the rest reflows with no parallel desktop layout |
 | The counter, not a form | Pinch asks for a name and little else. A price, a package size or a nutrition value is invited by a quiet line exactly where it changes a number, and always optional |
 | Drawers for looking and quick edits, subviews for building | an ingredient, a day, a planned meal and a recipe's detail open in `DetailSheet` drawers; a recipe, a meal and the stores and products lists are page-sized and open as `Subview`s; short forms (ingredient, product, store, settings) are `FormSheet`s |
 | Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
@@ -40,7 +40,7 @@ flowchart TD
     A[First launch] --> D["Calendar, empty: zeros and two nudges 'Plan your first meal' · 'Add a recipe'"]
     subgraph Bar["Bottom bar"]
         D2["Calendar"]
-        R["Recipes · centre, raised"]
+        R["Recipes · centre"]
         K["Kitchen"]
     end
     D --> D2
@@ -96,7 +96,7 @@ block-beta
   style B2 fill:transparent,stroke:#888888,stroke-width:3px;
   style B3 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Recipes sits in the middle, wider and raised so it reads as home base for everything you cook; the app opens to Calendar, the left tab. The active tab takes the orange accent. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
+*Navigation is a floating pill at the bottom of a phone, as wide as its three tabs (never stretched edge to edge), and a rail on the left from `lg` up. The app opens to Calendar, the left tab; the active tab gets a soft fill and a drizzle of orange on its icon, the only orange in the bar. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
 
 **First launch — Calendar, empty** (no setup steps: Pinch is usable the moment it opens)
 

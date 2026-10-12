@@ -14,7 +14,7 @@ import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
-import BottomNav from '@apps/pinch/components/shell/BottomNav';
+import PinchNav from '@apps/pinch/components/shell/PinchNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
 import { DEFAULT_PINCH_TAB, PINCH_TABS } from '@apps/pinch/constants';
 import { PinchOverlayContext } from '@apps/pinch/hooks/usePinchOverlay';
@@ -127,9 +127,9 @@ function Pinch() {
             'hidden',
         )}
       >
-        <div className='page pb-28'>
+        <div className='page pb-28 lg:pb-8 lg:pl-28'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>{getScreen()}</div>
-          <BottomNav value={activeTab} onChange={setActiveTab} />
+          <PinchNav value={activeTab} onChange={setActiveTab} />
         </div>
       </div>
     </PinchOverlayContext.Provider>
