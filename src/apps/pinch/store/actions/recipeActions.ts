@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
@@ -7,6 +7,8 @@ import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { freezeLoadedPastMeals } from '@apps/pinch/store/actions/freezeActions';
+import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
 import type {
@@ -112,6 +114,7 @@ export const saveRecipe = createAsyncThunk<
           gramsPerMl: null,
           gramsEach: null,
           defaultProductId: null,
+          isArchived: false,
           createdAt: now,
           updatedAt: now,
         };
@@ -129,12 +132,16 @@ export const saveRecipe = createAsyncThunk<
         );
       });
       if (existing) {
-        batch.update(recipeDoc(uid, recipeId), fields);
+        batch.update(recipeDoc(uid, recipeId), {
+          ...fields,
+          ...('isArchived' in existing ? {} : { isArchived: false }),
+        });
       } else {
         const recipe: Recipe = {
           id: recipeId,
           ...fields,
           source: draft.source,
+          isArchived: false,
           createdAt: now,
         };
         batch.set(recipeDoc(uid, recipeId), recipe);
@@ -162,7 +169,7 @@ interface RemoveRecipeInput {
   id: string;
 }
 
-/** Deletes the recipe and its cover; a recipe that planned days use is archived instead once Issue 17 lands. */
+/** Deletes the recipe and its cover, or archives it (cover kept) when a planned day or saved meal still uses it. */
 export const removeRecipe = createAsyncThunk<
   string,
   RemoveRecipeInput,
@@ -176,6 +183,14 @@ export const removeRecipe = createAsyncThunk<
 
     try {
       await freezeLoadedPastMeals(uid, getState());
+      if (isInUse(await readUsage(uid, getState(), 'RECIPE', id))) {
+        await updateDoc(recipeDoc(uid, id), {
+          isArchived: true,
+          updatedAt: Date.now(),
+        });
+        return id;
+      }
+
       await deleteDoc(recipeDoc(uid, id));
     } catch (error) {
       return rejectWithValue(
