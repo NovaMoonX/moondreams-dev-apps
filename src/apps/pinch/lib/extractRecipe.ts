@@ -107,7 +107,7 @@ export async function extractRecipeFromText(
 
 const asBase64 = (buffer: ArrayBuffer) =>
   btoa(
-    [...new Uint8Array(buffer)].reduce(
+    new Uint8Array(buffer).reduce(
       (binary, byte) => binary + String.fromCharCode(byte),
       '',
     ),

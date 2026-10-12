@@ -92,4 +92,19 @@ assert.equal(
   60,
 );
 
+// values the form or the rules would refuse are cut or dropped, so a long answer can't block Add
+const oversized = normalizeExtractedRecipe({
+  title: 'T'.repeat(500),
+  description: 'D'.repeat(5000),
+  servings: 5_000_000,
+  prepMinutes: 9_999_999,
+  ingredients: [{ name: 'salt', amount: 9_999_999, note: 'N'.repeat(500) }],
+});
+assert.equal(oversized.title?.length, 200);
+assert.equal(oversized.description?.length, 2000);
+assert.equal(oversized.servings, null);
+assert.equal(oversized.prepMinutes, null);
+assert.equal(oversized.ingredients[0].amount, null);
+assert.equal(oversized.ingredients[0].note?.length, 200);
+
 console.log('pinchIngest: all checks passed');
