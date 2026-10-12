@@ -84,7 +84,12 @@ export const saveIngredient = createAsyncThunk<
       }
 
       if (existing) {
+        const missingKeys = {
+          ...('gramsPerMl' in existing ? {} : { gramsPerMl: null }),
+          ...('gramsEach' in existing ? {} : { gramsEach: null }),
+        };
         const ownedFields = {
+          ...missingKeys,
           iconKey: draft.iconKey,
           nutritionPer100g: draft.nutrition,
           servingAmount: draft.servingAmount,
