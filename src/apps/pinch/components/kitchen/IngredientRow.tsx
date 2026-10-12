@@ -6,6 +6,7 @@ import NutritionLine, {
   hasNutrition,
 } from '@apps/pinch/components/shared/NutritionLine';
 import type { ResolvedIngredient } from '@apps/pinch/types';
+import { hasNutrition } from '@apps/pinch/utils/nutrition';
 
 interface IngredientRowProps {
   ingredient: ResolvedIngredient;
