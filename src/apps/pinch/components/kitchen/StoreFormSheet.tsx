@@ -67,6 +67,7 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
     const confirmed = await confirm({
       title: 'Delete store',
       message: `Delete "${store.name}"? Products you saved there keep their price and size. This action cannot be undone.`,
+      confirmText: 'Delete',
       destructive: true,
     });
     if (!confirmed) {
@@ -200,6 +201,7 @@ function CatalogStoreView({ uid, store, onClose }: CatalogStoreViewProps) {
     const confirmed = await confirm({
       title: 'Delete store',
       message: `Delete "${store.name}"? Products you saved there keep their price and size. You can add it again from the list.`,
+      confirmText: 'Delete',
       destructive: true,
     });
     if (!confirmed) {

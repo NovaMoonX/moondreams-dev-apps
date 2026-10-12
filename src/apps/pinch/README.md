@@ -99,7 +99,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ### Core MVP
 - [x] Browse and search a ready-made catalog of everyday ingredients and seasonings, grouped into families, each with an icon and built-in nutrition
 - [x] Add, edit, and delete your own ingredients, including ready-to-eat foods, as a new family or a variant of an existing one
-- [ ] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
+- [x] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
 - [ ] Add products to an ingredient (store, label, price, package size), choose a default, and edit or remove them
 - [x] Enter or adjust nutrition on any ingredient
 - [ ] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
