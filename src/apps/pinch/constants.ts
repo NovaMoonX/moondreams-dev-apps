@@ -88,6 +88,9 @@ export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
 export const STORE_IMAGE_MAX_DIMENSION = 512;
 
 export const MAX_DISMISSED_NUDGES = 500;
+/** The longest recipe text the reader takes, and the biggest photo, screenshot or PDF. */
+export const MAX_PASTE_CHARS = 20_000;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
 /** Months loaded on each side of the one shown. */
 export const MONTH_WINDOW_PADDING = 1;

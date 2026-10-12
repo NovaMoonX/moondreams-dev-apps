@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
@@ -9,9 +9,11 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
 import type {
+  IngredientRecord,
   NutritionValues,
   Recipe,
   RecipeIngredient,
+  RecipeSource,
 } from '@apps/pinch/types';
 
 const recipeDoc = (uid: string, id: string) =>
@@ -32,6 +34,10 @@ export interface RecipeDraft {
   steps: string[];
   /** Per serving, typed over the added-up value; null keeps every metric derived. */
   nutritionOverride: NutritionValues | null;
+  /** How a new recipe came to be; an edit keeps the recipe's own. */
+  source: RecipeSource;
+  /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
+  newIngredients: { id: string; name: string }[];
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
@@ -90,17 +96,48 @@ export const saveRecipe = createAsyncThunk<
         updatedAt: now,
       };
 
+      const batch = writeBatch(db);
+      draft.newIngredients.forEach((ingredient) => {
+        const record: IngredientRecord = {
+          id: ingredient.id,
+          catalogId: null,
+          name: ingredient.name.trim(),
+          familyId: null,
+          iconKey: null,
+          nutritionPer100g: null,
+          servingAmount: null,
+          servingUnit: null,
+          gramsPerMl: null,
+          gramsEach: null,
+          defaultProductId: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        batch.set(
+          doc(
+            db,
+            'apps',
+            'pinch',
+            'kitchens',
+            uid,
+            'ingredients',
+            ingredient.id,
+          ),
+          record,
+        );
+      });
       if (existing) {
-        await updateDoc(recipeDoc(uid, recipeId), fields);
+        batch.update(recipeDoc(uid, recipeId), fields);
       } else {
         const recipe: Recipe = {
           id: recipeId,
           ...fields,
-          source: 'MANUAL',
+          source: draft.source,
           createdAt: now,
         };
-        await setDoc(recipeDoc(uid, recipeId), recipe);
+        batch.set(recipeDoc(uid, recipeId), recipe);
       }
+      await batch.commit();
     } catch (error) {
       if (draft.coverFile && existing?.coverPath !== path) {
         await deleteFile(path).catch(() => undefined);
