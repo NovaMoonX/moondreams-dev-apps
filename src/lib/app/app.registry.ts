@@ -46,6 +46,14 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
       'A personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.',
     createdAt: '2026-10-03',
   },
+  {
+    id: 'pinch',
+    name: 'Pinch',
+    path: '/pinch',
+    description:
+      'A calm, personal kitchen planner that keeps your ingredients, recipes, and meals on a calendar, with what everything costs and, whenever you want it, the nutrition.',
+    createdAt: '2026-10-12',
+  },
 ];
 
 export const APP_REGISTRY_ID_MAP = Object.fromEntries(
