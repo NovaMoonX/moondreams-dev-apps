@@ -277,6 +277,19 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
   await uploadSeedImage(customImagePath);
 
   await Promise.all([
+    // Alex already closed the nudge for the vinegar, so the adobo recipe's fill-in starts one short.
+    kitchenRef.set({
+      uid: alex.uid,
+      showNutrition: {
+        calories: false,
+        protein: false,
+        carbs: false,
+        fat: false,
+      },
+      dismissedNudges: { 'NO_PRODUCT:cat-white-vinegar': createdAt },
+      createdAt,
+      updatedAt: createdAt,
+    }),
     ...CATALOG_STORE_SEEDS.map((store) =>
       kitchenRef.collection('stores').doc(store.id).set({
         id: store.id,
@@ -329,6 +342,6 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_PRODUCTS.length +
       SEED_RECIPES.length +
       CATALOG_STORE_SEEDS.length +
-      1,
+      2,
   };
 }

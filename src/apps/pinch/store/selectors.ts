@@ -10,6 +10,7 @@ const selectRecords = (state: RootState) => state.pinch.ingredients.records;
 const selectFamilyItems = (state: RootState) => state.pinch.families.items;
 
 export const selectIsPinchLoaded = (state: RootState) =>
+  state.pinch.settings.isLoaded &&
   state.pinch.ingredients.isLoaded &&
   state.pinch.families.isLoaded &&
   state.pinch.stores.isLoaded &&
@@ -17,6 +18,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded;
 
 export const selectPinchLoadError = (state: RootState) =>
+  state.pinch.settings.loadError ??
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
   state.pinch.stores.loadError ??
@@ -153,5 +155,21 @@ export const selectRecipeCosts = createSelector(
         recipe.id,
         getRecipeCost(recipe, ingredientsById, defaultProducts),
       ]),
+    ),
+);
+
+const NO_DISMISSALS: Record<string, number> = {};
+
+export const selectDismissedNudges = (state: RootState) =>
+  state.pinch.settings.settings?.dismissedNudges ?? NO_DISMISSALS;
+
+/** The ingredients some recipe uses: the ones whose missing price changes a number. */
+export const selectUsedIngredientIds = createSelector(
+  [selectRecipes],
+  (recipes) =>
+    new Set(
+      recipes.flatMap((recipe) =>
+        recipe.ingredients.map((line) => line.ingredientId),
+      ),
     ),
 );

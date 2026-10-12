@@ -1452,8 +1452,28 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
-      // The kitchen document itself (settings) gets its create and update rule with the issue that writes it.
+      function isSwitch(value) {
+        return value is bool;
+      }
+
+      function isSettings(data) {
+        return data.keys().hasOnly(['uid', 'showNutrition', 'dismissedNudges', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['uid', 'showNutrition', 'dismissedNudges', 'createdAt', 'updatedAt'])
+          && data.uid == uid
+          && data.showNutrition is map
+          && data.showNutrition.keys().hasOnly(['calories', 'protein', 'carbs', 'fat'])
+          && data.showNutrition.keys().hasAll(['calories', 'protein', 'carbs', 'fat'])
+          && isSwitch(data.showNutrition.calories) && isSwitch(data.showNutrition.protein)
+          && isSwitch(data.showNutrition.carbs) && isSwitch(data.showNutrition.fat)
+          && data.dismissedNudges is map && data.dismissedNudges.size() <= 500
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // The kitchen document is the person's settings; it is created by their first change.
       allow read, delete: if isKitchenOwner();
+      allow create: if isKitchenOwner() && isSettings(request.resource.data);
+      allow update: if isKitchenOwner() && isSettings(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
 
       match /ingredients/{id} {
         allow read, delete: if isKitchenOwner();

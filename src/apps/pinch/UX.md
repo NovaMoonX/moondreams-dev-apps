@@ -602,7 +602,7 @@ block-beta
 | Where the gap shows | Nudge wording | What the fill-in sheet asks |
 |---|---|---|
 | a recipe, meal or day cost | "2 ingredients need a price · Add prices" | price and package size for each |
-| a cost that can't be compared | "Rice vinegar: Pinch can't compare cups to a bottle · Add a size" | the package size in a comparable unit |
+| a cost that can't be compared | "Rice vinegar can't be compared with its package size · Add a size" | the package size in a comparable unit, for the ingredient's default product |
 | a nutrition metric that is on | "3 ingredients have no protein · Add values" | the missing metric for each |
 | the stats row | "leaves out 2 items · Add prices" | the same sheet, covering the month |
 

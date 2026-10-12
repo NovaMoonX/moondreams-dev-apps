@@ -375,7 +375,7 @@ Archived items never appear in pickers, search or lists and never count as a def
 
 A gap is **hidden** when `dismissedNudges["{kind}:{ingredientId}"]` exists. Dismissing writes that key; filling the gap makes the gap disappear on its own, and a later regression (a product removed) brings it back only if the key was cleared, so dismissal clearing happens in the same write as the action that fills the gap (`saveProduct` removes the `NO_PRODUCT`/`NOT_COMPARABLE` keys for that ingredient). A nudge renders only when the filtered gap list is non-empty. A total that excludes lines always says so, whether or not its nudge is dismissed.
 
-The fill-in sheet takes the gap list and renders one row per ingredient with only the fields that gap needs: a product's store, price and size for `NO_PRODUCT`; the size for `NOT_COMPARABLE`; the metric for `NO_NUTRITION`. Saving writes through the same actions as the full forms.
+The fill-in sheet takes the gap list and renders one row per ingredient with only the fields that gap needs: a product's store, price and size for `NO_PRODUCT`; the size for `NOT_COMPARABLE`; the metric for `NO_NUTRITION`. Saving writes through the same actions as the full forms. A row left blank stays unchanged; a row that is part-filled is not saved and says what it still needs, so Save never writes half a product. A saved row asks to become the ingredient's default product, and a `NOT_COMPARABLE` row rewrites the size of the default product it is about.
 
 ### 5. Recipe ingestion (AI)
 
