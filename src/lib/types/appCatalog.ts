@@ -3,6 +3,7 @@ export type AppId =
   | 'nine-lives'
   | 'waypoint'
   | 'a-list'
+  | 'pinch'
   | (string & {});
 
 export type AppStatus = 'draft' | 'public' | 'removed';

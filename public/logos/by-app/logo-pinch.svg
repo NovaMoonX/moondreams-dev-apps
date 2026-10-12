@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><rect width="1024" height="1024" fill="#F97316"/><g transform="translate(512 512) scale(1.1) translate(-502 -481)">
+<mask id="pinchMaskTile" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#fff"/>
+  <g transform="translate(470 420) rotate(128)" fill="#000">
+    <circle cx="-62" cy="-198" r="15"/><circle cx="0" cy="-228" r="15"/><circle cx="62" cy="-198" r="15"/>
+    <circle cx="-32" cy="-150" r="15"/><circle cx="32" cy="-150" r="15"/>
+    <rect x="-176" y="62" width="352" height="30" rx="15"/>
+  </g>
+</mask>
+<g mask="url(#pinchMaskTile)" fill="#FFF7ED">
+  <g transform="translate(470 420) rotate(128)">
+    <path d="M-150,-92 L-150,-150 C-150,-250 -92,-300 0,-300 C92,-300 150,-250 150,-150 L150,-92 Z"/>
+    <path d="M-168,-64 L168,-64 L198,196 Q202,262 134,262 L-134,262 Q-202,262 -198,196 Z"/>
+  </g>
+  <circle cx="726" cy="640" r="26"/><circle cx="800" cy="700" r="20"/><circle cx="688" cy="728" r="20"/>
+  <circle cx="760" cy="790" r="26"/><circle cx="690" cy="840" r="16"/><circle cx="830" cy="812" r="16"/>
+</g></g></svg>
