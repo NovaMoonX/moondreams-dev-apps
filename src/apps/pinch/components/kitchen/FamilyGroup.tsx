@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import SectionDivider from '@/components/SectionDivider';
 import LazyMount from '@/components/LazyMount';
 import IngredientRow from '@apps/pinch/components/kitchen/IngredientRow';
@@ -43,4 +45,4 @@ function FamilyGroup({ group, isEager, onOpen }: FamilyGroupProps) {
   );
 }
 
-export default FamilyGroup;
+export default memo(FamilyGroup);

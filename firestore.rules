@@ -1340,7 +1340,7 @@ service cloud.firestore {
 
     // --- App: pinch ---
 
-    // Only the app's catalog document is covered so far; a person's kitchen (apps/pinch/kitchens/{uid}) gets its rules with the issues that store it.
+    // Only the app document is covered: apps/pinch/kitchens/{uid} has no rule yet, so it falls through to the default deny.
     match /apps/pinch {
       allow read: if isAdmin() || isDevUser();
       allow read: if isUnrestrictedPublicApp(resource.data);

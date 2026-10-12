@@ -24,5 +24,12 @@ export const UNIT_LABELS: Record<Unit, string> = {
   EACH: 'each',
 };
 
+export const NUTRITION_CELLS = [
+  { key: 'calories', label: 'Calories', unit: '' },
+  { key: 'protein', label: 'Protein', unit: ' g' },
+  { key: 'carbs', label: 'Carbs', unit: ' g' },
+  { key: 'fat', label: 'Fat', unit: ' g' },
+] as const;
+
 /** A list gets a search from this many rows. */
 export const LIST_SEARCH_THRESHOLD = 8;

@@ -4,19 +4,12 @@ import {
   CATALOG_FAMILIES_BY_ID,
   CATALOG_INGREDIENTS_BY_ID,
 } from '@apps/pinch/catalog';
-import { UNIT_LABELS } from '@apps/pinch/constants';
+import { NUTRITION_CELLS, UNIT_LABELS } from '@apps/pinch/constants';
 
 interface IngredientDrawerProps {
   ingredientId: string;
   onClose: () => void;
 }
-
-const NUTRITION_CELLS = [
-  { key: 'calories', label: 'Calories', unit: '' },
-  { key: 'protein', label: 'Protein', unit: ' g' },
-  { key: 'carbs', label: 'Carbs', unit: ' g' },
-  { key: 'fat', label: 'Fat', unit: ' g' },
-] as const;
 
 function IngredientDrawer({ ingredientId, onClose }: IngredientDrawerProps) {
   const ingredient = CATALOG_INGREDIENTS_BY_ID.get(ingredientId);
@@ -53,12 +46,15 @@ function IngredientDrawer({ ingredientId, onClose }: IngredientDrawerProps) {
           </h3>
           <dl className='grid grid-cols-4 gap-2 text-center'>
             {NUTRITION_CELLS.map((cell) => (
-              <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
+              <div
+                key={cell.key}
+                className='bg-muted flex flex-col-reverse rounded-xl px-1 py-2'
+              >
+                <dt className='text-muted-foreground text-xs'>{cell.label}</dt>
                 <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
                   {Math.round(ingredient.per100g[cell.key] * 10) / 10}
                   {cell.unit}
                 </dd>
-                <dt className='text-muted-foreground text-xs'>{cell.label}</dt>
               </div>
             ))}
           </dl>

@@ -10,7 +10,6 @@ const normalize = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-// Built once: the haystack is the name and every alias, so "capsicum" finds a bell pepper.
 const SEARCH_INDEX = CATALOG_INGREDIENTS.map((ingredient) => ({
   ingredient,
   name: normalize(ingredient.name),

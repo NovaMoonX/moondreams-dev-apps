@@ -31,7 +31,7 @@ function KitchenScreen() {
         placeholder='Search ingredients'
       />
       {groups.length === 0 ? (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
           Nothing matches “{trimmed}” yet. Try another name.
         </p>
       ) : (
