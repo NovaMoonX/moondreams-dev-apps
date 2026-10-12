@@ -165,7 +165,13 @@ export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   | { kind: 'recipe'; id: string | null }
-  | { kind: 'plan'; dayKey: string; mealType: MealType | null };
+  | {
+      kind: 'plan';
+      dayKey: string;
+      mealType: MealType | null;
+      /** The planned meal being changed; null plans a new one. */
+      plannedMealId: string | null;
+    };
 
 export interface CatalogStore {
   /** `cat-store-` plus the slug; also the document id of the person's own copy. */

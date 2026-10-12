@@ -61,8 +61,11 @@ function CalendarScreen({
   const [year, month] = shownMonth.split('-').map(Number);
   const isCurrentMonth = shownMonth === getLocalMonthKey(new Date(now));
 
-  const openPlan = (dayKey: string, mealType: MealType | null) =>
-    openSubview({ kind: 'plan', dayKey, mealType });
+  const openPlan = (
+    dayKey: string,
+    mealType: MealType | null,
+    plannedMealId: string | null = null,
+  ) => openSubview({ kind: 'plan', dayKey, mealType, plannedMealId });
 
   const goToMonth = (monthKey: string) => {
     setSelectedKey(null);
@@ -204,6 +207,11 @@ function CalendarScreen({
             const dayKey = openDayKey;
             setOpenDayKey(null);
             openPlan(dayKey, mealType);
+          }}
+          onEdit={(plannedMealId, mealType) => {
+            const dayKey = openDayKey;
+            setOpenDayKey(null);
+            openPlan(dayKey, mealType, plannedMealId);
           }}
         />
       )}
