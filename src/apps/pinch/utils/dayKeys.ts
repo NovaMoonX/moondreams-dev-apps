@@ -31,6 +31,10 @@ export const getDateOfDayKey = (dayKey: string) => {
   return Date.UTC(year, month - 1, day);
 };
 
+/** The stored date (UTC midnight) of the viewer's local today: a planned day before it has passed. */
+export const getLocalTodayDate = (now = Date.now()) =>
+  getDateOfDayKey(toLocalDateInputValue(now));
+
 export const getMonthKey = (year: number, monthIndex: number) =>
   toDateInputValue(Date.UTC(year, monthIndex, 1)).slice(0, 7);
 

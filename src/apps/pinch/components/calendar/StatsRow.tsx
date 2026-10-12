@@ -36,8 +36,8 @@ function StatsRow({
   const show = useAppSelector(selectShowNutrition);
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
   const gaps = [
-    ...stats.leftOut,
-    ...getNutritionGaps(stats.nutritionMissing, show),
+    ...stats.openLeftOut,
+    ...getNutritionGaps(stats.openNutritionMissing, show),
   ];
 
   return (

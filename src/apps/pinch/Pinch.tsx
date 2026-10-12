@@ -19,6 +19,7 @@ import PinchNav from '@apps/pinch/components/shell/PinchNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
 import { DEFAULT_PINCH_TAB, PINCH_TABS } from '@apps/pinch/constants';
 import { PinchOverlayContext } from '@apps/pinch/hooks/usePinchOverlay';
+import { useFreezePastDays } from '@apps/pinch/hooks/useFreezePastDays';
 import { usePinchSync } from '@apps/pinch/hooks/usePinchSync';
 import { usePinchTheme } from '@apps/pinch/hooks/usePinchTheme';
 import {
@@ -48,6 +49,7 @@ function Pinch() {
 
   usePinchTheme();
   usePinchSync(user?.uid ?? null, shownMonth);
+  useFreezePastDays(user?.uid ?? null);
 
   const requestedTab = searchParams.get('tab');
   const activeTab: PinchTab =

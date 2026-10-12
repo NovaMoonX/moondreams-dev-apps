@@ -1486,7 +1486,26 @@ service cloud.firestore {
           && isMealItemAt(items, 9);
       }
 
-      // The write-once snapshot of a past meal arrives with the issue that freezes days; until then it must be null.
+      function isTotal(value) {
+        return value == null || (value is number && value >= 0 && value <= 1000000000);
+      }
+
+      // What a meal cost when its day passed. The client lists at most 10 lines and as many left-out ingredients as its recipes hold; rules can't loop over them, so their elements are the client's.
+      function isSnapshot(value) {
+        return value is map
+          && value.keys().hasOnly(['frozenAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
+          && value.keys().hasAll(['frozenAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
+          && value.frozenAt is int && value.frozenAt <= request.time.toMillis() + 300000
+          && isTotal(value.costCents)
+          && value.leftOut is list && value.leftOut.size() <= 1000
+          && value.nutrition is map
+          && value.nutrition.keys().hasOnly(['calories', 'protein', 'carbs', 'fat'])
+          && value.nutrition.keys().hasAll(['calories', 'protein', 'carbs', 'fat'])
+          && isTotal(value.nutrition.calories) && isTotal(value.nutrition.protein)
+          && isTotal(value.nutrition.carbs) && isTotal(value.nutrition.fat)
+          && value.lines is list && value.lines.size() <= 10;
+      }
+
       function isPlannedMeal(data, id) {
         return data.keys().hasOnly(['id', 'date', 'mealType', 'name', 'sourceMealId', 'items', 'refIds', 'snapshot', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'date', 'mealType', 'name', 'sourceMealId', 'items', 'refIds', 'snapshot', 'createdAt', 'updatedAt'])
@@ -1497,7 +1516,7 @@ service cloud.firestore {
           && (data.sourceMealId == null || isShortText(data.sourceMealId, 80))
           && isMealItems(data.items)
           && data.refIds is list && data.refIds.size() <= 10
-          && data.snapshot == null
+          && (data.snapshot == null || isSnapshot(data.snapshot))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1542,7 +1561,9 @@ service cloud.firestore {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isPlannedMeal(request.resource.data, id);
         allow update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (resource.data.get('snapshot', null) == null
+            || request.resource.data.snapshot == resource.data.snapshot);
       }
 
       match /products/{id} {
