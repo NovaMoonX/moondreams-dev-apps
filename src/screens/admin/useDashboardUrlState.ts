@@ -13,35 +13,45 @@ const URL_KEYS = {
   member: parseAsString,
 };
 
-const CLEARED = { view: null, app: null, section: null, member: null };
+interface DashboardUrlValues {
+  view: (typeof VIEWS)[number] | null;
+  app: string | null;
+  section: DashboardSection | null;
+  member: string | null;
+}
+
+const CLEARED: DashboardUrlValues = { view: null, app: null, section: null, member: null };
 
 interface NavigateOptions {
-  /** A step the person expects Back to undo (opening a screen from the list); anything else replaces the entry. */
   isStep?: boolean;
 }
 
-/** The admin dashboard's state, kept in the URL (`?view=members`, `?app=nine-lives&section=settings`, `?member=<uid>`) so refresh, Back and a shared link all land in the same place. */
+/** The admin dashboard's state, kept in the URL so refresh, Back and a shared link land in the same place. */
 export function useDashboardUrlState() {
   const navigate = useNavigate();
   const [state, setState] = useQueryStates(URL_KEYS);
 
-  const getHistory = (options?: NavigateOptions) => (options?.isStep ? 'push' : 'replace');
+  // nuqs writes the URL without telling the router, so `history.state.idx` can't say whether Back has
+  // an entry of ours to pop; the entries this hook pushes carry their own marker instead.
+  const markStep = () => window.history.replaceState({ ...window.history.state, dashboardStep: true }, '');
+
+  const update = (next: DashboardUrlValues, options?: NavigateOptions) => {
+    const result = setState(next, { history: options?.isStep ? 'push' : 'replace' });
+    if (options?.isStep) void result.then(markStep);
+  };
 
   const showMembers = (options?: NavigateOptions) =>
-    setState({ view: 'members', app: null, section: null, member: null }, { history: getHistory(options) });
+    update({ view: 'members', app: null, section: null, member: null }, options);
 
   const showApp = (appId: string, options?: NavigateOptions) =>
-    setState({ view: 'apps', app: appId, section: null, member: null }, { history: getHistory(options) });
+    update({ view: 'apps', app: appId, section: null, member: null }, options);
 
   const setSection = (section: DashboardSection) => setState({ section }, { history: 'replace' });
 
-  const openMember = (uid: string | null) =>
-    setState({ member: uid }, { history: uid ? 'push' : 'replace' });
+  const openMember = (uid: string | null) => setState({ member: uid }, { history: 'replace' });
 
-  // Back undoes the step that opened this screen; arriving by a link (no earlier entry) clears it instead.
   const goBack = () => {
-    const historyIndex = window.history.state?.idx;
-    if (typeof historyIndex === 'number' && historyIndex > 0) {
+    if (window.history.state?.dashboardStep) {
       navigate(-1);
       return;
     }

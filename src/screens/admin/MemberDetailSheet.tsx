@@ -18,14 +18,22 @@ interface MemberDetailSheetProps {
     appUsage: MemberAppUsage[];
   } | null;
   isLoading: boolean;
+  hasVisitError: boolean;
+  hasUsageError: boolean;
   onClose: () => void;
 }
 
 /** One member's visit and the apps they use, so the list itself stays one quiet row per person. */
-function MemberDetailSheet({ member, isLoading, onClose }: MemberDetailSheetProps) {
+function MemberDetailSheet({ member, isLoading, hasVisitError, hasUsageError, onClose }: MemberDetailSheetProps) {
   const getVisitText = (lastVisitedAt: number | null) => {
     if (lastVisitedAt) return `Last visited ${formatDate(lastVisitedAt)}`;
-    return isLoading ? 'Loading…' : 'Not seen on the site yet';
+    if (isLoading) return 'Loading…';
+    return hasVisitError ? "Couldn't load their last visit" : 'Not seen on the site yet';
+  };
+
+  const getEmptyAppsText = () => {
+    if (isLoading) return 'Loading their apps…';
+    return hasUsageError ? "Couldn't load their apps." : "Hasn't opened an app since tracking began.";
   };
 
   return (
@@ -46,9 +54,7 @@ function MemberDetailSheet({ member, isLoading, onClose }: MemberDetailSheetProp
 
           {member.appUsage.length === 0 ? (
             <p className='text-muted-foreground text-sm'>
-              {isLoading
-                ? 'Loading their apps…'
-                : "Hasn't opened an app since tracking began."}
+              {getEmptyAppsText()}
             </p>
           ) : (
             <ul className='divide-border divide-y'>

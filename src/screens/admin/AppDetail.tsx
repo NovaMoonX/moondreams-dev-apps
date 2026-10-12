@@ -22,7 +22,6 @@ interface AppDetailProps {
   isWide: boolean;
 }
 
-/** One app: Usage and Settings stacked under its name on a wide screen, and one tab bar between them on a phone. */
 function AppDetail({
   app,
   users,

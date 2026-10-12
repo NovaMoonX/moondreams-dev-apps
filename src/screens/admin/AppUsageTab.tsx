@@ -1,7 +1,9 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import HelpTip from '@/components/HelpTip';
+import SearchInput from '@/components/SearchInput';
 import { PillGroup } from '@/components/PillGroup';
 import StatTile from '@/components/StatTile';
 import useNow from '@/hooks/useNow';
@@ -11,6 +13,7 @@ import { ACTIVE_WINDOW_MONTHS, getActiveSince } from '@lib/appUsage/appUsage';
 import { appUsageQueryOptions } from '@lib/appUsage/appUsageQueries';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
+import { USAGE_PREVIEW_ROWS, USAGE_SEARCH_THRESHOLD } from './constants';
 import { getUsageRows } from './usageRows';
 
 type UsageFilter = 'started' | 'active';
@@ -24,6 +27,8 @@ interface AppUsageTabProps {
 
 function AppUsageTab({ app, users, isUsersLoading, isUsersError }: AppUsageTabProps) {
   const [filter, setFilter] = useState<UsageFilter>('started');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
   const now = useNow(60_000);
   const usageQuery = useQuery(appUsageQueryOptions(app.id));
   const usage = usageQuery.data;
@@ -31,16 +36,28 @@ function AppUsageTab({ app, users, isUsersLoading, isUsersError }: AppUsageTabPr
   const isError = usageQuery.isError || isUsersError;
 
   const activeSince = getActiveSince(now);
-  const rows = getUsageRows(usage, users, activeSince);
+  const profilesByUid = useMemo(() => new Map(users.map((profile) => [profile.uid, profile])), [users]);
+  const rows = getUsageRows(usage, profilesByUid, activeSince);
   const startedRows = [...rows].sort((a, b) => b.startedAt - a.startedAt);
   const activeRows = rows
     .filter((row) => row.isActive)
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
-  const visibleRows = filter === 'active' ? activeRows : startedRows;
+  const filteredRows = filter === 'active' ? activeRows : startedRows;
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const matchingRows = filteredRows.filter(
+    (row) =>
+      normalizedSearch.length === 0 ||
+      row.profile.displayName?.toLowerCase().includes(normalizedSearch) ||
+      row.profile.email.toLowerCase().includes(normalizedSearch),
+  );
+  const hiddenCount = matchingRows.length - USAGE_PREVIEW_ROWS;
+  const isCollapsed = !isExpanded && normalizedSearch.length === 0 && hiddenCount > 3;
+  const visibleRows = isCollapsed ? matchingRows.slice(0, USAGE_PREVIEW_ROWS) : matchingRows;
 
   const getEmptyMessage = () => {
     if (isPending) return 'Loading…';
     if (isError) return "We couldn't load usage just now.";
+    if (searchTerm.trim().length > 0 && filteredRows.length > 0) return 'No members match that search.';
     if (filter === 'active') {
       return `No one we've seen has opened ${app.name} in the past ${ACTIVE_WINDOW_MONTHS} months.`;
     }
@@ -73,10 +90,18 @@ function AppUsageTab({ app, users, isUsersLoading, isUsersError }: AppUsageTabPr
         value={filter}
         onChange={setFilter}
         options={[
-          { value: 'started', label: `Started using · ${getCount(startedRows.length)}` },
-          { value: 'active', label: `Active · ${getCount(activeRows.length)}` },
+          { value: 'started', label: 'Started using' },
+          { value: 'active', label: 'Active' },
         ]}
       />
+
+      {rows.length >= USAGE_SEARCH_THRESHOLD ? (
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder='Search members by name or email'
+        />
+      ) : null}
 
       {visibleRows.length === 0 ? (
         <p className='text-muted-foreground text-sm'>{getEmptyMessage()}</p>
@@ -101,6 +126,12 @@ function AppUsageTab({ app, users, isUsersLoading, isUsersError }: AppUsageTabPr
           ))}
         </ul>
       )}
+
+      {isCollapsed ? (
+        <Button type='button' variant='tertiary' className='px-0!' onClick={() => setIsExpanded(true)}>
+          Show all {matchingRows.length}
+        </Button>
+      ) : null}
     </div>
   );
 }

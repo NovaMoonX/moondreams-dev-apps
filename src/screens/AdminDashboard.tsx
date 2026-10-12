@@ -32,7 +32,7 @@ function AdminDashboard() {
   const users = usersQuery.data ?? NO_USERS;
 
   const isMembersOpen = url.view === 'members';
-  // The wide layout always shows something in the main view; a phone shows the list until one is chosen.
+  // A phone with no app chosen shows the list, but the wide layout's main view is never empty.
   const selectedApp = isMembersOpen
     ? undefined
     : (allApps.find((app) => app.id === url.app) ?? (isWide ? allApps[0] : undefined));
@@ -60,6 +60,8 @@ function AdminDashboard() {
       users={users}
       usageByAppId={allUsage.byAppId}
       isLoading={usersQuery.isPending || allUsage.isLoading}
+      isUsersError={usersQuery.isError}
+      failedAppIds={allUsage.failedAppIds}
       selected={selected}
       unsavedAppIds={allApps.filter(isDirty).map((app) => app.id)}
       isWide={isWide}
@@ -120,7 +122,7 @@ function AdminDashboard() {
             <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
               Admin
             </p>
-            <h1 className='text-foreground mt-2 text-4xl font-semibold tracking-tight'>
+            <h1 className='text-foreground mt-2 text-3xl font-semibold tracking-tight sm:text-4xl'>
               Dashboard
             </h1>
             <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>
@@ -135,7 +137,9 @@ function AdminDashboard() {
 
         {isWide ? (
           <div className='grid grid-cols-[260px_1fr] gap-8'>
-            <aside className='border-border bg-card h-fit rounded-2xl border p-3'>{nav}</aside>
+            <aside className='border-border bg-card h-fit rounded-2xl border p-3 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto'>
+              {nav}
+            </aside>
             <div className='min-w-0'>
               {isMembersOpen ? (
                 <div className='max-w-3xl space-y-4'>

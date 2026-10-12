@@ -1,7 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import SearchInput from '@/components/SearchInput';
 import useNow from '@/hooks/useNow';
@@ -55,7 +55,8 @@ interface DashboardNavProps {
   users: UserProfile[];
   usageByAppId: Record<string, AppUsage[] | undefined>;
   isLoading: boolean;
-  /** `'members'`, an app id, or null when nothing is open (the phone's list). */
+  isUsersError: boolean;
+  failedAppIds: string[];
   selected: string | null;
   unsavedAppIds: string[];
   isWide: boolean;
@@ -63,12 +64,13 @@ interface DashboardNavProps {
   onSelectApp: (appId: string) => void;
 }
 
-/** The dashboard's list of places to go: the left panel from `lg` up, and the whole screen on a phone. */
 function DashboardNav({
   apps,
   users,
   usageByAppId,
   isLoading,
+  isUsersError,
+  failedAppIds,
   selected,
   unsavedAppIds,
   isWide,
@@ -78,6 +80,7 @@ function DashboardNav({
   const [searchTerm, setSearchTerm] = useState('');
   const now = useNow(60_000);
   const activeSince = getActiveSince(now);
+  const profilesByUid = useMemo(() => new Map(users.map((profile) => [profile.uid, profile])), [users]);
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const visibleApps = apps.filter(
     (app) =>
@@ -87,10 +90,19 @@ function DashboardNav({
   );
 
   const getAppMeta = (app: AppMetadata) => {
-    const unsaved = unsavedAppIds.includes(app.id) ? ['unsaved changes'] : [];
-    if (isLoading) return ['…', ...unsaved];
-    const rows = getUsageRows(usageByAppId[app.id], users, activeSince);
-    return [`${rows.length} started`, `${rows.filter((row) => row.isActive).length} active`, ...unsaved];
+    if (isLoading) return ['…'];
+    if (isUsersError || failedAppIds.includes(app.id)) return ["Couldn't load"];
+    const rows = getUsageRows(usageByAppId[app.id], profilesByUid, activeSince);
+    return [`${rows.length} started`, `${rows.filter((row) => row.isActive).length} active`];
+  };
+  const getAppSubtitle = (app: AppMetadata) => {
+    const path = `/${app.path.replace(/^\//, '') || app.id}`;
+    return unsavedAppIds.includes(app.id) ? `${path} · unsaved` : path;
+  };
+  const getMembersSubtitle = () => {
+    if (isUsersError) return "Couldn't load";
+    if (isLoading) return 'Everyone who has signed in';
+    return `${users.length} ${users.length === 1 ? 'person' : 'people'}`;
   };
 
   return (
@@ -98,7 +110,7 @@ function DashboardNav({
       <div className='divide-border divide-y'>
         <NavRow
           title='Members'
-          subtitle={isLoading ? 'Everyone who has signed in' : `${users.length} ${users.length === 1 ? 'person' : 'people'}`}
+          subtitle={getMembersSubtitle()}
           meta={[]}
           isSelected={selected === 'members'}
           isWide={isWide}
@@ -107,7 +119,14 @@ function DashboardNav({
       </div>
 
       <div className='space-y-2'>
-        <h2 className='text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase'>Apps</h2>
+        <h2
+          className={join(
+            'text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase',
+            isWide && 'px-3',
+          )}
+        >
+          Apps
+        </h2>
         {apps.length >= APP_SEARCH_THRESHOLD ? (
           <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder='Search apps' />
         ) : null}
@@ -118,15 +137,16 @@ function DashboardNav({
         ) : (
           <div className='divide-border divide-y'>
             {visibleApps.map((app) => (
-              <NavRow
-                key={app.id}
-                title={app.name || app.id}
-                subtitle={`/${app.path.replace(/^\//, '') || app.id}`}
-                meta={getAppMeta(app)}
-                isSelected={selected === app.id}
-                isWide={isWide}
-                onClick={() => onSelectApp(app.id)}
-              />
+              <div key={app.id}>
+                <NavRow
+                  title={app.name || app.id}
+                  subtitle={getAppSubtitle(app)}
+                  meta={getAppMeta(app)}
+                  isSelected={selected === app.id}
+                  isWide={isWide}
+                  onClick={() => onSelectApp(app.id)}
+                />
+              </div>
             ))}
           </div>
         )}

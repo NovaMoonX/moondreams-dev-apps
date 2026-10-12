@@ -35,14 +35,16 @@ function MembersView({ apps, users, isUsersLoading, isUsersError, selectedUid, o
   const lastVisitByUid = new Map(
     (visitsQuery.data ?? []).map((visit) => [visit.uid, visit.lastVisitedAt]),
   );
+  const usageByAppUid = new Map(
+    apps.map((app) => [app.id, new Map((allUsage.byAppId[app.id] ?? []).map((entry) => [entry.uid, entry]))]),
+  );
   const activeSince = getActiveSince(now);
 
   const members = users
     .map((profile) => ({
       profile,
-      lastVisitedAt: lastVisitByUid.get(profile.uid) ?? null,
       appUsage: apps.flatMap((app) => {
-        const entry = allUsage.byAppId[app.id]?.find((usage) => usage.uid === profile.uid);
+        const entry = usageByAppUid.get(app.id)?.get(profile.uid);
         return entry
           ? [
               {
@@ -56,6 +58,11 @@ function MembersView({ apps, users, isUsersLoading, isUsersError, selectedUid, o
           : [];
       }),
     }))
+    .map((member) => {
+      const newestAppOpen = Math.max(0, ...member.appUsage.map((usage) => usage.lastActiveAt));
+      const lastVisitedAt = Math.max(lastVisitByUid.get(member.profile.uid) ?? 0, newestAppOpen);
+      return { ...member, lastVisitedAt: lastVisitedAt > 0 ? lastVisitedAt : null };
+    })
     .sort((a, b) => (b.lastVisitedAt ?? 0) - (a.lastVisitedAt ?? 0));
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -77,15 +84,17 @@ function MembersView({ apps, users, isUsersLoading, isUsersError, selectedUid, o
     return isUsersError ? "We couldn't load members just now." : 'No one has signed in yet.';
   };
   const getAppsText = (count: number) => {
-    if (isLoading || hasError) return '…';
-    return `${count} ${count === 1 ? 'app' : 'apps'}`;
+    if (isLoading) return '…';
+    return `${count}${allUsage.hasError ? '+' : ''} ${count === 1 && !allUsage.hasError ? 'app' : 'apps'}`;
   };
+  const isCountKnown = !isUsersLoading && !isUsersError;
 
   return (
     <div className='max-w-3xl space-y-4'>
       <p className='text-muted-foreground text-sm'>
-        {users.length} {users.length === 1 ? 'member' : 'members'}, most recent visitors first. Tap
-        someone to see the apps they use. Visits and app opens are counted from when tracking began.
+        {isCountKnown ? `${users.length} ${users.length === 1 ? 'member' : 'members'}, most` : 'Most'} recent
+        visitors first. Tap someone to see the apps they use. Visits and app opens are counted from when
+        tracking began.
       </p>
 
       {users.length >= MEMBER_SEARCH_THRESHOLD ? (
@@ -137,6 +146,8 @@ function MembersView({ apps, users, isUsersLoading, isUsersError, selectedUid, o
       <MemberDetailSheet
         member={selectedMember}
         isLoading={isLoading}
+        hasVisitError={visitsQuery.isError}
+        hasUsageError={allUsage.hasError}
         onClose={() => onSelectMember(null)}
       />
     </div>

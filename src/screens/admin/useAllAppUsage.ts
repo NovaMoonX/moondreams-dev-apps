@@ -9,6 +9,7 @@ export function useAllAppUsage(apps: AppMetadata[]) {
 
   return {
     byAppId: Object.fromEntries(apps.map((app, index) => [app.id, queries[index]?.data])),
+    failedAppIds: apps.filter((_, index) => queries[index]?.isError).map((app) => app.id),
     isLoading: queries.some((query) => query.isPending),
     hasError: queries.some((query) => query.isError),
   };

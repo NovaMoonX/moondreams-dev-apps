@@ -184,16 +184,7 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
 
   return (
     <div className='space-y-6'>
-      <div className='flex items-center justify-between gap-3'>
-        <p role='status' className='text-muted-foreground min-w-0 text-sm'>
-          {isDirty ? 'You have unsaved changes.' : 'Everything is saved.'}
-        </p>
-        <Button onClick={saveChanges} disabled={isSaving || !isDirty}>
-          {isSaving ? 'Saving...' : 'Save changes'}
-        </Button>
-      </div>
-
-      <div className='grid gap-4 md:grid-cols-2'>
+      <div className='grid gap-6 md:grid-cols-2'>
         <div className='space-y-2'>
           <label className='text-foreground text-sm font-medium'>
             App name
@@ -378,6 +369,15 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
             </p>
           ) : null}
         </div>
+      </div>
+
+      <div className='bg-background/90 border-border sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t py-3 backdrop-blur'>
+        <p role='status' className='text-muted-foreground min-w-0 text-sm'>
+          {isDirty ? 'You have unsaved changes.' : 'Everything is saved.'}
+        </p>
+        <Button onClick={saveChanges} disabled={isSaving || !isDirty}>
+          {isSaving ? 'Saving...' : 'Save changes'}
+        </Button>
       </div>
     </div>
   );
