@@ -486,13 +486,13 @@ Every slice resets on the shared `resetAllState`, so a user switch never shows t
 1. **Signed-in user:** `startSettingsListener`, `startIngredientsListener`, `startFamiliesListener`, `startStoresListener`, `startProductsListener`, `startRecipesListener`, `startMealsListener` — `onSnapshot` of the kitchen document and each collection under `kitchens/{uid}`. One effect keyed on `uid`.
 2. **Visible window:** `startPlannedMealsListener(uid, windowKey, onChange)` — `onSnapshot` of `plannedMeals` where `date >= windowStart` and `date < windowEnd`, a single-field range covering the shown month plus `MONTH_WINDOW_PADDING` months on each side. The effect is keyed on the window key (`"2026-10"`), so paging months restarts it only when the window actually changes. The slice keeps the previous window's documents until the new snapshot lands, so the grid never blanks while paging.
 
-**Loading gate.** `Pinch.tsx` shows a skeleton until every user-tier slice `isLoaded` and the first window has landed. An empty kitchen (no settings document, no records) is a valid state that renders the empty Calendar; there is no first-run blocking modal.
+**Loading gate.** `Pinch.tsx` shows a skeleton until every user-tier slice `isLoaded` and the first window has landed. An empty kitchen (no settings document, no records) is a valid state that renders the empty Calendar; there is no first-run blocking modal. The settings listener is waited for but its failure never shows the error screen (the nudges simply stay open), since it only carries an enhancement.
 
 **Actions (thunks)** in `store/actions/`, writing only to the person's own paths:
 
 | Action | Write |
 |---|---|
-| `saveSettings(fields)` / `dismissNudge(key)` | field-scoped `setDoc`/`updateDoc` with dotted paths (`showNutrition.protein`, `dismissedNudges.<key>`); creates the kitchen document on first write |
+| `saveSettings(fields)` / `dismissNudge({ keys })` | field-scoped writes with dotted paths (`showNutrition.protein`, `dismissedNudges.<key>`, built with `FieldPath` because keys hold `:` and `-`); `dismissNudge` is one `runTransaction` that re-reads the document, refuses a 501st key and creates the document on first write |
 | `saveIngredient(draft)` | `setDoc` of the record (custom: new id; catalog: id = catalog id) with the full shape; edits are field-scoped `updateDoc` |
 | `removeIngredient(id)` | the archive-or-delete check (Logic §3a) |
 | `saveFamily` / `removeFamily` | `setDoc` / archive-or-delete |

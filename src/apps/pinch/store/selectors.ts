@@ -18,7 +18,6 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded;
 
 export const selectPinchLoadError = (state: RootState) =>
-  state.pinch.settings.loadError ??
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
   state.pinch.stores.loadError ??

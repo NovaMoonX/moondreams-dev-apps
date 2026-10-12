@@ -79,15 +79,18 @@ function GapNudge({ uid, gaps, onFillIn }: GapNudgeProps) {
     <div className='flex items-start gap-1'>
       <p className='text-muted-foreground min-w-0 flex-1 py-2.5 text-sm'>
         {hasFailed ? "Couldn't hide this just now. " : null}
-        {text} ·{' '}
-        <Button
-          type='button'
-          variant='link'
-          onClick={() => onFillIn(open)}
-          className='relative h-auto p-0 align-baseline text-sm leading-[inherit] after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
-        >
-          {action}
-        </Button>
+        {text}{' '}
+        <span className='whitespace-nowrap'>
+          ·{' '}
+          <Button
+            type='button'
+            variant='link'
+            onClick={() => onFillIn(open)}
+            className='relative h-auto p-0 align-baseline text-sm leading-[inherit] after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
+          >
+            {action}
+          </Button>
+        </span>
       </p>
       <Button
         type='button'

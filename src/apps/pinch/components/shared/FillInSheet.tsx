@@ -20,6 +20,7 @@ import {
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, Product, Unit } from '@apps/pinch/types';
+import { formatSize } from '@apps/pinch/utils/productFormat';
 
 interface RowState {
   storeId: string | null;
@@ -184,10 +185,9 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         )}
         {!isSaved && gap.kind === 'NOT_COMPARABLE' && product && (
           <p className='text-muted-foreground text-sm'>
-            It's set up as a {product.sizeAmount}{' '}
-            {product.sizeUnit.toLowerCase()} package, which can't be compared
-            with the amounts in your recipes. How big is it, in something you'd
-            measure by weight or volume?
+            It's set up as a {formatSize(product.sizeAmount, product.sizeUnit)}{' '}
+            package, which can't be compared with the amounts in your recipes.
+            How big is it, in something you'd measure by weight or volume?
           </p>
         )}
         {!isSaved && (
