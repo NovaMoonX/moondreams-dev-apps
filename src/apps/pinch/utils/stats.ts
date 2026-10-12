@@ -28,7 +28,7 @@ export interface MonthStats {
   mealsPriced: number;
   avgPerMealCents: number | null;
   leftOut: Gap[];
-  /** Per metric, the average over the days that have a planned meal; null when unknown. */
+  /** Per metric, the average over the days that know it, so a day with nothing known never pulls it toward zero; null when no day does. */
   dailyNutrition: NutritionValues;
   /** Spend over protein grams, for the meals where both are known. */
   proteinCentsPerGram: number | null;
@@ -64,6 +64,10 @@ const addTotals = (
   leftOut: [...(current?.leftOut ?? []), ...leftOut],
   nutrition: addNutrition(current?.nutrition, nutrition),
 });
+
+const knownDays = (byDay: Map<string, Totals>, metric: keyof NutritionValues) =>
+  [...byDay.values()].filter((totals) => totals.nutrition[metric] !== null)
+    .length;
 
 const dedupe = (gaps: Gap[]) => [
   ...new Map(
@@ -146,9 +150,10 @@ export function getMonthStats(
     dailyNutrition: Object.fromEntries(
       NUTRITION_METRICS.map((metric) => [
         metric,
-        walked.nutrition?.[metric] == null || walked.byDay.size === 0
+        walked.nutrition?.[metric] == null ||
+        knownDays(walked.byDay, metric) === 0
           ? null
-          : walked.nutrition[metric] / walked.byDay.size,
+          : walked.nutrition[metric] / knownDays(walked.byDay, metric),
       ]),
     ) as unknown as NutritionValues,
     proteinCentsPerGram:

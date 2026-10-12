@@ -12,8 +12,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { ResolvedIngredient } from '@apps/pinch/types';
 import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
-import { hasNutrition } from '@apps/pinch/utils/nutrition';
-import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
+import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 
 interface IngredientRowProps {
   ingredient: ResolvedIngredient;
@@ -57,8 +56,7 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
             No price yet
           </span>
         ) : (
-          hasNutrition(ingredient.per100g) &&
-          hasAnyMetricOn(show) && (
+          hasShownValue(ingredient.per100g, show) && (
             <span className='text-muted-foreground block truncate text-xs font-normal'>
               <NutritionLine values={ingredient.per100g} show={show} /> per 100
               g
