@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -31,6 +31,7 @@ import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import RecipeAutofill from '@apps/pinch/components/recipes/RecipeAutofill';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
 import ServingStepper from '@apps/pinch/components/plan/ServingStepper';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
@@ -55,13 +56,20 @@ import {
   saveRecipe,
 } from '@apps/pinch/store/actions/recipeActions';
 import {
+  selectIngredients,
   selectIngredientsById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
+import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
+import {
+  matchIngredient,
+  normalizeName,
+} from '@apps/pinch/utils/ingredientMatch';
 import type {
   NutritionMetric,
   NutritionValues,
   Recipe,
+  RecipeSource,
   Unit,
 } from '@apps/pinch/types';
 
@@ -69,10 +77,15 @@ const { custom, input } = FormFactories;
 
 interface IngredientRow {
   id: string;
+  /** Empty while the reader's name hasn't been resolved to an ingredient yet. */
   ingredientId: string;
   amount: string;
   unit: Unit;
   note: string | null;
+  /** A name from the reader that no ingredient matches: shown until the person adds it as new or picks another. */
+  proposedName: string | null;
+  /** Set when the person chose "Add as new ingredient": it is created with the recipe. */
+  newName: string | null;
 }
 
 interface Reveal<T> {
@@ -104,6 +117,8 @@ const getInitialData = (recipe: Recipe | null): FormData => ({
     amount: String(line.amount),
     unit: line.unit,
     note: line.note ?? null,
+    proposedName: null,
+    newName: null,
   })),
   extras: {
     steps: {
@@ -176,6 +191,7 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [isAdding, setIsAdding] = useState(rows.length === 0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [choosingId, setChoosingId] = useState<string | null>(null);
 
   const addRow = (ingredientId: string) => {
     const serving =
@@ -189,6 +205,8 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
         amount: String(serving.amount),
         unit: serving.unit,
         note: null,
+        proposedName: null,
+        newName: null,
       },
     ]);
     setOpenId(id);
@@ -219,6 +237,90 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
               : row.amount.trim() === ''
                 ? 'Add an amount'
                 : 'Check the amount';
+            const displayName =
+              ingredient?.name ??
+              row.newName ??
+              row.proposedName ??
+              'Removed ingredient';
+            if (row.ingredientId === '') {
+              return (
+                <li key={row.id} className='space-y-2 py-2'>
+                  <div className='flex items-center gap-1'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='truncate font-medium'>{displayName}</p>
+                      <p className='text-muted-foreground text-xs'>
+                        Not in your ingredients yet
+                      </p>
+                    </div>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      aria-label={`Remove ${displayName}`}
+                      className='size-10 shrink-0'
+                      onClick={() =>
+                        onChange(
+                          rows.filter((candidate) => candidate.id !== row.id),
+                        )
+                      }
+                    >
+                      <X className='h-4 w-4' aria-hidden='true' />
+                    </Button>
+                  </div>
+                  <div className='flex flex-wrap gap-2'>
+                    <Button
+                      type='button'
+                      size='sm'
+                      rounded='full'
+                      variant='secondary'
+                      onClick={() =>
+                        update({
+                          ingredientId:
+                            rows.find(
+                              (other) =>
+                                other.newName !== null &&
+                                normalizeName(other.newName) ===
+                                  normalizeName(row.proposedName ?? ''),
+                            )?.ingredientId ?? generateUuid(),
+                          newName: row.proposedName,
+                        })
+                      }
+                    >
+                      Add as new ingredient
+                    </Button>
+                    <Button
+                      type='button'
+                      size='sm'
+                      rounded='full'
+                      variant='secondary'
+                      onClick={() =>
+                        setChoosingId((current) =>
+                          current === row.id ? null : row.id,
+                        )
+                      }
+                    >
+                      {choosingId === row.id ? 'Close' : 'Choose another'}
+                    </Button>
+                  </div>
+                  {choosingId === row.id && (
+                    <ItemSearch
+                      uid={uid}
+                      excludeIds={rows.map(
+                        (candidate) => candidate.ingredientId,
+                      )}
+                      onPick={(ingredientId) => {
+                        setChoosingId(null);
+                        update({
+                          ingredientId,
+                          proposedName: null,
+                          newName: null,
+                        });
+                      }}
+                    />
+                  )}
+                </li>
+              );
+            }
             return (
               <li key={row.id} className='py-1'>
                 <div className='flex items-center gap-1'>
@@ -226,7 +328,7 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                     type='button'
                     variant='tertiary'
                     aria-expanded={openId === row.id}
-                    aria-label={`${ingredient?.name ?? 'Ingredient'}, ${amountLabel}`}
+                    aria-label={`${displayName}, ${amountLabel}`}
                     onClick={() =>
                       setOpenId((current) =>
                         current === row.id ? null : row.id,
@@ -239,7 +341,12 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                       size={28}
                     />
                     <span className='min-w-0 flex-1 truncate font-medium'>
-                      {ingredient?.name ?? 'Removed ingredient'}
+                      {displayName}
+                      {row.newName && (
+                        <span className='text-muted-foreground ml-1.5 text-xs font-normal'>
+                          new
+                        </span>
+                      )}
                     </span>
                     <span
                       className={join(
@@ -256,7 +363,7 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                     type='button'
                     variant='tertiary'
                     size='icon'
-                    aria-label={`Remove ${ingredient?.name ?? 'ingredient'}`}
+                    aria-label={`Remove ${displayName}`}
                     className='size-10 shrink-0'
                     onClick={() =>
                       onChange(
@@ -275,7 +382,7 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                       min={0}
                       step='any'
                       variant='outline'
-                      aria-label={`Amount of ${ingredient?.name ?? 'ingredient'}`}
+                      aria-label={`Amount of ${displayName}`}
                       value={row.amount}
                       onChange={(event) =>
                         update({ amount: event.target.value })
@@ -609,7 +716,10 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
   const upload = useImageUpload(null);
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
   const [isCoverRemoved, setIsCoverRemoved] = useState(false);
+  const ingredients = useAppSelector(selectIngredients);
   const initialData = useMemo(() => getInitialData(recipe), [recipe]);
+  const [seed, setSeed] = useState({ data: initialData, key: 0 });
+  const [source, setSource] = useState<RecipeSource>('MANUAL');
   const [formData, setFormData] = useState<FormData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -622,6 +732,7 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
   const rowsValid = formData.ingredients.every((row) => {
     const amount = Number(row.amount);
     return (
+      row.ingredientId !== '' &&
       row.amount.trim() !== '' &&
       Number.isFinite(amount) &&
       amount > 0 &&
@@ -718,6 +829,84 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
     }
   };
 
+  const latest = useRef({ formData, seed, ingredients });
+  useEffect(() => {
+    latest.current = { formData, seed, ingredients };
+  });
+
+  /** Fills only what the reader found and the person hasn't already written: blank fields, new ingredients and steps, never over what they typed. Reads the form as it is when the reading finishes, not when it started. */
+  const applyExtracted = (extracted: ExtractedRecipe, from: RecipeSource) => {
+    const { formData: current, seed: currentSeed } = latest.current;
+    const isUntouched = (value: number) => value === currentSeed.data.servings;
+    const known = new Set(current.ingredients.map((row) => row.ingredientId));
+    const addedRows = extracted.ingredients.flatMap((line) => {
+      const match = matchIngredient(line.name, latest.current.ingredients);
+      if (match && known.has(match.id)) {
+        return [];
+      }
+      return [
+        {
+          id: generateUuid(),
+          ingredientId: match?.id ?? '',
+          amount: line.amount === null ? '' : String(line.amount),
+          unit: line.unit ?? match?.serving.unit ?? 'EACH',
+          note: line.note,
+          proposedName: match ? null : line.name,
+          newName: null,
+        } satisfies IngredientRow,
+      ];
+    });
+    const { extras } = current;
+    const hasSteps =
+      extras.steps.enabled &&
+      extras.steps.value.some((step) => step.trim() !== '');
+    const next: FormData = {
+      ...current,
+      title:
+        current.title.trim() === '' ? (extracted.title ?? '') : current.title,
+      servings:
+        extracted.servings !== null && isUntouched(current.servings)
+          ? extracted.servings
+          : current.servings,
+      ingredients: [...current.ingredients, ...addedRows].slice(
+        0,
+        MAX_RECIPE_INGREDIENTS,
+      ),
+      extras: {
+        ...extras,
+        steps:
+          extracted.steps.length > 0 && !hasSteps
+            ? { enabled: true, value: extracted.steps }
+            : extras.steps,
+        description:
+          extracted.description !== null &&
+          extras.description.value.trim() === ''
+            ? { enabled: true, value: extracted.description }
+            : extras.description,
+        times:
+          (extracted.prepMinutes !== null || extracted.cookMinutes !== null) &&
+          !extras.times.enabled
+            ? {
+                enabled: true,
+                value: {
+                  prep:
+                    extracted.prepMinutes === null
+                      ? ''
+                      : String(extracted.prepMinutes),
+                  cook:
+                    extracted.cookMinutes === null
+                      ? ''
+                      : String(extracted.cookMinutes),
+                },
+              }
+            : extras.times,
+      },
+    };
+    setFormData(next);
+    setSeed((previous) => ({ data: next, key: previous.key + 1 }));
+    setSource(from);
+  };
+
   const handleSubmit = async (data: FormData) => {
     setError(null);
     setIsSubmitting(true);
@@ -745,6 +934,17 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
               unit: row.unit,
               note: row.note,
             })),
+            source: recipe ? recipe.source : source,
+            newIngredients: [
+              ...new Map(
+                data.ingredients
+                  .filter((row) => row.newName !== null)
+                  .map((row) => [
+                    row.ingredientId,
+                    { id: row.ingredientId, name: row.newName ?? '' },
+                  ]),
+              ).values(),
+            ],
             nutritionOverride: data.extras.nutrition.enabled
               ? parseNutrition(data.extras.nutrition.value)
               : null,
@@ -775,10 +975,12 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
 
   return (
     <>
+      <RecipeAutofill onFilled={applyExtracted} />
       <Form
+        key={seed.key}
         id='pinch-recipe'
         form={fields}
-        initialData={initialData}
+        initialData={seed.data}
         columns={1}
         onDataChange={(data) => setFormData(data as FormData)}
         onSubmit={(data) => {
