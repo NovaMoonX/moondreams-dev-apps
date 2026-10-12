@@ -652,7 +652,7 @@ block-beta
   style CP3 fill:transparent,stroke:#888888,stroke-width:1px;
   style CP4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A small drawer with a scrollable preview, one sentence on what is and isn't in the copy, and Dreamer UI's `CopyButton`. The same sheet serves a recipe, a saved meal, a day, a week and the ingredient list. A copy never carries money, stores or products.*
+*A scrollable preview, one sentence on what is and isn't in the copy, and Dreamer UI's `CopyButton` (the shared `CopyPanel`). Inside a recipe, meal, day or planned-meal drawer it swaps in place with a Back link (never a second overlay); the Kitchen's 📋 icon opens it in its own sheet (`CopySheet`). The day drawer offers "Copy this day" and "Copy this week" (the Monday-to-Sunday week that holds the day). A copy never carries money, stores or products.*
 
 **Breakdown** (drawer from the calendar stats row)
 

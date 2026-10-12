@@ -1,8 +1,15 @@
 import { memo, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus, ShoppingCart, Store } from 'lucide-react';
+import {
+  ChevronRight,
+  ClipboardCopy,
+  Plus,
+  ShoppingCart,
+  Store,
+} from 'lucide-react';
 
+import CopySheet from '@/components/CopySheet';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
@@ -21,8 +28,10 @@ import {
   selectProducts,
   selectProductsById,
   selectStores,
+  selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
 import type { KitchenView } from '@apps/pinch/types';
+import { ingredientsMarkdown } from '@apps/pinch/utils/markdown/ingredientsMarkdown';
 import {
   groupByFamily,
   searchIngredients,
@@ -36,6 +45,7 @@ const VIEW_OPTIONS = KITCHEN_VIEWS.map((value) => ({
 
 type Overlay =
   | { kind: 'details'; id: string }
+  | { kind: 'copy' }
   | { kind: 'form'; id: string | null }
   | { kind: 'product'; ingredientId: string; productId: string | null };
 
@@ -84,6 +94,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const productCount = useAppSelector(selectProducts).length;
   const productsById = useAppSelector(selectProductsById);
   const defaultProducts = useAppSelector(selectDefaultProducts);
+  const usedIds = useAppSelector(selectUsedIngredientIds);
   const { openSubview } = usePinchOverlay();
 
   const trimmed = query.trim();
@@ -135,16 +146,29 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         title='Ingredients'
         subtitle={`${ingredients.length} ingredients, ready to use`}
         action={
-          <Button
-            type='button'
-            size='sm'
-            rounded='full'
-            className='gap-1'
-            onClick={() => setOverlay({ kind: 'form', id: null })}
-          >
-            <Plus className='h-4 w-4' aria-hidden='true' />
-            New
-          </Button>
+          <div className='flex items-center gap-1'>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              rounded='full'
+              aria-label='Copy my ingredients'
+              className='size-10 p-0'
+              onClick={() => setOverlay({ kind: 'copy' })}
+            >
+              <ClipboardCopy className='h-5 w-5' aria-hidden='true' />
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              rounded='full'
+              className='gap-1'
+              onClick={() => setOverlay({ kind: 'form', id: null })}
+            >
+              <Plus className='h-4 w-4' aria-hidden='true' />
+              New
+            </Button>
+          </div>
         }
       />
       <div className='grid grid-cols-2 gap-2'>
@@ -188,6 +212,22 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             />
           ))}
         </div>
+      )}
+      {overlay?.kind === 'copy' && (
+        <CopySheet
+          title='My ingredients'
+          text={ingredientsMarkdown(
+            ingredients,
+            families,
+            (ingredient) =>
+              ingredient.isCustom ||
+              ingredient.isAdjusted ||
+              defaultProducts.has(ingredient.id) ||
+              usedIds.has(ingredient.id),
+          )}
+          note='Just the names, grouped by family, so a chat knows what is in your kitchen. No prices, stores or nutrition.'
+          onClose={() => setOverlay(null)}
+        />
       )}
       {overlay?.kind === 'details' && (
         <IngredientDrawer
