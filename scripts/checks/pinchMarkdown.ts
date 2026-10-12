@@ -110,6 +110,20 @@ assert.match(
   /- 2 tbsp Hot \\\*sauce\\\* \\#1 \\@home \(the \\\[spicy\\\] one\)/i,
 );
 assert.match(outputs.recipe, /1\. Cook the rice\./);
+
+// typed text that starts like a list item, rule or quote stays text, in a step, a description and an item title
+const lineStarts = recipeMarkdown(
+  {
+    ...recipe,
+    description: '- not a bullet',
+    steps: ['1. not nested', '- not nested either', '> not a quote'],
+  },
+  ingredientsById,
+);
+assert.ok(lineStarts.includes('\n\n\\- not a bullet\n'));
+assert.ok(lineStarts.includes('1. 1\\. not nested'));
+assert.ok(lineStarts.includes('2. \\- not nested either'));
+assert.ok(lineStarts.includes('3. \\> not a quote'));
 assert.ok(
   outputs.recipe.includes('Line one line two'),
   'a description collapses to one line',

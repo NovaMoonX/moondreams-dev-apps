@@ -14,11 +14,11 @@ interface CopyPanelProps {
 
 /** A read-only preview of text bound for the clipboard, with what it includes and one Copy button. */
 function CopyPanel({ text, note, onBack }: CopyPanelProps) {
-  const [failed, setFailed] = useState(false);
+  const [result, setResult] = useState<'copied' | 'failed' | null>(null);
 
   const handleCopy = async () => {
     const copied = await copyToClipboard(text);
-    setFailed(!copied);
+    setResult(copied ? 'copied' : 'failed');
   };
 
   return (
@@ -35,17 +35,23 @@ function CopyPanel({ text, note, onBack }: CopyPanelProps) {
         </Button>
       )}
       <pre
+        role='region'
         tabIndex={0}
         aria-label='Text that will be copied'
-        className='bg-muted/50 border-border max-h-[max(10rem,calc(92dvh-27rem))] overflow-y-auto rounded-2xl border p-3 text-sm break-words whitespace-pre-wrap'
+        className='bg-muted/50 border-border max-h-[max(10rem,calc(92dvh-30rem))] overflow-y-auto rounded-2xl border p-3 text-sm break-words whitespace-pre-wrap'
       >
         {text}
       </pre>
       <p className='text-muted-foreground text-sm'>{note}</p>
-      {failed && (
-        <p className='text-destructive text-sm'>
+      {result === 'failed' && (
+        <p role='alert' className='text-destructive text-sm'>
           Your browser wouldn't let us copy. Select the text above and copy it
           by hand.
+        </p>
+      )}
+      {result === 'copied' && (
+        <p role='status' className='text-muted-foreground text-sm'>
+          Copied. Paste it into your chat.
         </p>
       )}
       <CopyButton

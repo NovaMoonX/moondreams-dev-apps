@@ -153,7 +153,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
               size='icon'
               rounded='full'
               aria-label='Copy my ingredients'
-              className='relative before:absolute before:-inset-0.5 before:content-[""]'
+              className='size-10 p-0'
               onClick={() => setOverlay({ kind: 'copy' })}
             >
               <ClipboardCopy className='h-5 w-5' aria-hidden='true' />
