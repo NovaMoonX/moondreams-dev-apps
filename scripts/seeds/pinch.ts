@@ -192,6 +192,77 @@ async function uploadSeedImage(path: string) {
   }
 }
 
+const line = (
+  id: string,
+  ingredientId: string,
+  amount: number,
+  unit: string,
+) => ({ id, ingredientId, amount, unit, note: null });
+
+const SEED_RECIPES = [
+  {
+    id: 'seed-pinch-recipe-adobo',
+    title: 'Adobo chicken',
+    description: 'Sticky, tangy chicken thighs braised in soy and vinegar.',
+    servings: 4,
+    prepMinutes: 10,
+    cookMinutes: 35,
+    coverPath: null,
+    ingredients: [
+      line('adobo-1', 'cat-chicken-thigh', 2, 'LB'),
+      line('adobo-2', 'cat-soy-sauce', 0.25, 'CUP'),
+      line('adobo-3', 'cat-white-vinegar', 0.25, 'CUP'),
+      line('adobo-4', 'cat-garlic', 6, 'EACH'),
+      line('adobo-5', 'cat-bay-leaves', 2, 'EACH'),
+      line('adobo-6', 'cat-black-pepper', 1, 'TSP'),
+    ],
+    steps: [
+      'Marinate the chicken in the soy sauce, vinegar and garlic for 30 minutes.',
+      'Simmer everything with the bay leaves and pepper, covered, for 25 minutes.',
+      'Uncover and reduce the sauce until it clings to the chicken.',
+    ],
+    source: 'MANUAL',
+  },
+  {
+    id: 'seed-pinch-recipe-rice',
+    title: 'Cilantro lime rice',
+    description: null,
+    servings: 4,
+    prepMinutes: 5,
+    cookMinutes: 20,
+    coverPath: null,
+    ingredients: [
+      line('rice-1', 'cat-jasmine-rice', 1, 'CUP'),
+      line('rice-2', 'cat-cilantro', 0.25, 'CUP'),
+      line('rice-3', 'cat-lime-juice', 2, 'TBSP'),
+      line('rice-4', 'cat-salt', 0.5, 'TSP'),
+      line('rice-5', 'cat-olive-oil', 1, 'TBSP'),
+    ],
+    steps: [
+      'Cook the rice.',
+      'Fold in the cilantro, lime juice, salt and olive oil.',
+    ],
+    source: 'MANUAL',
+  },
+  {
+    id: 'seed-pinch-recipe-nachos',
+    title: 'Game night nachos',
+    description: 'Sheet-pan nachos built on a bag of Doritos.',
+    servings: 6,
+    prepMinutes: null,
+    cookMinutes: 10,
+    coverPath: null,
+    ingredients: [
+      line('nachos-1', 'seed-pinch-ingredient-doritos', 9, 'OZ'),
+      line('nachos-2', 'cat-cheddar', 8, 'OZ'),
+      line('nachos-3', 'cat-jalapeno', 2, 'EACH'),
+      line('nachos-4', 'cat-salsa', 0.5, 'CUP'),
+    ],
+    steps: [],
+    source: 'MANUAL',
+  },
+];
+
 // Alex's own kitchen; every other fixture account starts with an empty one.
 export async function seedPinch(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -230,6 +301,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(family.id)
         .set({ ...family, createdAt, updatedAt: createdAt }),
     ),
+    ...SEED_RECIPES.map((recipe) =>
+      kitchenRef
+        .collection('recipes')
+        .doc(recipe.id)
+        .set({ ...recipe, createdAt, updatedAt: createdAt }),
+    ),
     ...SEED_PRODUCTS.map((product) =>
       kitchenRef
         .collection('products')
@@ -250,6 +327,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_FAMILIES.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +
+      SEED_RECIPES.length +
       CATALOG_STORE_SEEDS.length +
       1,
   };

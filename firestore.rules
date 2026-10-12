@@ -1421,6 +1421,27 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      function isNullOrMinutes(value) {
+        return value == null || (value is int && value >= 0 && value <= 100000);
+      }
+
+      // Rules can't walk a list, so each ingredient line and step is shaped by the client; the rules cap the counts and the fields around them.
+      function isRecipe(data, id) {
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.title, 200)
+          && (data.get('description', null) == null || isShortText(data.description, 2000))
+          && isPositiveAmount(data.servings)
+          && isNullOrMinutes(data.get('prepMinutes', null))
+          && isNullOrMinutes(data.get('cookMinutes', null))
+          && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
+          && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
+          && data.steps is list && data.steps.size() <= 60
+          && data.source in ['MANUAL', 'AI_TEXT', 'AI_FILE']
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       function isStore(data, id) {
         return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
@@ -1439,6 +1460,13 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isIngredient(request.resource.data, id);
         allow update: if isKitchenOwner() && isIngredient(request.resource.data, id)
           && request.resource.data.catalogId == resource.data.catalogId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /recipes/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isRecipe(request.resource.data, id);
+        allow update: if isKitchenOwner() && isRecipe(request.resource.data, id)
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

@@ -19,7 +19,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES } from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
-import { useStoreImageUrl } from '@apps/pinch/hooks/useStoreImageUrl';
+import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import {
   ensureCatalogStore,
   removeStore,
@@ -47,7 +47,7 @@ interface OwnStoreFormProps {
 function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const existingUrl = useStoreImageUrl(
+  const existingUrl = useStorageImageUrl(
     store?.imagePath ?? null,
     store?.updatedAt ?? 0,
   );
