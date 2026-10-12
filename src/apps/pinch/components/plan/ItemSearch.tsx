@@ -89,6 +89,7 @@ function ItemSearch({
           },
         }),
       ).unwrap();
+      setQuery('');
       onPick(id);
     } catch (createError) {
       setError(getErrorMessage(createError, 'Unable to add this ingredient.'));
