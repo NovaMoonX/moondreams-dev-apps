@@ -5,7 +5,7 @@
  */
 html.pinch-theme {
   --color-background: oklch(0.987 0.012 80);
-  --color-primary: var(--color-orange-600);
+  --color-primary: var(--color-orange-700);
   --color-primary-foreground: var(--color-white);
   --color-secondary: var(--color-orange-100);
   --color-secondary-foreground: var(--color-orange-950);
