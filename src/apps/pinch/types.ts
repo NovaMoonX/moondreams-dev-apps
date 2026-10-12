@@ -143,7 +143,8 @@ export interface Meal {
 export interface PlannedSnapshot {
   frozenAt: number;
   costCents: number | null;
-  leftOutCount: number;
+  /** The ingredients the cost left out, so a day or month still names them. */
+  leftOut: Gap[];
   nutrition: NutritionValues;
   lines: { itemId: string; costCents: number | null }[];
 }

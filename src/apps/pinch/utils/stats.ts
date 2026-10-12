@@ -6,9 +6,12 @@ import type {
   PlannedMeal,
 } from '@apps/pinch/types';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
-import { getMealCost, type CostContext } from '@apps/pinch/utils/mealMath';
 import {
-  getMealNutrition,
+  getPlannedMealCost,
+  type CostContext,
+} from '@apps/pinch/utils/mealMath';
+import {
+  getPlannedMealNutrition,
   type IngredientMissing,
 } from '@apps/pinch/utils/nutritionMath';
 
@@ -28,11 +31,14 @@ export interface MonthStats {
   mealsPriced: number;
   avgPerMealCents: number | null;
   leftOut: Gap[];
+  /** What only the meals that aren't frozen yet leave out: the part a new price can still change, and so the part worth a nudge. */
+  openLeftOut: Gap[];
   /** Per metric, the average over the days that know it, so a day with nothing known never pulls it toward zero; null when no day does. */
   dailyNutrition: NutritionValues;
   /** Spend over protein grams, for the meals where both are known. */
   proteinCentsPerGram: number | null;
   nutritionMissing: IngredientMissing[];
+  openNutritionMissing: IngredientMissing[];
   byDay: (Totals & { dayKey: string })[];
   byType: (Totals & { mealType: MealType })[];
 }
@@ -88,9 +94,9 @@ export function getMonthStats(
         return acc;
       }
 
-      const cost = getMealCost(meal.items, context);
-      const nutrition = getMealNutrition(
-        meal.items,
+      const cost = getPlannedMealCost(meal, context);
+      const nutrition = getPlannedMealNutrition(
+        meal,
         context.recipeNutrition,
         context.ingredientsById,
       );
@@ -114,6 +120,10 @@ export function getMonthStats(
       );
       acc.nutrition = addNutrition(acc.nutrition, nutrition.values);
       acc.nutritionMissing.push(...nutrition.missing);
+      if (!meal.snapshot) {
+        acc.openLeftOut.push(...cost.leftOut);
+        acc.openNutritionMissing.push(...nutrition.missing);
+      }
       acc.plannedCount += 1;
       acc.leftOut.push(...cost.leftOut);
       if (cost.totalCents !== null) {
@@ -135,6 +145,8 @@ export function getMonthStats(
       leftOut: [] as Gap[],
       nutrition: undefined as NutritionValues | undefined,
       nutritionMissing: [] as IngredientMissing[],
+      openLeftOut: [] as Gap[],
+      openNutritionMissing: [] as IngredientMissing[],
       proteinSpendCents: 0,
       proteinGrams: 0,
     },
@@ -147,6 +159,7 @@ export function getMonthStats(
     avgPerMealCents:
       walked.mealsPriced === 0 ? null : walked.spendCents / walked.mealsPriced,
     leftOut: dedupe(walked.leftOut),
+    openLeftOut: dedupe(walked.openLeftOut),
     dailyNutrition: Object.fromEntries(
       NUTRITION_METRICS.map((metric) => [
         metric,
@@ -161,6 +174,7 @@ export function getMonthStats(
         ? null
         : walked.proteinSpendCents / walked.proteinGrams,
     nutritionMissing: walked.nutritionMissing,
+    openNutritionMissing: walked.openNutritionMissing,
     byDay: [...walked.byDay]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([dayKey, totals]) => ({

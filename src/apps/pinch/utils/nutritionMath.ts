@@ -5,6 +5,7 @@ import type {
   NutritionMetric,
   NutritionSwitches,
   NutritionValues,
+  PlannedMeal,
   Recipe,
   ResolvedIngredient,
 } from '@apps/pinch/types';
@@ -174,6 +175,17 @@ export function getMealNutrition(
     ) as unknown as NutritionValues,
     missing: parts.flatMap((part) => part.missing),
   };
+}
+
+/** A planned meal's nutrition: its snapshot once its day has passed, otherwise worked out now. A frozen meal has nothing missing to fill in. */
+export function getPlannedMealNutrition(
+  meal: PlannedMeal,
+  recipeNutrition: Map<string, NutritionResult>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): NutritionResult {
+  return meal.snapshot
+    ? { values: meal.snapshot.nutrition, missing: [] }
+    : getMealNutrition(meal.items, recipeNutrition, ingredientsById);
 }
 
 /** The ingredients missing a metric that is switched on, as gaps the nudge understands. */
