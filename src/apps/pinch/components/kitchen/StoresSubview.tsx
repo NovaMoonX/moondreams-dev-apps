@@ -106,7 +106,7 @@ function StoresSubview({ uid }: StoresSubviewProps) {
           </ul>
         )}
       </div>
-      {form && (
+      {form && (form.storeId === null || editing) && (
         <StoreFormSheet
           key={form.storeId ?? 'new'}
           uid={uid}

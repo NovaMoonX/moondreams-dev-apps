@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
+import {
+  deleteDoc,
+  doc,
+  runTransaction,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
@@ -87,6 +93,11 @@ export const saveStore = createAsyncThunk<
     const existing = id
       ? (getState().pinch.stores.items.find((store) => store.id === id) ?? null)
       : null;
+    if (id && !existing) {
+      return rejectWithValue(
+        'This store is gone, so there is nothing to save.',
+      );
+    }
     const path = getStoreImagePath(uid, storeId);
 
     try {
@@ -95,8 +106,6 @@ export const saveStore = createAsyncThunk<
           path,
           await resizeImageToWebp(imageFile, STORE_IMAGE_MAX_DIMENSION),
         );
-      } else if (removeImage && existing?.imagePath) {
-        await deleteFile(existing.imagePath);
       }
 
       const imagePath = imageFile
@@ -119,14 +128,19 @@ export const saveStore = createAsyncThunk<
           createdAt: now,
           updatedAt: now,
         };
-        await runTransaction(db, async (transaction) => {
-          transaction.set(storeDoc(uid, storeId), store);
-        });
+        await setDoc(storeDoc(uid, storeId), store);
       }
     } catch (error) {
+      if (imageFile && existing?.imagePath !== path) {
+        await deleteFile(path).catch(() => undefined);
+      }
       return rejectWithValue(
         getErrorMessage(error, 'Unable to save this store.'),
       );
+    }
+
+    if (removeImage && !imageFile && existing?.imagePath) {
+      await deleteFile(existing.imagePath).catch(() => undefined);
     }
 
     return storeId;

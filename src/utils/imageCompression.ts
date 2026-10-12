@@ -8,7 +8,10 @@ export async function compressIngestionImage(file: File): Promise<File> {
 }
 
 /** Scales an image down to fit `maxDimension` on its longer edge and re-encodes it as WebP; a non-image, or one the browser can't decode, passes through untouched. */
-export async function resizeImageToWebp(file: File, maxDimension: number): Promise<File> {
+export async function resizeImageToWebp(
+  file: File,
+  maxDimension: number,
+): Promise<File> {
   if (!file.type.startsWith('image/')) {
     return file;
   }
