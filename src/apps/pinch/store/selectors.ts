@@ -5,6 +5,7 @@ import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { MEAL_TYPES } from '@apps/pinch/constants';
 import type { PlannedMeal, Product, ResolvedFamily } from '@apps/pinch/types';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
+import { getMonthStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 
@@ -219,4 +220,15 @@ export const selectMeals = createSelector([selectMealItems], (meals) =>
 export const selectMealsById = createSelector(
   [selectMeals],
   (meals) => new Map(meals.map((meal) => [meal.id, meal])),
+);
+
+/** The shown month's spend, average per meal and breakdowns, computed once per change of meals, prices or month. */
+export const selectMonthStats = createSelector(
+  [
+    selectPlannedMeals,
+    selectCostContext,
+    (_state: RootState, monthKey: string) => monthKey,
+  ],
+  (plannedMeals, context, monthKey) =>
+    getMonthStats(plannedMeals, monthKey, context),
 );
