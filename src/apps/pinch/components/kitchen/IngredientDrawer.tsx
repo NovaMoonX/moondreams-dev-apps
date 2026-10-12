@@ -195,7 +195,8 @@ function IngredientDrawer({
                       <Star
                         className={join(
                           'h-4 w-4',
-                          isDefault && 'text-primary fill-current',
+                          isDefault &&
+                            'fill-current text-[var(--pinch-drizzle)]',
                         )}
                         aria-hidden='true'
                       />

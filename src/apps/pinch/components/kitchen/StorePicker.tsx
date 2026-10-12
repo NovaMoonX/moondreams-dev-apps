@@ -194,7 +194,7 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
         leading={
           <Pill
             isSelected={isAdding}
-            className='border-primary/60 border border-dashed'
+            className='border border-dashed border-[var(--pinch-drizzle)]/60'
             onClick={() => setIsAdding((current) => !current)}
           >
             <Plus className='h-3.5 w-3.5' aria-hidden='true' />

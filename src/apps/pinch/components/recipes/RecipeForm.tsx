@@ -8,6 +8,7 @@ import {
   Label,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Clock,
@@ -42,6 +43,7 @@ import {
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
   MAX_STEP_LENGTH,
+  UNIT_LABELS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
@@ -129,20 +131,23 @@ interface IngredientRowsProps {
 function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [isAdding, setIsAdding] = useState(rows.length === 0);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const addRow = (ingredientId: string) => {
     const serving =
       ingredientsById.get(ingredientId)?.serving ?? DEFAULT_SERVING;
+    const id = generateUuid();
     onChange([
       ...rows,
       {
-        id: generateUuid(),
+        id,
         ingredientId,
         amount: String(serving.amount),
         unit: serving.unit,
         note: null,
       },
     ]);
+    setOpenId(id);
     setIsAdding(false);
   };
 
@@ -160,16 +165,49 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                     : candidate,
                 ),
               );
+            const amount = Number(row.amount);
+            const isAmountValid =
+              row.amount.trim() !== '' &&
+              amount > 0 &&
+              amount <= MAX_SERVING_AMOUNT;
+            const amountLabel = isAmountValid
+              ? `${Math.round(amount * 100) / 100} ${UNIT_LABELS[row.unit]}`
+              : row.amount.trim() === ''
+                ? 'Add an amount'
+                : 'Check the amount';
             return (
-              <li key={row.id} className='space-y-2 py-3'>
-                <div className='flex items-center gap-3'>
-                  <IngredientIcon
-                    iconKey={ingredient?.iconKey ?? null}
-                    size={28}
-                  />
-                  <span className='min-w-0 flex-1 truncate font-medium'>
-                    {ingredient?.name ?? 'Removed ingredient'}
-                  </span>
+              <li key={row.id} className='py-1'>
+                <div className='flex items-center gap-1'>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    aria-expanded={openId === row.id}
+                    aria-label={`${ingredient?.name ?? 'Ingredient'}, ${amountLabel}`}
+                    onClick={() =>
+                      setOpenId((current) =>
+                        current === row.id ? null : row.id,
+                      )
+                    }
+                    className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
+                  >
+                    <IngredientIcon
+                      iconKey={ingredient?.iconKey ?? null}
+                      size={28}
+                    />
+                    <span className='min-w-0 flex-1 truncate font-medium'>
+                      {ingredient?.name ?? 'Removed ingredient'}
+                    </span>
+                    <span
+                      className={join(
+                        'shrink-0 text-sm font-normal whitespace-nowrap',
+                        isAmountValid
+                          ? 'text-muted-foreground'
+                          : 'text-destructive',
+                      )}
+                    >
+                      {amountLabel}
+                    </span>
+                  </Button>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -185,22 +223,26 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                     <X className='h-4 w-4' aria-hidden='true' />
                   </Button>
                 </div>
-                <div className='grid grid-cols-2 gap-3'>
-                  <Input
-                    type='number'
-                    inputMode='decimal'
-                    min={0}
-                    step='any'
-                    variant='outline'
-                    aria-label={`Amount of ${ingredient?.name ?? 'ingredient'}`}
-                    value={row.amount}
-                    onChange={(event) => update({ amount: event.target.value })}
-                  />
-                  <UnitSelect
-                    value={row.unit}
-                    onChange={(unit) => update({ unit })}
-                  />
-                </div>
+                {openId === row.id && (
+                  <div className='grid grid-cols-2 gap-3 pb-2'>
+                    <Input
+                      type='number'
+                      inputMode='decimal'
+                      min={0}
+                      step='any'
+                      variant='outline'
+                      aria-label={`Amount of ${ingredient?.name ?? 'ingredient'}`}
+                      value={row.amount}
+                      onChange={(event) =>
+                        update({ amount: event.target.value })
+                      }
+                    />
+                    <UnitSelect
+                      value={row.unit}
+                      onChange={(unit) => update({ unit })}
+                    />
+                  </div>
+                )}
               </li>
             );
           })}
@@ -248,6 +290,7 @@ interface ExtrasFieldsProps {
 }
 
 function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
+  const [openStep, setOpenStep] = useState<number | null>(null);
   const chips = [
     { key: 'steps', label: 'Steps', icon: <ListOrdered className='h-4 w-4' /> },
     {
@@ -279,37 +322,64 @@ function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
         >
           <div className='space-y-2'>
             {steps.map((step, index) => (
-              <div key={index} className='flex items-start gap-2'>
-                <span className='bg-secondary text-secondary-foreground mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
-                  {index + 1}
-                </span>
-                <Textarea
-                  rows={2}
-                  variant='outline'
-                  aria-label={`Step ${index + 1}`}
-                  maxLength={MAX_STEP_LENGTH}
-                  value={step}
-                  onChange={(event) =>
-                    setSteps(
-                      steps.map((current, at) =>
-                        at === index ? event.target.value : current,
-                      ),
-                    )
-                  }
-                />
-                {steps.length > 1 && (
+              <div key={index} className='space-y-2'>
+                <div className='flex items-start gap-1'>
                   <Button
                     type='button'
                     variant='tertiary'
-                    size='icon'
-                    aria-label={`Remove step ${index + 1}`}
-                    className='size-10 shrink-0'
+                    aria-expanded={openStep === index}
+                    aria-label={`Step ${index + 1}`}
                     onClick={() =>
-                      setSteps(steps.filter((_, at) => at !== index))
+                      setOpenStep((current) =>
+                        current === index ? null : index,
+                      )
                     }
+                    className='h-auto min-h-12 min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
                   >
-                    <Trash2 className='h-4 w-4' aria-hidden='true' />
+                    <span className='bg-secondary text-secondary-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
+                      {index + 1}
+                    </span>
+                    <span
+                      className={join(
+                        'line-clamp-2 min-w-0 flex-1 text-sm font-normal',
+                        step.trim() === '' && 'text-muted-foreground',
+                      )}
+                    >
+                      {step.trim() === '' ? 'Write this step' : step}
+                    </span>
                   </Button>
+                  {steps.length > 1 && (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      aria-label={`Remove step ${index + 1}`}
+                      className='size-10 shrink-0'
+                      onClick={() => {
+                        setOpenStep(null);
+                        setSteps(steps.filter((_, at) => at !== index));
+                      }}
+                    >
+                      <Trash2 className='h-4 w-4' aria-hidden='true' />
+                    </Button>
+                  )}
+                </div>
+                {openStep === index && (
+                  <Textarea
+                    rows={3}
+                    variant='outline'
+                    autoFocus
+                    aria-label={`Step ${index + 1} text`}
+                    maxLength={MAX_STEP_LENGTH}
+                    value={step}
+                    onChange={(event) =>
+                      setSteps(
+                        steps.map((current, at) =>
+                          at === index ? event.target.value : current,
+                        ),
+                      )
+                    }
+                  />
                 )}
               </div>
             ))}
@@ -319,7 +389,10 @@ function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
                 variant='tertiary'
                 size='sm'
                 className='h-10 gap-1.5 px-0!'
-                onClick={() => setSteps([...steps, ''])}
+                onClick={() => {
+                  setSteps([...steps, '']);
+                  setOpenStep(steps.length);
+                }}
               >
                 <Plus className='h-4 w-4' aria-hidden='true' />
                 Add a step
@@ -413,12 +486,13 @@ function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
       )}
       <AddFieldChips
         chips={chips}
-        onAdd={(key) =>
+        onAdd={(key) => {
+          if (key === 'steps') setOpenStep(0);
           onChange({
             ...extras,
             [key]: { ...extras[key as keyof Extras], enabled: true },
-          })
-        }
+          });
+        }}
       />
     </div>
   );
