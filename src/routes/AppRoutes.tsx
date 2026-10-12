@@ -1,3 +1,4 @@
+import { NuqsAdapter } from 'nuqs/adapters/react-router/v7';
 import { createBrowserRouter } from 'react-router-dom';
 
 import ProtectedRoute from '@routes/ProtectedRoute';
@@ -9,7 +10,11 @@ import Loading from '@ui/Loading';
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: (
+      <NuqsAdapter>
+        <Layout />
+      </NuqsAdapter>
+    ),
     errorElement: <ErrorBoundary />,
     children: [
       {

@@ -25,6 +25,7 @@ import {
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { clearUserInfoStore } from '@/hooks/useUserInfo';
 import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
+import { recordSiteVisit } from '@/lib/appUsage/appUsage';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
 import { resetAllState } from '@/store/actions/globalActions';
@@ -101,6 +102,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
           },
           { merge: true },
         ).catch((error) => console.error('Failed to sync user profile:', error));
+
+        recordSiteVisit(firebaseUser.uid).catch((error) =>
+          console.error('Failed to record site visit:', error),
+        );
 
         if (isAdminUser) {
           Promise.all(

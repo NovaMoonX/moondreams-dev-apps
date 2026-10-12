@@ -19,6 +19,7 @@ Server-side code for the mini-apps. Every function:
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
+| `registerAppUsage` | callable | shared | `{ appId }` → the caller's `apps/{appId}/usage/{uid}` record (`startedAt`, `lastActiveAt`). Creates it the first time a member opens an app, dating `startedAt` at the oldest data that app already holds for them |
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
 | `sendScheduledReminders` | schedule, every 5 minutes | shared | Sends due push reminders from `reminders` through FCM |
 
@@ -108,6 +109,19 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
 - **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
 - **Check after the key is set:** the response parsing was written from AMC's public docs and a third-party reference of live responses, and has not been run against the live API. Still unconfirmed: that `movieName` and `purchaseUrl` are present on every showtime, the Dolby and PRIME attribute codes, and the `/v2/locations` and `/v2/location-suggestions` shapes.
+
+### `registerAppUsage`
+
+- **Secrets:** none.
+- **When it runs:** the client calls it only when `apps/{appId}/usage/{uid}` doesn't exist yet, so the scan runs once per member per app. After that the client refreshes `lastActiveAt` itself, at most daily.
+- **Finding `startedAt`:** each app has a `findFirstActivityAt` under `functions/src/apps/<app>/` that returns the oldest timestamp the app holds for that member, or `null`. With `null` the member's start is now. Add a finder (and its entry in `registerAppUsage.ts`) for every new app.
+  - A-List: membership, viewings and watchlist `createdAt`.
+  - Nine Lives: `createdAt` of what the member wrote in their households (`createdBy`), plus a household they created. Joining leaves no timestamp.
+  - Waypoint: their `joinedAt` on each trip, plus trips they created.
+  - Worth the Wait: their space, boxes and items, plus when they first saw the welcome.
+- **Lazy by design:** nothing runs for existing members until they next open an app, so counts start from when tracking began, and a member who only joined a Nine Lives household starts at their first visit after launch.
+- **Access:** it refuses a caller who couldn't open the app (not public, or restricted and not on its list). Admins and emulator dev accounts always pass.
+- **Rules:** clients can't create or delete a record, and may only move their own `lastActiveAt` forward (and not more than an hour past the server clock), so `startedAt` can't be forged. Only admins can list a collection. The site-wide last visit lives separately in `siteVisits/{uid}`, written by the member and readable only by them and the admin.
 
 ### `fetchLinkMetadata`
 

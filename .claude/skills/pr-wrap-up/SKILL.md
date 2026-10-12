@@ -64,7 +64,7 @@ Spawn **technical, product and design** agents in parallel (`model: "sonnet"`, n
 
 ## 6. Write down what the review taught, automatically
 
-Don't ask first. When a finding reflects a **lasting** design or product rule rather than a one-off bug, add it in the same PR and tell the user afterwards (the PR body's "Rules added" line and the final report).
+Don't ask first. When a finding reflects a **lasting** design or product rule rather than a one-off bug, add it in the same PR. The same goes for a **pattern** the PR establishes or reuses (a component, a layout, a copy convention): add its line to the Design & UX "Pattern lookup" index in `CLAUDE.md`, and its rules to the app's rules file when it belongs to one app and tell the user afterwards (the PR body's "Rules added" line and the final report).
 
 - **Where:** CLAUDE.md edits from a stack of PRs go into the one PR that owns the section (usually the procedure/rules PR) so the stack doesn't conflict, and the final report says which. Design rules go in `CLAUDE.md` → "Design & UX" (or "Designing a mini-app's look"); product rules go in `CLAUDE.md` → "Product" (create it after "Design & UX" if it is missing); a rule that only applies to one mini-app goes in its rules file (`.github/instructions/<app>.instructions.md` and the identical `.claude/rules/<app>.md`) and its `UX.md`. Mirror anything shared with Copilot into `.github/copilot-instructions.md`, its source of truth.
 - **How:** fold, don't append. Tighten the nearest existing bullet instead of adding a near-duplicate, reword or remove a bullet the finding proves wrong, keep the section's voice (one or two lines, bold lead-in), and re-read the section afterwards.

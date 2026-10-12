@@ -8,7 +8,9 @@ export type AppRegistryEntry = {
   createdAt?: string; // YYYY-MM-DD
 };
 
-/* IMPORTANT: Keep the following in sync with this registry:
+/* IMPORTANT: A new app is more than an entry here: follow the "New mini-app checklist" in
+   .github/copilot-instructions.md (usage tracking hook and finder, store, rules, seed, docs).
+   Keep the following in sync with this registry:
    - in /public folder: logos and banners
    - cloudflare-worker.js
    - repo root README.md (its "Current apps" list: one line per app)

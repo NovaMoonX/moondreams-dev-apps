@@ -3241,6 +3241,33 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Cross-app: when each member started using an app and when they were last active. Only the
+    // `registerAppUsage` Function creates a record (Admin SDK), so `startedAt` can't be forged; the
+    // member may only move `lastActiveAt`, and only admins read the whole collection.
+    match /apps/{appId}/usage/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, delete: if false;
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActiveAt'])
+        && request.resource.data.lastActiveAt is number
+        && request.resource.data.lastActiveAt >= resource.data.lastActiveAt
+        && request.resource.data.lastActiveAt <= request.time.toMillis() + 3600000;
+    }
+
+    // The last time a member loaded the site, kept out of `users` because that collection is
+    // readable by every signed-in member. Admins read them all; a member only writes their own.
+    match /siteVisits/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'lastVisitedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.lastVisitedAt is number
+        && request.resource.data.lastVisitedAt <= request.time.toMillis() + 3600000;
+      allow delete: if false;
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
