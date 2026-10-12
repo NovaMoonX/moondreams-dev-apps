@@ -146,6 +146,13 @@ Problems we've hit before, so we don't hit them again.
 - **Cloudflare can serve a stale worker.** `apps.moondreams.dev` is proxied, and Cloudflare cached `sw.js` for hours (`cf-cache-status: HIT`, `max-age=14400`), so browsers kept the old worker after the fix deployed. `firebase.json` now sends `Cache-Control: no-cache` for `sw.js` and the `firebase-messaging-sw-*.js` helpers. If a worker change doesn't reach browsers, check `curl -sI https://apps.moondreams.dev/sw.js` and purge that URL in Cloudflare (Caching → Configuration → Custom Purge).
 - **Check after any change to the worker or `authDomain`:** open `/__/auth/handler` in a profile that has loaded the site before; it should be blank, not the app.
 
+### Scheduled reminders never arrive and `sendScheduledReminders` logs a 500
+
+- **Symptom:** Cloud Run logs for `sendscheduledreminders` show `9 FAILED_PRECONDITION: The query requires an index` every 5 minutes, and no push reminders are delivered.
+- **Cause:** the function queries `reminders` for `status == 'pending'` and `scheduledFor <= now + 5 min`. Equality on one field plus a range on another needs a composite index, and `firestore.indexes.json` was empty. The emulator never enforces indexes, so nothing failed locally.
+- **Fix:** the index is in `firestore.indexes.json` and deploys with `npm run fb:deploy:smart` on merge. It builds for a few minutes after deploy (Firebase console → Firestore → Indexes shows Building, then Enabled); the next 5-minute run after that succeeds. `npm run check:indexes` now fails any PR with a query that needs an index the file doesn't have.
+- **Tell it apart:** an index error names `requires an index` with a console link; a missing-secret or permission error does not.
+
 ### An app shows empty or first-run screens for an existing account on one device
 
 - **Symptom:** one phone (Chrome, Android) showed A-List's setup modal for an account whose membership doc exists, with the same account fine on desktop and fine in Waypoint and Nine Lives on that phone. Reloading, signing out and in, and clearing Chrome's site data did not help. No error, no denied read.

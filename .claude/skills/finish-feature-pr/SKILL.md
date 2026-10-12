@@ -131,6 +131,11 @@ This checklist names the sections to walk; the rules themselves live there:
 
 ## 4. Sync Firestore + Storage rules with the final data model
 
+Run `npm run check:indexes` and, for every `where`/`orderBy` the diff adds or
+changes (client and `functions/src`), confirm the index it needs is in
+`firestore.indexes.json`; the emulator never enforces indexes, so this is the
+only check before production.
+
 Walk "Firestore and Storage rules" in `CLAUDE.md` against every rule, index,
 and Storage path the diff touches or should have touched. Confirm each rule change
 was verified against the emulator (allowed + denied write per role, plus a

@@ -42,6 +42,7 @@
     "fb:rules:firestore": "firebase deploy --only firestore:rules",
     "fb:rules:storage": "firebase deploy --only storage",
     "fb:rules": "firebase deploy --only database,firestore:rules,storage",
+    "check:indexes": "tsx scripts/checkFirestoreIndexes.ts",
     "fb:indexes": "firebase deploy --only firestore:indexes",
     "fb:functions": "cd functions && npm run build && firebase deploy --only functions",
     "fb:deploy:smart": "tsx scripts/fbDeploySmart.ts",
