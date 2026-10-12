@@ -1,10 +1,15 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import type { ItemKind, MealType, PlannedMeal } from '@apps/pinch/types';
+import type {
+  ItemKind,
+  MealItem,
+  MealType,
+  PlannedMeal,
+} from '@apps/pinch/types';
 
 const plannedMealDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'plannedMeals', id);
@@ -78,3 +83,37 @@ export const removePlannedMeal = createAsyncThunk<
 
   return id;
 });
+
+interface UpdatePlannedMealInput {
+  uid: string;
+  id: string;
+  date: number;
+  mealType: MealType;
+  items: MealItem[];
+}
+
+/** Changes what the builder owns (day, type, items) and nothing else, so a concurrent change to anything else on the document survives. */
+export const updatePlannedMeal = createAsyncThunk<
+  string,
+  UpdatePlannedMealInput,
+  { rejectValue: string }
+>(
+  'pinch/plannedMeals/update',
+  async ({ uid, id, date, mealType, items }, { rejectWithValue }) => {
+    try {
+      await updateDoc(plannedMealDoc(uid, id), {
+        date,
+        mealType,
+        items,
+        refIds: Array.from(new Set(items.map((item) => item.refId))),
+        updatedAt: Date.now(),
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this meal.'),
+      );
+    }
+
+    return id;
+  },
+);

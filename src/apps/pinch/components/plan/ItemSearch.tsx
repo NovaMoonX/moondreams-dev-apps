@@ -59,9 +59,10 @@ function ItemSearch({
             trimmed,
           )
             .map(({ recipe }) => recipe)
+            .filter((recipe) => !excludeIds.includes(recipe.id))
             .slice(0, MAX_RESULTS)
         : [],
-    [onPickRecipe, recipes, trimmed],
+    [onPickRecipe, recipes, trimmed, excludeIds],
   );
   const hasExactName = ingredients.some(
     (ingredient) =>
@@ -124,7 +125,10 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
-                onClick={() => onPickRecipe?.(recipe.id)}
+                onClick={() => {
+                  setQuery('');
+                  onPickRecipe?.(recipe.id);
+                }}
                 className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
               >
                 <span
@@ -147,7 +151,10 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
-                onClick={() => onPick(ingredient.id)}
+                onClick={() => {
+                  setQuery('');
+                  onPick(ingredient.id);
+                }}
                 className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
               >
                 <IngredientIcon iconKey={ingredient.iconKey} size={28} />
