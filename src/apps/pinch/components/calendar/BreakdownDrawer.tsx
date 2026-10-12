@@ -9,7 +9,7 @@ import { MEAL_TYPE_EMOJIS, MEAL_TYPE_LABELS } from '@apps/pinch/constants';
 import { formatDayTitle, formatMonthTitle } from '@apps/pinch/utils/dayKeys';
 import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
-import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
+import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import type { MonthStats, Totals } from '@apps/pinch/utils/stats';
 
 type BreakdownView = 'day' | 'meal';
@@ -73,7 +73,7 @@ function BreakdownDrawer({ monthKey, stats, onClose }: BreakdownDrawerProps) {
                 <span className='block'>{row.label}</span>
                 <span className='text-muted-foreground block text-xs'>
                   {row.totals.count} {row.totals.count === 1 ? 'meal' : 'meals'}
-                  {hasAnyMetricOn(show) && (
+                  {hasShownValue(row.totals.nutrition, show) && (
                     <>
                       {' · '}
                       <NutritionLine

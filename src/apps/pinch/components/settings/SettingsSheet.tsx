@@ -82,8 +82,8 @@ function SettingsSheet({ uid, onClose }: SettingsSheetProps) {
               FoodData Central.
             </li>
             <li>
-              Store logos come from Logo.dev, and remain their owners'
-              trademarks.
+              Store logos, where shown, are provided by Logo.dev and remain
+              their owners' trademarks.
             </li>
           </ul>
         </section>

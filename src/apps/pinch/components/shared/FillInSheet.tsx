@@ -179,10 +179,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
           saveIngredient({
             uid,
             draft: {
-              id:
-                ingredient.isCustom || ingredient.isAdjusted
-                  ? ingredient.id
-                  : null,
+              id: ingredient.id,
               catalogId: ingredient.isCustom ? null : ingredient.id,
               name: ingredient.name,
               familyId: ingredient.familyId,
@@ -216,11 +213,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     <FormSheet
       isOpen
       onClose={onClose}
-      title={
-        rows.every((entry) => entry.kind === 'NO_NUTRITION')
-          ? 'Nutrition values'
-          : 'Prices and sizes'
-      }
+      title={isNutrition ? 'Nutrition values' : 'Prices and sizes'}
     >
       <div className='grid gap-4'>
         <div className='flex items-center gap-3'>
@@ -235,7 +228,9 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         {isNutrition && (
           <div className='space-y-3'>
             <p className='text-muted-foreground text-sm'>
-              What's in 100 g of {name}? Fill in what you know.
+              {metricsAsked.length === 0
+                ? `${name} has its values, but Pinch can't turn the amount in your recipe into grams. A unit with a weight, like g, oz or lb, will fix it.`
+                : `What's in 100 g of ${name}? Fill in what you know.`}
             </p>
             <div className='grid grid-cols-2 gap-3'>
               {metricsAsked.map((cell) => (
