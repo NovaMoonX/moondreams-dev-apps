@@ -73,3 +73,6 @@ export const KITCHEN_VIEW_LABELS: Record<KitchenView, string> = {
 export const MAX_NAME_LENGTH = 120;
 /** What "1 serving" is for an ingredient with no serving size of its own. */
 export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
+
+/** The longest edge of a store's own image: it only ever shows in a small round tile. */
+export const STORE_IMAGE_MAX_DIMENSION = 512;

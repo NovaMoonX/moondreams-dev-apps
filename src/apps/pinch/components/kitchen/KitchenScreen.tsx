@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Plus, Store } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -11,10 +11,12 @@ import FamilyGroup from '@apps/pinch/components/kitchen/FamilyGroup';
 import IngredientDrawer from '@apps/pinch/components/kitchen/IngredientDrawer';
 import IngredientFormSheet from '@apps/pinch/components/kitchen/IngredientFormSheet';
 import { KITCHEN_VIEW_LABELS, KITCHEN_VIEWS } from '@apps/pinch/constants';
+import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectIngredientFamilies,
   selectIngredients,
   selectIngredientsById,
+  selectStores,
 } from '@apps/pinch/store/selectors';
 import type { KitchenView } from '@apps/pinch/types';
 import {
@@ -42,6 +44,8 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const families = useAppSelector(selectIngredientFamilies);
+  const storeCount = useAppSelector(selectStores).length;
+  const { openSubview } = usePinchOverlay();
 
   const trimmed = query.trim();
   const scoped = useMemo(
@@ -101,6 +105,24 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           </Button>
         }
       />
+      <Button
+        type='button'
+        variant='secondary'
+        onClick={() => openSubview({ kind: 'stores' })}
+        className='h-12 w-full justify-start gap-3 rounded-2xl px-4'
+      >
+        <Store className='h-5 w-5 shrink-0' aria-hidden='true' />
+        <span className='min-w-0 flex-1 text-left'>Stores</span>
+        {storeCount > 0 && (
+          <span className='text-muted-foreground text-sm font-normal'>
+            {storeCount}
+          </span>
+        )}
+        <ChevronRight
+          className='text-muted-foreground h-5 w-5 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
       <PillGroup
         label='Which ingredients'
         options={VIEW_OPTIONS}

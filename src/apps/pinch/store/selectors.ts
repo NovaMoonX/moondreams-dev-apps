@@ -9,10 +9,14 @@ const selectRecords = (state: RootState) => state.pinch.ingredients.records;
 const selectFamilyItems = (state: RootState) => state.pinch.families.items;
 
 export const selectIsPinchLoaded = (state: RootState) =>
-  state.pinch.ingredients.isLoaded && state.pinch.families.isLoaded;
+  state.pinch.ingredients.isLoaded &&
+  state.pinch.families.isLoaded &&
+  state.pinch.stores.isLoaded;
 
 export const selectPinchLoadError = (state: RootState) =>
-  state.pinch.ingredients.loadError ?? state.pinch.families.loadError;
+  state.pinch.ingredients.loadError ??
+  state.pinch.families.loadError ??
+  state.pinch.stores.loadError;
 
 export const selectIngredientRecords = selectRecords;
 
@@ -57,4 +61,16 @@ export const selectIngredientFamilies = createSelector(
 export const selectIngredientFamiliesById = createSelector(
   [selectIngredientFamilies],
   (families) => new Map(families.map((family) => [family.id, family])),
+);
+
+const selectStoreItems = (state: RootState) => state.pinch.stores.items;
+
+/** The person's stores, alphabetical. */
+export const selectStores = createSelector([selectStoreItems], (stores) =>
+  [...stores].sort((a, b) => a.name.localeCompare(b.name)),
+);
+
+export const selectStoresById = createSelector(
+  [selectStores],
+  (stores) => new Map(stores.map((store) => [store.id, store])),
 );

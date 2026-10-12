@@ -4,6 +4,11 @@ const MAX_IMAGE_DIMENSION = 2_000;
 const WEBP_QUALITY = 0.82;
 
 export async function compressIngestionImage(file: File): Promise<File> {
+  return resizeImageToWebp(file, MAX_IMAGE_DIMENSION);
+}
+
+/** Scales an image down to fit `maxDimension` on its longer edge and re-encodes it as WebP; a non-image, or one the browser can't decode, passes through untouched. */
+export async function resizeImageToWebp(file: File, maxDimension: number): Promise<File> {
   if (!file.type.startsWith('image/')) {
     return file;
   }
@@ -17,7 +22,7 @@ export async function compressIngestionImage(file: File): Promise<File> {
 
     const scale = Math.min(
       1,
-      MAX_IMAGE_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight),
+      maxDimension / Math.max(image.naturalWidth, image.naturalHeight),
     );
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
