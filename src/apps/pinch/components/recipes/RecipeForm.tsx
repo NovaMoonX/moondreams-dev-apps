@@ -36,6 +36,7 @@ import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   DEFAULT_SERVING,
   MAX_MINUTES,
+  MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_STEPS,
   MAX_RECIPE_TITLE_LENGTH,
@@ -61,6 +62,7 @@ interface IngredientRow {
   ingredientId: string;
   amount: string;
   unit: Unit;
+  note: string | null;
 }
 
 interface Reveal<T> {
@@ -90,6 +92,7 @@ const getInitialData = (recipe: Recipe | null): FormData => ({
     ingredientId: line.ingredientId,
     amount: String(line.amount),
     unit: line.unit,
+    note: line.note ?? null,
   })),
   extras: {
     steps: {
@@ -137,6 +140,7 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
         ingredientId,
         amount: String(serving.amount),
         unit: serving.unit,
+        note: null,
       },
     ]);
     setIsAdding(false);
@@ -335,6 +339,7 @@ function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
           <Textarea
             rows={3}
             variant='outline'
+            maxLength={MAX_RECIPE_DESCRIPTION_LENGTH}
             value={extras.description.value}
             onChange={(event) =>
               onChange({
@@ -570,7 +575,7 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
               ingredientId: row.ingredientId,
               amount: Number(row.amount),
               unit: row.unit,
-              note: null,
+              note: row.note,
             })),
             steps: data.extras.steps.enabled
               ? data.extras.steps.value

@@ -89,6 +89,7 @@ export const MAX_PRICE_CENTS = 100_000_000;
 export const MAX_RECIPE_INGREDIENTS = 60;
 export const MAX_RECIPE_STEPS = 60;
 export const MAX_RECIPE_TITLE_LENGTH = 200;
+export const MAX_RECIPE_DESCRIPTION_LENGTH = 2000;
 export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
 export const MAX_MINUTES = 100_000;

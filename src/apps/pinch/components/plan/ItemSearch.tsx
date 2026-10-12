@@ -78,7 +78,14 @@ function ItemSearch({
   };
 
   return (
-    <div className='space-y-2'>
+    <div
+      className='space-y-2'
+      onKeyDown={(event) =>
+        event.key === 'Enter' &&
+        event.target instanceof HTMLInputElement &&
+        event.preventDefault()
+      }
+    >
       <SearchInput
         value={query}
         onChange={setQuery}
