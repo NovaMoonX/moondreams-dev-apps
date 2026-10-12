@@ -4,6 +4,7 @@ import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   startFamiliesListener,
+  startPlannedMealsListener,
   startIngredientsListener,
   startProductsListener,
   startRecipesListener,
@@ -20,6 +21,11 @@ import {
   setIngredients,
   setIngredientsLoadError,
 } from '@apps/pinch/store/slices/ingredientsSlice';
+import {
+  clearPlannedMeals,
+  setPlannedMeals,
+  setPlannedMealsLoadError,
+} from '@apps/pinch/store/slices/plannedMealsSlice';
 import {
   clearProducts,
   setProducts,
@@ -41,8 +47,10 @@ import {
   setStoresLoadError,
 } from '@apps/pinch/store/slices/storesSlice';
 
-/** Starts the listeners for the signed-in person's own kitchen, once per uid; screens only read the store. */
-export function usePinchSync(uid: string | null) {
+import { getMonthWindow } from '@apps/pinch/utils/dayKeys';
+
+/** Starts the listeners for the signed-in person's own kitchen, once per uid, and the planned-meals window once per shown month; screens only read the store. */
+export function usePinchSync(uid: string | null, shownMonth: string) {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
@@ -53,6 +61,7 @@ export function usePinchSync(uid: string | null) {
       dispatch(clearProducts());
       dispatch(clearRecipes());
       dispatch(clearSettings());
+      dispatch(clearPlannedMeals());
       return;
     }
 
@@ -130,4 +139,22 @@ export function usePinchSync(uid: string | null) {
       unsubscribeFamilies();
     };
   }, [dispatch, uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      return;
+    }
+
+    return startPlannedMealsListener(
+      uid,
+      getMonthWindow(shownMonth),
+      (items) => dispatch(setPlannedMeals({ windowKey: shownMonth, items })),
+      (error) =>
+        dispatch(
+          setPlannedMealsLoadError(
+            getErrorMessage(error, 'Unable to load your planned meals.'),
+          ),
+        ),
+    );
+  }, [dispatch, uid, shownMonth]);
 }

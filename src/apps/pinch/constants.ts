@@ -1,6 +1,7 @@
 import type {
   Dimension,
   KitchenView,
+  MealType,
   PinchTab,
   RecipesView,
   Unit,
@@ -85,6 +86,34 @@ export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
 export const STORE_IMAGE_MAX_DIMENSION = 512;
 
 export const MAX_DISMISSED_NUDGES = 500;
+export const MAX_MEAL_ITEMS = 10;
+/** Months loaded on each side of the one shown. */
+export const MONTH_WINDOW_PADDING = 1;
+
+export const MEAL_TYPES: MealType[] = [
+  'BREAKFAST',
+  'LUNCH',
+  'DINNER',
+  'SNACK',
+  'DESSERT',
+  'DRINK',
+];
+export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  BREAKFAST: 'Breakfast',
+  LUNCH: 'Lunch',
+  DINNER: 'Dinner',
+  SNACK: 'Snack',
+  DESSERT: 'Dessert',
+  DRINK: 'Drink',
+};
+export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
+  BREAKFAST: '🍳',
+  LUNCH: '🥪',
+  DINNER: '🍝',
+  SNACK: '🍿',
+  DESSERT: '🍰',
+  DRINK: '🥤',
+};
 
 export const MAX_PRICE_CENTS = 100_000_000;
 

@@ -263,6 +263,92 @@ const SEED_RECIPES = [
   },
 ];
 
+type SeedMealType =
+  'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
+
+const item = (
+  id: string,
+  kind: 'RECIPE' | 'INGREDIENT',
+  refId: string,
+  servings: number,
+) => ({
+  id,
+  kind,
+  refId,
+  servings,
+});
+
+// Days are offsets from today (UTC midnight): an empty day, one meal, a full day, five meals and a day of ten, so the cells and drawer show every size.
+const PLANNED_BLUEPRINTS: {
+  day: number;
+  type: SeedMealType;
+  items: ReturnType<typeof item>[];
+}[] = [
+  {
+    day: -3,
+    type: 'DINNER',
+    items: [item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 4)],
+  },
+  {
+    day: 0,
+    type: 'BREAKFAST',
+    items: [item('a', 'INGREDIENT', 'cat-banana', 1)],
+  },
+  {
+    day: 0,
+    type: 'DINNER',
+    items: [
+      item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 2),
+      item('b', 'RECIPE', 'seed-pinch-recipe-rice', 2),
+    ],
+  },
+  {
+    day: 0,
+    type: 'DESSERT',
+    items: [item('a', 'INGREDIENT', 'seed-pinch-ingredient-doritos', 1)],
+  },
+  {
+    day: 1,
+    type: 'LUNCH',
+    items: [item('a', 'RECIPE', 'seed-pinch-recipe-rice', 1)],
+  },
+  {
+    day: 2,
+    type: 'BREAKFAST',
+    items: [item('a', 'INGREDIENT', 'cat-banana', 2)],
+  },
+  {
+    day: 2,
+    type: 'LUNCH',
+    items: [item('a', 'RECIPE', 'seed-pinch-recipe-rice', 1)],
+  },
+  {
+    day: 2,
+    type: 'DINNER',
+    items: [item('a', 'RECIPE', 'seed-pinch-recipe-nachos', 3)],
+  },
+  {
+    day: 2,
+    type: 'SNACK',
+    items: [item('a', 'INGREDIENT', 'seed-pinch-ingredient-doritos', 1)],
+  },
+  { day: 2, type: 'DRINK', items: [item('a', 'INGREDIENT', 'cat-banana', 1)] },
+  ...Array.from({ length: 10 }, (_, index) => ({
+    day: 5,
+    type: (
+      [
+        'BREAKFAST',
+        'LUNCH',
+        'DINNER',
+        'SNACK',
+        'DESSERT',
+        'DRINK',
+      ] as SeedMealType[]
+    )[index % 6],
+    items: [item('a', 'RECIPE', 'seed-pinch-recipe-rice', 1 + (index % 3) / 2)],
+  })),
+];
+
 // Alex's own kitchen; every other fixture account starts with an empty one.
 export async function seedPinch(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -272,6 +358,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     .collection('kitchens')
     .doc(alex.uid);
   const createdAt = context.now - 14 * DAY_MS;
+  const today = Math.floor(context.now / DAY_MS) * DAY_MS;
 
   const customImagePath = `apps/pinch/kitchens/${alex.uid}/stores/${CUSTOM_STORE.id}/logo.webp`;
   await uploadSeedImage(customImagePath);
@@ -314,6 +401,26 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(family.id)
         .set({ ...family, createdAt, updatedAt: createdAt }),
     ),
+    ...PLANNED_BLUEPRINTS.map((blueprint, index) => {
+      const id = `seed-pinch-planned-${index + 1}`;
+      return kitchenRef
+        .collection('plannedMeals')
+        .doc(id)
+        .set({
+          id,
+          date: today + blueprint.day * DAY_MS,
+          mealType: blueprint.type,
+          name: null,
+          sourceMealId: null,
+          items: blueprint.items,
+          refIds: Array.from(
+            new Set(blueprint.items.map((entry) => entry.refId)),
+          ),
+          snapshot: null,
+          createdAt: createdAt + index,
+          updatedAt: createdAt + index,
+        });
+    }),
     ...SEED_RECIPES.map((recipe) =>
       kitchenRef
         .collection('recipes')
@@ -342,6 +449,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_PRODUCTS.length +
       SEED_RECIPES.length +
       CATALOG_STORE_SEEDS.length +
+      PLANNED_BLUEPRINTS.length +
       2,
   };
 }

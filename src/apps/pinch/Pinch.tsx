@@ -11,6 +11,7 @@ import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
+import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import BottomNav from '@apps/pinch/components/shell/BottomNav';
@@ -24,12 +25,14 @@ import {
   selectPinchLoadError,
 } from '@apps/pinch/store/selectors';
 import type { PinchSubview, PinchTab } from '@apps/pinch/types';
+import { getLocalMonthKey } from '@apps/pinch/utils/dayKeys';
 
 function Pinch() {
   const { user, loading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
   const [subview, setSubview] = useState<PinchSubview | null>(null);
+  const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
   const overlayContext = useMemo(
     () => ({
       subview,
@@ -43,7 +46,7 @@ function Pinch() {
   const loadError = useAppSelector(selectPinchLoadError);
 
   usePinchTheme();
-  usePinchSync(user?.uid ?? null);
+  usePinchSync(user?.uid ?? null, shownMonth);
 
   const requestedTab = searchParams.get('tab');
   const activeTab: PinchTab =
@@ -90,7 +93,13 @@ function Pinch() {
   const getScreen = () => {
     if (activeTab === 'recipes') return <RecipesScreen uid={user.uid} />;
     if (activeTab === 'kitchen') return <KitchenScreen uid={user.uid} />;
-    return <CalendarScreen />;
+    return (
+      <CalendarScreen
+        uid={user.uid}
+        shownMonth={shownMonth}
+        onShownMonthChange={setShownMonth}
+      />
+    );
   };
 
   return (
@@ -100,10 +109,21 @@ function Pinch() {
       {subview?.kind === 'recipe' && (
         <RecipeSubview uid={user.uid} recipeId={subview.id} />
       )}
+      {subview?.kind === 'plan' && (
+        <PlanMealSubview
+          key={`${subview.dayKey}-${subview.mealType ?? ''}`}
+          uid={user.uid}
+          dayKey={subview.dayKey}
+          mealType={subview.mealType}
+        />
+      )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
       <div
         className={join(
-          subview !== null && subview.kind !== 'recipe' && 'hidden',
+          subview !== null &&
+            subview.kind !== 'recipe' &&
+            subview.kind !== 'plan' &&
+            'hidden',
         )}
       >
         <div className='page pb-28'>

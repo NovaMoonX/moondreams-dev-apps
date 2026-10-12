@@ -2,7 +2,9 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
-import type { Product, ResolvedFamily } from '@apps/pinch/types';
+import { MEAL_TYPES } from '@apps/pinch/constants';
+import type { PlannedMeal, Product, ResolvedFamily } from '@apps/pinch/types';
+import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 
@@ -11,6 +13,7 @@ const selectFamilyItems = (state: RootState) => state.pinch.families.items;
 
 export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.settings.isLoaded &&
+  state.pinch.plannedMeals.isLoaded &&
   state.pinch.ingredients.isLoaded &&
   state.pinch.families.isLoaded &&
   state.pinch.stores.isLoaded &&
@@ -171,4 +174,36 @@ export const selectUsedIngredientIds = createSelector(
         recipe.ingredients.map((line) => line.ingredientId),
       ),
     ),
+);
+
+export const selectPlannedMeals = (state: RootState) =>
+  state.pinch.plannedMeals.items;
+
+const MEAL_TYPE_ORDER = new Map(MEAL_TYPES.map((type, index) => [type, index]));
+
+/** Day key to that day's planned meals in meal-type order, then in the order they were added: what every calendar cell and the day drawer read. */
+export const selectPlannedByDay = createSelector(
+  [selectPlannedMeals],
+  (plannedMeals) => {
+    const sorted = [...plannedMeals].sort(
+      (a, b) =>
+        (MEAL_TYPE_ORDER.get(a.mealType) ?? 0) -
+          (MEAL_TYPE_ORDER.get(b.mealType) ?? 0) || a.createdAt - b.createdAt,
+    );
+    return sorted.reduce((byDay, meal) => {
+      const key = getPlannedDayKey(meal.date);
+      byDay.set(key, [...(byDay.get(key) ?? []), meal]);
+      return byDay;
+    }, new Map<string, PlannedMeal[]>());
+  },
+);
+
+/** What a meal's cost is computed from, bundled so a component reads one value. */
+export const selectCostContext = createSelector(
+  [selectRecipeCosts, selectIngredientsById, selectDefaultProducts],
+  (recipeCosts, ingredientsById, defaultProducts) => ({
+    recipeCosts,
+    ingredientsById,
+    defaultProducts,
+  }),
 );

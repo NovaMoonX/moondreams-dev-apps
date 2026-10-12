@@ -1469,6 +1469,37 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      function isMealItemAt(items, i) {
+        return items.size() <= i || (items[i].keys().hasOnly(['id', 'kind', 'refId', 'servings'])
+          && items[i].id is string && items[i].refId is string
+          && items[i].kind in ['RECIPE', 'INGREDIENT']
+          && items[i].servings is number && items[i].servings > 0 && items[i].servings <= 1000000);
+      }
+
+      // Rules can't loop, so each of the (at most 10) items is checked by index.
+      function isMealItems(items) {
+        return items is list && items.size() >= 1 && items.size() <= 10
+          && isMealItemAt(items, 0) && isMealItemAt(items, 1) && isMealItemAt(items, 2)
+          && isMealItemAt(items, 3) && isMealItemAt(items, 4) && isMealItemAt(items, 5)
+          && isMealItemAt(items, 6) && isMealItemAt(items, 7) && isMealItemAt(items, 8)
+          && isMealItemAt(items, 9);
+      }
+
+      // The write-once snapshot of a past meal arrives with the issue that freezes days; until then it must be null.
+      function isPlannedMeal(data, id) {
+        return data.keys().hasOnly(['id', 'date', 'mealType', 'name', 'sourceMealId', 'items', 'refIds', 'snapshot', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'date', 'mealType', 'name', 'sourceMealId', 'items', 'refIds', 'snapshot', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && data.date is int && data.date >= 0 && data.date % 86400000 == 0
+          && data.mealType in ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', 'DESSERT', 'DRINK']
+          && (data.name == null || isShortText(data.name, 120))
+          && (data.sourceMealId == null || isShortText(data.sourceMealId, 80))
+          && isMealItems(data.items)
+          && data.refIds is list && data.refIds.size() <= 10
+          && data.snapshot == null
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       // The kitchen document is the person's settings; it is created by their first change.
       allow read, delete: if isKitchenOwner();
       allow create: if isKitchenOwner() && isSettings(request.resource.data);
@@ -1487,6 +1518,13 @@ service cloud.firestore {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isRecipe(request.resource.data, id);
         allow update: if isKitchenOwner() && isRecipe(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /plannedMeals/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isPlannedMeal(request.resource.data, id);
+        allow update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
