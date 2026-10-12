@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { freezeLoadedPastMeals } from '@apps/pinch/store/actions/freezeActions';
+import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { getGapKey } from '@apps/pinch/utils/gaps';
 import type {
@@ -86,7 +86,7 @@ export const saveIngredient = createAsyncThunk<
       : (newFamily?.id ?? matchedFamilyId ?? draft.familyId);
 
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       const batch = writeBatch(db);
       if (newFamily && !isCatalog) {
         batch.set(kitchenDoc(uid, 'families', newFamily.id), newFamily);
@@ -167,7 +167,7 @@ export const removeIngredient = createAsyncThunk<
   'pinch/ingredients/remove',
   async ({ uid, id }, { getState, rejectWithValue }) => {
     try {
-      await freezeLoadedPastMeals(uid, getState());
+      await freezeBeforeEdit(uid, getState());
       const recordRef = kitchenDoc(uid, 'ingredients', id);
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(recordRef);

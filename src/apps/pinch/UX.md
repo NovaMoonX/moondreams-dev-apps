@@ -216,7 +216,7 @@ block-beta
   style D11 fill:transparent,stroke:#888888,stroke-width:1px;
   style D12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. A past day shows a muted "Prices as they were that day" line under the title.*
+*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. A past day shows a muted "Prices as they were that day" line under the title. A past meal opened from it has no "Change items or servings": a muted line says the day has passed and to remove the meal and add it again.*
 
 **Planned meal** (tap a meal in the day drawer; swaps in place with "‹ Back")
 

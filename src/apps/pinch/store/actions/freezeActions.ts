@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -13,13 +13,17 @@ import {
 import { getLocalTodayDate } from '@apps/pinch/utils/dayKeys';
 import { buildSnapshot } from '@apps/pinch/utils/mealMath';
 
-/** Writes `snapshot` on every loaded planned meal whose day has passed and that hasn't been frozen, from the data as it is now. Returns how many it froze. */
+/** Whether every collection the cost math reads has loaded without a failure, so a snapshot taken now isn't built from partial data. */
+export const hasCompleteCostData = (state: RootState) =>
+  selectIsPinchLoaded(state) && selectPinchLoadError(state) === null;
+
+/** Writes `snapshot` on every loaded planned meal whose day has passed and that hasn't been frozen, from the data as it is now. Each meal is its own write, so one that another device froze first or deleted doesn't stop the rest. Returns how many it froze. */
 export async function freezeLoadedPastMeals(
   uid: string,
   state: RootState,
   now = Date.now(),
 ): Promise<number> {
-  if (!selectIsPinchLoaded(state) || selectPinchLoadError(state) !== null) {
+  if (!hasCompleteCostData(state)) {
     return 0;
   }
 
@@ -32,17 +36,22 @@ export async function freezeLoadedPastMeals(
     return 0;
   }
 
-  const batch = writeBatch(db);
-  due.forEach((meal) =>
-    batch.update(
-      doc(db, 'apps', 'pinch', 'kitchens', uid, 'plannedMeals', meal.id),
-      { snapshot: buildSnapshot(meal.items, context, now) },
+  const results = await Promise.allSettled(
+    due.map((meal) =>
+      updateDoc(
+        doc(db, 'apps', 'pinch', 'kitchens', uid, 'plannedMeals', meal.id),
+        { snapshot: buildSnapshot(meal.items, context, now) },
+      ),
     ),
   );
-  await batch.commit();
+  const frozen = results.filter((result) => result.status === 'fulfilled');
 
-  return due.length;
+  return frozen.length;
 }
+
+/** The step before an edit that moves a price or a recipe. A freeze that fails never stops the person's own edit; those meals just stay open until the next one. */
+export const freezeBeforeEdit = (uid: string, state: RootState) =>
+  freezeLoadedPastMeals(uid, state).catch(() => 0);
 
 interface FreezePastMealsInput {
   uid: string;
