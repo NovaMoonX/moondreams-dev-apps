@@ -28,6 +28,7 @@ const baseIngredient = {
   servingUnit: null,
   gramsPerMl: null,
   gramsEach: null,
+  defaultProductId: null,
 };
 
 // A ready-to-eat food in a family of its own, a variant joined to a catalog family, one with nothing but a name,
@@ -63,6 +64,57 @@ const SEED_INGREDIENTS = [
     nutritionPer100g: nutrition(120, 26, 0, 1.5),
     servingAmount: 5,
     servingUnit: 'OZ',
+    defaultProductId: 'seed-pinch-product-chicken-walmart',
+  },
+  // A catalog ingredient that only points at a default product: Alex changed nothing else about it.
+  {
+    ...baseIngredient,
+    id: 'cat-jasmine-rice',
+    catalogId: 'cat-jasmine-rice',
+    defaultProductId: 'seed-pinch-product-rice-costco',
+  },
+];
+
+const SEED_PRODUCTS = [
+  {
+    id: 'seed-pinch-product-chicken-walmart',
+    ingredientId: 'cat-chicken-breast',
+    storeId: 'cat-store-walmart',
+    label: 'Great Value',
+    priceCents: 948,
+    sizeAmount: 3,
+    sizeUnit: 'LB',
+    url: null,
+  },
+  {
+    id: 'seed-pinch-product-chicken-costco',
+    ingredientId: 'cat-chicken-breast',
+    storeId: 'cat-store-costco',
+    label: null,
+    priceCents: 1999,
+    sizeAmount: 6.5,
+    sizeUnit: 'LB',
+    url: 'https://www.costco.com/',
+  },
+  {
+    id: 'seed-pinch-product-rice-costco',
+    ingredientId: 'cat-jasmine-rice',
+    storeId: 'cat-store-costco',
+    label: null,
+    priceCents: 1499,
+    sizeAmount: 20,
+    sizeUnit: 'LB',
+    url: null,
+  },
+  {
+    id: 'seed-pinch-product-doritos-green-market',
+    ingredientId: 'seed-pinch-ingredient-doritos',
+    storeId: 'seed-pinch-store-green-market',
+    label: null,
+    priceCents: 498,
+    sizeAmount: 9.25,
+    sizeUnit: 'OZ',
+    url: null,
   },
 ];
 
@@ -177,6 +229,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .collection('families')
         .doc(family.id)
         .set({ ...family, createdAt, updatedAt: createdAt }),
+    ),
+    ...SEED_PRODUCTS.map((product) =>
+      kitchenRef
+        .collection('products')
+        .doc(product.id)
+        .set({ ...product, createdAt, updatedAt: createdAt }),
     ),
     ...SEED_INGREDIENTS.map((ingredient) =>
       kitchenRef

@@ -9,7 +9,11 @@ export interface ProductsState {
   loadError: string | null;
 }
 
-const initialState: ProductsState = { items: [], isLoaded: false, loadError: null };
+const initialState: ProductsState = {
+  items: [],
+  isLoaded: false,
+  loadError: null,
+};
 
 export const productsSlice = createSlice({
   name: 'pinch/products',
@@ -31,5 +35,6 @@ export const productsSlice = createSlice({
   },
 });
 
-export const { setProducts, setProductsLoadError, clearProducts } = productsSlice.actions;
+export const { setProducts, setProductsLoadError, clearProducts } =
+  productsSlice.actions;
 export const productsReducer = productsSlice.reducer;

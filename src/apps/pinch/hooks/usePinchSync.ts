@@ -77,7 +77,12 @@ export function usePinchSync(uid: string | null) {
     const unsubscribeProducts = startProductsListener(
       uid,
       (products) => dispatch(setProducts(products)),
-      (error) => dispatch(setProductsLoadError(getErrorMessage(error, 'Unable to load your products.'))),
+      (error) =>
+        dispatch(
+          setProductsLoadError(
+            getErrorMessage(error, 'Unable to load your products.'),
+          ),
+        ),
     );
 
     return () => {

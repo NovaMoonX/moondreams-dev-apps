@@ -80,25 +80,51 @@ export const selectStoresById = createSelector(
 const selectProductItems = (state: RootState) => state.pinch.products.items;
 
 /** Every product, newest last, so "the first product" is the one added first. */
-export const selectProducts = createSelector([selectProductItems], (products) => [...products].sort((a, b) => a.createdAt - b.createdAt));
+export const selectProducts = createSelector([selectProductItems], (products) =>
+  [...products].sort((a, b) => a.createdAt - b.createdAt),
+);
 
-export const selectProductsById = createSelector([selectProducts], (products) => new Map(products.map((product) => [product.id, product])));
+export const selectProductsById = createSelector(
+  [selectProducts],
+  (products) => new Map(products.map((product) => [product.id, product])),
+);
 
-export const selectProductsByIngredient = createSelector([selectProducts], (products) =>
-  products.reduce((acc, product) => {
-    acc.set(product.ingredientId, [...(acc.get(product.ingredientId) ?? []), product]);
-    return acc;
-  }, new Map<string, Product[]>()),
+export const selectProductsByIngredient = createSelector(
+  [selectProducts],
+  (products) =>
+    products.reduce((acc, product) => {
+      acc.set(product.ingredientId, [
+        ...(acc.get(product.ingredientId) ?? []),
+        product,
+      ]);
+      return acc;
+    }, new Map<string, Product[]>()),
 );
 
 /** The product that prices each ingredient: the one its record points at, else the first one added. */
-export const selectDefaultProducts = createSelector([selectProductsByIngredient, selectRecords], (byIngredient, records) => {
-  const pointers = new Map(records.map((record) => [record.id, record.defaultProductId ?? null]));
+export const selectDefaultProducts = createSelector(
+  [selectProductsByIngredient, selectRecords],
+  (byIngredient, records) => {
+    const pointers = new Map(
+      records.map((record) => [record.id, record.defaultProductId ?? null]),
+    );
 
-  return new Map(
-    [...byIngredient.entries()].map(([ingredientId, products]) => [
-      ingredientId,
-      products.find((product) => product.id === pointers.get(ingredientId)) ?? products[0],
-    ]),
-  );
-});
+    return new Map(
+      [...byIngredient.entries()].map(([ingredientId, products]) => [
+        ingredientId,
+        products.find((product) => product.id === pointers.get(ingredientId)) ??
+          products[0],
+      ]),
+    );
+  },
+);
+
+export const selectProductCountsByStore = createSelector(
+  [selectProducts],
+  (products) =>
+    products.reduce(
+      (acc, product) =>
+        acc.set(product.storeId, (acc.get(product.storeId) ?? 0) + 1),
+      new Map<string, number>(),
+    ),
+);

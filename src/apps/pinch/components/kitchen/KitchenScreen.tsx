@@ -1,7 +1,7 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus, Store } from 'lucide-react';
+import { ChevronRight, Plus, ShoppingCart, Store } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -10,12 +10,16 @@ import { useAppSelector } from '@/store';
 import FamilyGroup from '@apps/pinch/components/kitchen/FamilyGroup';
 import IngredientDrawer from '@apps/pinch/components/kitchen/IngredientDrawer';
 import IngredientFormSheet from '@apps/pinch/components/kitchen/IngredientFormSheet';
+import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import { KITCHEN_VIEW_LABELS, KITCHEN_VIEWS } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectDefaultProducts,
   selectIngredientFamilies,
   selectIngredients,
   selectIngredientsById,
+  selectProducts,
+  selectProductsById,
   selectStores,
 } from '@apps/pinch/store/selectors';
 import type { KitchenView } from '@apps/pinch/types';
@@ -31,10 +35,42 @@ const VIEW_OPTIONS = KITCHEN_VIEWS.map((value) => ({
 }));
 
 type Overlay =
-  { kind: 'details'; id: string } | { kind: 'form'; id: string | null };
+  | { kind: 'details'; id: string }
+  | { kind: 'form'; id: string | null }
+  | { kind: 'product'; ingredientId: string; productId: string | null };
 
 interface KitchenScreenProps {
   uid: string;
+}
+
+interface EntryRowProps {
+  icon: ReactNode;
+  label: string;
+  count: number;
+  onClick: () => void;
+}
+
+function EntryRow({ icon, label, count, onClick }: EntryRowProps) {
+  return (
+    <Button
+      type='button'
+      variant='secondary'
+      onClick={onClick}
+      className='h-12 min-w-0 justify-start gap-2 rounded-2xl px-3'
+    >
+      {icon}
+      <span className='min-w-0 flex-1 truncate text-left'>{label}</span>
+      {count > 0 && (
+        <span className='text-muted-foreground text-sm font-normal'>
+          {count}
+        </span>
+      )}
+      <ChevronRight
+        className='text-muted-foreground h-4 w-4 shrink-0'
+        aria-hidden='true'
+      />
+    </Button>
+  );
 }
 
 function KitchenScreen({ uid }: KitchenScreenProps) {
@@ -45,6 +81,9 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const families = useAppSelector(selectIngredientFamilies);
   const storeCount = useAppSelector(selectStores).length;
+  const productCount = useAppSelector(selectProducts).length;
+  const productsById = useAppSelector(selectProductsById);
+  const defaultProducts = useAppSelector(selectDefaultProducts);
   const { openSubview } = usePinchOverlay();
 
   const trimmed = query.trim();
@@ -53,9 +92,12 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       view === 'all'
         ? ingredients
         : ingredients.filter(
-            (ingredient) => ingredient.isCustom || ingredient.isAdjusted,
+            (ingredient) =>
+              ingredient.isCustom ||
+              ingredient.isAdjusted ||
+              defaultProducts.has(ingredient.id),
           ),
-    [ingredients, view],
+    [ingredients, view, defaultProducts],
   );
   const groups = useMemo(
     () => groupByFamily(searchIngredients(scoped, trimmed), families),
@@ -105,24 +147,22 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           </Button>
         }
       />
-      <Button
-        type='button'
-        variant='secondary'
-        onClick={() => openSubview({ kind: 'stores' })}
-        className='h-12 w-full justify-start gap-3 rounded-2xl px-4'
-      >
-        <Store className='h-5 w-5 shrink-0' aria-hidden='true' />
-        <span className='min-w-0 flex-1 text-left'>Stores</span>
-        {storeCount > 0 && (
-          <span className='text-muted-foreground text-sm font-normal'>
-            {storeCount}
-          </span>
-        )}
-        <ChevronRight
-          className='text-muted-foreground h-5 w-5 shrink-0'
-          aria-hidden='true'
+      <div className='grid grid-cols-2 gap-2'>
+        <EntryRow
+          icon={<Store className='h-5 w-5 shrink-0' aria-hidden='true' />}
+          label='Stores'
+          count={storeCount}
+          onClick={() => openSubview({ kind: 'stores' })}
         />
-      </Button>
+        <EntryRow
+          icon={
+            <ShoppingCart className='h-5 w-5 shrink-0' aria-hidden='true' />
+          }
+          label='Products'
+          count={productCount}
+          onClick={() => openSubview({ kind: 'products' })}
+        />
+      </div>
       <PillGroup
         label='Which ingredients'
         options={VIEW_OPTIONS}
@@ -152,9 +192,16 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       {overlay?.kind === 'details' && (
         <IngredientDrawer
           key={overlay.id}
+          uid={uid}
           ingredientId={overlay.id}
           onClose={() => setOverlay(null)}
           onModify={(id) => setOverlay({ kind: 'form', id })}
+          onAddProduct={(ingredientId) =>
+            setOverlay({ kind: 'product', ingredientId, productId: null })
+          }
+          onEditProduct={(ingredientId, productId) =>
+            setOverlay({ kind: 'product', ingredientId, productId })
+          }
         />
       )}
       {overlay?.kind === 'form' && (
@@ -167,6 +214,20 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           onClose={() => setOverlay(null)}
         />
       )}
+      {overlay?.kind === 'product' &&
+        ingredientsById.has(overlay.ingredientId) && (
+          <ProductFormSheet
+            key={overlay.productId ?? `new-${overlay.ingredientId}`}
+            uid={uid}
+            ingredient={ingredientsById.get(overlay.ingredientId)!}
+            product={
+              overlay.productId
+                ? (productsById.get(overlay.productId) ?? null)
+                : null
+            }
+            onClose={() => setOverlay(null)}
+          />
+        )}
     </div>
   );
 }

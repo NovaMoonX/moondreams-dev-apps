@@ -30,15 +30,23 @@ interface SaveProductInput {
 }
 
 /** Writes the product and, when it becomes the ingredient's default, the ingredient's pointer to it in the same batch (a catalog ingredient gets its record on the way). */
-export const saveProduct = createAsyncThunk<string, SaveProductInput, { state: RootState; rejectValue: string }>(
+export const saveProduct = createAsyncThunk<
+  string,
+  SaveProductInput,
+  { state: RootState; rejectValue: string }
+>(
   'pinch/products/save',
   async ({ uid, draft }, { getState, rejectWithValue }) => {
     const now = Date.now();
     const productId = draft.id ?? generateUuid();
     const { records } = getState().pinch.ingredients;
     const { items: products } = getState().pinch.products;
-    const record = records.find((candidate) => candidate.id === draft.ingredientId) ?? null;
-    const hasOthers = products.some((product) => product.ingredientId === draft.ingredientId && product.id !== productId);
+    const record =
+      records.find((candidate) => candidate.id === draft.ingredientId) ?? null;
+    const hasOthers = products.some(
+      (product) =>
+        product.ingredientId === draft.ingredientId && product.id !== productId,
+    );
     const becomesDefault = draft.makeDefault || !hasOthers;
 
     try {
@@ -80,12 +88,17 @@ export const saveProduct = createAsyncThunk<string, SaveProductInput, { state: R
             ...('gramsEach' in record ? {} : { gramsEach: null }),
           });
         } else {
-          batch.set(recordRef, buildCatalogRecord(draft.ingredientId, productId, now));
+          batch.set(
+            recordRef,
+            buildCatalogRecord(draft.ingredientId, productId, now),
+          );
         }
       }
       await batch.commit();
     } catch (error) {
-      return rejectWithValue(getErrorMessage(error, 'Unable to save this product.'));
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this product.'),
+      );
     }
 
     return productId;
@@ -99,13 +112,22 @@ interface SetDefaultProductInput {
 }
 
 /** Points the ingredient at one of its products, after confirming in a transaction that the product still exists. */
-export const setDefaultProduct = createAsyncThunk<string, SetDefaultProductInput, { rejectValue: string }>(
+export const setDefaultProduct = createAsyncThunk<
+  string,
+  SetDefaultProductInput,
+  { rejectValue: string }
+>(
   'pinch/products/setDefault',
   async ({ uid, ingredientId, productId }, { rejectWithValue }) => {
     try {
       await runTransaction(db, async (transaction) => {
-        const productSnapshot = await transaction.get(kitchenDoc(uid, 'products', productId));
-        if (!productSnapshot.exists() || (productSnapshot.data() as Product).ingredientId !== ingredientId) {
+        const productSnapshot = await transaction.get(
+          kitchenDoc(uid, 'products', productId),
+        );
+        if (
+          !productSnapshot.exists() ||
+          (productSnapshot.data() as Product).ingredientId !== ingredientId
+        ) {
           throw new Error('That product has just been removed.');
         }
 
@@ -116,15 +138,24 @@ export const setDefaultProduct = createAsyncThunk<string, SetDefaultProductInput
           transaction.update(recordRef, {
             defaultProductId: productId,
             updatedAt: now,
-            ...('gramsPerMl' in recordSnapshot.data() ? {} : { gramsPerMl: null }),
-            ...('gramsEach' in recordSnapshot.data() ? {} : { gramsEach: null }),
+            ...('gramsPerMl' in recordSnapshot.data()
+              ? {}
+              : { gramsPerMl: null }),
+            ...('gramsEach' in recordSnapshot.data()
+              ? {}
+              : { gramsEach: null }),
           });
         } else {
-          transaction.set(recordRef, buildCatalogRecord(ingredientId, productId, now));
+          transaction.set(
+            recordRef,
+            buildCatalogRecord(ingredientId, productId, now),
+          );
         }
       });
     } catch (error) {
-      return rejectWithValue(getErrorMessage(error, 'Unable to change the default product.'));
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to change the default product.'),
+      );
     }
 
     return productId;
@@ -137,13 +168,24 @@ interface RemoveProductInput {
 }
 
 /** Deletes the product; if it was the default, the ingredient is re-pointed to another product that still exists, or to none, in the same transaction. */
-export const removeProduct = createAsyncThunk<string, RemoveProductInput, { state: RootState; rejectValue: string }>(
+export const removeProduct = createAsyncThunk<
+  string,
+  RemoveProductInput,
+  { state: RootState; rejectValue: string }
+>(
   'pinch/products/remove',
   async ({ uid, id }, { getState, rejectWithValue }) => {
-    const target = getState().pinch.products.items.find((product) => product.id === id);
+    const target = getState().pinch.products.items.find(
+      (product) => product.id === id,
+    );
     const candidateId =
       [...getState().pinch.products.items]
-        .filter((product) => target && product.ingredientId === target.ingredientId && product.id !== id)
+        .filter(
+          (product) =>
+            target &&
+            product.ingredientId === target.ingredientId &&
+            product.id !== id,
+        )
         .sort((a, b) => a.createdAt - b.createdAt)[0]?.id ?? null;
 
     try {
@@ -155,10 +197,15 @@ export const removeProduct = createAsyncThunk<string, RemoveProductInput, { stat
       await runTransaction(db, async (transaction) => {
         const recordRef = kitchenDoc(uid, 'ingredients', target.ingredientId);
         const recordSnapshot = await transaction.get(recordRef);
-        const candidateSnapshot = candidateId ? await transaction.get(kitchenDoc(uid, 'products', candidateId)) : null;
+        const candidateSnapshot = candidateId
+          ? await transaction.get(kitchenDoc(uid, 'products', candidateId))
+          : null;
 
         transaction.delete(kitchenDoc(uid, 'products', id));
-        if (recordSnapshot.exists() && recordSnapshot.data().defaultProductId === id) {
+        if (
+          recordSnapshot.exists() &&
+          recordSnapshot.data().defaultProductId === id
+        ) {
           transaction.update(recordRef, {
             defaultProductId: candidateSnapshot?.exists() ? candidateId : null,
             updatedAt: Date.now(),
@@ -166,7 +213,9 @@ export const removeProduct = createAsyncThunk<string, RemoveProductInput, { stat
         }
       });
     } catch (error) {
-      return rejectWithValue(getErrorMessage(error, 'Unable to remove this product.'));
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to remove this product.'),
+      );
     }
 
     return id;

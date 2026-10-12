@@ -1,23 +1,39 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Checkbox, Form, FormFactories, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Checkbox,
+  Form,
+  FormFactories,
+  Input,
+  Label,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Link2, Tag } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
-import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
+import AddFieldChips, {
+  RemovableField,
+} from '@/components/forms/AddFieldChips';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoneyInput from '@/components/MoneyInput';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
-import { isValidHttpUrl } from '@/utils/urlUtils';
+import { isValidHttpsUrl } from '@/utils/urlUtils';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import { MAX_NAME_LENGTH, MAX_PRICE_CENTS, MAX_SERVING_AMOUNT } from '@apps/pinch/constants';
-import { removeProduct, saveProduct } from '@apps/pinch/store/actions/productActions';
+import {
+  MAX_NAME_LENGTH,
+  MAX_PRICE_CENTS,
+  MAX_SERVING_AMOUNT,
+} from '@apps/pinch/constants';
+import {
+  removeProduct,
+  saveProduct,
+} from '@apps/pinch/store/actions/productActions';
 import { selectProductsByIngredient } from '@apps/pinch/store/selectors';
 import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 
@@ -68,28 +84,58 @@ function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
   return (
     <div className='space-y-4'>
       {extras.label.enabled && (
-        <RemovableField label='Label' removeLabel='Remove label' onRemove={() => onChange({ ...extras, label: { enabled: false, value: '' } })}>
+        <RemovableField
+          label='Label'
+          removeLabel='Remove label'
+          onRemove={() =>
+            onChange({ ...extras, label: { enabled: false, value: '' } })
+          }
+        >
           <Input
             variant='outline'
             placeholder='Great Value'
             maxLength={MAX_NAME_LENGTH}
             value={extras.label.value}
-            onChange={(event) => onChange({ ...extras, label: { enabled: true, value: event.target.value } })}
+            onChange={(event) =>
+              onChange({
+                ...extras,
+                label: { enabled: true, value: event.target.value },
+              })
+            }
           />
         </RemovableField>
       )}
       {extras.link.enabled && (
-        <RemovableField label='Link' removeLabel='Remove link' onRemove={() => onChange({ ...extras, link: { enabled: false, value: '' } })}>
+        <RemovableField
+          label='Link'
+          removeLabel='Remove link'
+          onRemove={() =>
+            onChange({ ...extras, link: { enabled: false, value: '' } })
+          }
+        >
           <Input
             variant='outline'
             type='url'
             placeholder='https://'
             value={extras.link.value}
-            onChange={(event) => onChange({ ...extras, link: { enabled: true, value: event.target.value } })}
+            onChange={(event) =>
+              onChange({
+                ...extras,
+                link: { enabled: true, value: event.target.value },
+              })
+            }
           />
         </RemovableField>
       )}
-      <AddFieldChips chips={chips} onAdd={(key) => onChange({ ...extras, [key]: { ...extras[key as keyof Extras], enabled: true } })} />
+      <AddFieldChips
+        chips={chips}
+        onAdd={(key) =>
+          onChange({
+            ...extras,
+            [key]: { ...extras[key as keyof Extras], enabled: true },
+          })
+        }
+      />
     </div>
   );
 }
@@ -102,17 +148,25 @@ interface ProductFormSheetProps {
   onClose: () => void;
 }
 
-function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormSheetProps) {
+function ProductFormSheet({
+  uid,
+  ingredient,
+  product,
+  onClose,
+}: ProductFormSheetProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const otherCount = (useAppSelector(selectProductsByIngredient).get(ingredient.id) ?? []).filter((candidate) => candidate.id !== product?.id).length;
+  const otherCount = (
+    useAppSelector(selectProductsByIngredient).get(ingredient.id) ?? []
+  ).filter((candidate) => candidate.id !== product?.id).length;
   const initialData = useMemo(() => getInitialData(product), [product]);
   const [formData, setFormData] = useState<FormData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const priceCents = parseMoneyToCents(formData.price);
-  const sizeAmount = formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
+  const sizeAmount =
+    formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
   const link = formData.extras.link;
   const isFormComplete =
     formData.storeId !== null &&
@@ -122,7 +176,9 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
     Number.isFinite(sizeAmount) &&
     sizeAmount > 0 &&
     sizeAmount <= MAX_SERVING_AMOUNT &&
-    (!link.enabled || link.value.trim() === '' || isValidHttpUrl(link.value.trim()));
+    (!link.enabled ||
+      link.value.trim() === '' ||
+      isValidHttpsUrl(link.value.trim()));
 
   const fields = useMemo(
     () => [
@@ -130,7 +186,11 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
         name: 'storeId',
         label: 'Where do you buy it?',
         renderComponent: (props) => (
-          <StorePicker uid={uid} value={props.value as string | null} onChange={(storeId) => props.onValueChange(storeId)} />
+          <StorePicker
+            uid={uid}
+            value={props.value as string | null}
+            onChange={(storeId) => props.onValueChange(storeId)}
+          />
         ),
       }),
       custom({
@@ -144,7 +204,9 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
                 ariaLabel='Price'
                 placeholder='9.48'
                 value={formData.price}
-                onChange={(price) => setFormData((current) => ({ ...current, price }))}
+                onChange={(price) =>
+                  setFormData((current) => ({ ...current, price }))
+                }
               />
             </div>
             <div className='space-y-1.5'>
@@ -160,12 +222,19 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
                   placeholder='3'
                   className='min-w-0'
                   value={formData.sizeAmount}
-                  onChange={(event) => setFormData((current) => ({ ...current, sizeAmount: event.target.value }))}
+                  onChange={(event) =>
+                    setFormData((current) => ({
+                      ...current,
+                      sizeAmount: event.target.value,
+                    }))
+                  }
                 />
                 <UnitSelect
                   value={formData.sizeUnit}
                   className='w-24 shrink-0'
-                  onChange={(sizeUnit) => setFormData((current) => ({ ...current, sizeUnit }))}
+                  onChange={(sizeUnit) =>
+                    setFormData((current) => ({ ...current, sizeUnit }))
+                  }
                 />
               </div>
             </div>
@@ -175,7 +244,12 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
       custom({
         name: 'extras',
         label: '',
-        renderComponent: (props) => <ExtrasFields extras={props.value as Extras} onChange={props.onValueChange} />,
+        renderComponent: (props) => (
+          <ExtrasFields
+            extras={props.value as Extras}
+            onChange={props.onValueChange}
+          />
+        ),
       }),
       ...(otherCount > 0
         ? [
@@ -187,9 +261,13 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
                   <Checkbox
                     aria-label='Make this the default'
                     checked={props.value === true}
-                    onCheckedChange={(checked) => props.onValueChange(checked === true)}
+                    onCheckedChange={(checked) =>
+                      props.onValueChange(checked === true)
+                    }
                   />
-                  <span className='text-sm font-medium'>Make this the default</span>
+                  <span className='text-sm font-medium'>
+                    Make this the default
+                  </span>
                 </div>
               ),
             }),
@@ -237,11 +315,15 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
             id: product?.id ?? null,
             ingredientId: ingredient.id,
             storeId: data.storeId,
-            label: data.extras.label.enabled ? data.extras.label.value.trim() || null : null,
+            label: data.extras.label.enabled
+              ? data.extras.label.value.trim() || null
+              : null,
             priceCents,
             sizeAmount,
             sizeUnit: formData.sizeUnit,
-            url: data.extras.link.enabled ? data.extras.link.value.trim() || null : null,
+            url: data.extras.link.enabled
+              ? data.extras.link.value.trim() || null
+              : null,
             makeDefault: data.makeDefault === true,
           },
         }),
@@ -268,21 +350,43 @@ function ProductFormSheet({ uid, ingredient, product, onClose }: ProductFormShee
         initialData={initialData}
         columns={1}
         onDataChange={(data) =>
-          setFormData((current) => ({ ...current, ...(data as FormData), price: current.price, sizeAmount: current.sizeAmount, sizeUnit: current.sizeUnit }))
+          setFormData((current) => ({
+            ...current,
+            ...(data as FormData),
+            price: current.price,
+            sizeAmount: current.sizeAmount,
+            sizeUnit: current.sizeUnit,
+          }))
         }
         onSubmit={(data) => {
           void handleSubmit(data as FormData);
         }}
         submitButton={
           <ModalFooterActions
-            leftActions={product && <DeleteIconButton onClick={() => void handleDelete()} disabled={isSubmitting} />}
+            leftActions={
+              product && (
+                <DeleteIconButton
+                  onClick={() => void handleDelete()}
+                  disabled={isSubmitting}
+                />
+              )
+            }
             cancelAction={
-              <Button type='button' variant='secondary' onClick={onClose} disabled={isSubmitting}>
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
             }
             rightActions={
-              <Button type='submit' loading={isSubmitting} disabled={isSubmitting || !isFormComplete}>
+              <Button
+                type='submit'
+                loading={isSubmitting}
+                disabled={isSubmitting || !isFormComplete}
+              >
                 {product ? 'Save' : 'Add'}
               </Button>
             }

@@ -8,10 +8,16 @@ import { PillOptions } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { CATALOG_STORES, CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
+import {
+  CATALOG_STORES,
+  CATALOG_STORES_BY_ID,
+} from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
-import { ensureCatalogStore, saveStore } from '@apps/pinch/store/actions/storeActions';
+import {
+  ensureCatalogStore,
+  saveStore,
+} from '@apps/pinch/store/actions/storeActions';
 import { selectStores, selectStoresById } from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
@@ -41,7 +47,12 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
         icon: (
           <StoreLogo
             name={store.name}
-            domain={store.catalogStoreId ? (CATALOG_STORES_BY_ID.get(store.catalogStoreId)?.domain ?? null) : null}
+            domain={
+              store.catalogStoreId
+                ? (CATALOG_STORES_BY_ID.get(store.catalogStoreId)?.domain ??
+                  null)
+                : null
+            }
             imagePath={store.imagePath}
             imageVersion={store.updatedAt}
             size={20}
@@ -51,7 +62,13 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
     [stores],
   );
   const matches = useMemo(
-    () => searchByName(CATALOG_STORES.filter((catalogStore) => !storesById.has(catalogStore.id)), query),
+    () =>
+      searchByName(
+        CATALOG_STORES.filter(
+          (catalogStore) => !storesById.has(catalogStore.id),
+        ),
+        query,
+      ),
     [storesById, query],
   );
 
@@ -66,7 +83,9 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
     setError(null);
     setIsWorking(true);
     try {
-      finish(await dispatch(ensureCatalogStore({ uid, catalogStoreId })).unwrap());
+      finish(
+        await dispatch(ensureCatalogStore({ uid, catalogStoreId })).unwrap(),
+      );
     } catch (addError) {
       setError(getErrorMessage(addError, 'Unable to add this store.'));
     } finally {
@@ -78,7 +97,17 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
     setError(null);
     setIsWorking(true);
     try {
-      finish(await dispatch(saveStore({ uid, id: null, name: ownName, imageFile: null, removeImage: false })).unwrap());
+      finish(
+        await dispatch(
+          saveStore({
+            uid,
+            id: null,
+            name: ownName,
+            imageFile: null,
+            removeImage: false,
+          }),
+        ).unwrap(),
+      );
     } catch (addError) {
       setError(getErrorMessage(addError, 'Unable to add this store.'));
     } finally {
@@ -88,9 +117,15 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
 
   const creator = (
     <div className='border-border space-y-3 rounded-2xl border p-3'>
-      <SearchInput value={query} onChange={setQuery} placeholder='Search well-known stores' />
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder='Search well-known stores'
+      />
       {matches.length === 0 ? (
-        <p className='text-muted-foreground text-center text-sm wrap-break-word'>Nothing matches “{query.trim()}” on the list.</p>
+        <p className='text-muted-foreground text-center text-sm wrap-break-word'>
+          Nothing matches “{query.trim()}” on the list.
+        </p>
       ) : (
         <ul className='divide-border max-h-44 divide-y overflow-y-auto'>
           {matches.map((catalogStore) => (
@@ -102,8 +137,14 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
                 onClick={() => void addCatalogStore(catalogStore.id)}
                 className='h-auto min-h-11 w-full justify-start gap-3 px-0! py-1.5 text-left'
               >
-                <StoreLogo name={catalogStore.name} domain={catalogStore.domain} size={28} />
-                <span className='min-w-0 flex-1 truncate font-medium'>{catalogStore.name}</span>
+                <StoreLogo
+                  name={catalogStore.name}
+                  domain={catalogStore.domain}
+                  size={28}
+                />
+                <span className='min-w-0 flex-1 truncate font-medium'>
+                  {catalogStore.name}
+                </span>
               </Button>
             </li>
           ))}
@@ -124,7 +165,12 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
             }
           }}
         />
-        <Button type='button' variant='secondary' disabled={isWorking || ownName.trim() === ''} onClick={() => void addOwnStore()}>
+        <Button
+          type='button'
+          variant='secondary'
+          disabled={isWorking || ownName.trim() === ''}
+          onClick={() => void addOwnStore()}
+        >
           Add
         </Button>
       </div>
@@ -146,7 +192,11 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
         isSelected={(storeId) => value === storeId}
         onToggle={(storeId) => onChange(value === storeId ? null : storeId)}
         leading={
-          <Pill isSelected={isAdding} className='border-primary/60 border border-dashed' onClick={() => setIsAdding((current) => !current)}>
+          <Pill
+            isSelected={isAdding}
+            className='border-primary/60 border border-dashed'
+            onClick={() => setIsAdding((current) => !current)}
+          >
             <Plus className='h-3.5 w-3.5' aria-hidden='true' />
             New store
           </Pill>
