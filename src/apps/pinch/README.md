@@ -102,7 +102,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
 - [x] Add products to an ingredient (store, label, price, package size), choose a default, and edit or remove them
 - [x] Enter or adjust nutrition on any ingredient
-- [ ] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
+- [x] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
 - [ ] See a recipe's nutrition added up from its ingredients, or type your own over it
 - [ ] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
 - [ ] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
