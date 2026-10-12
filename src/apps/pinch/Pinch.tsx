@@ -12,6 +12,7 @@ import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
+import MealSubview from '@apps/pinch/components/recipes/MealSubview';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import PinchNav from '@apps/pinch/components/shell/PinchNav';
@@ -109,13 +110,17 @@ function Pinch() {
       {subview?.kind === 'recipe' && (
         <RecipeSubview uid={user.uid} recipeId={subview.id} />
       )}
+      {subview?.kind === 'meal' && (
+        <MealSubview uid={user.uid} mealId={subview.id} />
+      )}
       {subview?.kind === 'plan' && (
         <PlanMealSubview
-          key={`${subview.dayKey}-${subview.mealType ?? ''}-${subview.plannedMealId ?? 'new'}`}
+          key={`${subview.dayKey}-${subview.mealType ?? ''}-${subview.plannedMealId ?? 'new'}-${subview.fromMealId ?? ''}`}
           uid={user.uid}
           dayKey={subview.dayKey}
           mealType={subview.mealType}
           plannedMealId={subview.plannedMealId}
+          fromMealId={subview.fromMealId}
         />
       )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
@@ -124,6 +129,7 @@ function Pinch() {
           subview !== null &&
             subview.kind !== 'recipe' &&
             subview.kind !== 'plan' &&
+            subview.kind !== 'meal' &&
             'hidden',
         )}
       >

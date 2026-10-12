@@ -8,6 +8,8 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
+import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
+import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
 import {
@@ -16,9 +18,16 @@ import {
   RECIPES_VIEWS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { selectRecipeCosts, selectRecipes } from '@apps/pinch/store/selectors';
+import {
+  selectCostContext,
+  selectMeals,
+  selectRecipeCosts,
+  selectRecipes,
+} from '@apps/pinch/store/selectors';
 import type { Gap, RecipesView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
+import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
+import { getMealCost } from '@apps/pinch/utils/mealMath';
 
 const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   value,
@@ -33,12 +42,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const { openSubview } = usePinchOverlay();
   const recipes = useAppSelector(selectRecipes);
   const costs = useAppSelector(selectRecipeCosts);
+  const meals = useAppSelector(selectMeals);
+  const costContext = useAppSelector(selectCostContext);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
 
-  const hasSearch = recipes.length >= LIST_SEARCH_THRESHOLD;
+  const total = view === 'meals' ? meals.length : recipes.length;
+  const hasSearch = total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
   const shown = useMemo(
     () =>
@@ -49,12 +62,44 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     [recipes, trimmed],
   );
 
+  const shownMeals = useMemo(
+    () =>
+      searchByName(
+        meals.map((meal) => ({ name: meal.name, meal })),
+        trimmed,
+      ).map(({ meal }) => meal),
+    [meals, trimmed],
+  );
+
   const getBody = () => {
     if (view === 'meals') {
+      if (meals.length === 0) {
+        return (
+          <p className='text-muted-foreground py-6 text-center text-sm'>
+            No saved meals yet. Put a few items together once and plan them
+            again in a tap.
+          </p>
+        );
+      }
+      if (shownMeals.length === 0) {
+        return (
+          <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
+            Nothing matches “{trimmed}” yet.
+          </p>
+        );
+      }
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
-          No saved meals yet. They'll live here once you put a few together.
-        </p>
+        <ul className='divide-border divide-y'>
+          {shownMeals.map((meal) => (
+            <li key={meal.id}>
+              <MealRow
+                meal={meal}
+                cost={getMealCost(meal.items, costContext)}
+                onOpen={setOpenMealId}
+              />
+            </li>
+          ))}
+        </ul>
       );
     }
     if (recipes.length === 0) {
@@ -96,7 +141,13 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             size='sm'
             rounded='full'
             className='gap-1'
-            onClick={() => openSubview({ kind: 'recipe', id: null })}
+            onClick={() =>
+              openSubview(
+                view === 'meals'
+                  ? { kind: 'meal', id: null }
+                  : { kind: 'recipe', id: null },
+              )
+            }
           >
             <Plus className='h-4 w-4' aria-hidden='true' />
             New
@@ -107,14 +158,17 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         label='Recipes or meals'
         options={VIEW_OPTIONS}
         value={view}
-        onChange={setView}
+        onChange={(next) => {
+          setQuery('');
+          setView(next);
+        }}
         isThin
       />
-      {view === 'recipes' && hasSearch && (
+      {hasSearch && (
         <SearchInput
           value={query}
           onChange={setQuery}
-          placeholder='Search recipes'
+          placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
         />
       )}
       {getBody()}
@@ -130,6 +184,32 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           }}
           onFillIn={(gaps) => {
             setOpenId(null);
+            setFillIn(gaps);
+          }}
+        />
+      )}
+      {openMealId && (
+        <MealDrawer
+          key={openMealId}
+          uid={uid}
+          mealId={openMealId}
+          onClose={() => setOpenMealId(null)}
+          onPlan={(id) => {
+            setOpenMealId(null);
+            openSubview({
+              kind: 'plan',
+              dayKey: getCellDayKey(new Date()),
+              mealType: null,
+              plannedMealId: null,
+              fromMealId: id,
+            });
+          }}
+          onModify={(id) => {
+            setOpenMealId(null);
+            openSubview({ kind: 'meal', id });
+          }}
+          onFillIn={(gaps) => {
+            setOpenMealId(null);
             setFillIn(gaps);
           }}
         />

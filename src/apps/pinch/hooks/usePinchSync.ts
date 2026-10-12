@@ -4,6 +4,7 @@ import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   startFamiliesListener,
+  startMealsListener,
   startPlannedMealsListener,
   startIngredientsListener,
   startProductsListener,
@@ -21,6 +22,11 @@ import {
   setIngredients,
   setIngredientsLoadError,
 } from '@apps/pinch/store/slices/ingredientsSlice';
+import {
+  clearMeals,
+  setMeals,
+  setMealsLoadError,
+} from '@apps/pinch/store/slices/mealsSlice';
 import {
   clearPlannedMeals,
   setPlannedMeals,
@@ -62,6 +68,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearRecipes());
       dispatch(clearSettings());
       dispatch(clearPlannedMeals());
+      dispatch(clearMeals());
       return;
     }
 
@@ -130,7 +137,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
         ),
     );
 
+    const unsubscribeMeals = startMealsListener(
+      uid,
+      (meals) => dispatch(setMeals(meals)),
+      (error) =>
+        dispatch(
+          setMealsLoadError(
+            getErrorMessage(error, 'Unable to load your saved meals.'),
+          ),
+        ),
+    );
+
     return () => {
+      unsubscribeMeals();
       unsubscribeSettings();
       unsubscribeRecipes();
       unsubscribeProducts();

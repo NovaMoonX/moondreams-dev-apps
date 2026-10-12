@@ -224,8 +224,7 @@ interface MealItem {
 interface Meal {
   id: string;
   name: string;
-  items: MealItem[];                           // 1 … MAX_MEAL_ITEMS
-  isArchived: boolean;
+  items: MealItem[];                           // 1 … MAX_MEAL_ITEMS (no isArchived: a saved meal is always deletable)
   createdAt: number;
   updatedAt: number;
 }

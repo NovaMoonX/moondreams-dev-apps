@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
+import AppToggle from '@/components/AppToggle';
+import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -17,11 +19,13 @@ import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MAX_MEAL_ITEMS,
+  MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
   MEAL_TYPES,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { removeMeal, saveMeal } from '@apps/pinch/store/actions/mealActions';
 import {
   planMeal,
   updatePlannedMeal,
@@ -29,6 +33,8 @@ import {
 import {
   selectCostContext,
   selectIngredientsById,
+  selectMeals,
+  selectMealsById,
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -48,39 +54,67 @@ const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
   emoji: MEAL_TYPE_EMOJIS[value],
 }));
 
+const copyItems = (items: MealItem[]) =>
+  items.map((item) => ({ ...item, id: generateUuid() }));
+
 interface MealBuilderProps {
   uid: string;
+  /** `plan` puts a meal on a day; `meal` builds a saved meal with no day. */
+  mode: 'plan' | 'meal';
   dayKey: string;
   mealType: MealType | null;
   /** The planned meal being changed; null plans a new one. */
   plannedMealId: string | null;
+  /** A saved meal whose items start the plate (plan), or the saved meal being changed (meal). */
+  mealId: string | null;
 }
 
-/** Plans a meal on a day, or changes one already planned: its day and type, and any mix of recipes and ingredients with servings on each. */
+/** Builds a meal from any mix of recipes and ingredients with servings on each, then plans it on a day or saves it for later. */
 function MealBuilder({
   uid,
+  mode,
   dayKey: initialDayKey,
   mealType: initialType,
   plannedMealId,
+  mealId,
 }: MealBuilderProps) {
   const { closeSubview } = usePinchOverlay();
   const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
   const { addToast } = useToast();
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const existing =
+  const savedMeals = useAppSelector(selectMeals);
+  const savedMealsById = useAppSelector(selectMealsById);
+  const existingPlanned =
     useAppSelector(selectPlannedMeals).find(
       (meal) => meal.id === plannedMealId,
     ) ?? null;
+  const existingMeal =
+    mode === 'meal' && mealId ? (savedMealsById.get(mealId) ?? null) : null;
+  const starter =
+    mode === 'plan' && !existingPlanned && mealId
+      ? (savedMealsById.get(mealId) ?? null)
+      : null;
   const [dayKey, setDayKey] = useState(
-    existing ? getPlannedDayKey(existing.date) : initialDayKey,
+    existingPlanned ? getPlannedDayKey(existingPlanned.date) : initialDayKey,
   );
   const [mealType, setMealType] = useState<MealType>(
-    existing?.mealType ?? initialType ?? 'DINNER',
+    existingPlanned?.mealType ?? initialType ?? 'DINNER',
   );
   const [isChanging, setIsChanging] = useState(false);
-  const [items, setItems] = useState<MealItem[]>(existing?.items ?? []);
+  const [items, setItems] = useState<MealItem[]>(
+    existingPlanned?.items ??
+      existingMeal?.items ??
+      (starter ? copyItems(starter.items) : []),
+  );
+  const [source, setSource] = useState<{ id: string; name: string } | null>(
+    starter ? { id: starter.id, name: starter.name } : null,
+  );
+  const [name, setName] = useState(existingMeal?.name ?? '');
+  const [saveAsMeal, setSaveAsMeal] = useState(false);
+  const [newMealName, setNewMealName] = useState('');
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,12 +126,23 @@ function MealBuilder({
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
   const isFull = items.length >= MAX_MEAL_ITEMS;
+  const isMissing =
+    (mode === 'plan' && plannedMealId !== null && existingPlanned === null) ||
+    (mode === 'meal' && mealId !== null && existingMeal === null);
+  const wantsSaveAsMeal = mode === 'plan' && saveAsMeal && items.length >= 2;
+  const isValid =
+    items.length > 0 &&
+    (mode === 'meal'
+      ? name.trim() !== ''
+      : date !== null && (!wantsSaveAsMeal || newMealName.trim() !== ''));
 
-  if (plannedMealId !== null && existing === null) {
+  if (isMissing) {
     return (
       <div className='space-y-3 py-6 text-center'>
         <p className='text-muted-foreground text-sm'>
-          This meal has been removed from its day.
+          {mode === 'plan'
+            ? 'This meal has been removed from its day.'
+            : 'This meal has been deleted.'}
         </p>
         <Button type='button' variant='secondary' onClick={closeSubview}>
           Close
@@ -112,28 +157,55 @@ function MealBuilder({
       { id: generateUuid(), kind, refId, servings: 1 },
     ]);
 
+  const pickSavedMeal = (id: string) => {
+    const meal = savedMealsById.get(id);
+    if (meal) {
+      setItems(copyItems(meal.items));
+      setSource({ id: meal.id, name: meal.name });
+    }
+  };
+
+  const rows = () =>
+    items.map(({ id, kind, refId, servings }) => ({
+      id,
+      kind,
+      refId,
+      servings,
+    }));
+
   const handleSubmit = async () => {
-    if (date === null || items.length === 0) {
+    if (!isValid) {
       return;
     }
 
     setError(null);
     setIsSubmitting(true);
     try {
-      const rows = items.map(({ id, kind, refId, servings }) => ({
-        id,
-        kind,
-        refId,
-        servings,
-      }));
-      if (existing) {
+      if (mode === 'meal') {
+        await dispatch(
+          saveMeal({ uid, id: existingMeal?.id ?? null, name, items: rows() }),
+        ).unwrap();
+        addToast({ title: `Saved ${name.trim()}`, type: 'success' });
+        closeSubview();
+        return;
+      }
+
+      if (date === null) {
+        return;
+      }
+      if (wantsSaveAsMeal) {
+        await dispatch(
+          saveMeal({ uid, id: null, name: newMealName, items: rows() }),
+        ).unwrap();
+      }
+      if (existingPlanned) {
         await dispatch(
           updatePlannedMeal({
             uid,
-            id: existing.id,
+            id: existingPlanned.id,
             date,
             mealType,
-            items: rows,
+            items: rows(),
           }),
         ).unwrap();
       } else {
@@ -142,20 +214,20 @@ function MealBuilder({
             uid,
             date,
             mealType,
-            items: rows.map(({ kind, refId, servings }) => ({
+            items: rows().map(({ kind, refId, servings }) => ({
               kind,
               refId,
               servings,
             })),
-            name: null,
-            sourceMealId: null,
+            name: source?.name ?? null,
+            sourceMealId: source?.id ?? null,
           }),
         ).unwrap();
       }
       addToast({
-        title: existing
+        title: existingPlanned
           ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} on ${formatWeekday(dayKey)}`
-          : `Added ${getItemTitle(items[0], recipesById, ingredientsById)}${items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${formatWeekday(dayKey)}`,
+          : `Added ${source?.name ?? getItemTitle(items[0], recipesById, ingredientsById)}${!source && items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${formatWeekday(dayKey)}`,
         type: 'success',
       });
       closeSubview();
@@ -165,46 +237,105 @@ function MealBuilder({
     }
   };
 
+  const handleDelete = async () => {
+    if (!existingMeal) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete meal',
+      message: `Delete ${existingMeal.name}? Days you've already planned it on keep their own copy. This action cannot be undone.`,
+      confirmText: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await dispatch(removeMeal({ uid, id: existingMeal.id })).unwrap();
+      closeSubview();
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError, 'Unable to delete this meal.'));
+      setIsSubmitting(false);
+    }
+  };
+
+  const getSubmitLabel = () => {
+    if (mode === 'meal' || existingPlanned || date === null) return 'Save';
+    return `Add to ${formatWeekday(dayKey)}`;
+  };
+
   return (
     <div className='flex flex-1 flex-col gap-5'>
-      <div className='space-y-3'>
-        <div className='flex items-center justify-between gap-3'>
-          <p className='min-w-0 font-medium'>
-            {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
-            <span className='whitespace-nowrap'>
-              {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
-            </span>
-          </p>
-          <Button
-            type='button'
-            variant='link'
-            className='h-10 shrink-0'
-            onClick={() => setIsChanging((current) => !current)}
-          >
-            {isChanging ? 'Done' : 'Change'}
-          </Button>
-        </div>
-        {isChanging && (
-          <div className='space-y-3'>
-            <PillGroup
-              label='Meal'
-              options={MEAL_TYPE_OPTIONS}
-              value={mealType}
-              onChange={setMealType}
-            />
-            <div className='space-y-1.5'>
-              <Label>Day</Label>
-              <Input
-                type='date'
-                variant='outline'
-                aria-label='Day'
-                value={dayKey}
-                onChange={(event) => setDayKey(event.target.value)}
-              />
-            </div>
+      {mode === 'plan' ? (
+        <div className='space-y-3'>
+          <div className='flex items-center justify-between gap-3'>
+            <p className='min-w-0 font-medium'>
+              {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
+              <span className='whitespace-nowrap'>
+                {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
+              </span>
+            </p>
+            <Button
+              type='button'
+              variant='link'
+              className='h-10 shrink-0'
+              onClick={() => setIsChanging((current) => !current)}
+            >
+              {isChanging ? 'Done' : 'Change'}
+            </Button>
           </div>
+          {isChanging && (
+            <div className='space-y-3'>
+              <PillGroup
+                label='Meal'
+                options={MEAL_TYPE_OPTIONS}
+                value={mealType}
+                onChange={setMealType}
+              />
+              <div className='space-y-1.5'>
+                <Label>Day</Label>
+                <Input
+                  type='date'
+                  variant='outline'
+                  aria-label='Day'
+                  value={dayKey}
+                  onChange={(event) => setDayKey(event.target.value)}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className='space-y-1.5'>
+          <Label>Name</Label>
+          <Input
+            variant='outline'
+            aria-label='Meal name'
+            placeholder='Taco night'
+            maxLength={MAX_NAME_LENGTH}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </div>
+      )}
+
+      {mode === 'plan' &&
+        !existingPlanned &&
+        savedMeals.length > 0 &&
+        items.length === 0 && (
+          <PillGroup
+            label='Start from a saved meal'
+            options={savedMeals.map((meal) => ({
+              value: meal.id,
+              label: meal.name,
+            }))}
+            value={source?.id ?? null}
+            onChange={pickSavedMeal}
+          />
         )}
-      </div>
 
       <section aria-label="What's on the plate" className='space-y-3'>
         <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
@@ -290,9 +421,40 @@ function MealBuilder({
           <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={setFillIn} />
         </div>
       )}
+
+      {mode === 'plan' && items.length >= 2 && (
+        <div className='space-y-3'>
+          <div className='flex items-center justify-between gap-3'>
+            <span className='text-sm font-medium'>Save as a meal</span>
+            <AppToggle
+              aria-label='Save as a meal'
+              checked={saveAsMeal}
+              onCheckedChange={setSaveAsMeal}
+            />
+          </div>
+          {saveAsMeal && (
+            <Input
+              variant='outline'
+              aria-label='Name for the saved meal'
+              placeholder='Taco night'
+              maxLength={MAX_NAME_LENGTH}
+              value={newMealName}
+              onChange={(event) => setNewMealName(event.target.value)}
+            />
+          )}
+        </div>
+      )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
 
       <ModalFooterActions
+        leftActions={
+          existingMeal && (
+            <DeleteIconButton
+              onClick={() => void handleDelete()}
+              disabled={isSubmitting}
+            />
+          )
+        }
         cancelAction={
           <Button
             type='button'
@@ -307,12 +469,10 @@ function MealBuilder({
           <Button
             type='button'
             loading={isSubmitting}
-            disabled={isSubmitting || items.length === 0 || date === null}
+            disabled={isSubmitting || !isValid}
             onClick={() => void handleSubmit()}
           >
-            {existing || date === null
-              ? 'Save'
-              : `Add to ${formatWeekday(dayKey)}`}
+            {getSubmitLabel()}
           </Button>
         }
       />
