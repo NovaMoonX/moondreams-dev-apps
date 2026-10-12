@@ -1427,7 +1427,7 @@ service cloud.firestore {
 
       // Rules can't walk a list, so each ingredient line and step is shaped by the client; the rules cap the counts and the fields around them.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'nutritionOverride', 'source', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1435,6 +1435,7 @@ service cloud.firestore {
           && isPositiveAmount(data.servings)
           && isNullOrMinutes(data.get('prepMinutes', null))
           && isNullOrMinutes(data.get('cookMinutes', null))
+          && isNutrition(data.get('nutritionOverride', null))
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
           && data.steps is list && data.steps.size() <= 60

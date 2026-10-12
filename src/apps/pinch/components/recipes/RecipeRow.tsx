@@ -1,10 +1,17 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
+import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
+import {
+  selectRecipeNutrition,
+  selectShowNutrition,
+} from '@apps/pinch/store/selectors';
 import type { Recipe, RecipeCost } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import {
   formatMinutes,
   formatServings,
@@ -18,6 +25,8 @@ interface RecipeRowProps {
 }
 
 function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
+  const nutrition = useAppSelector(selectRecipeNutrition).get(recipe.id);
+  const show = useAppSelector(selectShowNutrition);
   const total = getTotalMinutes(recipe);
   const detail = [
     formatServings(recipe.servings),
@@ -53,6 +62,11 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
               {formatCents(Math.round(cost.perServingCents))} / serving
             </span>
             {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
+          </span>
+        )}
+        {nutrition && hasShownValue(nutrition.values, show) && (
+          <span className='text-muted-foreground block truncate text-xs font-normal'>
+            <NutritionLine values={nutrition.values} show={show} /> per serving
           </span>
         )}
       </span>

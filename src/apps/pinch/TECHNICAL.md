@@ -287,16 +287,17 @@ Files: `catalog/catalogIngredients.ts`, `catalog/catalogFamilies.ts`, `catalog/c
 | Ingredient unit cost | default (else first non-archived) product: `priceCents ÷ sizeInBase`, per base unit of the product's dimension | `utils/unitCost.ts` |
 | Line cost | recipe line amount bridged into the product's dimension × unit cost; otherwise a `NOT_COMPARABLE` gap; no product → `NO_PRODUCT` | `utils/recipeMath.ts` |
 | Recipe cost | sum of the priced lines; `{ totalCents, perServingCents, leftOut: Gap[], lines }` (`lines`: each recipe line's own cost or gap, for the drawer); `null` totals when nothing could be priced | `utils/recipeMath.ts` |
-| Recipe nutrition per serving | per metric: override if non-null, else sum of line grams × `per100g ÷ 100` ÷ servings; a line with no per-100 g value or no gram bridge adds a `NO_NUTRITION` gap for that metric | `utils/recipeMath.ts` |
-| Ingredient item per serving | serving size (record, else catalog, else 100 g) through the same bridge: cost and nutrition of one serving | `utils/mealMath.ts` |
+| Recipe nutrition per serving | per metric: override if non-null, else sum of line grams × `per100g ÷ 100` ÷ servings; a line with no per-100 g value or no gram bridge is left out of that metric (never counted as 0) and adds a `NO_NUTRITION` gap for it | `utils/nutritionMath.ts` |
+| Ingredient item per serving | serving size (record, else catalog, else 100 g) through the same bridge: cost and nutrition of one serving | `utils/mealMath.ts`, `utils/nutritionMath.ts` |
+| Meal nutrition | sum of the items' nutrition (`getMealNutrition`); a metric is known when some item knows it, and the ingredients left out are reported | `utils/nutritionMath.ts` |
 | Item cost | `servings ×` (recipe per-serving cost or ingredient per-serving cost) | `utils/mealMath.ts` |
 | Planned meal totals | sum of items; for a frozen meal, the snapshot instead | `utils/mealMath.ts` |
 | Day totals | planned meals for a day key, inside the month pass | `selectMonthStats(...).byDay` |
-| Month stats | `{ spendCents, mealsPriced, avgPerMealCents, nutritionTotals, proteinPriceCentsPerGram, leftOut }` over the shown month | `selectMonthStats(monthKey)` |
+| Month stats | `{ spendCents, mealsPriced, avgPerMealCents, dailyNutrition, proteinCentsPerGram, nutritionMissing, leftOut }` over the shown month; `byDay` and `byType` each carry their `nutrition` | `selectMonthStats(monthKey)` |
 | Gaps | the union of left-out ingredients for a scope, minus dismissed ones | `utils/gaps.ts` |
 | Day key | `toDateInputValue(date)` for a stored date; `toLocalDateInputValue(cell.getTime())` for a Dreamer UI cell | `utils/dayKeys.ts` |
 
-*Average per meal* divides month spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
+*Daily nutrition* is the month's total of a metric divided by the number of days that know it, so a day with nothing known doesn't pull it toward zero. *Average per meal* divides month spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
 
 ---
 
@@ -637,7 +638,7 @@ No `functions/src/apps/pinch/` in the MVP.
 
 Each has a default the design already assumes; the owner can change any of them cheaply now and expensively later.
 
-1. **Store logo source: Logo.dev is wired, its terms are still to be confirmed.** Logos load by domain in the person's browser behind `storeLogoUrl` (enabled only when `VITE_STORE_LOGO_TOKEN` is set, with a letter-tile fallback and `no-referrer`). Logo.dev's Community plan needs attribution for commercial projects and says logos remain their owners' trademarks; the plan's terms and the attribution wording were not verified from the sandbox. Gate before launch: read them, then add the attribution row (Settings' About, Issue 13) or leave the token unset. Fallback if it doesn't fit: letter tiles plus person-uploaded images only.
+1. **Store logo source: Logo.dev is wired, its terms are still to be confirmed.** Logos load by domain in the person's browser behind `storeLogoUrl` (enabled only when `VITE_STORE_LOGO_TOKEN` is set, with a letter-tile fallback and `no-referrer`). Logo.dev's Community plan needs attribution for commercial projects and says logos remain their owners' trademarks; the plan's terms and the attribution wording were not verified from the sandbox. Gate before launch: read them, then keep or reword the attribution line already in Settings' About row, or leave the token unset. Fallback if it doesn't fit: letter tiles plus person-uploaded images only.
 2. **USDA FoodData Central licence** is to be confirmed before the catalog ships (the page could not be read while planning). Defaults to FDC's public-domain/CC0 position; the generated catalog keeps a `source` note per row.
 3. **Ingredient icon set.** Fluent Emoji (MIT), Noto Emoji (Apache-2.0) or Twemoji (CC-BY-4.0). The design assumes one set vendored with its notice; the choice affects the About row's wording only.
 4. **The calendar grid's first weekday: decided.** Dreamer UI's `Calendar` has no week-start option (its weekday header and `daysInView` are Sunday-first), so the month grid starts on Sunday and Monday-to-Sunday applies to week copies only. Building a Monday-first grid by hand would give up the shared `Calendar`; it is cheap to revisit if the owner wants it.

@@ -166,7 +166,8 @@ export interface PlannedMeal {
 }
 
 export type KitchenView = 'yours' | 'all';
-export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE';
+export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
+export type NutritionMetric = keyof NutritionValues;
 export type RecipesView = 'recipes' | 'meals';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
@@ -245,6 +246,8 @@ export interface Recipe {
   coverPath: string | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** Per serving; a null metric falls back to the value added up from the ingredients. */
+  nutritionOverride: NutritionValues | null;
   source: RecipeSource;
   createdAt: number;
   updatedAt: number;

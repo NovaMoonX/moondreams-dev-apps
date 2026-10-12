@@ -1,11 +1,18 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { doc, runTransaction, writeBatch } from 'firebase/firestore';
+import {
+  deleteField,
+  doc,
+  FieldPath,
+  runTransaction,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
+import { getGapKey } from '@apps/pinch/utils/gaps';
 import type {
   Family,
   IngredientRecord,
@@ -120,6 +127,18 @@ export const saveIngredient = createAsyncThunk<
           updatedAt: now,
         };
         batch.set(kitchenDoc(uid, 'ingredients', id), record);
+      }
+      const closedKey = getGapKey({ kind: 'NO_NUTRITION', ingredientId: id });
+      if (
+        closedKey in (getState().pinch.settings.settings?.dismissedNudges ?? {})
+      ) {
+        batch.update(
+          doc(db, 'apps', 'pinch', 'kitchens', uid),
+          'updatedAt',
+          now,
+          new FieldPath('dismissedNudges', closedKey),
+          deleteField(),
+        );
       }
       await batch.commit();
     } catch (error) {

@@ -5,6 +5,7 @@ import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { MEAL_TYPES } from '@apps/pinch/constants';
 import type { PlannedMeal, Product, ResolvedFamily } from '@apps/pinch/types';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
+import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getMonthStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
@@ -200,13 +201,31 @@ export const selectPlannedByDay = createSelector(
   },
 );
 
-/** What a meal's cost is computed from, bundled so a component reads one value. */
+/** Every recipe's nutrition per serving, computed once per change of recipes or ingredients. */
+export const selectRecipeNutrition = createSelector(
+  [selectRecipes, selectIngredientsById],
+  (recipes, ingredientsById) =>
+    new Map(
+      recipes.map((recipe) => [
+        recipe.id,
+        getRecipeNutrition(recipe, ingredientsById),
+      ]),
+    ),
+);
+
+/** What a meal's cost and nutrition are computed from, bundled so a component reads one value. */
 export const selectCostContext = createSelector(
-  [selectRecipeCosts, selectIngredientsById, selectDefaultProducts],
-  (recipeCosts, ingredientsById, defaultProducts) => ({
+  [
+    selectRecipeCosts,
+    selectIngredientsById,
+    selectDefaultProducts,
+    selectRecipeNutrition,
+  ],
+  (recipeCosts, ingredientsById, defaultProducts, recipeNutrition) => ({
     recipeCosts,
     ingredientsById,
     defaultProducts,
+    recipeNutrition,
   }),
 );
 
@@ -232,3 +251,14 @@ export const selectMonthStats = createSelector(
   (plannedMeals, context, monthKey) =>
     getMonthStats(plannedMeals, monthKey, context),
 );
+
+const NO_SWITCHES = {
+  calories: false,
+  protein: false,
+  carbs: false,
+  fat: false,
+};
+
+/** Which nutrition metrics the person has switched on; all off until they do. */
+export const selectShowNutrition = (state: RootState) =>
+  state.pinch.settings.settings?.showNutrition ?? NO_SWITCHES;
