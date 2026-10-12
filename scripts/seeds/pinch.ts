@@ -73,12 +73,6 @@ const SEED_INGREDIENTS = [
     catalogId: 'cat-jasmine-rice',
     defaultProductId: 'seed-pinch-product-rice-costco',
   },
-  {
-    ...baseIngredient,
-    id: 'cat-cheddar',
-    catalogId: 'cat-cheddar',
-    defaultProductId: 'seed-pinch-product-cheddar-green-market',
-  },
 ];
 
 const SEED_PRODUCTS = [
@@ -110,17 +104,6 @@ const SEED_PRODUCTS = [
     priceCents: 1499,
     sizeAmount: 20,
     sizeUnit: 'LB',
-    url: null,
-  },
-  // Sold by the block, with no weight each, so a cheddar line in ounces can't be compared with it.
-  {
-    id: 'seed-pinch-product-cheddar-green-market',
-    ingredientId: 'cat-cheddar',
-    storeId: 'seed-pinch-store-green-market',
-    label: 'Block',
-    priceCents: 549,
-    sizeAmount: 1,
-    sizeUnit: 'EACH',
     url: null,
   },
   {
