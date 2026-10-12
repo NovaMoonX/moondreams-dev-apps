@@ -1,3 +1,5 @@
+import { deflateSync } from 'node:zlib';
+
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -64,6 +66,80 @@ const SEED_INGREDIENTS = [
   },
 ];
 
+const CATALOG_STORE_SEEDS = [
+  { id: 'cat-store-walmart', name: 'Walmart' },
+  { id: 'cat-store-costco', name: 'Costco' },
+];
+const CUSTOM_STORE = {
+  id: 'seed-pinch-store-green-market',
+  name: 'Green Market',
+};
+
+/** A solid-colour square PNG, so the seeded store has a real image without any asset file. */
+function makeSquarePng(
+  size: number,
+  [red, green, blue]: [number, number, number],
+) {
+  const row = Buffer.concat([
+    Buffer.from([0]),
+    Buffer.from(Array.from({ length: size }, () => [red, green, blue]).flat()),
+  ]);
+  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  const crcTable = Array.from({ length: 256 }, (_, n) =>
+    Array.from({ length: 8 }).reduce<number>(
+      (c) => (c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1),
+      n,
+    ),
+  );
+  const crc = (buffer: Buffer) =>
+    (buffer.reduce(
+      (c, byte) => crcTable[(c ^ byte) & 0xff] ^ (c >>> 8),
+      0xffffffff,
+    ) ^
+      0xffffffff) >>>
+    0;
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const checksum = Buffer.alloc(4);
+    checksum.writeUInt32BE(crc(body));
+    return Buffer.concat([length, body, checksum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** Uploads the seeded store's image to the Storage emulator; a bucket the app isn't configured for just leaves the letter tile. */
+async function uploadSeedImage(path: string) {
+  const bucket =
+    process.env.STORAGE_BUCKET ??
+    process.env.VITE_FIREBASE_STORAGE_BUCKET ??
+    'moondreams-dev-apps.firebasestorage.app';
+  const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+  const response = await fetch(
+    `http://${host}/v0/b/${bucket}/o?name=${encodeURIComponent(path)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/png', Authorization: 'Bearer owner' },
+      body: makeSquarePng(64, [86, 140, 76]),
+    },
+  ).catch(() => null);
+  if (!response?.ok) {
+    console.warn(
+      'Pinch seed: could not upload the store image to the Storage emulator, so Green Market shows a letter tile.',
+    );
+  }
+}
+
 // Alex's own kitchen; every other fixture account starts with an empty one.
 export async function seedPinch(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -74,7 +150,28 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     .doc(alex.uid);
   const createdAt = context.now - 14 * DAY_MS;
 
+  const customImagePath = `apps/pinch/kitchens/${alex.uid}/stores/${CUSTOM_STORE.id}/logo.webp`;
+  await uploadSeedImage(customImagePath);
+
   await Promise.all([
+    ...CATALOG_STORE_SEEDS.map((store) =>
+      kitchenRef.collection('stores').doc(store.id).set({
+        id: store.id,
+        name: store.name,
+        catalogStoreId: store.id,
+        imagePath: null,
+        createdAt,
+        updatedAt: createdAt,
+      }),
+    ),
+    kitchenRef.collection('stores').doc(CUSTOM_STORE.id).set({
+      id: CUSTOM_STORE.id,
+      name: CUSTOM_STORE.name,
+      catalogStoreId: null,
+      imagePath: customImagePath,
+      createdAt,
+      updatedAt: createdAt,
+    }),
     ...SEED_FAMILIES.map((family) =>
       kitchenRef
         .collection('families')
@@ -91,6 +188,10 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: SEED_FAMILIES.length + SEED_INGREDIENTS.length,
+    firestoreDocuments:
+      SEED_FAMILIES.length +
+      SEED_INGREDIENTS.length +
+      CATALOG_STORE_SEEDS.length +
+      1,
   };
 }

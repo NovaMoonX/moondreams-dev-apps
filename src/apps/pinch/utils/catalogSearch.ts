@@ -109,3 +109,19 @@ export function groupByFamily(
 
   return result;
 }
+
+/** Items whose name contains every word typed, in the order given; an empty query keeps them all. */
+export function searchByName<T extends { name: string }>(
+  items: T[],
+  query: string,
+): T[] {
+  const words = normalize(query).split(' ').filter(Boolean);
+  const result =
+    words.length === 0
+      ? items
+      : items.filter((item) =>
+          words.every((word) => normalize(item.name).includes(word)),
+        );
+
+  return result;
+}
