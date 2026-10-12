@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { formatCents } from '@/utils/moneyUtils';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import type { Recipe, RecipeCost } from '@apps/pinch/types';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatMinutes,
   formatServings,
@@ -21,12 +22,11 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
   const detail = [
     formatServings(recipe.servings),
     total === null ? null : formatMinutes(total),
-    cost?.perServingCents == null
-      ? null
-      : `${formatCents(Math.round(cost.perServingCents))} / serving`,
   ]
     .filter(Boolean)
     .join(' · ');
+
+  const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
 
   return (
     <Button
@@ -47,6 +47,14 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {detail}
         </span>
+        {cost?.perServingCents != null && (
+          <span className='text-muted-foreground block text-xs font-normal'>
+            <span className='whitespace-nowrap'>
+              {formatCents(Math.round(cost.perServingCents))} / serving
+            </span>
+            {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground h-5 w-5 shrink-0'
