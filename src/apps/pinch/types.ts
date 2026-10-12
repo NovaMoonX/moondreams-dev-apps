@@ -98,9 +98,13 @@ export interface ResolvedFamily {
 }
 
 export type KitchenView = 'yours' | 'all';
+export type RecipesView = 'recipes' | 'meals';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
-export type PinchSubview = { kind: 'stores' } | { kind: 'products' };
+export type PinchSubview =
+  | { kind: 'stores' }
+  | { kind: 'products' }
+  | { kind: 'recipe'; id: string | null };
 
 export interface CatalogStore {
   /** `cat-store-` plus the slug; also the document id of the person's own copy. */
@@ -135,6 +139,34 @@ export interface Product {
   sizeUnit: Unit;
   /** https only. */
   url: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE';
+
+/** One line of a recipe: it names the ingredient and an amount, never a store or product. */
+export interface RecipeIngredient {
+  /** A row id, so edits and reordering keep stable keys. */
+  id: string;
+  ingredientId: string;
+  amount: number;
+  unit: Unit;
+  note: string | null;
+}
+
+export interface Recipe {
+  id: string;
+  title: string;
+  description: string | null;
+  servings: number;
+  prepMinutes: number | null;
+  cookMinutes: number | null;
+  /** Storage path of the cover image. */
+  coverPath: string | null;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  source: RecipeSource;
   createdAt: number;
   updatedAt: number;
 }

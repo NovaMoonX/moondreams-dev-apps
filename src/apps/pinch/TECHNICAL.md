@@ -160,7 +160,7 @@ interface Store {
 }
 ```
 
-A well-known store becomes a `Store` document the first time a product uses it, so every product points at a store the person owns. Its logo is derived from the catalog entry's domain; a person's own store shows `imagePath` (its download URL is a TanStack query keyed by path and `updatedAt`, `storeImageQueryOptions`; `useStoragePhoto` only uploads and deletes), else a letter tile.
+A well-known store becomes a `Store` document the first time a product uses it, so every product points at a store the person owns. Its logo is derived from the catalog entry's domain; a person's own store shows `imagePath` (its download URL is a TanStack query keyed by path and `updatedAt`, `storageImageQueryOptions`; `useStoragePhoto` only uploads and deletes), else a letter tile.
 
 ### 5. `Product` — `…/products/{id}`
 

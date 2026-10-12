@@ -5,6 +5,7 @@ import type {
   Family,
   IngredientRecord,
   Product,
+  Recipe,
   Store,
 } from '@apps/pinch/types';
 
@@ -61,6 +62,19 @@ export function startProductsListener(
     kitchenCollection(uid, 'products'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Product)),
+    onError,
+  );
+}
+
+export function startRecipesListener(
+  uid: string,
+  onChange: (recipes: Recipe[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'recipes'),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as Recipe)),
     onError,
   );
 }

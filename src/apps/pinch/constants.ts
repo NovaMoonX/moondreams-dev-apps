@@ -1,4 +1,10 @@
-import type { Dimension, KitchenView, PinchTab, Unit } from '@apps/pinch/types';
+import type {
+  Dimension,
+  KitchenView,
+  PinchTab,
+  RecipesView,
+  Unit,
+} from '@apps/pinch/types';
 
 export const PINCH_TABS: PinchTab[] = ['calendar', 'recipes', 'kitchen'];
 export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
@@ -79,3 +85,18 @@ export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
 export const STORE_IMAGE_MAX_DIMENSION = 512;
 
 export const MAX_PRICE_CENTS = 100_000_000;
+
+export const MAX_RECIPE_INGREDIENTS = 60;
+export const MAX_RECIPE_STEPS = 60;
+export const MAX_RECIPE_TITLE_LENGTH = 200;
+export const MAX_STEP_LENGTH = 2000;
+export const MAX_NOTE_LENGTH = 200;
+export const MAX_MINUTES = 100_000;
+/** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
+export const RECIPE_COVER_MAX_DIMENSION = 1280;
+
+export const RECIPES_VIEWS: RecipesView[] = ['recipes', 'meals'];
+export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
+  recipes: 'Recipes',
+  meals: 'Meals',
+};

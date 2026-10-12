@@ -11,6 +11,7 @@ import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
+import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import BottomNav from '@apps/pinch/components/shell/BottomNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
@@ -96,8 +97,15 @@ function Pinch() {
     <PinchOverlayContext.Provider value={overlayContext}>
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
+      {subview?.kind === 'recipe' && (
+        <RecipeSubview uid={user.uid} recipeId={subview.id} />
+      )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
-      <div className={join(subview !== null && 'hidden')}>
+      <div
+        className={join(
+          subview !== null && subview.kind !== 'recipe' && 'hidden',
+        )}
+      >
         <div className='page pb-28'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>{getScreen()}</div>
           <BottomNav value={activeTab} onChange={setActiveTab} />
