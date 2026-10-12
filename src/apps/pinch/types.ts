@@ -116,6 +116,46 @@ export interface KitchenSettings {
   updatedAt: number;
 }
 
+export type MealType =
+  'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
+export type ItemKind = 'RECIPE' | 'INGREDIENT';
+
+/** One row of a meal: a recipe or an ingredient, and how many servings of it. */
+export interface MealItem {
+  id: string;
+  kind: ItemKind;
+  /** A recipe id or an ingredient id. */
+  refId: string;
+  /** Above zero; halves allowed. */
+  servings: number;
+}
+
+/** What a past meal cost, written once after its day so later price changes don't rewrite history. */
+export interface PlannedSnapshot {
+  frozenAt: number;
+  costCents: number | null;
+  leftOutCount: number;
+  nutrition: NutritionValues;
+  lines: { itemId: string; costCents: number | null }[];
+}
+
+/** A meal on a day: its own copy of the items, so editing a saved meal never touches planned days. */
+export interface PlannedMeal {
+  id: string;
+  /** UTC midnight of the planned day (a date-only value). */
+  date: number;
+  mealType: MealType;
+  /** The saved meal's name when it came from one. */
+  name: string | null;
+  sourceMealId: string | null;
+  items: MealItem[];
+  /** Every recipe and ingredient id in `items`, for the "in use" check. */
+  refIds: string[];
+  snapshot: PlannedSnapshot | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type KitchenView = 'yours' | 'all';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE';
 export type RecipesView = 'recipes' | 'meals';
@@ -124,7 +164,8 @@ export type RecipesView = 'recipes' | 'meals';
 export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
-  | { kind: 'recipe'; id: string | null };
+  | { kind: 'recipe'; id: string | null }
+  | { kind: 'plan'; dayKey: string; mealType: MealType | null };
 
 export interface CatalogStore {
   /** `cat-store-` plus the slug; also the document id of the person's own copy. */
