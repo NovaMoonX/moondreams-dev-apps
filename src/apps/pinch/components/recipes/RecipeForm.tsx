@@ -172,7 +172,9 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
               amount <= MAX_SERVING_AMOUNT;
             const amountLabel = isAmountValid
               ? `${Math.round(amount * 100) / 100} ${UNIT_LABELS[row.unit]}`
-              : 'Add an amount';
+              : row.amount.trim() === ''
+                ? 'Add an amount'
+                : 'Check the amount';
             return (
               <li key={row.id} className='py-1'>
                 <div className='flex items-center gap-1'>

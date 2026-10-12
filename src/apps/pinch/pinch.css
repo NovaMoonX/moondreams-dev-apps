@@ -23,6 +23,8 @@ html.pinch-theme {
   --radius-2xl: 1.75rem;
 
   --pinch-drizzle: var(--color-orange-600);
+  --pinch-drizzle-fill: var(--color-orange-700);
+  --pinch-drizzle-fill-foreground: var(--color-white);
 
   --pinch-meal-breakfast: var(--color-amber-400);
   --pinch-meal-lunch: var(--color-lime-500);
@@ -46,6 +48,8 @@ html.pinch-theme.dark {
   --color-card: oklch(0.2 0.005 60);
 
   --pinch-drizzle: var(--color-orange-400);
+  --pinch-drizzle-fill: var(--color-orange-400);
+  --pinch-drizzle-fill-foreground: oklch(0.18 0.006 60);
 
   --pinch-meal-breakfast: var(--color-amber-300);
   --pinch-meal-lunch: var(--color-lime-400);

@@ -46,7 +46,8 @@ function MealBarCell({
       <span
         className={join(
           'flex h-5 min-w-5 items-center justify-center self-start rounded-full px-1 text-[11px] font-semibold',
-          isToday && 'bg-[var(--pinch-drizzle)] text-white',
+          isToday &&
+            'bg-[var(--pinch-drizzle-fill)] text-[var(--pinch-drizzle-fill-foreground)]',
         )}
       >
         {date.getDate()}

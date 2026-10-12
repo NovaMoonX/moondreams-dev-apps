@@ -167,6 +167,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         </div>
         {gap.kind === 'NO_PRODUCT' && (
           <StorePicker
+            key={gap.ingredientId}
             uid={uid}
             value={row.storeId}
             onChange={(storeId) => update(gap.ingredientId, gap, { storeId })}
