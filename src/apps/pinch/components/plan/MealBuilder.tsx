@@ -115,6 +115,7 @@ function MealBuilder({
   const [name, setName] = useState(existingMeal?.name ?? '');
   const [saveAsMeal, setSaveAsMeal] = useState(false);
   const [newMealName, setNewMealName] = useState('');
+  const [createdMealId, setCreatedMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,9 +196,15 @@ function MealBuilder({
         return;
       }
       if (wantsSaveAsMeal) {
-        await dispatch(
-          saveMeal({ uid, id: null, name: newMealName, items: rows() }),
+        const savedId = await dispatch(
+          saveMeal({
+            uid,
+            id: createdMealId,
+            name: newMealName,
+            items: rows(),
+          }),
         ).unwrap();
+        setCreatedMealId(savedId);
       }
       if (existingPlanned) {
         await dispatch(
@@ -389,11 +396,12 @@ function MealBuilder({
                     size='icon'
                     aria-label={`Remove ${title}`}
                     className='size-10 shrink-0'
-                    onClick={() =>
+                    onClick={() => {
+                      if (items.length === 1) setSource(null);
                       setItems((current) =>
                         current.filter((row) => row.id !== item.id),
-                      )
-                    }
+                      );
+                    }}
                   >
                     <X className='h-4 w-4' aria-hidden='true' />
                   </Button>
