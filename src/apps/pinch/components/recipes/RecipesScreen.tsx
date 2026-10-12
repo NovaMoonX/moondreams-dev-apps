@@ -32,7 +32,8 @@ function RecipesScreen() {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const trimmed = query.trim();
+  const hasSearch = recipes.length >= LIST_SEARCH_THRESHOLD;
+  const trimmed = hasSearch ? query.trim() : '';
   const shown = useMemo(
     () =>
       searchByName(
@@ -103,7 +104,7 @@ function RecipesScreen() {
         onChange={setView}
         isThin
       />
-      {view === 'recipes' && recipes.length >= LIST_SEARCH_THRESHOLD && (
+      {view === 'recipes' && hasSearch && (
         <SearchInput
           value={query}
           onChange={setQuery}
