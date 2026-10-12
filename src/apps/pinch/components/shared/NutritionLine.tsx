@@ -6,9 +6,6 @@ interface NutritionLineProps {
   isCompact?: boolean;
 }
 
-export const hasNutrition = (values: NutritionValues) =>
-  Object.values(values).some((value) => value !== null);
-
 const formatAmount = (value: number) => String(Math.round(value * 10) / 10);
 
 /** The nutrition a person can see: the metrics that have a value, per whatever the caller says it is per. */

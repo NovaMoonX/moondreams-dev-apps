@@ -2,9 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
-import NutritionLine, {
-  hasNutrition,
-} from '@apps/pinch/components/shared/NutritionLine';
+import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import type { ResolvedIngredient } from '@apps/pinch/types';
 import { hasNutrition } from '@apps/pinch/utils/nutrition';
 
