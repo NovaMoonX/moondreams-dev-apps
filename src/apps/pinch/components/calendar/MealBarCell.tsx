@@ -18,7 +18,7 @@ interface MealBarCellProps {
   isOutsideMonth: boolean;
   /** The hover card is for a computer; a phone's cell is just the face, with no popover built behind it. */
   hasPeek: boolean;
-  /** On a computer a cell has room to name each meal's first item; a phone's shows only the colour bar. */
+  /** A wide screen's cell is tall enough to name each meal's first item; narrower screens show only the colour bar. */
   getMealTitle: ((meal: PlannedMeal) => string) | null;
   /** Controlled by the calendar so only one day's peek is ever open. */
   isPeekOpen: boolean;

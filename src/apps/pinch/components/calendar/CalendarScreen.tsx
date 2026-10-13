@@ -63,7 +63,9 @@ function CalendarScreen({
   );
   const now = useNow();
   const todayKey = getCellDayKey(new Date(now));
-  const isPhone = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
+  const isPhone = isBelow('sm');
+  const isWide = !isBelow('lg');
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const getMealTitle = (meal: PlannedMeal) =>
@@ -236,7 +238,7 @@ function CalendarScreen({
               isToday={isToday}
               isOutsideMonth={dayKey.slice(0, 7) !== shownMonth}
               hasPeek={!isPhone}
-              getMealTitle={isPhone ? null : getMealTitle}
+              getMealTitle={isWide ? getMealTitle : null}
               isPeekOpen={peekDayKey === dayKey}
               onPeekOpenChange={(isOpen) =>
                 setPeekDayKey((current) => {
