@@ -1,6 +1,6 @@
 # Pinch — Technical Design Document
 
-Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. A-List's `TECHNICAL.md` is the format reference. Like A-List, **every byte of Pinch data is private to one signed-in person**, so there is no invite flow, no roles and no cross-user concurrency. The design weight sits on four things instead: a static ingredient catalog merged with the person's own records, the quantity and cost math, the calendar read model, and an AI reader that fills recipe forms.
+Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. A-List's `TECHNICAL.md` is the format reference. Like A-List, **every byte of Pinch data is private to one signed-in person**, so there is no invite flow, no roles and no cross-user concurrency. The design weight sits on four things instead: a static ingredient catalog merged with the person's own records, the quantity and cost math, the calendar read model, and an AI reader that fills recipe forms from text, a photo or a web page.
 
 ## Decisions made in this document
 
@@ -16,8 +16,8 @@ These shape everything below. Each is also listed under [Open questions](#open-q
 8. **Cost and nutrition are computed, never stored**, except the frozen snapshot of a past meal. Every derived number returns what it left out, so the UI can say so.
 9. **Cost exists only for comparable amounts.** A recipe amount and a product size must share a dimension (mass, volume, count) or be bridged by a conversion the catalog or the person has supplied. Anything else is left out of totals and surfaced as a gap.
 10. **Gaps are derived, not stored.** A "nudge" is a pure function of the data (a missing price, size, nutrition value or conversion on an ingredient that something uses). Only the person's dismissals are stored.
-11. **Dates are date-only.** A planned meal's `date` is UTC midnight of the day picked (`fromDateInputValue`), shown with `formatDateUTC`, and keyed on the calendar by `toDateInputValue`. Weeks run Monday to Sunday for week copies; the month grid itself starts on Sunday (open question 4).
-12. **No Cloud Functions in the MVP.** The AI reader is the repo's shared client-side Firebase AI setup, store logos use a publishable browser token, and nothing needs a server secret. `functions/` and `functions/README.md` are untouched.
+11. **Dates are date-only.** A planned meal's `date` is UTC midnight of the day picked (`fromDateInputValue`), shown with `formatDateUTC`, and keyed on the calendar by `toDateInputValue`. Weeks run Sunday to Saturday, in the month grid and the week view alike (open question 4).
+12. **One shared Cloud Function, no Pinch-specific ones.** The AI reader is the repo's shared client-side Firebase AI setup and store logos use a publishable browser token, so nothing needs a server secret. Reading a recipe from a link needs a server to fetch the page, so it calls the shared `fetchPageContent` callable (`functions/src/linkMetadata/fetchPageContent.ts`, listed in `functions/README.md`); nothing under `functions/` is Pinch's own.
 13. **Per-person data nests under `apps/pinch/kitchens/{uid}/…`.** A `kitchens` root (not `users/{uid}`) leaves room for a future shared kitchen to be a read grant on this document, not a data move.
 
 ---
@@ -58,7 +58,7 @@ export type Unit =
   | 'EACH';                                          // count
 export type Dimension = 'MASS' | 'VOLUME' | 'COUNT';
 export type NutritionMetric = 'calories' | 'protein' | 'carbs' | 'fat';
-export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE';
+export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE' | 'AI_LINK';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 ```
 
@@ -83,16 +83,15 @@ export const UNIT_TO_BASE: Record<Unit, number> = {   // grams for MASS, millili
 };
 export const UNIT_LABELS: Record<Unit, string> = { /* 'g', 'kg', 'oz', 'lb', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'fl oz', 'pinch', 'each' */ };
 export const NUTRITION_METRICS: NutritionMetric[] = ['calories', 'protein', 'carbs', 'fat'];
-export const WEEK_STARTS_ON = 1;                  // Monday
+export const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
 export const MAX_RECIPE_INGREDIENTS = 60;
 export const MAX_RECIPE_STEPS = 60;
 export const MAX_MEAL_ITEMS = 10;                // the most items a rule can check by index (a 12-item check exceeds the rules evaluator's limit)
 export const MAX_PASTE_CHARS = 20_000;            // text the AI reader accepts
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // photo, screenshot or PDF
-export const MAX_COPIED_INGREDIENTS = 500;
 export const LIST_SEARCH_THRESHOLD = 8;           // a list gets a search from this many rows
 export const MAX_DISMISSED_NUDGES = 500;
-export const MONTH_WINDOW_PADDING = 1;            // months loaded on each side of the one shown
+export const MONTH_WINDOW_PADDING = 2;            // months loaded on each side of the window's centre
 ```
 
 ### 1. `KitchenSettings` — `apps/pinch/kitchens/{uid}`
@@ -121,7 +120,7 @@ interface IngredientRecord {
   catalogId: string | null;                     // immutable; null for a custom ingredient
   name: string | null;                          // required for custom; null means "use the catalog name"
   familyId: string | null;                      // a catalog family id (cat-fam-…) or a Family id; null = its own family
-  iconKey: string | null;                       // null = matched from the name, falling back to the jar
+  iconKey: string | null;                       // @deprecated: icons were removed; old documents may carry one, new writes null
   nutritionPer100g: NutritionValues | null;     // null = the catalog's values (or none, for custom)
   servingAmount: number | null;                 // what "1 serving" of this ingredient is (null = catalog / 100 g)
   servingUnit: Unit | null;
@@ -268,7 +267,6 @@ interface CatalogIngredient {
   serving: { amount: number; unit: Unit };     // a sensible "1 serving"
   gramsPerMl: number | null;
   gramsEach: number | null;
-  iconKey: string | null;
 }
 interface CatalogFamily { id: string; name: string }
 interface CatalogStore { id: string; name: string; domain: string }   // 'walmart.com'
@@ -291,12 +289,12 @@ Files: `catalog/catalogIngredients.ts`, `catalog/catalogFamilies.ts`, `catalog/c
 | Meal nutrition | sum of the items' nutrition (`getMealNutrition`); a metric is known when some item knows it, and the ingredients left out are reported | `utils/nutritionMath.ts` |
 | Item cost | `servings ×` (recipe per-serving cost or ingredient per-serving cost) | `utils/mealMath.ts` |
 | Planned meal totals | sum of items; for a frozen meal, the snapshot instead | `utils/mealMath.ts` |
-| Day totals | planned meals for a day key, inside the month pass | `selectMonthStats(...).byDay` |
-| Month stats | `{ spendCents, mealsPriced, avgPerMealCents, dailyNutrition, proteinCentsPerGram, nutritionMissing, leftOut }` over the shown month; `byDay` and `byType` each carry their `nutrition` | `selectMonthStats(monthKey)` |
+| Day totals | planned meals for a day key, inside the period pass | `selectPeriodStats(...).byDay` |
+| Period stats | `{ spendCents, mealsPriced, avgPerMealCents, dailyNutrition, proteinCentsPerGram, nutritionMissing, leftOut }` over the shown month, week or day (`getPeriodStats(range)`); `byDay` and `byType` each carry their `nutrition` | `selectPeriodStats(startKey, endKey)` |
 | Gaps | the union of left-out ingredients for a scope, minus dismissed ones | `utils/gaps.ts` |
 | Day key | `toDateInputValue(date)` for a stored date; `toLocalDateInputValue(cell.getTime())` for a Dreamer UI cell | `utils/dayKeys.ts` |
 
-*Daily nutrition* is the month's total of a metric divided by the number of days that know it, so a day with nothing known doesn't pull it toward zero. *Average per meal* divides month spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
+*Daily nutrition* is the period's total of a metric divided by the number of days that know it (for a single day, that day's own total), so a day with nothing known doesn't pull it toward zero. *Average per meal* divides the period's spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
 
 ---
 
@@ -329,7 +327,7 @@ Worked example: chicken breast, Walmart, $9.48 (948¢) for 3 lb → 3 × 453.592
 
 ### 2. Nutrition
 
-Per metric, independently. Ingredient values are per 100 g, so a line's grams (bridged as above) give `grams ÷ 100 × per100g[metric]`. A recipe's per-serving value is the sum over lines ÷ `servings`, unless `nutritionOverride[metric]` is non-null. An ingredient with `null` for a metric, or a line that can't be bridged to grams, adds a `NO_NUTRITION` gap for that metric only. Nutrition is computed for all four metrics whether or not they're switched on; the switches only choose what is rendered and which gaps are surfaced (`gaps.ts` takes the `showNutrition` switches).
+Per metric, independently. Ingredient values are per 100 g, so a line's grams (bridged as above) give `grams ÷ 100 × per100g[metric]`. A recipe's per-serving value is the sum over lines ÷ `servings`, unless `nutritionOverride[metric]` is non-null. An ingredient with `null` for a metric, or a line that can't be bridged to grams, adds a `NO_NUTRITION` gap for that metric only. Nutrition is computed for all four metrics whether or not they're switched on; the switches only choose what is rendered and which gaps are surfaced (`gaps.ts` takes the `showNutrition` switches). In the recipe form `NutritionReview` shows the calculated per-serving values as `MacroStats` tiles (with a warning tip when some ingredients have no nutrition), Edit turns the four numbers into inputs, a changed number is saved as that metric's `nutritionOverride` while a number equal to the calculated one stays derived (`null`), and "Reset to what we calculated" clears the overrides. `MacroStats` and `src/utils/macroUtils.ts` are the one place calories (whole numbers) and macros (grams) are formatted.
 
 ### 3. Copy-on-plan, edit semantics and the past
 
@@ -346,7 +344,7 @@ Per metric, independently. Ingredient values are per 100 g, so a line's grams (b
 
 `freezePastMeals` runs in two places: `useFreezePastDays` (from `Pinch.tsx`) once the kitchen has loaded and again for any unfrozen past meals a newly loaded month brings (each meal is submitted once per visit, so the list shrinking as writes land never starts another freeze of the same ones; a failed attempt isn't retried until the next visit or the next edit's freeze), and as the first step of every action that changes a value the math reads (`saveProduct`, `setDefaultProduct`, `removeProduct`, `saveRecipe`, `removeRecipe`, `saveIngredient`, `removeIngredient`, through `freezeLoadedPastMeals`). It never runs while a listener has failed, since the numbers it would freeze come from incomplete data. "Past" is the viewer's local day (`getLocalTodayDate`), the same clock the calendar shows as today, so an evening in a time zone behind UTC doesn't freeze the day still being planned. It finds loaded planned meals with `snapshot === null` and `date` before that, computes each snapshot from the current data, and writes `snapshot` field-scoped (no reads), in one `writeBatch` per 100 meals so each batch is one snapshot event for the listeners. A batch is all-or-nothing, so a refused one (a meal another device froze first, or deleted) falls back to one `updateDoc` per meal, settled independently: the refused meal is denied alone and doesn't stop the rest. The rule allows `snapshot` to change only from `null`, so a stale device can't overwrite history. A freeze that fails never blocks the edit that triggered it (`freezeBeforeEdit` swallows it): a person's own price or recipe change isn't held up by bookkeeping, and the cost is only that those meals stay open until the next freeze.
 
-A frozen meal still lists its items from the live recipes and ingredients (so a deleted-then-archived recipe still shows its title), but its totals come from the snapshot. A meal planned on a day that has already passed is frozen at once (`planMeal` writes the snapshot with the meal, unless a listener has failed, in which case it is left open and the load-time freeze takes it). A frozen meal can't be edited: `updatePlannedMeal` is a transaction that refuses it (a snapshot would no longer match its items), the planned meal view hides "Change items or servings", and the way to change it is to remove it and add it again. Frozen gaps still count in the "leaves out N ingredients" notes but are not offered as nudges, since a new price can't change history (`MonthStats.openLeftOut`).
+A frozen meal still lists its items from the live recipes and ingredients (so a deleted-then-archived recipe still shows its title), but its totals come from the snapshot. A meal planned on a day that has already passed is frozen at once (`planMeal` writes the snapshot with the meal, unless a listener has failed, in which case it is left open and the load-time freeze takes it). A frozen meal can't be edited: `updatePlannedMeal` is a transaction that refuses it (a snapshot would no longer match its items), the planned meal view hides "Change items or servings", and the way to change it is to remove it and add it again. Frozen gaps still count in what a total says it leaves out but are not offered as nudges, since a new price can't change history (`PeriodStats.openLeftOut`).
 
 *Honest limit:* a meal is frozen from the data on the first load after its day, not the data on the day itself. A price changed during a gap in use, in a month the window never loaded, can leak into history for meals that were never frozen. The freeze-before-edit step keeps this to meals older than the loaded window.
 
@@ -384,31 +382,16 @@ idle → reading(source) → draft(recipe, unread[]) → (person edits) → save
              └→ failed(message)    (always ends on idle for the next try; nothing was written)
 ```
 
-- Entry points: `RecipeAutofill` inside the recipe form. **Paste:** text up to `MAX_PASTE_CHARS`. **File:** a photo, screenshot or PDF up to `MAX_UPLOAD_BYTES` (JPG, PNG, WebP, HEIC, PDF through `getUploadMimeType`; images through `compressIngestionImage`).
-- `lib/extractRecipe.ts` exports `extractRecipeFromText(text)` and `extractRecipeFromFile(file)`. Both call the shared `generativeModel` from `src/lib/firebase/ai.ts` with a response schema: `{ title, servings, prepMinutes, cookMinutes, description, ingredients: [{ name, amount, unit, note }], steps: [string], unread: [string] }`, where `unit` is an enum of the app's unit labels. Files go as `inlineData` base64. Extraction calls are not cached and not Query-backed (non-idempotent), like the other extraction calls in the repo.
+- Entry point: a new recipe opens on `RecipeStart` (inside `RecipeSubview`, before the form), four ways side by side through the shared `MethodPicker`: **From text** (up to `MAX_PASTE_CHARS`), **From a photo** (a photo, screenshot or PDF up to `MAX_UPLOAD_BYTES`; JPG, PNG, WebP, HEIC, PDF through `getUploadMimeType`; images through `compressIngestionImage`), **From a link**, and **Write it yourself**, last and quieter. Editing an existing recipe goes straight to the form.
+- `lib/extractRecipe.ts` exports `extractRecipeFromText(text)`, `extractRecipeFromFile(file)` and `extractRecipeFromPage(page)`. All call the shared `generativeModel` from `src/lib/firebase/ai.ts` with a response schema: `{ title, servings, prepMinutes, cookMinutes, description, ingredients: [{ name, amount, unit, note }], steps: [string], unread: [string] }`, where `unit` is an enum of the app's unit labels. Files go as `inlineData` base64. Extraction calls are not cached and not Query-backed (non-idempotent), like the other extraction calls in the repo.
+- **From a link** fetches the page first through `fetchPageContent` (shared: `src/lib/pageContent/*`, `pageContentQueryOptions`, kept ten minutes and never persisted, so a retry of a failed reading doesn't refetch). The callable (`functions/src/linkMetadata/fetchPageContent.ts`) is signed-in only, takes http/https links only, uses the same private-network guard as `fetchLinkMetadata` (`safeFetch.ts`), returns `{ url, title, structured, text }` (the page's schema.org Recipe data as JSON or `null`, and its visible text, capped at 20,000 and 30,000 characters) and stores nothing. `extractRecipeFromPage` sends both to the model. The client maps a bad link, an unreadable page and a failed fetch to one warm sentence each.
 - The model output is **only a draft for the form.** `matchIngredient(name)` (`utils/ingredientMatch.ts`) resolves each ingredient name to an ingredient id against the person's custom ingredients first, then catalog names and aliases (normalized: lowercase, singular, punctuation stripped). No match → the row is marked "Add as new ingredient" and, if kept, creates a custom ingredient with that name in the same save as the recipe (one `writeBatch`).
 - The prompt tells the model the pasted text is data, not instructions, and asks it to list anything it could not read in `unread`; the draft never writes anything itself, so injected text can at most fill form fields the person reviews.
-- **The form is filled, never overwritten.** When a reading finishes, the form is read as it is then (not as it was when the reading started, so typing during the wait survives): the title, description, times and steps fill only while blank or off, ingredients are appended (a line whose ingredient is already a row is skipped), and servings fill only while still at the value the form started (or last filled) with, since a number has no blank. `normalizeExtractedRecipe` also cuts every value to the limits the form and `firestore.rules` enforce (title, description, note, step lengths, servings, minutes, counts), so a long answer can't leave Add disabled or fail the write.
+- **The reading becomes the form's starting values.** Because the start picker comes before the form, a finished reading is handed to `RecipeForm` as `initialRead` and `getDataFromExtracted` builds the form's initial data from it (a line whose ingredient is already a row is skipped; unmatched names become "Add as new ingredient" rows). The form then says what it was filled from and lists `unread`, and nothing is saved until the person saves. `normalizeExtractedRecipe` also cuts every value to the limits the form and `firestore.rules` enforce (title, description, note, step lengths, servings, minutes, counts), so a long answer can't leave Add disabled or fail the write.
 - A reading that finds no ingredients at all is a failure ("We couldn't find a recipe in that"). Errors map to one warm sentence each (busy, offline, unavailable, unreadable) and the detail is logged, never shown.
-- `source` is saved as `AI_TEXT` / `AI_FILE` when the draft came from the reader, `MANUAL` otherwise (even if the person edited it).
+- `source` is saved as `AI_TEXT` / `AI_FILE` / `AI_LINK` when the draft came from the reader, `MANUAL` otherwise (even if the person edited it).
 
-### 6. Markdown copy
-
-`utils/markdown/` has four builders — `recipeMarkdown`, `dayMarkdown`, `weekMarkdown`, `ingredientsMarkdown` — each a pure function of already-loaded data, built at the tap and copied through `copyToClipboard`. Rules, each decided field by field:
-
-| Copy | Included | Never included |
-|---|---|---|
-| Recipe | title, servings, times, ingredients with amounts, steps | prices, stores, products, nutrition overrides, cover |
-| Meal, planned meal | the heading, items with servings, the recipes' ingredient lists as nested bullets | prices, stores |
-| Day | the date, each meal type heading, items with servings, the recipes' ingredient lists as nested bullets | prices, stores |
-| Week | seven day blocks, Monday to Sunday, in the same shape as a day | prices, stores |
-| Ingredients | names grouped by family, for "your ingredients" (custom + adjusted + with a product + used in a recipe), capped at `MAX_COPIED_INGREDIENTS` ("and N more") | prices, stores, products, nutrition |
-
-The preview and Copy button are the shared `src/components/CopyPanel` (a generic text-plus-note component, so central from its first use), which copies through `copyToClipboard` so plain-HTTP pages still work and says so when the browser refuses. `npm run check:pinch-markdown` checks the builders (no `$`, cover or typed nutrition; `*`, `#`, `@` escaped; Monday-to-Sunday weeks; the "and N more" cap).
-
-User text (titles, descriptions, notes, steps, names) is collapsed to one line and escaped for Markdown: punctuation such as `*`, `#` and `@` gets a backslash (so a name that contains `@` is never linkified), and a leading `-` or `1.` is escaped so a typed step never becomes a list. The recipe format is also the one the AI reader reads back; the paste reader strips those backslashes before it reads, so a copy-then-paste round trip fills the form with the original words.
-
-### 7. Stock tracking (reserved for Next Steps)
+### 6. Stock tracking (reserved for Next Steps)
 
 The MVP data model leaves two things open on purpose: a future `stock` collection (`ingredientId`, `amount`, `unit`, `lastCountedAt`, `isTracked`) where a missing document means "not tracked", and `plannedMeals.madeAt` for mark-as-made. Neither is written in the MVP. Both arrive as new optional-by-default fields (`null`) with the legacy-document defaults the repo already requires.
 
@@ -487,7 +470,7 @@ Every slice resets on the shared `resetAllState`, so a user switch never shows t
 **Two listener tiers**, both under `store/listeners/` and started from `usePinchSync(uid, shownMonth)` called once from `Pinch.tsx` (the only orchestrator); no tab, panel or drawer has an `onSnapshot` of its own:
 
 1. **Signed-in user:** `startSettingsListener`, `startIngredientsListener`, `startFamiliesListener`, `startStoresListener`, `startProductsListener`, `startRecipesListener`, `startMealsListener` — `onSnapshot` of the kitchen document and each collection under `kitchens/{uid}`. One effect keyed on `uid`.
-2. **Visible window:** `startPlannedMealsListener(uid, windowKey, onChange)` — `onSnapshot` of `plannedMeals` where `date >= windowStart` and `date < windowEnd`, a single-field range covering the shown month plus `MONTH_WINDOW_PADDING` months on each side. The effect is keyed on the window key (`"2026-10"`), so paging months restarts it only when the window actually changes. The slice keeps the previous window's documents until the new snapshot lands, so the grid never blanks while paging.
+2. **Visible window:** `startPlannedMealsListener(uid, windowKey, onChange)` — `onSnapshot` of `plannedMeals` where `date >= windowStart` and `date < windowEnd`, a single-field range covering the window's centre month (`shownMonth`) plus `MONTH_WINDOW_PADDING` (2) months on each side. The effect is keyed on that month (`"2026-10"`). `CalendarScreen` moves the centre only when the view being shown reaches past the window (`isRangeInWindow`), so month paging restarts the listener about every second page and week or day paging seldom does. The slice keeps the previous window's documents until the new snapshot lands, so the grid never blanks while paging.
 
 **Loading gate.** `Pinch.tsx` shows a skeleton until every user-tier slice `isLoaded` and the first window has landed. An empty kitchen (no settings document, no records) is a valid state that renders the empty Calendar; there is no first-run blocking modal. The settings listener is waited for but its failure never shows the error screen (the nudges simply stay open), since it only carries an enhancement.
 
@@ -522,50 +505,50 @@ No cached document is ever written back whole. There is no cross-person concurre
 - `selectDefaultProducts` — `Map<ingredientId, Product>`
 - `selectRecipeCosts` — `Map<recipeId, RecipeCost>` computed once per change of recipes, products or ingredients
 - `selectPlannedByDay` — `Map<dayKey, PlannedMeal[]>` read by the Calendar's `renderCell` and the day drawer, so a cell never filters the list
-- `selectMonthStats(state, monthKey)` — one pass over the planned meals of the shown month: spend, average per meal, what it leaves out, and the totals by day and by meal type that the breakdown reads (there is no separate day-totals selector)
+- `selectPeriodStats(state, startKey, endKey)` — one pass over the planned meals of the shown month, week or day (`getPeriodStats(range)`): spend, average per meal, what it leaves out, and the totals by day and by meal type that the breakdown reads (there is no separate day-totals selector)
+- `selectUsedIngredientIds` — the ingredients a recipe, a saved meal or an unfrozen planned day uses; Kitchen's "Yours", "Needs a price" and the "No price yet" notes read it
 - `selectGaps(scope)` — scope-parameterized via a small factory; takes `showNutrition` and `dismissedNudges`
 - Time-dependent selectors take `todayKey` as an argument (`useNow()` supplies it in the component)
 
-**Overlay coordination.** The orchestrator owns one discriminated-union state: `overlay: null | { kind: 'day'; dayKey } | { kind: 'plannedMeal'; id } | { kind: 'recipe'; id } | { kind: 'meal'; id } | { kind: 'ingredient'; id } | { kind: 'breakdown' } | { kind: 'settings' } | { kind: 'fillIn'; scope } | { kind: 'copy'; what }`, plus a `subview: null | { kind: 'planMeal'; ... } | { kind: 'recipeForm'; ... } | { kind: 'mealForm'; ... } | { kind: 'stores' } | { kind: 'products' }`, exposed through a small context (`usePinchOverlay`). A drawer's action that opens a form closes the drawer first; the in-place "swap" screens (planned meal, save-as-meal) are components inside the drawer, not new overlays.
+**Overlay coordination.** The orchestrator owns one discriminated-union state: `subview: null | PinchSubview` (`{ kind: 'stores' } | { kind: 'products' } | { kind: 'recipe'; id } | { kind: 'plan'; ... } | { kind: 'meal'; id }`), exposed through a small context (`usePinchOverlay`) so a full-page screen can never open on top of another; the drawers and sheets (day, planned meal, recipe, meal, ingredient, breakdown, settings, fill-in) are opened from the screen that owns them. The recipe form's own ingredient drawer (on a phone) is the one drawer allowed over a subview. A drawer's action that opens a form closes the drawer first; the in-place "swap" screens (planned meal, save-as-meal) are components inside the drawer, not new overlays.
 
 ---
 
 ## Component Encapsulation
 
 - **Screens read the store; presentation components take props.** `CalendarScreen`, `RecipesScreen` and `KitchenScreen` use `useAppSelector`; rows, cells and badges are pure.
-- **App-aware pieces stay in the app** (`MealBarCell`, `StatsRow`, `StoreLogo`, `GapNudge`, `NutritionLine`); anything whose props mention no kitchen entity (`SearchInput`, `PillGroup`, `PickOrCreate`, `SectionDivider`, `MoneyInput`, `FormSheet`, `Subview`, `CopyButton`) comes from `src/components` or Dreamer UI.
+- **App-aware pieces stay in the app** (`DayCell`, `MonthView`, `WeekView`, `DayView`, `MealChip`, `StatsRow`, `StoreLogo`, `GapNudge`, `CostLine`, `RecipeStart`, `RecipeIngredients`, `NutritionReview`, `MealBuilder`); anything whose props mention no kitchen entity comes from `src/components` or Dreamer UI: `SearchInput`, `PillGroup`, `PickOrCreate`, `SectionDivider`, `MoneyInput`, `FormSheet`, `Subview`, `CopyButton`, and the ones added with the redesign: `MacroStats` (with `src/utils/macroUtils.ts`), `HelpTip` (`variant='warning'`), `MethodPicker`, `FormSection`, `forms/Field`, `Stepper`, `FilterBar` and `PeriodSwitcher`.
 - **`parseMoneyToCents`, `formatCents` and `centsToInputValue` move to `src/utils/moneyUtils.ts`** in the first Pinch PR that needs them (A-List keeps them in `apps/a-list/utils/money.ts` today); A-List's imports are updated in the same PR, per the "a second mini-app needs it" rule.
 - **A quantity/unit select is built once** as `UnitSelect` from `UNIT_LABELS`; the ingredient row, the product form and the fill-in sheet all use it.
 - **Closed means unmounted:** drawers' heavy bodies (the recipe drawer's step list, the breakdown rows, the store list) render only while open.
 
 ## UI Component Conventions Applied
 
-- Forms: `FormSheet` for the ingredient, product, store and settings forms; `Subview` for the recipe and meal builders and the stores and products lists; `DetailSheet` for day, planned meal, recipe, meal and ingredient details; `ModalFooterActions` with Cancel left, a `DeleteIconButton` beside it on edit, the primary alone on the right.
+- Forms: `FormSheet` for the ingredient, product, store and settings forms; `Subview` for the recipe form (behind the start picker) and meal builder (`MealBuilder` renders its own `Subview`; `MealSubview` and `PlanMealSubview` are thin wrappers) and the stores and products lists; `DetailSheet` for day, planned meal, recipe, meal and ingredient details; `ModalFooterActions` with Cancel left, a `DeleteIconButton` beside it on edit, the primary alone on the right.
 - Titles are plain nouns ("Recipe", "Product", "Store", "Meal", "Settings"); the verb is on the primary button and the destructive confirm.
-- `PickOrCreate` for family and store; `PillGroup` for meal type, "Start from a saved meal" and the Recipes / Meals and Yours / All switches (`isThin`); `AppToggle` for the four nutrition switches; `SuggestionChips` is not used.
+- `PickOrCreate` for family and store; `PillGroup` for meal type, "Start from a saved meal", the Month / Week / Day switch and the Recipes / Meals and Yours / All switches (`isThin`); `FilterBar` for the Kitchen ingredient and Products filters; `FormSection` and `Field` lay out the recipe form, whose sections are all visible (no "+ Add X" chips); `AppToggle` for the four nutrition switches; `SuggestionChips` is not used.
 - Lists search from `LIST_SEARCH_THRESHOLD` rows; Kitchen groups by family with `SectionDivider` and mounts a family group only near the viewport (`LazyMount`).
 - Images from URLs (a recipe cover, a store logo) are `FallbackImage` with a themed fallback (a tinted emoji tile, a letter tile).
 - Delete confirmations go through `useActionModal().confirm` with `destructive: true` and say what archiving means when something is in use.
-- Copy goes through `copyToClipboard`, inside the `CopySheet` that states what is and isn't included.
 
 ## Theming
 
-- `src/apps/pinch/pinch.css` overrides Dreamer UI's semantic tokens on `html.pinch-theme`: clean white-on-white (black-on-black in dark) surfaces with hairline borders, an ink `--color-primary` for the one filled action, see-through secondary buttons, and a single warm `--pinch-drizzle` used only as a small accent; `--radius-md` and up raised for a rounded counter feel; field text inset; hairline option pills with a drizzle outline when selected; tertiary buttons use the normal text colour. `usePinchTheme()` adds the class to `<html>` only while the app is mounted.
-- Meal-type colours are tokens, not raw palette classes (`--pinch-meal-breakfast … --pinch-meal-drink`), checked on a thin bar in light and dark.
-- The Pinch rules file is written in the same PR as the shell: `.github/instructions/pinch.instructions.md` with an identical `.claude/rules/pinch.md` (metaphor: a chef's apron; palette roles; shape language; what the emoji mean; calendar bar anatomy; nudge wording; missing details appear only as in-context nudge lines).
+- `src/apps/pinch/pinch.css` overrides Dreamer UI's semantic tokens on `html.pinch-theme`: paper-cream (warm black in dark) surfaces with hairline borders, an espresso-ink `--color-primary` for the one filled action, see-through secondary buttons, peach tints (`--color-accent`, `--pinch-drizzle-soft`) for chips, groups and the selected pill, and warm orange (`--pinch-drizzle`) as the accent (today dot, selected outline, active tab, the default product's star); `--radius-md` and up raised for a rounded counter feel; field text inset; hairline option pills that take a peach tint and a drizzle outline when selected; tertiary buttons use the normal text colour. `usePinchTheme()` adds the class to `<html>` only while the app is mounted.
+- Meal-type colours are tokens, not raw palette classes (`--pinch-meal-breakfast … --pinch-meal-drink`, each with a `-soft` tint for the calendar's chips and pills), checked on a chip and a pill in light and dark.
+- The Pinch rules file is written in the same PR as the shell: `.github/instructions/pinch.instructions.md` with an identical `.claude/rules/pinch.md` (metaphor: a warm kitchen; palette roles; shape language; what the emoji mean; calendar chip and pill anatomy; nudge wording; missing details appear only as in-context nudge lines).
 
 ---
 
 ## Security & Privacy Requirements
 
 - **Private by construction.** A person's kitchen is readable and writable only by them. There is no admin read; Security Rules Design Criteria #1–2 are the whole access model. Nothing in the MVP is shared or public.
-- **What leaves the app, and where it goes.** (1) Pasted text or a chosen photo or PDF goes to Firebase AI (Gemini) to be read into a recipe draft; the provider sees the content, not the person's identity beyond Firebase's own request metadata, and the screen says an AI reads it and that it isn't saved. (2) Store logos are requested by the person's browser from the logo service by domain only (well-known stores only); a person's own stores never leave Storage. (3) Copy-to-Markdown puts text on the clipboard, never prices, stores or products.
+- **What leaves the app, and where it goes.** (1) Pasted text or a chosen photo or PDF goes to Firebase AI (Gemini) to be read into a recipe draft; the provider sees the content, not the person's identity beyond Firebase's own request metadata, and the screen says an AI reads it and that it isn't saved. (2) A recipe link goes to our `fetchPageContent` function, which fetches the page from Google's servers (signed-in only, http/https only, private networks refused) and returns the page's recipe data and text without storing anything; the client then sends that recipe data and text, not the link, to the AI reader. (3) Store logos are requested by the person's browser from the logo service by domain only (well-known stores only); a person's own stores never leave Storage. Nothing else leaves: there is no copy-out of recipes, plans or ingredient lists.
 - **The logo service's key is a publishable browser token**, domain-restricted at the provider, kept in an env var (`VITE_STORE_LOGO_TOKEN`) and sent only in the logo request's URL. It is not a secret and is not a Functions secret; if the chosen provider needs a secret, the logo route moves behind an `onCall` instead.
 - **Stored data minimization.** No location, no payment details, no card data, no receipt images are stored. A product stores store, price, size and an optional link; a recipe stores what the person typed or reviewed.
 - **Persistence on the device.** Nothing from the person's own documents is persisted beyond Firestore's own cache. No TanStack query in the MVP carries `meta: { persist: true }`; the catalog is code, not a query.
 - **Links are https-only** and shown with `ExternalLinkText`.
 - **Rules are verified against the emulator, not by the UI hiding a control:** the owner allowed and a second signed-in user denied on every path (kitchen document and all seven collections, plus Storage), signed-out denied; and one denied write per integrity rule (snapshot overwrite, `priceCents` negative, `sizeAmount` 0, an unknown `unit`, a `date` that isn't UTC midnight, a 61st recipe ingredient, an `http://` link).
-- **Terms and licences are a gate, not a footnote:** the USDA FoodData Central licence (catalog nutrition), the emoji icon set's licence notices, and the logo service's terms and attribution are each confirmed in the PR that ships the thing that uses them, with the notices in an About row in Settings.
+- **Terms and licences are a gate, not a footnote:** the USDA FoodData Central licence (catalog nutrition) and the logo service's terms and attribution are each confirmed in the PR that ships the thing that uses them, with the logo credit in an About row in Settings. Pinch vendors no other third-party asset since the ingredient icons were removed.
 
 ---
 
@@ -573,10 +556,10 @@ No cached document is ever written back whole. There is no cross-person concurre
 
 - **Scale fixture.** `npm run seed:pinch-scale` (`scripts/seeds/pinchScale.ts`, opt-in) fills Taylor's kitchen: 300 custom ingredients across 40 families, 150 products across 12 stores, 200 recipes of 3–8 ingredients, 60 saved meals, and about 1,100 planned meals from 45 days back to 45 days ahead (12 a day). Every list or per-row feature is opened on it at phone width (390×844) with the dev build throttled 4× (CDP `Emulation.setCPUThrottlingRate`), switching Calendar ↔ Recipes ↔ Kitchen. The numbers from the last pass are in the PR that added it.
 - **Never freeze the same meal twice, and freeze in batches.** The load-time freeze of ~540 past meals took the page down twice over: a write per meal raised one snapshot event each, and the list of unfrozen meals shrinking after each event started another freeze of the rest (quadratic writes, most of them refused by the write-once rule). It is now one batch per 100 meals (one event each), each meal is submitted once per visit (`useFreezePastDays`), and a refused batch falls back to a write per meal.
-- **One pass, then lookups.** `selectRecipeCosts` and `selectMonthStats` compute in one walk and are memoized; no cell, row or drawer recomputes a recipe's cost. The Calendar's `renderCell` reads `selectPlannedByDay` only.
+- **One pass, then lookups.** `selectRecipeCosts` and `selectPeriodStats` compute in one walk and are memoized; no cell, row or drawer recomputes a recipe's cost. The Calendar's `renderCell` reads `selectPlannedByDay` only.
 - **Build once.** The currency `Intl.NumberFormat` and the catalog lookup maps are module-level; the search index is built on first use.
-- **Cap what's drawn.** Kitchen mounts a family group near the viewport and the recipe list mounts twenty rows at a time (`LazyMount`); recipe and ingredient pickers show the top matches; the breakdown caps at one month of rows. A calendar cell builds a hover popover only on a computer, and the card's content only while it is open; a phone's cell is just its face.
-- **What is not ours.** A cold first load of the fixture (about 1,900 documents) spends most of its time inside the Firestore SDK ingesting them into its local cache, and so does paging to a month that moves the planned-meals window (the listener restarts). Both are measured in the PR and left alone; later visits read the persistent cache.
+- **Cap what's drawn.** Kitchen mounts a family group near the viewport and the recipe list mounts twenty rows at a time (`LazyMount`); recipe and ingredient pickers show the top matches; the breakdown caps at one month of rows. A calendar cell builds a hover popover only on a computer, and the card's content only while it is open; a phone's cell is just its chips. A week's agenda shows six rows a day then "Show N more", and Products caps its rows at 60 with "Show 60 more".
+- **What is not ours.** A cold first load of the fixture (about 1,900 documents) spends most of its time inside the Firestore SDK ingesting them into its local cache, and so does paging far enough to move the planned-meals window (the listener restarts). Both are measured in the PR and left alone; later visits read the persistent cache.
 - **Keep the tap instant.** Each tab renders in a transition and is wrapped in `memo`; the day and recipe drawers read from the store at open, not from their parents.
 
 ---
@@ -591,40 +574,47 @@ src/apps/pinch/
 ├── catalog/
 │   ├── index.ts  catalogIngredients.ts  catalogFamilies.ts  catalogStores.ts
 ├── hooks/
-│   ├── usePinchSync.ts  usePinchTheme.ts  usePinchOverlay.tsx
+│   ├── usePinchSync.ts  usePinchTheme.ts  usePinchOverlay.ts  useFreezePastDays.ts  useStorageImageUrl.ts
 ├── lib/
-│   └── extractRecipe.ts            # text + file readers, response schema, error mapping
+│   └── extractRecipe.ts            # text, file and page readers, response schema, error mapping
+├── queries/
+│   └── storageImageQueries.ts
 ├── store/
 │   ├── index.ts  selectors.ts
 │   ├── slices/     settingsSlice.ts  ingredientsSlice.ts  familiesSlice.ts  storesSlice.ts
 │   │               productsSlice.ts  recipesSlice.ts  mealsSlice.ts  plannedMealsSlice.ts
 │   ├── actions/    settingsActions.ts  ingredientActions.ts  storeActions.ts  productActions.ts
 │   │               recipeActions.ts  mealActions.ts  plannedMealActions.ts  freezeActions.ts
-│   └── listeners/  kitchenListeners.ts  plannedMealsListener.ts
+│   │               usageActions.ts
+│   └── listeners/  kitchenListeners.ts
 ├── utils/
-│   ├── quantity.ts  unitCost.ts  recipeMath.ts  mealMath.ts  dayKeys.ts  stats.ts  gaps.ts
-│   ├── ingredientMatch.ts  catalogSearch.ts  weeks.ts
-│   └── markdown/   recipeMarkdown.ts  dayMarkdown.ts  weekMarkdown.ts  ingredientsMarkdown.ts
+│   ├── quantity.ts  unitCost.ts  recipeMath.ts  mealMath.ts  nutritionMath.ts  nutrition.ts
+│   ├── dayKeys.ts  stats.ts  gaps.ts  references.ts  resolveIngredient.ts  ingredientRecord.ts
+│   ├── ingredientMatch.ts  catalogSearch.ts  normalizeRecipe.ts  storeLogo.ts
+│   └── mealFormat.ts  recipeFormat.ts  productFormat.ts
 └── components/
     ├── shell/       PinchNav.tsx  LoadingSkeleton.tsx
-    ├── calendar/    CalendarScreen.tsx  MealBarCell.tsx  StatsRow.tsx  DayDrawer.tsx  DayPeek.tsx
+    ├── calendar/    CalendarScreen.tsx  MonthView.tsx  WeekView.tsx  DayView.tsx  DayCell.tsx
+    │                MealRow.tsx  MealChip.tsx  StatsRow.tsx  DayDrawer.tsx  DayPeek.tsx
     │                PlannedMealView.tsx  BreakdownDrawer.tsx
-    ├── plan/        PlanMealSubview.tsx  MealBuilder.tsx  ItemSearch.tsx  ServingStepper.tsx
-    ├── recipes/     RecipesScreen.tsx  RecipeRow.tsx  RecipeSubview.tsx  RecipeForm.tsx
-    │                RecipeAutofill.tsx  RecipeDrawer.tsx  MealRow.tsx  MealDrawer.tsx  MealSubview.tsx
-    ├── kitchen/     KitchenScreen.tsx  IngredientRow.tsx  FamilyGroup.tsx  IngredientDrawer.tsx
-    │                IngredientFormSheet.tsx  ProductFormSheet.tsx  StoresSubview.tsx  StoreFormSheet.tsx
-    │                StorePicker.tsx  ProductsSubview.tsx
+    ├── plan/        PlanMealSubview.tsx  MealBuilder.tsx  ItemSearch.tsx
+    ├── recipes/     RecipesScreen.tsx  RecipeRow.tsx  RecipeSubview.tsx  RecipeStart.tsx  RecipeForm.tsx
+    │                recipeFormModel.ts  RecipeIngredients.tsx  RecipeSteps.tsx  NutritionReview.tsx
+    │                RecipeDrawer.tsx  MealRow.tsx  MealDrawer.tsx  MealSubview.tsx
+    ├── kitchen/     KitchenScreen.tsx  ingredientFilters.ts  IngredientRow.tsx  FamilyGroup.tsx
+    │                IngredientDrawer.tsx  IngredientFormSheet.tsx  ProductFormSheet.tsx
+    │                StoresSubview.tsx  StoreFormSheet.tsx  StorePicker.tsx  ProductsSubview.tsx
     ├── settings/    SettingsSheet.tsx
-    └── shared/      CopySheet.tsx  GapNudge.tsx  FillInSheet.tsx  IngredientIcon.tsx  StoreLogo.tsx
-                     NutritionLine.tsx  CoverImage.tsx  UnitSelect.tsx
+    └── shared/      GapNudge.tsx  CostLine.tsx  FillInSheet.tsx  StoreLogo.tsx  CoverImage.tsx  UnitSelect.tsx
 
-public/vendor/ingredient-icons/     # vendored emoji SVGs with their licence notices
+src/components/     MacroStats  MethodPicker  FormSection  forms/Field  Stepper  FilterBar  PeriodSwitcher  HelpTip
+src/utils/macroUtils.ts   src/lib/pageContent/ (fetchPageContent.ts  pageContentQueries.ts)
+functions/src/linkMetadata/fetchPageContent.ts  safeFetch.ts
 scripts/seeds/pinch.ts  pinchScale.ts
 scripts/catalog/buildCatalog.ts
 ```
 
-No `functions/src/apps/pinch/` in the MVP.
+No `functions/src/apps/pinch/`: the only function Pinch calls is the shared `fetchPageContent`.
 
 **Wiring checklist** (everything a new mini-app has to touch; each item is in the roadmap):
 
@@ -645,8 +635,8 @@ Each has a default the design already assumes; the owner can change any of them 
 
 1. **Store logo source: Logo.dev is wired, its terms are still to be confirmed.** Logos load by domain in the person's browser behind `storeLogoUrl` (enabled only when `VITE_STORE_LOGO_TOKEN` is set, with a letter-tile fallback and `no-referrer`). Logo.dev's Community plan needs attribution for commercial projects and says logos remain their owners' trademarks; the plan's terms and the attribution wording were not verified from the sandbox. Gate before launch: read them, then keep or reword the attribution line already in Settings' About row, or leave the token unset. Fallback if it doesn't fit: letter tiles plus person-uploaded images only.
 2. **USDA FoodData Central licence** is to be confirmed before the catalog ships (the page could not be read while planning). Defaults to FDC's public-domain/CC0 position; the generated catalog keeps a `source` note per row.
-3. **Ingredient icon set.** Fluent Emoji (MIT), Noto Emoji (Apache-2.0) or Twemoji (CC-BY-4.0). The design assumes one set vendored with its notice; the choice affects the About row's wording only.
-4. **The calendar grid's first weekday: decided.** Dreamer UI's `Calendar` has no week-start option (its weekday header and `daysInView` are Sunday-first), so the month grid starts on Sunday and Monday-to-Sunday applies to week copies only. Building a Monday-first grid by hand would give up the shared `Calendar`; it is cheap to revisit if the owner wants it.
+3. **Ingredient icons: removed, approach to be decided.** The vendored Twemoji set, `IngredientIcon` and the icon picker are gone, and `IngredientRecord.iconKey` stays in the type as `@deprecated` (existing documents may carry one; new writes null). Whatever returns (a licensed set, emoji per family, or nothing) will need its own notice if vendored.
+4. **The calendar grid's first weekday: decided.** Dreamer UI's `Calendar` has no week-start option (its weekday header and `daysInView` are Sunday-first), so the month grid starts on Sunday, and the week view and `getWeekStartKey` start on Sunday to match it. Building a Monday-first grid by hand would give up the shared `Calendar`; it is cheap to revisit if the owner wants it.
 5. **Freezing from first-load data.** A past meal is frozen from the data at the first load after its day, with a freeze-before-edit step. Prices changed while the app wasn't opened for a month or more can leak into meals that were never frozen. Alternative: a daily scheduled Function that freezes by UTC day (adds a Function, a secret-free deploy, and a time-zone approximation).
 6. **"Average per meal" excludes meals with no priced item**, and "price per gram of protein" uses only meals where both are known. Both are my choices; the screens say what was left out.
 7. **Pinch uses `kitchens/{uid}` private data only.** If "cook with someone" means a live shared kitchen (not a one-time copy of a plan), the shared data needs its own tree; the `kitchens` root makes that a read grant on this document for the first version but not a co-edited kitchen.
@@ -655,3 +645,4 @@ Each has a default the design already assumes; the owner can change any of them 
 10. **Unit conversions beyond the catalog are Next Steps.** A custom ingredient has no density or per-piece weight in the MVP, so a recipe line in cups of a custom ingredient priced by the pound is left out and named. The `gramsPerMl` and `gramsEach` fields are in the schema already so adding the UI later needs no migration.
 11. **Ingredient serving sizes.** An ingredient item in a meal ("1 serving of Doritos") needs a serving size; the catalog supplies one and a custom ingredient defaults to 100 g until the person sets one. Doritos-style items need that field in the ingredient form's extras.
 12. **The AI text cap** (20,000 characters) and the 10 MB upload cap are reasonable limits set here, not provider limits.
+13. **Reading a recipe from a link is unverified from the sandbox.** A real page fetch through `fetchPageContent` and the AI step over a page's recipe data had no outside network to run against; the contract (schema.org Recipe JSON in `structured`, capped text) is from the code and docs, so check a few real recipe sites before relying on it.
