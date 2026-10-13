@@ -4,6 +4,7 @@ import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft, ChevronRight, Plus, Settings } from 'lucide-react';
 
 import SectionHeader from '@/components/SectionHeader';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import BreakdownDrawer from '@apps/pinch/components/calendar/BreakdownDrawer';
@@ -59,6 +60,7 @@ function CalendarScreen({
   );
   const now = useNow();
   const todayKey = getCellDayKey(new Date(now));
+  const isPhone = useMediaQuery().isBelow('sm');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
@@ -221,6 +223,7 @@ function CalendarScreen({
               isSelected={selectedKey === dayKey}
               isToday={isToday}
               isOutsideMonth={dayKey.slice(0, 7) !== shownMonth}
+              hasPeek={!isPhone}
               isPeekOpen={peekDayKey === dayKey}
               onPeekOpenChange={(isOpen) =>
                 setPeekDayKey((current) => {

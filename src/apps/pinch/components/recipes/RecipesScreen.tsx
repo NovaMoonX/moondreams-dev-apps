@@ -1,10 +1,12 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
+import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
@@ -33,6 +35,10 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   value,
   label: RECIPES_VIEW_LABELS[value],
 }));
+
+const RECIPE_CHUNK = 20;
+const EAGER_RECIPE_CHUNKS = 1;
+const RECIPE_ROW_HEIGHT = 89;
 
 interface RecipesScreenProps {
   uid: string;
@@ -117,17 +123,47 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       );
     }
     return (
-      <ul className='divide-border divide-y'>
-        {shown.map((recipe) => (
-          <li key={recipe.id}>
-            <RecipeRow
-              recipe={recipe}
-              cost={costs.get(recipe.id)}
-              onOpen={setOpenId}
-            />
-          </li>
-        ))}
-      </ul>
+      <div>
+        {Array.from(
+          { length: Math.ceil(shown.length / RECIPE_CHUNK) },
+          (_, chunk) => {
+            const rows = shown.slice(
+              chunk * RECIPE_CHUNK,
+              (chunk + 1) * RECIPE_CHUNK,
+            );
+            const estimatedHeight = rows.length * RECIPE_ROW_HEIGHT;
+            return (
+              <div
+                key={`${trimmed}-${chunk}`}
+                className={join(
+                  'defer-offscreen',
+                  chunk > 0 && 'border-border border-t',
+                )}
+                style={
+                  { '--defer-size': `${estimatedHeight}px` } as CSSProperties
+                }
+              >
+                <LazyMount
+                  estimatedHeight={estimatedHeight}
+                  eager={chunk < EAGER_RECIPE_CHUNKS}
+                >
+                  <ul className='divide-border divide-y'>
+                    {rows.map((recipe) => (
+                      <li key={recipe.id}>
+                        <RecipeRow
+                          recipe={recipe}
+                          cost={costs.get(recipe.id)}
+                          onOpen={setOpenId}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </LazyMount>
+              </div>
+            );
+          },
+        )}
+      </div>
     );
   };
 

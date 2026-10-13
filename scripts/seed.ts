@@ -8,6 +8,7 @@ import {
 } from './seeds/types.ts';
 import { seedNineLives } from './seeds/nineLives.ts';
 import { seedPinch } from './seeds/pinch.ts';
+import { seedPinchScale } from './seeds/pinchScale.ts';
 import { seedWorthTheWait } from './seeds/worthTheWait.ts';
 import { seedWaypoint } from './seeds/waypoint.ts';
 
@@ -22,13 +23,14 @@ function readScope(args: string[]): SeedScope {
     scope === 'nine-lives' ||
     scope === 'waypoint' ||
     scope === 'a-list' ||
-    scope === 'pinch'
+    scope === 'pinch' ||
+    scope === 'pinch-scale'
   ) {
     return scope;
   }
 
   throw new Error(
-    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, a-list, or pinch.',
+    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, a-list, pinch, or pinch-scale.',
   );
 }
 
@@ -51,7 +53,8 @@ async function main() {
     scope === 'nine-lives' ||
     scope === 'waypoint' ||
     scope === 'a-list' ||
-    scope === 'pinch'
+    scope === 'pinch' ||
+    scope === 'pinch-scale'
   ) {
     results.push(await seedCore(context));
   }
@@ -74,6 +77,10 @@ async function main() {
 
   if (scope === 'all' || scope === 'pinch') {
     results.push(await seedPinch(context));
+  }
+
+  if (scope === 'pinch-scale') {
+    results.push(await seedPinchScale(context));
   }
 
   const result = combineSeedResults(...results);

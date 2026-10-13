@@ -115,6 +115,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
 - [x] Copy a day's or week's plan, and your list of ingredients, as Markdown
+- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes and a thousand planned meals
 
 ### Next Steps
 - [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"
