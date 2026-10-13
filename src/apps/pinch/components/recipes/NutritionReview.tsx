@@ -4,7 +4,8 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import Field from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
-import MacroStats, { formatMacro } from '@/components/MacroStats';
+import MacroStats from '@/components/MacroStats';
+import { formatMacro } from '@/utils/macroUtils';
 import { NUTRITION_CELLS, NUTRITION_METRICS } from '@apps/pinch/constants';
 import type { NutritionMetric, NutritionValues } from '@apps/pinch/types';
 

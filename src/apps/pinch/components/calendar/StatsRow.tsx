@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
@@ -39,6 +40,12 @@ const PERIOD_PHRASES: Record<CalendarView, string> = {
   week: 'this week',
   day: 'that day',
 };
+
+/** A big total drops its cents and a long one its size, so five figures never run under the warning icon in a three-across tile. */
+const formatTileCost = (cents: number) =>
+  cents >= 100_000
+    ? formatCost(Math.round(cents / 100) * 100).replace(/\.00$/, '')
+    : formatCost(cents);
 
 const pluralize = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -86,7 +93,15 @@ function StatsRow({
       >
         <StatTile
           label={isPhone ? 'Spent' : `Spent ${phrase}`}
-          value={formatCost(stats.spendCents)}
+          value={
+            <span
+              className={join(
+                formatTileCost(stats.spendCents).length > 6 && 'max-sm:text-sm',
+              )}
+            >
+              {formatTileCost(stats.spendCents)}
+            </span>
+          }
           help={
             leftOutCount > 0 ? (
               <HelpTip

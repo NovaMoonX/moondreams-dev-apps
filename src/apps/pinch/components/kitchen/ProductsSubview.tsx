@@ -390,7 +390,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
           <FilterBar
             query={query}
             onQueryChange={setQuery}
-            searchPlaceholder='Search products'
+            searchPlaceholder='Search'
             filterLabel='Filter products'
             activeFilters={activeFilters}
             onRemoveFilter={removeFilter}

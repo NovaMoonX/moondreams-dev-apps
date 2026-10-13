@@ -149,12 +149,16 @@ function FilterBar({
             onOpenChange={setIsOpen}
             placement='bottom'
             alignment='end'
-            className='max-h-[min(34rem,80dvh)] w-80 overflow-y-auto p-4'
+            className='w-80 p-4'
           >
             {isOpen && (
-              <div className='space-y-5'>
-                {children}
-                <div className='border-border border-t pt-3'>{footer}</div>
+              <div className='flex max-h-[min(32rem,75dvh)] flex-col gap-3'>
+                <div className='min-h-0 flex-1 space-y-5 overflow-y-auto'>
+                  {children}
+                </div>
+                <div className='border-border shrink-0 border-t pt-3'>
+                  {footer}
+                </div>
               </div>
             )}
           </Popover>

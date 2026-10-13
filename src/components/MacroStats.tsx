@@ -1,5 +1,7 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { formatMacro } from '@/utils/macroUtils';
+
 export interface MacroValues {
   calories: number | null;
   protein: number | null;
@@ -16,10 +18,6 @@ const MACROS: { key: MacroKey; emoji: string; label: string; unit: string }[] =
     { key: 'carbs', emoji: '🌾', label: 'Carbs', unit: 'g' },
     { key: 'fat', emoji: '🥑', label: 'Fat', unit: 'g' },
   ];
-
-/** Calories are whole numbers, grams keep one decimal. */
-export const formatMacro = (key: MacroKey, value: number) =>
-  String(key === 'calories' ? Math.round(value) : Math.round(value * 10) / 10);
 
 interface MacroStatsProps {
   values: MacroValues;

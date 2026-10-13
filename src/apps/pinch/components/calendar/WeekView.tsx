@@ -20,6 +20,8 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 
 const NO_MEALS: PlannedMeal[] = [];
+const MAX_COLUMN_MEALS = 5;
+const MAX_AGENDA_MEALS = 6;
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   timeZone: 'UTC',
@@ -82,7 +84,7 @@ function WeekView({
                   {Number(dayKey.slice(8))}
                 </span>
               </Button>
-              {meals.map((meal) => (
+              {meals.slice(0, MAX_COLUMN_MEALS).map((meal) => (
                 <Button
                   key={meal.id}
                   type='button'
@@ -106,6 +108,16 @@ function WeekView({
                   </span>
                 </Button>
               ))}
+              {meals.length > MAX_COLUMN_MEALS && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  onClick={() => onOpenDay(dayKey)}
+                  className='text-muted-foreground! h-6 min-h-0 w-full px-1! text-[11px] font-medium'
+                >
+                  +{meals.length - MAX_COLUMN_MEALS} more
+                </Button>
+              )}
               <Button
                 type='button'
                 variant='tertiary'
@@ -158,7 +170,7 @@ function WeekView({
               </p>
             ) : (
               <ul className='divide-border divide-y'>
-                {meals.map((meal) => (
+                {meals.slice(0, MAX_AGENDA_MEALS).map((meal) => (
                   <li key={meal.id}>
                     <MealRow
                       meal={meal}
@@ -169,6 +181,16 @@ function WeekView({
                   </li>
                 ))}
               </ul>
+            )}
+            {meals.length > MAX_AGENDA_MEALS && (
+              <Button
+                type='button'
+                variant='link'
+                onClick={() => onOpenDay(dayKey)}
+                className='h-10 px-0!'
+              >
+                Show {meals.length - MAX_AGENDA_MEALS} more
+              </Button>
             )}
           </section>
         );
