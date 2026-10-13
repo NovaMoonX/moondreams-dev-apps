@@ -25,7 +25,9 @@ import {
   removeStore,
   saveStore,
 } from '@apps/pinch/store/actions/storeActions';
-import { selectStoresById } from '@apps/pinch/store/selectors';
+import { getUsage } from '@apps/pinch/store/actions/usageActions';
+import { describeUsage, isInUse } from '@apps/pinch/utils/references';
+import { selectStores } from '@apps/pinch/store/selectors';
 import type { Store } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
@@ -64,10 +66,23 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
     if (!store) {
       return;
     }
+    const usage = await dispatch(getUsage({ uid, kind: 'STORE', id: store.id }))
+      .unwrap()
+      .catch(() => null);
+    if (usage === null) {
+      setError(
+        "We couldn't check whether this store is in use. Try again in a moment.",
+      );
+      return;
+    }
+
+    const isUsed = isInUse(usage);
     const confirmed = await confirm({
-      title: 'Delete store',
-      message: `Delete "${store.name}"? Products you saved there keep their price and size. This action cannot be undone.`,
-      confirmText: 'Delete',
+      title: isUsed ? 'Hide store' : 'Delete store',
+      message: isUsed
+        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. They keep their price, size and where they were bought.`
+        : `Delete "${store.name}"? This action cannot be undone.`,
+      confirmText: isUsed ? 'Hide' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {
@@ -198,10 +213,23 @@ function CatalogStoreView({ uid, store, onClose }: CatalogStoreViewProps) {
   );
 
   const handleDelete = async () => {
+    const usage = await dispatch(getUsage({ uid, kind: 'STORE', id: store.id }))
+      .unwrap()
+      .catch(() => null);
+    if (usage === null) {
+      setError(
+        "We couldn't check whether this store is in use. Try again in a moment.",
+      );
+      return;
+    }
+
+    const isUsed = isInUse(usage);
     const confirmed = await confirm({
-      title: 'Delete store',
-      message: `Delete "${store.name}"? Products you saved there keep their price and size. You can add it again from the list.`,
-      confirmText: 'Delete',
+      title: isUsed ? 'Hide store' : 'Delete store',
+      message: isUsed
+        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. They keep their price, size and where they were bought. You can add it again from the list.`
+        : `Delete "${store.name}"? You can add it again from the list.`,
+      confirmText: isUsed ? 'Hide' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {
@@ -251,7 +279,7 @@ interface CatalogPickerProps {
 
 function CatalogPicker({ uid, onOwn, onClose }: CatalogPickerProps) {
   const dispatch = useAppDispatch();
-  const storesById = useAppSelector(selectStoresById);
+  const stores = useAppSelector(selectStores);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const matches = searchByName(CATALOG_STORES, query);
@@ -280,7 +308,9 @@ function CatalogPicker({ uid, onOwn, onClose }: CatalogPickerProps) {
       ) : (
         <ul className='divide-border max-h-64 divide-y overflow-y-auto'>
           {matches.map((catalogStore) => {
-            const isAdded = storesById.has(catalogStore.id);
+            const isAdded = stores.some(
+              (store) => store.id === catalogStore.id,
+            );
             return (
               <li key={catalogStore.id}>
                 <Button

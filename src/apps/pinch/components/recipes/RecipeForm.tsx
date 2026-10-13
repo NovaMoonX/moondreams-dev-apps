@@ -55,6 +55,8 @@ import {
   removeRecipe,
   saveRecipe,
 } from '@apps/pinch/store/actions/recipeActions';
+import { getUsage } from '@apps/pinch/store/actions/usageActions';
+import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 import {
   selectIngredients,
   selectIngredientsById,
@@ -809,10 +811,25 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
     if (!recipe) {
       return;
     }
+    const usage = await dispatch(
+      getUsage({ uid, kind: 'RECIPE', id: recipe.id }),
+    )
+      .unwrap()
+      .catch(() => null);
+    if (usage === null) {
+      setError(
+        "We couldn't check whether this recipe is in use. Try again in a moment.",
+      );
+      return;
+    }
+
+    const isUsed = isInUse(usage);
     const confirmed = await confirm({
-      title: 'Delete recipe',
-      message: `Delete "${recipe.title}"? This action cannot be undone.`,
-      confirmText: 'Delete',
+      title: isUsed ? 'Hide recipe' : 'Delete recipe',
+      message: isUsed
+        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be hidden, not erased. Everything that uses it keeps its name and numbers.`
+        : `Delete "${recipe.title}"? This action cannot be undone.`,
+      confirmText: isUsed ? 'Hide' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {

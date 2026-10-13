@@ -265,6 +265,24 @@ const SEED_RECIPES = [
     nutritionOverride: { calories: 520, protein: null, carbs: null, fat: null },
     source: 'MANUAL',
   },
+  // Deleted by Alex while a planned day still used it, so it is archived: hidden from lists and pickers, still named on that day.
+  {
+    id: 'seed-pinch-recipe-chili',
+    title: 'Retired chili',
+    description: null,
+    servings: 4,
+    prepMinutes: null,
+    cookMinutes: 40,
+    coverPath: null,
+    ingredients: [
+      line('chili-1', 'cat-jasmine-rice', 1, 'CUP'),
+      line('chili-2', 'cat-salt', 1, 'TSP'),
+    ],
+    steps: ['Simmer until thick.'],
+    nutritionOverride: null,
+    source: 'MANUAL',
+    isArchived: true,
+  },
 ];
 
 type SeedMealType =
@@ -312,6 +330,11 @@ const PLANNED_BLUEPRINTS: {
     day: -3,
     type: 'DINNER',
     items: [item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 4)],
+  },
+  {
+    day: -2,
+    type: 'DINNER',
+    items: [item('a', 'RECIPE', 'seed-pinch-recipe-chili', 2)],
   },
   {
     day: 0,
@@ -466,7 +489,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       kitchenRef
         .collection('recipes')
         .doc(recipe.id)
-        .set({ ...recipe, createdAt, updatedAt: createdAt }),
+        .set({
+          isArchived: false,
+          ...recipe,
+          createdAt,
+          updatedAt: createdAt,
+        }),
     ),
     ...SEED_PRODUCTS.map((product) =>
       kitchenRef

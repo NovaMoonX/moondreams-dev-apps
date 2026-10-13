@@ -37,13 +37,19 @@ export const selectIngredientRecordsById = createSelector(
   (records) => new Map(records.map((record) => [record.id, record])),
 );
 
-/** Every ingredient the person can use, catalog and custom, with their changes applied. */
-export const selectIngredients = createSelector([selectRecords], (records) =>
+/** Every ingredient, archived ones too, so whatever uses one still resolves it. */
+export const selectAllIngredients = createSelector([selectRecords], (records) =>
   resolveIngredients(records),
 );
 
+/** The ingredients the person can pick, search and browse: catalog and custom, with their changes applied, archived ones left out. */
+export const selectIngredients = createSelector(
+  [selectAllIngredients],
+  (ingredients) => ingredients.filter((ingredient) => !ingredient.isArchived),
+);
+
 export const selectIngredientsById = createSelector(
-  [selectIngredients],
+  [selectAllIngredients],
   (ingredients) =>
     new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
 );
@@ -77,13 +83,18 @@ export const selectIngredientFamiliesById = createSelector(
 
 const selectStoreItems = (state: RootState) => state.pinch.stores.items;
 
-/** The person's stores, alphabetical. */
-export const selectStores = createSelector([selectStoreItems], (stores) =>
+/** Every store, archived ones too, alphabetical, so a product still names where it was bought. */
+export const selectAllStores = createSelector([selectStoreItems], (stores) =>
   [...stores].sort((a, b) => a.name.localeCompare(b.name)),
 );
 
+/** The stores the person can pick and manage. */
+export const selectStores = createSelector([selectAllStores], (stores) =>
+  stores.filter((store) => store.isArchived !== true),
+);
+
 export const selectStoresById = createSelector(
-  [selectStores],
+  [selectAllStores],
   (stores) => new Map(stores.map((store) => [store.id, store])),
 );
 
@@ -141,19 +152,24 @@ export const selectProductCountsByStore = createSelector(
 
 const selectRecipeItems = (state: RootState) => state.pinch.recipes.items;
 
-/** The person's recipes, alphabetical. */
-export const selectRecipes = createSelector([selectRecipeItems], (recipes) =>
+/** Every recipe, archived ones too, alphabetical, so a planned day or saved meal still resolves its title and cost. */
+export const selectAllRecipes = createSelector([selectRecipeItems], (recipes) =>
   [...recipes].sort((a, b) => a.title.localeCompare(b.title)),
 );
 
+/** The recipes the person can list, search and plan. */
+export const selectRecipes = createSelector([selectAllRecipes], (recipes) =>
+  recipes.filter((recipe) => recipe.isArchived !== true),
+);
+
 export const selectRecipesById = createSelector(
-  [selectRecipes],
+  [selectAllRecipes],
   (recipes) => new Map(recipes.map((recipe) => [recipe.id, recipe])),
 );
 
 /** Every recipe's cost, computed once per change of recipes, ingredients or products. */
 export const selectRecipeCosts = createSelector(
-  [selectRecipes, selectIngredientsById, selectDefaultProducts],
+  [selectAllRecipes, selectIngredientsById, selectDefaultProducts],
   (recipes, ingredientsById, defaultProducts) =>
     new Map(
       recipes.map((recipe) => [
@@ -170,7 +186,7 @@ export const selectDismissedNudges = (state: RootState) =>
 
 /** The ingredients some recipe uses: the ones whose missing price changes a number. */
 export const selectUsedIngredientIds = createSelector(
-  [selectRecipes],
+  [selectAllRecipes],
   (recipes) =>
     new Set(
       recipes.flatMap((recipe) =>
@@ -203,7 +219,7 @@ export const selectPlannedByDay = createSelector(
 
 /** Every recipe's nutrition per serving, computed once per change of recipes or ingredients. */
 export const selectRecipeNutrition = createSelector(
-  [selectRecipes, selectIngredientsById],
+  [selectAllRecipes, selectIngredientsById],
   (recipes, ingredientsById) =>
     new Map(
       recipes.map((recipe) => [

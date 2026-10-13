@@ -96,6 +96,7 @@ export const saveProduct = createAsyncThunk<
             updatedAt: now,
             ...('gramsPerMl' in record ? {} : { gramsPerMl: null }),
             ...('gramsEach' in record ? {} : { gramsEach: null }),
+            ...('isArchived' in record ? {} : { isArchived: false }),
           });
         } else {
           batch.set(
@@ -171,6 +172,9 @@ export const setDefaultProduct = createAsyncThunk<
             ...('gramsEach' in recordSnapshot.data()
               ? {}
               : { gramsEach: null }),
+            ...('isArchived' in recordSnapshot.data()
+              ? {}
+              : { isArchived: false }),
           });
         } else {
           transaction.set(

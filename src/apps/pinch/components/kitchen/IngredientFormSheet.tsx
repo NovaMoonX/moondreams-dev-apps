@@ -26,6 +26,8 @@ import {
   removeIngredient,
   saveIngredient,
 } from '@apps/pinch/store/actions/ingredientActions';
+import { getUsage } from '@apps/pinch/store/actions/usageActions';
+import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 import {
   selectIngredientFamilies,
   selectIngredientRecordsById,
@@ -360,12 +362,31 @@ function IngredientFormSheet({
     if (!ingredient) {
       return;
     }
+    const usage = isCatalog
+      ? null
+      : await dispatch(getUsage({ uid, kind: 'INGREDIENT', id: ingredient.id }))
+          .unwrap()
+          .catch(() => undefined);
+    if (usage === undefined) {
+      setError(
+        "We couldn't check whether this ingredient is in use. Try again in a moment.",
+      );
+      return;
+    }
+
+    const isUsed = usage !== null && isInUse(usage);
     const confirmed = await confirm({
-      title: isCatalog ? 'Use the built-in values' : 'Delete ingredient',
+      title: isCatalog
+        ? 'Use the built-in values'
+        : isUsed
+          ? 'Hide ingredient'
+          : 'Delete ingredient',
       message: isCatalog
         ? `Put ${ingredient.name} back to its built-in nutrition, serving size and icon? Your changes to it are removed.`
-        : `Delete "${ingredient.name}"? This action cannot be undone.`,
-      confirmText: isCatalog ? 'Reset' : 'Delete',
+        : usage !== null && isUsed
+          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. Everything that uses it keeps its name and numbers.`
+          : `Delete "${ingredient.name}"? This action cannot be undone.`,
+      confirmText: isCatalog ? 'Reset' : isUsed ? 'Hide' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {
