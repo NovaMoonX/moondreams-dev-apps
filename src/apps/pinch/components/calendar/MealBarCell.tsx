@@ -14,6 +14,8 @@ interface MealBarCellProps {
   isSelected: boolean;
   isToday: boolean;
   isOutsideMonth: boolean;
+  /** The hover card is for a computer; a phone's cell is just the face, with no popover built behind it. */
+  hasPeek: boolean;
   /** Controlled by the calendar so only one day's peek is ever open. */
   isPeekOpen: boolean;
   onPeekOpenChange: (isOpen: boolean) => void;
@@ -33,6 +35,7 @@ function MealBarCell({
   isSelected,
   isToday,
   isOutsideMonth,
+  hasPeek,
   isPeekOpen,
   onPeekOpenChange,
 }: MealBarCellProps) {
@@ -89,18 +92,18 @@ function MealBarCell({
       aria-label={`${date.toDateString()}${label}`}
       className='absolute inset-0 block [&>div]:block [&>div]:h-full [&>div]:w-full'
     >
-      {meals.length > 0 ? (
+      {meals.length > 0 && hasPeek ? (
         <Popover
           hoverable
           isOpen={isPeekOpen}
           onOpenChange={onPeekOpenChange}
           placement='bottom'
           alignment={getPopoverAlignment(date)}
-          className='w-64 p-3 max-sm:hidden!'
+          className='w-64 p-3'
           trigger={face}
           offset={4}
         >
-          <DayPeek dayKey={dayKey} meals={meals} />
+          {isPeekOpen && <DayPeek dayKey={dayKey} meals={meals} />}
         </Popover>
       ) : (
         face

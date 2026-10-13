@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
+import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
@@ -33,6 +34,10 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   value,
   label: RECIPES_VIEW_LABELS[value],
 }));
+
+const RECIPE_CHUNK = 20;
+const EAGER_RECIPE_CHUNKS = 1;
+const RECIPE_ROW_HEIGHT = 89;
 
 interface RecipesScreenProps {
   uid: string;
@@ -117,17 +122,32 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       );
     }
     return (
-      <ul className='divide-border divide-y'>
-        {shown.map((recipe) => (
-          <li key={recipe.id}>
-            <RecipeRow
-              recipe={recipe}
-              cost={costs.get(recipe.id)}
-              onOpen={setOpenId}
-            />
-          </li>
-        ))}
-      </ul>
+      <div>
+        {Array.from(
+          { length: Math.ceil(shown.length / RECIPE_CHUNK) },
+          (_, chunk) => (
+            <LazyMount
+              key={`${trimmed}-${chunk}`}
+              estimatedHeight={RECIPE_CHUNK * RECIPE_ROW_HEIGHT}
+              eager={chunk < EAGER_RECIPE_CHUNKS}
+            >
+              <ul className='divide-border divide-y'>
+                {shown
+                  .slice(chunk * RECIPE_CHUNK, (chunk + 1) * RECIPE_CHUNK)
+                  .map((recipe) => (
+                    <li key={recipe.id}>
+                      <RecipeRow
+                        recipe={recipe}
+                        cost={costs.get(recipe.id)}
+                        onOpen={setOpenId}
+                      />
+                    </li>
+                  ))}
+              </ul>
+            </LazyMount>
+          ),
+        )}
+      </div>
     );
   };
 
